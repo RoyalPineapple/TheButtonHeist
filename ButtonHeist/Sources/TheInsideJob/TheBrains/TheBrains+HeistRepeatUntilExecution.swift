@@ -663,10 +663,9 @@ extension TheBrains {
                 expected: step.predicate.description
             )
         } : nil)
-        return HeistExecutionStepResult(
+        return heistLoopReceipt(
             path: context.path,
             kind: .repeatUntil,
-            status: status,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: .repeatUntil(
                 predicate: step.predicate.description,
@@ -697,10 +696,9 @@ extension TheBrains {
         abortedAtChildPath: String?,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistLoopIterationReceipt(
             path: path,
             kind: .repeatUntilIteration,
-            status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .repeatUntil(
                 predicate: step.predicate.description,
@@ -719,9 +717,6 @@ extension TheBrains {
                 lastObservedSummary: progress.lastObservedSummary,
                 failureReason: abortedAtChildPath.map { "child failed at \($0)" }
             )),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .loop, childPath: $0)
-            },
             abortedAtChildPath: abortedAtChildPath,
             children: children
         )
@@ -733,10 +728,9 @@ extension TheBrains {
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistFailedReceipt(
             path: path,
             kind: .repeatUntil,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .repeatUntil(predicate: step.predicate.description, timeout: step.timeout),
             failure: HeistFailureDetail(

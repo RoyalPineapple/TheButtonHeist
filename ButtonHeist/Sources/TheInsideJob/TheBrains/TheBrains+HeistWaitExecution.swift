@@ -103,14 +103,15 @@ struct HeistWaitOutcome {
         )
     }
 
+    @MainActor
     func actionResult(method: ActionMethod = .wait) -> ActionResult {
-        ActionResult(
-            success: succeeded,
-            method: method,
-            message: message,
-            errorKind: status.errorKind,
-            accessibilityTrace: accessibilityTrace
-        )
+        var builder = ActionResultBuilder(method: method)
+        builder.message = message
+        builder.accessibilityTrace = accessibilityTrace
+        if succeeded {
+            return builder.success()
+        }
+        return builder.failure(errorKind: status.errorKind ?? .actionFailed)
     }
 }
 
@@ -139,6 +140,7 @@ struct HeistWaitReceipt {
         self.observationSummary = observationSummary
     }
 
+    @MainActor
     init(waitOutcome: HeistWaitOutcome) {
         self.actionResult = waitOutcome.actionResult()
         self.waitOutcome = waitOutcome

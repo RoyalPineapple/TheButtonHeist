@@ -171,7 +171,7 @@ extension HeistPlanSourceParser {
             } else {
                 let message = """
                 element update predicate accepts element: and one property change: \
-                value, traits, hint, actions, frame, activationPoint, customContent, rotors
+                \(ElementProperty.parserSupportedSourceNameList)
                 """
                 throw error(currentToken, message)
             }
@@ -183,59 +183,66 @@ extension HeistPlanSourceParser {
     mutating func parsePropertyChangeExpr() throws -> AnyPropertyChangeExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
         try expectSymbol("(")
+        guard let descriptor = ElementProperty.parserSupportedSourceDescriptor(named: name) else {
+            throw error(previous, "unsupported element update property '.\(name)'. Valid: \(ElementProperty.parserSupportedSourceNameList)")
+        }
         let change: AnyPropertyChangeExpr
-        switch name {
-        case "value":
-            let fields = try parseStringPropertyChangeFields(property: "value", allowsUnlabeledAfter: true)
+        switch descriptor.property {
+        case .label:
+            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
+            change = .label(before: fields.before, after: fields.after)
+        case .identifier:
+            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
+            change = .identifier(before: fields.before, after: fields.after)
+        case .value:
+            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
             change = .value(before: fields.before, after: fields.after)
-        case "hint":
-            let fields = try parseStringPropertyChangeFields(property: "hint")
+        case .traits:
+            let fields = try parseTraitsPropertyChangeFields(descriptor: descriptor)
+            change = .traits(before: fields.before, after: fields.after)
+        case .hint:
+            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
             change = .hint(before: fields.before, after: fields.after)
-        case "actions":
-            let fields = try parseTypedPropertyChangeFields(property: "actions") {
+        case .actions:
+            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
                 try $0.parseActionSetMatch(role: $1)
             }
             change = .actions(before: fields.before, after: fields.after)
-        case "frame":
-            let fields = try parseTypedPropertyChangeFields(property: "frame") {
+        case .frame:
+            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
                 try $0.parseElementFrameMatch(role: $1)
             }
             change = .frame(before: fields.before, after: fields.after)
-        case "activationPoint":
-            let fields = try parseTypedPropertyChangeFields(property: "activationPoint") {
+        case .activationPoint:
+            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
                 try $0.parseElementPointMatch(role: $1)
             }
             change = .activationPoint(before: fields.before, after: fields.after)
-        case "customContent":
-            let fields = try parseTypedPropertyChangeFields(property: "customContent") {
+        case .customContent:
+            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
                 try $0.parseCustomContentMatch(role: $1)
             }
             change = .customContent(before: fields.before, after: fields.after)
-        case "rotors":
-            let fields = try parseTypedPropertyChangeFields(property: "rotors") {
+        case .rotors:
+            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
                 try $0.parseRotorSetMatch(role: $1)
             }
             change = .rotors(before: fields.before, after: fields.after)
-        case "traits":
-            let fields = try parseTraitsPropertyChangeFields()
-            change = .traits(before: fields.before, after: fields.after)
-        default:
-            throw error(previous, "unsupported element update property '.\(name)'. Valid: \(Self.validElementProperties)")
         }
         try expectSymbol(")")
         return change
     }
 
     mutating func parseStringPropertyChangeFields(
-        property: String,
-        allowsUnlabeledAfter: Bool = false
+        descriptor: ElementProperty.SourceDescriptor
     ) throws -> PropertyChangeFields<StringMatch<StringExpr>> {
+        let property = descriptor.sourceName
         var before: StringMatch<StringExpr>?
         var after: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
             return PropertyChangeFields(before: nil, after: nil)
         }
-        if allowsUnlabeledAfter && !lookaheadLabel("before") && !lookaheadLabel("after") {
+        if descriptor.allowsUnlabeledAfter && !lookaheadLabel("before") && !lookaheadLabel("after") {
             return PropertyChangeFields(
                 before: nil,
                 after: try parseStringMatchCallArgument(field: "\(property) after")
@@ -257,14 +264,17 @@ extension HeistPlanSourceParser {
                 }
                 after = try parseStringMatchFieldValue(field: "\(property) after")
             } else {
-                throw error(currentToken, "\(property) update predicate accepts before and after")
+                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
             }
             guard consumeSymbol(",") else { break }
         }
         return PropertyChangeFields(before: before, after: after)
     }
 
-    mutating func parseTraitsPropertyChangeFields() throws -> PropertyChangeFields<TraitSetMatch> {
+    mutating func parseTraitsPropertyChangeFields(
+        descriptor: ElementProperty.SourceDescriptor
+    ) throws -> PropertyChangeFields<TraitSetMatch> {
+        let property = descriptor.sourceName
         var before: TraitSetMatch?
         var after: TraitSetMatch?
         if currentToken.isSymbol(")") {
@@ -275,18 +285,18 @@ extension HeistPlanSourceParser {
                 try expectIdentifier("before")
                 try expectSymbol(":")
                 guard before == nil else {
-                    throw error(previous, "traits update predicate accepts before only once")
+                    throw error(previous, "\(property) update predicate accepts before only once")
                 }
-                before = try parseTraitSetMatch(role: "traits before")
+                before = try parseTraitSetMatch(role: "\(property) before")
             } else if lookaheadLabel("after") {
                 try expectIdentifier("after")
                 try expectSymbol(":")
                 guard after == nil else {
-                    throw error(previous, "traits update predicate accepts after only once")
+                    throw error(previous, "\(property) update predicate accepts after only once")
                 }
-                after = try parseTraitSetMatch(role: "traits after")
+                after = try parseTraitSetMatch(role: "\(property) after")
             } else {
-                throw error(currentToken, "traits update predicate accepts before and after")
+                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
             }
             guard consumeSymbol(",") else { break }
         }
@@ -331,9 +341,10 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseTypedPropertyChangeFields<T>(
-        property: String,
+        descriptor: ElementProperty.SourceDescriptor,
         parseValue: (inout HeistPlanSourceParser, String) throws -> T
     ) throws -> PropertyChangeFields<T> {
+        let property = descriptor.sourceName
         var before: T?
         var after: T?
         if currentToken.isSymbol(")") {
@@ -355,7 +366,7 @@ extension HeistPlanSourceParser {
                 }
                 after = try parseValue(&self, "\(property) after")
             } else {
-                throw error(currentToken, "\(property) update predicate accepts before and after")
+                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
             }
             guard consumeSymbol(",") else { break }
         }
@@ -614,7 +625,4 @@ extension HeistPlanSourceParser {
         return matches
     }
 
-    private static var validElementProperties: String {
-        ElementProperty.allCases.map(\.rawValue).joined(separator: ", ")
-    }
 }

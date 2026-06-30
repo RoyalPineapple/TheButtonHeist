@@ -37,8 +37,8 @@ final class ScreenManifestTests: XCTestCase {
 
     func testEmptyManifest() {
         let manifest = Navigation.ScreenManifest()
-        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
-        XCTAssertTrue(manifest.exploredContainerPaths.isEmpty)
+        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(manifest.exploredScrollPaths.isEmpty)
         XCTAssertEqual(manifest.scrollCount, 0)
         XCTAssertEqual(manifest.maxScrollsPerContainer, Navigation.ScreenManifest.maxScrollsPerContainer)
         XCTAssertEqual(manifest.maxScrollsPerDiscovery, Navigation.ScreenManifest.maxScrollsPerDiscovery)
@@ -77,12 +77,12 @@ final class ScreenManifestTests: XCTestCase {
         let path = TreePath([0])
         manifest.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertFalse(manifest.pendingContainerPaths.isEmpty)
+        XCTAssertFalse(manifest.pendingScrollPaths.isEmpty)
 
         manifest.markExplored(path)
 
-        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
-        XCTAssertTrue(manifest.exploredContainerPaths.contains(path))
+        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(manifest.exploredScrollPaths.contains(path))
     }
 
     // MARK: - addPendingContainers
@@ -94,7 +94,7 @@ final class ScreenManifestTests: XCTestCase {
         manifest.markExplored(path)
         manifest.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty,
+        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty,
                       "An already-explored container must not be re-added to pending")
     }
 
@@ -107,7 +107,7 @@ final class ScreenManifestTests: XCTestCase {
             semanticContainer(containerB, path: TreePath([1])),
         ])
 
-        XCTAssertEqual(manifest.pendingContainerPaths.count, 2)
+        XCTAssertEqual(manifest.pendingScrollPaths.count, 2)
     }
 
     func testEqualContainersAtDifferentPathsHaveIndependentExplorationState() {
@@ -126,10 +126,10 @@ final class ScreenManifestTests: XCTestCase {
 
         manifest.markExplored(firstPath)
 
-        XCTAssertTrue(manifest.exploredContainerPaths.contains(firstPath))
-        XCTAssertFalse(manifest.exploredContainerPaths.contains(secondPath))
-        XCTAssertFalse(manifest.pendingContainerPaths.contains(firstPath))
-        XCTAssertTrue(manifest.pendingContainerPaths.contains(secondPath))
+        XCTAssertTrue(manifest.exploredScrollPaths.contains(firstPath))
+        XCTAssertFalse(manifest.exploredScrollPaths.contains(secondPath))
+        XCTAssertFalse(manifest.pendingScrollPaths.contains(firstPath))
+        XCTAssertTrue(manifest.pendingScrollPaths.contains(secondPath))
     }
 
     // MARK: - Diagnostics

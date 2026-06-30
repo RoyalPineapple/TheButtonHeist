@@ -37,7 +37,7 @@ extension Navigation {
         targetHeistId: HeistId? = nil,
         exploration: inout SemanticExploration
     ) async -> Bool {
-        while !exploration.manifest.pendingContainerPaths.isEmpty {
+        while !exploration.manifest.pendingScrollPaths.isEmpty {
             guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                 exploration.manifest.discoveryLimitHit = true
                 return false
@@ -45,7 +45,7 @@ extension Navigation {
 
             let batch = sortedPendingContainers(in: exploration)
             guard !batch.isEmpty else {
-                exploration.manifest.pendingContainerPaths.removeAll()
+                exploration.manifest.pendingScrollPaths.removeAll()
                 return false
             }
 
@@ -81,7 +81,7 @@ extension Navigation {
     }
 
     private func sortedPendingContainers(in exploration: SemanticExploration) -> [SemanticScreen.Container] {
-        exploration.manifest.pendingContainerPaths
+        exploration.manifest.pendingScrollPaths
             .compactMap { exploration.screen.semantic.containers[$0] }
             .map { PendingContainer(container: $0, overflow: totalOverflow(of: $0.container)) }
             .sorted { $0.overflow > $1.overflow }
@@ -311,7 +311,7 @@ extension Navigation {
         in hierarchy: [AccessibilityHierarchy],
         tolerance: CGFloat = 1
     ) -> Bool {
-        guard let path = hierarchy.containerPaths.first(where: { $0.container == container })?.path else {
+        guard let path = hierarchy.pathIndexedContainers.first(where: { $0.container == container })?.path else {
             return false
         }
         return hasContentBeyondFrame(of: path, in: hierarchy, tolerance: tolerance)
@@ -380,27 +380,6 @@ extension Navigation {
             x = Int(point.x.rounded())
             y = Int(point.y.rounded())
         }
-    }
-}
-
-private extension Array where Element == AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard let rootIndex = path.indices.first,
-              indices.contains(rootIndex)
-        else { return nil }
-        guard path.indices.count > 1 else { return self[rootIndex] }
-        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
-}
-
-private extension AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard !path.indices.isEmpty else { return self }
-        guard case .container(_, let children) = self,
-              let childIndex = path.indices.first,
-              children.indices.contains(childIndex)
-        else { return nil }
-        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 }
 

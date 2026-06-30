@@ -18,9 +18,9 @@ extension TheFence {
             argumentFieldPrefix = fieldPrefix
         }
 
-        func dropping(_ key: String) -> CommandArgumentEnvelope {
+        func dropping(_ key: FenceParameterKey) -> CommandArgumentEnvelope {
             var values = argumentValues
-            values.removeValue(forKey: key)
+            values.removeValue(forKey: key.rawValue)
             return CommandArgumentEnvelope(
                 values: values,
                 fieldPrefix: argumentFieldPrefix
@@ -543,12 +543,16 @@ extension TheFence.CommandArgumentEnvelope {
         argumentValues[key.rawValue]
     }
 
-    func string(_ key: String) -> String? {
-        guard case .string(let value) = argumentValues[key] else { return nil }
+    func string(_ key: FenceParameterKey) -> String? {
+        guard case .string(let value) = value(for: key) else { return nil }
         return value
     }
 
-    func observedDescription(for key: String) -> String? {
+    func observedDescription(for key: FenceParameterKey) -> String? {
+        argumentValues[key.rawValue]?.schemaObservedDescription
+    }
+
+    func observedDescription(forUnknownKey key: String) -> String? {
         argumentValues[key]?.schemaObservedDescription
     }
 
@@ -556,26 +560,22 @@ extension TheFence.CommandArgumentEnvelope {
         "object"
     }
 
-    func schemaInteger(_ key: String) throws -> Int? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaInteger(_ key: FenceParameterKey) throws -> Int? {
+        guard let value = value(for: key) else { return nil }
         guard let integer = value.integerValue else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "integer")
         }
         return integer
     }
 
-    func schemaInteger(_ key: FenceParameterKey) throws -> Int? {
-        try schemaInteger(key.rawValue)
-    }
-
-    func requiredSchemaInteger(_ key: String) throws -> Int {
+    func requiredSchemaInteger(_ key: FenceParameterKey) throws -> Int {
         guard let integer = try schemaInteger(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "integer")
         }
         return integer
     }
 
-    func schemaNonNegativeInteger(_ key: String) throws -> Int? {
+    func schemaNonNegativeInteger(_ key: FenceParameterKey) throws -> Int? {
         guard let integer = try schemaInteger(key) else { return nil }
         guard integer >= 0 else {
             throw SchemaValidationError(field: field(key), observed: integer, expected: "integer >= 0")
@@ -583,20 +583,16 @@ extension TheFence.CommandArgumentEnvelope {
         return integer
     }
 
-    func schemaString(_ key: String) throws -> String? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaString(_ key: FenceParameterKey) throws -> String? {
+        guard let value = value(for: key) else { return nil }
         guard case .string(let string) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "string")
         }
         return string
     }
 
-    func schemaString(_ key: FenceParameterKey) throws -> String? {
-        try schemaString(key.rawValue)
-    }
-
-    func schemaStringMatch(_ key: String) throws -> StringMatch<String>? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaStringMatch(_ key: FenceParameterKey) throws -> StringMatch<String>? {
+        guard let value = value(for: key) else { return nil }
         guard case .object = value else {
             throw SchemaValidationError(
                 field: field(key),
@@ -608,8 +604,8 @@ extension TheFence.CommandArgumentEnvelope {
         return try decodePayload(value, forKey: key, as: StringMatch<String>.self)
     }
 
-    func schemaStringMatches(_ key: String) throws -> [StringMatch<String>] {
-        guard let value = argumentValues[key] else { return [] }
+    func schemaStringMatches(_ key: FenceParameterKey) throws -> [StringMatch<String>] {
+        guard let value = value(for: key) else { return [] }
         switch value {
         case .object:
             guard let match = try schemaStringMatch(key) else { return [] }
@@ -634,46 +630,38 @@ extension TheFence.CommandArgumentEnvelope {
         }
     }
 
-    func schemaStringMatches(_ key: FenceParameterKey) throws -> [StringMatch<String>] {
-        try schemaStringMatches(key.rawValue)
-    }
-
-    func requiredSchemaString(_ key: String) throws -> String {
+    func requiredSchemaString(_ key: FenceParameterKey) throws -> String {
         guard let value = try schemaString(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "string")
         }
         return value
     }
 
-    func schemaBoolean(_ key: String) throws -> Bool? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaBoolean(_ key: FenceParameterKey) throws -> Bool? {
+        guard let value = value(for: key) else { return nil }
         guard case .bool(let bool) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "boolean")
         }
         return bool
     }
 
-    func schemaBoolean(_ key: FenceParameterKey) throws -> Bool? {
-        try schemaBoolean(key.rawValue)
-    }
-
-    func schemaNumber(_ key: String) throws -> Double? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaNumber(_ key: FenceParameterKey) throws -> Double? {
+        guard let value = value(for: key) else { return nil }
         guard let number = value.numberValue else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "number")
         }
         return number
     }
 
-    func requiredSchemaNumber(_ key: String) throws -> Double {
+    func requiredSchemaNumber(_ key: FenceParameterKey) throws -> Double {
         guard let value = try schemaNumber(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "number")
         }
         return value
     }
 
-    func schemaStringArray(_ key: String) throws -> [String]? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaStringArray(_ key: FenceParameterKey) throws -> [String]? {
+        guard let value = value(for: key) else { return nil }
         guard case .array(let array) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "array of strings")
         }
@@ -689,12 +677,8 @@ extension TheFence.CommandArgumentEnvelope {
         }
     }
 
-    func schemaStringArray(_ key: FenceParameterKey) throws -> [String]? {
-        try schemaStringArray(key.rawValue)
-    }
-
-    func schemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentEnvelope]? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaObjectArray(_ key: FenceParameterKey) throws -> [TheFence.CommandArgumentEnvelope]? {
+        guard let value = value(for: key) else { return nil }
         guard case .array(let array) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "array of objects")
         }
@@ -710,25 +694,26 @@ extension TheFence.CommandArgumentEnvelope {
         }
     }
 
-    func requiredSchemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentEnvelope] {
+    func requiredSchemaObjectArray(_ key: FenceParameterKey) throws -> [TheFence.CommandArgumentEnvelope] {
         guard let array = try schemaObjectArray(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "array of objects")
         }
         return array
     }
 
-    func rejectUnknownKeys(allowed: Set<String>, expected: String) throws {
-        let unknownKeys = keys.filter { !allowed.contains($0) }.sorted()
+    func rejectUnknownKeys(allowed: Set<FenceParameterKey>, expected: String) throws {
+        let allowedRawValues = Set(allowed.map(\.rawValue))
+        let unknownKeys = keys.filter { !allowedRawValues.contains($0) }.sorted()
         guard let unknownKey = unknownKeys.first else { return }
         throw SchemaValidationError(
-            field: field(unknownKey),
+            field: field(forUnknownKey: unknownKey),
             observed: argumentValues[unknownKey]?.schemaObservedDescription ?? "missing",
             expected: expected
         )
     }
 
-    func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentEnvelope? {
-        guard let value = argumentValues[key] else { return nil }
+    func schemaDictionary(_ key: FenceParameterKey) throws -> TheFence.CommandArgumentEnvelope? {
+        guard let value = value(for: key) else { return nil }
         guard case .object(let object) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "object")
         }
@@ -736,7 +721,7 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func schemaEnum<E>(
-        _ key: String,
+        _ key: FenceParameterKey,
         as type: E.Type
     ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
         guard let rawValue = try schemaString(key) else { return nil }
@@ -750,15 +735,8 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func schemaEnum<E>(
-        _ key: FenceParameterKey,
-        as type: E.Type
-    ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        try schemaEnum(key.rawValue, as: type)
-    }
-
     func requiredSchemaEnum<E>(
-        _ key: String,
+        _ key: FenceParameterKey,
         as type: E.Type
     ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
         guard let rawValue = try schemaString(key) else {
@@ -778,21 +756,12 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func field(_ key: String) -> String {
-        guard let argumentFieldPrefix else { return key }
-        return "\(argumentFieldPrefix).\(key)"
-    }
-
     func field(_ key: FenceParameterKey) -> String {
-        field(key.rawValue)
+        field(forRawKey: key.rawValue)
     }
 
-    func decodePayload<T: HeistValuePayloadExpectationProviding>(
-        _ value: HeistValue,
-        forKey key: String,
-        as type: T.Type
-    ) throws -> T {
-        try TheFence.HeistValuePayloadDecoder.decode(value, field: field(key), as: type)
+    func field(forUnknownKey key: String) -> String {
+        field(forRawKey: key)
     }
 
     func decodePayload<T: HeistValuePayloadExpectationProviding>(
@@ -800,7 +769,12 @@ extension TheFence.CommandArgumentEnvelope {
         forKey key: FenceParameterKey,
         as type: T.Type
     ) throws -> T {
-        try decodePayload(value, forKey: key.rawValue, as: type)
+        try TheFence.HeistValuePayloadDecoder.decode(value, field: field(key), as: type)
+    }
+
+    private func field(forRawKey key: String) -> String {
+        guard let argumentFieldPrefix else { return key }
+        return "\(argumentFieldPrefix).\(key)"
     }
 
 }

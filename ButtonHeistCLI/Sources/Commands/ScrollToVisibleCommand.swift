@@ -27,14 +27,14 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let target = try element.requireTarget()
 
-        var request = CLIRequestParameters()
-        request.set(.timeout, timeout)
-
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request, target: target),
+            arguments: Self.fenceArguments(
+                target: target,
+                CommandArgumentWriter.value(.timeout, timeout)
+            ),
             statusMessage: "Scrolling to element..."
         )
     }

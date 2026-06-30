@@ -1898,90 +1898,98 @@ final class TheFenceHandlerTests: XCTestCase {
 
     func testCommandArgumentEnvelopeReadsTypedScalarValues() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "bool": .bool(true),
-            "int": .int(3),
-            "double": .double(2.5),
+            FenceParameterKey.inlineData.rawValue: .bool(true),
+            FenceParameterKey.ordinal.rawValue: .int(3),
+            FenceParameterKey.duration.rawValue: .double(2.5),
+            FenceParameterKey.requestId.rawValue: .string("abc123"),
         ])
 
-        XCTAssertEqual(try envelope.schemaBoolean("bool"), true)
-        XCTAssertEqual(try envelope.schemaInteger("int"), 3)
-        XCTAssertEqual(try envelope.schemaNumber("double"), 2.5)
-        XCTAssertNil(envelope.observedDescription(for: "missing"))
+        XCTAssertEqual(try envelope.schemaBoolean(.inlineData), true)
+        XCTAssertEqual(try envelope.schemaInteger(.ordinal), 3)
+        XCTAssertEqual(try envelope.schemaNumber(.duration), 2.5)
+        XCTAssertEqual(envelope.observedDescription(for: .requestId), "string \"abc123\"")
+        XCTAssertNil(envelope.observedDescription(forUnknownKey: "missing"))
     }
 
     func testCommandArgumentEnvelopeReadsNestedTypedValues() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "object": .object([
-                "label": .string("Pay"),
-                "traits": .array([.string("button"), .string("selected")]),
+            FenceParameterKey.target.rawValue: .object([
+                FenceParameterKey.label.rawValue: .string("Pay"),
+                FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
             ]),
-            "array": .array([
-                .object(["x": .double(0.25), "y": .double(0.75)]),
-                .object(["x": .double(0.5), "y": .double(0.5)]),
+            FenceParameterKey.elementUnitPoints.rawValue: .array([
+                .object([FenceParameterKey.x.rawValue: .double(0.25), FenceParameterKey.y.rawValue: .double(0.75)]),
+                .object([FenceParameterKey.x.rawValue: .double(0.5), FenceParameterKey.y.rawValue: .double(0.5)]),
             ]),
         ])
 
-        let object = try XCTUnwrap(try envelope.schemaDictionary("object"))
-        XCTAssertEqual(try object.schemaString("label"), "Pay")
-        XCTAssertEqual(try object.schemaStringArray("traits"), ["button", "selected"])
+        let object = try XCTUnwrap(try envelope.schemaDictionary(.target))
+        XCTAssertEqual(try object.schemaString(.label), "Pay")
+        XCTAssertEqual(try object.schemaStringArray(.traits), ["button", "selected"])
 
-        guard case .array(let array)? = envelope.argumentValues["array"] else {
+        guard case .array(let array)? = envelope.value(for: .elementUnitPoints) else {
             return XCTFail("Expected typed array")
         }
         XCTAssertEqual(array.count, 2)
         guard case .object(let firstObject) = array[0] else {
             return XCTFail("Expected typed object")
         }
-        let first = TheFence.CommandArgumentEnvelope(values: firstObject, fieldPrefix: "array[0]")
-        XCTAssertEqual(try first.schemaNumber("x"), 0.25)
-        XCTAssertEqual(try first.schemaNumber("y"), 0.75)
+        let first = TheFence.CommandArgumentEnvelope(
+            values: firstObject,
+            fieldPrefix: "\(FenceParameterKey.elementUnitPoints.rawValue)[0]"
+        )
+        XCTAssertEqual(try first.schemaNumber(.x), 0.25)
+        XCTAssertEqual(try first.schemaNumber(.y), 0.75)
         guard case .object(let secondObject) = array[1] else {
             return XCTFail("Expected typed object")
         }
-        let second = TheFence.CommandArgumentEnvelope(values: secondObject, fieldPrefix: "array[1]")
-        XCTAssertEqual(try second.schemaNumber("x"), 0.5)
-        XCTAssertEqual(try second.schemaNumber("y"), 0.5)
+        let second = TheFence.CommandArgumentEnvelope(
+            values: secondObject,
+            fieldPrefix: "\(FenceParameterKey.elementUnitPoints.rawValue)[1]"
+        )
+        XCTAssertEqual(try second.schemaNumber(.x), 0.5)
+        XCTAssertEqual(try second.schemaNumber(.y), 0.5)
     }
 
     func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "subtree": .object([
-                "element": .object([
-                    "label": .string("Pay"),
-                    "traits": .array([.string("button"), .string("selected")]),
+            FenceParameterKey.subtree.rawValue: .object([
+                FenceParameterKey.element.rawValue: .object([
+                    FenceParameterKey.label.rawValue: .string("Pay"),
+                    FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
                 ]),
-                "container": .object([
-                    "type": .string("scrollable"),
-                    "isModalBoundary": .bool(true),
-                    "ratio": .double(0.5),
+                FenceParameterKey.container.rawValue: .object([
+                    FenceParameterKey.type.rawValue: .string("scrollable"),
+                    FenceParameterKey.isModalBoundary.rawValue: .bool(true),
+                    FenceParameterKey.scale.rawValue: .double(0.5),
                 ]),
-                "ordinal": .int(2),
+                FenceParameterKey.ordinal.rawValue: .int(2),
             ]),
         ])
 
-        let subtree = try XCTUnwrap(try envelope.schemaDictionary("subtree"))
-        let element = try XCTUnwrap(try subtree.schemaDictionary("element"))
-        let container = try XCTUnwrap(try subtree.schemaDictionary("container"))
-        XCTAssertEqual(try subtree.schemaInteger("ordinal"), 2)
-        XCTAssertEqual(try element.schemaString("label"), "Pay")
-        XCTAssertEqual(try element.schemaStringArray("traits"), ["button", "selected"])
-        XCTAssertEqual(try container.schemaEnum("type", as: ContainerTypeName.self), .scrollable)
-        XCTAssertEqual(try container.schemaBoolean("isModalBoundary"), true)
-        XCTAssertEqual(try container.schemaNumber("ratio"), 0.5)
+        let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
+        let element = try XCTUnwrap(try subtree.schemaDictionary(.element))
+        let container = try XCTUnwrap(try subtree.schemaDictionary(.container))
+        XCTAssertEqual(try subtree.schemaInteger(.ordinal), 2)
+        XCTAssertEqual(try element.schemaString(.label), "Pay")
+        XCTAssertEqual(try element.schemaStringArray(.traits), ["button", "selected"])
+        XCTAssertEqual(try container.schemaEnum(.type, as: ContainerTypeName.self), .scrollable)
+        XCTAssertEqual(try container.schemaBoolean(.isModalBoundary), true)
+        XCTAssertEqual(try container.schemaNumber(.scale), 0.5)
     }
 
     func testCommandArgumentEnvelopeNestedSchemaErrorsUseQualifiedFields() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "subtree": .object([
-                "element": .object([
-                    "traits": .array([.int(7)]),
+            FenceParameterKey.subtree.rawValue: .object([
+                FenceParameterKey.element.rawValue: .object([
+                    FenceParameterKey.traits.rawValue: .array([.int(7)]),
                 ]),
             ]),
         ])
 
-        let subtree = try XCTUnwrap(try envelope.schemaDictionary("subtree"))
-        let element = try XCTUnwrap(try subtree.schemaDictionary("element"))
-        XCTAssertThrowsError(try element.schemaStringArray("traits")) { error in
+        let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
+        let element = try XCTUnwrap(try subtree.schemaDictionary(.element))
+        XCTAssertThrowsError(try element.schemaStringArray(.traits)) { error in
             XCTAssertEqual(
                 (error as? SchemaValidationError)?.message,
                 "schema validation failed for subtree.element.traits[0]: observed integer 7; expected string"
@@ -1991,50 +1999,50 @@ final class TheFenceHandlerTests: XCTestCase {
 
     func testCommandArgumentEnvelopeReadsTypedObjectArrays() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "points": .array([
-                .object(["x": .double(0.25), "y": .double(0.75)]),
-                .object(["x": .int(1), "y": .int(2)]),
+            FenceParameterKey.elementUnitPoints.rawValue: .array([
+                .object([FenceParameterKey.x.rawValue: .double(0.25), FenceParameterKey.y.rawValue: .double(0.75)]),
+                .object([FenceParameterKey.x.rawValue: .int(1), FenceParameterKey.y.rawValue: .int(2)]),
             ]),
         ])
 
-        let points = try envelope.requiredSchemaObjectArray("points")
+        let points = try envelope.requiredSchemaObjectArray(.elementUnitPoints)
         XCTAssertEqual(points.count, 2)
-        XCTAssertEqual(try points[0].requiredSchemaNumber("x"), 0.25)
-        XCTAssertEqual(try points[0].requiredSchemaNumber("y"), 0.75)
-        XCTAssertEqual(try points[1].requiredSchemaNumber("x"), 1)
-        XCTAssertEqual(try points[1].requiredSchemaNumber("y"), 2)
+        XCTAssertEqual(try points[0].requiredSchemaNumber(.x), 0.25)
+        XCTAssertEqual(try points[0].requiredSchemaNumber(.y), 0.75)
+        XCTAssertEqual(try points[1].requiredSchemaNumber(.x), 1)
+        XCTAssertEqual(try points[1].requiredSchemaNumber(.y), 2)
     }
 
     func testCommandArgumentEnvelopeObjectArrayErrorsUseIndexedFields() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "points": .array([
-                .object(["x": .string("bad")]),
+            FenceParameterKey.elementUnitPoints.rawValue: .array([
+                .object([FenceParameterKey.x.rawValue: .string("bad")]),
             ]),
         ])
 
-        let points = try envelope.requiredSchemaObjectArray("points")
-        XCTAssertThrowsError(try points[0].requiredSchemaNumber("x")) { error in
+        let points = try envelope.requiredSchemaObjectArray(.elementUnitPoints)
+        XCTAssertThrowsError(try points[0].requiredSchemaNumber(.x)) { error in
             XCTAssertEqual(
                 (error as? SchemaValidationError)?.message,
-                "schema validation failed for points[0].x: observed string \"bad\"; expected number"
+                "schema validation failed for elementUnitPoints[0].x: observed string \"bad\"; expected number"
             )
         }
     }
 
     func testCommandArgumentEnvelopeReadsRequiredEnum() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "direction": .string("up"),
+            FenceParameterKey.direction.rawValue: .string("up"),
         ])
 
         XCTAssertEqual(
-            try envelope.requiredSchemaEnum("direction", as: SwipeDirection.self),
+            try envelope.requiredSchemaEnum(.direction, as: SwipeDirection.self),
             .up
         )
     }
 
     func testCommandArgumentEnvelopeRequiredEnumErrorsUseExpectedCases() throws {
         let missing = TheFence.CommandArgumentEnvelope(values: [:])
-        XCTAssertThrowsError(try missing.requiredSchemaEnum("direction", as: SwipeDirection.self)) { error in
+        XCTAssertThrowsError(try missing.requiredSchemaEnum(.direction, as: SwipeDirection.self)) { error in
             XCTAssertEqual(
                 (error as? SchemaValidationError)?.message,
                 "schema validation failed for direction: observed missing; expected enum one of up, down, left, right"
@@ -2042,9 +2050,9 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let invalid = TheFence.CommandArgumentEnvelope(values: [
-            "direction": .string("diagonal"),
+            FenceParameterKey.direction.rawValue: .string("diagonal"),
         ])
-        XCTAssertThrowsError(try invalid.requiredSchemaEnum("direction", as: SwipeDirection.self)) { error in
+        XCTAssertThrowsError(try invalid.requiredSchemaEnum(.direction, as: SwipeDirection.self)) { error in
             XCTAssertEqual(
                 (error as? SchemaValidationError)?.message,
                 "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
@@ -3001,7 +3009,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let parameter = try XCTUnwrap(TheFence.Command.setPasteboard.descriptor.parameters.first { $0.key == "text" })
 
         XCTAssertEqual(parameter.minLength, 1)
-        guard case .object(let schema) = parameter.jsonSchemaProperty else {
+        guard case .object(let schema) = parameter.jsonSchema.heistValue else {
             return XCTFail("Expected text parameter schema")
         }
         XCTAssertEqual(schema["minLength"], .int(1))

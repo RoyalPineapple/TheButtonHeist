@@ -312,6 +312,8 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
     let message: String?
     let value: String?
     let rotor: PublicRotorResultDTO?
+    let screenshot: PublicScreenshotResultDTO?
+    let heistExecution: PublicHeistExecutionActionResultDTO?
     let screenId: String?
     let errorClass: String?
     let errorCode: String?
@@ -329,6 +331,8 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         message: String? = nil,
         value: String? = nil,
         rotor: PublicRotorResultDTO? = nil,
+        screenshot: PublicScreenshotResultDTO? = nil,
+        heistExecution: PublicHeistExecutionActionResultDTO? = nil,
         screenId: String? = nil,
         errorClass: String? = nil,
         errorCode: String? = nil,
@@ -345,6 +349,8 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         self.message = message
         self.value = value
         self.rotor = rotor
+        self.screenshot = screenshot
+        self.heistExecution = heistExecution
         self.screenId = screenId
         self.errorClass = errorClass
         self.errorCode = errorCode
@@ -356,6 +362,15 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         self.delta = delta
         self.omitted = omitted
     }
+}
+
+struct PublicScreenshotResultDTO: Decodable, Equatable {
+    let width: Double
+    let height: Double
+}
+
+struct PublicHeistExecutionActionResultDTO: Decodable, Equatable {
+    let stepCount: Int
 }
 
 struct PublicRotorResultDTO: Decodable, Equatable {

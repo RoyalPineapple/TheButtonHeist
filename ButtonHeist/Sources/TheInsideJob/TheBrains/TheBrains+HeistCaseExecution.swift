@@ -61,14 +61,14 @@ extension TheBrains {
 
         case .elseBranch, .timedOut, .noMatch:
             guard let elseBody = dispatch.elseBody else {
-                return HeistExecutionStepResult(
+                return heistChildParentReceipt(
                     path: dispatch.path,
                     kind: dispatch.kind,
-                    status: .passed,
                     durationMs: elapsedMilliseconds(since: dispatch.start),
                     intent: dispatch.intent,
                     evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
-                    failure: nil
+                    childFailureCategory: .invocation,
+                    children: []
                 )
             }
 
@@ -89,18 +89,13 @@ extension TheBrains {
         selection: HeistCaseSelectionResult,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let abortedAtChildPath = children.firstFailedStep?.path
-        return HeistExecutionStepResult(
+        heistChildParentReceipt(
             path: dispatch.path,
             kind: dispatch.kind,
-            status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: dispatch.start),
             intent: dispatch.intent,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .invocation, childPath: $0)
-            },
-            abortedAtChildPath: abortedAtChildPath,
+            childFailureCategory: .invocation,
             children: children
         )
     }
@@ -112,10 +107,9 @@ extension TheBrains {
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistFailedReceipt(
             path: path,
             kind: kind,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .conditional,
             failure: HeistFailureDetail(

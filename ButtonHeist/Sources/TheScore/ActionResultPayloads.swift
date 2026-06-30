@@ -267,7 +267,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
 public struct ActionResult: Codable, Sendable, Equatable {
     // MARK: - Nested Types
 
-    private enum Outcome: Sendable, Equatable {
+    package enum Outcome: Sendable, Equatable {
         case success
         case failure(ErrorKind)
 
@@ -330,6 +330,57 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let timing: ActionPerformanceTiming?
 
     // MARK: - Init
+
+    package static func success(
+        method: ActionMethod,
+        message: String? = nil,
+        payload: ResultPayload? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) -> ActionResult {
+        ActionResult(
+            outcome: .success,
+            method: method,
+            message: message,
+            payload: payload,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    package static func failure(
+        method: ActionMethod,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        payload: ResultPayload? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) -> ActionResult {
+        ActionResult(
+            outcome: .failure(errorKind),
+            method: method,
+            message: message,
+            payload: payload,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
 
     public init(
         success: Bool,
@@ -461,10 +512,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
         return ActionResult(
-            success: success,
+            outcome: outcome,
             method: method,
             message: message,
-            errorKind: errorKind,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,

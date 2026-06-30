@@ -23,13 +23,11 @@ struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = CLIRequestParameters()
-        request.set(.text, text)
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
+            arguments: Self.fenceArguments(CommandArgumentWriter.value(.text, text)),
             statusMessage: "Writing to pasteboard..."
         )
     }

@@ -29,15 +29,14 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = try RunHeistCommand.planArguments(
+        let request = try RunHeistCommand.planArguments(
             inline: plan,
             path: path,
             entry: nil,
             commandName: Self.cliCommandName
+        ).adding(
+            detail ? CommandArgumentWriter.value(.detail, "detailed") : nil
         )
-        if detail {
-            request.set(.detail, "detailed")
-        }
         try await Self.runLocal(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments(request),
@@ -73,13 +72,14 @@ struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = try RunHeistCommand.planArguments(
+        let request = try RunHeistCommand.planArguments(
             inline: plan,
             path: path,
             entry: nil,
             commandName: Self.cliCommandName
+        ).adding(
+            CommandArgumentWriter.value(.heist, name)
         )
-        request.set(.heist, name)
         try await Self.runLocal(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments(request),

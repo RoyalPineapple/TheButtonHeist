@@ -40,6 +40,56 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertNil(result.rotor)
     }
 
+    func testStandaloneActionResponseEncodesScreenshotPayloadSummary() throws {
+        let response = FenceResponse.action(
+            command: .getScreen,
+            result: ActionResult(
+                success: true,
+                method: .takeScreenshot,
+                message: "captured",
+                payload: .screenshot(ScreenPayload(pngData: "abc", width: 393, height: 852))
+            )
+        )
+
+        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+
+        XCTAssertEqual(result.screenshot, PublicScreenshotResultDTO(width: 393, height: 852))
+        XCTAssertNil(result.value)
+        XCTAssertNil(result.rotor)
+        XCTAssertNil(result.heistExecution)
+    }
+
+    func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
+        let heistResult = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .warn,
+                    status: .passed,
+                    durationMs: 1,
+                    evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "heads up"))
+                ),
+            ],
+            durationMs: 1
+        )
+        let response = FenceResponse.action(
+            command: .runHeist,
+            result: ActionResult(
+                success: true,
+                method: .heistPlan,
+                message: "ran",
+                payload: .heistExecution(heistResult)
+            )
+        )
+
+        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+
+        XCTAssertEqual(result.heistExecution, PublicHeistExecutionActionResultDTO(stepCount: 1))
+        XCTAssertNil(result.value)
+        XCTAssertNil(result.rotor)
+        XCTAssertNil(result.screenshot)
+    }
+
     func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
         let response = FenceResponse.action(
             command: .activate,
@@ -53,10 +103,14 @@ final class PublicActionResultJSONTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("value")
         try json.assertMissing("rotor")
+        try json.assertMissing("screenshot")
+        try json.assertMissing("heistExecution")
 
         let result = try json.decode(PublicHeistActionResultDTO.self)
         XCTAssertNil(result.value)
         XCTAssertNil(result.rotor)
+        XCTAssertNil(result.screenshot)
+        XCTAssertNil(result.heistExecution)
     }
 
     func testStandaloneActionResponseEncodesStructuredFailure() throws {

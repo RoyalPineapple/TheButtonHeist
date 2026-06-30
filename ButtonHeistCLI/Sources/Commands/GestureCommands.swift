@@ -14,10 +14,10 @@ struct CLIPointArgument: Equatable {
     }
 
     var object: CLIRequestObject {
-        CLIRequestObject([
-            (.x, .double(x)),
-            (.y, .double(y)),
-        ])
+        CommandArgumentWriter.object(
+            CommandArgumentWriter.value(.x, x),
+            CommandArgumentWriter.value(.y, y)
+        )
     }
 
     var value: HeistValue {
@@ -44,51 +44,51 @@ struct CLIGesturePayload: Equatable {
     ) -> Self {
         Self(
             key: .elementUnitPoints,
-            object: CLIRequestObject([
-                (.element, CLIRequestBuilder.targetValue(element)),
-                (.start, start.value),
-                (.end, end.value),
-            ])
+            object: CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
+                CommandArgumentWriter.value(.start, start.value),
+                CommandArgumentWriter.value(.end, end.value)
+            )
         )
     }
 
     static func elementDirection(element: ElementTarget, direction: String) -> Self {
         Self(
             key: .elementDirection,
-            object: CLIRequestObject([
-                (.element, CLIRequestBuilder.targetValue(element)),
-                (.direction, .string(direction)),
-            ])
+            object: CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
+                CommandArgumentWriter.value(.direction, direction)
+            )
         )
     }
 
     static func pointDirection(start: CLIPointArgument, direction: String) -> Self {
         Self(
             key: .pointDirection,
-            object: CLIRequestObject([
-                (.start, start.value),
-                (.direction, .string(direction)),
-            ])
+            object: CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.start, start.value),
+                CommandArgumentWriter.value(.direction, direction)
+            )
         )
     }
 
     static func pointToPoint(start: CLIPointArgument, end: CLIPointArgument) -> Self {
         Self(
             key: .pointToPoint,
-            object: CLIRequestObject([
-                (.start, start.value),
-                (.end, end.value),
-            ])
+            object: CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.start, start.value),
+                CommandArgumentWriter.value(.end, end.value)
+            )
         )
     }
 
     static func elementToPoint(element: ElementTarget, end: CLIPointArgument) -> Self {
         Self(
             key: .elementToPoint,
-            object: CLIRequestObject([
-                (.element, CLIRequestBuilder.targetValue(element)),
-                (.end, end.value),
-            ])
+            object: CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
+                CommandArgumentWriter.value(.end, end.value)
+            )
         )
     }
 }
@@ -98,11 +98,9 @@ extension GestureCLICommandContract {
         parameters: CLIRequestParameters = CLIRequestParameters(),
         _ payloads: CLIGesturePayload...
     ) throws -> TheFence.CommandArgumentEnvelope {
-        var merged = parameters
-        for payload in payloads {
-            merged.set(payload.key, payload.object)
-        }
-        return fenceArguments(merged)
+        fenceArguments(parameters.adding(payloads.map { payload in
+            CommandArgumentWriter.value(payload.key, payload.object)
+        }))
     }
 
     static func elementObject(_ target: ElementTarget) -> CLIRequestObject {
@@ -195,8 +193,9 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
         }
 
         let request: TheFence.CommandArgumentEnvelope
-        var parameters = CLIRequestParameters()
-        parameters.set(.duration, duration)
+        let parameters = CommandArgumentWriter.parameters(
+            CommandArgumentWriter.value(.duration, duration)
+        )
         if let target = try element.parsedTarget() {
             request = try Self.gestureRequest(
                 parameters: parameters,
@@ -293,8 +292,9 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             swipeDirection = nil
         }
 
-        var parameters = CLIRequestParameters()
-        if let duration { parameters.set(.duration, duration) }
+        let parameters = CommandArgumentWriter.parameters(
+            CommandArgumentWriter.optional(.duration, duration)
+        )
         let request: TheFence.CommandArgumentEnvelope
         if let startUnitX, let startUnitY, let endUnitX, let endUnitY {
             let target = try element.requireTarget()
@@ -366,8 +366,9 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify --identifier, -l, or --from-x/--from-y coordinates")
         }
 
-        var parameters = CLIRequestParameters()
-        if let duration { parameters.set(.duration, duration) }
+        let parameters = CommandArgumentWriter.parameters(
+            CommandArgumentWriter.optional(.duration, duration)
+        )
         let request: TheFence.CommandArgumentEnvelope
         if let target = try element.parsedTarget() {
             guard fromX == nil, fromY == nil else {

@@ -53,6 +53,22 @@ struct CLIRequestParameters: Equatable {
     mutating func set(_ key: FenceParameterKey, _ value: [String]) {
         set(key, .array(value.map(HeistValue.string)))
     }
+
+    func adding(_ fields: CommandArgumentWriter.Field?...) -> Self {
+        adding(fields)
+    }
+
+    func adding(_ fields: [CommandArgumentWriter.Field]) -> Self {
+        adding(fields.map(Optional.some))
+    }
+
+    func adding(_ fields: [CommandArgumentWriter.Field?]) -> Self {
+        var copy = self
+        for field in fields.compactMap({ $0 }) {
+            copy.values[field.key] = field.value
+        }
+        return copy
+    }
 }
 
 struct CLIRequestObject: Equatable {
@@ -111,6 +127,97 @@ struct CLIRequestObject: Equatable {
         case let existing?:
             values[key] = .array([existing, value])
         }
+    }
+}
+
+enum CommandArgumentWriter {
+    struct Field: Equatable {
+        let key: FenceParameterKey
+        let value: HeistValue
+    }
+
+    static func parameters(_ fields: Field?...) -> CLIRequestParameters {
+        parameters(fields)
+    }
+
+    static func parameters(_ fields: [Field]) -> CLIRequestParameters {
+        parameters(fields.map(Optional.some))
+    }
+
+    static func parameters(_ fields: [Field?]) -> CLIRequestParameters {
+        CLIRequestParameters(fields.compactMap { field in
+            field.map { ($0.key, $0.value) }
+        })
+    }
+
+    static func object(_ fields: Field?...) -> CLIRequestObject {
+        object(fields)
+    }
+
+    static func object(_ fields: [Field]) -> CLIRequestObject {
+        object(fields.map(Optional.some))
+    }
+
+    static func object(_ fields: [Field?]) -> CLIRequestObject {
+        CLIRequestObject(fields.compactMap { field in
+            field.map { ($0.key, $0.value) }
+        })
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: HeistValue) -> Field {
+        Field(key: key, value: value)
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: CLIRequestObject) -> Field {
+        self.value(key, value.heistValue)
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: String) -> Field {
+        self.value(key, .string(value))
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: Int) -> Field {
+        self.value(key, .int(value))
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: Double) -> Field {
+        self.value(key, .double(value))
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: Bool) -> Field {
+        self.value(key, .bool(value))
+    }
+
+    static func value(_ key: FenceParameterKey, _ value: [String]) -> Field {
+        self.value(key, .array(value.map(HeistValue.string)))
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: HeistValue?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: CLIRequestObject?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: String?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: Int?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: Double?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: Bool?) -> Field? {
+        value.map { self.value(key, $0) }
+    }
+
+    static func optional(_ key: FenceParameterKey, _ value: [String]?) -> Field? {
+        value.map { self.value(key, $0) }
     }
 }
 
@@ -236,6 +343,16 @@ extension CLICommandContract {
         target: ElementTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         CLIRequestBuilder.arguments(parameters: parameters, target: target)
+    }
+
+    static func fenceArguments(
+        target: ElementTarget? = nil,
+        _ fields: CommandArgumentWriter.Field?...
+    ) -> TheFence.CommandArgumentEnvelope {
+        CLIRequestBuilder.arguments(
+            parameters: CommandArgumentWriter.parameters(fields),
+            target: target
+        )
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {

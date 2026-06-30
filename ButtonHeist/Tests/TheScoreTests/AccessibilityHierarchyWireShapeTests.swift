@@ -44,6 +44,36 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(indexed.map(\.element.label), ["First", "Second"])
     }
 
+    func testPathIndexedContainersReturnNamedRecordsInPreorder() {
+        let rootContainer = makeTestAccessibilityContainer(type: .landmark)
+        let nestedScrollable = makeTestAccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 100, height: 400))
+        )
+        let siblingContainer = makeTestAccessibilityContainer(type: .list)
+        let interface = makeTestInterface(nodes: [
+            testContainer(
+                rootContainer,
+                children: [
+                    testElement(sampleElement(label: "First")),
+                    testContainer(
+                        nestedScrollable,
+                        children: [testElement(sampleElement(label: "Nested"))]
+                    ),
+                ]
+            ),
+            testContainer(
+                siblingContainer,
+                children: [testElement(sampleElement(label: "Sibling"))]
+            ),
+        ])
+
+        let indexed: [PathIndexedAccessibilityContainer] = interface.tree.pathIndexedContainers
+
+        XCTAssertEqual(indexed.map(\.path), [TreePath([0]), TreePath([0, 1]), TreePath([1])])
+        XCTAssertEqual(indexed.map(\.container), [rootContainer, nestedScrollable, siblingContainer])
+        XCTAssertEqual(interface.tree.scrollablePathIndexedContainers.map(\.path), [TreePath([0, 1])])
+    }
+
     func testContainerCarriesParserContainerAndChildren() throws {
         let interface = makeTestInterface(nodes: [
             testContainer(
@@ -157,6 +187,17 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(forest.node(at: TreePath([1, 0])), nestedLeaf)
         XCTAssertNil(forest.node(at: TreePath([2])))
         XCTAssertNil(forest.node(at: TreePath([1, 1])))
+    }
+
+    func testTreePathHelpersExposeParentAndRelativePaths() {
+        let path = TreePath([2, 4, 6])
+
+        XCTAssertEqual(path.parent, TreePath([2, 4]))
+        XCTAssertEqual(TreePath([2]).parent, .root)
+        XCTAssertNil(TreePath.root.parent)
+        XCTAssertEqual(path.removingPrefix(TreePath([2])), TreePath([4, 6]))
+        XCTAssertEqual(path.relative(to: TreePath([2, 4])), TreePath([6]))
+        XCTAssertNil(path.removingPrefix(TreePath([3])))
     }
 
     func testInterfaceDiagnosticsRoundTripThroughCanonicalWireShape() throws {

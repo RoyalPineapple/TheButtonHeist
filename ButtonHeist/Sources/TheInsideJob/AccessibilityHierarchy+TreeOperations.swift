@@ -2,16 +2,6 @@
 import AccessibilitySnapshotParser
 import TheScore
 
-// MARK: - Container Convenience
-
-extension AccessibilityContainer {
-    /// Whether this container is scrollable.
-    var isScrollable: Bool {
-        if case .scrollable = type { return true }
-        return false
-    }
-}
-
 // MARK: - Fold
 
 extension AccessibilityHierarchy {
@@ -196,24 +186,11 @@ extension Array where Element == AccessibilityHierarchy {
         flatMap(\.containers)
     }
 
-    /// All container nodes across all roots, paired with capture-local tree paths.
-    var containerPaths: [(container: AccessibilityContainer, path: TreePath)] {
-        compactMapSubtrees { node, path in
-            guard case .container(let container, _) = node else { return nil }
-            return (container, path)
-        }
-    }
-
     // MARK: - Container Queries
 
     /// Scrollable containers in pre-order (outermost first).
     var scrollableContainers: [AccessibilityContainer] {
         containers.filter(\.isScrollable)
-    }
-
-    /// Scrollable containers paired with capture-local tree paths.
-    var scrollableContainerPaths: [(container: AccessibilityContainer, path: TreePath)] {
-        containerPaths.filter(\.container.isScrollable)
     }
 
     /// Each container mapped to its subtree content fingerprint.

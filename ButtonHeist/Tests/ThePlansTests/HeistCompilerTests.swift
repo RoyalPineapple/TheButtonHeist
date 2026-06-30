@@ -449,7 +449,7 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `tooling-only helpers and report DTOs are package scoped`() throws {
+    func `tooling-only helpers and report facts are package scoped`() throws {
         let root = try repositoryRoot()
         let sourceCompiler = try String(
             contentsOf: root.appendingPathComponent("ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift"),
@@ -492,21 +492,23 @@ struct HeistCompilerTests {
             encoding: .utf8
         )
         for required in [
-            "package struct HeistExecutionReportSummaryDTO",
-            "package struct HeistExecutionStepReportDTO",
+            "package struct HeistExecutionReportSummaryFacts",
+            "package struct HeistExecutionStepReportFacts",
             "package extension HeistExecutionStepResult",
         ] {
-            #expect(reportFacts.contains(required), "Report DTO helper is not package scoped: \(required)")
+            #expect(reportFacts.contains(required), "Report facts helper is not package scoped: \(required)")
         }
 
         for forbidden in [
-            "@_spi(ButtonHeistInternals) public struct HeistExecutionReportSummaryDTO",
-            "@_spi(ButtonHeistInternals) public struct HeistExecutionStepReportDTO",
-            "public struct HeistExecutionReportSummaryDTO",
-            "public struct HeistExecutionStepReportDTO",
-            "@_spi(ButtonHeistInternals) var reportDTO",
+            "@_spi(ButtonHeistInternals) public struct HeistExecutionReportSummaryFacts",
+            "@_spi(ButtonHeistInternals) public struct HeistExecutionStepReportFacts",
+            "public struct HeistExecutionReportSummaryFacts",
+            "public struct HeistExecutionStepReportFacts",
+            "HeistExecutionReportSummaryDTO",
+            "HeistExecutionStepReportDTO",
+            "reportDTO",
         ] {
-            #expect(!reportFacts.contains(forbidden), "Report DTO helper leaked public or SPI API: \(forbidden)")
+            #expect(!reportFacts.contains(forbidden), "Report facts helper leaked public, SPI, or DTO API: \(forbidden)")
         }
     }
 

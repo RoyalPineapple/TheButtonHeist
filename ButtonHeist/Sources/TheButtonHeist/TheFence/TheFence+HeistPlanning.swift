@@ -76,7 +76,7 @@ extension TheFence {
 
     func decodePerformRequest(_ arguments: CommandArgumentEnvelope) throws -> PerformRequest {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.perform.rawValue)
-        let source = try arguments.requiredSchemaString("step")
+        let source = try arguments.requiredSchemaString(.step)
         let plan = try loadInlinePerformStepSource(source)
         let step = try performableStep(in: plan)
         return PerformRequest(plan: plan, step: step)
@@ -86,7 +86,7 @@ extension TheFence {
         let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: ["argument"]
+            droppingPlanKeys: [.argument]
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
@@ -142,12 +142,12 @@ extension TheFence {
     }
 
     func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
-        let detail = try arguments.schemaEnum("detail", as: HeistCatalogDetail.self) ?? .summary
+        let detail = try arguments.schemaEnum(.detail, as: HeistCatalogDetail.self) ?? .summary
         do {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
-                droppingPlanKeys: ["detail"]
+                droppingPlanKeys: [.detail]
             )
             return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
         } catch let error as HeistCatalogError {
@@ -156,12 +156,12 @@ extension TheFence {
     }
 
     func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
-        let requestedName = try arguments.requiredSchemaString("heist")
+        let requestedName = try arguments.requiredSchemaString(.heist)
         do {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
-                droppingPlanKeys: ["heist"]
+                droppingPlanKeys: [.heist]
             )
             return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
         } catch let error as HeistCatalogError {
@@ -191,15 +191,15 @@ private extension TheFence {
     func admitRuntimeSafeHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
         commandName: String,
-        droppingPlanKeys: Set<String> = []
+        droppingPlanKeys: Set<FenceParameterKey> = []
     ) throws -> HeistPlan {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
         switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceAdmissionRequest(
             commandName: commandName,
-            path: try arguments.schemaString("path"),
-            inlineDSL: try arguments.schemaString("plan"),
+            path: try arguments.schemaString(.path),
+            inlineDSL: try arguments.schemaString(.plan),
             rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys)
         )) {
         case .success(let plan, _):
@@ -223,16 +223,16 @@ private extension TheFence {
 
     func rawStructuredJSONIRFields(
         in arguments: CommandArgumentEnvelope,
-        dropping keys: Set<String>
+        dropping keys: Set<FenceParameterKey>
     ) -> Set<String> {
         var fieldNames = Set(arguments.argumentValues.keys)
-        fieldNames.remove("requestId")
-        fieldNames.subtract(keys)
+        fieldNames.remove(FenceParameterKey.requestId.rawValue)
+        fieldNames.subtract(keys.map(\.rawValue))
         return fieldNames.intersection(HeistPlanning.rawStructuredJSONIRFieldNames)
     }
 
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {
-        guard let value = arguments.argumentValues["argument"] else { return .none }
+        guard let value = arguments.value(for: .argument) else { return .none }
         try validateRootHeistArgumentPayload(value)
         let data = try JSONEncoder().encode(value)
         switch HeistPlanning.decodeArgumentJSONResult(

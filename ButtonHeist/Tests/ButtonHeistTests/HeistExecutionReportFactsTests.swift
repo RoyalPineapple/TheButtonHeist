@@ -51,7 +51,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.reportTarget, .predicate(ElementPredicate(label: "Delete")))
     }
 
-    func testReportDTOCarriesStepStoryForProjectionAdapters() {
+    func testReportFactsCarryStepStoryForProjectionAdapters() {
         let result = HeistExecutionResult(
             steps: [
                 actionStep(
@@ -73,8 +73,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             abortedAtPath: "$.body[0]"
         )
 
-        let summary = HeistExecutionReportSummaryDTO(result: result)
-        let report = result.steps[0].reportDTO
+        let summary = HeistExecutionReportSummaryFacts(result: result)
+        let report = result.steps[0].reportFacts
 
         XCTAssertEqual(summary.executedTopLevelStepCount, 1)
         XCTAssertEqual(summary.executedNodeCount, 1)

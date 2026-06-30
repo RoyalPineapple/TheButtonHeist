@@ -88,8 +88,7 @@ struct ButtonHeistMCPServer {
         presenter: FenceResponsePresenter
     ) -> Value {
         do {
-            let data = try presenter.jsonData(for: response, outputFormatting: [])
-            return try JSONDecoder().decode(Value.self, from: data)
+            return try MCPValueBridge.structuredContent(for: response, presenter: presenter)
         } catch {
             return structuredEncodingFailureValue(error)
         }
@@ -107,15 +106,7 @@ struct ButtonHeistMCPServer {
         _ failure: DiagnosticFailure,
         presenter: FenceResponsePresenter
     ) -> Value {
-        do {
-            let data = try presenter.jsonData(
-                for: .error(failure),
-                outputFormatting: []
-            )
-            return try JSONDecoder().decode(Value.self, from: data)
-        } catch {
-            return MCPStructuredErrorFallback(failure: failure).value
-        }
+        MCPValueBridge.structuredErrorValue(failure, presenter: presenter)
     }
 
 }
@@ -123,32 +114,4 @@ struct ButtonHeistMCPServer {
 private struct MCPServerContext {
     let fence: TheFence
     let idleMonitor: IdleMonitor
-}
-
-private struct MCPStructuredErrorFallback {
-    let failure: DiagnosticFailure
-
-    var value: Value {
-        .object([
-            "status": .string("error"),
-            "message": .string(failure.message),
-            "code": .string(failure.code),
-            "kind": .string(failure.kind.rawValue),
-            "errorCode": .string(failure.code),
-            "phase": .string(failure.phase.rawValue),
-            "retryable": .bool(failure.retryable),
-            "hint": failure.hint.map(Value.string) ?? .null,
-            "details": details,
-        ])
-    }
-
-    private var details: Value {
-        .object([
-            "code": .string(failure.code),
-            "kind": .string(failure.kind.rawValue),
-            "phase": .string(failure.phase.rawValue),
-            "retryable": .bool(failure.retryable),
-            "hint": failure.hint.map(Value.string) ?? .null,
-        ])
-    }
 }

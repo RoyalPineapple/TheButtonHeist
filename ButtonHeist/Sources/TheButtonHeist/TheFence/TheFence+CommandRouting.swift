@@ -90,7 +90,7 @@ private extension TheFence.Command {
     ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         let commandName: String
         do {
-            commandName = try step.requiredSchemaString("command")
+            commandName = try step.requiredSchemaString(.command)
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(
                 message: error.message,
@@ -102,7 +102,7 @@ private extension TheFence.Command {
 
         return routeCanonicalStep(
             commandName: commandName,
-            arguments: step.dropping("command"),
+            arguments: step.dropping(.command),
             context: context,
             isExecutable: isExecutable
         )

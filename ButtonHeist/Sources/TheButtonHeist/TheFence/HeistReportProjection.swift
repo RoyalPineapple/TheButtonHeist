@@ -30,7 +30,7 @@ struct HeistReportSummaryProjection: Sendable {
             : nil
     }
 
-    init(summary: HeistExecutionReportSummaryDTO) {
+    init(summary: HeistExecutionReportSummaryFacts) {
         executedTopLevelStepCount = summary.executedTopLevelStepCount
         executedNodeCount = summary.executedNodeCount
         outputReceiptNodeCount = summary.outputReceiptNodeCount
@@ -84,7 +84,7 @@ struct HeistReportProjection: Sendable {
         status = result.abortedAtPath == nil ? .ok : .partial
         nodes = result.steps.map { HeistReportNodeProjection(step: $0, profile: profile) }
         outputNodes = nodes.flatMap(\.flattened)
-        let reportSummary = HeistExecutionReportSummaryDTO(result: result)
+        let reportSummary = HeistExecutionReportSummaryFacts(result: result)
         precondition(
             outputNodes.count == reportSummary.outputReceiptNodeCount,
             "heist report projection output nodes must match TheScore report summary"
@@ -130,7 +130,7 @@ struct HeistReportNodeProjection: Sendable {
     let children: [HeistReportNodeProjection]
 
     init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
-        let report = step.reportDTO
+        let report = step.reportFacts
 
         path = report.path
         kind = report.kind

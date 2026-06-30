@@ -5,7 +5,7 @@ import Testing
 @_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ToolRoutingTests {
-    private typealias Argument = HeistValue
+    private typealias Argument = Value
     private typealias RoutedCommand = FenceOperationRequest
 
     @Test("direct tools route to same command")
@@ -81,13 +81,15 @@ struct ToolRoutingTests {
     func runHeistDoesNotParsePlanSource() throws {
         // The MCP adapter has no knowledge of ButtonHeist plan source parsing. The
         // `plan` string is forwarded verbatim to TheFence/ThePlans.
-        let arguments = try MCPToolArguments(
+        let operation = try routed(
+            TheFence.Command.runHeist.rawValue,
             [
                 "plan": .string("HeistPlan { Activate(.label(\"Pay\")) }"),
             ]
-        ).commandEnvelope
+        )
 
-        #expect(arguments.argumentValues["plan"] == .string("HeistPlan { Activate(.label(\"Pay\")) }"))
+        #expect(operation.command == .runHeist)
+        #expect(operation.arguments.argumentValues["plan"] == .string("HeistPlan { Activate(.label(\"Pay\")) }"))
     }
 
     @Test("run_heist tool schema exposes plan source")
@@ -96,8 +98,7 @@ struct ToolRoutingTests {
             Issue.record("run_heist tool not found")
             return
         }
-        let schema = String(describing: runHeist.inputSchema)
-        #expect(schema.contains("plan"))
+        #expect(schemaValue(at: ["properties", "plan"], in: runHeist.inputSchema) != nil)
     }
 
     @Test("run_heist routes root argument opaquely")
@@ -226,6 +227,23 @@ struct ToolRoutingTests {
         #expect(describe.arguments.argumentValues["path"] == .string("Flow.heist"))
     }
 
+    @Test("core router accepts a prebuilt command argument envelope")
+    func coreRouterAcceptsPrebuiltCommandArgumentEnvelope() throws {
+        let envelope = TheFence.CommandArgumentEnvelope(values: ["target": .string("demo")])
+
+        let result = TheFence.Command.routeToolRequest(
+            named: TheFence.Command.connect.rawValue,
+            arguments: envelope
+        )
+
+        guard case .success(let operation) = result else {
+            Issue.record("Expected core routing success")
+            return
+        }
+        #expect(operation.command == .connect)
+        #expect(operation.arguments.argumentValues["target"] == .string("demo"))
+    }
+
     private func routeToolRequest(
         name: String
     ) -> Result<TheFence.Command, FenceOperationRoutingError> {
@@ -236,16 +254,13 @@ struct ToolRoutingTests {
         _ name: String,
         _ arguments: [String: Argument]
     ) throws -> RoutedCommand {
-        switch TheFence.Command.routeToolRequest(named: name, arguments: envelope(arguments)) {
+        let request = try MCPToolRequest(name: name, arguments: arguments)
+        switch ButtonHeistMCPServer.routedToolRequest(request) {
         case .success(let request):
             return request
         case .failure(let error):
             throw error
         }
-    }
-
-    private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {
-        TheFence.CommandArgumentEnvelope(values: arguments)
     }
 
     private static func nestedMCPValueOverLimit() -> Value {
@@ -264,4 +279,10 @@ struct ToolRoutingTests {
         return object
     }
 
+}
+
+private func schemaValue(at path: [String], in root: Value) -> Value? {
+    path.reduce(Optional(root)) { value, key in
+        value?.objectValue?[key]
+    }
 }

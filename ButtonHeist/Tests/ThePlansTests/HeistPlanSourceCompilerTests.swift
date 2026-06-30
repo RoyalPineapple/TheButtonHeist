@@ -177,6 +177,14 @@ import Testing
     TypeText("Bruschetta", into: .identifier("Search"))
         .expect(.change(.elements(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))))
     """#))
+    let labelUpdate = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.identifier("name-row"))
+        .expect(.change(.elements(.updated(.label(before: "Old name", after: "New name")))))
+    """#))
+    let identifierUpdate = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Save"))
+        .expect(.change(.elements(.updated(.identifier(before: "save-disabled", after: "save-enabled")))))
+    """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.change(.elements(.updated(.value(after: "3")))))
@@ -202,6 +210,22 @@ import Testing
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 change: .value(after: "Bruschetta")
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedLabelUpdate = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.identifier("name-row"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                change: .label(before: "Old name", after: "New name")
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedIdentifierUpdate = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Save"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                change: .identifier(before: "save-disabled", after: "save-enabled")
             )))), timeout: 1)
         )),
     ])
@@ -232,9 +256,13 @@ import Testing
     ])
 
     #expect(scoped == expectedScoped)
+    #expect(labelUpdate == expectedLabelUpdate)
+    #expect(identifierUpdate == expectedIdentifierUpdate)
     #expect(unscoped == expectedUnscoped)
     #expect(beforeAfter == expectedBeforeAfter)
     #expect(broadBeforeAfter == expectedBroadBeforeAfter)
+    try assertCanonicalRoundTrip(labelUpdate)
+    try assertCanonicalRoundTrip(identifierUpdate)
 }
 
 @Test func `inline plan source custom content update queries label and value`() throws {

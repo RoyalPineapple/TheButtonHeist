@@ -59,14 +59,14 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let predicateValue = try resolvedPredicateValue()
-        var request = CLIRequestParameters()
-        request.set(.timeout, timeout)
-        request.set(.predicate, predicateValue)
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
+            arguments: Self.fenceArguments(
+                CommandArgumentWriter.value(.timeout, timeout),
+                CommandArgumentWriter.value(.predicate, predicateValue)
+            ),
             statusMessage: "Waiting for predicate..."
         )
     }

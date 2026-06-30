@@ -100,6 +100,33 @@ public struct TreePath: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+public extension TreePath {
+    func hasPrefix(_ prefix: TreePath) -> Bool {
+        guard prefix.indices.count <= indices.count else { return false }
+        return zip(prefix.indices, indices).allSatisfy { $0 == $1 }
+    }
+}
+
+package extension TreePath {
+    var parent: TreePath? {
+        guard !indices.isEmpty else { return nil }
+        return TreePath(Array(indices.dropLast()))
+    }
+
+    func removingPrefix(_ prefix: TreePath) -> TreePath? {
+        guard hasPrefix(prefix) else { return nil }
+        return TreePath(Array(indices.dropFirst(prefix.indices.count)))
+    }
+
+    func relative(to prefix: TreePath) -> TreePath? {
+        removingPrefix(prefix)
+    }
+
+    func appending(contentsOf path: TreePath) -> TreePath {
+        TreePath(indices + path.indices)
+    }
+}
+
 extension TreePath: Comparable {
     public static func < (lhs: TreePath, rhs: TreePath) -> Bool {
         for (left, right) in zip(lhs.indices, rhs.indices) where left != right {
@@ -237,15 +264,18 @@ package struct InterfaceTraceIdentities: Equatable, Sendable {
 
 package struct InterfaceElementRecord: Equatable, Sendable {
     package let path: TreePath
+    package let traversalIndex: Int
     package let element: HeistElement
     package let traceIdentity: TraceElementIdentity?
 
     package init(
         path: TreePath,
+        traversalIndex: Int,
         element: HeistElement,
         traceIdentity: TraceElementIdentity? = nil
     ) {
         self.path = path
+        self.traversalIndex = traversalIndex
         self.element = element
         self.traceIdentity = traceIdentity
     }
@@ -395,6 +425,7 @@ public struct Interface: Codable, Equatable, Sendable {
             let annotation = annotationsByPath[item.path]
             return InterfaceElementRecord(
                 path: item.path,
+                traversalIndex: item.traversalIndex,
                 element: HeistElement(
                     accessibilityElement: item.element,
                     annotation: annotation
@@ -456,8 +487,8 @@ public struct Interface: Codable, Equatable, Sendable {
         let elementsByPath = annotations.elementByPath
         let elements = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceElementAnnotation? in
             guard case .element = node else { return nil }
-            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
-            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
+            let oldPath = originalPath.appending(contentsOf: relativePath)
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
@@ -467,8 +498,8 @@ public struct Interface: Codable, Equatable, Sendable {
         let containersByPath = annotations.containerByPath
         let containers = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceContainerAnnotation? in
             guard case .container = node else { return nil }
-            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
-            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
+            let oldPath = originalPath.appending(contentsOf: relativePath)
             guard let annotation = containersByPath[oldPath] else { return nil }
             return InterfaceContainerAnnotation(
                 path: newPath,
@@ -486,8 +517,8 @@ public struct Interface: Codable, Equatable, Sendable {
     ) -> InterfaceTraceIdentities {
         let identities = node.compactMapSubtrees(path: rootPath) { node, newPath -> (TreePath, TraceElementIdentity)? in
             guard case .element = node else { return nil }
-            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
-            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
+            let oldPath = originalPath.appending(contentsOf: relativePath)
             guard let identity = traceIdentities[oldPath] else { return nil }
             return (newPath, identity)
         }

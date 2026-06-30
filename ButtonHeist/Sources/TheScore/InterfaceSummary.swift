@@ -17,8 +17,24 @@ public enum InterfaceSummary {
     public static func screenTitle(for interface: Interface) -> String? {
         screenTitle(from: interface.projectedElements)
     }
+}
 
-    private static func screenDescription(from elements: [HeistElement]) -> String {
+package extension InterfaceSummary {
+    static func screenDescription(forProjectedElements elements: [HeistElement]) -> String {
+        screenDescription(from: elements)
+    }
+
+    static func screenId(forProjectedElements elements: [HeistElement]) -> String? {
+        slugify(screenTitle(from: elements))
+    }
+
+    static func screenTitle(forProjectedElements elements: [HeistElement]) -> String? {
+        screenTitle(from: elements)
+    }
+}
+
+private extension InterfaceSummary {
+    static func screenDescription(from elements: [HeistElement]) -> String {
         let screenName = screenTitle(from: elements)
 
         var textFields = 0
@@ -70,7 +86,7 @@ public enum InterfaceSummary {
         }
     }
 
-    private static func screenTitle(from elements: [HeistElement]) -> String? {
+    static func screenTitle(from elements: [HeistElement]) -> String? {
         elements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: HeistElement)? in

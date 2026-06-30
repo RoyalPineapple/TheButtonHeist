@@ -227,10 +227,9 @@ extension TheBrains {
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         let currentElement = ElementTarget.predicate(step.matching, ordinal: targetOrdinal)
-        return HeistExecutionStepResult(
+        return heistLoopIterationReceipt(
             path: path,
             kind: .forEachIteration,
-            status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
@@ -244,9 +243,6 @@ extension TheBrains {
                 targetSummary: currentElement.description,
                 failureReason: abortedAtChildPath.map { "child failed at \($0)" }
             )),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .loop, childPath: $0)
-            },
             abortedAtChildPath: abortedAtChildPath,
             children: children
         )
@@ -258,10 +254,9 @@ extension TheBrains {
         step: ForEachElementStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
-        return HeistExecutionStepResult(
+        return heistLoopReceipt(
             path: path,
             kind: .forEachElement,
-            status: outcome.status,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
@@ -331,10 +326,9 @@ extension TheBrains {
             )
 
             let abortedAtChildPath = iterationResults.firstFailedStep?.path
-            iterationNodes.append(HeistExecutionStepResult(
+            iterationNodes.append(heistLoopIterationReceipt(
                 path: iterationPath,
                 kind: .forEachIteration,
-                status: abortedAtChildPath == nil ? .passed : .failed,
                 durationMs: elapsedMilliseconds(since: iterationStart),
                 intent: .forEachString(parameter: step.parameter, count: step.values.count),
                 evidence: .forEachString(HeistForEachStringEvidence(
@@ -345,9 +339,6 @@ extension TheBrains {
                     value: value,
                     failureReason: abortedAtChildPath.map { "child failed at \($0)" }
                 )),
-                failure: abortedAtChildPath.map {
-                    childFailureDetail(category: .loop, childPath: $0)
-                },
                 abortedAtChildPath: abortedAtChildPath,
                 children: iterationResults
             ))
@@ -378,10 +369,9 @@ extension TheBrains {
         step: ForEachStringStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
-        return HeistExecutionStepResult(
+        return heistLoopReceipt(
             path: path,
             kind: .forEachString,
-            status: outcome.status,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachString(parameter: step.parameter, count: outcome.totalCount),
             evidence: .forEachString(HeistForEachStringEvidence(
@@ -412,10 +402,9 @@ extension TheBrains {
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: path,
             kind: .forEachElement,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
@@ -444,10 +433,9 @@ extension TheBrains {
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(limit)"
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: path,
             kind: .forEachElement,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
             evidence: .forEachElement(HeistForEachElementEvidence(

@@ -1448,8 +1448,8 @@ final class TheBrainsScrollTests: XCTestCase {
             brains.stash.refreshLiveCapture(),
             "No live hierarchy available for scroll_to_visible post-reveal regression test"
         )
-        guard let scrollContainerPath = liveScreen.liveCapture.hierarchy.containerPaths.first(where: {
-            $0.container.isScrollable && liveScreen.liveCapture.scrollView(forContainerPath: $0.path) != nil
+        guard let scrollContainerPath = liveScreen.liveCapture.hierarchy.scrollablePathIndexedContainers.first(where: {
+            liveScreen.liveCapture.scrollView(forContainerPath: $0.path) != nil
         })?.path else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }

@@ -29,10 +29,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let replacingExisting = try input.schemaBoolean("replacingExisting") ?? false
-        let text = try input.requiredSchemaString("text")
+        let replacingExisting = try input.schemaBoolean(.replacingExisting) ?? false
+        let text = try input.requiredSchemaString(.text)
         if text.isEmpty, !replacingExisting {
-            throw SchemaValidationError(field: input.field("text"), observed: "string \"\"", expected: "non-empty string")
+            throw SchemaValidationError(field: input.field(.text), observed: "string \"\"", expected: "non-empty string")
         }
         return appInteractionDispatch(
             SemanticActionCommand.typeText.command,
@@ -53,7 +53,7 @@ extension TheFence {
         appInteractionDispatch(
             SemanticActionCommand.editAction.command,
             .editAction(EditActionTarget(
-                action: try input.requiredSchemaEnum("action", as: EditAction.self)
+                action: try input.requiredSchemaEnum(.action, as: EditAction.self)
             ))
         )
     }
@@ -64,7 +64,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let text = try input.nonEmptyString("text")
+        let text = try input.nonEmptyString(.text)
         return appInteractionDispatch(
             SemanticActionCommand.setPasteboard.command,
             .setPasteboard(SetPasteboardTarget(text: text))

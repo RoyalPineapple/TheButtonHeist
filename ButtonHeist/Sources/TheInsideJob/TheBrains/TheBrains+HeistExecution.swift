@@ -269,13 +269,11 @@ extension TheBrains {
         let result = await runtime.execute(.takeScreenshot)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
-        return HeistExecutionStepResult(
+        return heistActionReceipt(
             path: "\(failedPath).failure.actions[0]",
-            kind: .action,
-            status: result.success ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .action(command: command.wireType.rawValue, target: nil),
-            evidence: .action(HeistActionEvidence(command: command, actionResult: result)),
+            evidence: HeistActionEvidence(command: command, actionResult: result),
             failure: failureScreenshotDetail(for: result)
         )
     }
@@ -367,11 +365,9 @@ extension TheBrains {
             children = []
         }
 
-        return HeistExecutionStepResult(
+        return heistSkippedReceipt(
             path: path,
             kind: kind,
-            status: .skipped,
-            durationMs: 0,
             children: children
         )
     }
@@ -487,13 +483,11 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistWarningReceipt(
             path: path,
-            kind: .warn,
-            status: .passed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .warn(message: warn.message),
-            evidence: .warning(HeistExecutionWarning(path: path, message: warn.message))
+            warning: HeistExecutionWarning(path: path, message: warn.message)
         )
     }
 
@@ -502,10 +496,8 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistExplicitFailureReceipt(
             path: path,
-            kind: .fail,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .fail(message: fail.message),
             failure: HeistFailureDetail(
@@ -537,21 +529,16 @@ extension TheBrains {
             ),
             path: "\(path).heist.body"
         )
-        let abortedAtChildPath = children.firstFailedStep?.path
-        return HeistExecutionStepResult(
+        return heistChildParentReceipt(
             path: path,
             kind: .heist,
-            status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: .heist(name: plan.name),
             evidence: .invocation(HeistInvocationEvidence(
                 name: plan.name.map { "heist \($0)" } ?? "inline heist",
-                childFailedPath: abortedAtChildPath
+                childFailedPath: children.firstFailedStep?.path
             )),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .invocation, childPath: $0)
-            },
-            abortedAtChildPath: abortedAtChildPath,
+            childFailureCategory: .invocation,
             children: children
         )
     }
@@ -662,10 +649,9 @@ extension TheBrains {
         resolvedInvocationName: String
     ) -> HeistExecutionStepResult {
         let observed = "recursive heist run \(resolvedInvocationName)"
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: context.path,
             kind: .invoke,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
@@ -681,10 +667,9 @@ extension TheBrains {
         context: InvocationExecutionContext
     ) -> HeistExecutionStepResult {
         let observed = "unknown heist run \(context.requestedName)"
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: context.path,
             kind: .invoke,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
@@ -702,10 +687,9 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not bind heist run argument: \(error)"
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: context.path,
             kind: .invoke,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(
@@ -752,21 +736,17 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist run expectation: \(error)"
-        let expectationActionResult = ActionResult(
-            success: false,
-            method: .wait,
-            message: observed,
-            errorKind: .actionFailed
-        )
+        var builder = ActionResultBuilder(method: .wait)
+        builder.message = observed
+        let expectationActionResult = builder.failure(errorKind: .actionFailed)
         let expectationResult = ExpectationResult(
             met: false,
             predicate: nil,
             actual: observed
         )
-        return HeistExecutionStepResult(
+        return heistFailedReceipt(
             path: context.path,
             kind: .invoke,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(
@@ -823,10 +803,9 @@ extension TheBrains {
         expectationReceipt: HeistWaitReceipt?,
         failure: HeistFailureDetail?
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistChildParentReceipt(
             path: context.path,
             kind: .invoke,
-            status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(
@@ -837,9 +816,9 @@ extension TheBrains {
                 expectationActionResult: expectationReceipt?.actionResult,
                 expectation: expectationReceipt?.expectation
             )),
-            failure: failure,
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            childFailureCategory: .invocation,
+            children: children,
+            failure: failure
         )
     }
 

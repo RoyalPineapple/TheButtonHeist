@@ -7,7 +7,7 @@ import ThePlans
 // the execution result types so encoders, formatters, and report adapters walk
 // `HeistExecutionResult.steps` without a second report model.
 
-package struct HeistExecutionReportSummaryDTO: Sendable, Equatable {
+package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
     package let executedTopLevelStepCount: Int
     package let executedNodeCount: Int
     package let outputReceiptNodeCount: Int
@@ -27,7 +27,7 @@ package struct HeistExecutionReportSummaryDTO: Sendable, Equatable {
     }
 }
 
-package struct HeistExecutionStepReportDTO: Sendable, Equatable {
+package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let path: String
     package let kind: String
     package let capabilityName: String?
@@ -257,8 +257,8 @@ package struct HeistExecutionStepReportDTO: Sendable, Equatable {
 }
 
 package extension HeistExecutionStepResult {
-    var reportDTO: HeistExecutionStepReportDTO {
-        HeistExecutionStepReportDTO(step: self)
+    var reportFacts: HeistExecutionStepReportFacts {
+        HeistExecutionStepReportFacts(step: self)
     }
 }
 
@@ -332,35 +332,35 @@ public extension HeistExecutionStepResult {
 
     /// Wire-format step name. Renames `conditional` -> `if`.
     var reportStepName: String {
-        reportDTO.kind
+        reportFacts.kind
     }
 
     /// Human-facing display label for a step. Invoke steps surface the product
     /// capability that ran rather than the bare `invoke` kind.
     var reportDisplayName: String {
-        reportDTO.displayName
+        reportFacts.displayName
     }
 
     /// Wire command name for an action-kind step.
     var reportCommandName: String? {
-        reportDTO.commandName
+        reportFacts.commandName
     }
 
     /// Durable matcher target for an action-kind step, if any.
     var reportTarget: ElementTarget? {
-        reportDTO.target
+        reportFacts.target
     }
 
     /// Message to surface for this step. Failure evidence wins over compact
     /// success summaries because failed receipts are the detail-oriented case.
     var reportMessage: String? {
-        reportDTO.message
+        reportFacts.message
     }
 
     /// Action result surfaced to human/report adapters. For an action with an
     /// expectation, the expectation wait result wins over the dispatch result.
     var reportActionResult: ActionResult? {
-        reportDTO.actionResult
+        reportFacts.actionResult
     }
 
     /// Runtime dispatch evidence for actual action steps.
@@ -378,7 +378,7 @@ public extension HeistExecutionStepResult {
     /// Expectation to surface for this step. Action dispatch failure suppresses
     /// expectation details so the dispatch failure remains the headline.
     var reportExpectation: ExpectationResult? {
-        reportDTO.expectation
+        reportFacts.expectation
     }
 
     /// Number of expectations evaluated in this subtree.
@@ -395,7 +395,7 @@ public extension HeistExecutionStepResult {
 
     /// Action result that contributes accessibility-trace evidence for this step.
     var traceEvidenceResult: ActionResult? {
-        reportDTO.traceEvidenceResult
+        reportFacts.traceEvidenceResult
     }
 
     /// Trace-contributing results in execution order across this subtree.
@@ -407,7 +407,7 @@ public extension HeistExecutionStepResult {
     /// Public-facing failure message for a failed step, derived from factual
     /// execution evidence.
     var reportFailureMessage: String? {
-        reportDTO.failureMessage
+        reportFacts.failureMessage
     }
 }
 
