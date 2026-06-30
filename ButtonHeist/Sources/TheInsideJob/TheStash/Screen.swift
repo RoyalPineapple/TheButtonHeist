@@ -195,7 +195,7 @@ struct Screen: Equatable {
     /// semantic entries retained from exploration.
     var visibleOnly: Screen {
         let visibleIds = liveCapture.heistIds
-        let visibleContainerPaths = Set(liveCapture.hierarchy.containerPaths.map(\.path))
+        let visibleContainerPaths = Set(liveCapture.hierarchy.pathIndexedContainers.map(\.path))
         return Screen(
             semantic: SemanticScreen(
                 elements: semantic.elements.filter { visibleIds.contains($0.key) },
@@ -252,7 +252,7 @@ struct Screen: Equatable {
 
     private static func semanticContainers(from liveCapture: LiveCapture) -> [TreePath: SemanticScreen.Container] {
         Dictionary(
-            uniqueKeysWithValues: liveCapture.hierarchy.containerPaths.map { item in
+            uniqueKeysWithValues: liveCapture.hierarchy.pathIndexedContainers.map { item in
                 (
                     item.path,
                     SemanticScreen.Container(

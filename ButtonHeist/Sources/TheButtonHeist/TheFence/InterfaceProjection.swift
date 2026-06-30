@@ -31,9 +31,8 @@ struct InterfaceNavigationProjection: Sendable {
     let backButton: NavigationItemProjection?
     let tabBarItems: [TabBarItemProjection]
 
-    init(interface: Interface) {
-        let elements = interface.projectedElements
-        screenTitle = InterfaceSummary.screenTitle(for: interface)
+    init(screenTitle: String?, elements: [HeistElement]) {
+        self.screenTitle = screenTitle
         backButton = elements
             .first(where: { $0.traits.contains(.backButton) })
             .map(NavigationItemProjection.init(element:))
@@ -105,13 +104,17 @@ struct InterfaceProjection: Sendable {
     let elementCount: Int
 
     init(interface: Interface, profile: ProjectionProfile) {
+        let projectedElementRecords = interface.projectedElementRecords
+        let projectedElements = projectedElementRecords.map(\.element)
+        let screenTitle = InterfaceSummary.screenTitle(forProjectedElements: projectedElements)
+
         timestamp = interface.timestamp
         detail = profile.interfaceDetail
-        screenDescription = InterfaceSummary.screenDescription(for: interface)
-        screenId = InterfaceSummary.screenId(for: interface)
+        screenDescription = InterfaceSummary.screenDescription(forProjectedElements: projectedElements)
+        screenId = InterfaceSummary.screenId(forProjectedElements: projectedElements)
         diagnostics = interface.diagnostics
-        navigation = InterfaceNavigationProjection(interface: interface)
-        elementCount = interface.projectedElements.count
+        navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
+        elementCount = projectedElementRecords.count
 
         let stats = InterfaceProjectionStats(observedElementCount: elementCount)
         let totalNodeBudget = InterfaceNodeBudgetTracker(budget: profile.limits.totalNodeBudget)
@@ -120,7 +123,7 @@ struct InterfaceProjection: Sendable {
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: totalNodeBudget,
             stats: stats,
-            elementAnnotations: interface.annotations.elementByPath,
+            elementsByPath: Dictionary(uniqueKeysWithValues: projectedElementRecords.map { ($0.path, $0.element) }),
             containerAnnotations: interface.annotations.containerByPath
         )
         var counter = 0
@@ -150,7 +153,7 @@ struct InterfaceProjection: Sendable {
         remainingElements: inout Int?
     ) -> InterfaceNodeProjection? {
         switch request.node {
-        case .element(let element, _):
+        case .element:
             let order = counter
             counter += 1
             if let remaining = remainingElements {
@@ -161,10 +164,9 @@ struct InterfaceProjection: Sendable {
                 remainingElements = remaining - 1
             }
             context.stats.recordRenderedElement()
-            let projected = HeistElement(
-                accessibilityElement: element,
-                annotation: context.elementAnnotations[request.path]
-            )
+            guard let projected = context.elementsByPath[request.path] else {
+                preconditionFailure("InterfaceProjection missing projected element at path \(request.path.indices)")
+            }
             return .element(InterfaceElementProjection(element: projected, order: order))
 
         case .container(let container, let children):
@@ -236,7 +238,7 @@ private struct InterfaceProjectionContext {
     let visibleElementBudget: Int
     let totalNodeBudget: InterfaceNodeBudgetTracker
     let stats: InterfaceProjectionStats
-    let elementAnnotations: [TreePath: InterfaceElementAnnotation]
+    let elementsByPath: [TreePath: HeistElement]
     let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
 }
 

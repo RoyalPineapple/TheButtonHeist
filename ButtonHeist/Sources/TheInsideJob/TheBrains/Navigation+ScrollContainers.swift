@@ -99,7 +99,7 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        stash.latestObservedLiveHierarchy.containerPaths.compactMap { item -> ScrollPlan? in
+        stash.latestObservedLiveHierarchy.pathIndexedContainers.compactMap { item -> ScrollPlan? in
             let container = item.container
             let path = item.path
             guard case .scrollable(let contentSize) = container.type else { return nil }

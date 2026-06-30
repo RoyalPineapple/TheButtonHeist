@@ -1112,8 +1112,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)
-        XCTAssertTrue(exploration.manifest.pendingContainerPaths.isEmpty)
-        XCTAssertTrue(exploration.manifest.exploredContainerPaths.isEmpty)
+        XCTAssertTrue(exploration.manifest.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(exploration.manifest.exploredScrollPaths.isEmpty)
     }
 
     func testSemanticExplorationAbsorbsSameIdElementChange() {
@@ -1160,9 +1160,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         exploration.markExplored(outerEntry)
         exploration.addDiscoveredContainers([outerEntry, nestedEntry])
 
-        XCTAssertTrue(exploration.manifest.exploredContainerPaths.contains(outerPath))
-        XCTAssertFalse(exploration.manifest.pendingContainerPaths.contains(outerPath))
-        XCTAssertTrue(exploration.manifest.pendingContainerPaths.contains(nestedPath))
+        XCTAssertTrue(exploration.manifest.exploredScrollPaths.contains(outerPath))
+        XCTAssertFalse(exploration.manifest.pendingScrollPaths.contains(outerPath))
+        XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(nestedPath))
     }
 
     func testSemanticExplorationAbsorbQueuesScrollContainersFromParsedPage() {
@@ -1187,8 +1187,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         exploration.absorb(page)
 
-        XCTAssertTrue(exploration.manifest.pendingContainerPaths.contains(TreePath([0])))
-        XCTAssertTrue(exploration.manifest.pendingContainerPaths.contains(TreePath([0, 0])))
+        XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(TreePath([0])))
+        XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(TreePath([0, 0])))
     }
 
     func testSemanticExplorationAbsorbQueuesNestedContainerWithoutRequeuingExploredOuter() {
@@ -1218,9 +1218,9 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         exploration.absorb(page)
 
-        XCTAssertTrue(exploration.manifest.exploredContainerPaths.contains(outerPath))
-        XCTAssertFalse(exploration.manifest.pendingContainerPaths.contains(outerPath))
-        XCTAssertTrue(exploration.manifest.pendingContainerPaths.contains(nestedPath))
+        XCTAssertTrue(exploration.manifest.exploredScrollPaths.contains(outerPath))
+        XCTAssertFalse(exploration.manifest.pendingScrollPaths.contains(outerPath))
+        XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(nestedPath))
     }
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() {
@@ -1236,9 +1236,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
-        guard let container = brains.stash.latestObservedLiveHierarchy.containerPaths.first(where: {
-            guard $0.container.isScrollable else { return false }
-            return brains.stash.liveScrollableContainerView(forPath: $0.path) == nil
+        guard let container = brains.stash.latestObservedLiveHierarchy.scrollablePathIndexedContainers.first(where: {
+            brains.stash.liveScrollableContainerView(forPath: $0.path) == nil
         }) else {
             throw XCTSkip("No semantic-only scrollable container in host UI")
         }
@@ -1246,7 +1245,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let exploration = await brains.navigation.exploreScreen()
         let manifest = exploration.manifest
 
-        XCTAssertTrue(manifest.exploredContainerPaths.contains(container.path))
+        XCTAssertTrue(manifest.exploredScrollPaths.contains(container.path))
     }
 
     // MARK: - Helpers

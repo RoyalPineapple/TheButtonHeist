@@ -4,6 +4,7 @@ import UIKit
 
 import AccessibilitySnapshotParser
 import ThePlans
+import TheScore
 
 /// Viewport-tied live capture and UIKit lookup surface.
 ///
@@ -61,7 +62,7 @@ struct LiveLookup {
                 )
             }
         )
-        let visibleContainerPaths = Set(capture.hierarchy.containerPaths.map(\.path))
+        let visibleContainerPaths = Set(capture.hierarchy.pathIndexedContainers.map(\.path))
         return Screen(
             semantic: SemanticScreen(
                 elements: visibleElements,
@@ -119,7 +120,7 @@ struct LiveLookup {
     }
 
     func container(forPath path: TreePath) -> AccessibilityContainer? {
-        capture.hierarchy.containerPaths.first { $0.path == path }?.container
+        capture.hierarchy.pathIndexedContainers.first { $0.path == path }?.container
     }
 
     func containerName(forPath path: TreePath) -> ContainerName? {
@@ -131,8 +132,7 @@ struct LiveLookup {
     }
 
     func scrollContainerDiagnostics() -> String {
-        let summaries = capture.hierarchy.containerPaths
-            .filter { $0.container.isScrollable }
+        let summaries = capture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
                 let containerName = capture.containerNamesByPath[item.path]
                 let hasLiveScrollView = capture.scrollView(forContainerPath: item.path) != nil

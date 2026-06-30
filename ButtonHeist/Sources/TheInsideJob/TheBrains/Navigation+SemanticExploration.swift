@@ -58,8 +58,8 @@ extension Navigation {
 
         mutating func addDiscoveredContainers(_ containers: [SemanticScreen.Container]) {
             let newContainers = containers.filter {
-                !manifest.exploredContainerPaths.contains($0.path)
-                    && !manifest.pendingContainerPaths.contains($0.path)
+                !manifest.exploredScrollPaths.contains($0.path)
+                    && !manifest.pendingScrollPaths.contains($0.path)
             }
             manifest.addPendingContainers(newContainers)
         }

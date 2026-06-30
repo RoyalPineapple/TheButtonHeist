@@ -32,16 +32,12 @@ struct RepairScreen {
     let elements: [Element]
 
     init(interface: Interface) {
-        let annotationsByPath = interface.annotations.elementByPath
-        let indexed = interface.tree.pathIndexedElements.enumerated().map { ordinal, item in
+        let indexed = interface.projectedElementRecords.enumerated().map { ordinal, record in
             ElementCore(
                 id: PredicateSelectionElementId(rawValue: "element-\(ordinal)"),
-                element: HeistElement(
-                    accessibilityElement: item.element,
-                    annotation: annotationsByPath[item.path]
-                ),
-                path: item.path,
-                traversalIndex: item.traversalIndex,
+                element: record.element,
+                path: record.path,
+                traversalIndex: record.traversalIndex,
                 ordinal: ordinal
             )
         }
@@ -117,6 +113,5 @@ enum RepairTargetResolution {
 }
 
 private func parentPath(_ path: TreePath) -> TreePath {
-    guard !path.indices.isEmpty else { return TreePath.root }
-    return TreePath(Array(path.indices.dropLast()))
+    path.parent ?? .root
 }

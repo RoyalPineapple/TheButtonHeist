@@ -739,7 +739,7 @@ final class ElementInflationProductTests: XCTestCase {
     }
 
     private func firstLiveScrollableContainerPath(in screen: Screen) -> TreePath? {
-        for item in screen.liveCapture.hierarchy.containerPaths where item.container.isScrollable {
+        for item in screen.liveCapture.hierarchy.scrollablePathIndexedContainers {
             guard screen.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
             return item.path
         }
@@ -766,8 +766,7 @@ final class ElementInflationProductTests: XCTestCase {
     }
 
     private func scrollContainerDiagnostics(in screen: Screen) -> String {
-        let summaries = screen.liveCapture.hierarchy.containerPaths
-            .filter { $0.container.isScrollable }
+        let summaries = screen.liveCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
                 let name = screen.liveCapture.containerNamesByPath[item.path]
                 let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil

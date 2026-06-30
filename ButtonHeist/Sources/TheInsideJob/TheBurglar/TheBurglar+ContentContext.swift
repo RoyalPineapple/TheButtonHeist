@@ -226,26 +226,5 @@ extension TheBurglar {
 
 }
 
-private extension Array where Element == AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard let rootIndex = path.indices.first,
-              indices.contains(rootIndex)
-        else { return nil }
-        guard path.indices.count > 1 else { return self[rootIndex] }
-        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
-}
-
-private extension AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard !path.indices.isEmpty else { return self }
-        guard case .container(_, let children) = self,
-              let childIndex = path.indices.first,
-              children.indices.contains(childIndex)
-        else { return nil }
-        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
-}
-
 #endif // DEBUG
 #endif // canImport(UIKit)

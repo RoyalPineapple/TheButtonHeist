@@ -13,13 +13,34 @@ package struct PathIndexedAccessibilityElement {
     }
 }
 
+package struct PathIndexedAccessibilityContainer {
+    package let container: AccessibilityContainer
+    package let path: TreePath
+
+    package init(container: AccessibilityContainer, path: TreePath) {
+        self.container = container
+        self.path = path
+    }
+}
+
+package extension AccessibilityContainer {
+    /// Whether this container can expose off-viewport content by scrolling.
+    var isScrollable: Bool {
+        if case .scrollable = type { return true }
+        return false
+    }
+}
+
 public extension AccessibilityHierarchy {
     func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard let childIndex = path.indices.first else { return self }
-        guard case .container(_, let children) = self,
-              children.indices.contains(childIndex)
-        else { return nil }
-        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+        var current = self
+        for childIndex in path.indices {
+            guard case .container(_, let children) = current,
+                  children.indices.contains(childIndex)
+            else { return nil }
+            current = children[childIndex]
+        }
+        return current
     }
 
     func compactMapSubtrees<Result>(
@@ -54,6 +75,18 @@ package extension AccessibilityHierarchy {
             }
         }
     }
+
+    func pathIndexedContainers(path: TreePath = .root) -> [PathIndexedAccessibilityContainer] {
+        switch self {
+        case .element:
+            return []
+        case .container(let container, let children):
+            return [PathIndexedAccessibilityContainer(container: container, path: path)]
+                + children.enumerated().flatMap { index, child in
+                    child.pathIndexedContainers(path: path.appending(index))
+                }
+        }
+    }
 }
 
 public extension Array where Element == AccessibilityHierarchy {
@@ -62,7 +95,8 @@ public extension Array where Element == AccessibilityHierarchy {
               indices.contains(rootIndex)
         else { return nil }
         guard path.indices.count > 1 else { return self[rootIndex] }
-        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+        guard let subtreePath = path.removingPrefix(TreePath([rootIndex])) else { return nil }
+        return self[rootIndex].node(at: subtreePath)
     }
 
     func compactMapSubtrees<Result>(
@@ -85,11 +119,13 @@ package extension Array where Element == AccessibilityHierarchy {
                 return $0.path < $1.path
             }
     }
-}
 
-public extension TreePath {
-    func hasPrefix(_ prefix: TreePath) -> Bool {
-        guard prefix.indices.count <= indices.count else { return false }
-        return zip(prefix.indices, indices).allSatisfy { $0 == $1 }
+    var pathIndexedContainers: [PathIndexedAccessibilityContainer] {
+        enumerated()
+            .flatMap { index, root in root.pathIndexedContainers(path: TreePath([index])) }
+    }
+
+    var scrollablePathIndexedContainers: [PathIndexedAccessibilityContainer] {
+        pathIndexedContainers.filter(\.container.isScrollable)
     }
 }

@@ -373,13 +373,13 @@ final class ContainerFingerprintTests: XCTestCase {
         let path = TreePath([0])
 
         var manifest = Navigation.ScreenManifest()
-        manifest.addPendingContainerPaths([path])
-        XCTAssertTrue(manifest.pendingContainerPaths.contains(path))
+        manifest.addPendingScrollPaths([path])
+        XCTAssertTrue(manifest.pendingScrollPaths.contains(path))
 
         manifest.markExplored(path)
-        XCTAssertFalse(manifest.pendingContainerPaths.contains(path))
-        XCTAssertTrue(manifest.exploredContainerPaths.contains(path))
-        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
+        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
+        XCTAssertTrue(manifest.exploredScrollPaths.contains(path))
+        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
     }
 
     func testAddPendingSkipsExplored() {
@@ -387,9 +387,9 @@ final class ContainerFingerprintTests: XCTestCase {
 
         var manifest = Navigation.ScreenManifest()
         manifest.markExplored(path)
-        manifest.addPendingContainerPaths([path])
+        manifest.addPendingScrollPaths([path])
 
-        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty, "Already-explored container should not be re-added to pending")
+        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty, "Already-explored container should not be re-added to pending")
     }
 
 }
