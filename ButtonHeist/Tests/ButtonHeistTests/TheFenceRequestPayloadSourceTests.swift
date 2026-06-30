@@ -180,12 +180,24 @@ import Testing
         let source = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift"
         )
+        let requestSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload.swift"
+        )
 
-        #expect(source.contains("let jsonSchema: FenceParameterJSONSchema"))
+        #expect(source.contains("let schema: FenceParameterSchema"))
+        #expect(source.contains("indirect enum FenceParameterSchema: Sendable, Equatable"))
+        #expect(source.contains("case scalar(FenceParameterScalarSpec)"))
+        #expect(source.contains("case object(FenceParameterObjectSpec)"))
+        #expect(source.contains("case array(FenceParameterArraySpec)"))
+        #expect(source.contains("var jsonSchema: FenceParameterJSONSchema"))
         #expect(source.contains("indirect enum FenceParameterJSONSchema: Sendable, Equatable"))
         #expect(source.contains("var heistValue: HeistValue"))
+        #expect(requestSource.contains("func validateSchema("))
+        #expect(requestSource.contains("try validateSchema(itemSchema, value: item, field: itemField)"))
+        #expect(!requestSource.contains("FenceParameterSpec("))
 
         for forbidden in [
+            "let jsonSchema: FenceParameterJSONSchema",
             "jsonSchemaProperty: HeistValue",
             "public let schema:",
             "public var schema:",

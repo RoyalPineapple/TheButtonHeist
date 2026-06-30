@@ -198,46 +198,47 @@ extension FenceCommandDescriptor {
             return
         }
 
-        try validateType(parameter.type, value: value, field: field)
-        try validateEnum(parameter, value: value, field: field)
-        try validateScalarBounds(parameter, value: value, field: field)
+        try validateSchema(parameter.schema, value: value, field: field)
+    }
 
-        switch parameter.type {
-        case .object:
-            guard case .object(let object) = value,
-                  !parameter.skipsNestedDescriptorValidation else {
-                return
-            }
-            try validateObject(object, parameter: parameter, field: field)
-        case .array:
-            guard case .array(let array) = value,
-                  !parameter.skipsNestedDescriptorValidation else {
-                return
-            }
-            try validateArrayItems(array, parameter: parameter, field: field)
-        case .stringArray:
+    func validateSchema(
+        _ schema: FenceParameterSchema,
+        value: HeistValue,
+        field: String
+    ) throws {
+        try validateType(schema.type, value: value, field: field)
+
+        switch schema {
+        case .scalar(let scalar):
+            try validateEnum(scalar, value: value, field: field)
+            try validateScalarBounds(scalar, value: value, field: field)
+        case .object(let objectSpec):
+            guard case .object(let object) = value else { return }
+            try validateObject(object, spec: objectSpec, field: field)
+        case .array(let arraySpec):
             guard case .array(let array) = value else { return }
-            try validateStringArrayItems(array, field: field)
-        default:
-            break
+            try validateArrayBounds(arraySpec, value: value, field: field)
+            try validateArrayItems(array, spec: arraySpec, field: field)
         }
     }
 
     func validateObject(
         _ object: [String: HeistValue],
-        parameter: FenceParameterSpec,
+        spec: FenceParameterObjectSpec,
         field: String
     ) throws {
-        for child in parameter.objectProperties {
+        guard let properties = spec.properties else { return }
+
+        for child in properties {
             guard let value = object[child.key] else { continue }
             try validate(child, value: value, field: "\(field).\(child.key)")
         }
-        for child in parameter.objectProperties where object[child.key] == nil {
+        for child in properties where object[child.key] == nil {
             try validate(child, value: nil, field: "\(field).\(child.key)")
         }
 
-        guard !parameter.objectAdditionalProperties else { return }
-        let knownKeys = Set(parameter.objectProperties.map(\.key))
+        guard spec.additionalProperties != true else { return }
+        let knownKeys = Set(properties.map(\.key))
         guard let unknownKey = object.keys.sorted().first(where: { !knownKeys.contains($0) }) else {
             return
         }
@@ -251,46 +252,13 @@ extension FenceCommandDescriptor {
 
     func validateArrayItems(
         _ array: [HeistValue],
-        parameter: FenceParameterSpec,
+        spec: FenceParameterArraySpec,
         field: String
     ) throws {
-        guard let itemType = parameter.arrayItemType else { return }
+        guard let itemSchema = spec.items else { return }
         for (index, item) in array.enumerated() {
             let itemField = "\(field)[\(index)]"
-            try validateType(itemType, value: item, field: itemField)
-            guard itemType == .object, case .object(let object) = item else { continue }
-            let itemParameter = FenceParameterSpec(
-                key: parameter.key,
-                type: .object,
-                required: true,
-                enumValues: nil,
-                defaultValue: nil,
-                minimum: nil,
-                maximum: nil,
-                exclusiveMinimum: nil,
-                minLength: nil,
-                minItems: nil,
-                maxItems: nil,
-                jsonSchema: .object(),
-                objectProperties: parameter.arrayItemProperties,
-                objectAdditionalProperties: parameter.arrayItemAdditionalProperties,
-                arrayItemType: nil,
-                arrayItemProperties: [],
-                arrayItemAdditionalProperties: false
-            )
-            try validateObject(object, parameter: itemParameter, field: itemField)
-        }
-    }
-
-    func validateStringArrayItems(_ array: [HeistValue], field: String) throws {
-        for (index, item) in array.enumerated() {
-            guard case .string = item else {
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)]",
-                    observed: item.schemaObservedDescription,
-                    expected: "string"
-                )
-            }
+            try validateSchema(itemSchema, value: item, field: itemField)
         }
     }
 
@@ -326,11 +294,11 @@ extension FenceCommandDescriptor {
     }
 
     func validateEnum(
-        _ parameter: FenceParameterSpec,
+        _ scalar: FenceParameterScalarSpec,
         value: HeistValue,
         field: String
     ) throws {
-        guard let enumValues = parameter.enumValues,
+        guard let enumValues = scalar.constraints.enumValues,
               case .string(let string) = value,
               !enumValues.contains(string) else {
             return
@@ -343,19 +311,31 @@ extension FenceCommandDescriptor {
     }
 
     func validateScalarBounds(
-        _ parameter: FenceParameterSpec,
+        _ scalar: FenceParameterScalarSpec,
         value: HeistValue,
         field: String
     ) throws {
-        switch parameter.type {
+        switch scalar.kind.type {
         case .integer:
             guard let integer = value.integerValue else { return }
-            try validateNumberBounds(Double(integer), parameter: parameter, value: value, field: field)
+            try validateNumberBounds(
+                Double(integer),
+                type: .integer,
+                constraints: scalar.constraints,
+                value: value,
+                field: field
+            )
         case .number:
             guard let number = value.numberValue else { return }
-            try validateNumberBounds(number, parameter: parameter, value: value, field: field)
+            try validateNumberBounds(
+                number,
+                type: .number,
+                constraints: scalar.constraints,
+                value: value,
+                field: field
+            )
         case .string:
-            guard let minLength = parameter.minLength,
+            guard let minLength = scalar.constraints.minLength,
                   case .string(let string) = value,
                   string.count < minLength else {
                 return
@@ -365,54 +345,99 @@ extension FenceCommandDescriptor {
                 observed: value.schemaObservedDescription,
                 expected: minLength == 1 ? "non-empty string" : "string with length >= \(minLength)"
             )
-        case .array, .stringArray:
-            guard case .array(let array) = value else { return }
-            if let minItems = parameter.minItems, array.count < minItems {
-                throw SchemaValidationError(
-                    field: field,
-                    observed: "array count \(array.count)",
-                    expected: "array with at least \(minItems) items"
-                )
-            }
-            if let maxItems = parameter.maxItems, array.count > maxItems {
-                throw SchemaValidationError(
-                    field: field,
-                    observed: "array count \(array.count)",
-                    expected: "array with at most \(maxItems) items"
-                )
-            }
         default:
             break
         }
     }
 
-    func validateNumberBounds(
-        _ number: Double,
-        parameter: FenceParameterSpec,
+    func validateArrayBounds(
+        _ spec: FenceParameterArraySpec,
         value: HeistValue,
         field: String
     ) throws {
-        if let exclusiveMinimum = parameter.exclusiveMinimum, number <= exclusiveMinimum {
+        guard case .array(let array) = value else { return }
+        if let minItems = spec.constraints.minItems, array.count < minItems {
+            throw SchemaValidationError(
+                field: field,
+                observed: "array count \(array.count)",
+                expected: "array with at least \(minItems) items"
+            )
+        }
+        if let maxItems = spec.constraints.maxItems, array.count > maxItems {
+            throw SchemaValidationError(
+                field: field,
+                observed: "array count \(array.count)",
+                expected: "array with at most \(maxItems) items"
+            )
+        }
+    }
+
+    func validateNumberBounds(
+        _ number: Double,
+        type: FenceParameterSpec.ParamType,
+        constraints: FenceParameterScalarConstraints,
+        value: HeistValue,
+        field: String
+    ) throws {
+        if let exclusiveMinimum = constraints.exclusiveMinimum, number <= exclusiveMinimum {
             throw SchemaValidationError(
                 field: field,
                 observed: value.schemaObservedDescription,
-                expected: "\(parameter.numericTypeDescription) > \(formatConstraintNumber(exclusiveMinimum))"
+                expected: "\(numericTypeDescription(type)) > \(formatConstraintNumber(exclusiveMinimum))"
             )
         }
-        if let minimum = parameter.minimum, number < minimum {
+        if let minimum = constraints.minimum, number < minimum {
             throw SchemaValidationError(
                 field: field,
                 observed: value.schemaObservedDescription,
-                expected: parameter.numericLowerBoundDescription
+                expected: numericLowerBoundDescription(type: type, constraints: constraints)
             )
         }
-        if let maximum = parameter.maximum, number > maximum {
+        if let maximum = constraints.maximum, number > maximum {
             throw SchemaValidationError(
                 field: field,
                 observed: value.schemaObservedDescription,
-                expected: parameter.numericUpperBoundDescription
+                expected: numericUpperBoundDescription(type: type, constraints: constraints)
             )
         }
+    }
+
+    func numericTypeDescription(_ type: FenceParameterSpec.ParamType) -> String {
+        type == .integer ? "integer" : "number"
+    }
+
+    func numericLowerBoundDescription(
+        type: FenceParameterSpec.ParamType,
+        constraints: FenceParameterScalarConstraints
+    ) -> String {
+        let numericType = numericTypeDescription(type)
+        guard let minimum = constraints.minimum else { return numericType }
+        if let maximum = constraints.maximum {
+            return "\(numericType) between \(formatConstraintNumber(minimum)) and \(formatConstraintNumber(maximum))"
+        }
+        return "\(numericType) >= \(formatConstraintNumber(minimum))"
+    }
+
+    func numericUpperBoundDescription(
+        type: FenceParameterSpec.ParamType,
+        constraints: FenceParameterScalarConstraints
+    ) -> String {
+        let numericType = numericTypeDescription(type)
+        guard let maximum = constraints.maximum else { return numericType }
+        if let exclusiveMinimum = constraints.exclusiveMinimum {
+            return "\(numericType) in \(formatConstraintNumber(exclusiveMinimum))...\(formatUpperConstraintNumber(maximum, type: type))"
+        }
+        if let minimum = constraints.minimum {
+            return "\(numericType) between \(formatConstraintNumber(minimum)) and \(formatUpperConstraintNumber(maximum, type: type))"
+        }
+        return "\(numericType) <= \(formatUpperConstraintNumber(maximum, type: type))"
+    }
+
+    func formatUpperConstraintNumber(_ value: Double, type: FenceParameterSpec.ParamType) -> String {
+        if type == .number, value != 0, value.rounded(.towardZero) == value {
+            return String(format: "%.1f", value)
+        }
+        return formatConstraintNumber(value)
     }
 
     func formatConstraintNumber(_ value: Double) -> String {
@@ -437,61 +462,11 @@ private extension FenceParameterSpec {
         }
     }
 
-    var skipsNestedDescriptorValidation: Bool {
-        switch key {
-        case FenceParameterKey.target.rawValue,
-             FenceParameterKey.element.rawValue,
-             FenceParameterKey.predicate.rawValue,
-             FenceParameterKey.expect.rawValue,
-             FenceParameterKey.argument.rawValue:
-            return true
-        default:
-            return false
-        }
-    }
-
     var expectedTypeDescription: String {
         if let enumValues {
             return SchemaValidationError.expectedEnumValues(enumValues)
         }
         return type.expectedDescription
-    }
-
-    var numericTypeDescription: String {
-        type == .integer ? "integer" : "number"
-    }
-
-    var numericLowerBoundDescription: String {
-        guard let minimum else { return numericTypeDescription }
-        if let maximum {
-            return "\(numericTypeDescription) between \(formatConstraintNumber(minimum)) and \(formatConstraintNumber(maximum))"
-        }
-        return "\(numericTypeDescription) >= \(formatConstraintNumber(minimum))"
-    }
-
-    var numericUpperBoundDescription: String {
-        guard let maximum else { return numericTypeDescription }
-        if let exclusiveMinimum {
-            return "\(numericTypeDescription) in \(formatConstraintNumber(exclusiveMinimum))...\(formatUpperConstraintNumber(maximum))"
-        }
-        if let minimum {
-            return "\(numericTypeDescription) between \(formatConstraintNumber(minimum)) and \(formatUpperConstraintNumber(maximum))"
-        }
-        return "\(numericTypeDescription) <= \(formatUpperConstraintNumber(maximum))"
-    }
-
-    func formatConstraintNumber(_ value: Double) -> String {
-        if value.rounded(.towardZero) == value {
-            return String(format: "%.0f", value)
-        }
-        return String(value)
-    }
-
-    func formatUpperConstraintNumber(_ value: Double) -> String {
-        if type == .number, value != 0, value.rounded(.towardZero) == value {
-            return String(format: "%.1f", value)
-        }
-        return formatConstraintNumber(value)
     }
 }
 
