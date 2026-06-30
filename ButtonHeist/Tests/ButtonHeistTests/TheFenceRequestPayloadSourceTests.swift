@@ -147,6 +147,10 @@ import Testing
 
         for forbidden in [
             "jsonSchemaProperty: HeistValue",
+            "public let schema:",
+            "public var schema:",
+            "let schema: HeistValue",
+            "var schema: HeistValue",
             "var schema: [String: HeistValue]",
             "let schema: [String: HeistValue]",
         ] {
