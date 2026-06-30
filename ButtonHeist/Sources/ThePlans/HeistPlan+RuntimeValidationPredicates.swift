@@ -188,10 +188,6 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         guard let change else { return }
         switch change {
-        case .label(let change):
-            validateStringPropertyChange(change, path: path)
-        case .identifier(let change):
-            validateStringPropertyChange(change, path: path)
         case .value(let change):
             validateStringPropertyChange(change, path: path)
         case .traits:
@@ -222,10 +218,6 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         guard let change else { return }
         switch change {
-        case .label(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
-        case .identifier(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
         case .value(let change):
             validateStringPropertyChange(change, path: path, scope: scope)
         case .traits:

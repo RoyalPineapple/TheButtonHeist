@@ -1291,8 +1291,14 @@ import Testing
     let elementOnlyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(.label("Total")))"#))
     expect(elementOnlyUpdated, contains: ".updated(...) with an element matcher also requires an update matcher")
 
+    let explicitlyElementOnlyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(.element(.label("Quantity"))))"#))
+    expect(explicitlyElementOnlyUpdated, contains: ".updated(...) with an element matcher also requires an update matcher")
+
     let labeledElementUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(element: .label("Total"), .value("$3")))"#))
     expect(labeledElementUpdated, contains: "updated(element:) is not supported")
+
+    let labeledExplicitElementUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(element: .element(.label("Total")), .value("$3")))"#))
+    expect(labeledExplicitElementUpdated, contains: "updated(element:) is not supported")
 
     let fromOnlyUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(from: "$2")))"#))
     expect(fromOnlyUpdate, contains: "value update predicate requires to when from is set")
@@ -1314,6 +1320,23 @@ import Testing
 
     let presentAlias = compileError(root(#"WaitFor(.present(.label("Receipt")))"#))
     expect(presentAlias, contains: "unsupported accessibility predicate '.present'")
+}
+
+@Test func `runtime parser rejects empty predicates and bare wait strings`() throws {
+    let emptyExists = compileError(root(#"WaitFor(.exists())"#))
+    expect(emptyExists, contains: ".exists requires an element matcher or target")
+
+    let emptyMissing = compileError(root(#"WaitFor(.missing())"#))
+    expect(emptyMissing, contains: ".missing requires an element matcher or target")
+
+    let emptyAppeared = compileError(root(#"WaitFor(.appeared())"#))
+    expect(emptyAppeared, contains: ".appeared requires an element matcher")
+
+    let emptyDisappeared = compileError(root(#"WaitFor(.disappeared())"#))
+    expect(emptyDisappeared, contains: ".disappeared requires an element matcher")
+
+    let bareWaitString = compileError(root(#"WaitFor("Receipt")"#))
+    expect(bareWaitString, contains: "accessibility predicate requires an explicit accessibility property")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {

@@ -132,7 +132,7 @@ enum PredicateObservationDiagnostics {
         }
 
         if allowsDisappearanceFinalStateWarning,
-           let warning = disappearanceFinalStateWarning(for: step.predicate, state: state) {
+           let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
             return waitReceipt(
                 for: step,
                 state: state,
@@ -282,30 +282,141 @@ enum PredicateObservationDiagnostics {
         )
     }
 
-    private func disappearanceFinalStateWarning(
+    private func finalStateSatisfiedTransitionWarning(
         for predicate: AccessibilityPredicate,
         state: WaitPredicateState
     ) -> HeistPredicateWarning? {
-        guard let element = predicate.singleDisappearedElementMatcher,
+        if let element = predicate.singleAppearedElementMatcher {
+            return presenceFinalStateWarning(
+                for: predicate,
+                state: state,
+                element: element,
+                expectedPresence: true
+            )
+        }
+
+        if let element = predicate.singleDisappearedElementMatcher {
+            return presenceFinalStateWarning(
+                for: predicate,
+                state: state,
+                element: element,
+                expectedPresence: false
+            )
+        }
+
+        if let update = predicate.singleDestinationOnlyUpdatedElement {
+            return updateFinalStateWarning(
+                for: predicate,
+                state: state,
+                update: update
+            )
+        }
+
+        return nil
+    }
+
+    private func presenceFinalStateWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState,
+        element: ElementPredicate,
+        expectedPresence: Bool
+    ) -> HeistPredicateWarning? {
+        guard
               let baselineElements = state.changeBaseline?.capture?.interface.projectedElements else {
             return nil
         }
         let baselinePresent = !ElementMatchSet(elements: baselineElements).matching(element).isEmpty
-        guard !baselinePresent else { return nil }
+        guard baselinePresent == expectedPresence else { return nil }
 
         let finalElements = state.finalElements ?? baselineElements
-        let finalAbsent = ElementMatchSet(elements: finalElements).matching(element).isEmpty
-        guard finalAbsent else { return nil }
+        let finalPresent = !ElementMatchSet(elements: finalElements).matching(element).isEmpty
+        guard finalPresent == expectedPresence else { return nil }
 
-        let subject = Self.disappearanceWarningSubject(for: element)
+        let subject = Self.warningSubject(for: element)
+        let stateDescription = expectedPresence ? "present" : "absent"
+        let transitionDescription = expectedPresence ? "appearance" : "disappearance"
+        let message = "\(subject) was already \(stateDescription) when the wait began, "
+            + "so no \(transitionDescription) was observed. The final state satisfied the wait."
         return HeistPredicateWarning(
             code: "transition_not_observed_final_state_satisfied",
             predicate: predicate.description,
-            message: "\(subject) was already absent when the wait began, so no disappearance was observed. The final state satisfied the wait."
+            message: message
         )
     }
 
-    private static func disappearanceWarningSubject(for predicate: ElementPredicate) -> String {
+    private func updateFinalStateWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState,
+        update: ElementUpdatePredicate
+    ) -> HeistPredicateWarning? {
+        guard let change = update.change,
+              change.isDestinationOnly,
+              let baselineElements = state.changeBaseline?.capture?.interface.projectedElements
+        else { return nil }
+
+        let baselineSatisfied = updateFinalStateSatisfied(
+            update,
+            in: baselineElements
+        )
+        guard baselineSatisfied else { return nil }
+
+        let finalElements = state.finalElements ?? baselineElements
+        let finalSatisfied = updateFinalStateSatisfied(
+            update,
+            in: finalElements
+        )
+        guard finalSatisfied else { return nil }
+
+        let message = "The destination update state was already satisfied when the wait began, "
+            + "so no update transition was observed. The final state satisfied the wait."
+        return HeistPredicateWarning(
+            code: "transition_not_observed_final_state_satisfied",
+            predicate: predicate.description,
+            message: message
+        )
+    }
+
+    private func updateFinalStateSatisfied(
+        _ update: ElementUpdatePredicate,
+        in elements: [HeistElement]
+    ) -> Bool {
+        guard let change = update.change else { return false }
+        let candidates = update.element.map {
+            ElementMatchSet(elements: elements).matching($0).elements
+        } ?? elements
+
+        return candidates.contains { element in
+            Self.destinationPropertyChange(for: change.property, in: element)?.satisfies(change) == true
+        }
+    }
+
+    private static func destinationPropertyChange(
+        for property: ElementProperty,
+        in element: HeistElement
+    ) -> PropertyChange? {
+        switch property {
+        case .label, .identifier:
+            return nil
+        case .value:
+            return ValueProperty.value(in: element).map { .value(old: nil, new: $0) }
+        case .traits:
+            return TraitsProperty.value(in: element).map { .traits(old: nil, new: $0) }
+        case .hint:
+            return HintProperty.value(in: element).map { .hint(old: nil, new: $0) }
+        case .actions:
+            return ActionsProperty.value(in: element).map { .actions(old: nil, new: $0) }
+        case .frame:
+            return FrameProperty.value(in: element).map { .frame(old: nil, new: $0) }
+        case .activationPoint:
+            return ActivationPointProperty.value(in: element).map { .activationPoint(old: nil, new: $0) }
+        case .customContent:
+            return CustomContentProperty.value(in: element).map { .customContent(old: nil, new: $0) }
+        case .rotors:
+            return RotorsProperty.value(in: element).map { .rotors(old: nil, new: $0) }
+        }
+    }
+
+    private static func warningSubject(for predicate: ElementPredicate) -> String {
         for check in predicate.checks {
             if case .label(.exact(let label)) = check, !label.isEmpty {
                 return label
@@ -1274,6 +1385,15 @@ private extension HeistSemanticObservation {
 }
 
 private extension AccessibilityPredicate {
+    var singleAppearedElementMatcher: ElementPredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .appearedElement(let element) = assertions[0] else {
+            return nil
+        }
+        return element
+    }
+
     var singleDisappearedElementMatcher: ElementPredicate? {
         guard case .changePredicate(.elementsScope(let assertions)) = self,
               assertions.count == 1,
@@ -1281,6 +1401,39 @@ private extension AccessibilityPredicate {
             return nil
         }
         return element
+    }
+
+    var singleDestinationOnlyUpdatedElement: ElementUpdatePredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .updatedElement(let update) = assertions[0],
+              update.change?.isDestinationOnly == true else {
+            return nil
+        }
+        return update
+    }
+}
+
+private extension AnyPropertyChange {
+    var isDestinationOnly: Bool {
+        switch self {
+        case .value(let change):
+            return change.before == nil && change.after != nil
+        case .traits(let change):
+            return change.before == nil && change.after != nil
+        case .hint(let change):
+            return change.before == nil && change.after != nil
+        case .actions(let change):
+            return change.before == nil && change.after != nil
+        case .frame(let change):
+            return change.before == nil && change.after != nil
+        case .activationPoint(let change):
+            return change.before == nil && change.after != nil
+        case .customContent(let change):
+            return change.before == nil && change.after != nil
+        case .rotors(let change):
+            return change.before == nil && change.after != nil
+        }
     }
 }
 
