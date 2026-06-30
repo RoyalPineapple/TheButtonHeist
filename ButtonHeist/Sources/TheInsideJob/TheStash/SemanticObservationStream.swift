@@ -120,6 +120,7 @@ private struct SemanticObservationFulfillmentState {
     ) -> EventsByFulfilledScope {
         var currentEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
         var events: EventsByFulfilledScope = [:]
+        let pendingAccessibilityNotifications = stash.accessibilityNotifications.drainPendingEvents()
         var sourceEvent: SettledSemanticObservationEvent?
         for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
@@ -131,7 +132,8 @@ private struct SemanticObservationFulfillmentState {
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
                 previous: currentEvents[fulfilledScope],
-                stash: stash
+                stash: stash,
+                pendingAccessibilityNotifications: pendingAccessibilityNotifications
             )
             currentEvents[fulfilledScope] = event
             events[fulfilledScope] = event
@@ -299,6 +301,9 @@ final class SemanticObservationStream {
             passiveObservationState.replaceDiscovery(discovery)
             return
         }
+        if let stash {
+            AccessibilityNotificationObserver.shared.subscribe(stash.accessibilityNotifications)
+        }
         fulfillmentState.invalidate()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -315,6 +320,10 @@ final class SemanticObservationStream {
         cycles.cancelRunningCycle()
         settledWaiters.completeAll(returning: nil)
         cycles.completeAllWaiters()
+        if let stash {
+            AccessibilityNotificationObserver.shared.unsubscribe(stash.accessibilityNotifications)
+            stash.accessibilityNotifications.clearPendingEvents()
+        }
     }
 
     func subscribe(scope: SemanticObservationScope) -> SemanticObservationSubscription {

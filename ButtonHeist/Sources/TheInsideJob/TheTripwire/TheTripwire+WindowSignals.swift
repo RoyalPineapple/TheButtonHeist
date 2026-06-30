@@ -11,12 +11,26 @@ extension TheTripwire {
         static let empty = TripwireSignal(
             topmostVC: nil,
             navigation: .empty,
-            windowStack: .empty
+            windowStack: .empty,
+            accessibilityNotificationSequence: 0
         )
 
         let topmostVC: ObjectIdentifier?
         let navigation: NavigationSignal
         let windowStack: WindowStackSignal
+        let accessibilityNotificationSequence: UInt64
+
+        init(
+            topmostVC: ObjectIdentifier?,
+            navigation: NavigationSignal,
+            windowStack: WindowStackSignal,
+            accessibilityNotificationSequence: UInt64 = 0
+        ) {
+            self.topmostVC = topmostVC
+            self.navigation = navigation
+            self.windowStack = windowStack
+            self.accessibilityNotificationSequence = accessibilityNotificationSequence
+        }
     }
 
     /// Public UIKit navigation state sampled from the topmost controller. This
@@ -92,7 +106,8 @@ extension TheTripwire {
         return TripwireSignal(
             topmostVC: topmost.map(ObjectIdentifier.init),
             navigation: Self.navigationSignal(for: topmost),
-            windowStack: Self.windowStackSignal(for: windows)
+            windowStack: Self.windowStackSignal(for: windows),
+            accessibilityNotificationSequence: AccessibilityNotificationObserver.shared.latestSequence
         )
     }
 

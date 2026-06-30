@@ -33,6 +33,9 @@ final class TheStash {
     /// TheBurglar handles parsing.
     let burglar: TheBurglar
 
+    /// Pending accessibility notifications captured while semantic observation is active.
+    let accessibilityNotifications = AccessibilityNotificationBus()
+
     // MARK: - State Stores
 
     var observedState = ObservedState()

@@ -55,6 +55,15 @@ final class PostActionObservation {
         var timeMs: Int {
             outcome.outcome.timeMs
         }
+
+        var accessibilityNotifications: [AccessibilityNotificationEvidence] {
+            switch result {
+            case .committed(let event):
+                return event.trace.captures.last?.transition.accessibilityNotifications ?? []
+            case .diagnostic, .unavailable:
+                return []
+            }
+        }
     }
 
     struct FinalEvidence {
@@ -264,14 +273,16 @@ final class PostActionObservation {
         afterInterface: Interface,
         parentCapture: AccessibilityTrace.Capture,
         classification: ScreenClassifier.Classification,
-        transient: [HeistElement] = []
+        transient: [HeistElement] = [],
+        accessibilityNotifications: [AccessibilityNotificationEvidence] = []
     ) -> AccessibilityTrace {
         makeAccessibilityTrace(
             afterInterface: afterInterface,
             parentCapture: parentCapture,
             transition: AccessibilityTrace.Transition(
                 screenChangeReason: classification.reason?.rawValue,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
             )
         )
     }
@@ -379,7 +390,8 @@ final class PostActionObservation {
                 before: before,
                 final: final,
                 classification: classification
-            )
+            ),
+            accessibilityNotifications: settleEvidence.accessibilityNotifications
         )
     }
 

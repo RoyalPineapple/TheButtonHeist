@@ -161,7 +161,7 @@ final class TheBurglar {
     /// a custom rotor result that VoiceOver can focus even though it is not
     /// discoverable by walking the current app hierarchy.
     func parseObject(_ object: NSObject) -> AccessibilityElement? {
-        let root = RotorResultParsingRoot(object: object)
+        let root = SingleElementParsingRoot(object: object)
         let captured = parser.parseAccessibilityHierarchy(
             in: root,
             rotorResultLimit: 0,
@@ -235,14 +235,14 @@ final class TheBurglar {
 
 }
 
-private final class RotorResultParsingRoot: UIView {
-    private let rotorResultObject: NSObject
+private final class SingleElementParsingRoot: UIView {
+    private let elementObject: NSObject
 
     init(object: NSObject) {
-        self.rotorResultObject = object
+        self.elementObject = object
         super.init(frame: ScreenMetrics.current.bounds)
         isAccessibilityElement = false
-        accessibilityElements = [rotorResultObject]
+        accessibilityElements = [elementObject]
     }
 
     @available(*, unavailable)
