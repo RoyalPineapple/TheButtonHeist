@@ -10,6 +10,8 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case message
     case value
     case rotor
+    case screenshot
+    case heistExecution
     case delta
     case screenName
     case screenId
@@ -116,6 +118,8 @@ private struct PublicActionResultModel {
 private enum PublicActionPayload {
     case value(String)
     case rotor(PublicRotorResult)
+    case screenshot(PublicScreenshotResult)
+    case heistExecution(PublicHeistExecutionActionResult)
     case none
 
     init(projection: ActionPayloadProjection) {
@@ -124,7 +128,11 @@ private enum PublicActionPayload {
             self = .value(value)
         case .rotor(let rotor):
             self = .rotor(PublicRotorResult(result: rotor))
-        case .screenshot, .heistExecutionStepCount, .none:
+        case .screenshot(let width, let height):
+            self = .screenshot(PublicScreenshotResult(width: width, height: height))
+        case .heistExecutionStepCount(let stepCount):
+            self = .heistExecution(PublicHeistExecutionActionResult(stepCount: stepCount))
+        case .none:
             self = .none
         }
     }
@@ -135,10 +143,23 @@ private enum PublicActionPayload {
             try container.encode(value, forKey: .value)
         case .rotor(let rotor):
             try container.encode(rotor, forKey: .rotor)
+        case .screenshot(let screenshot):
+            try container.encode(screenshot, forKey: .screenshot)
+        case .heistExecution(let heistExecution):
+            try container.encode(heistExecution, forKey: .heistExecution)
         case .none:
             break
         }
     }
+}
+
+struct PublicScreenshotResult: Encodable {
+    let width: Double
+    let height: Double
+}
+
+struct PublicHeistExecutionActionResult: Encodable {
+    let stepCount: Int
 }
 
 private struct PublicActionFailure {
