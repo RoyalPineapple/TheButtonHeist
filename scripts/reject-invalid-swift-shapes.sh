@@ -323,6 +323,12 @@ public_response_envelope_matches="$(git_grep '\bPublicResponseEnvelope\b' "${EXI
 public_response_envelope_matches="$(filter_allowed_paths "$public_response_envelope_matches" "${PUBLIC_RESPONSE_ENVELOPE_ALLOWED_PATHS[@]}")"
 report_matches "public response envelope bypass outside PublicJSONSerializer" "$public_response_envelope_matches"
 
+public_scrollable_container_list_projection_matches="$(
+  perl -0ne 'while (/case[[:space:]]+[.]scrollable\b(?:(?!case[[:space:]]+[.]).)*?Fields[[:space:]]*\([[:space:]]*type:[[:space:]]*[.]list\b/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' \
+    ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Container.swift
+)"
+report_matches "public scrollable container projected as list" "$public_scrollable_container_list_projection_matches"
+
 TOOL_STDOUT_ALLOWED_LINES=(
   'ButtonHeist/Sources/HeistDoctorTool/main.swift:LINE:        FileHandle.standardOutput.write(Data((line + "\n").utf8))'
   'ButtonHeist/Sources/HeistPlanTool/main.swift:LINE:        FileHandle.standardOutput.write(data)'
@@ -438,6 +444,18 @@ failure_raw_initializer_matches="$(
   done
 )"
 report_matches "raw failure-domain initializer outside JSON boundary" "$failure_raw_initializer_matches"
+
+auth_failure_hint_drop_matches="$(
+  perl -0ne 'while (/case[[:space:]]+[.]authFailure\b(?:(?!case[[:space:]]+[.]).)*?[.]authFailed[[:space:]]*\([[:space:]]*serverError[.]message[[:space:]]*\)/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' \
+    ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffAdmission.swift
+)"
+report_matches "auth failure mapping drops server recovery hint" "$auth_failure_hint_drop_matches"
+
+transport_send_action_failed_matches="$(
+  perl -0ne 'while (/case[[:space:]]+[.]transportFailed\b(?:(?!case[[:space:]]+[.]).)*?self[[:space:]]*=[[:space:]]*[.]actionFailed\b/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' \
+    ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+FailureMapping.swift
+)"
+report_matches "typed transport send failure flattened to request.action_failed" "$transport_send_action_failed_matches"
 
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'
