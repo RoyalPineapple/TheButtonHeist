@@ -9,6 +9,7 @@ import ThePlans
 
 package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let durationMs: Int
+    package let rootNodes: [HeistExecutionEvidenceNode]
     package let nodes: [HeistExecutionEvidenceNode]
 
     package var summary: HeistExecutionEvidenceSummary {
@@ -32,7 +33,8 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         durationMs: Int = 0
     ) {
         self.durationMs = durationMs
-        self.nodes = steps.flatMap(Self.nodes(from:))
+        self.rootNodes = steps.map(Self.node(from:))
+        self.nodes = rootNodes.flatMap(\.preorder)
     }
 
     package var outputReceiptNodes: [HeistExecutionStepResult] {
@@ -43,31 +45,37 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         nodes.lazy.compactMap(\.firstFailedStepInSubtree).first
     }
 
-    private static func nodes(from step: HeistExecutionStepResult) -> [HeistExecutionEvidenceNode] {
-        let childNodes = step.children.flatMap(Self.nodes(from:))
+    private static func node(from step: HeistExecutionStepResult) -> HeistExecutionEvidenceNode {
+        let childNodes = step.children.map(Self.node(from:))
         let firstFailedStep = childNodes.lazy.compactMap(\.firstFailedStepInSubtree).first
             ?? (step.status == .failed ? step : nil)
-        return [
-            HeistExecutionEvidenceNode(
-                step: step,
-                firstFailedStepInSubtree: firstFailedStep
-            ),
-        ] + childNodes
+        return HeistExecutionEvidenceNode(
+            step: step,
+            children: childNodes,
+            firstFailedStepInSubtree: firstFailedStep
+        )
     }
 }
 
 package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     package let step: HeistExecutionStepResult
     package let reportFacts: HeistExecutionStepReportFacts
+    package let children: [HeistExecutionEvidenceNode]
     package let firstFailedStepInSubtree: HeistExecutionStepResult?
 
     package init(
         step: HeistExecutionStepResult,
+        children: [HeistExecutionEvidenceNode] = [],
         firstFailedStepInSubtree: HeistExecutionStepResult?
     ) {
         self.step = step
         self.reportFacts = HeistExecutionStepReportFacts(step: step)
+        self.children = children
         self.firstFailedStepInSubtree = firstFailedStepInSubtree
+    }
+
+    package var preorder: [HeistExecutionEvidenceNode] {
+        [self] + children.flatMap(\.preorder)
     }
 
     package var isExecuted: Bool {
@@ -87,6 +95,7 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
     package let durationMs: Int
     package let expectationsChecked: Int
     package let expectationsMet: Int
+    package let finalScreenId: String?
 
     package init(rollup: HeistExecutionEvidenceRollup) {
         executedTopLevelStepCount = rollup.nodes.count { $0.isExecuted && $0.isRootBodyStep }
@@ -100,6 +109,7 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
         expectationsMet = rollup.nodes.count { node in
             node.isExecuted && node.reportFacts.expectation?.met == true
         }
+        finalScreenId = rollup.actions.finalScreenId
     }
 }
 
@@ -122,6 +132,12 @@ package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
 
     package var traceResultsInExecutionOrder: [ActionResult] {
         nodes.compactMap(\.reportFacts.traceEvidenceResult)
+    }
+
+    package var finalScreenId: String? {
+        traceResultsInExecutionOrder
+            .compactMap { $0.accessibilityTrace?.endpointScreenId }
+            .last
     }
 }
 
@@ -168,6 +184,7 @@ package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
     package let durationMs: Int
     package let expectationsChecked: Int
     package let expectationsMet: Int
+    package let finalScreenId: String?
 
     package init(result: HeistExecutionResult) {
         self.init(summary: HeistExecutionEvidenceRollup(result: result).summary)
@@ -181,6 +198,7 @@ package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
         durationMs = summary.durationMs
         expectationsChecked = summary.expectationsChecked
         expectationsMet = summary.expectationsMet
+        finalScreenId = summary.finalScreenId
     }
 }
 

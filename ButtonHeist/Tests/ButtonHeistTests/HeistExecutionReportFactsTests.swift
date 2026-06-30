@@ -84,6 +84,49 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         ])
     }
 
+    func testReportProjectionConsumesScoreEvidenceNodesForTreeAndOutputShapes() throws {
+        let result = forEachStringSuccessResult()
+        let rollup = result.evidenceRollup
+        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
+
+        XCTAssertEqual(projection.nodes.map(\.path), rollup.rootNodes.map(\.step.path))
+        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.nodes.map(\.step.path))
+        XCTAssertEqual(projection.summary.outputReceiptNodeCount, rollup.summary.outputReceiptNodeCount)
+
+        let projectedRoot = try XCTUnwrap(projection.nodes.first)
+        let rollupRoot = try XCTUnwrap(rollup.rootNodes.first)
+        XCTAssertEqual(projectedRoot.children.map(\.path), rollupRoot.children.map(\.step.path))
+    }
+
+    func testReportProjectionFinalScreenIdOriginatesFromScoreSummaryFacts() {
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2),
+            beforeScreenId: "home",
+            afterScreenId: "checkout"
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                actionStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
+                    actionResult: ActionResult(
+                        success: true,
+                        method: .activate,
+                        accessibilityTrace: trace
+                    )
+                ),
+            ],
+            durationMs: 12
+        )
+
+        let summary = HeistExecutionReportSummaryFacts(result: result)
+        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
+
+        XCTAssertEqual(summary.finalScreenId, "checkout")
+        XCTAssertEqual(projection.summary.finalScreenId, summary.finalScreenId)
+        XCTAssertEqual(projection.finalScreenId, summary.finalScreenId)
+    }
+
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
         let evidence = HeistActionEvidence(
             command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
@@ -760,7 +803,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testPublicHeistEvidenceProjectionEncodesExactlyOneVariantPerEvidenceCase() throws {
         let plan = try evidenceProjectionPlan()
         for testCase in evidenceProjectionCases() {
-            let projection = HeistReportNodeProjection(step: testCase.step, profile: .mcp)
+            let node = try XCTUnwrap(HeistExecutionEvidenceRollup(steps: [testCase.step]).rootNodes.first)
+            let projection = HeistReportNodeProjection(node: node, profile: .mcp)
             XCTAssertEqual(projectedEvidenceKey(projection.evidence), testCase.expectedKey, testCase.name)
 
             let response = FenceResponse.heistExecution(
