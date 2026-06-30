@@ -1493,7 +1493,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         activationTrace: ActivationTrace? = nil
     ) -> PostActionObservation.ActionOutcome {
         .success(PostActionObservation.ActionOutcomeSuccess(
-            payload: payload,
+            payload: payload.map(PostActionObservation.ActionOutcomePayload.immediate) ?? .none,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace
         ))
@@ -1506,7 +1506,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     ) -> PostActionObservation.ActionOutcome {
         .failure(PostActionObservation.ActionOutcomeFailure(
             errorKind: errorKind,
-            payload: payload,
+            payload: payload.map(PostActionObservation.ActionOutcomePayload.immediate) ?? .none,
             activationTrace: activationTrace
         ))
     }

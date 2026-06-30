@@ -60,8 +60,14 @@ import Testing
             rawPayloadFactories.isEmpty,
             "ActionResultBuilder should traffic in method-bound ActionResultPayload values."
         )
-        #expect(try builder.containsMatch(#"\bfunc\s+success\s*\(\s*payload\s*:\s*ActionResultPayload[?]\s*\)"#))
-        #expect(try builder.containsMatch(#"\bfunc\s+failure\s*\([^)]*payload\s*:\s*ActionResultPayload[?]\s*\)"#))
+        #expect(
+            try !builder.containsMatch(#"\bfunc\s+success\s*\(\s*payload\s*:\s*ActionResultPayload[?]\s*\)"#)
+        )
+        #expect(
+            try !builder.containsMatch(#"\bfunc\s+failure\s*\([^)]*payload\s*:\s*ActionResultPayload[?]\s*\)"#)
+        )
+        #expect(try builder.containsMatch(#"\bfunc\s+success\s*\(\s*payload\s*:\s*ActionResultPayload\s*\)"#))
+        #expect(try builder.containsMatch(#"\bfunc\s+failure\s*\([^)]*payload\s*:\s*ActionResultPayload\s*\)"#))
     }
 
     @Test func `runtime payload producers construct method bound payloads`() throws {
@@ -101,5 +107,25 @@ import Testing
         #expect(try rotor.containsMatch(#"[.]rotor\s*\("#))
         #expect(try screenCapture.containsMatch(#"[.]screenshot\s*\("#))
         #expect(try heistExecution.containsMatch(#"[.]heistExecution\s*\("#))
+    }
+
+    @Test func `post action payload resolution is a single enum not parallel optionals`() throws {
+        let postAction = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift"
+        )
+        let success = try #require(
+            try postAction.firstBlock(matching: #"\bstruct\s+ActionOutcomeSuccess\b"#)
+        )
+        let payload = try #require(
+            try postAction.firstBlock(matching: #"\benum\s+ActionOutcomePayload\b"#)
+        )
+
+        #expect(success.contents.contains("let payload: ActionOutcomePayload"))
+        #expect(!success.contents.contains("afterStatePayload"))
+        #expect(!success.contents.contains("let payload: ActionResultPayload?"))
+        #expect(payload.contents.contains("case none"))
+        #expect(payload.contents.contains("case immediate("))
+        #expect(payload.contents.contains("case afterState("))
+        #expect(payload.contents.contains("case afterStateWithFallback("))
     }
 }

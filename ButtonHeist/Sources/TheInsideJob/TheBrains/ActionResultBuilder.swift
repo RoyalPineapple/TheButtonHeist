@@ -49,8 +49,7 @@ import TheScore
         )
     }
 
-    func success(payload: ActionResultPayload?) -> ActionResult {
-        guard let payload else { return success() }
+    func success(payload: ActionResultPayload) -> ActionResult {
         precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
         return ActionResult.success(
             payload: payload,
@@ -78,8 +77,7 @@ import TheScore
         )
     }
 
-    func failure(errorKind: ErrorKind = .actionFailed, payload: ActionResultPayload?) -> ActionResult {
-        guard let payload else { return failure(errorKind: errorKind) }
+    func failure(errorKind: ErrorKind = .actionFailed, payload: ActionResultPayload) -> ActionResult {
         precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
         return ActionResult.failure(
             payload: payload,
