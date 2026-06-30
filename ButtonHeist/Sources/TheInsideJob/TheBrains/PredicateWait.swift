@@ -598,7 +598,7 @@ private enum FinalStateSatisfactionTiming: String {
         let expectation = warning.map {
             ExpectationResult(met: true, predicate: step.predicate, actual: $0.message)
         } ?? state.lastEvaluation
-        waitReceipt(
+        return waitReceipt(
             for: step,
             trace: state.lastTrace,
             observationSummary: state.lastObservationSummary,
