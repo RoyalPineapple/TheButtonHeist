@@ -867,11 +867,11 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                    predicate: .exists(.label("Home")),
                     body: [.warn(WarnStep(message: "home flow"))]
                 ),
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Login"))),
+                    predicate: .exists(.label("Login")),
                     body: [.fail(FailStep(message: "wrong branch"))]
                 ),
             ])),
@@ -883,7 +883,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, HeistCaseSelectionOutcome.matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -894,7 +894,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                    predicate: .exists(.label("Home")),
                     body: [.fail(FailStep(message: "should not run"))]
                 ),
             ])),
@@ -908,7 +908,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(heist.steps.map(\.kind), [.conditional, .warn])
         XCTAssertEqual(
             heist.steps.first?.caseSelectionEvidence?.selection.outcome,
-            .elseBranch(reason: .noMatch)
+            HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
         )
     }
 
@@ -1188,11 +1188,11 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                    predicate: .exists(.label("Home")),
                     body: [.warn(WarnStep(message: "home flow"))]
                 ),
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Settings"))),
+                    predicate: .exists(.label("Settings")),
                     body: [.fail(FailStep(message: "should not run"))]
                 ),
             ])),
@@ -1204,38 +1204,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
-    }
-
-    func testHeistIfChangedPredicateUsesFirstObservationAsBaseline() async throws {
-        let runtime = heistRuntime(observations: [
-            observedState(labels: ["Home"]),
-        ])
-        let plan = try HeistPlan(body: [
-            .conditional(try ConditionalStep(
-                cases: [
-                    PredicateCase(
-                        predicate: .change(.elements()),
-                        body: [.fail(FailStep(message: "baseline should not match"))]
-                    ),
-                ],
-                elseBody: [.warn(WarnStep(message: "no future change observed"))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
-
-        let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(selection.outcome, .elseBranch(reason: .noMatch))
-        XCTAssertEqual(
-            selection.cases.first?.result.actual,
-            "change predicate requires future settled observation after baseline"
-        )
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, HeistCaseSelectionOutcome.matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -1293,7 +1262,7 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                        predicate: .exists(.label("Home")),
                         body: [.warn(WarnStep(message: "home flow"))]
                     ),
                 ]
@@ -1305,7 +1274,10 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .elseBranch(reason: .noMatch))
+        XCTAssertEqual(
+            step.caseSelectionEvidence?.selection.outcome,
+            HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
+        )
         XCTAssertEqual(step.children.map(\.kind), [])
     }
 
@@ -1319,7 +1291,7 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                        predicate: .exists(.label("Home")),
                         body: [.warn(WarnStep(message: "home flow"))]
                     ),
                 ]
@@ -2264,11 +2236,11 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                    predicate: .exists(.label("Home")),
                     body: [.warn(WarnStep(message: "home"))]
                 ),
                 PredicateCase(
-                    predicate: .state(.missing(ElementPredicate(label: "Login"))),
+                    predicate: .missing(.label("Login")),
                     body: [.warn(WarnStep(message: "not login"))]
                 ),
             ])),
@@ -2289,7 +2261,7 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .exists(ElementPredicate(label: "Toast")),
+                        predicate: .exists(.label("Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ],
@@ -2312,11 +2284,11 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                        predicate: .exists(.label("Home")),
                         body: [.warn(WarnStep(message: "home"))]
                     ),
                     PredicateCase(
-                        predicate: .exists(ElementPredicate(label: "Toast")),
+                        predicate: .exists(.label("Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ],
@@ -2346,7 +2318,7 @@ final class TheBrainsActionTests: XCTestCase {
             .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))))),
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
-                    predicate: .state(.exists(ElementPredicate(label: "Ready"))),
+                    predicate: .exists(.label("Ready")),
                     body: [.warn(WarnStep(message: "ready"))]
                 ),
             ])),
@@ -2389,7 +2361,7 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .exists(ElementPredicate(label: "Toast")),
+                        predicate: .exists(.label("Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ]
@@ -2401,7 +2373,10 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .elseBranch(reason: .noMatch))
+        XCTAssertEqual(
+            step.caseSelectionEvidence?.selection.outcome,
+            HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
+        )
         XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
     }
 

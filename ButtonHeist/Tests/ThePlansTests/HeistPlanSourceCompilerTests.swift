@@ -220,14 +220,6 @@ import Testing
     TypeText("Bruschetta", into: .identifier("Search"))
         .expect(.change(.elements(.updated(.identifier("Search"), .value("Bruschetta")))))
     """#))
-    let labelUpdate = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.identifier("name-row"))
-        .expect(.change(.elements(.updated(.label(before: "Old name", after: "New name")))))
-    """#))
-    let identifierUpdate = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.label("Save"))
-        .expect(.change(.elements(.updated(.identifier(before: "save-disabled", after: "save-enabled")))))
-    """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.change(.elements(.updated(.value("3")))))
@@ -253,22 +245,6 @@ import Testing
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 change: .value(after: "Bruschetta")
-            )))), timeout: 1)
-        )),
-    ])
-    let expectedLabelUpdate = try HeistPlan(body: [
-        .action(try ActionStep(
-            command: .activate(.predicate(.identifier("name-row"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .label(before: "Old name", after: "New name")
-            )))), timeout: 1)
-        )),
-    ])
-    let expectedIdentifierUpdate = try HeistPlan(body: [
-        .action(try ActionStep(
-            command: .activate(.predicate(.label("Save"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .identifier(before: "save-disabled", after: "save-enabled")
             )))), timeout: 1)
         )),
     ])
@@ -299,13 +275,11 @@ import Testing
     ])
 
     #expect(scoped == expectedScoped)
-    #expect(labelUpdate == expectedLabelUpdate)
-    #expect(identifierUpdate == expectedIdentifierUpdate)
     #expect(unscoped == expectedUnscoped)
     #expect(beforeAfter == expectedBeforeAfter)
     #expect(broadBeforeAfter == expectedBroadBeforeAfter)
-    try assertCanonicalRoundTrip(labelUpdate)
-    try assertCanonicalRoundTrip(identifierUpdate)
+    try assertCanonicalRoundTrip(scoped)
+    try assertCanonicalRoundTrip(beforeAfter)
 }
 
 @Test func `inline plan source custom content update queries label and value`() throws {
@@ -1305,6 +1279,12 @@ import Testing
 
     let fromToUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(from: "$2", to: "$3")))"#))
     expect(fromToUpdate, contains: "value update predicate accepts before and after")
+
+    let labelUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.label(before: "Old", after: "New")))"#))
+    expect(labelUpdate, contains: "expected a string literal or scoped string reference")
+
+    let identifierUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.identifier(before: "old", after: "new")))"#))
+    expect(identifierUpdate, contains: "expected a string literal or scoped string reference")
 
     let screenChangedAppeared = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged(.appeared(.label("Receipt"))))"#))
     expect(screenChangedAppeared, contains: "unsupported state predicate '.appeared'")

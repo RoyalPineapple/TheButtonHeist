@@ -87,6 +87,27 @@ extension TheBrains {
         )
     }
 
+    func heistInvocationReceipt(
+        path: String,
+        durationMs: Int,
+        intent: HeistStepIntent,
+        evidence: HeistInvocationEvidence,
+        failure: HeistFailureDetail? = nil,
+        abortedAtChildPath: String? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        heistReceipt(
+            path: path,
+            kind: .invoke,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: .invocation(evidence),
+            failure: failure,
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
+        )
+    }
+
     func heistFailedReceipt(
         path: String,
         kind: HeistExecutionStepKind,

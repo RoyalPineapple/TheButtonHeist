@@ -49,13 +49,11 @@ extension TheBrains {
                 resolvedCommand = try command.resolveForRuntimeDispatch(in: environment)
             } catch {
                 let observed = "could not resolve heist action command: \(error)"
-                return HeistExecutionStepResult(
+                return heistActionReceipt(
                     path: path,
-                    kind: .action,
-                    status: .failed,
                     durationMs: elapsedMilliseconds(since: start),
                     intent: actionIntent(command),
-                    evidence: .action(HeistActionEvidence(command: command, actionResult: nil)),
+                    evidence: HeistActionEvidence(command: command, actionResult: nil),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "action command resolves before dispatch",
@@ -125,18 +123,16 @@ extension TheBrains {
             wait: wait,
             receipt: receipt
         )
-        return HeistExecutionStepResult(
+        return heistActionReceipt(
             path: path,
-            kind: .action,
-            status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: .action(HeistActionEvidence(
+            evidence: HeistActionEvidence(
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: receipt.actionResult,
                 expectation: receipt.expectation
-            )),
+            ),
             failure: failure
         )
     }
@@ -148,13 +144,11 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let failure = actionDispatchFailure(command: command, result: actionResult)
-        return HeistExecutionStepResult(
+        return heistActionReceipt(
             path: path,
-            kind: .action,
-            status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: .action(HeistActionEvidence(command: command, actionResult: actionResult)),
+            evidence: HeistActionEvidence(command: command, actionResult: actionResult),
             failure: failure
         )
     }
@@ -211,13 +205,11 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        heistWaitReceipt(
             path: path,
-            kind: .wait,
-            status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt, outcome: outcome),
+            evidence: waitEvidencePayload(receipt, outcome: outcome),
             failure: failure
         )
     }
@@ -240,13 +232,11 @@ extension TheBrains {
             path: "\(path).wait.else_body"
         )
         let abortedAtChildPath = children.firstFailedStep?.path
-        return HeistExecutionStepResult(
+        return heistWaitReceipt(
             path: path,
-            kind: .wait,
-            status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt, outcome: .handledElse),
+            evidence: waitEvidencePayload(receipt, outcome: .handledElse),
             failure: abortedAtChildPath.map {
                 childFailureDetail(category: .wait, childPath: $0)
             },
@@ -256,24 +246,24 @@ extension TheBrains {
     }
 
     private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
-        waitEvidence(
+        .wait(waitEvidencePayload(
             receipt,
             outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed
-        )
+        ))
     }
 
-    private func waitEvidence(
+    private func waitEvidencePayload(
         _ receipt: HeistWaitReceipt,
         outcome: HeistPredicateEvidenceOutcome
-    ) -> HeistStepEvidence {
-        .wait(HeistWaitEvidence(
+    ) -> HeistWaitEvidence {
+        HeistWaitEvidence(
             outcome: outcome,
             actionResult: receipt.actionResult,
             expectation: receipt.expectation,
             baselineSummary: nil,
             finalSummary: receipt.expectation.actual,
             warning: receipt.warning
-        ))
+        )
     }
 
     private func waitResolutionFailure(
@@ -283,10 +273,8 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist wait predicate: \(error)"
-        return HeistExecutionStepResult(
+        return heistWaitReceipt(
             path: path,
-            kind: .wait,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
             failure: HeistFailureDetail(
@@ -312,18 +300,16 @@ extension TheBrains {
             predicate: nil,
             actual: "could not resolve heist expectation: \(error)"
         )
-        return HeistExecutionStepResult(
+        return heistActionReceipt(
             path: path,
-            kind: .action,
-            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: .action(HeistActionEvidence(
+            evidence: HeistActionEvidence(
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: expectationActionResult,
                 expectation: expectation
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .expectation,
                 contract: "action expectation predicate resolves before evaluation",
