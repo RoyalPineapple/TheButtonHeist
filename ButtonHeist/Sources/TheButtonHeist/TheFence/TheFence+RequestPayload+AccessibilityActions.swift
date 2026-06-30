@@ -11,9 +11,10 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyString(.action)
-        return appInteractionDispatch(
+        return try appInteractionDispatch(
             SemanticActionCommand.activate.command,
-            Self.accessibilityActionCommand(target: target, actionName: actionName)
+            Self.accessibilityActionCommand(target: target, actionName: actionName),
+            expectationPayload: expectationPayload
         )
     }
 

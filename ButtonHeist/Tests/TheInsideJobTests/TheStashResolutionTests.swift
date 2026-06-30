@@ -522,8 +522,9 @@ final class TheStashResolutionTests: XCTestCase {
         )
 
         XCTAssertEqual(result.settle.outcome, .cancelled(timeMs: 1))
-        XCTAssertNil(result.event)
-        XCTAssertNil(result.diagnosticScreen)
+        guard case .unavailable = result.result else {
+            return XCTFail("Expected cancelled settle to return unavailable evidence")
+        }
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.sequence, sequence)
         XCTAssertEqual(bagman.settledSemanticScreen.orderedElements.first?.element.label, "Settled")
         XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence)

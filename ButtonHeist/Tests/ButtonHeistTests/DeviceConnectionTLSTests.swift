@@ -3,6 +3,21 @@ import Network
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeviceConnectionTLSTests: XCTestCase {
+    private func makeDummyDevice() -> DiscoveredDevice {
+        DiscoveredDevice(
+            id: "test",
+            name: "TestApp#abc",
+            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        )
+    }
+
+    @ButtonHeistActor
+    private func makeConnectedConnection() -> (DeviceConnection, NWConnection) {
+        let transportConnection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(DeviceConnection.ActiveConnection(connection: transportConnection))
+        return (connection, transportConnection)
+    }
 
     // MARK: - DisconnectReason
 
@@ -108,36 +123,84 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
     @ButtonHeistActor
     func testDeviceConnectionStoresTokenFromInitializer() async {
-        let device = DiscoveredDevice(
-            id: "test",
-            name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        )
-
-        let connection = DeviceConnection(device: device, token: "token")
+        let connection = DeviceConnection(device: makeDummyDevice(), token: "token")
         XCTAssertNotNil(connection)
+        XCTAssertEqual(HandoffAuthToken("token")?.rawValue, "token")
     }
 
     @ButtonHeistActor
     func testDeviceConnectionWithoutFingerprint() async {
-        let device = DiscoveredDevice(
-            id: "test",
-            name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        )
-
-        let connection = DeviceConnection(device: device)
+        let connection = DeviceConnection(device: makeDummyDevice())
         XCTAssertNotNil(connection)
     }
 
     @ButtonHeistActor
-    func testConnectWithoutTokenEmitsMissingToken() async {
-        let device = DiscoveredDevice(
-            id: "test",
-            name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+    func testConnectWithoutUsableTokenEmitsMissingToken() async {
+        let tokens: [String?] = [nil, "", " \n"]
+
+        for token in tokens {
+            XCTAssertNil(HandoffAuthToken(token))
+            let connection = DeviceConnection(device: makeDummyDevice(), token: token)
+            var disconnectReason: DisconnectReason?
+            connection.onEvent = { event in
+                if case .disconnected(let reason) = event {
+                    disconnectReason = reason
+                }
+            }
+
+            connection.connect()
+
+            XCTAssertEqual(disconnectReason, .missingToken)
+        }
+    }
+
+    // MARK: - Receive Events
+
+    @ButtonHeistActor
+    func testReceiveErrorWithContentDisconnectsAsNetworkError() async {
+        let (connection, transportConnection) = makeConnectedConnection()
+        let expectedError = NWError.posix(.ECONNRESET)
+        var disconnectReason: DisconnectReason?
+        var deliveredMessage = false
+        connection.onEvent = { event in
+            switch event {
+            case .message:
+                deliveredMessage = true
+            case .disconnected(let reason):
+                disconnectReason = reason
+            default:
+                break
+            }
+        }
+
+        connection.handleReceive(
+            DeviceReceiveEvent(content: Data(#"{"type":"info"}"#.utf8), isComplete: true, error: expectedError),
+            connection: transportConnection
         )
-        let connection = DeviceConnection(device: device)
+
+        guard let reason = disconnectReason, case .networkError(let error) = reason else {
+            return XCTFail("Expected network error disconnect, got \(String(describing: disconnectReason))")
+        }
+        XCTAssertEqual(String(describing: error), String(describing: expectedError))
+        XCTAssertFalse(deliveredMessage)
+        assertDeviceConnectionDisconnected(connection)
+    }
+
+    @ButtonHeistActor
+    func testNilContentNoncompleteReceiveKeepsConnectionOpen() async {
+        let (connection, transportConnection) = makeConnectedConnection()
+
+        connection.handleReceive(
+            DeviceReceiveEvent(content: nil, isComplete: false, error: nil),
+            connection: transportConnection
+        )
+
+        assertDeviceConnectionConnected(connection)
+    }
+
+    @ButtonHeistActor
+    func testCompleteReceiveWithoutContentDisconnectsAsServerClosed() async {
+        let (connection, transportConnection) = makeConnectedConnection()
         var disconnectReason: DisconnectReason?
         connection.onEvent = { event in
             if case .disconnected(let reason) = event {
@@ -145,9 +208,13 @@ final class DeviceConnectionTLSTests: XCTestCase {
             }
         }
 
-        connection.connect()
+        connection.handleReceive(
+            DeviceReceiveEvent(content: nil, isComplete: true, error: nil),
+            connection: transportConnection
+        )
 
-        XCTAssertEqual(disconnectReason, .missingToken)
+        XCTAssertEqual(disconnectReason, .serverClosed)
+        assertDeviceConnectionDisconnected(connection)
     }
 
     // MARK: - Loopback Detection

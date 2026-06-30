@@ -69,19 +69,18 @@ extension FenceResponse {
     }
 
     private static func formatSessionStateHuman(_ payload: SessionStatePayload) -> String {
-        let device = payload.device?.deviceName ?? "unknown"
-        switch payload.phase {
-        case .connected:
-            return "Session: connected to \(device)"
+        switch payload.state {
+        case .connected(let device):
+            return "Session: connected to \(device.deviceName)"
         case .connecting:
             return "Session: connecting"
-        case .failed:
-            if let failure = sessionStateFailureSummary(payload.lastFailure) {
+        case .failed(let failure):
+            if let failure = sessionStateFailureSummary(failure) {
                 return "Session: failed (\(failure))"
             }
             return "Session: failed"
-        case .disconnected:
-            if let failure = sessionStateFailureSummary(payload.lastFailure) {
+        case .disconnected(let lastFailure):
+            if let failure = sessionStateFailureSummary(lastFailure) {
                 return "Session: disconnected (\(failure))"
             }
             return "Session: not connected"
@@ -421,39 +420,42 @@ extension FenceResponse {
     }
 
     private func formatDelta(_ projection: DeltaProjection) -> String {
-        switch projection.kind {
-        case .noChange:
-            guard !projection.transient.elements.isEmpty else {
-                return "[\(projection.elementCount) elements, no change]"
+        switch projection {
+        case .noChange(let metadata):
+            guard !metadata.transient.elements.isEmpty else {
+                return "[\(metadata.elementCount) elements, no change]"
             }
-            let transients = projection.transient.elements
+            let transients = metadata.transient.elements
                 .map { "+- \(Self.compactElementLine($0))" }
                 .joined(separator: "; ")
-            return "[\(projection.elementCount) elements, no net change: \(transients)]"
-        case .elementsChanged:
-            var parts: [String] = ["\(projection.elementCount) elements"]
-            if let addedCount = projection.edits?.added.elements.count, addedCount > 0 {
+            return "[\(metadata.elementCount) elements, no net change: \(transients)]"
+        case .elementsChanged(let delta):
+            var parts: [String] = ["\(delta.metadata.elementCount) elements"]
+            if delta.edits.added.elements.count > 0 {
+                let addedCount = delta.edits.added.elements.count
                 parts.append("+\(addedCount) added")
             }
-            if let removedCount = projection.edits?.removed.elements.count, removedCount > 0 {
+            if delta.edits.removed.elements.count > 0 {
+                let removedCount = delta.edits.removed.elements.count
                 parts.append("-\(removedCount) removed")
             }
-            if let updatedCount = projection.edits?.updated.updates.count, updatedCount > 0 {
+            if delta.edits.updated.updates.count > 0 {
+                let updatedCount = delta.edits.updated.updates.count
                 parts.append("~\(updatedCount) updated")
             }
             let detail = Self.compactElementEditLines(
-                edits: projection.edits,
-                transient: projection.transient.elements
+                edits: delta.edits,
+                transient: delta.metadata.transient.elements
             )
             guard !detail.isEmpty else {
                 return "[" + parts.joined(separator: ", ") + "]"
             }
             return "[" + parts.joined(separator: ", ") + ": " + detail.joined(separator: "; ") + "]"
-        case .screenChanged:
-            let compactInterface = projection.screen?.interface.map {
+        case .screenChanged(let delta):
+            let compactInterface = delta.screen.interface.map {
                 Self.compactInterface($0)
             } ?? ""
-            return "[\(projection.elementCount) elements, screen changed]\n" + compactInterface
+            return "[\(delta.metadata.elementCount) elements, screen changed]\n" + compactInterface
         }
     }
 

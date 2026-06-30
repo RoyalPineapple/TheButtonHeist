@@ -21,7 +21,7 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var predicateInput: WaitPredicateInput
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -29,82 +29,126 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 10, max: 30)")
     var timeout: Double = 10.0
 
-    @Flag(name: .long, help: "Wait for an element matching the element fields to exist")
-    var exists: Bool = false
-
-    @Flag(name: .long, help: "Wait for an element matching the element fields to be missing")
-    var missing: Bool = false
-
-    @Option(
-        name: .long,
-        help: ArgumentHelp(
-            "Wait for a change: a discriminator (screen, elements, updated)"
-        )
-    )
-    var change: String?
-
-    @Option(name: .long, help: "Full predicate as a JSON object (overrides --exists/--missing/--change)")
-    var predicate: String?
-
     func validate() throws {
         guard timeout > 0 && timeout <= 30 else {
             throw ValidationError("timeout must be greater than 0 and at most 30 seconds, got \(timeout)")
-        }
-        let modes = [exists, missing, change != nil, predicate != nil].filter { $0 }.count
-        guard modes == 1 else {
-            throw ValidationError("Specify exactly one of --exists, --missing, --change, or --predicate")
         }
     }
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let predicateValue = try resolvedPredicateValue()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(
-                CommandArgumentWriter.value(.timeout, timeout),
-                CommandArgumentWriter.value(.predicate, predicateValue)
-            ),
+            arguments: try requestArguments(),
             statusMessage: "Waiting for predicate..."
         )
     }
 
-    private func resolvedPredicateValue() throws -> HeistValue {
-        if let predicate {
-            return try TheFence.parseExpectationArgument(predicate)
-        }
-        let accessibilityPredicate = try buildPredicate()
-        return try Self.heistValue(from: accessibilityPredicate)
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        Self.fenceArguments(
+            CommandArgumentWriter.value(.timeout, timeout),
+            CommandArgumentWriter.value(.predicate, try predicateInput.predicateValue())
+        )
+    }
+}
+
+enum WaitChangeKind: String, CaseIterable, ExpressibleByArgument {
+    case screen
+    case elements
+    case updated
+
+    static var allowedValuesDescription: String {
+        allCases.map(\.rawValue).joined(separator: ", ")
+    }
+}
+
+struct WaitPredicateInput: ParsableArguments {
+    @OptionGroup var element: ElementTargetOptions
+
+    @Flag(
+        exclusivity: .exclusive,
+        help: "Wait for an element matching the element fields to exist or be missing"
+    )
+    var presence: WaitPresenceKind?
+
+    @Option(
+        name: .long,
+        help: ArgumentHelp(
+            "Wait for a change: \(WaitChangeKind.allowedValuesDescription)"
+        )
+    )
+    var change: WaitChangeKind?
+
+    @Option(name: .long, help: "Full predicate as a JSON object")
+    var predicate: String?
+
+    mutating func validate() throws {
+        _ = try predicateSource()
     }
 
-    private func buildPredicate() throws -> AccessibilityPredicate {
-        if exists || missing {
-            guard let elementPredicate = try element.parsedMatcher() else {
-                throw ValidationError("--exists/--missing require element fields (e.g. -l, --identifier)")
-            }
-            return exists ? .state(.exists(elementPredicate)) : .state(.missing(elementPredicate))
+    func predicateValue() throws -> HeistValue {
+        switch try predicateSource() {
+        case .rawPredicate(let predicate):
+            return try TheFence.parseExpectationArgument(predicate)
+        case .accessibilityPredicate(let accessibilityPredicate):
+            return try Self.heistValue(from: accessibilityPredicate)
         }
-        guard let change else {
+    }
+
+    private func predicateSource() throws -> WaitPredicateSource {
+        switch (presence, change, predicate) {
+        case (.some(let presence), nil, nil):
+            return .accessibilityPredicate(try presence.predicate(element: element))
+        case (nil, .some(let change), nil):
+            return .accessibilityPredicate(try change.predicate(element: element))
+        case (nil, nil, .some(let predicate)):
+            return .rawPredicate(predicate)
+        case (nil, nil, nil):
             throw ValidationError("Specify exactly one of --exists, --missing, --change, or --predicate")
-        }
-        switch change {
-        case "screen":
-            return .change(.screen())
-        case "elements":
-            return .change(.elements())
-        case "updated":
-            return .change(.elements(.updatedElement(ElementUpdatePredicate(element: try element.parsedMatcher()))))
         default:
-            throw ValidationError(
-                "Unknown --change value \"\(change)\". Valid: screen, elements, updated"
-            )
+            throw ValidationError("Specify exactly one of --exists, --missing, --change, or --predicate")
         }
     }
 
     private static func heistValue(from predicate: AccessibilityPredicate) throws -> HeistValue {
         let data = try JSONEncoder().encode(predicate)
         return try JSONDecoder().decode(HeistValue.self, from: data)
+    }
+}
+
+private enum WaitPredicateSource {
+    case accessibilityPredicate(AccessibilityPredicate)
+    case rawPredicate(String)
+}
+
+enum WaitPresenceKind: String, EnumerableFlag {
+    case exists
+    case missing
+
+    func predicate(element: ElementTargetOptions) throws -> AccessibilityPredicate {
+        guard let elementPredicate = try element.parsedMatcher() else {
+            throw ValidationError("--exists/--missing require element fields (e.g. -l, --identifier)")
+        }
+        switch self {
+        case .exists:
+            return .state(.exists(elementPredicate))
+        case .missing:
+            return .state(.missing(elementPredicate))
+        }
+    }
+}
+
+private extension WaitChangeKind {
+    func predicate(element: ElementTargetOptions) throws -> AccessibilityPredicate {
+        switch self {
+        case .screen:
+            return .change(.screen())
+        case .elements:
+            return .change(.elements())
+        case .updated:
+            return .change(.elements(.updatedElement(ElementUpdatePredicate(element: try element.parsedMatcher()))))
+        }
     }
 }

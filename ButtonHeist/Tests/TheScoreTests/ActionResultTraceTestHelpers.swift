@@ -84,11 +84,26 @@ func makeTestActionResult(
     activationTrace: ActivationTrace? = nil,
     timing: ActionPerformanceTiming? = nil
 ) -> ActionResult {
-    ActionResult(
-        success: success,
+    if success {
+        return .success(
+            method: method,
+            message: message,
+            payload: payload,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+    guard let errorKind else {
+        preconditionFailure("failed test ActionResult requires errorKind")
+    }
+    return .failure(
         method: method,
-        message: message,
         errorKind: errorKind,
+        message: message,
         payload: payload,
         accessibilityTrace: accessibilityTrace,
         settled: settled,
@@ -105,12 +120,20 @@ func makeTestHeistActionStep(
     result: ActionResult = makeTestActionResult(),
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
-    HeistExecutionStepResult(
+    let evidence = HeistStepEvidence.action(HeistActionEvidence(command: command, actionResult: result))
+    if result.success {
+        return .passed(
+            path: path,
+            kind: .action,
+            durationMs: durationMs,
+            evidence: evidence
+        )
+    }
+    return .failed(
         path: path,
         kind: .action,
-        status: result.success ? .passed : .failed,
         durationMs: durationMs,
-        evidence: .action(HeistActionEvidence(command: command, actionResult: result))
+        evidence: evidence
     )
 }
 
@@ -119,10 +142,16 @@ func makeTestHeistExecutionResult(
     durationMs: Int = 1,
     abortedAtPath: String? = nil
 ) -> HeistExecutionResult {
-    HeistExecutionResult(
+    if let abortedAtPath {
+        return .failed(
+            steps: steps,
+            durationMs: durationMs,
+            abortedAtPath: abortedAtPath
+        )
+    }
+    return .passed(
         steps: steps,
-        durationMs: durationMs,
-        abortedAtPath: abortedAtPath
+        durationMs: durationMs
     )
 }
 

@@ -775,6 +775,48 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(waitEvidence.expectation.met)
     }
 
+    func testHeistActivateRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let subject = makeTestHeistElement(
+            label: "Checkout",
+            traits: [.staticText],
+            actions: [.activate]
+        )
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                ActionResult(
+                    success: true,
+                    method: .activate,
+                    subjectEvidence: ActionSubjectEvidence(
+                        source: .resolvedSemanticTarget,
+                        target: target,
+                        element: subject
+                    )
+                )
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success, result.message ?? "heist failed")
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
+        XCTAssertEqual(warning.code, HeistActionWarning.activationWeakAffordanceEvidenceCode)
+        XCTAssertEqual(
+            warning.message,
+            "activate succeeded, but the target does not advertise a primary activation affordance"
+        )
+        XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[activate]"#)
+        XCTAssertEqual(heist.warnings, [])
+        XCTAssertEqual(heist.evidenceRollup.warnings.all, [
+            .action(path: "$.body[0]", warning: warning),
+        ])
+    }
+
     func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let screenshot = ScreenPayload(

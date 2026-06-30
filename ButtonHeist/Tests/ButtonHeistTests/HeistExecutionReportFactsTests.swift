@@ -33,6 +33,89 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
     }
 
+    func testEvidenceRollupUsesOneOrderedNodeShapeForSummaryActionsAndWarnings() {
+        let actionWarning = HeistActionWarning.activationWeakAffordanceEvidence(
+            evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#
+        )
+        let waitWarning = HeistPredicateWarning(
+            code: "transition_not_observed_final_state_satisfied",
+            predicate: ".changed(.screen)",
+            evidence: "Ready",
+            message: "final state was already satisfied"
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                actionStep(
+                    path: "$.body[0]",
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
+                    actionResult: ActionResult(success: true, method: .activate),
+                    warning: actionWarning
+                ),
+                waitStep(
+                    path: "$.body[1]",
+                    actionResult: ActionResult(success: true, method: .wait),
+                    expectation: ExpectationResult(
+                        met: true,
+                        predicate: .state(.exists(ElementPredicate(label: "Ready")))
+                    ),
+                    warning: waitWarning
+                ),
+                warnStep(path: "$.body[2]", message: "explicit warning"),
+            ],
+            durationMs: 42
+        )
+
+        let rollup = result.evidenceRollup
+
+        XCTAssertEqual(rollup.outputReceiptNodes.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
+        XCTAssertEqual(rollup.summary.executedTopLevelStepCount, 3)
+        XCTAssertEqual(rollup.summary.executedNodeCount, 3)
+        XCTAssertEqual(rollup.summary.expectationsChecked, 1)
+        XCTAssertEqual(rollup.summary.expectationsMet, 1)
+        XCTAssertEqual(rollup.actions.dispatchedResults.map(\.method), [.activate])
+        XCTAssertEqual(rollup.actions.traceResultsInExecutionOrder.map(\.method), [.activate, .wait])
+        XCTAssertEqual(rollup.warnings.explicit, [
+            HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
+        ])
+        XCTAssertEqual(rollup.warnings.all, [
+            .action(path: "$.body[0]", warning: actionWarning),
+            .wait(path: "$.body[1]", warning: waitWarning),
+            .explicit(HeistExecutionWarning(path: "$.body[2]", message: "explicit warning")),
+        ])
+    }
+
+    func testActionEvidenceStrictlyDecodesActionWarnings() throws {
+        let evidence = HeistActionEvidence(
+            command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
+            actionResult: ActionResult(success: true, method: .activate),
+            warning: .activationWeakAffordanceEvidence(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
+        )
+
+        let decoded = try JSONDecoder().decode(
+            HeistActionEvidence.self,
+            from: try JSONEncoder().encode(evidence)
+        )
+
+        XCTAssertEqual(decoded, evidence)
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            HeistActionEvidence.self,
+            from: Data(#"{"actionResult":{"success":true,"method":"activate"},"warning":"loose"}"#.utf8)
+        ))
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            HeistActionEvidence.self,
+            from: Data("""
+            {
+              "actionResult": { "success": true, "method": "activate" },
+              "warning": {
+                "code": "activation_weak_affordance_evidence",
+                "message": "activate succeeded",
+                "legacy": true
+              }
+            }
+            """.utf8)
+        ))
+    }
+
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
         let result = HeistExecutionResult(
             steps: [
@@ -731,13 +814,17 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             name: "action",
             step: actionStep(
                 command: .activate(.target(.predicate(ElementPredicate(label: "Button")))),
-                actionResult: ActionResult(success: true, method: .activate)
+                actionResult: ActionResult(success: true, method: .activate),
+                warning: .activationWeakAffordanceEvidence(evidence: #"label="Button" traits=[staticText] actions=[activate]"#)
             ),
             expectedKey: "action",
             assertEvidence: { evidence in
                 let action = try XCTUnwrap(evidence.action)
                 XCTAssertEqual(action.commandName, "activate")
                 XCTAssertNotNil(action.result)
+                XCTAssertEqual(action.warning?.code, HeistActionWarning.activationWeakAffordanceEvidenceCode)
+                XCTAssertEqual(action.warning?.evidence, #"label="Button" traits=[staticText] actions=[activate]"#)
+                XCTAssertNil(evidence.warning)
             }
         )
     }
@@ -973,6 +1060,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         actionResult: ActionResult,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
+        warning: HeistActionWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
@@ -987,7 +1075,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: expectationActionResult,
-                expectation: expectation
+                expectation: expectation,
+                warning: warning
             )),
             failure: failure
         )

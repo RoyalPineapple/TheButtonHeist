@@ -201,7 +201,7 @@ final class ServerMessageTests: XCTestCase {
     // MARK: - ActionResult Tests
 
     func testActionResultWithValue() throws {
-        let result = ActionResult(success: true, method: .typeText, payload: .value("Hello World"))
+        let result = ActionResult.success(method: .typeText, payload: .value("Hello World"))
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -221,7 +221,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultWithoutValue() throws {
-        let result = ActionResult(success: true, method: .syntheticTap)
+        let result = ActionResult.success(method: .syntheticTap)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -236,7 +236,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultPayloadValueWireShape() throws {
-        let result = ActionResult(success: true, method: .typeText, payload: .value("Hi"))
+        let result = ActionResult.success(method: .typeText, payload: .value("Hi"))
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
@@ -252,7 +252,7 @@ final class ServerMessageTests: XCTestCase {
             timestamp: Date(timeIntervalSince1970: 0),
             interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         )
-        let result = ActionResult(success: true, method: .takeScreenshot, payload: .screenshot(screen))
+        let result = ActionResult.success(method: .takeScreenshot, payload: .screenshot(screen))
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -269,8 +269,8 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultPayloadHeistExecutionWireShape() throws {
-        let heist = HeistExecutionResult(steps: [], durationMs: 42)
-        let result = ActionResult(success: true, method: .heistPlan, payload: .heistExecution(heist))
+        let heist = HeistExecutionResult.passed(steps: [], durationMs: 42)
+        let result = ActionResult.success(method: .heistPlan, payload: .heistExecution(heist))
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -303,7 +303,7 @@ final class ServerMessageTests: XCTestCase {
             element: element,
             settledObservationSequence: 12
         )
-        let result = ActionResult(success: true, method: .activate, subjectEvidence: evidence)
+        let result = ActionResult.success(method: .activate, subjectEvidence: evidence)
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -364,7 +364,7 @@ final class ServerMessageTests: XCTestCase {
             ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
-        let result = ActionResult(success: true, method: .rotor, payload: .rotor(rotor))
+        let result = ActionResult.success(method: .rotor, payload: .rotor(rotor))
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
@@ -572,7 +572,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testErrorKindAllCasesRoundTrip() throws {
         for kind in ErrorKind.allCases {
-            let result = ActionResult(success: false, method: .syntheticTap, errorKind: kind)
+            let result = ActionResult.failure(method: .syntheticTap, errorKind: kind)
             let data = try JSONEncoder().encode(result)
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
             XCTAssertEqual(decoded.errorKind, kind, "Round-trip failed for \(kind)")

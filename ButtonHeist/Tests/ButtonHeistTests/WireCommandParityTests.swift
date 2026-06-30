@@ -196,38 +196,32 @@ final class WireCommandParityTests: XCTestCase {
         for command in TheFence.Command.allCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
-            let singleStepPlan = try fence.singleStepHeistPlan(for: singleRequest)
 
-            guard let executable = singleRequest.executableRequest else {
-                XCTAssertNil(singleStepPlan, command.rawValue)
+            switch singleRequest.dispatch {
+            case .singleStepHeist(let heistRequest):
+                let plan = try fence.singleStepHeistPlan(for: heistRequest)
+                if case .wait(let wait) = heistRequest {
+                    XCTAssertEqual(plan.body, [.wait(wait)], command.rawValue)
+                    continue
+                }
+
+                guard case .actions(let actions, _) = heistRequest else {
+                    XCTFail("Unknown single-step request for \(command.rawValue)")
+                    continue
+                }
+                let singleCommands = actions.values
+                let heistCommands = plan.body.flatMap(actionCommands(for:))
+
+                XCTAssertEqual(
+                    String(reflecting: heistCommands),
+                    String(reflecting: singleCommands),
+                    command.rawValue
+                )
+            case .directAction(let directAction):
+                XCTAssertNotNil(directAction.action.durableHeistActionFailure, command.rawValue)
+            case .handler:
                 continue
             }
-
-            if case .wait(let wait) = executable {
-                let plan = try XCTUnwrap(singleStepPlan, command.rawValue)
-                XCTAssertEqual(plan.body, [.wait(wait)], command.rawValue)
-                continue
-            }
-
-            guard case .actions(let actions) = executable else {
-                XCTFail("Unknown executable request for \(command.rawValue)")
-                continue
-            }
-            let singleCommands = actions.values
-            let allActionCommandsAreDurable = singleCommands.allSatisfy { $0.durableHeistActionFailure == nil }
-            if !allActionCommandsAreDurable {
-                XCTAssertNil(singleStepPlan, command.rawValue)
-                continue
-            }
-
-            let plan = try XCTUnwrap(singleStepPlan, command.rawValue)
-            let heistCommands = plan.body.flatMap(actionCommands(for:))
-
-            XCTAssertEqual(
-                String(reflecting: heistCommands),
-                String(reflecting: singleCommands),
-                command.rawValue
-            )
         }
     }
 
@@ -246,13 +240,10 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertFalse(command.usesPayloadCheckedHeistPrimitive, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            let executable = try fence.executableRequest(for: request)
-            guard case .actions(let commands) = executable else {
-                return XCTFail("\(command.rawValue) should decode as an action command")
+            guard case .directAction(let directAction) = request.dispatch else {
+                return XCTFail("\(command.rawValue) should decode as direct action")
             }
-            XCTAssertFalse(commands.values.isEmpty, command.rawValue)
-
-            XCTAssertNil(try fence.singleStepHeistPlan(for: request), command.rawValue)
+            XCTAssertNotNil(directAction.action.durableHeistActionFailure, command.rawValue)
         }
     }
 
@@ -262,12 +253,11 @@ final class WireCommandParityTests: XCTestCase {
 
         for command in [TheFence.Command.activate, .oneFingerTap, .typeText, .setPasteboard] {
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            let executable = try fence.executableRequest(for: request)
-            guard case .actions(let actions) = executable else {
-                return XCTFail("\(command.rawValue) should decode as an action command")
+            guard case .singleStepHeist(.actions(let actions, _)) = request.dispatch else {
+                return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
             let singleCommands = actions.values
-            let plan = try XCTUnwrap(try fence.singleStepHeistPlan(for: request), command.rawValue)
+            let plan = try fence.singleStepHeistPlan(for: try XCTUnwrap(request.singleStepHeistRequest))
             let heistCommands = plan.body.flatMap(actionCommands(for:))
 
             XCTAssertEqual(String(reflecting: heistCommands), String(reflecting: singleCommands), command.rawValue)

@@ -39,8 +39,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let afterScreen = makeScreen(elements: [("Still Here", .button, "button_sign_in")])
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: false,
             method: .activate,
+            outcome: failureOutcome(),
             message: "target disappeared",
             before: before,
             settleOutcome: settledOutcome(finalScreen: afterScreen)
@@ -136,14 +136,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         let failure = TheSafecracker.InteractionResult.failure(
             .activate,
             message: "missing",
-            payload: .value("fallback"),
             failureKind: .targetUnavailable
         )
         .withActivationTrace(activationTrace)
         .withTiming(ActionPerformanceTiming(targetResolutionMs: 11))
 
         XCTAssertFalse(failure.success)
-        XCTAssertEqual(failure.payload, .value("fallback"))
+        XCTAssertNil(failure.payload)
         XCTAssertEqual(failure.activationTrace, activationTrace)
         XCTAssertEqual(failure.timing, ActionPerformanceTiming(targetResolutionMs: 11))
         guard case .targetUnavailable? = failure.failureKind else {
@@ -155,8 +154,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: false,
             method: .activate,
+            outcome: failureOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
@@ -168,9 +167,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: false,
             method: .activate,
-            errorKind: .timeout,
+            outcome: failureOutcome(errorKind: .timeout),
             before: before,
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
@@ -183,10 +181,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: false,
             method: .getPasteboard,
+            outcome: failureOutcome(payload: .value("")),
             message: "pasteboard empty",
-            payload: .value(""),
             before: before,
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
@@ -216,12 +213,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
-            subjectEvidence: activationSubjectEvidence(
-                target: .predicate(ElementPredicate(identifier: "inert_option")),
-                element: element,
-                settledObservationSequence: before.settledObservationSequence
+            outcome: successOutcome(
+                subjectEvidence: activationSubjectEvidence(
+                    target: .predicate(ElementPredicate(identifier: "inert_option")),
+                    element: element,
+                    settledObservationSequence: before.settledObservationSequence
+                )
             ),
             before: before,
             settleOutcome: settledOutcome(finalScreen: screen)
@@ -252,8 +250,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             ("Long List", .header, "long_list_header"),
         ])
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .scrollToEdge,
+            outcome: successOutcome(),
             before: before,
             postActionCommitScope: .discovery,
             settleOutcome: settledOutcome(finalScreen: bottomScreen)
@@ -271,8 +269,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .syntheticTap,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: beforeScreen)
         )
@@ -306,14 +304,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
-            subjectEvidence: activationSubjectEvidence(
-                target: .predicate(ElementPredicate(identifier: "tap_activated_option")),
-                element: element,
-                settledObservationSequence: before.settledObservationSequence
+            outcome: successOutcome(
+                subjectEvidence: activationSubjectEvidence(
+                    target: .predicate(ElementPredicate(identifier: "tap_activated_option")),
+                    element: element,
+                    settledObservationSequence: before.settledObservationSequence
+                ),
+                activationTrace: activationTrace
             ),
-            activationTrace: activationTrace,
             before: before,
             settleOutcome: settledOutcome(finalScreen: screen)
         )
@@ -334,8 +333,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: afterScreen)
         )
@@ -368,9 +367,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
-            subjectEvidence: evidence,
+            outcome: successOutcome(subjectEvidence: evidence),
             before: before,
             settleOutcome: settledOutcome(finalScreen: beforeScreen)
         )
@@ -386,8 +384,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: afterScreen)
         )
@@ -426,8 +424,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
         )
@@ -437,7 +435,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
 
-        let labels = payload.newInterface.projectedElements.compactMap(\.label)
+        let labels = payload.newInterface.projectedElements.compactMap { $0.label }
         XCTAssertTrue(labels.contains("Section A"), "Expected new screen labels: \(labels)")
         XCTAssertTrue(labels.contains("A acid"), "Expected new screen labels: \(labels)")
         XCTAssertTrue(labels.contains("abacus major"), "Expected new screen labels: \(labels)")
@@ -477,8 +475,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let resultTask = Task { @MainActor in
             await brains.interactionObservation.finishAfterAction(
-                success: true,
                 method: .activate,
+                outcome: successOutcome(),
                 before: before,
                 settleOutcome: settledOutcome(finalScreen: visibleAfter)
             )
@@ -495,7 +493,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last)
             .interface
             .projectedElements
-            .compactMap(\.label)
+            .compactMap { $0.label }
         XCTAssertEqual(labels, ["Controls Demo"])
         XCTAssertFalse(labels.contains("ButtonHeist Demo"))
     }
@@ -508,8 +506,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .timedOut(timeMs: 250))
         )
@@ -539,8 +537,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let settledSequence = brains.stash.latestSettledSemanticObservationEvent?.sequence
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: beforeScreen, outcome: .cancelled(timeMs: 125))
         )
@@ -561,8 +559,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.installScreenForTesting(.empty)
 
         let result = await brains.interactionObservation.finishAfterAction(
-            success: true,
             method: .activate,
+            outcome: successOutcome(),
             before: before,
             settleOutcome: settledOutcome(finalScreen: nil, outcome: .timedOut(timeMs: 300))
         )
@@ -897,6 +895,22 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
     }
 
+    func testPredicateWaitUsesExplicitOutcomeAndBaselineShapes() throws {
+        let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
+        let waitExecutionSource = try String(contentsOf: heistWaitExecutionSourceURL(), encoding: .utf8)
+
+        XCTAssertFalse(source.contains("case finished(success: Bool)"))
+        XCTAssertFalse(source.contains(".finished(success:"))
+        XCTAssertFalse(source.contains("var changeBaselineSequence: SettledObservationSequence?"))
+        XCTAssertTrue(source.contains("case matched"))
+        XCTAssertTrue(source.contains("case timedOut"))
+        XCTAssertTrue(source.contains("case observing(PredicateChangeObservationCursor)"))
+        XCTAssertTrue(source.contains("let baseline: WaitChangeBaseline"))
+        XCTAssertTrue(source.contains("case observingSince(SettledObservationSequence)"))
+        XCTAssertFalse(waitExecutionSource.contains("case failed(ErrorKind?)"))
+        XCTAssertTrue(waitExecutionSource.contains("case failed(ErrorKind)"))
+    }
+
     func testHeistExecutionUsesExplicitStateMachine() throws {
         let source = try String(contentsOf: heistExecutionSourceURL(), encoding: .utf8)
 
@@ -1191,7 +1205,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
-            Set(state.interface.projectedElements.compactMap(\.label)),
+            Set(state.interface.projectedElements.compactMap { $0.label }),
             ["Visible", "Below fold"]
         )
         XCTAssertEqual(
@@ -1452,6 +1466,30 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private func successOutcome(
+        payload: ResultPayload? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil
+    ) -> PostActionObservation.ActionOutcome {
+        .success(PostActionObservation.ActionOutcomeSuccess(
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace
+        ))
+    }
+
+    private func failureOutcome(
+        errorKind: ErrorKind = .actionFailed,
+        payload: ResultPayload? = nil,
+        activationTrace: ActivationTrace? = nil
+    ) -> PostActionObservation.ActionOutcome {
+        .failure(PostActionObservation.ActionOutcomeFailure(
+            errorKind: errorKind,
+            payload: payload,
+            activationTrace: activationTrace
+        ))
+    }
+
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
         brains.stash.installScreenForTesting(makeScreen(elements: elements))
     }
@@ -1492,6 +1530,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift")
+    }
+
+    private func heistWaitExecutionSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {

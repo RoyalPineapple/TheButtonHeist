@@ -464,6 +464,32 @@ transport_send_action_failed_matches="$(
 )"
 report_matches "typed transport send failure flattened to request.action_failed" "$transport_send_action_failed_matches"
 
+raw_handoff_receive_event_matches="$(
+  git_grep \
+    '\bcase[[:space:]]+received[[:space:]]*\([[:space:]]*content[[:space:]]*:' \
+    ButtonHeist/Sources/TheButtonHeist/TheHandoff
+)"
+report_matches "raw tuple DeviceConnection receive event" "$raw_handoff_receive_event_matches"
+
+raw_handoff_receive_handler_matches="$(
+  for file in ButtonHeist/Sources/TheButtonHeist/TheHandoff/*.swift; do
+    [[ -f "$file" ]] || continue
+    perl -0ne 'while (/\bfunc\s+handleReceive\s*\(\s*content\s*:\s*Data\?\s*,\s*isComplete\s*:\s*Bool\s*,\s*error\s*:\s*NWError\?/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$file"
+  done
+)"
+report_matches "raw tuple DeviceConnection receive handler" "$raw_handoff_receive_handler_matches"
+
+STORAGE_CLEANUP_RESULT_INITIALIZER_ALLOWED_PATHS=(
+  '^ButtonHeist/Sources/TheButtonHeist/Storage/StorageCleanup\.swift$'
+)
+storage_cleanup_result_initializer_matches="$(git_grep '\bStorageCleanupResult[[:space:]]*\([[:space:]]*operation[[:space:]]*:' "${EXISTING_PATHS[@]}")"
+storage_cleanup_result_initializer_matches="$(
+  filter_allowed_paths \
+    "$storage_cleanup_result_initializer_matches" \
+    "${STORAGE_CLEANUP_RESULT_INITIALIZER_ALLOWED_PATHS[@]}"
+)"
+report_matches "direct StorageCleanupResult outcome initializer outside StorageCleanup.swift" "$storage_cleanup_result_initializer_matches"
+
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'
 

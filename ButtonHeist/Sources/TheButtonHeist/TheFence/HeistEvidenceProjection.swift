@@ -45,6 +45,7 @@ struct HeistActionEvidenceProjection: Sendable {
     let result: ActionProjection?
     let expectationResult: ActionProjection?
     let expectation: ExpectationProjection?
+    let warning: HeistActionWarning?
 
     init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
         commandName = evidence.command?.wireType.rawValue
@@ -61,6 +62,7 @@ struct HeistActionEvidenceProjection: Sendable {
             ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         expectation = evidence.expectation.map { ExpectationProjection(result: $0) }
+        warning = evidence.warning
     }
 }
 

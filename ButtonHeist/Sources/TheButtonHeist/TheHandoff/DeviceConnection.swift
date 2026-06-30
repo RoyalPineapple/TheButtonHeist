@@ -13,7 +13,7 @@ let deviceConnectionLogger = ButtonHeistLog.logger(.handoff(.connection))
 /// lose during reconnect.
 enum DeviceConnectionEvent: Sendable {
     case state(NWConnection.State, connection: NWConnection)
-    case received(content: Data?, isComplete: Bool, error: NWError?, connection: NWConnection)
+    case received(DeviceReceiveEvent, connection: NWConnection)
 }
 
 /// Connection client using Network framework.
@@ -47,7 +47,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         connection.send(content: content, completion: completion)
     }
 
-    private let token: String?
+    private let token: HandoffAuthToken?
 
     /// Single consumer Task driving NW callbacks into the actor in order.
     /// Replaced on each `connect()`; cancelled in `disconnect()`. The for-await
@@ -61,13 +61,13 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
 
     init(device: DiscoveredDevice, token: String? = nil) {
         self.device = device
-        self.token = token
+        self.token = HandoffAuthToken(token)
     }
 
     func connect() {
         deviceConnectionLogger.info("Connecting to \(self.device.name)...")
 
-        guard let token = Self.validToken(token) else {
+        guard let token else {
             tlsFailureTracker = nil
             deviceConnectionLogger.error("No TLS token available — refusing connection")
             onEvent?(.disconnected(.missingToken))
@@ -75,7 +75,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         }
 
         tlsFailureTracker = nil
-        let parameters = Self.makeTLSParameters(token: token)
+        let parameters = Self.makeTLSParameters(token: token.rawValue)
         deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
@@ -104,8 +104,8 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
                 switch event {
                 case .state(let state, let connection):
                     self.handleStateChange(state, connection: connection)
-                case .received(let content, let isComplete, let error, let connection):
-                    self.handleReceive(content: content, isComplete: isComplete, error: error, connection: connection)
+                case .received(let receiveEvent, let connection):
+                    self.handleReceive(receiveEvent, connection: connection)
                 }
             }
         }
@@ -143,13 +143,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         case .connected(let active): return active.connection
         case .disconnected: return nil
         }
-    }
-
-    private nonisolated static func validToken(_ token: String?) -> String? {
-        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return token
     }
 
     /// Internal for testing: state updates are normally dispatched by the

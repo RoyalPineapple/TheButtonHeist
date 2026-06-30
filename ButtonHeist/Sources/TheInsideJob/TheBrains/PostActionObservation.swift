@@ -46,8 +46,7 @@ final class PostActionObservation {
 
     struct SettleEvidence {
         let outcome: SettleSession.Outcome
-        let visibleEvent: SettledSemanticObservationEvent?
-        let diagnosticScreen: Screen?
+        let result: PostActionSettleObservation.Result
 
         var didSettleCleanly: Bool {
             outcome.outcome.didSettleCleanly
@@ -120,8 +119,7 @@ final class PostActionObservation {
         )
         return SettleEvidence(
             outcome: settledObservation.settle,
-            visibleEvent: settledObservation.event,
-            diagnosticScreen: settledObservation.diagnosticScreen
+            result: settledObservation.result
         )
     }
 
@@ -130,15 +128,16 @@ final class PostActionObservation {
         settleEvidence: SettleEvidence
     ) async -> FinalEvidence? {
         let observedFinalState: BeforeState
-        if let visibleEvent = settleEvidence.visibleEvent {
+        switch settleEvidence.result {
+        case .committed(let visibleEvent):
             observedFinalState = captureFinalSemanticState(after: visibleEvent)
-        } else if let diagnosticScreen = settleEvidence.diagnosticScreen {
+        case .diagnostic(let diagnosticScreen):
             observedFinalState = captureSemanticState(
                 from: diagnosticScreen,
                 tripwireSignal: tripwire.tripwireSignal(),
                 settledObservationSequence: nil
             )
-        } else {
+        case .unavailable:
             return nil
         }
         let finalState = refinedScreenChangeFinalState(
@@ -371,16 +370,56 @@ final class PostActionObservation {
 
     // MARK: - Result Building
 
-    /// Inputs for building a post-action receipt from settle and final evidence.
-    struct ResultInput {
-        let success: Bool
-        let method: ActionMethod
-        let message: String?
+    enum ActionOutcome {
+        case success(ActionOutcomeSuccess)
+        case failure(ActionOutcomeFailure)
+    }
+
+    fileprivate enum ReceiptOutcome {
+        case success
+        case failure(ErrorKind)
+    }
+
+    struct ActionOutcomeSuccess {
         let payload: ResultPayload?
         let afterStatePayload: ((BeforeState) -> ResultPayload?)?
-        let errorKind: ErrorKind?
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
+
+        init(
+            payload: ResultPayload? = nil,
+            afterStatePayload: ((BeforeState) -> ResultPayload?)? = nil,
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            activationTrace: ActivationTrace? = nil
+        ) {
+            self.payload = payload
+            self.afterStatePayload = afterStatePayload
+            self.subjectEvidence = subjectEvidence
+            self.activationTrace = activationTrace
+        }
+    }
+
+    struct ActionOutcomeFailure {
+        let errorKind: ErrorKind
+        let payload: ResultPayload?
+        let activationTrace: ActivationTrace?
+
+        init(
+            errorKind: ErrorKind,
+            payload: ResultPayload? = nil,
+            activationTrace: ActivationTrace? = nil
+        ) {
+            self.errorKind = errorKind
+            self.payload = payload
+            self.activationTrace = activationTrace
+        }
+    }
+
+    /// Inputs for building a post-action receipt from settle and final evidence.
+    struct ResultInput {
+        let method: ActionMethod
+        let outcome: ActionOutcome
+        let message: String?
         let before: BeforeState
         let settleEvidence: SettleEvidence
         let finalEvidence: FinalEvidence?
@@ -392,9 +431,9 @@ final class PostActionObservation {
     static func result(_ input: ResultInput) -> ActionResult {
         if let cancelled = cancelledActionResult(
             method: input.method,
-            payload: input.payload,
-            subjectEvidence: input.subjectEvidence,
-            activationTrace: input.activationTrace,
+            payload: input.outcome.payload,
+            subjectEvidence: input.outcome.subjectEvidence,
+            activationTrace: input.outcome.activationTrace,
             before: input.before,
             settleEvidence: input.settleEvidence
         ) {
@@ -404,17 +443,15 @@ final class PostActionObservation {
         guard let finalEvidence = input.finalEvidence else {
             return parseFailureResult(
                 method: input.method,
-                payload: input.payload,
-                subjectEvidence: input.subjectEvidence,
-                activationTrace: input.activationTrace,
+                payload: input.outcome.payload,
+                subjectEvidence: input.outcome.subjectEvidence,
+                activationTrace: input.outcome.activationTrace,
                 before: input.before,
                 settleEvidence: input.settleEvidence
             )
         }
 
-        let resolvedPayload = input.success
-            ? (input.afterStatePayload?(finalEvidence.state) ?? input.payload)
-            : input.payload
+        let resolvedPayload = input.outcome.resolvedPayload(after: finalEvidence.state)
 
         guard finalEvidence.capture != nil else {
             return failedActionResult(
@@ -422,8 +459,8 @@ final class PostActionObservation {
                 capture: input.before.capture,
                 message: input.message,
                 payload: resolvedPayload,
-                subjectEvidence: input.subjectEvidence,
-                activationTrace: input.activationTrace
+                subjectEvidence: input.outcome.subjectEvidence,
+                activationTrace: input.outcome.activationTrace
             )
         }
 
@@ -432,28 +469,26 @@ final class PostActionObservation {
             capture: finalEvidence.capture ?? finalEvidence.state.capture,
             message: input.message,
             payload: resolvedPayload,
-            errorKind: input.errorKind,
+            outcome: input.outcome.receiptOutcome,
             accessibilityTrace: finalEvidence.trace,
-            subjectEvidence: input.subjectEvidence,
-            activationTrace: input.activationTrace,
+            subjectEvidence: input.outcome.subjectEvidence,
+            activationTrace: input.outcome.activationTrace,
             settled: input.settleEvidence.didSettleCleanly,
-            settleTimeMs: input.settleEvidence.timeMs,
-            success: input.success
+            settleTimeMs: input.settleEvidence.timeMs
         )
     }
 
-    static func actionResult(
+    private static func actionResult(
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
         payload: ResultPayload?,
-        errorKind: ErrorKind? = nil,
+        outcome: ReceiptOutcome,
         accessibilityTrace: AccessibilityTrace? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        success: Bool
+        settleTimeMs: Int? = nil
     ) -> ActionResult {
         var builder = ActionResultBuilder(method: method, capture: capture)
         builder.message = message
@@ -464,18 +499,20 @@ final class PostActionObservation {
         builder.settleTimeMs = settleTimeMs
         builder.subjectEvidence = subjectEvidence
         builder.activationTrace = activationTrace
-        if success {
+        switch outcome {
+        case .success:
             return builder.success(payload: payload)
+        case .failure(let errorKind):
+            return builder.failure(errorKind: errorKind, payload: payload)
         }
-        return builder.failure(errorKind: errorKind ?? .actionFailed, payload: payload)
     }
 
-    static func failedActionResult(
+    private static func failedActionResult(
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
         payload: ResultPayload?,
-        errorKind: ErrorKind? = .actionFailed,
+        errorKind: ErrorKind = .actionFailed,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         settled: Bool? = nil,
@@ -486,12 +523,11 @@ final class PostActionObservation {
             capture: capture,
             message: message,
             payload: payload,
-            errorKind: errorKind,
+            outcome: .failure(errorKind),
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
             settled: settled,
-            settleTimeMs: settleTimeMs,
-            success: false
+            settleTimeMs: settleTimeMs
         )
     }
 
@@ -561,6 +597,53 @@ final class PostActionObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheStash.WireConversion.convert($0) }
+    }
+}
+
+private extension PostActionObservation.ActionOutcome {
+    var payload: ResultPayload? {
+        switch self {
+        case .success(let success):
+            return success.payload
+        case .failure(let failure):
+            return failure.payload
+        }
+    }
+
+    var subjectEvidence: ActionSubjectEvidence? {
+        switch self {
+        case .success(let success):
+            return success.subjectEvidence
+        case .failure:
+            return nil
+        }
+    }
+
+    var activationTrace: ActivationTrace? {
+        switch self {
+        case .success(let success):
+            return success.activationTrace
+        case .failure(let failure):
+            return failure.activationTrace
+        }
+    }
+
+    var receiptOutcome: PostActionObservation.ReceiptOutcome {
+        switch self {
+        case .success:
+            return .success
+        case .failure(let failure):
+            return .failure(failure.errorKind)
+        }
+    }
+
+    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ResultPayload? {
+        switch self {
+        case .success(let success):
+            return success.afterStatePayload?(state) ?? success.payload
+        case .failure(let failure):
+            return failure.payload
+        }
     }
 }
 

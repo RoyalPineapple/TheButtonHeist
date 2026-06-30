@@ -16,7 +16,44 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         outcome.abortedAtPath
     }
 
-    public init(
+    public static func passed(
+        steps: [HeistExecutionStepResult],
+        durationMs: Int
+    ) -> HeistExecutionResult {
+        do {
+            return HeistExecutionResult(
+                outcome: try Self.validatedOutcome(
+                    steps: steps,
+                    abortedAtPath: nil,
+                    codingPath: []
+                ),
+                durationMs: durationMs
+            )
+        } catch {
+            preconditionFailure("Invalid passed heist execution result: \(error)")
+        }
+    }
+
+    public static func failed(
+        steps: [HeistExecutionStepResult],
+        durationMs: Int,
+        abortedAtPath: String
+    ) -> HeistExecutionResult {
+        do {
+            return HeistExecutionResult(
+                outcome: try Self.validatedOutcome(
+                    steps: steps,
+                    abortedAtPath: abortedAtPath,
+                    codingPath: []
+                ),
+                durationMs: durationMs
+            )
+        } catch {
+            preconditionFailure("Invalid failed heist execution result: \(error)")
+        }
+    }
+
+    package init(
         steps: [HeistExecutionStepResult],
         durationMs: Int,
         abortedAtPath: String? = nil
@@ -32,6 +69,14 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         } catch {
             preconditionFailure("Invalid heist execution result: \(error)")
         }
+    }
+
+    private init(
+        outcome: HeistExecutionOutcome,
+        durationMs: Int
+    ) {
+        self.outcome = outcome
+        self.durationMs = durationMs
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -189,7 +234,66 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         outcome.children
     }
 
-    public init(
+    public static func passed(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            status: .passed,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: evidence,
+            children: children
+        )
+    }
+
+    public static func failed(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence? = nil,
+        failure: HeistFailureDetail? = nil,
+        abortedAtChildPath: String? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            status: .failed,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: evidence,
+            failure: failure,
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
+        )
+    }
+
+    public static func skipped(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int = 0,
+        intent: HeistStepIntent? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            status: .skipped,
+            durationMs: durationMs,
+            intent: intent,
+            children: children
+        )
+    }
+
+    package init(
         path: String,
         kind: HeistExecutionStepKind,
         status: HeistExecutionStepStatus,
@@ -835,17 +939,116 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     public let actionResult: ActionResult?
     public let expectationActionResult: ActionResult?
     public let expectation: ExpectationResult?
+    public let warning: HeistActionWarning?
 
     public init(
         command: HeistActionCommand?,
         actionResult: ActionResult?,
         expectationActionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil
+        expectation: ExpectationResult? = nil,
+        warning: HeistActionWarning? = nil
     ) {
         self.command = command
         self.actionResult = actionResult
         self.expectationActionResult = expectationActionResult
         self.expectation = expectation
+        self.warning = warning
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case command
+        case actionResult
+        case expectationActionResult
+        case expectation
+        case warning
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action evidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            command: try container.decodeIfPresent(HeistActionCommand.self, forKey: .command),
+            actionResult: try container.decodeIfPresent(ActionResult.self, forKey: .actionResult),
+            expectationActionResult: try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult),
+            expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation),
+            warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(command, forKey: .command)
+        try container.encodeIfPresent(actionResult, forKey: .actionResult)
+        try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
+        try container.encodeIfPresent(expectation, forKey: .expectation)
+        try container.encodeIfPresent(warning, forKey: .warning)
+    }
+}
+
+public struct HeistActionWarning: Codable, Sendable, Equatable {
+    public static let activationWeakAffordanceEvidenceCode = "activation_weak_affordance_evidence"
+
+    public let code: String
+    public let message: String
+    public let evidence: String?
+
+    public init(
+        code: String,
+        message: String,
+        evidence: String? = nil
+    ) {
+        precondition(!code.isEmpty, "HeistActionWarning code must not be empty")
+        precondition(!message.isEmpty, "HeistActionWarning message must not be empty")
+        self.code = code
+        self.message = message
+        self.evidence = evidence
+    }
+
+    public static func activationWeakAffordanceEvidence(evidence: String?) -> HeistActionWarning {
+        HeistActionWarning(
+            code: activationWeakAffordanceEvidenceCode,
+            message: "activate succeeded, but the target does not advertise a primary activation affordance",
+            evidence: evidence
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case code
+        case message
+        case evidence
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action warning")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let code = try container.decode(String.self, forKey: .code)
+        let message = try container.decode(String.self, forKey: .message)
+        guard !code.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .code,
+                in: container,
+                debugDescription: "heist action warning code must not be empty"
+            )
+        }
+        guard !message.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .message,
+                in: container,
+                debugDescription: "heist action warning message must not be empty"
+            )
+        }
+        self.init(
+            code: code,
+            message: message,
+            evidence: try container.decodeIfPresent(String.self, forKey: .evidence)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(code, forKey: .code)
+        try container.encode(message, forKey: .message)
+        try container.encodeIfPresent(evidence, forKey: .evidence)
     }
 }
 

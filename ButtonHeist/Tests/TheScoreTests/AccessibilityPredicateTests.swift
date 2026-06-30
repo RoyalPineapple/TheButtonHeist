@@ -129,7 +129,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testStatePredicateRequiresObservedTraceForActionResultValidation() {
-        let action = ActionResult(success: true, method: .activate)
+        let action = ActionResult.success(method: .activate)
         let result = AccessibilityPredicate.state(.missing(ElementPredicate(label: "Loading"))).validate(against: action)
 
         XCTAssertFalse(result.met)

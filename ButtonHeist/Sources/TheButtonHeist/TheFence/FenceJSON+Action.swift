@@ -278,49 +278,40 @@ struct PublicDelta: Encodable {
     let omitted: PublicHeistDeltaOmissions?
 
     init(projection: DeltaProjection) {
-        let fields = PublicDeltaFields(projection: projection)
-        self.kind = fields.kind
-        self.elementCount = fields.elementCount
-        self.captureEdge = fields.captureEdge
-        self.interactionDigest = fields.interactionDigest
-        self.transient = fields.transient
-        self.edits = fields.edits
-        self.newInterface = fields.screen?.interface.map(PublicInterface.init(projection:))
-        self.omitted = fields.omitted
-    }
-}
-
-private struct PublicDeltaFields {
-    let kind: String
-    let elementCount: Int
-    let captureEdge: AccessibilityTrace.CaptureEdge?
-    let interactionDigest: AccessibilityTrace.InteractionDigest?
-    let transient: [PublicElement]?
-    let edits: PublicElementEdits?
-    let screen: DeltaScreenProjection?
-    let omitted: PublicHeistDeltaOmissions?
-
-    init(projection: DeltaProjection) {
-        self.kind = projection.kind.rawValue
-        self.elementCount = projection.elementCount
-        self.captureEdge = projection.captureEdge
-        self.interactionDigest = projection.interactionDigest
-        self.transient = Self.elements(projection.transient.elements)
-
-        let transientOmissions = PublicHeistDeltaOmissions(projection: projection.transient)
-        self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
-
-        switch projection.kind {
-        case .noChange:
+        switch projection {
+        case .noChange(let metadata):
+            self.kind = DeltaProjectionKind.noChange.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
             self.edits = nil
-            self.screen = nil
-        case .elementsChanged:
-            let edits = projection.edits.map { PublicElementEdits(projection: $0) }
-            self.edits = edits?.isEmpty == false ? edits : nil
-            self.screen = nil
-        case .screenChanged:
+            self.newInterface = nil
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+        case .elementsChanged(let delta):
+            let metadata = delta.metadata
+            self.kind = DeltaProjectionKind.elementsChanged.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
+            let edits = PublicElementEdits(projection: delta.edits)
+            self.edits = edits.isEmpty ? nil : edits
+            self.newInterface = nil
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+        case .screenChanged(let delta):
+            let metadata = delta.metadata
+            self.kind = DeltaProjectionKind.screenChanged.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
             self.edits = nil
-            self.screen = projection.screen
+            self.newInterface = delta.screen.interface.map(PublicInterface.init(projection:))
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
         }
     }
 
@@ -527,6 +518,7 @@ struct PublicHeistActionEvidence: Encodable {
     let result: PublicHeistReportActionResult?
     let expectationResult: PublicHeistReportActionResult?
     let expectation: PublicExpectationResult?
+    let warning: HeistActionWarning?
 
     init(projection: HeistActionEvidenceProjection) {
         self.commandName = projection.commandName
@@ -534,6 +526,7 @@ struct PublicHeistActionEvidence: Encodable {
         self.result = projection.result.map { PublicHeistReportActionResult(projection: $0) }
         self.expectationResult = projection.expectationResult.map { PublicHeistReportActionResult(projection: $0) }
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
+        self.warning = projection.warning
     }
 }
 
@@ -742,15 +735,46 @@ struct PublicHeistDelta: Encodable {
     let omitted: PublicHeistDeltaOmissions?
 
     init(projection: DeltaProjection) {
-        let fields = PublicDeltaFields(projection: projection)
-        self.kind = fields.kind
-        self.elementCount = fields.elementCount
-        self.captureEdge = fields.captureEdge
-        self.interactionDigest = fields.interactionDigest
-        self.transient = fields.transient
-        self.edits = fields.edits
-        self.screen = fields.screen.map { PublicHeistScreenProjection(projection: $0) }
-        self.omitted = fields.omitted
+        switch projection {
+        case .noChange(let metadata):
+            self.kind = DeltaProjectionKind.noChange.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
+            self.edits = nil
+            self.screen = nil
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+        case .elementsChanged(let delta):
+            let metadata = delta.metadata
+            self.kind = DeltaProjectionKind.elementsChanged.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
+            let edits = PublicElementEdits(projection: delta.edits)
+            self.edits = edits.isEmpty ? nil : edits
+            self.screen = nil
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+        case .screenChanged(let delta):
+            let metadata = delta.metadata
+            self.kind = DeltaProjectionKind.screenChanged.rawValue
+            self.elementCount = metadata.elementCount
+            self.captureEdge = metadata.captureEdge
+            self.interactionDigest = metadata.interactionDigest
+            self.transient = Self.elements(metadata.transient.elements)
+            self.edits = nil
+            self.screen = PublicHeistScreenProjection(projection: delta.screen)
+            let transientOmissions = PublicHeistDeltaOmissions(projection: metadata.transient)
+            self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+        }
+    }
+
+    private static func elements(_ elements: [HeistElement]) -> [PublicElement]? {
+        guard !elements.isEmpty else { return nil }
+        return elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 

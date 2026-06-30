@@ -9,7 +9,7 @@ extension TheFence {
         let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
         let options = ScreenshotResponseOptions()
 
-        if request.inlineData {
+        if case .inlineData = request.destination {
             let byteCount = screen.pngData.utf8.count
             guard byteCount <= DecodeLimits.maxInlineScreenshotBase64Bytes else {
                 return .error(DiagnosticFailure(
@@ -22,9 +22,14 @@ extension TheFence {
         }
 
         do {
+            let outputPath: String? = if case .artifact(let outputPath) = request.destination {
+                outputPath
+            } else {
+                nil
+            }
             let url = try screenshotArtifacts.writeScreenshot(
                 base64Data: screen.pngData,
-                outputPath: request.outputPath,
+                outputPath: outputPath,
                 command: .getScreen
             )
             return .screenshot(path: url.path, payload: screen, options: options)

@@ -25,14 +25,15 @@ extension TheFence {
         } else {
             .automatic
         }
-        return appInteractionDispatch(
+        return try appInteractionDispatch(
             SemanticActionCommand.rotor.command,
             .rotor(
                 selection: selection,
                 target: .target(try input.requiredElementTarget(command: .rotor)),
                 direction: try input.schemaEnum(.direction, as: RotorDirection.self)
                     ?? Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self)
-            )
+            ),
+            expectationPayload: expectationPayload
         )
     }
 }

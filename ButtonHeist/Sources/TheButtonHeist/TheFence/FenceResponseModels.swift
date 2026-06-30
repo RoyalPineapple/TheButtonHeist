@@ -65,29 +65,66 @@ public struct SessionFailurePayload: Sendable, Equatable {
     }
 }
 
+public enum SessionConnectionState: Sendable, Equatable {
+    case disconnected(lastFailure: SessionFailurePayload?)
+    case connecting(lastFailure: SessionFailurePayload?)
+    case connected(device: SessionDevicePayload)
+    case failed(SessionFailurePayload)
+
+    public var connected: Bool {
+        if case .connected = self { return true }
+        return false
+    }
+
+    public var phase: SessionConnectionPhase {
+        switch self {
+        case .disconnected:
+            return .disconnected
+        case .connecting:
+            return .connecting
+        case .connected:
+            return .connected
+        case .failed:
+            return .failed
+        }
+    }
+
+    public var device: SessionDevicePayload? {
+        guard case .connected(let device) = self else { return nil }
+        return device
+    }
+
+    public var lastFailure: SessionFailurePayload? {
+        switch self {
+        case .disconnected(let failure), .connecting(let failure):
+            return failure
+        case .failed(let failure):
+            return failure
+        case .connected:
+            return nil
+        }
+    }
+}
+
 public struct SessionStatePayload: Sendable, Equatable {
-    public let connected: Bool
-    public let phase: SessionConnectionPhase
-    public let device: SessionDevicePayload?
+    public let state: SessionConnectionState
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
-    public let lastFailure: SessionFailurePayload?
 
     public init(
-        connected: Bool,
-        phase: SessionConnectionPhase,
-        device: SessionDevicePayload?,
+        state: SessionConnectionState,
         actionTimeoutSeconds: TimeInterval,
-        longActionTimeoutSeconds: TimeInterval,
-        lastFailure: SessionFailurePayload?
+        longActionTimeoutSeconds: TimeInterval
     ) {
-        self.connected = connected
-        self.phase = phase
-        self.device = device
+        self.state = state
         self.actionTimeoutSeconds = actionTimeoutSeconds
         self.longActionTimeoutSeconds = longActionTimeoutSeconds
-        self.lastFailure = lastFailure
     }
+
+    public var connected: Bool { state.connected }
+    public var phase: SessionConnectionPhase { state.phase }
+    public var device: SessionDevicePayload? { state.device }
+    public var lastFailure: SessionFailurePayload? { state.lastFailure }
 }
 
 enum DiagnosticFailureMapper {
