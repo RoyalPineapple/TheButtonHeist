@@ -196,16 +196,13 @@ final class TheGetaway {
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         insideJobLogger.debug("Screen requested")
 
-        let result = await brains.captureScreenPayload()
-        guard case .success(let payload) = result else {
-            if case .failure(let message) = result {
-                sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
-            }
-            return
+        switch await brains.captureScreenPayload() {
+        case .success(let payload):
+            sendMessage(.screen(payload), requestId: requestId, respond: respond)
+            insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
+        case .failure(let failure):
+            sendMessage(.error(ServerError(kind: .general, message: failure.message)), requestId: requestId, respond: respond)
         }
-
-        sendMessage(.screen(payload), requestId: requestId, respond: respond)
-        insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
     }
 }
 

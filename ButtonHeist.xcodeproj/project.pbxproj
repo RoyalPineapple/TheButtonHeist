@@ -139,6 +139,7 @@
 		341243CC560578C65B6FEC16 /* Navigation+ScrollSettleProof.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2EF9D00F8131FB91EBA14F2 /* Navigation+ScrollSettleProof.swift */; };
 		3444E3D463FC8D3238E7D643 /* TheFence+Formatting+Compact+Delta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 284A2CE492A275715B63BF0A /* TheFence+Formatting+Compact+Delta.swift */; };
 		34C3764F92C25710E8917D28 /* GesturePointSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84D766ECC9C6347C4469360F /* GesturePointSelection.swift */; };
+		34FC4655333F99D6DE8CDDC4 /* ScreenCaptureFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5050A41AC8BF9D21A75D7A /* ScreenCaptureFailureTests.swift */; };
 		35733F90076016629B0E685B /* ElementMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3B78F18645E27C9BD85F0B /* ElementMatcherTests.swift */; };
 		36028DE1BEDE6E1FF9EC62E2 /* AccessibilityArmingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E4AF8938E348B619C62C6D /* AccessibilityArmingTests.swift */; };
 		360A1DB76AD1182D815D051A /* CancellableSleep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD75B6C0E7FA3AC5039F61A /* CancellableSleep.swift */; };
@@ -1030,6 +1031,7 @@
 		2B92FA5985EAF1A5C7360207 /* TheFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFence.swift; sourceTree = "<group>"; };
 		2CECC69361494BE26E4EA537 /* HeistCanonicalSwiftDSLRenderer+TargetsAndExpressions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistCanonicalSwiftDSLRenderer+TargetsAndExpressions.swift"; sourceTree = "<group>"; };
 		2D1E53484FFB4C5A65450ABE /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
+		2E5050A41AC8BF9D21A75D7A /* ScreenCaptureFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureFailureTests.swift; sourceTree = "<group>"; };
 		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F3E63876D513CED21786EC3 /* ClientMessages+WireCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ClientMessages+WireCoding.swift"; sourceTree = "<group>"; };
 		2F5C6AE93B3E5319066718A6 /* ButtonHeistTestSupport.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeistTestSupport.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -2273,6 +2275,7 @@
 				C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */,
 				9AE62F1B4134AF0A9FE888EB /* PureReducerSourceShapeTests.swift */,
 				49B2E011E256A57C07E586E5 /* RuntimeLeaseObservationTests.swift */,
+				2E5050A41AC8BF9D21A75D7A /* ScreenCaptureFailureTests.swift */,
 				E61AED0209793344783FFCD7 /* ScreenClassifierTests.swift */,
 				EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */,
 				CD60080E4BE14A994AC72411 /* ScreenTests.swift */,
@@ -3435,6 +3438,7 @@
 				F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */,
 				812C55D9D628364B687C9112 /* PureReducerSourceShapeTests.swift in Sources */,
 				16F213C277658794D7E90DAC /* RuntimeLeaseObservationTests.swift in Sources */,
+				34FC4655333F99D6DE8CDDC4 /* ScreenCaptureFailureTests.swift in Sources */,
 				06A24ABB3DDA92F7B9081BE6 /* ScreenClassifierTests.swift in Sources */,
 				15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */,
 				0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */,
