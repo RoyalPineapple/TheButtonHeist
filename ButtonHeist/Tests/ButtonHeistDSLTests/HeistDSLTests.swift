@@ -924,8 +924,8 @@ func invalidHeistDefinitionNamesSurfaceBuildDiagnostics() throws {
     #expect(diagnostic.phase == .dslBuild)
     #expect(diagnostic.path == "LibraryScreen..checkout")
     #expect(diagnostic.message.contains("HeistDef path is invalid"))
-    #expect(diagnostic.message.contains("heist invocation path component at index 1 must not be empty"))
-    #expect(diagnostic.hint == "Use a non-empty dot-separated heist capability name with no empty components.")
+    #expect(diagnostic.message.contains("heist definition path component at index 1 must not be empty"))
+    #expect(diagnostic.hint == "Use a non-empty dot-separated heist capability name with Swift-style identifier components.")
 
     do {
         _ = try HeistPlan {
@@ -1205,7 +1205,7 @@ private func expectInvalidRunHeistName(
     #expect(contentDiagnostic.path == expectedPath)
     #expect(contentDiagnostic.message.contains("RunHeist name is invalid"))
     #expect(contentDiagnostic.message.contains(expectedMessage))
-    #expect(contentDiagnostic.hint == "Use a non-empty dot-separated heist capability name with no empty components.")
+    #expect(contentDiagnostic.hint == "Use a non-empty dot-separated heist capability name with Swift-style identifier components.")
 
     do {
         _ = try HeistPlan {

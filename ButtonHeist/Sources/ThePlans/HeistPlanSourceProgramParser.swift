@@ -158,9 +158,14 @@ extension HeistPlanSourceParser {
 
     mutating func parseDefinitionPath(_ header: HeistDefinitionHeader) throws -> [String] {
         do {
-            return try HeistInvocationPath.components(fromDottedName: header.path)
+            return try HeistDefinitionPath.components(fromDottedName: header.path)
         } catch {
-            throw self.error(header.pathToken, String(describing: error))
+            throw HeistPlanSourceCompilerError(diagnostic: .invalidDefinitionPath(
+                header.path,
+                error: error,
+                phase: .sourceCompilation,
+                sourceSpan: sourceSpan(for: header.pathToken)
+            ))
         }
     }
 

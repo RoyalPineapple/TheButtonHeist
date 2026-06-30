@@ -16,6 +16,26 @@ Runtime wire IR is internal and generated. Raw `version`/`name`/`parameter`/
 `definitions`/`body` JSON MUST NOT be used as the human or agent authoring
 language.
 
+## Path grammar
+
+Reusable capabilities are named by typed heist paths. A heist path is a
+non-empty dot-separated list of Swift-style identifier components:
+
+```text
+heist-path = identifier ("." identifier)*
+identifier = letter-or-underscore (letter-or-digit-or-underscore)*
+```
+
+Path components MUST NOT be empty, contain whitespace, contain punctuation other
+than the dot separator, start with a digit, or use Swift reserved words.
+`Cart.checkout` is valid. `Cart..checkout`, `.checkout`, `Cart.`,
+`Cart Screen.checkout`, `1Cart.checkout`, and `Cart.class` are invalid.
+
+Swift DSL authors SHOULD use `HeistDefinitionPath` and `HeistInvocationPath`
+when constructing reusable paths programmatically. String convenience APIs MAY
+be used for literals, but they MUST validate through the same typed path rules
+and surface diagnostics instead of silently canonicalizing invalid names.
+
 ## Execution entry points
 
 `run_heist` MUST accept durable plans only. Public callers SHOULD pass one of:
@@ -30,7 +50,53 @@ runtime path.
 `perform(step:)` MUST accept exactly one durable DSL step. It MAY run one action
 statement or one `WaitFor(...)` statement for immediate client interaction. It
 MUST reject `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `ForEach`, multi-step
-source, raw wire IR, and direct viewport/debug/session command text.
+source, raw wire IR, direct viewport/debug/session command text, and
+`WaitFor(...).else { ... }`. Branching or composition belongs behind
+`run_heist`.
+
+## Compilation and validation
+
+Canonical ButtonHeist source and trusted local Swift DSL are authoring
+frontends, not executable products. Both frontends MUST lower through the same
+semantic validation boundary before producing a durable `HeistPlan`.
+
+The checked-plan pipeline is:
+
+1. Parse or build syntax into an admission candidate.
+2. Validate syntax-local contracts such as typed paths, supported step shapes,
+   parameter names, and expectation composition.
+3. Run semantic validation for duplicate sibling definitions, unresolved
+   `RunHeist` targets, argument arity/type mismatches, unsupported recursion,
+   non-durable actions, bounded loops, bounded nesting, and payload contracts.
+4. Admit only a validated `HeistPlan` to storage, catalog discovery, rendering,
+   replay, or execution.
+
+Invalid syntax MUST NOT become a different valid program. In particular,
+invalid dotted paths MUST NOT be repaired by dropping empty components or
+otherwise canonicalizing user input.
+
+## Diagnostics
+
+Diagnostics are part of the public language contract. Each diagnostic MUST
+include a stable code, title, phase, message, and actionable hint when a useful
+repair exists. Source compilation diagnostics SHOULD include a source span with
+source name, line, column, byte offset, and token length.
+
+Representative stable codes:
+
+- `heist.dsl.invalid_definition`: invalid `HeistDef` path or definition shape
+- `heist.dsl.invalid_invocation_path`: invalid `RunHeist` path
+- `heist.dsl.invalid_invocation_expectation`: invalid `RunHeist(...).expect`
+  composition
+- `heist.source.invalid_syntax`: unsupported or malformed source syntax
+- `heist.plan.runtime_safety`: semantic validation failure
+- `heist.plan.non_durable_action`: direct client command admitted into durable
+  DSL
+
+For the same invalid authoring shape, canonical source and Swift DSL builder
+diagnostics SHOULD share the same code, title, message, path, and hint. Their
+phases and source spans may differ because they originate from different
+frontends.
 
 ## Direct client commands
 

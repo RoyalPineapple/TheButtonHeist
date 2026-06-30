@@ -249,6 +249,17 @@ public struct HeistDef<Input>: Sendable {
     }
 
     public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        @HeistBuilder _ content: @escaping () throws -> Content
+    ) where Input == Void {
+        self.parameter = .none
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content()
+        }
+    }
+
+    public init<Content: HeistContent>(
         _ path: String,
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
@@ -263,6 +274,19 @@ public struct HeistDef<Input>: Sendable {
     }
 
     public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    ) where Input == String {
+        let reference = parameter
+        self.parameter = .string(name: reference)
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content(try StringExpr(ref: reference))
+        }
+    }
+
+    public init<Content: HeistContent>(
         _ path: String,
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
@@ -274,6 +298,19 @@ public struct HeistDef<Input>: Sendable {
         }
         self.path = result.components
         self.definitionResult = result.definition
+    }
+
+    public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    ) where Input == ElementTarget {
+        let reference = parameter
+        self.parameter = .elementTarget(name: reference)
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content(try ElementTargetExpr(ref: reference))
+        }
     }
 
     private static func buildDefinitionFromDottedPath(
@@ -297,7 +334,7 @@ public struct HeistDef<Input>: Sendable {
         parameter: HeistParameter,
         _ content: () throws -> any HeistContent
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        let renderedPath = HeistInvocationPath.render(path)
+        let renderedPath = HeistDefinitionPath.render(path)
         do {
             let content = try content()
             guard content.heistBuildDiagnostics.isEmpty else {
@@ -358,21 +395,19 @@ public struct HeistDef<Input>: Sendable {
 
     private static func pathComponents(_ path: String) -> ValidationResult<[String], HeistBuildDiagnostic> {
         do {
-            return .success(try HeistInvocationPath.components(fromDottedName: path), diagnostics: [])
+            return .success(try HeistDefinitionPath.components(fromDottedName: path), diagnostics: [])
         } catch {
-            return .failure([.dslBuild(
-                code: .dslInvalidDefinition,
-                path: path.isEmpty ? nil : path,
-                message: "HeistDef path is invalid: \(String(describing: error))",
-                hint: "Use a non-empty dot-separated heist capability name with no empty components."
-            )])
+            return .failure([.invalidDefinitionPath(path, error: error, phase: .dslBuild)])
         }
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
         let definition = try definitionResult.get(orThrow: HeistDefinitionBuildError.init(diagnostics:))
         return HeistInvocationContent(
-            invocation: HeistInvocationStep(path: path, argument: argument),
+            invocation: HeistInvocationStep(
+                invocationPath: HeistInvocationPath.preconditionValidated(components: path),
+                argument: argument
+            ),
             heistDefinitions: [definition]
         )
     }
@@ -535,12 +570,24 @@ public func RunHeist(_ name: String) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .none)
 }
 
+public func RunHeist(_ path: HeistInvocationPath) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .none)
+}
+
 public func RunHeist(_ name: String, _ input: String) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .string(.literal(input)))
 }
 
+public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .string(.literal(input)))
+}
+
 public func RunHeist(_ name: String, _ input: StringExpr) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .string(input))
+}
+
+public func RunHeist(_ path: HeistInvocationPath, _ input: StringExpr) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .string(input))
 }
 
 @_disfavoredOverload
@@ -548,27 +595,35 @@ public func RunHeist(_ name: String, _ input: ElementTarget) -> HeistInvocationC
     runHeistInvocation(name, argument: .elementTarget(.target(input)))
 }
 
+@_disfavoredOverload
+public func RunHeist(_ path: HeistInvocationPath, _ input: ElementTarget) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .elementTarget(.target(input)))
+}
+
 public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .elementTarget(input))
 }
 
+public func RunHeist(_ path: HeistInvocationPath, _ input: ElementTargetExpr) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .elementTarget(input))
+}
+
 private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
     do {
-        return HeistInvocationContent(
-            invocation: HeistInvocationStep(
-                invocationPath: try HeistInvocationPath(dottedName: name),
-                argument: argument
-            ),
-            heistDefinitions: []
-        )
+        return runHeistInvocation(try HeistInvocationPath(dottedName: name), argument: argument)
     } catch {
-        return HeistInvocationContent(invalidDiagnostics: [.dslBuild(
-            code: .dslInvalidInvocationPath,
-            path: name.isEmpty ? nil : name,
-            message: "RunHeist name is invalid: \(String(describing: error))",
-            hint: "Use a non-empty dot-separated heist capability name with no empty components."
-        )])
+        return HeistInvocationContent(invalidDiagnostics: [.invalidInvocationPath(name, error: error, phase: .dslBuild)])
     }
+}
+
+private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgument) -> HeistInvocationContent {
+    HeistInvocationContent(
+        invocation: HeistInvocationStep(
+            invocationPath: path,
+            argument: argument
+        ),
+        heistDefinitions: []
+    )
 }
 // swiftlint:enable identifier_name
 

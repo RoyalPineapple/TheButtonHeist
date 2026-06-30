@@ -51,7 +51,7 @@ public struct HeistPlan: Codable, Sendable, Equatable {
             parameter: parameter,
             definitions: definitions.map(HeistPlanAdmissionCandidate.init),
             body: body.map(HeistStepAdmissionCandidate.init)
-        ).validatedForRuntimeSafety()
+        ).validatedSemantics()
     }
 
     init(
@@ -69,7 +69,7 @@ public struct HeistPlan: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        self = try HeistPlanAdmissionCandidate(from: decoder).validatedForRuntimeSafety()
+        self = try HeistPlanAdmissionCandidate(from: decoder).validatedSemantics()
     }
 
     public func encode(to encoder: Encoder) throws {

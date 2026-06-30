@@ -115,7 +115,12 @@ extension HeistPlanSourceParser {
         do {
             invocationPath = try HeistInvocationPath(dottedName: name)
         } catch let validationError {
-            throw error(nameToken, String(describing: validationError))
+            throw HeistPlanSourceCompilerError(diagnostic: .invalidInvocationPath(
+                name,
+                error: validationError,
+                phase: .sourceCompilation,
+                sourceSpan: sourceSpan(for: nameToken)
+            ))
         }
         var argument = HeistArgument.none
         if consumeSymbol(",") {
