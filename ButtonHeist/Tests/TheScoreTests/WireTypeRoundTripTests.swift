@@ -1002,7 +1002,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         let decodedStep = try XCTUnwrap(decoded.steps.first)
         XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.predicate, predicate)
         XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.result.met, true)
-        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
+        XCTAssertEqual(
+            decodedStep.caseSelectionEvidence?.selection.outcome,
+            HeistCaseSelectionOutcome.matchedCase(index: 0)
+        )
         XCTAssertEqual(decodedStep.children.first?.actionEvidence?.actionResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
     }

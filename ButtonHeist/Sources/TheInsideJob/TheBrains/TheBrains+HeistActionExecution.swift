@@ -209,7 +209,7 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt, outcome: outcome),
+            evidence: waitEvidencePayload(receipt, outcome: outcome),
             failure: failure
         )
     }
@@ -236,7 +236,7 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt, outcome: .handledElse),
+            evidence: waitEvidencePayload(receipt, outcome: .handledElse),
             failure: abortedAtChildPath.map {
                 childFailureDetail(category: .wait, childPath: $0)
             },
@@ -245,14 +245,14 @@ extension TheBrains {
         )
     }
 
-    private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistWaitEvidence {
-        waitEvidence(
+    private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
+        .wait(waitEvidencePayload(
             receipt,
             outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed
-        )
+        ))
     }
 
-    private func waitEvidence(
+    private func waitEvidencePayload(
         _ receipt: HeistWaitReceipt,
         outcome: HeistPredicateEvidenceOutcome
     ) -> HeistWaitEvidence {
@@ -261,7 +261,8 @@ extension TheBrains {
             actionResult: receipt.actionResult,
             expectation: receipt.expectation,
             baselineSummary: nil,
-            finalSummary: receipt.expectation.actual
+            finalSummary: receipt.expectation.actual,
+            warning: receipt.warning
         )
     }
 
@@ -272,9 +273,8 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist wait predicate: \(error)"
-        return heistFailedReceipt(
+        return heistWaitReceipt(
             path: path,
-            kind: .wait,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
             failure: HeistFailureDetail(

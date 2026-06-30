@@ -7,18 +7,28 @@ struct PropertyChangeFields<Value> {
 
 extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicateExpr {
+        if case .string = currentToken.kind {
+            throw error(currentToken, "accessibility predicate requires an explicit accessibility property such as .exists(.label(...)) or .label(...)")
+        }
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "change":
             try expectSymbol("(")
-            var changes: [ChangePredicateExpr] = []
+            var changes: [ChangeScopePredicateExpr] = []
             if !consumeSymbol(")") {
                 repeat {
-                    changes.append(try parseChangePredicateExpr())
+                    changes.append(try parseChangeScopePredicateExpr())
                 } while consumeSymbol(",")
                 try expectSymbol(")")
             }
-            return .changePredicate(changes.isEmpty ? .any : (changes.count == 1 ? changes[0] : .allScopes(changes)))
+            switch changes.count {
+            case 0:
+                return .changePredicate(.any)
+            case 1:
+                return .changePredicate(changes[0].change)
+            default:
+                return .changePredicate(.allScopes(NonEmptyArray(changes[0], rest: Array(changes.dropFirst()))))
+            }
         case "noChange":
             return .noChangePredicate
         case "exists":
@@ -35,12 +45,18 @@ extension HeistPlanSourceParser {
             return .changePredicate(.elementsScope([try parseDisappearedElementDeltaPredicateExpr()]))
         case "updated":
             return .changePredicate(.elementsScope([try parseUpdatedElementDeltaPredicateExpr()]))
+        case "screenChanged":
+            return .changePredicate(try parseScreenChangedPredicateExpr().change)
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
     }
 
     mutating func parseChangePredicateExpr() throws -> ChangePredicateExpr {
+        try parseChangeScopePredicateExpr().change
+    }
+
+    mutating func parseChangeScopePredicateExpr() throws -> ChangeScopePredicateExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "screen":
@@ -52,7 +68,9 @@ extension HeistPlanSourceParser {
                 } while consumeSymbol(",")
                 try expectSymbol(")")
             }
-            return .screenScope(assertions)
+            return .screen(assertions)
+        case "screenChanged":
+            return try parseScreenChangedPredicateExpr()
         case "elements":
             try expectSymbol("(")
             var assertions: [ElementDeltaPredicateExpr] = []
@@ -62,16 +80,30 @@ extension HeistPlanSourceParser {
                 } while consumeSymbol(",")
                 try expectSymbol(")")
             }
-            return .elementsScope(assertions)
+            return .elements(assertions)
         case "appeared":
-            return .elementsScope([try parseAppearedElementDeltaPredicateExpr()])
+            return .elements([try parseAppearedElementDeltaPredicateExpr()])
         case "disappeared":
-            return .elementsScope([try parseDisappearedElementDeltaPredicateExpr()])
+            return .elements([try parseDisappearedElementDeltaPredicateExpr()])
         case "updated":
-            return .elementsScope([try parseUpdatedElementDeltaPredicateExpr()])
+            return .elements([try parseUpdatedElementDeltaPredicateExpr()])
         default:
-            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screen, elements, appeared, disappeared, updated")
+            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screenChanged, screen, elements, appeared, disappeared, updated")
         }
+    }
+
+    mutating func parseScreenChangedPredicateExpr() throws -> ChangeScopePredicateExpr {
+        guard consumeSymbol("(") else {
+            return .screen([])
+        }
+        var assertions: [StatePredicateExpr] = []
+        if !consumeSymbol(")") {
+            repeat {
+                assertions.append(try parseStatePredicateExpr())
+            } while consumeSymbol(",")
+            try expectSymbol(")")
+        }
+        return .screen(assertions)
     }
 
     mutating func parseStatePredicateExpr() throws -> StatePredicateExpr {
@@ -90,6 +122,9 @@ extension HeistPlanSourceParser {
 
     mutating func parseExistsMissingState(name: String) throws -> StatePredicateExpr {
         try expectSymbol("(")
+        if currentToken.isSymbol(")") {
+            throw error(currentToken, ".\(name) requires an element matcher or target")
+        }
         let state: StatePredicateExpr
         if let target = try parseTargetRefIfPresent() {
             state = name == "exists" ? .existsTarget(target) : .missingTarget(target)
@@ -111,7 +146,7 @@ extension HeistPlanSourceParser {
             states.append(try parseStatePredicateExpr())
         }
         try expectSymbol(")")
-        return .all(states)
+        return .all(NonEmptyArray(states[0], rest: Array(states.dropFirst())))
     }
 
     mutating func parseElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
@@ -130,6 +165,9 @@ extension HeistPlanSourceParser {
 
     mutating func parseAppearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
         try expectSymbol("(")
+        if currentToken.isSymbol(")") {
+            throw error(currentToken, ".appeared requires an element matcher")
+        }
         let predicate = try parseElementPredicateTemplate()
         try expectSymbol(")")
         return .appearedElement(predicate)
@@ -137,6 +175,9 @@ extension HeistPlanSourceParser {
 
     mutating func parseDisappearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
         try expectSymbol("(")
+        if currentToken.isSymbol(")") {
+            throw error(currentToken, ".disappeared requires an element matcher")
+        }
         let predicate = try parseElementPredicateTemplate()
         try expectSymbol(")")
         return .disappearedElement(predicate)
@@ -144,105 +185,106 @@ extension HeistPlanSourceParser {
 
     mutating func parseUpdatedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
         try expectSymbol("(")
-        let update = try parseElementUpdatePredicate()
+        if currentToken.isSymbol(")") {
+            throw error(currentToken, ".updated(...) requires an update matcher")
+        }
+        if lookaheadLabel("element") {
+            throw error(currentToken, "updated(element:) is not supported; use .updated(.label(...), .value(...))")
+        }
+
+        let update: ElementUpdatePredicateExpr
+        if lookaheadElementUpdateMatcherFollowedByChange {
+            let element = try parseElementPredicateTemplate()
+            try expectSymbol(",")
+            update = ElementUpdatePredicateExpr(element: element, change: try parsePropertyChangeExpr())
+        } else if lookaheadElementUpdateMatcherOnly {
+            throw error(currentToken, ".updated(...) with an element matcher also requires an update matcher")
+        } else if startsElementUpdatePropertyChange {
+            update = ElementUpdatePredicateExpr(change: try parsePropertyChangeExpr())
+        } else {
+            let element = try parseElementPredicateTemplate()
+            guard consumeSymbol(",") else {
+                throw error(currentToken, ".updated(...) with an element matcher also requires an update matcher")
+            }
+            update = ElementUpdatePredicateExpr(element: element, change: try parsePropertyChangeExpr())
+        }
         try expectSymbol(")")
         return .updatedElement(update)
     }
 
-    mutating func parseElementUpdatePredicate() throws -> ElementUpdatePredicateExpr {
-        var element: ElementPredicateTemplate?
-        var change: AnyPropertyChangeExpr?
-        if currentToken.isSymbol(")") {
-            return ElementUpdatePredicateExpr()
-        }
-        while true {
-            if lookaheadLabel("element") {
-                try expectIdentifier("element")
-                try expectSymbol(":")
-                guard element == nil else {
-                    throw error(previous, "element update predicate accepts element only once")
-                }
-                element = try parseElementPredicateTemplate()
-            } else if currentToken.isSymbol(".") {
-                guard change == nil else {
-                    throw error(previous, "element update predicate accepts one property change")
-                }
-                change = try parsePropertyChangeExpr()
-            } else {
-                let message = """
-                element update predicate accepts element: and one property change: \
-                \(ElementProperty.parserSupportedSourceNameList)
-                """
-                throw error(currentToken, message)
-            }
-            guard consumeSymbol(",") else { break }
-        }
-        return ElementUpdatePredicateExpr(element: element, change: change)
+    var lookaheadElementUpdateMatcherFollowedByChange: Bool {
+        var parser = self
+        guard (try? parser.parseElementPredicateTemplate()) != nil else { return false }
+        return parser.consumeSymbol(",")
+    }
+
+    var lookaheadElementUpdateMatcherOnly: Bool {
+        var parser = self
+        guard (try? parser.parseElementPredicateTemplate()) != nil else { return false }
+        guard parser.currentToken.isSymbol(")") else { return false }
+        return !lookaheadIdentifier(1, "value")
+    }
+
+    var startsElementUpdatePropertyChange: Bool {
+        currentToken.isSymbol(".") && lookaheadIdentifier(in: Self.validElementPropertyNames)
     }
 
     mutating func parsePropertyChangeExpr() throws -> AnyPropertyChangeExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
         try expectSymbol("(")
-        guard let descriptor = ElementProperty.parserSupportedSourceDescriptor(named: name) else {
-            throw error(previous, "unsupported element update property '.\(name)'. Valid: \(ElementProperty.parserSupportedSourceNameList)")
-        }
         let change: AnyPropertyChangeExpr
-        switch descriptor.property {
-        case .label:
-            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
-            change = .label(before: fields.before, after: fields.after)
-        case .identifier:
-            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
-            change = .identifier(before: fields.before, after: fields.after)
-        case .value:
-            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
+        switch name {
+        case "value":
+            let fields = try parseStringPropertyChangeFields(property: "value", allowsUnlabeledAfter: true)
             change = .value(before: fields.before, after: fields.after)
-        case .traits:
-            let fields = try parseTraitsPropertyChangeFields(descriptor: descriptor)
-            change = .traits(before: fields.before, after: fields.after)
-        case .hint:
-            let fields = try parseStringPropertyChangeFields(descriptor: descriptor)
+        case "hint":
+            let fields = try parseStringPropertyChangeFields(property: "hint")
             change = .hint(before: fields.before, after: fields.after)
-        case .actions:
-            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
+        case "actions":
+            let fields = try parseTypedPropertyChangeFields(property: "actions") {
                 try $0.parseActionSetMatch(role: $1)
             }
             change = .actions(before: fields.before, after: fields.after)
-        case .frame:
-            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
+        case "frame":
+            let fields = try parseTypedPropertyChangeFields(property: "frame") {
                 try $0.parseElementFrameMatch(role: $1)
             }
             change = .frame(before: fields.before, after: fields.after)
-        case .activationPoint:
-            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
+        case "activationPoint":
+            let fields = try parseTypedPropertyChangeFields(property: "activationPoint") {
                 try $0.parseElementPointMatch(role: $1)
             }
             change = .activationPoint(before: fields.before, after: fields.after)
-        case .customContent:
-            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
+        case "customContent":
+            let fields = try parseTypedPropertyChangeFields(property: "customContent") {
                 try $0.parseCustomContentMatch(role: $1)
             }
             change = .customContent(before: fields.before, after: fields.after)
-        case .rotors:
-            let fields = try parseTypedPropertyChangeFields(descriptor: descriptor) {
+        case "rotors":
+            let fields = try parseTypedPropertyChangeFields(property: "rotors") {
                 try $0.parseRotorSetMatch(role: $1)
             }
             change = .rotors(before: fields.before, after: fields.after)
+        case "traits":
+            let fields = try parseTraitsPropertyChangeFields()
+            change = .traits(before: fields.before, after: fields.after)
+        default:
+            throw error(previous, "unsupported element update property '.\(name)'. Valid: \(Self.validElementProperties)")
         }
         try expectSymbol(")")
         return change
     }
 
     mutating func parseStringPropertyChangeFields(
-        descriptor: ElementProperty.SourceDescriptor
+        property: String,
+        allowsUnlabeledAfter: Bool = false
     ) throws -> PropertyChangeFields<StringMatch<StringExpr>> {
-        let property = descriptor.sourceName
         var before: StringMatch<StringExpr>?
         var after: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
             return PropertyChangeFields(before: nil, after: nil)
         }
-        if descriptor.allowsUnlabeledAfter && !lookaheadLabel("before") && !lookaheadLabel("after") {
+        if allowsUnlabeledAfter && !currentTokenStartsFieldLabel {
             return PropertyChangeFields(
                 before: nil,
                 after: try parseStringMatchCallArgument(field: "\(property) after")
@@ -264,17 +306,22 @@ extension HeistPlanSourceParser {
                 }
                 after = try parseStringMatchFieldValue(field: "\(property) after")
             } else {
-                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
+                throw error(currentToken, "\(property) update predicate accepts before and after")
             }
             guard consumeSymbol(",") else { break }
+        }
+        if before != nil, after == nil {
+            throw error(currentToken, "\(property) update predicate requires after when before is set")
         }
         return PropertyChangeFields(before: before, after: after)
     }
 
-    mutating func parseTraitsPropertyChangeFields(
-        descriptor: ElementProperty.SourceDescriptor
-    ) throws -> PropertyChangeFields<TraitSetMatch> {
-        let property = descriptor.sourceName
+    var currentTokenStartsFieldLabel: Bool {
+        guard case .identifier = currentToken.kind else { return false }
+        return nextTokenIsSymbol(":")
+    }
+
+    mutating func parseTraitsPropertyChangeFields() throws -> PropertyChangeFields<TraitSetMatch> {
         var before: TraitSetMatch?
         var after: TraitSetMatch?
         if currentToken.isSymbol(")") {
@@ -285,20 +332,23 @@ extension HeistPlanSourceParser {
                 try expectIdentifier("before")
                 try expectSymbol(":")
                 guard before == nil else {
-                    throw error(previous, "\(property) update predicate accepts before only once")
+                    throw error(previous, "traits update predicate accepts before only once")
                 }
-                before = try parseTraitSetMatch(role: "\(property) before")
+                before = try parseTraitSetMatch(role: "traits before")
             } else if lookaheadLabel("after") {
                 try expectIdentifier("after")
                 try expectSymbol(":")
                 guard after == nil else {
-                    throw error(previous, "\(property) update predicate accepts after only once")
+                    throw error(previous, "traits update predicate accepts after only once")
                 }
-                after = try parseTraitSetMatch(role: "\(property) after")
+                after = try parseTraitSetMatch(role: "traits after")
             } else {
-                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
+                throw error(currentToken, "traits update predicate accepts before and after")
             }
             guard consumeSymbol(",") else { break }
+        }
+        if before != nil, after == nil {
+            throw error(currentToken, "traits update predicate requires after when before is set")
         }
         return PropertyChangeFields(before: before, after: after)
     }
@@ -341,10 +391,9 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseTypedPropertyChangeFields<T>(
-        descriptor: ElementProperty.SourceDescriptor,
+        property: String,
         parseValue: (inout HeistPlanSourceParser, String) throws -> T
     ) throws -> PropertyChangeFields<T> {
-        let property = descriptor.sourceName
         var before: T?
         var after: T?
         if currentToken.isSymbol(")") {
@@ -366,9 +415,12 @@ extension HeistPlanSourceParser {
                 }
                 after = try parseValue(&self, "\(property) after")
             } else {
-                throw error(currentToken, "\(property) update predicate accepts \(descriptor.expectedFieldList)")
+                throw error(currentToken, "\(property) update predicate accepts before and after")
             }
             guard consumeSymbol(",") else { break }
+        }
+        if before != nil, after == nil {
+            throw error(currentToken, "\(property) update predicate requires after when before is set")
         }
         return PropertyChangeFields(before: before, after: after)
     }
@@ -625,4 +677,15 @@ extension HeistPlanSourceParser {
         return matches
     }
 
+    private static var validElementPropertyNames: Set<String> {
+        Set(validElementUpdateProperties.map(\.rawValue))
+    }
+
+    private static var validElementUpdateProperties: [ElementProperty] {
+        ElementProperty.allCases.filter { $0 != .label && $0 != .identifier }
+    }
+
+    private static var validElementProperties: String {
+        validElementUpdateProperties.map(\.rawValue).joined(separator: ", ")
+    }
 }

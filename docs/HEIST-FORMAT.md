@@ -169,10 +169,10 @@ HeistPlan("cartFlow") {
     }
 
     If {
-        Case(.label("Checkout")) {
-            Activate(.label("Checkout"))
-                .expect(.change(.screen()))
-        }
+            Case(.label("Checkout")) {
+                Activate(.label("Checkout"))
+                    .expect(.screenChanged(.exists(.label("Receipt"))))
+            }
 
         Else {
             Fail("Checkout unavailable")

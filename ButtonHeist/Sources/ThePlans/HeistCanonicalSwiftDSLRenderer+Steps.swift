@@ -130,7 +130,7 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderSingleCaseBranches(
         callee: String,
-        predicate: AccessibilityPredicateExpr,
+        predicate: StatePredicateExpr,
         timeout: Double?,
         body: [HeistStep],
         elseBody: [HeistStep]?,

@@ -9,6 +9,20 @@ enum PredicateObservationDiagnostics {
     static let changePredicateNeedsFutureObservationMessage = "change predicate requires future settled observation after baseline"
 }
 
+private struct PredicateWaitPollEvaluation {
+    let expectation: ExpectationResult
+    let warning: HeistPredicateWarning?
+
+    var met: Bool {
+        expectation.met || warning != nil
+    }
+}
+
+private enum FinalStateSatisfactionTiming: String {
+    case baseline
+    case afterObservation = "after_observation"
+}
+
 // PredicateWait stores main-actor closures and is constructed/used from main-actor observation code.
 @MainActor struct PredicateWait { // swiftlint:disable:this agent_main_actor_value_type
     typealias ObserveEvent = @MainActor (
@@ -30,13 +44,15 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        allowsTransitionFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         do {
             return await wait(
                 for: try step.resolve(in: .empty),
                 initialTrace: initialTrace,
-                after: sequence
+                after: sequence,
+                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -60,7 +76,8 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        allowsTransitionFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
@@ -77,7 +94,8 @@ enum PredicateObservationDiagnostics {
                 initialTrace: initialTrace,
                 start: start,
                 shouldPoll: timeout > 0 && sequence == nil,
-                observationScope: scope
+                observationScope: scope,
+                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
             )
         }
 
@@ -93,14 +111,26 @@ enum PredicateObservationDiagnostics {
             state: &state
         )
         if case .finished(let success) = initialOutcome {
+            if success {
+                return waitReceipt(for: step, state: state, start: start, success: true)
+            }
+            if allowsTransitionFinalStateWarning,
+               let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
+                return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
+            }
             return waitReceipt(for: step, state: state, start: start, success: success)
+        }
+
+        if allowsTransitionFinalStateWarning,
+           let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
+            return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
         }
 
         guard timeout > 0 else {
             return waitReceipt(for: step, state: state, start: start, success: false)
         }
 
-        let pollResult = await PredicatePollingEngine<ExpectationResult>(
+        let pollResult = await PredicatePollingEngine<PredicateWaitPollEvaluation>(
             observeSemanticState: observeSemanticState
         ).poll(
             scope: scope,
@@ -115,7 +145,12 @@ enum PredicateObservationDiagnostics {
             evaluate: { observation, _ in
                 let reduced = stream.reducing(observation, predicate: step.predicate)
                 stream = reduced.state
-                return reduced.reduction.expectation
+                return pollEvaluation(
+                    for: reduced.reduction,
+                    predicate: step.predicate,
+                    state: state,
+                    allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+                )
             },
             isMatched: { $0.met }
         )
@@ -126,6 +161,20 @@ enum PredicateObservationDiagnostics {
             if reduction.expectation.met {
                 return waitReceipt(for: step, state: state, start: start, success: true)
             }
+            if let warning = pollResult.lastEvaluation?.warning {
+                return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
+            }
+        }
+
+        if allowsTransitionFinalStateWarning,
+           let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
+            return waitReceipt(
+                for: step,
+                state: state,
+                start: start,
+                success: true,
+                warning: warning
+            )
         }
 
         return waitReceipt(
@@ -195,13 +244,14 @@ enum PredicateObservationDiagnostics {
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
         shouldPoll: Bool,
-        observationScope: SemanticObservationScope
+        observationScope: SemanticObservationScope,
+        allowsTransitionFinalStateWarning: Bool
     ) async -> HeistWaitReceipt {
         var state = WaitPredicateState(predicate: step.predicate)
         var stream = PredicateObservationStreamState()
 
         if shouldPoll {
-            let pollResult = await PredicatePollingEngine<ExpectationResult>(
+            let pollResult = await PredicatePollingEngine<PredicateWaitPollEvaluation>(
                 observeSemanticState: observeSemanticState
             ).poll(
                 scope: observationScope,
@@ -223,7 +273,12 @@ enum PredicateObservationDiagnostics {
                         baselineSeed: baselineSeed
                     )
                     stream = reduced.state
-                    return reduced.reduction.expectation
+                    return pollEvaluation(
+                        for: reduced.reduction,
+                        predicate: step.predicate,
+                        state: state,
+                        allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+                    )
                 },
                 isMatched: { $0.met }
             )
@@ -234,7 +289,15 @@ enum PredicateObservationDiagnostics {
                 if reduction.expectation.met {
                     return waitReceipt(for: step, state: state, start: start, success: true)
                 }
+                if let warning = pollResult.lastEvaluation?.warning {
+                    return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
+                }
             }
+        }
+
+        if allowsTransitionFinalStateWarning,
+           let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
+            return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
@@ -253,6 +316,25 @@ enum PredicateObservationDiagnostics {
         return waitReceipt(for: step, state: state, start: start, success: false)
     }
 
+    private func pollEvaluation(
+        for reduction: PredicateObservationReduction,
+        predicate: AccessibilityPredicate,
+        state: WaitPredicateState,
+        allowsTransitionFinalStateWarning: Bool
+    ) -> PredicateWaitPollEvaluation {
+        let expectation = reduction.expectation
+        guard !expectation.met, allowsTransitionFinalStateWarning else {
+            return PredicateWaitPollEvaluation(expectation: expectation, warning: nil)
+        }
+
+        var warningState = state
+        warningState.record(reduction)
+        return PredicateWaitPollEvaluation(
+            expectation: expectation,
+            warning: finalStateSatisfiedTransitionWarning(for: predicate, state: warningState)
+        )
+    }
+
     private func initialTraceChangeEvaluation(
         for predicate: AccessibilityPredicate,
         initialTrace: AccessibilityTrace?
@@ -268,6 +350,205 @@ enum PredicateObservationDiagnostics {
         )
     }
 
+    private func finalStateSatisfiedTransitionWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState
+    ) -> HeistPredicateWarning? {
+        if let element = predicate.singleAppearedElementMatcher {
+            return presenceFinalStateWarning(
+                for: predicate,
+                state: state,
+                element: element,
+                expectedPresence: true
+            )
+        }
+
+        if let element = predicate.singleDisappearedElementMatcher {
+            return presenceFinalStateWarning(
+                for: predicate,
+                state: state,
+                element: element,
+                expectedPresence: false
+            )
+        }
+
+        if let update = predicate.singleUpdatedElementWithDestination {
+            return updateFinalStateWarning(
+                for: predicate,
+                state: state,
+                update: update
+            )
+        }
+
+        return nil
+    }
+
+    private func presenceFinalStateWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState,
+        element: ElementPredicate,
+        expectedPresence: Bool
+    ) -> HeistPredicateWarning? {
+        guard let baselineElements = state.changeBaseline?.capture?.interface.projectedElements else {
+            return nil
+        }
+
+        let timing: FinalStateSatisfactionTiming
+        let evidence: String
+        if let baselineEvidence = Self.presenceEvidence(of: element, in: baselineElements),
+           expectedPresence {
+            timing = .baseline
+            evidence = baselineEvidence
+        } else if !expectedPresence,
+                  !Self.isPresent(element, in: baselineElements) {
+            timing = .baseline
+            evidence = Self.warningSubject(for: element)
+        } else if let finalElements = state.finalElements,
+                  let finalEvidence = Self.presenceEvidence(of: element, in: finalElements),
+                  expectedPresence {
+            timing = .afterObservation
+            evidence = finalEvidence
+        } else if let finalElements = state.finalElements,
+                  !expectedPresence,
+                  !Self.isPresent(element, in: finalElements) {
+            timing = .afterObservation
+            evidence = Self.warningSubject(for: element)
+        } else {
+            return nil
+        }
+
+        let subject = Self.warningSubject(for: element)
+        let stateDescription = expectedPresence ? "present" : "absent"
+        let transitionDescription = expectedPresence ? "appearance" : "disappearance"
+        let timingDescription = timing == .baseline
+            ? "was already \(stateDescription) when the wait began"
+            : "satisfied the \(stateDescription) final state without an observed transition"
+        let message = "\(subject) \(timingDescription), so no \(transitionDescription) was observed. "
+            + "The final state satisfied the wait."
+        return HeistPredicateWarning(
+            code: "transition_not_observed_final_state_satisfied",
+            predicate: predicate.description,
+            impliedPredicate: AccessibilityPredicate.state(expectedPresence ? .exists(element) : .missing(element)).description,
+            finalStateTiming: timing.rawValue,
+            evidence: evidence,
+            message: message
+        )
+    }
+
+    private func updateFinalStateWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState,
+        update: ElementUpdatePredicate
+    ) -> HeistPredicateWarning? {
+        guard let baselineElements = state.changeBaseline?.capture?.interface.projectedElements
+        else { return nil }
+
+        let timing: FinalStateSatisfactionTiming
+        let evidence: String
+        if let baselineEvidence = updateFinalStateEvidence(update, in: baselineElements) {
+            timing = .baseline
+            evidence = baselineEvidence
+        } else if let finalElements = state.finalElements,
+                  let finalEvidence = updateFinalStateEvidence(update, in: finalElements) {
+            timing = .afterObservation
+            evidence = finalEvidence
+        } else {
+            return nil
+        }
+
+        let timingDescription = timing == .baseline
+            ? "was already satisfied when the wait began"
+            : "became satisfied without an observed matching transition"
+        let message = "The destination update state \(timingDescription), so no update transition was observed. "
+            + "The final state satisfied the wait."
+        return HeistPredicateWarning(
+            code: "transition_not_observed_final_state_satisfied",
+            predicate: predicate.description,
+            impliedPredicate: Self.impliedUpdateFinalStateDescription(update),
+            finalStateTiming: timing.rawValue,
+            evidence: evidence,
+            message: message
+        )
+    }
+
+    private func updateFinalStateEvidence(
+        _ update: ElementUpdatePredicate,
+        in elements: [HeistElement]
+    ) -> String? {
+        guard let change = update.change?.destinationChange else { return nil }
+        let candidates = update.element.map {
+            ElementMatchSet(elements: elements).matching($0).elements
+        } ?? elements
+
+        for element in candidates
+        where Self.destinationPropertyChange(for: change.property, in: element)?.satisfies(change) == true {
+            return Self.warningEvidence(for: element)
+        }
+        return nil
+    }
+
+    private static func isPresent(_ predicate: ElementPredicate, in elements: [HeistElement]) -> Bool {
+        !ElementMatchSet(elements: elements).matching(predicate).isEmpty
+    }
+
+    private static func presenceEvidence(of predicate: ElementPredicate, in elements: [HeistElement]) -> String? {
+        ElementMatchSet(elements: elements).matching(predicate).elements.first.map(warningEvidence(for:))
+    }
+
+    private static func warningEvidence(for element: HeistElement) -> String {
+        if let label = element.label, !label.isEmpty {
+            return "label=\(label)"
+        }
+        if let identifier = element.identifier, !identifier.isEmpty {
+            return "identifier=\(identifier)"
+        }
+        return "description=\(element.description)"
+    }
+
+    private static func impliedUpdateFinalStateDescription(_ update: ElementUpdatePredicate) -> String? {
+        guard let destinationChange = update.change?.destinationChange else { return nil }
+        let subject = update.element.map { "element=\($0)" } ?? "element=any"
+        return ScoreDescription.call("destination_state", [
+            subject,
+            "change=\(destinationChange)",
+        ])
+    }
+
+    private static func destinationPropertyChange(
+        for property: ElementProperty,
+        in element: HeistElement
+    ) -> PropertyChange? {
+        switch property {
+        case .label, .identifier:
+            return nil
+        case .value:
+            return ValueProperty.value(in: element).map { .value(old: nil, new: $0) }
+        case .traits:
+            return TraitsProperty.value(in: element).map { .traits(old: nil, new: $0) }
+        case .hint:
+            return HintProperty.value(in: element).map { .hint(old: nil, new: $0) }
+        case .actions:
+            return ActionsProperty.value(in: element).map { .actions(old: nil, new: $0) }
+        case .frame:
+            return FrameProperty.value(in: element).map { .frame(old: nil, new: $0) }
+        case .activationPoint:
+            return ActivationPointProperty.value(in: element).map { .activationPoint(old: nil, new: $0) }
+        case .customContent:
+            return CustomContentProperty.value(in: element).map { .customContent(old: nil, new: $0) }
+        case .rotors:
+            return RotorsProperty.value(in: element).map { .rotors(old: nil, new: $0) }
+        }
+    }
+
+    private static func warningSubject(for predicate: ElementPredicate) -> String {
+        for check in predicate.checks {
+            if case .label(.exact(let label)) = check, !label.isEmpty {
+                return label
+            }
+        }
+        return "The element"
+    }
+
     private func waitReceipt(
         for step: ResolvedWaitStep,
         trace: AccessibilityTrace? = nil,
@@ -275,6 +556,7 @@ enum PredicateObservationDiagnostics {
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
         success: Bool,
+        warning: HeistPredicateWarning? = nil,
         changeBaseline: WaitChangeBaseline? = nil,
         sawObservationAfterBaseline: Bool = false,
         observedSequence: SettledObservationSequence? = nil
@@ -298,6 +580,7 @@ enum PredicateObservationDiagnostics {
             expectation: expectation,
             elapsed: elapsed,
             success: success,
+            warning: warning,
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
@@ -309,15 +592,20 @@ enum PredicateObservationDiagnostics {
         for step: ResolvedWaitStep,
         state: WaitPredicateState,
         start: CFAbsoluteTime,
-        success: Bool
+        success: Bool,
+        warning: HeistPredicateWarning? = nil
     ) -> HeistWaitReceipt {
-        waitReceipt(
+        let expectation = warning.map {
+            ExpectationResult(met: true, predicate: step.predicate, actual: $0.message)
+        } ?? state.lastEvaluation
+        return waitReceipt(
             for: step,
             trace: state.lastTrace,
             observationSummary: state.lastObservationSummary,
-            expectation: state.lastEvaluation,
+            expectation: expectation,
             start: start,
             success: success,
+            warning: warning,
             changeBaseline: state.changeBaseline,
             sawObservationAfterBaseline: state.sawObservationAfterBaseline,
             observedSequence: state.observedSequence
@@ -405,12 +693,13 @@ enum PredicateObservationDiagnostics {
         expectation: ExpectationResult,
         elapsed: String,
         success: Bool,
+        warning: HeistPredicateWarning? = nil,
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary receiptObservationSummary: String? = nil
     ) -> HeistWaitReceipt {
-        let message = success
+        let message = warning?.message ?? (success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
             : waitTimeoutMessage(
                 for: step,
@@ -419,7 +708,7 @@ enum PredicateObservationDiagnostics {
                 elapsed: elapsed,
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
-            )
+            ))
         return HeistWaitReceipt(
             waitOutcome: HeistWaitOutcome(
                 status: success ? .matched : .timedOut,
@@ -427,7 +716,8 @@ enum PredicateObservationDiagnostics {
                 accessibilityTrace: trace,
                 expectation: expectation,
                 observedSequence: observedSequence,
-                observationSummary: receiptObservationSummary
+                observationSummary: receiptObservationSummary,
+                warning: warning
             )
         )
     }
@@ -1218,6 +1508,66 @@ private extension HeistSemanticObservation {
     }
 }
 
+private extension AccessibilityPredicate {
+    var singleAppearedElementMatcher: ElementPredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .appearedElement(let element) = assertions[0] else {
+            return nil
+        }
+        return element
+    }
+
+    var singleDisappearedElementMatcher: ElementPredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .disappearedElement(let element) = assertions[0] else {
+            return nil
+        }
+        return element
+    }
+
+    var singleUpdatedElementWithDestination: ElementUpdatePredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .updatedElement(let update) = assertions[0],
+              update.change?.destinationChange != nil else {
+            return nil
+        }
+        return update
+    }
+}
+
+private extension AnyPropertyChange {
+    var destinationChange: AnyPropertyChange? {
+        switch self {
+        case .value(let change):
+            return change.destinationOnlyChange.map { .value($0) }
+        case .traits(let change):
+            return change.destinationOnlyChange.map { .traits($0) }
+        case .hint(let change):
+            return change.destinationOnlyChange.map { .hint($0) }
+        case .actions(let change):
+            return change.destinationOnlyChange.map { .actions($0) }
+        case .frame(let change):
+            return change.destinationOnlyChange.map { .frame($0) }
+        case .activationPoint(let change):
+            return change.destinationOnlyChange.map { .activationPoint($0) }
+        case .customContent(let change):
+            return change.destinationOnlyChange.map { .customContent($0) }
+        case .rotors(let change):
+            return change.destinationOnlyChange.map { .rotors($0) }
+        }
+    }
+}
+
+private extension ElementPropertyChange {
+    var destinationOnlyChange: ElementPropertyChange<P>? {
+        guard before == nil, let after else { return nil }
+        return ElementPropertyChange(after: after)
+    }
+}
+
 private struct WaitPredicateState {
     var lastTrace: AccessibilityTrace?
     var lastObservationSummary: String?
@@ -1233,6 +1583,10 @@ private struct WaitPredicateState {
             predicate: predicate,
             actual: "no settled semantic observation available"
         )
+    }
+
+    var finalElements: [HeistElement]? {
+        lastTrace?.captures.last?.interface.projectedElements
     }
 
     mutating func record(_ reduction: PredicateObservationReduction) {

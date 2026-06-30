@@ -158,7 +158,7 @@ public struct If: HeistContent {
     }
 
     public init(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: StatePredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
@@ -168,14 +168,6 @@ public struct If: HeistContent {
             definitions: content.heistDefinitions,
             diagnostics: content.heistBuildDiagnostics
         )
-    }
-
-    @_disfavoredOverload
-    public init(
-        _ predicate: AccessibilityPredicate,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        self.init(.predicate(predicate), content)
     }
 
     public func `else`(
@@ -216,7 +208,7 @@ public struct Case {
     let predicateBranch: PredicateBranch
 
     public init(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: StatePredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
@@ -225,14 +217,6 @@ public struct Case {
             definitions: content.heistDefinitions,
             diagnostics: content.heistBuildDiagnostics
         )
-    }
-
-    @_disfavoredOverload
-    public init(
-        _ predicate: AccessibilityPredicate,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        self.init(.predicate(predicate), content)
     }
 }
 

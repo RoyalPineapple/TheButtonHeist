@@ -174,7 +174,7 @@ Use `HeistPlan` for reusable or multi-step behavior:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.change(.screen()))
+        .expect(.screenChanged(.exists(.label("Receipt"))))
 
     WaitFor(.label("Receipt"), timeout: .seconds(10))
 }
@@ -184,8 +184,16 @@ Use `perform(step:)` for one durable step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.change(.screen()))
+    .expect(.screenChanged(.exists(.label("Receipt"))))
 ```
+
+`WaitFor(...)` is final-state oriented. Snapshot predicates pass when the
+current settled screen satisfies the predicate. Element transition predicates
+such as `.appeared(...)`, `.disappeared(...)`, and `.updated(...)` still try to
+observe the transition, but standalone waits may pass with a warning when the
+implied final state is already true or becomes true without transition evidence.
+Action `.expect(...)` and `RunHeist(...).expect(...)` remain strict transition
+assertions.
 
 Use definitions and composition inside a durable plan:
 

@@ -234,6 +234,13 @@ struct PublicHeistWaitEvidenceDTO: Decodable, Equatable {
     let expectation: PublicExpectationResultDTO
     let baselineSummary: String?
     let finalSummary: String?
+    let warning: PublicHeistPredicateWarningDTO?
+}
+
+struct PublicHeistPredicateWarningDTO: Decodable, Equatable {
+    let code: String
+    let predicate: String
+    let message: String
 }
 
 struct PublicHeistCaseSelectionEvidenceDTO: Decodable, Equatable {
@@ -292,6 +299,7 @@ struct PublicHeistInvocationEvidenceDTO: Decodable, Equatable {
     let childFailedPath: String?
     let expectationResult: PublicHeistActionResultDTO?
     let expectation: PublicExpectationResultDTO?
+    let expectationEvidence: PublicHeistWaitEvidenceDTO?
 }
 
 struct PublicHeistWarningEvidenceDTO: Decodable, Equatable {

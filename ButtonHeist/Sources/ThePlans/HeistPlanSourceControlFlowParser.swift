@@ -25,7 +25,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
-            let predicate = try parseAccessibilityPredicateExpr()
+            let predicate = try parseStatePredicateExpr()
             try expectSymbol(")")
             let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "If")
             return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
@@ -207,7 +207,7 @@ extension HeistPlanSourceParser {
                     throw error(token, "Case must appear before Else")
                 }
                 try expectSymbol("(")
-                let predicate = try parseAccessibilityPredicateExpr()
+                let predicate = try parseStatePredicateExpr()
                 try expectSymbol(")")
                 cases.append(PredicateCase(predicate: predicate, body: try parseHeistBlock()))
             case "Else":
@@ -223,7 +223,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseSinglePredicateBranches(
-        predicate: AccessibilityPredicateExpr,
+        predicate: StatePredicateExpr,
         chainContext: String
     ) throws -> ParsedPredicateBranches {
         let body = try parseHeistBlock()

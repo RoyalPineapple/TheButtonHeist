@@ -677,6 +677,206 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
+    func testDisappearedWaitWarnsWhenFinalStateIsAlreadyAbsent() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let emptyScreen = Screen.makeForTests(elements: [])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .disappeared(.label("Loading")),
+                timeout: 0.05
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertTrue(receipt.warning?.message.contains("already absent") == true)
+        XCTAssertEqual(receipt.warning?.evidence, "Loading")
+    }
+
+    func testAppearedWaitWarnsWhenFinalStateIsAlreadyPresent() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let readyScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .appeared(.label("Ready")),
+                timeout: 0.05
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(readyScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertEqual(receipt.warning?.evidence, "label=Ready")
+        XCTAssertTrue(receipt.warning?.message.contains("already present") == true)
+    }
+
+    func testUpdatedWaitWarnsWhenFinalStateAlreadyMatches() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let quantity = AccessibilityElement.make(
+            label: "Quantity",
+            value: "3",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let quantityScreen = Screen.makeForTests(elements: [
+            (quantity, HeistId(rawValue: "quantity")),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .change(.updated(.label("Quantity"), .value("3"))),
+                timeout: 0.05
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertEqual(receipt.warning?.finalStateTiming, "baseline")
+        XCTAssertTrue(receipt.warning?.impliedPredicate?.contains("destination_state") == true)
+        XCTAssertEqual(receipt.warning?.evidence, "label=Quantity")
+        XCTAssertTrue(receipt.warning?.message.contains("no update transition was observed") == true)
+    }
+
+    func testFromToUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let quantity = AccessibilityElement.make(
+            label: "Quantity",
+            value: "3",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let quantityScreen = Screen.makeForTests(elements: [
+            (quantity, HeistId(rawValue: "quantity")),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .change(.updated(.label("Quantity"), .value(before: "2", after: "3"))),
+                timeout: 0.05
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertEqual(receipt.expectation.met, false)
+        XCTAssertNil(receipt.warning)
+    }
+
+    func testFromToUpdatedWaitWarningCanBeDisabledForActionExpectationSemantics() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let quantity = AccessibilityElement.make(
+            label: "Quantity",
+            value: "3",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let quantityScreen = Screen.makeForTests(elements: [
+            (quantity, HeistId(rawValue: "quantity")),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(
+                WaitStep(
+                    predicate: .change(.updated(.label("Quantity"), .value(before: "2", after: "3"))),
+                    timeout: 0.05
+                ),
+                allowsTransitionFinalStateWarning: false
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, false)
+        XCTAssertNil(receipt.warning)
+    }
+
+    func testTransitionFinalStateWarningCanBeDisabledForActionExpectationSemantics() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let emptyScreen = Screen.makeForTests(elements: [])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(
+                WaitStep(
+                    predicate: .disappeared(.label("Loading")),
+                    timeout: 0.05
+                ),
+                allowsTransitionFinalStateWarning: false
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, false)
+        XCTAssertNil(receipt.warning)
+    }
+
+    func testDisappearedWaitDoesNotWarnWhenTransitionIsObserved() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let loadingScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
+        ])
+        let emptyScreen = Screen.makeForTests(elements: [])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .disappeared(.label("Loading")),
+                timeout: 1
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(loadingScreen)
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+
+        let receipt = await receiptTask.value
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertNil(receipt.warning)
+    }
+
     func testPredicateWaitStateMatchingKeepsTypedSetShape() throws {
         let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
         let evaluationSource = try String(contentsOf: predicateEvaluationSourceURL(), encoding: .utf8)

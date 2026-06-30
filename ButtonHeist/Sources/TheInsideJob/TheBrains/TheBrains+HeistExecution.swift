@@ -89,10 +89,18 @@ extension TheBrains {
                     await brains.executeRuntimeAction(command)
                 },
                 wait: { request in
-                    await brains.interactionObservation.waitForPredicate(
+                    let allowsTransitionFinalStateWarning: Bool
+                    switch request {
+                    case .standalone:
+                        allowsTransitionFinalStateWarning = true
+                    case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
+                        allowsTransitionFinalStateWarning = false
+                    }
+                    return await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
-                        after: request.afterSequence
+                        after: request.afterSequence,
+                        allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
                     )
                 },
                 selectPredicateCase: { cases, timeout in
@@ -483,7 +491,7 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistWarningReceipt(
+        return heistWarningReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: .warn(message: warn.message),
@@ -496,7 +504,7 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistExplicitFailureReceipt(
+        return heistExplicitFailureReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: .fail(message: fail.message),
@@ -529,6 +537,7 @@ extension TheBrains {
             ),
             path: "\(path).heist.body"
         )
+        let abortedAtChildPath = children.firstFailedStep?.path
         return heistChildParentReceipt(
             path: path,
             kind: .heist,
@@ -536,7 +545,7 @@ extension TheBrains {
             intent: .heist(name: plan.name),
             evidence: .invocation(HeistInvocationEvidence(
                 name: plan.name.map { "heist \($0)" } ?? "inline heist",
-                childFailedPath: children.firstFailedStep?.path
+                childFailedPath: abortedAtChildPath
             )),
             childFailureCategory: .invocation,
             children: children
@@ -611,6 +620,7 @@ extension TheBrains {
             context: context,
             children: children,
             abortedAtChildPath: abortedAtChildPath,
+            expectationContext: expectationContext,
             expectationReceipt: expectationReceipt,
             failure: failure
         )
@@ -649,12 +659,11 @@ extension TheBrains {
         resolvedInvocationName: String
     ) -> HeistExecutionStepResult {
         let observed = "recursive heist run \(resolvedInvocationName)"
-        return heistFailedReceipt(
+        return heistInvocationReceipt(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
+            evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
             failure: HeistFailureDetail(
                 category: .invocation,
                 contract: "heist invocation must not recurse",
@@ -667,12 +676,11 @@ extension TheBrains {
         context: InvocationExecutionContext
     ) -> HeistExecutionStepResult {
         let observed = "unknown heist run \(context.requestedName)"
-        return heistFailedReceipt(
+        return heistInvocationReceipt(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
+            evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
             failure: HeistFailureDetail(
                 category: .invocation,
                 contract: "heist invocation path resolves to a definition",
@@ -687,15 +695,14 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not bind heist run argument: \(error)"
-        return heistFailedReceipt(
+        return heistInvocationReceipt(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence(
+            evidence: HeistInvocationEvidence(
                 invocation: context.invoke,
                 name: context.requestedName
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .validation,
                 contract: "heist invocation argument binds to the target parameter",
@@ -744,18 +751,17 @@ extension TheBrains {
             predicate: nil,
             actual: observed
         )
-        return heistFailedReceipt(
+        return heistInvocationReceipt(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence(
+            evidence: HeistInvocationEvidence(
                 invocation: context.invoke,
                 name: context.requestedName,
                 argument: context.argumentSummary,
                 expectationActionResult: expectationActionResult,
                 expectation: expectationResult
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .expectation,
                 contract: "heist invocation expectation predicate resolves before evaluation",
@@ -800,25 +806,43 @@ extension TheBrains {
         context: InvocationExecutionContext,
         children: [HeistExecutionStepResult],
         abortedAtChildPath: String?,
+        expectationContext: InvocationExpectationContext?,
         expectationReceipt: HeistWaitReceipt?,
         failure: HeistFailureDetail?
     ) -> HeistExecutionStepResult {
-        heistChildParentReceipt(
+        let expectationEvidence = expectationReceipt.map {
+            invocationExpectationEvidence(receipt: $0, context: expectationContext)
+        }
+        return heistInvocationReceipt(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence(
+            evidence: HeistInvocationEvidence(
                 invocation: context.invoke,
                 name: context.requestedName,
                 argument: context.argumentSummary,
                 childFailedPath: abortedAtChildPath,
-                expectationActionResult: expectationReceipt?.actionResult,
-                expectation: expectationReceipt?.expectation
-            )),
-            childFailureCategory: .invocation,
-            children: children,
-            failure: failure
+                expectationActionResult: expectationEvidence?.actionResult,
+                expectation: expectationEvidence?.expectation,
+                expectationEvidence: expectationEvidence
+            ),
+            failure: failure,
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
+        )
+    }
+
+    private func invocationExpectationEvidence(
+        receipt: HeistWaitReceipt,
+        context: InvocationExpectationContext?
+    ) -> HeistWaitEvidence {
+        HeistWaitEvidence(
+            outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed,
+            actionResult: receipt.actionResult,
+            expectation: receipt.expectation,
+            baselineSummary: context?.baseline.observationSummary,
+            finalSummary: receipt.observationSummary ?? receipt.expectation.actual,
+            warning: receipt.warning
         )
     }
 

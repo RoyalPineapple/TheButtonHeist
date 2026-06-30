@@ -7,7 +7,7 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     case missing(ElementPredicateTemplate)
     case existsTarget(ElementTargetExpr)
     case missingTarget(ElementTargetExpr)
-    case all([StatePredicateExpr])
+    case all(NonEmptyArray<StatePredicateExpr>)
 
     private enum WireType: String {
         case exists, missing, all
@@ -28,7 +28,7 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         case .missingTarget(let target):
             return .missingTarget(try target.resolve(in: environment))
         case .all(let states):
-            return .all(try states.map { try $0.resolve(in: environment) })
+            return .all(try states.mapNonEmpty { try $0.resolve(in: environment) })
         }
     }
 
@@ -50,14 +50,14 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate expression")
             let states = try container.decode([StatePredicateExpr].self, forKey: .states)
-            guard !states.isEmpty else {
+            guard let first = states.first else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .states,
                     in: container,
                     debugDescription: "all predicate requires at least one child state"
                 )
             }
-            self = .all(states)
+            self = .all(NonEmptyArray(first, rest: Array(states.dropFirst())))
         }
     }
 
@@ -151,7 +151,7 @@ public extension StatePredicateExpr {
         case .missingTarget(let target):
             self = .missingTarget(ElementTargetExpr(target))
         case .all(let states):
-            self = .all(states.map(StatePredicateExpr.init))
+            self = .all(states.mapNonEmpty(StatePredicateExpr.init))
         }
     }
 }

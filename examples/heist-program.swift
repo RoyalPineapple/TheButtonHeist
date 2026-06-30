@@ -5,7 +5,7 @@ let heist = try HeistPlan("searchFlow") {
         .expect(.exists(.element(label: "Search", value: "milk")), timeout: .seconds(2))
 
     Activate(.label("Search"))
-        .expect(.change(.screen()), timeout: .seconds(5))
+        .expect(.screenChanged(.exists(.label("Results"))), timeout: .seconds(5))
 
     WaitFor(.exists(.label("Results")), timeout: .seconds(5))
         .else {

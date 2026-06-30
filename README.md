@@ -53,10 +53,7 @@ A single move proves one contract. A heist defines a product capability.
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search Items"))
-            .expect(.updated(
-                element: .label("Search Items"),
-                .value(item)
-            ))
+            .expect(.updated(.label("Search Items"), .value(item)))
 
         Activate(.label(item))
             .expect(.appeared(.element(
@@ -66,18 +63,22 @@ HeistPlan("shop") {
     }
 
     RunHeist("Cart.addItem", "Milk")
+        .expect(.appeared(.element(
+            .label("subtotal"),
+            .value(.contains("1 item"))
+        )))
+
     RunHeist("Cart.addItem", "Eggs")
+        .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
+
     RunHeist("Cart.addItem", "Bread")
-    WaitFor(.updated(
-        element: .label("subtotal"),
-        .value(.contains("3 items"))
-    ))
+        .expect(.updated(.label("subtotal"), .value(.contains("3 items"))))
 }
 ```
 
 Each `Cart.addItem` call runs the same product capability with a new argument.
 The heist owns the search, activation, settlement, and evidence. The caller says
-what product move they want.
+what aggregate product outcome they require from that composed action.
 
 That is where the tool changes shape. The accessibility interface becomes the language of app interaction.
 

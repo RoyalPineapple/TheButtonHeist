@@ -543,6 +543,7 @@ struct PublicHeistWaitEvidence: Encodable {
     let expectation: PublicExpectationResult
     let baselineSummary: String?
     let finalSummary: String?
+    let warning: HeistPredicateWarning?
 
     init(projection: HeistWaitEvidenceProjection) {
         self.outcome = projection.outcome
@@ -550,6 +551,7 @@ struct PublicHeistWaitEvidence: Encodable {
         self.expectation = PublicExpectationResult(projection: projection.expectation)
         self.baselineSummary = projection.baselineSummary
         self.finalSummary = projection.finalSummary
+        self.warning = projection.warning
     }
 }
 
@@ -658,6 +660,7 @@ struct PublicHeistInvocationEvidence: Encodable {
     let childFailedPath: String?
     let expectationResult: PublicHeistReportActionResult?
     let expectation: PublicExpectationResult?
+    let expectationEvidence: PublicHeistWaitEvidence?
 
     init(projection: HeistInvocationEvidenceProjection) {
         self.capability = projection.capability
@@ -666,6 +669,7 @@ struct PublicHeistInvocationEvidence: Encodable {
         self.childFailedPath = projection.childFailedPath
         self.expectationResult = projection.expectationResult.map { PublicHeistReportActionResult(projection: $0) }
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
+        self.expectationEvidence = projection.expectationEvidence.map { PublicHeistWaitEvidence(projection: $0) }
     }
 }
 

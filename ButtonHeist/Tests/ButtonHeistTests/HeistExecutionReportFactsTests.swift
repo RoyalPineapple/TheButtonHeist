@@ -747,13 +747,19 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             name: "wait",
             step: waitStep(
                 actionResult: ActionResult(success: true, method: .wait),
-                expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate())
+                expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate()),
+                warning: HeistPredicateWarning(
+                    code: "transition_not_observed_final_state_satisfied",
+                    predicate: ".disappeared(.label(\"Loading\"))",
+                    message: "Loading was already absent when the wait began"
+                )
             ),
             expectedKey: "wait",
             assertEvidence: { evidence in
                 let wait = try XCTUnwrap(evidence.wait)
                 XCTAssertEqual(wait.result.method, "wait")
                 XCTAssertEqual(wait.expectation.met, true)
+                XCTAssertEqual(wait.warning?.code, "transition_not_observed_final_state_satisfied")
             }
         )
     }
@@ -888,6 +894,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             path: ["LibraryScreen", "addToCart"],
             argument: .string(.literal("Milk"))
         )
+        let predicate = evidenceProjectionPredicate()
+        let expectation = ExpectationResult(met: true, predicate: predicate, actual: "Ready")
         return (
             name: "invokeInvocation",
             step: HeistExecutionStepResult(
@@ -899,7 +907,16 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 evidence: .invocation(HeistInvocationEvidence(
                     invocation: invocation,
                     name: "LibraryScreen.addToCart",
-                    argument: "Milk"
+                    argument: "Milk",
+                    expectationActionResult: ActionResult(success: true, method: .wait),
+                    expectation: expectation,
+                    expectationEvidence: HeistWaitEvidence(
+                        outcome: .matched,
+                        actionResult: ActionResult(success: true, method: .wait),
+                        expectation: expectation,
+                        baselineSummary: "before addToCart",
+                        finalSummary: "Ready"
+                    )
                 ))
             ),
             expectedKey: "invocation",
@@ -907,6 +924,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 let invocation = try XCTUnwrap(evidence.invocation)
                 XCTAssertEqual(invocation.capability, "LibraryScreen.addToCart")
                 XCTAssertEqual(invocation.argument, "Milk")
+                XCTAssertEqual(invocation.expectationEvidence?.outcome, "matched")
+                XCTAssertEqual(invocation.expectationEvidence?.result.method, "wait")
+                XCTAssertEqual(invocation.expectationEvidence?.baselineSummary, "before addToCart")
+                XCTAssertEqual(invocation.expectationEvidence?.finalSummary, "Ready")
             }
         )
     }
@@ -979,6 +1000,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             met: true,
             predicate: .state(.exists(ElementPredicate(label: "Done")))
         ),
+        warning: HeistPredicateWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
@@ -990,7 +1012,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             evidence: .wait(HeistWaitEvidence(
                 outcome: failure == nil ? .matched : .failed,
                 actionResult: actionResult,
-                expectation: expectation
+                expectation: expectation,
+                warning: warning
             )),
             failure: failure
         )

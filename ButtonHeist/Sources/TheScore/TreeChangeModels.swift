@@ -504,12 +504,8 @@ extension PropertyChange: Codable {
 }
 
 extension PropertyChange {
-    func satisfies(_ expected: AnyPropertyChange) -> Bool {
+    package func satisfies(_ expected: AnyPropertyChange) -> Bool {
         switch expected {
-        case .label(let expected):
-            return satisfies(expected)
-        case .identifier(let expected):
-            return satisfies(expected)
         case .value(let expected):
             return satisfies(expected)
         case .traits(let expected):
@@ -527,16 +523,6 @@ extension PropertyChange {
         case .rotors(let expected):
             return satisfies(expected)
         }
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<LabelProperty>) -> Bool {
-        guard case .label(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<IdentifierProperty>) -> Bool {
-        guard case .identifier(let observed) = self else { return false }
-        return observed.satisfies(expected)
     }
 
     private func satisfies(_ expected: ElementPropertyChange<ValueProperty>) -> Bool {

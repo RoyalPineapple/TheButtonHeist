@@ -70,6 +70,7 @@ struct HeistWaitEvidenceProjection: Sendable {
     let expectation: ExpectationProjection
     let baselineSummary: String?
     let finalSummary: String?
+    let warning: HeistPredicateWarning?
 
     init(evidence: HeistWaitEvidence, profile: ProjectionProfile) {
         outcome = evidence.outcome
@@ -82,6 +83,7 @@ struct HeistWaitEvidenceProjection: Sendable {
         expectation = ExpectationProjection(result: evidence.expectation)
         baselineSummary = evidence.baselineSummary
         finalSummary = evidence.finalSummary
+        warning = evidence.warning
     }
 }
 
@@ -195,6 +197,7 @@ struct HeistInvocationEvidenceProjection: Sendable {
     let childFailedPath: String?
     let expectationResult: ActionProjection?
     let expectation: ExpectationProjection?
+    let expectationEvidence: HeistWaitEvidenceProjection?
 
     init(evidence: HeistInvocationEvidence, profile: ProjectionProfile) {
         capability = evidence.invocation?.capabilityName
@@ -205,6 +208,9 @@ struct HeistInvocationEvidenceProjection: Sendable {
             ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         expectation = evidence.expectation.map { ExpectationProjection(result: $0) }
+        expectationEvidence = evidence.expectationEvidence.map {
+            HeistWaitEvidenceProjection(evidence: $0, profile: profile)
+        }
     }
 }
 

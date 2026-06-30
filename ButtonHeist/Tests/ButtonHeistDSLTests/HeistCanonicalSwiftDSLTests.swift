@@ -70,7 +70,7 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
         If {
             Case(.exists(target)) {
                 CustomAction("Archive", on: target)
-                    .expect(.change(.screen(.exists(target))), timeout: .seconds(3))
+                    .expect(.screenChanged(.exists(target)), timeout: .seconds(3))
             }
 
             Else {
@@ -94,7 +94,7 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
 
         If(.exists(target)) {
             CustomAction("Archive", on: target)
-                .expect(.change(.screen(.exists(target))), timeout: .seconds(3))
+                .expect(.screenChanged(.exists(target)), timeout: .seconds(3))
         }
         .else {
             Fail("target missing")
@@ -295,7 +295,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
                 .expect(.value(query))
 
             Activate(.label("Search"))
-                .expect(.change(.screen()))
+                .expect(.screenChanged)
                 .expect(.label(query), timeout: .seconds(5))
         }
     }
@@ -311,7 +311,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
                 .expect(.value(query))
 
             Activate(.label("Search"))
-                .expect(.change(.screen(.label(query))), timeout: .seconds(5))
+                .expect(.screenChanged(.exists(.label(query))), timeout: .seconds(5))
         }
 
         RunHeist("SearchScreen.search", "milk")

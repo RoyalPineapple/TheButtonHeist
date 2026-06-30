@@ -32,24 +32,19 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         case predicate, body
     }
 
-    public let predicate: AccessibilityPredicateExpr
+    public let predicate: StatePredicateExpr
     public let body: [HeistStep]
 
-    public init(predicate: AccessibilityPredicateExpr, body: [HeistStep]) {
+    public init(predicate: StatePredicateExpr, body: [HeistStep]) {
         self.predicate = predicate
         self.body = body
-    }
-
-    @_disfavoredOverload
-    public init(predicate: AccessibilityPredicate, body: [HeistStep]) {
-        self.init(predicate: .predicate(predicate), body: body)
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+            predicate: try container.decode(StatePredicateExpr.self, forKey: .predicate),
             body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
@@ -58,7 +53,7 @@ public struct PredicateCase: Codable, Sendable, Equatable {
 public extension PredicateCase {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedPredicateCase {
         ResolvedPredicateCase(
-            predicate: try predicate.resolve(in: environment),
+            predicate: .state(try predicate.resolve(in: environment)),
             body: body
         )
     }

@@ -85,11 +85,11 @@ func `parameter binding resolves arguments in current scope and returns nested s
 @Test
 func `nested predicate resolution preserves state and change semantics`() throws {
     let target = ElementTarget.predicate(ElementPredicate(identifier: "cta"), ordinal: 0)
-    let expression = AccessibilityPredicateExpr.change(.screen(.all([
+    let expression = AccessibilityPredicateExpr.change(.screen(.all(
         .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
         .missingTarget(.ref("ctaTarget")),
-        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
-    ])))
+        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart"))))
+    )))
 
     let environment = HeistExecutionEnvironment(
         targets: ["ctaTarget": target],
@@ -97,11 +97,11 @@ func `nested predicate resolution preserves state and change semantics`() throws
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = AccessibilityPredicate.change(.screen(.all([
+    let expected = AccessibilityPredicate.change(.screen(.all(
         .exists(ElementPredicate(label: "Dashboard")),
         .missingTarget(target),
-        .exists(ElementPredicate(value: .contains("Ready"))),
-    ])))
+        .exists(ElementPredicate(value: .contains("Ready")))
+    )))
 
     #expect(resolved == expected)
 }

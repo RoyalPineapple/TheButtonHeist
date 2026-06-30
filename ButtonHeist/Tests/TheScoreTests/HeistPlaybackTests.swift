@@ -144,7 +144,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testConditionalAndWaitRoundTrip() throws {
         let conditionCase = PredicateCase(
-            predicate: .state(.exists(ElementPredicate(label: "Home"))),
+            predicate: .exists(.label("Home")),
             body: [.warn(WarnStep(message: "home"))]
         )
         let plan = try HeistPlan(body: [

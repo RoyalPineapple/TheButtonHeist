@@ -83,13 +83,13 @@ func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
 
 @Test
 func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
-        let heist = try HeistPlan {
-            TypeText("Bruschetta", into: .identifier("Search"))
+    let heist = try HeistPlan {
+        TypeText("Bruschetta", into: .identifier("Search"))
             .expect(.change(.updated(
-                element: .identifier("Search"),
+                .identifier("Search"),
                 .value("Bruschetta")
             )))
-        }
+    }
 
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
@@ -264,10 +264,10 @@ func `chained state expectations compose with all`() throws {
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Save")),
-            expectation: WaitStep(predicate: .state(.all([
+            expectation: WaitStep(predicate: .state(.all(
                 .exists(.label("A")),
-                .exists(.label("B")),
-            ])), timeout: 1)
+                .exists(.label("B"))
+            )), timeout: 1)
         )),
     ]))
 }
@@ -288,10 +288,10 @@ func `chained state expectation joins existing screen where clause`() throws {
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
-            expectation: WaitStep(predicate: .change(.screen(.all([
+            expectation: WaitStep(predicate: .change(.screen(.all(
                 .exists(.label("Results")),
-                .exists(.label("Filter")),
-            ]))), timeout: 1)
+                .exists(.label("Filter"))
+            ))), timeout: 1)
         )),
     ])
 
@@ -895,6 +895,49 @@ func runHeistBuildsHeistRunSteps() throws {
             expectation: expectedSubtotal
         )),
     ])
+
+    let expectedStatus = WaitStep(
+        predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            element: .label("subtotal"),
+            change: .value(after: .contains("2 items"))
+        )))),
+        timeout: defaultActionExpectationTimeout
+    )
+    let updatedRun = RunHeist("Cart.addItem", "Eggs")
+        .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
+    #expect(updatedRun.heistSteps == [
+        .invoke(HeistInvocationStep(
+            path: ["Cart", "addItem"],
+            argument: .string(.literal("Eggs")),
+            expectation: expectedStatus
+        )),
+    ])
+
+    let expectedCompletion = WaitStep(
+        predicate: .exists(.label("Payment Complete")),
+        timeout: defaultActionExpectationTimeout
+    )
+    let snapshotRun = RunHeist("Checkout.pay")
+        .expect(.exists(.label("Payment Complete")))
+    #expect(snapshotRun.heistSteps == [
+        .invoke(HeistInvocationStep(
+            path: ["Checkout", "pay"],
+            expectation: expectedCompletion
+        )),
+    ])
+
+    let expectedReceipt = WaitStep(
+        predicate: .change(.screen(.exists(.label("Receipt")))),
+        timeout: defaultActionExpectationTimeout
+    )
+    let screenRun = RunHeist("Checkout.pay")
+        .expect(.screenChanged(.exists(.label("Receipt"))))
+    #expect(screenRun.heistSteps == [
+        .invoke(HeistInvocationStep(
+            path: ["Checkout", "pay"],
+            expectation: expectedReceipt
+        )),
+    ])
 }
 
 @Test
@@ -972,7 +1015,7 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
     )
     let rendered = try plan.canonicalSwiftDSL()
     #expect(rendered.contains("RunHeist(\"CartScreen.checkout\")"))
-    #expect(rendered.contains(".expect(.change(.screen()))"))
+    #expect(rendered.contains(".expect(.screenChanged)"))
     #expect(!rendered.contains("CartScreen.checkout()"))
 }
 
