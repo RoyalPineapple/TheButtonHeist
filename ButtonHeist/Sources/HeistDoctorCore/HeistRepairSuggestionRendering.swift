@@ -94,8 +94,8 @@ enum HeistRepairSuggestionRenderer {
                 tiedBestCount: tiedBestCount,
                 failureKind: analysis.failureKind
             ),
-            reasons: unique(reasons).map(\.prose),
-            caveats: unique(caveats).map(\.prose)
+            reasons: reasons,
+            caveats: caveats
         )
     }
 
@@ -103,8 +103,8 @@ enum HeistRepairSuggestionRenderer {
         failureKind: HeistRepairFailureKind,
         currentResolution: RepairTargetResolution,
         selection: MinimumPredicateSelection,
-        lastSuccess: HeistStepRepairEvidence,
-        currentFailure: HeistStepRepairEvidence
+        lastSuccess: HeistPassedStepRepairEvidence,
+        currentFailure: HeistFailedStepRepairEvidence
     ) -> [RepairSuggestionReason] {
         var reasons: [RepairSuggestionReason] = [
             .oldTargetResolvedInLastSuccessfulSnapshot,
@@ -134,8 +134,8 @@ enum HeistRepairSuggestionRenderer {
     }
 
     private static func afterEvidenceReasons(
-        lastSuccess: HeistStepRepairEvidence,
-        currentFailure: HeistStepRepairEvidence
+        lastSuccess: HeistPassedStepRepairEvidence,
+        currentFailure: HeistFailedStepRepairEvidence
     ) -> [RepairSuggestionReason] {
         var reasons: [RepairSuggestionReason] = []
         if let reason = deltaReason(source: .lastSuccess, delta: lastSuccess.afterDelta) {
@@ -211,10 +211,6 @@ enum HeistRepairSuggestionRenderer {
 extension HeistRepairIneligibility {
     var noSuggestionReason: String {
         switch self {
-        case .lastReceiptStepDidNotPass:
-            return "last receipt step did not pass"
-        case .currentReceiptStepDidNotFail:
-            return "current receipt step did not fail"
         case .differentStepPaths:
             return "receipts refer to different step paths"
         case .incompatibleHeistFingerprints:
@@ -224,5 +220,164 @@ extension HeistRepairIneligibility {
         case .oldTargetStillResolvesAndSupportsRequestedAction:
             return "old target still resolves and supports the requested action; no target repair needed"
         }
+    }
+}
+
+// Decode-only bridge for the stable public JSON shape, which renders reasons
+// and caveats as prose while core suggestions keep typed facts.
+extension RepairSuggestionReason {
+    init?(prose: String) {
+        switch prose {
+        case Self.oldTargetResolvedInLastSuccessfulSnapshot.prose:
+            self = .oldTargetResolvedInLastSuccessfulSnapshot
+        case Self.oldTargetResolvesWithoutRequestedAction.prose:
+            self = .oldTargetResolvesWithoutRequestedAction
+        case Self.suggestedMatcherResolvesExactlyOneElement.prose:
+            self = .suggestedMatcherResolvesExactlyOneElement
+        case Self.noSemanticOnlyMatcherUnique.prose:
+            self = .noSemanticOnlyMatcherUnique
+        case Self.currentFailureSuppliedDifferentTarget.prose:
+            self = .currentFailureSuppliedDifferentTarget
+        case Self.missingTargetSuccessorSelected.prose:
+            self = .missingTargetSuccessorSelected
+        case Self.ambiguousTargetSuccessorSelected.prose:
+            self = .ambiguousTargetSuccessorSelected
+        case Self.lastSuccessfulExpectationMet.prose:
+            self = .lastSuccessfulExpectationMet
+        case Self.currentFailureExpectationUnmet.prose:
+            self = .currentFailureExpectationUnmet
+        default:
+            if let reason = RepairScoringReason(prose: prose) {
+                self = .scoring(reason)
+                return
+            }
+            if let matchCount = prose.matchCountReasonValue {
+                self = .oldTargetCurrentMatchCount(matchCount)
+                return
+            }
+            if let afterDiff = prose.afterDiffReasonValue {
+                self = afterDiff
+                return
+            }
+            return nil
+        }
+    }
+}
+
+extension RepairScoringReason {
+    init?(prose: String) {
+        switch prose {
+        case Self.oldTargetIsCurrentMatch.prose:
+            self = .oldTargetIsCurrentMatch
+        case Self.identifierUnchanged.prose:
+            self = .identifierUnchanged
+        case Self.labelUnchanged.prose:
+            self = .labelUnchanged
+        case Self.labelSemanticRename.prose:
+            self = .labelSemanticRename
+        case Self.valueUnchanged.prose:
+            self = .valueUnchanged
+        case Self.valueSemanticRename.prose:
+            self = .valueSemanticRename
+        case Self.controlRoleTraitsCompatible.prose:
+            self = .controlRoleTraitsCompatible
+        case Self.elementActionsCompatible.prose:
+            self = .elementActionsCompatible
+        case Self.rotorCapabilityCompatible.prose:
+            self = .rotorCapabilityCompatible
+        case Self.siblingRowContextPreserved.prose:
+            self = .siblingRowContextPreserved
+        case Self.headerContextPreserved.prose:
+            self = .headerContextPreserved
+        case Self.afterDiffEvidenceMatchesElement.prose:
+            self = .afterDiffEvidenceMatchesElement
+        case Self.expectationEvidenceMatchesElement.prose:
+            self = .expectationEvidenceMatchesElement
+        case Self.onlyCurrentSemanticCandidate.prose:
+            self = .onlyCurrentSemanticCandidate
+        case Self.elementSupportsSameActionFamily.prose:
+            self = .elementSupportsSameActionFamily
+        case Self.onlyCurrentElementWithCompatibleActionFamily.prose:
+            self = .onlyCurrentElementWithCompatibleActionFamily
+        default:
+            return nil
+        }
+    }
+}
+
+extension RepairCaveat {
+    init?(prose: String) {
+        switch prose {
+        case Self.candidateDoesNotExposeSameActionFamily.prose:
+            self = .candidateDoesNotExposeSameActionFamily
+        case Self.ordinalDisambiguation.prose:
+            self = .ordinalDisambiguation
+        case Self.tiedBestCandidates.prose:
+            self = .tiedBestCandidates
+        case Self.lastSuccessfulFullAfterSnapshotFallback.prose:
+            self = .lastSuccessfulFullAfterSnapshotFallback
+        case Self.currentFailureFullAfterSnapshotFallback.prose:
+            self = .currentFailureFullAfterSnapshotFallback
+        default:
+            return nil
+        }
+    }
+}
+
+private extension String {
+    var matchCountReasonValue: Int? {
+        let prefix = "Old target resolves to "
+        let suffix = " elements in the new before snapshot."
+        guard hasPrefix(prefix), hasSuffix(suffix) else { return nil }
+        let value = dropFirst(prefix.count).dropLast(suffix.count)
+        return Int(value)
+    }
+
+    var afterDiffReasonValue: RepairSuggestionReason? {
+        let sources: [(RepairEvidenceSource, String)] = [
+            (.lastSuccess, RepairEvidenceSource.lastSuccess.afterDiffPrefix),
+            (.currentFailure, RepairEvidenceSource.currentFailure.afterDiffPrefix),
+        ]
+        for (source, prefix) in sources {
+            guard hasPrefix(prefix + " "), hasSuffix(".") else { continue }
+            let observationText = dropFirst(prefix.count + 1).dropLast()
+            guard let observation = RepairAfterDiffObservation(prose: String(observationText)) else {
+                return nil
+            }
+            return .afterDiff(source, observation)
+        }
+        return nil
+    }
+}
+
+private extension RepairAfterDiffObservation {
+    init?(prose: String) {
+        switch prose {
+        case Self.noSemanticChange.prose:
+            self = .noSemanticChange
+        case Self.screenChange.prose:
+            self = .screenChange
+        case Self.semanticElementsAdded.prose:
+            self = .semanticElementsAdded
+        case Self.semanticElementsRemoved.prose:
+            self = .semanticElementsRemoved
+        case Self.elementChanges.prose:
+            self = .elementChanges
+        default:
+            let prefix = "observed value change from "
+            guard prose.hasPrefix(prefix) else { return nil }
+            let valueText = prose.dropFirst(prefix.count)
+            guard let separator = valueText.range(of: " to ") else { return nil }
+            self = .valueChange(
+                old: valueText[..<separator.lowerBound].nilIfRenderedNil,
+                new: valueText[separator.upperBound...].nilIfRenderedNil
+            )
+        }
+    }
+}
+
+private extension Substring {
+    var nilIfRenderedNil: String? {
+        self == "nil" ? nil : String(self)
     }
 }

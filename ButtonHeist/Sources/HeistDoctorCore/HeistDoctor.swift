@@ -10,8 +10,8 @@ public enum HeistDoctor {
         let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
         let lastStep = try selectedLastSuccess(in: lastPass, matching: currentStep.path)
         let request = HeistRepairRequest(
-            lastSuccess: try repairEvidence(from: lastStep, expectedStatus: .passed),
-            currentFailure: try repairEvidence(from: currentStep, expectedStatus: .failed)
+            lastSuccess: try passedRepairEvidence(from: lastStep),
+            currentFailure: try failedRepairEvidence(from: currentStep)
         )
         let suggestions = HeistRepairSuggester.suggestions(for: request)
         guard !suggestions.isEmpty else {
