@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
@@ -150,6 +151,69 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(tapRow.parameterKind == .elementTarget)
     #expect(tapRow.requiresArgument)
     #expect(tapRow.semanticSurfaces == nil)
+}
+
+@Test func `semantic discovery structurally dedupes before catalog projection`() throws {
+    let duplicateTemplate = ElementPredicateTemplate([
+        .label(.literal("Pay")),
+        .label(.literal("Pay")),
+        .traits([.link, .button]),
+        .traits([.button, .link]),
+    ])
+    let catalog = try HeistPlan(
+        name: "pay",
+        body: [
+            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+            .action(try ActionStep(command: .activate(.predicate(duplicateTemplate)))),
+        ]
+    ).heistCatalog(detail: .detailed)
+
+    let pay = try #require(catalog.heists.first)
+    #expect(pay.actionCommands == ["activate"])
+    #expect(pay.semanticSurfaces == [
+        "label=Pay",
+        "traits=button|link",
+    ])
+    #expect(pay.tags == ["entry", "semantic-action"])
+}
+
+@Test func `semantic discovery internals stay typed until catalog projection`() throws {
+    let source = try discoverySource()
+    let builderSource = try sourceSection(
+        source,
+        from: "private struct HeistSemanticSurfaceBuilder",
+        to: "\nprivate func appendUnique"
+    )
+    let catalogTagsSource = try sourceSection(
+        source,
+        from: "    func catalogTags(",
+        to: "\n}\n\nstruct ResolvedCatalogHeist"
+    )
+
+    #expect(builderSource.contains("var actionCommands: [HeistActionCommandType]"))
+    #expect(builderSource.contains("var semanticFacets: [HeistSemanticSurfaceFacet]"))
+    for forbidden in [
+        "var actionCommands: [String]",
+        "var semanticSurfaces: [String]",
+        ".wireType.rawValue",
+        "to: &semanticSurfaces",
+    ] {
+        #expect(!builderSource.contains(forbidden), "Builder collected early string state: \(forbidden)")
+    }
+
+    #expect(catalogTagsSource.contains("switch command"))
+    for forbidden in [
+        #""typeText""#,
+        #""type_text""#,
+        "contains(where: Self.isViewportAction)",
+        "contains(where: Self.isGestureAction)",
+        "contains(where: Self.isSemanticAction)",
+    ] {
+        #expect(!catalogTagsSource.contains(forbidden), "Catalog tags matched command strings: \(forbidden)")
+    }
+    #expect(!source.contains("static func isSemanticAction"))
+    #expect(!source.contains("static func isGestureAction"))
+    #expect(!source.contains("static func isViewportAction"))
 }
 
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
@@ -333,3 +397,21 @@ private func detailedSurfacePlan() throws -> HeistPlan {
         body: [.warn(WarnStep(message: "ready"))]
     )
 }
+
+private func discoverySource() throws -> String {
+    let testFile = URL(fileURLWithPath: #filePath)
+    let packageRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
+    let sourceURL = packageRoot.appendingPathComponent("Sources/ThePlans/HeistPlan+Discovery.swift")
+    return try String(contentsOf: sourceURL, encoding: .utf8)
+}
+
+private func sourceSection(_ source: String, from startMarker: String, to endMarker: String) throws -> String {
+    guard let start = source.range(of: startMarker),
+          let end = source[start.upperBound...].range(of: endMarker)
+    else {
+        throw DiscoverySourceGuardrailError()
+    }
+    return String(source[start.lowerBound..<end.lowerBound])
+}
+
+private struct DiscoverySourceGuardrailError: Error {}
