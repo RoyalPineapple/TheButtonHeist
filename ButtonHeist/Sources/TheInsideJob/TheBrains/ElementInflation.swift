@@ -51,9 +51,69 @@ final class ElementInflation {
         case liveObjectOnly
     }
 
-    private enum StaleLiveTargetRecovery {
-        case refreshVisibleTarget
-        case fail
+    private enum TreeTargetMatch {
+        case visible(TheStash.ScreenElement)
+        case known(TheStash.ScreenElement)
+    }
+
+    private enum InflationState: CustomStringConvertible {
+        case resolving
+        case revealing(treeElement: TheStash.ScreenElement)
+        case refreshing(
+            target: ElementTarget,
+            screenElement: TheStash.ScreenElement,
+            didReveal: Bool
+        )
+        case placing(inflatedTarget: InflatedElementTarget, didReveal: Bool)
+        case retrying(attempt: Int, reason: RetryReason)
+        case inflated(InflatedElementTarget)
+        case failed(ElementInflationFailure)
+
+        var description: String {
+            switch self {
+            case .resolving:
+                return "resolving"
+            case .revealing(let treeElement):
+                return "revealing(element: \(treeElement.heistId))"
+            case .refreshing(_, let screenElement, let didReveal):
+                return "refreshing(element: \(screenElement.heistId), didReveal: \(didReveal))"
+            case .placing(let inflatedTarget, let didReveal):
+                return "placing(element: \(inflatedTarget.screenElement.heistId), didReveal: \(didReveal))"
+            case .retrying(let attempt, let reason):
+                return "retrying(attempt: \(attempt), reason: \(reason.description))"
+            case .inflated(let inflatedTarget):
+                return "inflated(element: \(inflatedTarget.screenElement.heistId))"
+            case .failed(let failure):
+                return "failed(step: \(failure.failedStep.rawValue))"
+            }
+        }
+    }
+
+    private enum RetryReason: String, CustomStringConvertible {
+        case objectDeallocated
+        case staleTarget
+        case activationPointOffscreen
+
+        var description: String {
+            rawValue
+        }
+
+        var failureDescription: String {
+            switch self {
+            case .objectDeallocated:
+                return "the live object was deallocated"
+            case .staleTarget:
+                return "the live target no longer matched"
+            case .activationPointOffscreen:
+                return "the activation point stayed off-screen"
+            }
+        }
+    }
+
+    private enum FreshElementTargetResolution {
+        case success(InflatedElementTarget)
+        case retry(RetryReason)
+        case failure(ElementInflationFailure)
     }
 
     enum ElementInflationFailureStep: String {
@@ -122,56 +182,157 @@ final class ElementInflation {
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         stash.refreshCurrentVisibleTree()
-        var allowKnownFallback = true
+        var state: InflationState = .resolving
+        var attempt = 0
+        let maxAttempts = 2
+
         while true {
-            switch await findTargetInTree(target, allowKnownFallback: allowKnownFallback) {
-            case .success(let treeElement):
-                let result = await resolveTargetFromTree(
-                    target: target,
-                    treeElement: treeElement,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary,
-                    activationPointPolicy: activationPointPolicy
-                )
-                guard case .failed(let failure) = result,
-                      failure.failedStep == .staleRefresh,
-                      allowKnownFallback else {
-                    return result
+            switch state {
+            case .resolving:
+                switch await findTargetInTree(target, allowKnownFallback: attempt == 0) {
+                case .success(.visible(let treeElement)):
+                    transition(
+                        &state,
+                        to: .refreshing(
+                            target: target,
+                            screenElement: treeElement,
+                            didReveal: false
+                        )
+                    )
+                case .success(.known(let treeElement)):
+                    transition(&state, to: .revealing(treeElement: treeElement))
+                case .failure(let failure):
+                    transition(&state, to: .failed(failure))
                 }
-                allowKnownFallback = false
-            case .failure(let failure):
+
+            case .revealing(let treeElement):
+                transition(&state, to: await stateAfterReveal(treeElement, target: target))
+
+            case .refreshing(let target, let screenElement, let didReveal):
+                transition(
+                    &state,
+                    to: stateAfterRefresh(
+                        target: target,
+                        screenElement: screenElement,
+                        didReveal: didReveal,
+                        attempt: attempt,
+                        method: method,
+                        deallocatedBoundary: deallocatedBoundary,
+                        activationPointPolicy: activationPointPolicy
+                    )
+                )
+
+            case .placing(let inflatedTarget, let didReveal):
+                transition(
+                    &state,
+                    to: await stateAfterPlacement(
+                        inflatedTarget,
+                        didReveal: didReveal,
+                        attempt: attempt,
+                        method: method
+                    )
+                )
+
+            case .retrying(let currentAttempt, let reason):
+                attempt = currentAttempt + 1
+                if attempt >= maxAttempts {
+                    transition(
+                        &state,
+                        to: .failed(retryExhaustedFailure(reason: reason, maxAttempts: maxAttempts))
+                    )
+                } else {
+                    stash.refreshCurrentVisibleTree()
+                    transition(&state, to: .resolving)
+                }
+
+            case .inflated(let result):
+                return .inflated(result)
+
+            case .failed(let failure):
                 return .failed(failure)
             }
         }
     }
 
-    private func resolveTargetFromTree(
-        target: ElementTarget,
-        treeElement: TheStash.ScreenElement,
-        method: ActionMethod,
-        deallocatedBoundary: String,
-        activationPointPolicy: ActivationPointPolicy
-    ) async -> ElementInflationResult {
+    private func stateAfterReveal(
+        _ treeElement: TheStash.ScreenElement,
+        target: ElementTarget
+    ) async -> InflationState {
         let reveal = await revealSemanticTarget(treeElement)
         if case .failed(let failure) = reveal {
             return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
         }
-
-        switch resolveFreshElementTarget(
+        return .refreshing(
             target: target,
             screenElement: treeElement,
+            didReveal: reveal.didReveal
+        )
+    }
+
+    private func stateAfterRefresh(
+        target: ElementTarget,
+        screenElement: TheStash.ScreenElement,
+        didReveal: Bool,
+        attempt: Int,
+        method: ActionMethod,
+        deallocatedBoundary: String,
+        activationPointPolicy: ActivationPointPolicy
+    ) -> InflationState {
+        switch resolveFreshElementTarget(
+            target: target,
+            screenElement: screenElement,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         ) {
         case .success(let inflatedTarget):
-            guard activationPointPolicy == .requireOnscreen else {
+            if activationPointPolicy == .liveObjectOnly {
                 return .inflated(inflatedTarget)
             }
-            return await placeElementActivationPoint(
-                inflatedTarget,
-                method: method,
-                didRevealTarget: reveal.didReveal
-            )
+            return .placing(inflatedTarget: inflatedTarget, didReveal: didReveal)
+        case .retry(let reason):
+            return .retrying(attempt: attempt, reason: reason)
+        case .failure(let failure):
+            return .failed(failure)
+        }
+    }
+
+    private func stateAfterPlacement(
+        _ inflatedTarget: InflatedElementTarget,
+        didReveal: Bool,
+        attempt: Int,
+        method: ActionMethod
+    ) async -> InflationState {
+        let liveTarget = inflatedTarget.liveTarget
+        if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
+            return .inflated(inflatedTarget)
+        }
+        if didReveal {
+            return .failed(.geometryNotActionable(
+                "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
+                    + "did not become actionable after semantic reveal; "
+                    + Self.liveGeometrySummary(liveTarget)
+            ))
+        }
+
+        let screenElement = liveTarget.screenElement
+        let description = Navigation.ScrollTargetDescription(screenElement).description
+        let placement = await scrollActivationPointIntoBounds(
+            liveTarget.activationPoint,
+            in: stash.liveScrollView(for: screenElement),
+            method: method,
+            noScrollViewFailure: noScrollViewFailure(
+                for: liveTarget,
+                description: description,
+                method: method
+            ),
+            unsafeProgrammaticScrollMessage: nil,
+            scrollFailedMessage: "target \(description) activation point could not be brought on-screen"
+        )
+        switch placement {
+        case .success(false):
+            return .inflated(inflatedTarget)
+        case .success(true):
+            return .retrying(attempt: attempt, reason: .activationPointOffscreen)
         case .failure(let failure):
             return .failed(failure)
         }
@@ -195,10 +356,10 @@ final class ElementInflation {
     private func findTargetInTree(
         _ target: ElementTarget,
         allowKnownFallback: Bool
-    ) async -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+    ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):
-            return .success(visible)
+            return .success(.visible(visible))
         case .failure(let failure):
             return .failure(failure)
         case nil:
@@ -208,7 +369,7 @@ final class ElementInflation {
             stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
             switch visibleTargetResolution(target, in: screen) {
             case .success(let visible):
-                return .success(visible)
+                return .success(.visible(visible))
             case .failure(let failure):
                 return .failure(failure)
             case nil:
@@ -218,15 +379,20 @@ final class ElementInflation {
         guard allowKnownFallback else {
             return currentVisibleTargetFailure(target)
         }
-        return knownSemanticTarget(target)
+        switch knownSemanticTarget(target) {
+        case .success(let screenElement):
+            return .success(.known(screenElement))
+        case .failure(let failure):
+            return .failure(failure)
+        }
     }
 
     private func discoveredSemanticTarget(
         _ target: ElementTarget
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+    ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch knownSemanticTarget(target) {
         case .success(let screenElement):
-            return .success(screenElement)
+            return .success(.known(screenElement))
         case .failure(let failure) where failure.failedStep == .notFound:
             return .failure(failure)
         case .failure(let failure):
@@ -236,10 +402,10 @@ final class ElementInflation {
 
     private func currentVisibleTargetFailure(
         _ target: ElementTarget
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+    ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let screenElement):
-            return .success(screenElement)
+            return .success(.visible(screenElement))
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound(let facts):
@@ -325,122 +491,30 @@ final class ElementInflation {
         }
     }
 
-    private func placeElementActivationPoint(
-        _ inflatedTarget: InflatedElementTarget,
-        method: ActionMethod,
-        didRevealTarget: Bool
-    ) async -> ElementInflationResult {
-        let liveTarget = inflatedTarget.liveTarget
-        guard !ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) else {
-            return .inflated(inflatedTarget)
-        }
-        guard !didRevealTarget else {
-            return .failed(.geometryNotActionable(
-                "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
-                    + "did not become actionable after semantic reveal; "
-                    + Self.liveGeometrySummary(liveTarget)
-            ))
-        }
-
-        let screenElement = liveTarget.screenElement
-        let description = Navigation.ScrollTargetDescription(screenElement).description
-        let placement = await scrollActivationPointIntoBounds(
-            liveTarget.activationPoint,
-            in: stash.liveScrollView(for: screenElement),
-            method: method,
-            noScrollViewFailure: noScrollViewFailure(
-                for: liveTarget,
-                description: description,
-                method: method
-            ),
-            unsafeProgrammaticScrollMessage: nil,
-            scrollFailedMessage: "target \(description) activation point could not be brought on-screen"
-        )
-        switch placement {
-        case .success(false):
-            return .inflated(inflatedTarget)
-        case .failure(let failure):
-            return .failed(failure)
-        case .success(true):
-            break
-        }
-
-        switch resolveFreshElementTarget(
-            target: inflatedTarget.target,
-            screenElement: inflatedTarget.screenElement,
-            method: method,
-            deallocatedBoundary: "activation point placement"
-        ) {
-        case .success(let refreshedTarget):
-            if ScreenMetrics.current.bounds.contains(refreshedTarget.liveTarget.activationPoint) {
-                return .inflated(refreshedTarget)
-            }
-            return .failed(.geometryNotActionable(
-                "target \(Navigation.ScrollTargetDescription(refreshedTarget.screenElement).description) "
-                    + "did not become actionable after activation point placement; "
-                    + Self.liveGeometrySummary(refreshedTarget.liveTarget)
-            ))
-        case .failure(let failure):
-            return .failed(failure)
-        }
-    }
-
     private func resolveFreshElementTarget(
         target: ElementTarget,
         screenElement: TheStash.ScreenElement,
         method: ActionMethod,
         deallocatedBoundary: String
-    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
+    ) -> FreshElementTargetResolution {
         resolveLiveElementTarget(
             target: target,
             screenElement: screenElement,
             method: method,
-            deallocatedBoundary: deallocatedBoundary,
-            staleTargetRecovery: .refreshVisibleTarget
+            deallocatedBoundary: deallocatedBoundary
         )
-    }
-
-    private func resolveFreshVisibleElementTarget(
-        target: ElementTarget,
-        method: ActionMethod,
-        deallocatedBoundary: String
-    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
-        stash.refreshCurrentVisibleTree()
-        switch stash.resolveVisibleTarget(target) {
-        case .resolved(let visibleElement):
-            return resolveLiveElementTarget(
-                target: target,
-                screenElement: visibleElement,
-                method: method,
-                deallocatedBoundary: deallocatedBoundary,
-                staleTargetRecovery: .fail
-            )
-        case .notFound(let facts):
-            return .failure(.staleRefresh(
-                "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))",
-                failureKind: .targetUnavailable
-            ))
-        case .ambiguous(let facts):
-            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-        }
     }
 
     private func resolveLiveElementTarget(
         target: ElementTarget,
         screenElement: TheStash.ScreenElement,
         method: ActionMethod,
-        deallocatedBoundary: String,
-        staleTargetRecovery: StaleLiveTargetRecovery
-    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
+        deallocatedBoundary: String
+    ) -> FreshElementTargetResolution {
         switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
-            if case .refreshVisibleTarget = staleTargetRecovery,
-               !liveTarget.screenElement.matches(target) {
-                return resolveFreshVisibleElementTarget(
-                    target: target,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary
-                )
+            guard liveTarget.screenElement.matches(target) else {
+                return .retry(.staleTarget)
             }
             return .success(InflatedElementTarget(
                 target: target,
@@ -448,21 +522,7 @@ final class ElementInflation {
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
-            if case .refreshVisibleTarget = staleTargetRecovery {
-                return resolveFreshVisibleElementTarget(
-                    target: target,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary
-                )
-            }
-            return .failure(.staleRefresh(
-                ActionCapabilityDiagnostic.elementDeallocated(
-                    boundary: deallocatedBoundary,
-                    element: screenElement,
-                    isInflated: stash.visibleIds.contains(screenElement.heistId)
-                ),
-                failureKind: .targetUnavailable
-            ))
+            return .retry(.objectDeallocated)
         case .geometryUnavailable:
             return .failure(.geometryNotActionable(
                 ActionCapabilityDiagnostic.gestureTargetUnavailable(
@@ -471,6 +531,28 @@ final class ElementInflation {
                     isVisible: stash.visibleIds.contains(screenElement.heistId)
                 )
             ))
+        }
+    }
+
+    private func transition(_ state: inout InflationState, to nextState: InflationState) {
+        let currentDescription = state.description
+        let nextDescription = nextState.description
+        insideJobLogger.debug(
+            "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
+        )
+        state = nextState
+    }
+
+    private func retryExhaustedFailure(
+        reason: RetryReason,
+        maxAttempts: Int
+    ) -> ElementInflationFailure {
+        let message = "inflation exhausted \(maxAttempts) retry attempts after \(reason.failureDescription)"
+        switch reason {
+        case .objectDeallocated, .staleTarget:
+            return .staleRefresh(message, failureKind: .targetUnavailable)
+        case .activationPointOffscreen:
+            return .geometryNotActionable(message)
         }
     }
 
