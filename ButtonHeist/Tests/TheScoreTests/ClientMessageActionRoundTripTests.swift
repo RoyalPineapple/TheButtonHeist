@@ -116,7 +116,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithValueField() throws {
-        let result = ActionResult(success: true, method: .typeText, payload: .value("hello world"))
+        let result = ActionResult.success(method: .typeText, payload: .value("hello world"))
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
@@ -129,7 +129,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testServerMessageActionResultEncoding() throws {
-        let result = ActionResult(success: true, method: .syntheticTap)
+        let result = ActionResult.success(method: .syntheticTap)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)

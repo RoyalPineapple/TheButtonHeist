@@ -19,7 +19,14 @@ import Testing
             .map(\.relativePath)
 
         #expect(nonHelperOffenders.isEmpty, "Direct HeistExecutionStepResult construction should stay in \(helperPath): \(nonHelperOffenders)")
-        #expect(try receiptSourceOccurrenceCount(#"\bHeistExecutionStepResult\s*\("#, in: helperSource) == 1)
+        #expect(
+            try receiptSourceOccurrenceCount(#"\bHeistExecutionStepResult\s*\("#, in: helperSource) == 0,
+            "Receipt helper should use the typed public step factories, not raw HeistExecutionStepResult construction"
+        )
+        #expect(helperSource.contains("private func heistReceipt("))
+        #expect(helperSource.contains("return .passed("))
+        #expect(helperSource.contains("return .failed("))
+        #expect(helperSource.contains("return .skipped("))
 
         for helper in [
             "func heistActionReceipt",

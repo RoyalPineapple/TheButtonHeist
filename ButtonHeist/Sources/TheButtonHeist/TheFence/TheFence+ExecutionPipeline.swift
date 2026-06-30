@@ -9,15 +9,6 @@ extension TheFence {
         let durationMs: Int
     }
 
-    func executableRequest(for request: ParsedRequest) throws -> ExecutableRequest {
-        guard let executable = request.executableRequest else {
-            throw FenceError.invalidRequest(
-                "command \"\(request.command.rawValue)\" is not an executable action command"
-            )
-        }
-        return executable
-    }
-
     /// Execute one user intent.
     ///
     /// Durable executable UI actions and the `wait` command run as a one-step
@@ -27,11 +18,6 @@ extension TheFence {
     /// screen, session, the `get_pasteboard` read) keep their dedicated handler.
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         try await ensureConnectedIfNeeded(for: parsed.command)
-
-        if let plan = try singleStepHeistPlan(for: parsed) {
-            return try await executeSingleStepHeist(parsed, plan: plan)
-        }
-
         let dispatched = try await dispatchWithErrorLogging(parsed)
         return dispatched.response
     }

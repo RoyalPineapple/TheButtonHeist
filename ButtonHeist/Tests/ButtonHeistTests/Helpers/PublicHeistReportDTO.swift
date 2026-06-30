@@ -214,18 +214,27 @@ struct PublicHeistActionEvidenceDTO: Decodable, Equatable {
     let result: PublicHeistActionResultDTO?
     let expectationResult: PublicHeistActionResultDTO?
     let expectation: PublicExpectationResultDTO?
+    let warning: PublicHeistActionWarningDTO?
 
     init(
         commandName: String? = nil,
         result: PublicHeistActionResultDTO? = nil,
         expectationResult: PublicHeistActionResultDTO? = nil,
-        expectation: PublicExpectationResultDTO? = nil
+        expectation: PublicExpectationResultDTO? = nil,
+        warning: PublicHeistActionWarningDTO? = nil
     ) {
         self.commandName = commandName
         self.result = result
         self.expectationResult = expectationResult
         self.expectation = expectation
+        self.warning = warning
     }
+}
+
+struct PublicHeistActionWarningDTO: Decodable, Equatable {
+    let code: String
+    let message: String
+    let evidence: String?
 }
 
 struct PublicHeistWaitEvidenceDTO: Decodable, Equatable {

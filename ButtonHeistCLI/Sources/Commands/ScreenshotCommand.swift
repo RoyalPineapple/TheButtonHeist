@@ -8,24 +8,14 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "Capture a screenshot from the connected device"
     )
 
-    @Option(name: .shortAndLong, help: "Output file path (default: generated artifact path)")
-    var output: String?
-
-    @Flag(name: .long, help: "Write raw PNG bytes to stdout")
-    var inline = false
+    @OptionGroup var destination: ScreenshotDestinationInput
 
     @OptionGroup var connection: ConnectionOptions
-
-    func validate() throws {
-        if inline && output != nil {
-            throw ValidationError("--inline cannot be used with --output")
-        }
-    }
 
     @ButtonHeistActor
     func run() async throws {
         let commandResultMapper: CLIRunner.CommandResultMapper?
-        if inline {
+        if destination.inline {
             commandResultMapper = Self.inlineCommandResult(for:)
         } else {
             commandResultMapper = nil
@@ -34,13 +24,14 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             connection: connection,
             format: .human,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(
-                CommandArgumentWriter.optional(.output, output),
-                inline ? CommandArgumentWriter.value(.inlineData, true) : nil
-            ),
+            arguments: requestArguments(),
             statusMessage: "Requesting screenshot...",
             result: commandResultMapper
         )
+    }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        Self.fenceArguments(CommandArgumentWriter.parameters(try destination.argumentFields()))
     }
 
     static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
@@ -51,5 +42,28 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Failed to decode screenshot data")
         }
         return .binary(data)
+    }
+}
+
+struct ScreenshotDestinationInput: ParsableArguments {
+    @Option(name: .shortAndLong, help: "Output file path (default: generated artifact path)")
+    var output: String?
+
+    @Flag(name: .long, help: "Write raw PNG bytes to stdout")
+    var inline = false
+
+    mutating func validate() throws {
+        _ = try argumentFields()
+    }
+
+    func argumentFields() throws -> [CommandArgumentWriter.Field] {
+        switch (inline, output) {
+        case (true, nil):
+            return [CommandArgumentWriter.value(.inlineData, true)]
+        case (false, let output):
+            return [CommandArgumentWriter.optional(.output, output)].compactMap { $0 }
+        case (true, .some):
+            throw ValidationError("--inline cannot be used with --output")
+        }
     }
 }

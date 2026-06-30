@@ -251,11 +251,20 @@ extension TheBrains {
            ) {
             stepResults.append(failureScreenshotStep)
         }
-        let heistResult = HeistExecutionResult(
-            steps: stepResults,
-            durationMs: Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000),
-            abortedAtPath: abortedAtPath
-        )
+        let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
+        let heistResult: HeistExecutionResult
+        if let abortedAtPath {
+            heistResult = .failed(
+                steps: stepResults,
+                durationMs: durationMs,
+                abortedAtPath: abortedAtPath
+            )
+        } else {
+            heistResult = .passed(
+                steps: stepResults,
+                durationMs: durationMs
+            )
+        }
 
         var builder = ActionResultBuilder(method: .heistPlan)
         builder.message = heistExecutionMessage(

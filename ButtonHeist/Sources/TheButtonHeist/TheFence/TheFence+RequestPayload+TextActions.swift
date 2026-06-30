@@ -20,7 +20,11 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, .dismissKeyboard)
+        try appInteractionDispatch(
+            SemanticActionCommand.dismissKeyboard.command,
+            .dismissKeyboard,
+            expectationPayload: expectationPayload
+        )
     }
 
     static func decodeTypeTextRequest(
@@ -34,13 +38,14 @@ extension TheFence {
         if text.isEmpty, !replacingExisting {
             throw SchemaValidationError(field: input.field(.text), observed: "string \"\"", expected: "non-empty string")
         }
-        return appInteractionDispatch(
+        return try appInteractionDispatch(
             SemanticActionCommand.typeText.command,
             .typeText(
                 text: .literal(text),
                 target: try input.decodedElementTarget().map(ElementTargetExpr.target),
                 replacingExisting: replacingExisting
-            )
+            ),
+            expectationPayload: expectationPayload
         )
     }
 
@@ -50,11 +55,12 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(
+        try appInteractionDispatch(
             SemanticActionCommand.editAction.command,
             .editAction(EditActionTarget(
                 action: try input.requiredSchemaEnum(.action, as: EditAction.self)
-            ))
+            )),
+            expectationPayload: expectationPayload
         )
     }
 
@@ -65,9 +71,10 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let text = try input.nonEmptyString(.text)
-        return appInteractionDispatch(
+        return try appInteractionDispatch(
             SemanticActionCommand.setPasteboard.command,
-            .setPasteboard(SetPasteboardTarget(text: text))
+            .setPasteboard(SetPasteboardTarget(text: text)),
+            expectationPayload: expectationPayload
         )
     }
 }

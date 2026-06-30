@@ -7,6 +7,159 @@ import ThePlans
 // the execution result types so encoders, formatters, and report adapters walk
 // `HeistExecutionResult.steps` without a second report model.
 
+package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
+    package let durationMs: Int
+    package let nodes: [HeistExecutionEvidenceNode]
+
+    package var summary: HeistExecutionEvidenceSummary {
+        HeistExecutionEvidenceSummary(rollup: self)
+    }
+
+    package var actions: HeistExecutionActionEvidenceRollup {
+        HeistExecutionActionEvidenceRollup(nodes: nodes)
+    }
+
+    package var warnings: HeistExecutionWarningEvidenceRollup {
+        HeistExecutionWarningEvidenceRollup(nodes: nodes)
+    }
+
+    package init(result: HeistExecutionResult) {
+        self.init(steps: result.steps, durationMs: result.durationMs)
+    }
+
+    package init(
+        steps: [HeistExecutionStepResult],
+        durationMs: Int = 0
+    ) {
+        self.durationMs = durationMs
+        self.nodes = steps.flatMap(Self.nodes(from:))
+    }
+
+    package var outputReceiptNodes: [HeistExecutionStepResult] {
+        nodes.map(\.step)
+    }
+
+    package var firstFailedStep: HeistExecutionStepResult? {
+        nodes.lazy.compactMap(\.firstFailedStepInSubtree).first
+    }
+
+    private static func nodes(from step: HeistExecutionStepResult) -> [HeistExecutionEvidenceNode] {
+        let childNodes = step.children.flatMap(Self.nodes(from:))
+        let firstFailedStep = childNodes.lazy.compactMap(\.firstFailedStepInSubtree).first
+            ?? (step.status == .failed ? step : nil)
+        return [
+            HeistExecutionEvidenceNode(
+                step: step,
+                firstFailedStepInSubtree: firstFailedStep
+            ),
+        ] + childNodes
+    }
+}
+
+package struct HeistExecutionEvidenceNode: Sendable, Equatable {
+    package let step: HeistExecutionStepResult
+    package let reportFacts: HeistExecutionStepReportFacts
+    package let firstFailedStepInSubtree: HeistExecutionStepResult?
+
+    package init(
+        step: HeistExecutionStepResult,
+        firstFailedStepInSubtree: HeistExecutionStepResult?
+    ) {
+        self.step = step
+        self.reportFacts = HeistExecutionStepReportFacts(step: step)
+        self.firstFailedStepInSubtree = firstFailedStepInSubtree
+    }
+
+    package var isExecuted: Bool {
+        step.status != .skipped
+    }
+
+    package var isRootBodyStep: Bool {
+        step.isRootBodyStep
+    }
+}
+
+package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
+    package let executedTopLevelStepCount: Int
+    package let executedNodeCount: Int
+    package let outputReceiptNodeCount: Int
+    package let abortedAtPath: String?
+    package let durationMs: Int
+    package let expectationsChecked: Int
+    package let expectationsMet: Int
+
+    package init(rollup: HeistExecutionEvidenceRollup) {
+        executedTopLevelStepCount = rollup.nodes.count { $0.isExecuted && $0.isRootBodyStep }
+        executedNodeCount = rollup.nodes.count { $0.isExecuted }
+        outputReceiptNodeCount = rollup.nodes.count
+        abortedAtPath = rollup.firstFailedStep?.path
+        durationMs = rollup.durationMs
+        expectationsChecked = rollup.nodes.count { node in
+            node.isExecuted && node.reportFacts.expectation != nil
+        }
+        expectationsMet = rollup.nodes.count { node in
+            node.isExecuted && node.reportFacts.expectation?.met == true
+        }
+    }
+}
+
+package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
+    fileprivate let nodes: [HeistExecutionEvidenceNode]
+
+    package var dispatchedResults: [ActionResult] {
+        nodes.compactMap { node in
+            guard node.step.kind == .action else { return nil }
+            return node.step.actionEvidence?.actionResult
+        }
+    }
+
+    package var reportedResults: [ActionResult] {
+        nodes.compactMap { node in
+            guard node.step.kind == .action else { return nil }
+            return node.reportFacts.actionResult
+        }
+    }
+
+    package var traceResultsInExecutionOrder: [ActionResult] {
+        nodes.compactMap(\.reportFacts.traceEvidenceResult)
+    }
+}
+
+package struct HeistExecutionWarningEvidenceRollup: Sendable, Equatable {
+    fileprivate let nodes: [HeistExecutionEvidenceNode]
+
+    package var all: [HeistExecutionEvidenceWarning] {
+        nodes.compactMap { node in
+            let path = node.step.path
+            switch node.step.evidence {
+            case .action(let evidence):
+                return evidence.warning.map { .action(path: path, warning: $0) }
+            case .wait(let evidence):
+                return evidence.warning.map { .wait(path: path, warning: $0) }
+            case .warning(let warning):
+                return .explicit(warning)
+            case .caseSelection, .forEachString, .forEachElement, .repeatUntil, .invocation, .none:
+                return nil
+            }
+        }
+    }
+
+    package var explicit: [HeistExecutionWarning] {
+        all.compactMap(\.explicitWarning)
+    }
+}
+
+package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
+    case action(path: String, warning: HeistActionWarning)
+    case wait(path: String, warning: HeistPredicateWarning)
+    case explicit(HeistExecutionWarning)
+
+    package var explicitWarning: HeistExecutionWarning? {
+        guard case .explicit(let warning) = self else { return nil }
+        return warning
+    }
+}
+
 package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
     package let executedTopLevelStepCount: Int
     package let executedNodeCount: Int
@@ -17,13 +170,17 @@ package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
     package let expectationsMet: Int
 
     package init(result: HeistExecutionResult) {
-        executedTopLevelStepCount = result.executedTopLevelStepCount
-        executedNodeCount = result.executedNodeCount
-        outputReceiptNodeCount = result.outputReceiptNodes.count
-        abortedAtPath = result.abortedAtPath
-        durationMs = result.durationMs
-        expectationsChecked = result.expectationsChecked
-        expectationsMet = result.expectationsMet
+        self.init(summary: HeistExecutionEvidenceRollup(result: result).summary)
+    }
+
+    package init(summary: HeistExecutionEvidenceSummary) {
+        executedTopLevelStepCount = summary.executedTopLevelStepCount
+        executedNodeCount = summary.executedNodeCount
+        outputReceiptNodeCount = summary.outputReceiptNodeCount
+        abortedAtPath = summary.abortedAtPath
+        durationMs = summary.durationMs
+        expectationsChecked = summary.expectationsChecked
+        expectationsMet = summary.expectationsMet
     }
 }
 
@@ -265,7 +422,7 @@ package extension HeistExecutionStepResult {
 public extension HeistExecutionStepResult {
     /// Number of executed receipt nodes in this subtree, including this node.
     var executedNodeCount: Int {
-        (outcome.status == .skipped ? 0 : 1) + children.reduce(0) { $0 + $1.executedNodeCount }
+        HeistExecutionEvidenceRollup(steps: [self]).summary.executedNodeCount
     }
 
     var isFailure: Bool {
@@ -278,12 +435,7 @@ public extension HeistExecutionStepResult {
     }
 
     var firstFailedStep: HeistExecutionStepResult? {
-        for child in children {
-            if let failed = child.firstFailedStep {
-                return failed
-            }
-        }
-        return outcome.status == .failed ? self : nil
+        HeistExecutionEvidenceRollup(steps: [self]).firstFailedStep
     }
 
     var reportStatus: HeistExecutionStepStatus {
@@ -383,14 +535,12 @@ public extension HeistExecutionStepResult {
 
     /// Number of expectations evaluated in this subtree.
     var expectationsChecked: Int {
-        (outcome.status == .skipped || reportExpectation == nil ? 0 : 1)
-            + children.reduce(0) { $0 + $1.expectationsChecked }
+        HeistExecutionEvidenceRollup(steps: [self]).summary.expectationsChecked
     }
 
     /// Number of evaluated expectations that were met in this subtree.
     var expectationsMet: Int {
-        (outcome.status == .skipped ? 0 : ((reportExpectation?.met == true) ? 1 : 0))
-            + children.reduce(0) { $0 + $1.expectationsMet }
+        HeistExecutionEvidenceRollup(steps: [self]).summary.expectationsMet
     }
 
     /// Action result that contributes accessibility-trace evidence for this step.
@@ -400,8 +550,7 @@ public extension HeistExecutionStepResult {
 
     /// Trace-contributing results in execution order across this subtree.
     var traceResultsInExecutionOrder: [ActionResult] {
-        (traceEvidenceResult.map { [$0] } ?? [])
-            + children.flatMap(\.traceResultsInExecutionOrder)
+        HeistExecutionEvidenceRollup(steps: [self]).actions.traceResultsInExecutionOrder
     }
 
     /// Public-facing failure message for a failed step, derived from factual
@@ -423,15 +572,19 @@ public extension Array where Element == HeistExecutionStepResult {
 }
 
 public extension HeistExecutionResult {
+    package var evidenceRollup: HeistExecutionEvidenceRollup {
+        HeistExecutionEvidenceRollup(result: self)
+    }
+
     /// Top-level heist body steps that actually began execution/evaluation.
     var executedTopLevelStepCount: Int {
-        steps.count { $0.status != .skipped && $0.isRootBodyStep }
+        evidenceRollup.summary.executedTopLevelStepCount
     }
 
     /// All executed receipt nodes in the tree, including nested structural
     /// frames, iterations, and leaf action/wait/warn/fail nodes.
     var executedNodeCount: Int {
-        steps.reduce(0) { $0 + $1.executedNodeCount }
+        evidenceRollup.summary.executedNodeCount
     }
 
     /// Whether any step in the execution tree failed.
@@ -447,7 +600,7 @@ public extension HeistExecutionResult {
     /// First failed receipt node. Child failures are canonical before compound
     /// parent frames that merely report an aborted child.
     var firstFailedStep: HeistExecutionStepResult? {
-        steps.firstFailedStep
+        evidenceRollup.firstFailedStep
     }
 
     var failedStepPath: String? {
@@ -461,53 +614,40 @@ public extension HeistExecutionResult {
 
     /// Total expectations evaluated across the whole execution tree.
     var expectationsChecked: Int {
-        steps.reduce(0) { $0 + $1.expectationsChecked }
+        evidenceRollup.summary.expectationsChecked
     }
 
     /// Total met expectations across the whole execution tree.
     var expectationsMet: Int {
-        steps.reduce(0) { $0 + $1.expectationsMet }
+        evidenceRollup.summary.expectationsMet
     }
 
     /// Runtime-evidence-facing action results for action commands actually
     /// dispatched.
     var dispatchedActionResults: [ActionResult] {
-        steps.flatMap(\.dispatchedActionResults)
+        evidenceRollup.actions.dispatchedResults
     }
 
     /// Human/report-facing action results. Expectation wait evidence may be the
     /// surfaced result when an action has an expectation.
     var reportedActionResults: [ActionResult] {
-        steps.flatMap(\.reportedActionResults)
+        evidenceRollup.actions.reportedResults
     }
 
     /// Trace-contributing results in execution order across the whole tree.
     var traceResultsInExecutionOrder: [ActionResult] {
-        steps.flatMap(\.traceResultsInExecutionOrder)
+        evidenceRollup.actions.traceResultsInExecutionOrder
     }
 
     /// Receipt nodes surfaced by linear output adapters in execution order.
     /// Skipped nodes remain visible because they are first-class receipt facts.
     var outputReceiptNodes: [HeistExecutionStepResult] {
-        Self.outputReceiptNodes(steps)
+        evidenceRollup.outputReceiptNodes
     }
 
     /// Warnings emitted by executed `Warn(...)` steps, in execution order.
     var warnings: [HeistExecutionWarning] {
-        Self.warnings(in: steps)
-    }
-
-    private static func outputReceiptNodes(_ steps: [HeistExecutionStepResult]) -> [HeistExecutionStepResult] {
-        steps.flatMap { step -> [HeistExecutionStepResult] in
-            [step] + outputReceiptNodes(step.children)
-        }
-    }
-
-    private static func warnings(in steps: [HeistExecutionStepResult]) -> [HeistExecutionWarning] {
-        steps.flatMap { step -> [HeistExecutionWarning] in
-            let current = step.warningEvidence.map { [$0] } ?? []
-            return current + warnings(in: step.children)
-        }
+        evidenceRollup.warnings.explicit
     }
 }
 
@@ -521,12 +661,10 @@ private extension HeistExecutionStepResult {
     }
 
     var dispatchedActionResults: [ActionResult] {
-        (dispatchedActionResult.map { [$0] } ?? [])
-            + children.flatMap(\.dispatchedActionResults)
+        HeistExecutionEvidenceRollup(steps: [self]).actions.dispatchedResults
     }
 
     var reportedActionResults: [ActionResult] {
-        (reportedActionResult.map { [$0] } ?? [])
-            + children.flatMap(\.reportedActionResults)
+        HeistExecutionEvidenceRollup(steps: [self]).actions.reportedResults
     }
 }

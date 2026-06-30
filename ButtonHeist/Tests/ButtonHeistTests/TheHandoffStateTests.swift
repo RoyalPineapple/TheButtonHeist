@@ -144,6 +144,7 @@ final class TheHandoffStateTests: XCTestCase {
         let tokens: [String?] = [nil, "", " \n"]
 
         for token in tokens {
+            XCTAssertNil(HandoffAuthToken(token))
             let handoff = TheHandoff()
             handoff.token = token
             let mock = connectPendingMockHandoff(handoff)

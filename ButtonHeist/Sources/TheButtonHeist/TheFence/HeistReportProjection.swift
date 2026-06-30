@@ -81,10 +81,11 @@ struct HeistReportProjection: Sendable {
         netDelta: AccessibilityTrace.Delta?,
         profile: ProjectionProfile
     ) {
+        let rollup = result.evidenceRollup
         status = result.abortedAtPath == nil ? .ok : .partial
         nodes = result.steps.map { HeistReportNodeProjection(step: $0, profile: profile) }
-        outputNodes = nodes.flatMap(\.flattened)
-        let reportSummary = HeistExecutionReportSummaryFacts(result: result)
+        outputNodes = rollup.nodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
+        let reportSummary = HeistExecutionReportSummaryFacts(summary: rollup.summary)
         precondition(
             outputNodes.count == reportSummary.outputReceiptNodeCount,
             "heist report projection output nodes must match TheScore report summary"
@@ -96,7 +97,7 @@ struct HeistReportProjection: Sendable {
             elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = netDelta.map { DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true) }
-        finalScreenId = result.traceResultsInExecutionOrder
+        finalScreenId = rollup.actions.traceResultsInExecutionOrder
             .compactMap { $0.accessibilityTrace?.endpointScreenId }
             .last
     }
@@ -130,8 +131,18 @@ struct HeistReportNodeProjection: Sendable {
     let children: [HeistReportNodeProjection]
 
     init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
-        let report = step.reportFacts
+        self.init(step: step, report: step.reportFacts, profile: profile)
+    }
 
+    init(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
+        self.init(step: node.step, report: node.reportFacts, profile: profile)
+    }
+
+    private init(
+        step: HeistExecutionStepResult,
+        report: HeistExecutionStepReportFacts,
+        profile: ProjectionProfile
+    ) {
         path = report.path
         kind = report.kind
         capability = report.capabilityName
@@ -159,9 +170,5 @@ struct HeistReportNodeProjection: Sendable {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }
         children = step.children.map { HeistReportNodeProjection(step: $0, profile: profile) }
-    }
-
-    var flattened: [HeistReportNodeProjection] {
-        [self] + children.flatMap(\.flattened)
     }
 }

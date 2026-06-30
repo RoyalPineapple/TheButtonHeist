@@ -503,7 +503,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testActionResultWithoutPayload() throws {
-        let result = ActionResult(success: true, method: .activate)
+        let result = ActionResult.success(method: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertNil(decoded.payload)

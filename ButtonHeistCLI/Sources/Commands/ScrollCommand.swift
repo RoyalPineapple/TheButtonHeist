@@ -2,6 +2,47 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
+typealias ScrollSelection = ScrollContainerSelection
+
+struct ScrollSelectionInput: ParsableArguments {
+    @OptionGroup var element: ElementTargetOptions
+
+    @Option(name: .long, help: "Current-capture containerName from get_interface")
+    var container: String?
+
+    mutating func validate() throws {
+        _ = try scrollSelection()
+    }
+
+    func scrollSelection() throws -> ScrollSelection {
+        if let container {
+            guard let containerName = ContainerName(parsing: container) else {
+                throw ValidationError("--container must not be empty")
+            }
+            if try element.hasTarget {
+                throw ValidationError("--container cannot be combined with element target options")
+            }
+            return .container(containerName)
+        }
+        if let target = try element.parsedTarget() {
+            return .element(target)
+        }
+        return .visibleContainer
+    }
+}
+
+extension ScrollSelection {
+    var cliTarget: ElementTarget? {
+        guard case .element(let target) = self else { return nil }
+        return target
+    }
+
+    var cliContainerName: ContainerName? {
+        guard case .container(let containerName) = self else { return nil }
+        return containerName
+    }
+}
+
 struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -18,10 +59,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
-
-    @Option(name: .long, help: "Current-capture containerName from get_interface")
-    var container: String?
+    @OptionGroup var selection: ScrollSelectionInput
 
     @Option(
         name: .shortAndLong,
@@ -33,40 +71,28 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    func validate() throws {
-        if let container, container.isEmpty {
-            throw ValidationError("--container must not be empty")
-        }
-        if container != nil, try element.hasTarget {
-            throw ValidationError("--container cannot be combined with element target options")
-        }
-    }
-
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let scrollDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
-        }
-
-        let target: ElementTarget?
-        if container != nil {
-            target = nil
-        } else {
-            target = try element.parsedTarget()
-        }
-        let arguments = Self.fenceArguments(
-            target: target,
-            CommandArgumentWriter.value(.direction, scrollDirection),
-            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.container, container)
-        )
-
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: arguments,
+            arguments: try requestArguments(),
             statusMessage: "Sending scroll..."
+        )
+    }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        guard let scrollDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
+        }
+
+        let scrollSelection = try selection.scrollSelection()
+        return Self.fenceArguments(
+            target: scrollSelection.cliTarget,
+            CommandArgumentWriter.value(.direction, scrollDirection),
+            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
+            CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }

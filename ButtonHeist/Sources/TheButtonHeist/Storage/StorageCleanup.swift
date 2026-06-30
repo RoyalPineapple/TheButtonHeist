@@ -6,16 +6,35 @@ enum StorageCleanupOperation: String, Sendable {
 }
 
 struct StorageCleanupResult: Sendable {
+    private enum Outcome: Sendable {
+        case success
+        case failure(String)
+    }
+
     let operation: StorageCleanupOperation
     let path: String?
-    let errorDescription: String?
+    private let outcome: Outcome
+
+    var errorDescription: String? {
+        switch outcome {
+        case .success:
+            nil
+        case .failure(let description):
+            description
+        }
+    }
 
     var succeeded: Bool {
-        errorDescription == nil
+        switch outcome {
+        case .success:
+            true
+        case .failure:
+            false
+        }
     }
 
     static func success(_ operation: StorageCleanupOperation, path: String? = nil) -> StorageCleanupResult {
-        StorageCleanupResult(operation: operation, path: path, errorDescription: nil)
+        StorageCleanupResult(operation: operation, path: path, outcome: .success)
     }
 
     static func failure(
@@ -26,8 +45,14 @@ struct StorageCleanupResult: Sendable {
         StorageCleanupResult(
             operation: operation,
             path: path,
-            errorDescription: String(describing: error)
+            outcome: .failure(String(describing: error))
         )
+    }
+
+    private init(operation: StorageCleanupOperation, path: String?, outcome: Outcome) {
+        self.operation = operation
+        self.path = path
+        self.outcome = outcome
     }
 }
 

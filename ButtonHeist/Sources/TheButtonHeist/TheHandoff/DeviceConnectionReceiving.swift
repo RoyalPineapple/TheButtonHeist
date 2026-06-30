@@ -13,6 +13,28 @@ enum DeviceReceiveFraming {
     }
 }
 
+enum DeviceReceiveEvent: Sendable {
+    case failed(NWError)
+    case content(Data)
+    case contentThenCompleted(Data)
+    case completed
+    case awaitingContent
+
+    nonisolated init(content: Data?, isComplete: Bool, error: NWError?) {
+        if let error {
+            self = .failed(error)
+        } else if let content, isComplete {
+            self = .contentThenCompleted(content)
+        } else if let content {
+            self = .content(content)
+        } else if isComplete {
+            self = .completed
+        } else {
+            self = .awaitingContent
+        }
+    }
+}
+
 extension DeviceConnection {
     func startReceiving() {
         guard case .connected(let active) = connectionState else { return }
@@ -24,7 +46,7 @@ extension DeviceConnection {
         connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { content, _, isComplete, error in
             guard let continuation else { return }
             DeviceConnectionEventStream.yield(
-                .received(content: content, isComplete: isComplete, error: error, connection: connection),
+                .received(DeviceReceiveEvent(content: content, isComplete: isComplete, error: error), connection: connection),
                 to: continuation
             ) { [weak self, weak connection] in
                 guard let connection else { return }
@@ -36,50 +58,58 @@ extension DeviceConnection {
     }
 
     // Internal for testing stale-callback handling.
-    func handleReceive(
-        content: Data?,
-        isComplete: Bool,
-        error: NWError?,
-        connection: NWConnection
-    ) {
+    func handleReceive(_ event: DeviceReceiveEvent, connection: NWConnection) {
         guard case .connected(var active) = connectionState,
               active.connection === connection else {
             return
         }
 
-        if let error {
+        switch event {
+        case .failed(let error):
             deviceConnectionLogger.error("Receive error: \(error)")
             connectionState = .disconnected
             onEvent?(.disconnected(.networkError(error)))
-            return
+        case .content(let content):
+            guard appendAndProcess(content, into: &active, connection: connection) else { return }
+            receiveNext(connection: connection)
+        case .contentThenCompleted(let content):
+            guard appendAndProcess(content, into: &active, connection: connection) else { return }
+            closeForCompletedReceive()
+        case .completed:
+            closeForCompletedReceive()
+        case .awaitingContent:
+            receiveNext(connection: connection)
+        }
+    }
+
+    private func appendAndProcess(
+        _ content: Data,
+        into active: inout ActiveConnection,
+        connection: NWConnection
+    ) -> Bool {
+        active.receiveBuffer.append(content)
+
+        if active.receiveBuffer.count > DeviceReceiveFraming.maxBufferSize {
+            deviceConnectionLogger.error("Server exceeded max buffer size, disconnecting")
+            disconnect()
+            onEvent?(.disconnected(.bufferOverflow))
+            return false
         }
 
-        if let content {
-            active.receiveBuffer.append(content)
-
-            if active.receiveBuffer.count > DeviceReceiveFraming.maxBufferSize {
-                deviceConnectionLogger.error("Server exceeded max buffer size, disconnecting")
-                disconnect()
-                onEvent?(.disconnected(.bufferOverflow))
-                return
-            }
-
-            connectionState = .connected(active)
-            processBuffer()
-            guard case .connected(let latest) = connectionState,
-                  latest.connection === connection else {
-                return
-            }
+        connectionState = .connected(active)
+        processBuffer()
+        guard case .connected(let latest) = connectionState,
+              latest.connection === connection else {
+            return false
         }
+        return true
+    }
 
-        if isComplete {
+    private func closeForCompletedReceive() {
+        if case .connected = connectionState {
             deviceConnectionLogger.info("Connection closed by server")
             connectionState = .disconnected
             onEvent?(.disconnected(.serverClosed))
-        } else {
-            guard case .connected(let latest) = connectionState,
-                  latest.connection === connection else { return }
-            receiveNext(connection: connection)
         }
     }
 

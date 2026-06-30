@@ -856,30 +856,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDefensiveClientActionFallbackUsesTypedFailureDetails() async throws {
-        let fence = TheFence(configuration: .init())
-        let parsed = TheFence.ParsedRequest(
-            command: .activate,
-            requestId: "defensive-fallback-test",
-            arguments: TheFence.CommandArgumentEnvelope(values: [:]),
-            dispatch: TheFence.DecodedRequestDispatch(handler: { _, _ in .ok(message: "unused") }),
-            expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
+    func testDirectActionExpectIsRejectedBeforeDispatch() async throws {
+        await assertValidationError(
+            command: .scroll,
+            arguments: [
+                "expect": .object([
+                    "type": .string("change"),
+                    "scopes": .array([.object(["type": .string("screen")])]),
+                ]),
+            ],
+            equals: "command \"scroll\" direct dispatch does not support expect"
         )
-
-        let response: FenceResponse
-        do {
-            response = try await fence.handleClientActionRequest(parsed)
-        } catch {
-            response = FenceResponse.failure(error)
-        }
-        let failure = try XCTUnwrap(response.diagnosticFailure)
-
-        XCTAssertEqual(failure.failureCode.knownCode, .requestInvalid)
-        XCTAssertEqual(failure.code, KnownFailureCode.requestInvalid.rawValue)
-        XCTAssertEqual(failure.kind, .request)
-        XCTAssertEqual(failure.phase, .request)
-        XCTAssertEqual(failure.retryable, false)
-        XCTAssertEqual(failure.details.code.knownCode, .requestInvalid)
     }
 
     @ButtonHeistActor

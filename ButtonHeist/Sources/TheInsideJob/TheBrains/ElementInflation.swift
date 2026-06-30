@@ -66,7 +66,7 @@ final class ElementInflation {
 
     struct ElementInflationFailure: Error {
         let failedStep: ElementInflationFailureStep
-        let failureKind: TheSafecracker.FailureKind?
+        let failureKind: TheSafecracker.FailureKind
         let message: String
 
         static func notFound(_ message: String) -> ElementInflationFailure {
@@ -76,19 +76,19 @@ final class ElementInflation {
             .init(.ambiguous, failureKind: .targetUnavailable, message: message)
         }
         static func noRevealPath(_ message: String) -> ElementInflationFailure {
-            .init(.noRevealPath, failureKind: nil, message: message)
+            .init(.noRevealPath, failureKind: .actionFailed, message: message)
         }
 
         static func staleRefresh(
             _ message: String,
-            failureKind: TheSafecracker.FailureKind? = nil
+            failureKind: TheSafecracker.FailureKind = .actionFailed
         ) -> ElementInflationFailure {
             .init(.staleRefresh, failureKind: failureKind, message: message)
         }
 
         static func geometryNotActionable(
             _ message: String,
-            failureKind: TheSafecracker.FailureKind? = nil
+            failureKind: TheSafecracker.FailureKind = .actionFailed
         ) -> ElementInflationFailure {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
         }
@@ -99,7 +99,7 @@ final class ElementInflation {
 
         private init(
             _ step: ElementInflationFailureStep,
-            failureKind: TheSafecracker.FailureKind?,
+            failureKind: TheSafecracker.FailureKind,
             message: String
         ) {
             failedStep = step

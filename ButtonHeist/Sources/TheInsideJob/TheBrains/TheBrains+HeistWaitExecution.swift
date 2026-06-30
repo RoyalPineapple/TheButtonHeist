@@ -31,7 +31,7 @@ struct HeistWaitOutcome {
     enum Status {
         case matched
         case timedOut
-        case failed(ErrorKind?)
+        case failed(ErrorKind)
 
         init(actionResult: ActionResult) {
             if actionResult.success {
@@ -39,7 +39,10 @@ struct HeistWaitOutcome {
             } else if actionResult.errorKind == .timeout {
                 self = .timedOut
             } else {
-                self = .failed(actionResult.errorKind)
+                guard let errorKind = actionResult.errorKind else {
+                    preconditionFailure("Failed wait ActionResult must carry an ErrorKind")
+                }
+                self = .failed(errorKind)
             }
         }
 
@@ -113,10 +116,14 @@ struct HeistWaitOutcome {
         var builder = ActionResultBuilder(method: method)
         builder.message = message
         builder.accessibilityTrace = accessibilityTrace
-        if succeeded {
+        switch status {
+        case .matched:
             return builder.success()
+        case .timedOut:
+            return builder.failure(errorKind: .timeout)
+        case .failed(let errorKind):
+            return builder.failure(errorKind: errorKind)
         }
-        return builder.failure(errorKind: status.errorKind ?? .actionFailed)
     }
 }
 
