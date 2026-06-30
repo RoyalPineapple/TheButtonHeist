@@ -1,6 +1,7 @@
 import AccessibilitySnapshotModel
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
+import MCP
 import Testing
 import ThePlans
 import TheScore
@@ -23,7 +24,12 @@ struct RenderResponseTests {
         let result = ButtonHeistMCPServer.renderResponse(response)
 
         #expect(result.content.count == 2)
-        #expect(String(describing: result.content[0]).contains("image"))
+        guard case .image(let data, let mimeType, _, _) = result.content[0] else {
+            Issue.record("expected first content item to be image")
+            return
+        }
+        #expect(data == "abc")
+        #expect(mimeType == "image/png")
         guard case .text(let text, _, _) = result.content[1] else {
             Issue.record("expected second content item to be text")
             return
@@ -99,7 +105,7 @@ struct RenderResponseTests {
         #expect(addedElement["identifier"]?.stringValue == "lazy_row")
         #expect(traceOmission["projectedAs"]?.stringValue == "delta")
         #expect(traceOmission["omittedCount"] == .int(2))
-        #expect(!String(describing: result.structuredContent).contains("captures"))
+        #expect(!containsObjectKey("captures", in: result.structuredContent))
         guard case .text(let text, _, _)? = result.content.first else {
             Issue.record("expected compact text content")
             return
@@ -297,4 +303,16 @@ struct RenderResponseTests {
 
 private struct FallbackTestError: LocalizedError {
     var errorDescription: String? { "fallback failed" }
+}
+
+private func containsObjectKey(_ key: String, in value: Value?) -> Bool {
+    guard let value else { return false }
+    switch value {
+    case .object(let object):
+        return object[key] != nil || object.values.contains { containsObjectKey(key, in: $0) }
+    case .array(let values):
+        return values.contains { containsObjectKey(key, in: $0) }
+    default:
+        return false
+    }
 }
