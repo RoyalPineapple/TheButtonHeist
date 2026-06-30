@@ -849,7 +849,7 @@ import Testing
     RunHeist("CartScreen.checkout")
     """))
 
-    #expect(diagnostic.code == "heist.plan.runtime_safety")
+    #expect(diagnostic.code.rawValue == "heist.plan.runtime_safety")
     #expect(diagnostic.kind == .error)
     #expect(diagnostic.phase == .planValidation)
     #expect(diagnostic.path == "$.body[0].invoke.path")
@@ -896,7 +896,7 @@ import Testing
     }
     """)
 
-    #expect(diagnostic.code == "heist.source.invalid_syntax")
+    #expect(diagnostic.code.rawValue == "heist.source.invalid_syntax")
     #expect(diagnostic.kind == .error)
     #expect(diagnostic.phase == .sourceCompilation)
     #expect(diagnostic.sourceSpan?.sourceName == "inline-heist-plan")
@@ -915,7 +915,7 @@ import Testing
         return
     }
 
-    #expect(diagnostic.code == "heist.planning.raw_json_ir_fields")
+    #expect(diagnostic.code.rawValue == "heist.planning.raw_json_ir_fields")
     #expect(diagnostic.kind == .error)
     #expect(diagnostic.phase == .planning)
     #expect(diagnostic.sourceSpan == nil)
@@ -1649,7 +1649,7 @@ import Testing
     expect(diagnostic, contains: "252 definitions")
 
     let typedDiagnostic = compileDiagnostic(source)
-    #expect(typedDiagnostic.code == "heist.plan.runtime_safety")
+    #expect(typedDiagnostic.code.rawValue == "heist.plan.runtime_safety")
     #expect(typedDiagnostic.phase == .planValidation)
     #expect(typedDiagnostic.path == "$.definitions[0].definitions")
     #expect(typedDiagnostic.hint == "Use 250 definitions or fewer.")
@@ -1676,7 +1676,7 @@ private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
         _ = try HeistPlanSourceCompiler().compile(source)
         Issue.record("Expected source to fail: \(source)")
         return HeistBuildDiagnostic(
-            code: "test.missing_diagnostic",
+            externalBoundaryRawCode: "test.missing_diagnostic",
             phase: .sourceCompilation,
             message: "Expected source to fail"
         )
@@ -1685,7 +1685,7 @@ private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
     } catch {
         Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
         return HeistBuildDiagnostic(
-            code: "test.unexpected_error",
+            externalBoundaryRawCode: "test.unexpected_error",
             phase: .sourceCompilation,
             message: String(describing: error)
         )

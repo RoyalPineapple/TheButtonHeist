@@ -64,7 +64,7 @@ extension TheFence {
         Use run_heist for branching, loops, reusable heists, warnings, failures, or multiple steps.
         """
 
-        private static func diagnostic(code: HeistBuildDiagnosticCode) -> HeistBuildDiagnostic {
+        private static func diagnostic(code: HeistKnownBuildDiagnosticCode) -> HeistBuildDiagnostic {
             HeistBuildDiagnostic(
                 code: code,
                 phase: .planning,

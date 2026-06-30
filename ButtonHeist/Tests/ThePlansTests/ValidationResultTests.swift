@@ -82,7 +82,7 @@ private func validationDiagnostic(
     _ message: String
 ) -> HeistBuildDiagnostic {
     HeistBuildDiagnostic(
-        code: "heist.validation_result.test",
+        externalBoundaryRawCode: "heist.validation_result.test",
         kind: kind,
         phase: .planValidation,
         message: message

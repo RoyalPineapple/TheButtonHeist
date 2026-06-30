@@ -174,7 +174,7 @@ private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
         _ = try HeistPlanSourceCompiler().compile(source)
         Issue.record("Expected source to fail: \(source)")
         return HeistBuildDiagnostic(
-            code: "test.missing_diagnostic",
+            externalBoundaryRawCode: "test.missing_diagnostic",
             phase: .sourceCompilation,
             message: "Expected source to fail"
         )
@@ -183,7 +183,7 @@ private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
     } catch {
         Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
         return HeistBuildDiagnostic(
-            code: "test.unexpected_error",
+            externalBoundaryRawCode: "test.unexpected_error",
             phase: .sourceCompilation,
             message: String(describing: error)
         )

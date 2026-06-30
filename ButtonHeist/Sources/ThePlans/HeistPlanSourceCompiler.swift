@@ -54,7 +54,7 @@ package struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomS
     }
 
     package init(
-        code: String = "heist.source.invalid_syntax",
+        code: HeistKnownBuildDiagnosticCode = .sourceInvalidSyntax,
         phase: HeistBuildPhase = .sourceCompilation,
         message: String,
         sourceName: String,
