@@ -236,12 +236,12 @@ import Testing
     Increment(.identifier("Quantity"))
         .expect(.change(.elements(.updated(
             .identifier("Quantity"),
-            .value(from: "2", to: "3")
+            .value(before: "2", after: "3")
         ))))
     """#))
     let broadBeforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(.value(from: .prefix("cart:"), to: .contains("items"))))))
+        .expect(.change(.elements(.updated(.value(before: .prefix("cart:"), after: .contains("items"))))))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -310,7 +310,7 @@ import Testing
 
 @Test func `inline plan source custom content update queries label and value`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
-    WaitFor(.change(.elements(.updated(.customContent(to: .match(
+    WaitFor(.change(.elements(.updated(.customContent(after: .match(
         label: "Status",
         value: .contains("Ready"),
         isImportant: true
@@ -327,7 +327,7 @@ import Testing
     ])
 
     #expect(plan == expected)
-    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(to: .match(label: "Status", value: .contains("Ready"), isImportant: true))"#))
+    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(after: .match(label: "Status", value: .contains("Ready"), isImportant: true))"#))
     try assertCanonicalRoundTrip(plan)
 }
 
@@ -344,11 +344,11 @@ import Testing
     """#))
     let updatedBeforeAfterOnly = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.change(.updated(.value(from: "", to: "milk"))))
+        .expect(.change(.updated(.value(before: "", after: "milk"))))
     """#))
     let updatedAllFields = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.change(.updated(.identifier("Search"), .value(from: "", to: "milk"))))
+        .expect(.change(.updated(.identifier("Search"), .value(before: "", after: "milk"))))
     """#))
 
     let expectedAppeared = try HeistPlan(body: [
@@ -1300,11 +1300,11 @@ import Testing
     let labeledExplicitElementUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(element: .element(.label("Total")), .value("$3")))"#))
     expect(labeledExplicitElementUpdated, contains: "updated(element:) is not supported")
 
-    let fromOnlyUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(from: "$2")))"#))
-    expect(fromOnlyUpdate, contains: "value update predicate requires to when from is set")
+    let beforeOnlyUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(before: "$2")))"#))
+    expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
-    let beforeAfterUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(before: "$2", after: "$3")))"#))
-    expect(beforeAfterUpdate, contains: "value update predicate accepts from and to")
+    let fromToUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(from: "$2", to: "$3")))"#))
+    expect(fromToUpdate, contains: "value update predicate accepts before and after")
 
     let screenChangedAppeared = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged(.appeared(.label("Receipt"))))"#))
     expect(screenChangedAppeared, contains: "unsupported state predicate '.appeared'")

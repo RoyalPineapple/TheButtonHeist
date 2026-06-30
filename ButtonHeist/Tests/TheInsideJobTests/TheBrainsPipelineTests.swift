@@ -776,7 +776,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .change(.updated(.label("Quantity"), .value(from: "2", to: "3"))),
+                predicate: .change(.updated(.label("Quantity"), .value(before: "2", after: "3"))),
                 timeout: 0.05
             ))
         }
@@ -810,7 +810,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(
                 WaitStep(
-                    predicate: .change(.updated(.label("Quantity"), .value(from: "2", to: "3"))),
+                    predicate: .change(.updated(.label("Quantity"), .value(before: "2", after: "3"))),
                     timeout: 0.05
                 ),
                 allowsTransitionFinalStateWarning: false

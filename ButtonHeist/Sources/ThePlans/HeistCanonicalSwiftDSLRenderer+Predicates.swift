@@ -272,8 +272,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         render: (Checker) throws -> String
     ) rethrows -> String {
         let fields = try [
-            before.map { "from: \(try render($0))" },
-            after.map { "to: \(try render($0))" },
+            before.map { "before: \(try render($0))" },
+            after.map { "after: \(try render($0))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
@@ -287,8 +287,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".value(\(renderCallArgument(after)))"
         }
         let fields = [
-            before.map { "from: \(renderFieldArgument($0))" },
-            after.map { "to: \(renderFieldArgument($0))" },
+            before.map { "before: \(renderFieldArgument($0))" },
+            after.map { "after: \(renderFieldArgument($0))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
@@ -303,16 +303,16 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try ".value(\(renderCallArgument(after, environment: environment)))"
         }
         let fields = try [
-            before.map { "from: \(try renderFieldArgument($0, environment: environment))" },
-            after.map { "to: \(try renderFieldArgument($0, environment: environment))" },
+            before.map { "before: \(try renderFieldArgument($0, environment: environment))" },
+            after.map { "after: \(try renderFieldArgument($0, environment: environment))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
 
     func renderTraitsPropertyChange(before: TraitSetMatch?, after: TraitSetMatch?) -> String {
         let fields = [
-            before.map { "from: \(render(traitSet: $0))" },
-            after.map { "to: \(render(traitSet: $0))" },
+            before.map { "before: \(render(traitSet: $0))" },
+            after.map { "after: \(render(traitSet: $0))" },
         ].compactMap { $0 }
         return ".traits(\(fields.joined(separator: ", ")))"
     }
