@@ -1887,8 +1887,8 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistInvocationScreenChangeExpectationEvaluatesAcrossNestedCall() async throws {
         let runtime = heistRuntime(
             observations: [
-                observedState(labels: ["Checkout"]),
-                observedState(labels: ["Receipt"]),
+                observedState(labels: ["Checkout"], screenId: "checkout"),
+                observedState(labels: ["Receipt"], screenId: "receipt"),
             ],
             execute: { _ in
                 ActionResult(success: true, method: .activate)
@@ -3804,10 +3804,13 @@ final class TheBrainsActionTests: XCTestCase {
         return actionResult
     }
 
-    private func observedState(labels: [String]) -> PostActionObservation.BeforeState {
+    private func observedState(
+        labels: [String],
+        screenId: String? = nil
+    ) -> PostActionObservation.BeforeState {
         observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
-        })
+        }, screenId: screenId)
     }
 
     private func waitForSettledSemanticWaiter(
@@ -3825,10 +3828,40 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     private func observedState(
-        elements: [(AccessibilityElement, HeistId)]
+        elements: [(AccessibilityElement, HeistId)],
+        screenId: String? = nil
     ) -> PostActionObservation.BeforeState {
         brains.stash.installScreenForTesting(.makeForTests(elements: elements))
-        return brains.postActionObservation.captureSemanticState()
+        let state = brains.postActionObservation.captureSemanticState()
+        guard let screenId else { return state }
+
+        let context = AccessibilityTrace.Context(
+            firstResponder: state.capture.context.firstResponder,
+            keyboardVisible: state.capture.context.keyboardVisible,
+            screenId: screenId,
+            windowStack: state.capture.context.windowStack
+        )
+        let capture = AccessibilityTrace.Capture(
+            sequence: state.capture.sequence,
+            interface: state.capture.interface,
+            parentHash: state.capture.parentHash,
+            context: context,
+            transition: state.capture.transition
+        )
+        return PostActionObservation.BeforeState(
+            screen: state.screen,
+            snapshot: state.snapshot,
+            elements: state.elements,
+            hierarchy: state.hierarchy,
+            interface: state.interface,
+            interfaceHash: AccessibilityTrace.Capture.hash(interface: state.interface, context: context),
+            semanticHash: state.semanticHash,
+            capture: capture,
+            tripwireSignal: state.tripwireSignal,
+            screenSnapshot: state.screenSnapshot,
+            screenId: screenId,
+            settledObservationSequence: state.settledObservationSequence
+        )
     }
 
     private func heistRuntime(

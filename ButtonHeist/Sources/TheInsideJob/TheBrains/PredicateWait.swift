@@ -1542,22 +1542,29 @@ private extension AnyPropertyChange {
     var destinationChange: AnyPropertyChange? {
         switch self {
         case .value(let change):
-            return change.after.map { .value(ElementPropertyChange<ValueProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .value($0) }
         case .traits(let change):
-            return change.after.map { .traits(ElementPropertyChange<TraitsProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .traits($0) }
         case .hint(let change):
-            return change.after.map { .hint(ElementPropertyChange<HintProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .hint($0) }
         case .actions(let change):
-            return change.after.map { .actions(ElementPropertyChange<ActionsProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .actions($0) }
         case .frame(let change):
-            return change.after.map { .frame(ElementPropertyChange<FrameProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .frame($0) }
         case .activationPoint(let change):
-            return change.after.map { .activationPoint(ElementPropertyChange<ActivationPointProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .activationPoint($0) }
         case .customContent(let change):
-            return change.after.map { .customContent(ElementPropertyChange<CustomContentProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .customContent($0) }
         case .rotors(let change):
-            return change.after.map { .rotors(ElementPropertyChange<RotorsProperty>(after: $0)) }
+            return change.destinationOnlyChange.map { .rotors($0) }
         }
+    }
+}
+
+private extension ElementPropertyChange {
+    var destinationOnlyChange: ElementPropertyChange<P>? {
+        guard before == nil, let after else { return nil }
+        return ElementPropertyChange(after: after)
     }
 }
 
