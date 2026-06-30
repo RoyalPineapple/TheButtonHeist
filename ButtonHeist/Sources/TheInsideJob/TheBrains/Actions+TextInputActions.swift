@@ -68,10 +68,22 @@ extension Actions {
         }
         let elementTarget = target.elementTarget
         let focusResult = await focusTextInput(elementTarget)
-        if let failure = focusResult.failure { return failure }
+        switch focusResult {
+        case .alreadyFocused:
+            return await executeTypeText(target, using: nil)
+        case .focused(let input):
+            return await executeTypeText(target, using: input)
+        case .failed(let failure):
+            return failure
+        }
+    }
 
+    private func executeTypeText(
+        _ target: TypeTextTarget,
+        using focusedInput: FocusedTextInput?
+    ) async -> TheSafecracker.InteractionResult {
         if target.replacingExisting {
-            let clearResult = await safecracker.clearText(existingValue: focusResult.currentValue)
+            let clearResult = await safecracker.clearText(existingValue: focusedInput?.currentValue)
             if let diagnostic = clearResult.diagnostic {
                 return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing"))
             }
@@ -84,17 +96,17 @@ extension Actions {
             }
         }
 
-        if let value = Self.liveTextInputValue(for: focusResult.resolvedObject) {
+        if let value = Self.liveTextInputValue(for: focusedInput?.resolvedObject) {
             return .success(
                 payload: .typeText(value),
-                subjectEvidence: focusResult.subjectEvidence,
-                resolvedElementId: focusResult.resolvedElementId
+                subjectEvidence: focusedInput?.subjectEvidence,
+                resolvedElementId: focusedInput?.resolvedElementId
             )
         }
         return .success(
             method: .typeText,
-            subjectEvidence: focusResult.subjectEvidence,
-            resolvedElementId: focusResult.resolvedElementId
+            subjectEvidence: focusedInput?.subjectEvidence,
+            resolvedElementId: focusedInput?.resolvedElementId
         )
     }
 
@@ -125,47 +137,17 @@ extension Actions {
         )
     }
 
-    private struct TextInputFocusResult {
-        let failure: TheSafecracker.InteractionResult?
-        let subjectEvidence: ActionSubjectEvidence?
-        let resolvedElementId: HeistId?
-        let resolvedObject: NSObject?
+    private enum TextInputFocusResult {
+        case alreadyFocused
+        case focused(FocusedTextInput)
+        case failed(TheSafecracker.InteractionResult)
+    }
+
+    private struct FocusedTextInput {
+        let subjectEvidence: ActionSubjectEvidence
+        let resolvedElementId: HeistId
+        let resolvedObject: NSObject
         let currentValue: String?
-
-        static var focused: TextInputFocusResult {
-            TextInputFocusResult(
-                failure: nil,
-                subjectEvidence: nil,
-                resolvedElementId: nil,
-                resolvedObject: nil,
-                currentValue: nil
-            )
-        }
-
-        static func focused(
-            _ evidence: ActionSubjectEvidence,
-            resolvedElementId: HeistId,
-            resolvedObject: NSObject,
-            currentValue: String?
-        ) -> TextInputFocusResult {
-            TextInputFocusResult(
-                failure: nil,
-                subjectEvidence: evidence,
-                resolvedElementId: resolvedElementId,
-                resolvedObject: resolvedObject,
-                currentValue: currentValue
-            )
-        }
-
-        static func failed(_ failure: TheSafecracker.InteractionResult) -> TextInputFocusResult {
-            TextInputFocusResult(
-                failure: failure,
-                subjectEvidence: nil,
-                resolvedElementId: nil,
-                resolvedObject: nil,
-                currentValue: nil
-            )
-        }
     }
 
     private func focusTextInput(
@@ -183,7 +165,7 @@ extension Actions {
                     )
                 ))
             }
-            return .focused
+            return .alreadyFocused
         }
 
         let liveTarget: TheStash.LiveActionTarget
@@ -224,12 +206,12 @@ extension Actions {
                 )
             ))
         }
-        return .focused(
-            subjectEvidence,
+        return .focused(FocusedTextInput(
+            subjectEvidence: subjectEvidence,
             resolvedElementId: resolvedElementId,
             resolvedObject: liveTarget.object,
             currentValue: liveTarget.element.value
-        )
+        ))
     }
 
     private func waitForActiveTextInput() async -> Bool {

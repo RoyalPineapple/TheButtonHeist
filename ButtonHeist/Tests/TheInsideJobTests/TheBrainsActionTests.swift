@@ -3014,6 +3014,9 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "type_text failed")
         XCTAssertEqual(result.method, .typeText)
+        let subjectEvidence = try XCTUnwrap(result.subjectEvidence)
+        XCTAssertEqual(subjectEvidence.source, .textInputTarget)
+        XCTAssertEqual(subjectEvidence.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "hello")
         guard case .value(let value) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
@@ -3117,6 +3120,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .typeText)
+        XCTAssertNil(result.subjectEvidence)
+        XCTAssertNil(result.resolvedElementId)
         XCTAssertDiagnostic(result.message, contains: [
             "text entry failed",
             "focus=none",

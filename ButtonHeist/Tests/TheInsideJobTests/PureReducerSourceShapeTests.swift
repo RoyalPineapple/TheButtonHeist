@@ -159,6 +159,52 @@ import Testing
             """
         )
     }
+
+    @Test func `text input focus result is a sum type with targeted success evidence`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Actions+TextInputActions.swift")
+        let focusResult = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+enum\s+TextInputFocusResult\b"#),
+            "TextInputFocusResult should be an enum, not an optional product bag"
+        )
+        let focusedInput = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+struct\s+FocusedTextInput\b"#),
+            "Targeted focus success should carry a dedicated payload"
+        )
+        let executeTypeText = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+executeTypeText\s*\(\s*\n\s*_\s+target:\s+TypeTextTarget\b"#),
+            "type text dispatch should switch over TextInputFocusResult"
+        )
+
+        #expect(focusResult.contents.contains("case alreadyFocused"))
+        #expect(focusResult.contents.contains("case focused(FocusedTextInput)"))
+        #expect(focusResult.contents.contains("case failed(TheSafecracker.InteractionResult)"))
+        #expect(try executeTypeText.containsMatch(#"\bswitch\s+focusResult\b"#))
+        #expect(executeTypeText.contents.contains("case .alreadyFocused"))
+        #expect(executeTypeText.contents.contains("case .focused(let input)"))
+        #expect(executeTypeText.contents.contains("case .failed(let failure)"))
+
+        #expect(focusedInput.contents.contains("let subjectEvidence: ActionSubjectEvidence"))
+        #expect(focusedInput.contents.contains("let resolvedElementId: HeistId"))
+        #expect(focusedInput.contents.contains("let resolvedObject: NSObject"))
+        #expect(focusedInput.contents.contains("let currentValue: String?"))
+        #expect(
+            !focusedInput.contents.contains("TheSafecracker.InteractionResult"),
+            "FocusedTextInput should contain only targeted success data"
+        )
+
+        #expect(
+            try !source.containsMatch(#"\bstruct\s+TextInputFocusResult\b"#),
+            "TextInputFocusResult should not be constructible as a loose optional product"
+        )
+        #expect(
+            try !source.containsMatch(#"\bfocusResult[.]failure\b"#),
+            "call sites should switch over TextInputFocusResult instead of branching on failure"
+        )
+        #expect(
+            try !focusResult.containsMatch(#"\blet\s+(failure|subjectEvidence|resolvedElementId|resolvedObject|currentValue)\s*:"#),
+            "TextInputFocusResult enum should not store old optional-bag fields"
+        )
+    }
 }
 
 private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {
