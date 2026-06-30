@@ -264,10 +264,10 @@ func `chained state expectations compose with all`() throws {
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Save")),
-            expectation: WaitStep(predicate: .state(.all([
+            expectation: WaitStep(predicate: .state(.all(
                 .exists(.label("A")),
-                .exists(.label("B")),
-            ])), timeout: 1)
+                .exists(.label("B"))
+            )), timeout: 1)
         )),
     ]))
 }
@@ -288,10 +288,10 @@ func `chained state expectation joins existing screen where clause`() throws {
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
-            expectation: WaitStep(predicate: .change(.screen(.all([
+            expectation: WaitStep(predicate: .change(.screen(.all(
                 .exists(.label("Results")),
-                .exists(.label("Filter")),
-            ]))), timeout: 1)
+                .exists(.label("Filter"))
+            ))), timeout: 1)
         )),
     ])
 

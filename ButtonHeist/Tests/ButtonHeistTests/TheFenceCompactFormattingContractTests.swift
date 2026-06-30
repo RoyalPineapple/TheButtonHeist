@@ -597,9 +597,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
-        let casePredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
+        let casePredicateState = StatePredicateExpr.exists(.label("Home"))
+        let casePredicateRuntime = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: casePredicate, body: [childAction]),
+            PredicateCase(predicate: casePredicateState, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childResult = actionReceiptStep(
@@ -614,8 +615,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
-                                predicate: casePredicate,
-                                result: ExpectationResult(met: true, predicate: casePredicate)
+                                predicate: casePredicateRuntime,
+                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -835,9 +836,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Continue"))))
         ))
-        let casePredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        let casePredicateState = StatePredicateExpr.exists(.label("Ready"))
+        let casePredicateRuntime = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: casePredicate, body: [childAction]),
+            PredicateCase(predicate: casePredicateState, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childPath = "$.body[0].conditional.cases[0].body[0]"
@@ -864,8 +866,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
-                                predicate: casePredicate,
-                                result: ExpectationResult(met: true, predicate: casePredicate)
+                                predicate: casePredicateRuntime,
+                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -913,11 +915,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let elseStep = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Fallback"))))
         ))
+        let predicateState = StatePredicateExpr.exists(.label("Home"))
         let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(
             cases: [
                 PredicateCase(
-                    predicate: predicate,
+                    predicate: predicateState,
                     body: [try HeistStep.action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Home"))))))]
                 ),
             ],

@@ -49,6 +49,45 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 }
 
 @Test
+func `predicate case wire boundary decodes only snapshot predicates`() throws {
+    let transitionCase = Data("""
+    {
+      "predicate": {
+        "type": "change",
+        "scopes": [
+          {
+            "type": "elements",
+            "assertions": [
+              {
+                "type": "appeared",
+                "element": { "label": "Receipt" }
+              }
+            ]
+          }
+        ]
+      },
+      "body": [
+        { "type": "warn", "warn": { "message": "ready" } }
+      ]
+    }
+    """.utf8)
+
+    #expect(throws: DecodingError.self) {
+        _ = try JSONDecoder().decode(PredicateCase.self, from: transitionCase)
+    }
+
+    let snapshotCase = try JSONDecoder().decode(PredicateCase.self, from: Data("""
+    {
+      "predicate": { "type": "exists", "element": { "label": "Receipt" } },
+      "body": [
+        { "type": "warn", "warn": { "message": "ready" } }
+      ]
+    }
+    """.utf8))
+    #expect(snapshotCase.predicate == .exists(.label("Receipt")))
+}
+
+@Test
 func `for each parameter names reject Swift reserved identifiers including Any`() {
     #expect(HeistParameterName.isValid("item"))
     #expect(!HeistParameterName.isValid("Any"))

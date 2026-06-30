@@ -29,7 +29,7 @@ extension HeistPlanRuntimeSafetyValidator {
         case .state(let state):
             validateStatePredicate(state, path: path, depth: depth)
         case .changePredicate(let change):
-            validateChangePredicate(change, path: path, depth: depth, placement: .predicateRoot)
+            validateChangePredicate(change, path: path, depth: depth)
         case .noChangePredicate:
             break
         }
@@ -47,10 +47,6 @@ extension HeistPlanRuntimeSafetyValidator {
         case .target(_, let target):
             validateElementTarget(target, path: "\(path).target")
         case .all(let states):
-            guard !states.isEmpty else {
-                failPredicateContract(.emptyStateAll, path: "\(path).states")
-                return
-            }
             validateAllChildCount(states.count, path: "\(path).states")
             for (index, child) in states.enumerated() {
                 validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1)
@@ -71,10 +67,6 @@ extension HeistPlanRuntimeSafetyValidator {
         case .target(_, let target):
             validateTarget(target, path: "\(path).target", scope: scope)
         case .all(let states):
-            guard !states.isEmpty else {
-                failPredicateContract(.emptyStateAll, path: "\(path).states")
-                return
-            }
             validateAllChildCount(states.count, path: "\(path).states")
             for (index, child) in states.enumerated() {
                 validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1, scope: scope)
@@ -85,15 +77,12 @@ extension HeistPlanRuntimeSafetyValidator {
     mutating func validateChangePredicate(
         _ change: AccessibilityPredicate.Change,
         path: String,
-        depth: Int,
-        placement: AccessibilityPredicateContract.ChangePlacement
+        depth: Int
     ) {
         checkPredicateDepth(depth, path: path)
         switch change.contract {
         case .any:
-            if placement == .scope {
-                failPredicateContract(.unsupportedAnyChangeScope, path: path)
-            }
+            break
         case .screen(let states):
             validateAllChildCount(states.count, path: "\(path).screen")
             for (index, state) in states.enumerated() {
@@ -105,13 +94,34 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]")
             }
         case .all(let changes):
-            guard !changes.isEmpty else {
-                failPredicateContract(.emptyChangeAllScope, path: "\(path).scopes")
-                return
-            }
             validateAllChildCount(changes.count, path: "\(path).scopes")
             for (index, child) in changes.enumerated() {
-                validateChangePredicate(child, path: "\(path).scopes[\(index)]", depth: depth + 1, placement: .scope)
+                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1)
+            }
+        }
+    }
+
+    mutating func validateChangeScope(
+        _ change: AccessibilityPredicate.ChangeScope,
+        path: String,
+        depth: Int
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch change.contract {
+        case .screen(let states):
+            validateAllChildCount(states.count, path: "\(path).screen")
+            for (index, state) in states.enumerated() {
+                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1)
+            }
+        case .elements(let assertions):
+            validateAllChildCount(assertions.count, path: "\(path).elements")
+            for (index, assertion) in assertions.enumerated() {
+                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]")
+            }
+        case .all(let changes):
+            validateAllChildCount(changes.count, path: "\(path).scopes")
+            for (index, child) in changes.enumerated() {
+                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1)
             }
         }
     }
@@ -120,15 +130,12 @@ extension HeistPlanRuntimeSafetyValidator {
         _ change: ChangePredicateExpr,
         path: String,
         depth: Int,
-        scope: HeistReferenceScope,
-        placement: AccessibilityPredicateContract.ChangePlacement = .predicateRoot
+        scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
         switch change.predicateContract {
         case .any:
-            if placement == .scope {
-                failPredicateContract(.unsupportedAnyChangeScope, path: path)
-            }
+            break
         case .screen(let states):
             validateAllChildCount(states.count, path: "\(path).screen")
             for (index, state) in states.enumerated() {
@@ -140,13 +147,35 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]", scope: scope)
             }
         case .all(let changes):
-            guard !changes.isEmpty else {
-                failPredicateContract(.emptyChangeAllScope, path: "\(path).scopes")
-                return
-            }
             validateAllChildCount(changes.count, path: "\(path).scopes")
             for (index, child) in changes.enumerated() {
-                validateChangePredicate(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope, placement: .scope)
+                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope)
+            }
+        }
+    }
+
+    mutating func validateChangeScope(
+        _ change: ChangeScopePredicateExpr,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch change.predicateContract {
+        case .screen(let states):
+            validateAllChildCount(states.count, path: "\(path).screen")
+            for (index, state) in states.enumerated() {
+                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1, scope: scope)
+            }
+        case .elements(let assertions):
+            validateAllChildCount(assertions.count, path: "\(path).elements")
+            for (index, assertion) in assertions.enumerated() {
+                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]", scope: scope)
+            }
+        case .all(let changes):
+            validateAllChildCount(changes.count, path: "\(path).scopes")
+            for (index, child) in changes.enumerated() {
+                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope)
             }
         }
     }
@@ -312,28 +341,25 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func failPredicateContract(_ violation: AccessibilityPredicateContract.Violation, path: String) {
-        fail(
-            path: path,
-            contract: violation.contract,
-            observed: violation.observed,
-            correction: violation.correction
-        )
-    }
-
 }
 
 private enum StatePredicateExprContract {
     case element(AccessibilityPredicateContract.PresenceRequirement, ElementPredicateTemplate)
     case target(AccessibilityPredicateContract.PresenceRequirement, ElementTargetExpr)
-    case all([StatePredicateExpr])
+    case all(NonEmptyArray<StatePredicateExpr>)
 }
 
 private enum ChangePredicateExprContract {
     case any
     case screen([StatePredicateExpr])
     case elements([ElementDeltaPredicateExpr])
-    case all([ChangePredicateExpr])
+    case all(NonEmptyArray<ChangeScopePredicateExpr>)
+}
+
+private enum ChangeScopePredicateExprContract {
+    case screen([StatePredicateExpr])
+    case elements([ElementDeltaPredicateExpr])
+    case all(NonEmptyArray<ChangeScopePredicateExpr>)
 }
 
 private extension StatePredicateExpr {
@@ -394,6 +420,19 @@ private extension ChangePredicateExpr {
         case .elementsScope(let assertions):
             return .elements(assertions)
         case .allScopes(let changes):
+            return .all(changes)
+        }
+    }
+}
+
+private extension ChangeScopePredicateExpr {
+    var predicateContract: ChangeScopePredicateExprContract {
+        switch self {
+        case .screen(let states):
+            return .screen(states)
+        case .elements(let assertions):
+            return .elements(assertions)
+        case .all(let changes):
             return .all(changes)
         }
     }

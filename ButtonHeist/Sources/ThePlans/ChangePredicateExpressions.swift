@@ -95,7 +95,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
     case any
     case screenScope([StatePredicateExpr] = [])
     case elementsScope([ElementDeltaPredicateExpr] = [])
-    case allScopes([ChangePredicateExpr])
+    case allScopes(NonEmptyArray<ChangeScopePredicateExpr>)
 
     private enum PredicateWireType: String {
         case change
@@ -120,7 +120,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
         case .elementsScope(let assertions):
             self = .elementsScope(assertions.map(ElementDeltaPredicateExpr.init))
         case .allScopes(let changes):
-            self = .allScopes(changes.map(ChangePredicateExpr.init))
+            self = .allScopes(changes.mapNonEmpty(ChangeScopePredicateExpr.init))
         }
     }
 
@@ -133,7 +133,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
         case .elementsScope(let assertions):
             return .elementsScope(try assertions.map { try $0.resolve(in: environment) })
         case .allScopes(let changes):
-            return .allScopes(try changes.map { try $0.resolve(in: environment) })
+            return .allScopes(try changes.mapNonEmpty { try $0.resolve(in: environment) })
         }
     }
 
@@ -143,7 +143,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
         if typeString == PredicateWireType.change.rawValue {
             try decoder.rejectUnknownKeys(allowed: ["type", "scopes"], typeName: "change predicate expression")
             let scopes = try container.decodeIfPresent([ChangeScopePredicateExpr].self, forKey: .scopes) ?? []
-            self = Self.composed(scopes.map(\.change))
+            self = Self.composed(scopes)
             return
         }
         self = try ChangeScopePredicateExpr(from: decoder).change
@@ -152,42 +152,40 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(PredicateWireType.change.rawValue, forKey: .type)
-        let scopes = Self.flatten(self).map(ChangeScopePredicateExpr.init)
+        let scopes = Self.flatten(self)
         if !scopes.isEmpty {
             try container.encode(scopes, forKey: .scopes)
         }
     }
 
-    private static func composed(_ changes: [ChangePredicateExpr]) -> ChangePredicateExpr {
-        let flattened = changes.flatMap(flatten)
+    private static func composed(_ scopes: [ChangeScopePredicateExpr]) -> ChangePredicateExpr {
+        let flattened = scopes.flatMap(ChangeScopePredicateExpr.flatten)
         switch flattened.count {
         case 0:
             return .any
         case 1:
-            return flattened[0]
+            return flattened[0].change
         default:
-            return .allScopes(flattened)
+            return .allScopes(NonEmptyArray(flattened[0], rest: Array(flattened.dropFirst())))
         }
     }
 
-    fileprivate static func flatten(_ change: ChangePredicateExpr) -> [ChangePredicateExpr] {
+    fileprivate static func flatten(_ change: ChangePredicateExpr) -> [ChangeScopePredicateExpr] {
         switch change {
         case .any:
             return []
         case .screenScope, .elementsScope:
-            return [change]
+            return [ChangeScopePredicateExpr(change)]
         case .allScopes(let changes):
-            return changes.flatMap(flatten)
+            return changes.flatMap(ChangeScopePredicateExpr.flatten)
         }
     }
 }
 
-private struct ChangeScopePredicateExpr: Codable, Sendable, Equatable {
-    let change: ChangePredicateExpr
-
-    init(_ change: ChangePredicateExpr) {
-        self.change = change
-    }
+public enum ChangeScopePredicateExpr: Codable, Sendable, Equatable {
+    case screen([StatePredicateExpr] = [])
+    case elements([ElementDeltaPredicateExpr] = [])
+    case all(NonEmptyArray<ChangeScopePredicateExpr>)
 
     private enum ScopeWireType: String, CaseIterable {
         case screen
@@ -199,7 +197,53 @@ private struct ChangeScopePredicateExpr: Codable, Sendable, Equatable {
         case type, assertions, scopes
     }
 
-    init(from decoder: Decoder) throws {
+    public init(_ scope: AccessibilityPredicate.ChangeScope) {
+        switch scope {
+        case .screen(let assertions):
+            self = .screen(assertions.map(StatePredicateExpr.init))
+        case .elements(let assertions):
+            self = .elements(assertions.map(ElementDeltaPredicateExpr.init))
+        case .all(let scopes):
+            self = .all(scopes.mapNonEmpty(ChangeScopePredicateExpr.init))
+        }
+    }
+
+    fileprivate init(_ change: ChangePredicateExpr) {
+        switch change {
+        case .any:
+            preconditionFailure("any change has no scoped expression representation")
+        case .screenScope(let assertions):
+            self = .screen(assertions)
+        case .elementsScope(let assertions):
+            self = .elements(assertions)
+        case .allScopes(let scopes):
+            self = .all(scopes)
+        }
+    }
+
+    var change: ChangePredicateExpr {
+        switch self {
+        case .screen(let assertions):
+            return .screenScope(assertions)
+        case .elements(let assertions):
+            return .elementsScope(assertions)
+        case .all(let scopes):
+            return .allScopes(scopes)
+        }
+    }
+
+    public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.ChangeScope {
+        switch self {
+        case .screen(let assertions):
+            return .screen(try assertions.map { try $0.resolve(in: environment) })
+        case .elements(let assertions):
+            return .elements(try assertions.map { try $0.resolve(in: environment) })
+        case .all(let scopes):
+            return .all(try scopes.mapNonEmpty { try $0.resolve(in: environment) })
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "change scope expression")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
@@ -212,41 +256,47 @@ private struct ChangeScopePredicateExpr: Codable, Sendable, Equatable {
         }
         switch type {
         case .screen:
-            change = .screenScope(try container.decodeIfPresent([StatePredicateExpr].self, forKey: .assertions) ?? [])
+            self = .screen(try container.decodeIfPresent([StatePredicateExpr].self, forKey: .assertions) ?? [])
         case .elements:
-            change = .elementsScope(try container.decodeIfPresent([ElementDeltaPredicateExpr].self, forKey: .assertions) ?? [])
+            self = .elements(try container.decodeIfPresent([ElementDeltaPredicateExpr].self, forKey: .assertions) ?? [])
         case .all:
-            let scopes = try container.decode([ChangeScopePredicateExpr].self, forKey: .scopes).map(\.change)
-            guard !scopes.isEmpty else {
+            let scopes = try container.decode([ChangeScopePredicateExpr].self, forKey: .scopes)
+            guard let first = scopes.first else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .scopes,
                     in: container,
                     debugDescription: "all change scope expression requires at least one child scope"
                 )
             }
-            change = .allScopes(scopes)
+            self = .all(NonEmptyArray(first, rest: Array(scopes.dropFirst())))
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch change {
-        case .any:
-            try container.encode(ScopeWireType.all.rawValue, forKey: .type)
-            try container.encode([ChangeScopePredicateExpr](), forKey: .scopes)
-        case .screenScope(let assertions):
+        switch self {
+        case .screen(let assertions):
             try container.encode(ScopeWireType.screen.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
-        case .elementsScope(let assertions):
+        case .elements(let assertions):
             try container.encode(ScopeWireType.elements.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
-        case .allScopes(let changes):
+        case .all(let changes):
             try container.encode(ScopeWireType.all.rawValue, forKey: .type)
-            try container.encode(changes.flatMap(ChangePredicateExpr.flatten).map(ChangeScopePredicateExpr.init), forKey: .scopes)
+            try container.encode(changes.flatMap(Self.flatten), forKey: .scopes)
+        }
+    }
+
+    fileprivate static func flatten(_ scope: ChangeScopePredicateExpr) -> [ChangeScopePredicateExpr] {
+        switch scope {
+        case .screen, .elements:
+            return [scope]
+        case .all(let scopes):
+            return scopes.flatMap(flatten)
         }
     }
 }
@@ -262,6 +312,19 @@ extension ChangePredicateExpr: CustomStringConvertible {
             return ScoreDescription.call("elements", assertions.map(\.description))
         case .allScopes(let changes):
             return ScoreDescription.call("all", changes.map(\.description))
+        }
+    }
+}
+
+extension ChangeScopePredicateExpr: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .screen(let assertions):
+            return ScoreDescription.call("screen", assertions.map(\.description))
+        case .elements(let assertions):
+            return ScoreDescription.call("elements", assertions.map(\.description))
+        case .all(let scopes):
+            return ScoreDescription.call("all", scopes.map(\.description))
         }
     }
 }
@@ -283,7 +346,7 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         case .state(let state):
             return .state(try state.resolve(in: environment))
         case .changePredicate(let change):
-            return .change(try change.resolve(in: environment))
+            return .changePredicate(try change.resolve(in: environment))
         case .noChangePredicate:
             return .noChange
         }

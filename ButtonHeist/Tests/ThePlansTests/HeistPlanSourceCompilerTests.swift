@@ -840,7 +840,7 @@ import Testing
     let expected = try HeistPlan(body: [
         .wait(WaitStep(predicate: .state(.exists(.label("Home"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.exists(.label("Pay"))), body: [.warn(WarnStep(message: "ready"))]),
+            PredicateCase(predicate: .exists(.label("Pay")), body: [.warn(WarnStep(message: "ready"))]),
         ])),
     ])
 
@@ -1337,6 +1337,24 @@ import Testing
 
     let bareWaitString = compileError(root(#"WaitFor("Receipt")"#))
     expect(bareWaitString, contains: "accessibility predicate requires an explicit accessibility property")
+}
+
+@Test func `runtime parser rejects transition predicates in conditionals`() throws {
+    let ifAppeared = compileError(root(#"""
+    If(.appeared(.label("Receipt"))) {
+        Warn("ready")
+    }
+    """#))
+    expect(ifAppeared, contains: "unsupported state predicate '.appeared'")
+
+    let caseUpdated = compileError(root(#"""
+    If {
+        Case(.updated(.value("Ready"))) {
+            Warn("ready")
+        }
+    }
+    """#))
+    expect(caseUpdated, contains: "unsupported state predicate '.updated'")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {

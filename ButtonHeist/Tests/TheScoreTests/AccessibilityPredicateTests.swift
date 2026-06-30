@@ -892,63 +892,22 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testEmptyAllStateRejectsAtCodableBoundary() {
         let json = Data(#"{"type":"all","states":[]}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyStateAll.decodingDescription), "\(error)")
-        }
-
-        let predicate = AccessibilityPredicate.state(.all([]))
-        XCTAssertThrowsError(try JSONEncoder().encode(predicate)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyStateAll.encodingDescription), "\(error)")
-        }
-
-        XCTAssertThrowsError(try JSONEncoder().encode(AccessibilityPredicate.State.all([]))) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyStateAll.encodingDescription), "\(error)")
+            XCTAssertTrue("\(error)".contains("all predicate requires at least one child state"), "\(error)")
         }
     }
 
     func testEmptyAllChangeScopeRejectsAtCodableBoundary() {
         let json = Data(#"{"type":"change","scopes":[{"type":"all","scopes":[]}]}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyChangeAllScope.decodingDescription), "\(error)")
-        }
-
-        let predicate = AccessibilityPredicate.change(.allScopes([]))
-        XCTAssertThrowsError(try JSONEncoder().encode(predicate)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyChangeAllScope.encodingDescription), "\(error)")
-        }
-
-        XCTAssertThrowsError(try JSONEncoder().encode(AccessibilityPredicate.Change.allScopes([]))) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.emptyChangeAllScope.encodingDescription), "\(error)")
+            XCTAssertTrue("\(error)".contains("all change scope requires at least one child scope"), "\(error)")
         }
     }
 
     func testNestedAnyChangeScopeRejectsAtCodableBoundary() {
-        let predicate = AccessibilityPredicate.change(.allScopes([.any]))
-        XCTAssertThrowsError(try JSONEncoder().encode(predicate)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.unsupportedAnyChangeScope.encodingDescription), "\(error)")
+        let json = Data(#"{"type":"change","scopes":[{"type":"change"}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
+            XCTAssertTrue("\(error)".contains("Unknown change scope type"), "\(error)")
         }
-
-        XCTAssertThrowsError(try JSONEncoder().encode(AccessibilityPredicate.Change.any)) { error in
-            XCTAssertTrue("\(error)".contains(AccessibilityPredicateContract.Violation.unsupportedAnyChangeScope.encodingDescription), "\(error)")
-        }
-    }
-
-    func testUnsupportedPredicateContractsEvaluateAsNotMet() {
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 1,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-
-        let emptyState = AccessibilityPredicate.state(.all([])).evaluate(currentElements: [])
-        XCTAssertFalse(emptyState.met)
-        XCTAssertEqual(emptyState.actual, AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription)
-
-        let emptyAll = AccessibilityPredicate.change(.allScopes([])).evaluate(currentElements: [], delta: delta)
-        XCTAssertFalse(emptyAll.met)
-        XCTAssertEqual(emptyAll.actual, AccessibilityPredicateContract.Violation.emptyChangeAllScope.evaluationDescription)
-
-        let nestedAny = AccessibilityPredicate.change(.allScopes([.any])).evaluate(currentElements: [], delta: delta)
-        XCTAssertFalse(nestedAny.met)
-        XCTAssertEqual(nestedAny.actual, AccessibilityPredicateContract.Violation.unsupportedAnyChangeScope.evaluationDescription)
     }
 
     // MARK: - Helpers

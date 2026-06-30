@@ -360,7 +360,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validatePredicate(predicateCase.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
+        validateStatePredicate(predicateCase.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
         do {
             _ = try predicateCase.predicate.resolve(in: environment)
         } catch {

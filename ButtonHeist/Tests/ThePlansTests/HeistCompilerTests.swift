@@ -328,6 +328,134 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `conditionals accept only snapshot predicate types`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let validSource = try temp.writeSwiftSource(
+            named: "SnapshotConditional.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("SnapshotConditional") {
+                If(.exists(.label("Ready"))) {
+                    Warn("ready")
+                }
+
+                If {
+                    Case(.missing(.label("Loading"))) {
+                        Warn("loaded")
+                    }
+                }
+            }
+            """
+        )
+        let invalidIfSource = try temp.writeSwiftSource(
+            named: "TransitionIf.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("TransitionIf") {
+                If(.updated(.value("Ready"))) {
+                    Warn("ready")
+                }
+            }
+            """
+        )
+        let invalidCaseSource = try temp.writeSwiftSource(
+            named: "TransitionCase.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("TransitionCase") {
+                If {
+                    Case(.appeared(.label("Ready"))) {
+                        Warn("ready")
+                    }
+                }
+            }
+            """
+        )
+
+        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
+        #expect(plan.body.count == 2)
+
+        let invalidIfDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidIfSource))
+        let invalidIfText = invalidIfDiagnostics.map(\.description).joined(separator: "\n")
+        #expect(invalidIfText.contains("type 'StatePredicateExpr' has no member 'updated'"))
+
+        let invalidCaseDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidCaseSource))
+        let invalidCaseText = invalidCaseDiagnostics.map(\.description).joined(separator: "\n")
+        #expect(invalidCaseText.contains("type 'StatePredicateExpr' has no member 'appeared'"))
+    }
+
+    @Test
+    func `predicate composition shape is enforced by Swift types`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let validSource = try temp.writeSwiftSource(
+            named: "PredicateComposition.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("PredicateComposition") {
+                WaitFor(.all(
+                    .exists(.label("Receipt")),
+                    .missing(.label("Loading"))
+                ))
+
+                WaitFor(.change(.all(
+                    .screenChanged(.exists(.label("Receipt"))),
+                    .updated(.value("3"))
+                )))
+            }
+            """
+        )
+        let emptyAllSource = try temp.writeSwiftSource(
+            named: "EmptyAll.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("EmptyAll") {
+                WaitFor(.all())
+            }
+            """
+        )
+        let rawEmptyAllSource = try temp.writeSwiftSource(
+            named: "RawEmptyAll.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("RawEmptyAll") {
+                WaitFor(.state(.all([])))
+            }
+            """
+        )
+        let nestedAnySource = try temp.writeSwiftSource(
+            named: "NestedAny.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("NestedAny") {
+                WaitFor(.changePredicate(.all(.any)))
+            }
+            """
+        )
+
+        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
+        #expect(plan.body.count == 2)
+
+        let emptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(emptyAllSource))
+        let emptyAllText = emptyAllDiagnostics.map(\.description).joined(separator: "\n")
+        #expect(emptyAllText.contains("missing argument"))
+
+        let rawEmptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(rawEmptyAllSource))
+        let rawEmptyAllText = rawEmptyAllDiagnostics.map(\.description).joined(separator: "\n")
+        #expect(rawEmptyAllText.contains("NonEmptyArray<StatePredicateExpr>"))
+
+        let nestedAnyDiagnostics = try await requireFailure(HeistCompiler().compileFile(nestedAnySource))
+        let nestedAnyText = nestedAnyDiagnostics.map(\.description).joined(separator: "\n")
+        #expect(nestedAnyText.contains("type 'ChangeScopePredicateExpr' has no member 'any'"))
+    }
+
+    @Test
     func `compileDirectory compiles multiple Swift files into one catalog`() async throws {
         let temp = try CompilerTemporaryDirectory()
         _ = try temp.writeSwiftSource(named: "Alpha.swift", namedPlan: "Alpha")

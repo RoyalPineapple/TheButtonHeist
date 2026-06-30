@@ -1,6 +1,10 @@
 import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
+    func render(predicate: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
+        try render(state: predicate, environment: environment)
+    }
+
     func render(predicate: AccessibilityPredicateExpr, environment: RenderEnvironment) throws -> String {
         switch predicate {
         case .state(let state):
@@ -91,7 +95,7 @@ extension HeistCanonicalSwiftDSLRenderer {
                 return try ".elements(\(assertions.map { try render(elementDelta: $0) }.joined(separator: ", ")))"
             }
         case .allScopes(let changes):
-            return try changes.map { try render(change: $0, environment: environment) }
+            return try changes.map { try render(changeScope: $0, environment: environment) }
                 .filter { !$0.isEmpty }
                 .joined(separator: ", ")
         }
@@ -113,7 +117,47 @@ extension HeistCanonicalSwiftDSLRenderer {
                 return try ".elements(\(assertions.map { try render(elementDelta: $0, environment: environment) }.joined(separator: ", ")))"
             }
         case .allScopes(let changes):
-            return try changes.map { try render(change: $0, environment: environment) }
+            return try changes.map { try render(changeScope: $0, environment: environment) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+        }
+    }
+
+    func render(changeScope scope: AccessibilityPredicate.ChangeScope, environment: RenderEnvironment) throws -> String {
+        switch scope {
+        case .screen(let assertions):
+            return try renderScreenChanged(assertions: assertions, environment: environment)
+        case .elements(let assertions):
+            switch assertions.count {
+            case 0:
+                return ".elements()"
+            case 1:
+                return try render(elementDelta: assertions[0])
+            default:
+                return try ".elements(\(assertions.map { try render(elementDelta: $0) }.joined(separator: ", ")))"
+            }
+        case .all(let scopes):
+            return try scopes.map { try render(changeScope: $0, environment: environment) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+        }
+    }
+
+    func render(changeScope scope: ChangeScopePredicateExpr, environment: RenderEnvironment) throws -> String {
+        switch scope {
+        case .screen(let assertions):
+            return try renderScreenChanged(assertions: assertions, environment: environment)
+        case .elements(let assertions):
+            switch assertions.count {
+            case 0:
+                return ".elements()"
+            case 1:
+                return try render(elementDelta: assertions[0], environment: environment)
+            default:
+                return try ".elements(\(assertions.map { try render(elementDelta: $0, environment: environment) }.joined(separator: ", ")))"
+            }
+        case .all(let scopes):
+            return try scopes.map { try render(changeScope: $0, environment: environment) }
                 .filter { !$0.isEmpty }
                 .joined(separator: ", ")
         }
@@ -126,7 +170,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         case 1:
             return try ".screenChanged(\(renderScreenAssertion(assertions[0], environment: environment)))"
         default:
-            return try ".screenChanged(\(renderScreenAssertion(.all(assertions), environment: environment)))"
+            let assertion = StatePredicateExpr.all(NonEmptyArray(
+                assertions[0],
+                rest: Array(assertions.dropFirst())
+            ))
+            return try ".screenChanged(\(renderScreenAssertion(assertion, environment: environment)))"
         }
     }
 
@@ -137,7 +185,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         case 1:
             return ".screenChanged(\(renderScreenAssertion(assertions[0])))"
         default:
-            return ".screenChanged(\(renderScreenAssertion(.all(assertions))))"
+            let assertion = AccessibilityPredicate.State.all(NonEmptyArray(
+                assertions[0],
+                rest: Array(assertions.dropFirst())
+            ))
+            return ".screenChanged(\(renderScreenAssertion(assertion)))"
         }
     }
 

@@ -52,5 +52,18 @@ private extension AccessibilityPredicate.Change {
     }
 }
 
+private extension AccessibilityPredicate.ChangeScope {
+    var observationScope: SemanticObservationScope {
+        switch self {
+        case .screen(let states):
+            return states.map(\.observationScope).max() ?? .visible
+        case .elements:
+            return .visible
+        case .all(let changes):
+            return changes.map(\.observationScope).max() ?? .visible
+        }
+    }
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)

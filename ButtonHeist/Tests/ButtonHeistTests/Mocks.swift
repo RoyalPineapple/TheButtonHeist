@@ -483,7 +483,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
         cases.map {
-            let predicate = (try? $0.predicate.resolve(in: .empty))
+            let predicate = (try? $0.predicate.resolve(in: .empty)).map(AccessibilityPredicate.state)
                 ?? .state(.exists(ElementPredicate(label: "unresolved")))
             return HeistCaseMatchResult(
                 predicate: predicate,

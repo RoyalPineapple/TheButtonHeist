@@ -53,7 +53,7 @@ private extension AccessibilityPredicate {
         case .state(let stateClause):
             return stateClause.evaluate(in: currentMatches).expectation(for: self)
         case .changePredicate(let change):
-            return change.evaluate(changeEvidence: changeEvidence, placement: .predicateRoot)
+            return change.evaluate(changeEvidence: changeEvidence)
         case .noChangePredicate:
             let met = changeEvidence.isNoChange
             return ExpectationResult(met: met, predicate: self, actual: met ? nil : changeEvidence.kindDescription)
@@ -116,12 +116,6 @@ package extension AccessibilityPredicate.State {
                 actual: met ? nil : requirement.failureDescription(for: target)
             )
         case .all(let states):
-            guard !states.isEmpty else {
-                return PredicateEvaluationResult(
-                    met: false,
-                    actual: AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription
-                )
-            }
             let failures = states.compactMap { state -> String? in
                 let outcome = state.evaluate(in: matches)
                 return outcome.met ? nil : (outcome.actual ?? state.description)
@@ -140,24 +134,20 @@ public extension AccessibilityPredicate.Change {
     func evaluate(
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        evaluate(changeEvidence: ChangeEvaluationEvidence(delta: delta), placement: .predicateRoot)
+        evaluate(changeEvidence: ChangeEvaluationEvidence(delta: delta))
     }
 
     func evaluate(
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     ) -> ExpectationResult {
-        evaluate(changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta), placement: .predicateRoot)
+        evaluate(changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta))
     }
 }
 
 fileprivate extension AccessibilityPredicate.Change {
     func evaluate(
-        changeEvidence: ChangeEvaluationEvidence,
-        placement: AccessibilityPredicateContract.ChangePlacement
+        changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
-        if let violation = contract.violation(in: placement) {
-            return ExpectationResult(met: false, predicate: .change(self), actual: violation.evaluationDescription)
-        }
         let result: ExpectationResult
         switch contract {
         case .any:
@@ -171,14 +161,14 @@ fileprivate extension AccessibilityPredicate.Change {
         case .elements(let assertions):
             result = Self.evaluateElements(assertions: assertions, changeEvidence: changeEvidence)
         case .all(let changes):
-            let results = changes.map { $0.evaluate(changeEvidence: changeEvidence, placement: .scope) }
+            let results = changes.map { $0.evaluate(changeEvidence: changeEvidence) }
             let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
             result = ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
         }
-        return ExpectationResult(met: result.met, predicate: .change(self), actual: result.actual)
+        return ExpectationResult(met: result.met, predicate: .changePredicate(self), actual: result.actual)
     }
 
-    private static func evaluateScreen(
+    static func evaluateScreen(
         assertions: [AccessibilityPredicate.State],
         changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
@@ -188,7 +178,9 @@ fileprivate extension AccessibilityPredicate.Change {
         guard !assertions.isEmpty else {
             return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.screenChanged.rawValue)
         }
-        let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
+        let stateClause: AccessibilityPredicate.State = assertions.count == 1
+            ? assertions[0]
+            : .all(NonEmptyArray(assertions[0], rest: Array(assertions.dropFirst())))
         let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
         return PredicateEvaluationResult(
             met: outcome.met,
@@ -196,7 +188,7 @@ fileprivate extension AccessibilityPredicate.Change {
         ).expectation(for: nil)
     }
 
-    private static func evaluateElements(
+    static func evaluateElements(
         assertions: [ElementDeltaPredicate],
         changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
@@ -269,6 +261,23 @@ fileprivate extension AccessibilityPredicate.Change {
         let properties = changes.map { "\($0.property.rawValue): \($0.displayTransition)" }
         let name = edit.after.label ?? edit.before.label ?? edit.after.description
         return "\(name): \(properties.joined(separator: ", "))"
+    }
+}
+
+fileprivate extension AccessibilityPredicate.ChangeScope {
+    func evaluate(
+        changeEvidence: ChangeEvaluationEvidence
+    ) -> ExpectationResult {
+        switch contract {
+        case .screen(let assertions):
+            return AccessibilityPredicate.Change.evaluateScreen(assertions: assertions, changeEvidence: changeEvidence)
+        case .elements(let assertions):
+            return AccessibilityPredicate.Change.evaluateElements(assertions: assertions, changeEvidence: changeEvidence)
+        case .all(let changes):
+            let results = changes.map { $0.evaluate(changeEvidence: changeEvidence) }
+            let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
+            return ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
+        }
     }
 }
 

@@ -614,9 +614,10 @@ func composeExpectationPredicates(
     }
 
     if let existingState = stateExpression(existing),
-       let nextState = stateExpression(next) {
+       let nextState = stateExpression(next),
+       let state = allState([existingState, nextState]) {
         return ExpectationPredicateComposition(
-            predicate: .state(allState([existingState, nextState])),
+            predicate: .state(state),
             diagnostics: []
         )
     }
@@ -636,13 +637,15 @@ private func composeScreenChangeAndState(
     _ rhs: AccessibilityPredicateExpr
 ) -> AccessibilityPredicateExpr? {
     if let screenChange = screenChangeExpectation(lhs),
-       let state = stateExpression(rhs) {
-        return .change(.screen(allState([screenChange.state, state].compactMap { $0 })))
+       let state = stateExpression(rhs),
+       let assertion = allState([screenChange.state, state].compactMap { $0 }) {
+        return .change(.screen(assertion))
     }
 
     if let state = stateExpression(lhs),
-       let screenChange = screenChangeExpectation(rhs) {
-        return .change(.screen(allState([screenChange.state, state].compactMap { $0 })))
+       let screenChange = screenChangeExpectation(rhs),
+       let assertion = allState([screenChange.state, state].compactMap { $0 }) {
+        return .change(.screen(assertion))
     }
 
     return nil
@@ -674,12 +677,12 @@ private func stateExpression(_ predicate: AccessibilityPredicateExpr) -> StatePr
     }
 }
 
-private func allState(_ states: [StatePredicateExpr]) -> StatePredicateExpr {
+private func allState(_ states: [StatePredicateExpr]) -> StatePredicateExpr? {
     let flattened = states.flatMap { state -> [StatePredicateExpr] in
-        if case .all(let children) = state { return children }
+        if case .all(let children) = state { return children.elements }
         return [state]
     }
-    guard !flattened.isEmpty else { return .all([]) }
+    guard !flattened.isEmpty else { return nil }
     guard flattened.count > 1 else { return flattened[0] }
-    return .all(flattened)
+    return .all(NonEmptyArray(flattened[0], rest: Array(flattened.dropFirst())))
 }

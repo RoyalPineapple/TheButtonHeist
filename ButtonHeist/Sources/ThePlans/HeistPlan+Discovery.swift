@@ -779,6 +779,23 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
+    mutating func appendPredicateTargets(_ change: AccessibilityPredicate.ChangeScope) {
+        switch change {
+        case .screen(let states):
+            for state in states {
+                appendPredicateTargets(state)
+            }
+        case .elements(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        case .all(let changes):
+            for change in changes {
+                appendPredicateTargets(change)
+            }
+        }
+    }
+
     mutating func appendPredicateTargets(_ change: ChangePredicateExpr) {
         switch change {
         case .any:
@@ -792,6 +809,23 @@ private struct HeistSemanticSurfaceBuilder {
                 appendPredicateTargets(assertion)
             }
         case .allScopes(let changes):
+            for change in changes {
+                appendPredicateTargets(change)
+            }
+        }
+    }
+
+    mutating func appendPredicateTargets(_ change: ChangeScopePredicateExpr) {
+        switch change {
+        case .screen(let states):
+            for state in states {
+                appendPredicateTargets(state)
+            }
+        case .elements(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        case .all(let changes):
             for change in changes {
                 appendPredicateTargets(change)
             }

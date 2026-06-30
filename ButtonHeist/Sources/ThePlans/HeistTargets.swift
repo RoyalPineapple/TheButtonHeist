@@ -198,14 +198,14 @@ public extension ElementTargetExpr {
 }
 
 public extension AccessibilityPredicate {
-    static func change(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate {
-        switch changes.count {
+    static func change(_ scopes: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate {
+        switch scopes.count {
         case 0:
             return .changePredicate(.any)
         case 1:
-            return .changePredicate(changes[0])
+            return .changePredicate(AccessibilityPredicate.Change(scopes[0]))
         default:
-            return .changePredicate(.allScopes(changes))
+            return .changePredicate(.allScopes(NonEmptyArray(scopes[0], rest: Array(scopes.dropFirst()))))
         }
     }
 
@@ -232,7 +232,13 @@ public extension AccessibilityPredicate {
     }
 
     static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate {
-        .state(.all([first] + rest))
+        .state(.all(NonEmptyArray(first, rest: rest)))
+    }
+}
+
+public extension AccessibilityPredicate.State {
+    static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.State {
+        .all(NonEmptyArray(first, rest: rest))
     }
 }
 
@@ -255,14 +261,14 @@ public extension AccessibilityPredicateExpr {
         .state(.missingTarget(target))
     }
 
-    static func change(_ changes: ChangePredicateExpr...) -> AccessibilityPredicateExpr {
-        switch changes.count {
+    static func change(_ scopes: ChangeScopePredicateExpr...) -> AccessibilityPredicateExpr {
+        switch scopes.count {
         case 0:
             return .changePredicate(.any)
         case 1:
-            return .changePredicate(changes[0])
+            return .changePredicate(scopes[0].change)
         default:
-            return .changePredicate(.allScopes(changes))
+            return .changePredicate(.allScopes(NonEmptyArray(scopes[0], rest: Array(scopes.dropFirst()))))
         }
     }
 
@@ -271,7 +277,7 @@ public extension AccessibilityPredicateExpr {
     }
 
     static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> AccessibilityPredicateExpr {
-        .state(.all([first] + rest))
+        .state(.all(NonEmptyArray(first, rest: rest)))
     }
 
     @_disfavoredOverload
@@ -382,7 +388,7 @@ public extension StatePredicateExpr {
     }
 
     static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> StatePredicateExpr {
-        .all([first] + rest)
+        .all(NonEmptyArray(first, rest: rest))
     }
 
     @_disfavoredOverload
@@ -502,8 +508,50 @@ public extension ChangePredicateExpr {
         .elementsScope([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
     }
 
-    static func all(_ changes: ChangePredicateExpr...) -> ChangePredicateExpr {
-        .allScopes(changes)
+    static func all(_ first: ChangeScopePredicateExpr, _ rest: ChangeScopePredicateExpr...) -> ChangePredicateExpr {
+        .allScopes(NonEmptyArray(first, rest: rest))
+    }
+}
+
+public extension ChangeScopePredicateExpr {
+    static func screen(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangeScopePredicateExpr {
+        .screen([first] + rest)
+    }
+
+    static var screenChanged: ChangeScopePredicateExpr {
+        .screen([])
+    }
+
+    static func screenChanged(_ assertions: [StatePredicateExpr]) -> ChangeScopePredicateExpr {
+        .screen(assertions)
+    }
+
+    static func screenChanged(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangeScopePredicateExpr {
+        .screen([first] + rest)
+    }
+
+    static func elements(_ first: ElementDeltaPredicateExpr, _ rest: ElementDeltaPredicateExpr...) -> ChangeScopePredicateExpr {
+        .elements([first] + rest)
+    }
+
+    static func appeared(_ predicate: ElementPredicateTemplate) -> ChangeScopePredicateExpr {
+        .elements([.appearedElement(predicate)])
+    }
+
+    static func disappeared(_ predicate: ElementPredicateTemplate) -> ChangeScopePredicateExpr {
+        .elements([.disappearedElement(predicate)])
+    }
+
+    static func updated(_ change: AnyPropertyChangeExpr) -> ChangeScopePredicateExpr {
+        .elements([.updatedElement(ElementUpdatePredicateExpr(change: change))])
+    }
+
+    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ChangeScopePredicateExpr {
+        .elements([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
+    }
+
+    static func all(_ first: ChangeScopePredicateExpr, _ rest: ChangeScopePredicateExpr...) -> ChangeScopePredicateExpr {
+        .all(NonEmptyArray(first, rest: rest))
     }
 }
 
@@ -552,8 +600,50 @@ public extension AccessibilityPredicate.Change {
         .elementsScope([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
     }
 
-    static func all(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate.Change {
-        .allScopes(changes)
+    static func all(_ first: AccessibilityPredicate.ChangeScope, _ rest: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate.Change {
+        .allScopes(NonEmptyArray(first, rest: rest))
+    }
+}
+
+public extension AccessibilityPredicate.ChangeScope {
+    static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.ChangeScope {
+        .screen([first] + rest)
+    }
+
+    static var screenChanged: AccessibilityPredicate.ChangeScope {
+        .screen([])
+    }
+
+    static func screenChanged(_ assertions: [AccessibilityPredicate.State]) -> AccessibilityPredicate.ChangeScope {
+        .screen(assertions)
+    }
+
+    static func screenChanged(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.ChangeScope {
+        .screen([first] + rest)
+    }
+
+    static func elements(_ first: ElementDeltaPredicate, _ rest: ElementDeltaPredicate...) -> AccessibilityPredicate.ChangeScope {
+        .elements([first] + rest)
+    }
+
+    static func appeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.ChangeScope {
+        .elements([.appearedElement(predicate)])
+    }
+
+    static func disappeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.ChangeScope {
+        .elements([.disappearedElement(predicate)])
+    }
+
+    static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.ChangeScope {
+        .elements([.updatedElement(ElementUpdatePredicate(change: change))])
+    }
+
+    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> AccessibilityPredicate.ChangeScope {
+        .elements([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
+    }
+
+    static func all(_ first: AccessibilityPredicate.ChangeScope, _ rest: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate.ChangeScope {
+        .all(NonEmptyArray(first, rest: rest))
     }
 }
 
