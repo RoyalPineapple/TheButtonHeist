@@ -119,7 +119,7 @@ extension TheFence {
         }
         try validateRequestKeys(command: command, arguments: arguments)
         try command.descriptor.validatePublicRequestArguments(arguments)
-        let requestId = arguments.string("requestId") ?? UUID().uuidString
+        let requestId = arguments.string(.requestId) ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch = try command.descriptor.requestDecoder(self, arguments, requestId, expectationPayload)
 
@@ -133,7 +133,7 @@ extension TheFence {
     }
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
-        let metadataKeys = Set(["requestId"])
+        let metadataKeys = Set([FenceParameterKey.requestId.rawValue])
         let parameterKeys = command.descriptor.topLevelParameterKeys
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
@@ -242,7 +242,7 @@ extension FenceCommandDescriptor {
                 minLength: nil,
                 minItems: nil,
                 maxItems: nil,
-                jsonSchemaProperty: .object([:]),
+                jsonSchema: .object(),
                 objectProperties: parameter.arrayItemProperties,
                 objectAdditionalProperties: parameter.arrayItemAdditionalProperties,
                 arrayItemType: nil,

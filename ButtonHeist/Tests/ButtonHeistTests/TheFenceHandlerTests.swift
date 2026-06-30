@@ -3001,7 +3001,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let parameter = try XCTUnwrap(TheFence.Command.setPasteboard.descriptor.parameters.first { $0.key == "text" })
 
         XCTAssertEqual(parameter.minLength, 1)
-        guard case .object(let schema) = parameter.jsonSchemaProperty else {
+        guard case .object(let schema) = parameter.jsonSchema.heistValue else {
             return XCTFail("Expected text parameter schema")
         }
         XCTAssertEqual(schema["minLength"], .int(1))

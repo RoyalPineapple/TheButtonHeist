@@ -26,7 +26,7 @@ final class ElementActionRequestContractTests: XCTestCase {
                 XCTAssertEqual(spec.type, .stringArray)
             case .nonNegativeInteger:
                 XCTAssertEqual(spec.type, .integer)
-                XCTAssertEqual(jsonSchemaProperty("minimum", in: spec), .int(0))
+                XCTAssertEqual(projectedJSONSchemaProperty("minimum", in: spec), .int(0))
             }
         }
     }
@@ -110,8 +110,8 @@ private func targetValue(identifier: String) -> HeistValue {
     .object(["identifier": .string(identifier)])
 }
 
-private func jsonSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
-    guard case .object(let schema) = spec.jsonSchemaProperty else { return nil }
+private func projectedJSONSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
+    guard case .object(let schema) = spec.jsonSchema.heistValue else { return nil }
     return schema[key]
 }
 
@@ -120,7 +120,7 @@ private func assertStringMatchObjectSchema(
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard case .object(let schema) = spec.jsonSchemaProperty
+    guard case .object(let schema) = spec.jsonSchema.heistValue
     else {
         return XCTFail("Expected StringMatch object schema", file: file, line: line)
     }
@@ -149,7 +149,7 @@ private func assertPredicateChecksSchema(
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard case .object(let schema) = spec.jsonSchemaProperty else {
+    guard case .object(let schema) = spec.jsonSchema.heistValue else {
         return XCTFail("Expected predicate checks array schema", file: file, line: line)
     }
     XCTAssertEqual(schema["type"], .string("array"), file: file, line: line)

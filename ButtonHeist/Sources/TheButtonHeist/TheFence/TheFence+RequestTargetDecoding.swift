@@ -7,7 +7,7 @@ extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
     func decodedElementTarget() throws -> ElementTarget? {
-        guard let target = try schemaDictionary("target") else { return nil }
+        guard let target = try schemaDictionary(.target) else { return nil }
         return try target.decodeElementTargetPayload()
     }
 
@@ -21,11 +21,11 @@ extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
-        if let containerName = try optionalContainerName("container") {
+        if let containerName = try optionalContainerName(.container) {
             if try decodedElementTarget() != nil {
                 throw SchemaValidationError(
-                    field: field("container"),
-                    observed: observedDescription(for: "container") ?? "string",
+                    field: field(.container),
+                    observed: observedDescription(for: .container) ?? "string",
                     expected: "not present when an element target is provided"
                 )
             }
@@ -49,6 +49,10 @@ extension TheFence.CommandArgumentEnvelope {
         return containerName
     }
 
+    func optionalContainerName(_ key: FenceParameterKey) throws -> ContainerName? {
+        try optionalContainerName(key.rawValue)
+    }
+
     func nonEmptyString(_ key: String) throws -> String {
         let value = try requiredSchemaString(key)
         if value.isEmpty {
@@ -57,12 +61,20 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
+    func nonEmptyString(_ key: FenceParameterKey) throws -> String {
+        try nonEmptyString(key.rawValue)
+    }
+
     func optionalNonEmptyString(_ key: String) throws -> String? {
         guard let value = try schemaString(key) else { return nil }
         if value.isEmpty {
             throw SchemaValidationError(field: field(key), observed: "string \"\"", expected: "non-empty string")
         }
         return value
+    }
+
+    func optionalNonEmptyString(_ key: FenceParameterKey) throws -> String? {
+        try optionalNonEmptyString(key.rawValue)
     }
 
     func decodeElementTargetPayload() throws -> ElementTarget {

@@ -86,6 +86,32 @@ import Testing
         )
     }
 
+    @Test func `request payload argument accessors use typed parameter keys`() throws {
+        let root = repositoryRoot()
+        let fenceFiles = try swiftFiles(
+            in: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence", isDirectory: true)
+        ).filter {
+            $0.lastPathComponent.hasPrefix("TheFence+RequestPayload")
+                || $0.lastPathComponent == "TheFence+RequestTargetDecoding.swift"
+        }
+        let forbiddenPattern =
+            #"\b(schemaInteger|requiredSchemaInteger|schemaNonNegativeInteger|schemaString|requiredSchemaString|"#
+            + #"schemaStringMatch|schemaStringMatches|schemaBoolean|schemaNumber|requiredSchemaNumber|"#
+            + #"schemaStringArray|schemaObjectArray|requiredSchemaObjectArray|schemaDictionary|"#
+            + #"schemaEnum|requiredSchemaEnum|nonEmptyString|optionalNonEmptyString|optionalContainerName|"#
+            + #"field|observedDescription)\s*\(\s*\"[A-Za-z_][A-Za-z0-9_]*\""#
+        let unexpected = try sourceMatches(in: fenceFiles, root: root, pattern: forbiddenPattern)
+
+        #expect(
+            unexpected.isEmpty,
+            """
+            Request payload command-argument access should use FenceParameterKey \
+            overloads instead of raw string keys:
+            \(unexpected.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
     @Test func `tooling catalog and schema types are not normal public API`() throws {
         let sourcePaths = [
             "ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift",
@@ -108,6 +134,27 @@ import Testing
             \(violations.joined(separator: "\n"))
             """
         )
+    }
+
+    @Test func `fence parameter specs store typed schema until projection`() throws {
+        let source = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift"
+        )
+
+        #expect(source.contains("let jsonSchema: FenceParameterJSONSchema"))
+        #expect(source.contains("indirect enum FenceParameterJSONSchema: Sendable, Equatable"))
+        #expect(source.contains("var heistValue: HeistValue"))
+
+        for forbidden in [
+            "jsonSchemaProperty: HeistValue",
+            "var schema: [String: HeistValue]",
+            "let schema: [String: HeistValue]",
+        ] {
+            #expect(
+                !source.contains(forbidden),
+                "Fence parameter specs should keep typed schema nodes until projection, not \(forbidden)"
+            )
+        }
     }
 
     @Test func `doc reference and projection implementation controls stay out of public SPI`() throws {
