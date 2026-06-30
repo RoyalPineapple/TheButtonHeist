@@ -10,9 +10,9 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let predicate = try ExpectationPayload.parseRequiredPredicate(input.argumentValues["predicate"])
-        return runtimeActionDispatch(.wait(WaitTarget(
+        return waitDispatch(WaitStep(
             predicate: predicate,
-            timeout: try input.schemaNumber("timeout")
-        )))
+            timeout: min(try input.schemaNumber("timeout") ?? defaultWaitTimeout, defaultWaitTimeout)
+        ))
     }
 }

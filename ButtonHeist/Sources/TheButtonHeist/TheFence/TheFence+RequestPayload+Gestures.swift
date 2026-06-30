@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -12,7 +13,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.oneFingerTap.command,
-            .oneFingerTap(try fence.decodeTapTarget(arguments))
+            .mechanicalTap(try fence.decodeTapTarget(arguments))
         )
     }
 
@@ -24,7 +25,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.longPress.command,
-            .longPress(try fence.decodeLongPressTarget(arguments))
+            .mechanicalLongPress(try fence.decodeLongPressTarget(arguments))
         )
     }
 
@@ -36,7 +37,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.swipe.command,
-            .swipe(try fence.decodeSwipeTarget(arguments))
+            .mechanicalSwipe(try fence.decodeSwipeTarget(arguments))
         )
     }
 
@@ -48,7 +49,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.drag.command,
-            .drag(try fence.decodeDragTarget(arguments))
+            .mechanicalDrag(try fence.decodeDragTarget(arguments))
         )
     }
 }

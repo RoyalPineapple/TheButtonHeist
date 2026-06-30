@@ -9,13 +9,13 @@ extension TheFence {
         let durationMs: Int
     }
 
-    func executableRuntimeActions(for request: ParsedRequest) throws -> NonEmptyRuntimeActionMessages {
-        guard let messages = request.runtimeActionMessages else {
+    func executableRequest(for request: ParsedRequest) throws -> ExecutableRequest {
+        guard let executable = request.executableRequest else {
             throw FenceError.invalidRequest(
                 "command \"\(request.command.rawValue)\" is not an executable action command"
             )
         }
-        return messages
+        return executable
     }
 
     /// Execute one user intent.

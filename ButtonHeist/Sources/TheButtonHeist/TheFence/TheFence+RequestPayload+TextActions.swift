@@ -20,7 +20,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, .resignFirstResponder)
+        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, .dismissKeyboard)
     }
 
     static func decodeTypeTextRequest(
@@ -34,13 +34,13 @@ extension TheFence {
         if text.isEmpty, !replacingExisting {
             throw SchemaValidationError(field: input.field("text"), observed: "string \"\"", expected: "non-empty string")
         }
-        return try appInteractionDispatch(
+        return appInteractionDispatch(
             SemanticActionCommand.typeText.command,
-            .typeText(TypeTextTarget(
-                text: text,
-                elementTarget: input.decodedElementTarget(),
+            .typeText(
+                text: .literal(text),
+                target: try input.decodedElementTarget().map(ElementTargetExpr.target),
                 replacingExisting: replacingExisting
-            ))
+            )
         )
     }
 
@@ -50,10 +50,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try appInteractionDispatch(
+        appInteractionDispatch(
             SemanticActionCommand.editAction.command,
             .editAction(EditActionTarget(
-                action: input.requiredSchemaEnum("action", as: EditAction.self)
+                action: try input.requiredSchemaEnum("action", as: EditAction.self)
             ))
         )
     }

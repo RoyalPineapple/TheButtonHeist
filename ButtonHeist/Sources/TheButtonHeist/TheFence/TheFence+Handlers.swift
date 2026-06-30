@@ -29,10 +29,15 @@ extension TheFence {
     // MARK: - Handler: Executable Commands
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
-        let messages = try executableRuntimeActions(for: request)
-        guard messages.count == 1 else {
+        let executable = try executableRequest(for: request)
+        guard case .actions(let actions) = executable else {
             return .failure(FenceError.invalidRequest(
-                "command \"\(request.command.rawValue)\" direct dispatch requires exactly one runtime action"
+                "command \"\(request.command.rawValue)\" direct dispatch requires an action command"
+            ))
+        }
+        guard actions.count == 1 else {
+            return .failure(FenceError.invalidRequest(
+                "command \"\(request.command.rawValue)\" direct dispatch requires exactly one action command"
             ))
         }
         guard request.expectationPayload.expectation == nil else {
@@ -40,10 +45,10 @@ extension TheFence {
                 "command \"\(request.command.rawValue)\" direct dispatch does not support expect"
             ))
         }
-        let command = try HeistActionCommand(runtimeActionMessage: messages.first)
+        let command = actions.first
         let result = try await sendAndAwaitAction(
             .runtimeAction(command),
-            timeout: directActionTimeout(for: messages.first)
+            timeout: directActionTimeout(for: command)
         )
         return .action(command: request.command, result: result)
     }
@@ -52,8 +57,8 @@ extension TheFence {
         .failure(MissingElementTarget(command: command))
     }
 
-    private func directActionTimeout(for message: RuntimeActionMessage) -> TimeInterval {
-        switch message {
+    private func directActionTimeout(for command: HeistActionCommand) -> TimeInterval {
+        switch command {
         case .typeText:
             return Timeouts.longActionSeconds
         default:

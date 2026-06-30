@@ -18,11 +18,11 @@ extension TheFence {
 
     typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
-    struct NonEmptyRuntimeActionMessages {
-        let first: RuntimeActionMessage
-        private let additional: [RuntimeActionMessage]
+    struct NonEmptyHeistActionCommands {
+        let first: HeistActionCommand
+        private let additional: [HeistActionCommand]
 
-        init(_ first: RuntimeActionMessage, additional: [RuntimeActionMessage] = []) {
+        init(_ first: HeistActionCommand, additional: [HeistActionCommand] = []) {
             self.first = first
             self.additional = additional
         }
@@ -31,27 +31,32 @@ extension TheFence {
             1 + additional.count
         }
 
-        var values: [RuntimeActionMessage] {
+        var values: [HeistActionCommand] {
             [first] + additional
         }
     }
 
+    enum ExecutableRequest {
+        case actions(NonEmptyHeistActionCommands)
+        case wait(WaitStep)
+    }
+
     enum DecodedRequestDispatch {
-        case runtimeActions(NonEmptyRuntimeActionMessages)
+        case executable(ExecutableRequest)
         case handler(ParsedRequestHandler)
 
         init(handler: @escaping ParsedRequestHandler) {
             self = .handler(handler)
         }
 
-        var runtimeActionMessages: NonEmptyRuntimeActionMessages? {
-            guard case .runtimeActions(let messages) = self else { return nil }
-            return messages
+        var executableRequest: ExecutableRequest? {
+            guard case .executable(let request) = self else { return nil }
+            return request
         }
 
         var handler: ParsedRequestHandler {
             switch self {
-            case .runtimeActions:
+            case .executable:
                 return { fence, request in
                     try await fence.handleClientActionRequest(request)
                 }
@@ -82,8 +87,8 @@ extension TheFence {
             self.expectationPayload = expectationPayload
         }
 
-        var runtimeActionMessages: NonEmptyRuntimeActionMessages? {
-            dispatch.runtimeActionMessages
+        var executableRequest: ExecutableRequest? {
+            dispatch.executableRequest
         }
 
         var handler: ParsedRequestHandler {
@@ -91,20 +96,17 @@ extension TheFence {
         }
     }
 
-    static func runtimeActionDispatch(
-        _ firstMessage: RuntimeActionMessage,
-        _ additionalMessages: RuntimeActionMessage...
-    ) -> DecodedRequestDispatch {
-        .runtimeActions(NonEmptyRuntimeActionMessages(firstMessage, additional: additionalMessages))
+    static func waitDispatch(_ step: WaitStep) -> DecodedRequestDispatch {
+        .executable(.wait(step))
     }
 
     static func appInteractionDispatch(
         _ command: Command,
-        _ firstMessage: RuntimeActionMessage,
-        _ additionalMessages: RuntimeActionMessage...
+        _ firstCommand: HeistActionCommand,
+        _ additionalCommands: HeistActionCommand...
     ) -> DecodedRequestDispatch {
         precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
-        return .runtimeActions(NonEmptyRuntimeActionMessages(firstMessage, additional: additionalMessages))
+        return .executable(.actions(NonEmptyHeistActionCommands(firstCommand, additional: additionalCommands)))
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

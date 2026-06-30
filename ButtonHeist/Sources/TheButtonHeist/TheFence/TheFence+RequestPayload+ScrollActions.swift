@@ -11,10 +11,10 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         let direction = try input.schemaEnum("direction", as: ScrollDirection.self)
             ?? Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self)
-        return try appInteractionDispatch(
+        return appInteractionDispatch(
             ViewportDebugCommand.scroll.command,
-            .scroll(ScrollTarget(
-                selection: input.scrollContainerSelection(),
+            .viewportScroll(ScrollTarget(
+                selection: try input.scrollContainerSelection(),
                 direction: direction
             ))
         )
@@ -26,11 +26,9 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try appInteractionDispatch(
+        appInteractionDispatch(
             ViewportDebugCommand.scrollToVisible.command,
-            .scrollToVisible(ScrollToVisibleTarget(
-                elementTarget: input.requiredElementTarget(command: .scrollToVisible)
-            ))
+            .viewportScrollToVisible(.target(try input.requiredElementTarget(command: .scrollToVisible)))
         )
     }
 
@@ -42,10 +40,10 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         let edge = try input.schemaEnum("edge", as: ScrollEdge.self)
             ?? Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self)
-        return try appInteractionDispatch(
+        return appInteractionDispatch(
             ViewportDebugCommand.scrollToEdge.command,
-            .scrollToEdge(ScrollToEdgeTarget(
-                selection: input.scrollContainerSelection(),
+            .viewportScrollToEdge(ScrollToEdgeTarget(
+                selection: try input.scrollContainerSelection(),
                 edge: edge
             ))
         )
