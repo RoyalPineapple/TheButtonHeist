@@ -407,7 +407,8 @@ final class TheTripwireTests: XCTestCase {
     func testGetTraversableWindowsReturnsActiveWindows() {
         let windows = tripwire.getTraversableWindows()
         XCTAssertFalse(windows.isEmpty, "Test host should have at least one traversable window")
-        for (window, _) in windows {
+        for entry in windows {
+            let window = entry.window
             XCTAssertFalse(window.isHidden)
             XCTAssertNotEqual(window.bounds.size, .zero)
         }
@@ -560,6 +561,10 @@ final class TheTripwireTests: XCTestCase {
         return window
     }
 
+    private func windowRoot(_ window: UIWindow) -> TheTripwire.WindowTraversalRoot {
+        TheTripwire.WindowTraversalRoot(window: window, rootView: window)
+    }
+
     func testFilterToAccessibleWindowsEmptyInputReturnsEmpty() {
         let result = TheTripwire.filterToAccessibleWindows([])
         XCTAssertTrue(result.isEmpty)
@@ -567,7 +572,7 @@ final class TheTripwireTests: XCTestCase {
 
     func testFilterToAccessibleWindowsReturnsSingleAppWindowWhenNoOverlaysExist() {
         let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
-        let input = [(window: appWindow, rootView: appWindow as UIView)]
+        let input = [windowRoot(appWindow)]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
@@ -579,8 +584,8 @@ final class TheTripwireTests: XCTestCase {
         let alertLevelWindow = makeWindow(level: .alert, rootVC: UIViewController())
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
-            (window: alertLevelWindow, rootView: alertLevelWindow as UIView),
-            (window: base, rootView: base as UIView),
+            windowRoot(alertLevelWindow),
+            windowRoot(base),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -594,8 +599,8 @@ final class TheTripwireTests: XCTestCase {
         let overlay = makeWindow(level: .alert, rootVC: nil)
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
-            (window: overlay, rootView: overlay as UIView),
-            (window: base, rootView: base as UIView),
+            windowRoot(overlay),
+            windowRoot(base),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -614,7 +619,7 @@ final class TheTripwireTests: XCTestCase {
 
         let window = makeWindow(level: .normal, rootVC: root)
 
-        let input = [(window: window, rootView: window as UIView)]
+        let input = [windowRoot(window)]
         let result = TheTripwire.filterToAccessibleWindows(input)
 
         XCTAssertEqual(result.count, 1)
@@ -626,8 +631,8 @@ final class TheTripwireTests: XCTestCase {
         let a = makeWindow(level: .normal, rootVC: UIViewController())
         let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
         let input = [
-            (window: a, rootView: a as UIView),
-            (window: b, rootView: b as UIView),
+            windowRoot(a),
+            windowRoot(b),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -642,10 +647,10 @@ final class TheTripwireTests: XCTestCase {
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
-            (window: overlayA, rootView: overlayA as UIView),
-            (window: overlayB, rootView: overlayB as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
-            (window: lower, rootView: lower as UIView),
+            windowRoot(overlayA),
+            windowRoot(overlayB),
+            windowRoot(appWindow),
+            windowRoot(lower),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -663,9 +668,9 @@ final class TheTripwireTests: XCTestCase {
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
-            (window: overlay, rootView: overlay as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
-            (window: lower, rootView: lower as UIView),
+            windowRoot(overlay),
+            windowRoot(appWindow),
+            windowRoot(lower),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -686,8 +691,8 @@ final class TheTripwireTests: XCTestCase {
         let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
 
         let input = [
-            (window: cardReader as UIWindow, rootView: cardReader as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(cardReader),
+            windowRoot(appWindow),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -705,10 +710,10 @@ final class TheTripwireTests: XCTestCase {
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: overlay, rootView: overlay as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
-            (window: lower, rootView: lower as UIView),
+            windowRoot(keyboard),
+            windowRoot(overlay),
+            windowRoot(appWindow),
+            windowRoot(lower),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -732,8 +737,8 @@ final class TheTripwireTests: XCTestCase {
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
 
         let input = [
-            (window: overlay, rootView: overlay as UIView),
-            (window: baseWindow, rootView: baseWindow as UIView),
+            windowRoot(overlay),
+            windowRoot(baseWindow),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
@@ -754,8 +759,8 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(keyboard),
+            windowRoot(appWindow),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -775,9 +780,9 @@ final class TheTripwireTests: XCTestCase {
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: overlay, rootView: overlay as UIView),
-            (window: base, rootView: base as UIView),
+            windowRoot(keyboard),
+            windowRoot(overlay),
+            windowRoot(base),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -802,8 +807,8 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let appWindow = makeWindow(level: .normal, rootVC: root)
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(keyboard),
+            windowRoot(appWindow),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -823,9 +828,9 @@ final class TheTripwireTests: XCTestCase {
         let a = makeWindow(level: .normal, rootVC: UIViewController())
         let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: a, rootView: a as UIView),
-            (window: b, rootView: b as UIView),
+            windowRoot(keyboard),
+            windowRoot(a),
+            windowRoot(b),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -843,8 +848,8 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let textEffects = makeWindow(level: .alert + 1, rootVC: UIViewController())
         let input = [
-            (window: textEffects, rootView: textEffects as UIView),
-            (window: keyboard, rootView: keyboard as UIView),
+            windowRoot(textEffects),
+            windowRoot(keyboard),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
@@ -866,7 +871,7 @@ final class TheTripwireTests: XCTestCase {
         let window = makeWindow(level: .normal, rootVC: navigation)
 
         let result = TheTripwire.topmostViewController(
-            in: [(window: window, rootView: window as UIView)]
+            in: [windowRoot(window)]
         )
 
         XCTAssertTrue(result === top)
@@ -881,7 +886,7 @@ final class TheTripwireTests: XCTestCase {
         let window = makeWindow(level: .normal, rootVC: tabs)
 
         let result = TheTripwire.topmostViewController(
-            in: [(window: window, rootView: window as UIView)]
+            in: [windowRoot(window)]
         )
 
         XCTAssertTrue(result === selected)
@@ -897,7 +902,7 @@ final class TheTripwireTests: XCTestCase {
         let window = makeWindow(level: .normal, rootVC: parent)
 
         let result = TheTripwire.topmostViewController(
-            in: [(window: window, rootView: window as UIView)]
+            in: [windowRoot(window)]
         )
 
         XCTAssertTrue(result === parent)
@@ -914,8 +919,8 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: keyboardVC)
         let appWindow = makeWindow(level: .normal, rootVC: appVC)
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(keyboard),
+            windowRoot(appWindow),
         ]
 
         let result = TheTripwire.topmostViewController(
@@ -938,8 +943,8 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let appWindow = makeWindow(level: .normal, rootVC: root)
         let input = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(keyboard),
+            windowRoot(appWindow),
         ]
 
         let result = TheTripwire.topmostViewController(
@@ -954,7 +959,7 @@ final class TheTripwireTests: XCTestCase {
     func testTopmostViewControllerReturnsNilWhenOnlyPassthroughExists() {
         // No app windows at all — return nil rather than picking the keyboard.
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
-        let input = [(window: keyboard, rootView: keyboard as UIView)]
+        let input = [windowRoot(keyboard)]
 
         let result = TheTripwire.topmostViewController(
             in: input,
@@ -973,13 +978,13 @@ final class TheTripwireTests: XCTestCase {
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let isKeyboard: (UIWindow) -> Bool = { $0 === keyboard }
 
-        let appOnly = [(window: appWindow, rootView: appWindow as UIView)]
+        let appOnly = [windowRoot(appWindow)]
         let withKeyboard = [
-            (window: keyboard, rootView: keyboard as UIView),
-            (window: appWindow, rootView: appWindow as UIView),
+            windowRoot(keyboard),
+            windowRoot(appWindow),
         ]
 
-        let phases: [(label: String, windows: [(window: UIWindow, rootView: UIView)])] = [
+        let phases: [(label: String, windows: [TheTripwire.WindowTraversalRoot])] = [
             ("before keyboard", appOnly),
             ("keyboard up", withKeyboard),
             ("keyboard dismissed", appOnly),

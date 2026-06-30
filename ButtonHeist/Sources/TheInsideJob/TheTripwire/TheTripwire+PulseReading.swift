@@ -72,7 +72,8 @@ extension TheTripwire {
         var scan = LayerScan()
         let windows = getTraversableWindows()
         scan.windowCount = windows.count
-        for (window, _) in windows {
+        for entry in windows {
+            let window = entry.window
             var stack: [CALayer] = [window.layer]
             while let layer = stack.popLast() {
                 let presentationLayer = layer.presentation() ?? layer

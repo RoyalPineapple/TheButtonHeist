@@ -11,6 +11,127 @@ extension TheBrains {
         case wait(WaitStep, scope: HeistExecutionScope)
     }
 
+    private enum ActionCommandResolution {
+        case resolved(RuntimeActionMessage)
+        case failed(ActionCommandResolutionFailure)
+    }
+
+    private struct ActionCommandResolutionFailure {
+        let detail: HeistFailureDetail
+
+        init(command: HeistActionCommand, error: Error) {
+            detail = HeistFailureDetail(
+                category: .targetResolution,
+                contract: "action command resolves before dispatch",
+                observed: "could not resolve heist action command: \(error)",
+                expected: command.reportTarget.map(String.init(describing:))
+            )
+        }
+    }
+
+    private enum HeistWaitResolution {
+        case resolved(ResolvedWaitStep)
+        case failed(HeistWaitResolutionFailure)
+    }
+
+    private struct HeistWaitResolutionFailure {
+        let observed: String
+        let detail: HeistFailureDetail
+
+        init(wait: WaitStep, purpose: HeistWaitEvaluationPurpose, error: Error) {
+            observed = purpose.resolutionObservedMessage(error)
+            detail = HeistFailureDetail(
+                category: purpose.failureCategory,
+                contract: purpose.resolutionContract,
+                observed: observed,
+                expected: wait.predicate.description
+            )
+        }
+    }
+
+    private enum HeistWaitEvaluationPurpose {
+        case actionExpectation
+        case standaloneWait
+
+        var failureCategory: HeistFailureCategory {
+            switch self {
+            case .actionExpectation:
+                return .expectation
+            case .standaloneWait:
+                return .wait
+            }
+        }
+
+        var failureContract: String {
+            switch self {
+            case .actionExpectation:
+                return "post-action expectation is met"
+            case .standaloneWait:
+                return "wait predicate is met before timeout"
+            }
+        }
+
+        var resolutionContract: String {
+            switch self {
+            case .actionExpectation:
+                return "action expectation predicate resolves before evaluation"
+            case .standaloneWait:
+                return "wait predicate resolves before evaluation"
+            }
+        }
+
+        func resolutionObservedMessage(_ error: Error) -> String {
+            switch self {
+            case .actionExpectation:
+                return "could not resolve heist expectation: \(error)"
+            case .standaloneWait:
+                return "could not resolve heist wait predicate: \(error)"
+            }
+        }
+    }
+
+    private struct FailedHeistWaitEvaluation {
+        let receipt: HeistWaitReceipt
+        let detail: HeistFailureDetail
+    }
+
+    private enum HeistWaitEvaluation {
+        case matched(HeistWaitReceipt)
+        case failed(FailedHeistWaitEvaluation)
+
+        var receipt: HeistWaitReceipt {
+            switch self {
+            case .matched(let receipt):
+                return receipt
+            case .failed(let failedEvaluation):
+                return failedEvaluation.receipt
+            }
+        }
+
+        var failure: HeistFailureDetail? {
+            switch self {
+            case .matched:
+                return nil
+            case .failed(let failedEvaluation):
+                return failedEvaluation.detail
+            }
+        }
+
+        var evidenceOutcome: HeistPredicateEvidenceOutcome {
+            switch self {
+            case .matched:
+                return .matched
+            case .failed:
+                return .failed
+            }
+        }
+    }
+
+    private enum StandaloneWaitExecution {
+        case receipt(HeistWaitEvaluation)
+        case elseBody(elseBody: [HeistStep], failedEvaluation: FailedHeistWaitEvaluation)
+    }
+
     func executeActionStep(
         _ step: ActionStep,
         index: Int,
@@ -44,37 +165,9 @@ extension TheBrains {
     ) async -> HeistExecutionStepResult {
         switch unit {
         case .action(let command, let expectation):
-            let resolvedCommand: RuntimeActionMessage
-            do {
-                resolvedCommand = try command.resolveForRuntimeDispatch(in: environment)
-            } catch {
-                let observed = "could not resolve heist action command: \(error)"
-                return heistActionReceipt(
-                    path: path,
-                    durationMs: elapsedMilliseconds(since: start),
-                    intent: actionIntent(command),
-                    evidence: HeistActionEvidence(command: command, actionResult: nil),
-                    failure: HeistFailureDetail(
-                        category: .targetResolution,
-                        contract: "action command resolves before dispatch",
-                        observed: observed,
-                        expected: command.reportTarget.map(String.init(describing:))
-                    )
-                )
-            }
-            let actionResult = await runtime.execute(resolvedCommand)
-            guard actionResult.success, let expectation else {
-                return actionResultNode(
-                    command: command,
-                    actionResult: actionResult,
-                    path: path,
-                    start: start
-                )
-            }
-            return await actionExpectationResult(
+            return await actionStepResult(
                 command: command,
-                actionResult: actionResult,
-                wait: expectation,
+                expectation: expectation,
                 path: path,
                 start: start,
                 runtime: runtime,
@@ -93,6 +186,45 @@ extension TheBrains {
         }
     }
 
+    private func actionStepResult(
+        command: HeistActionCommand,
+        expectation: WaitStep?,
+        path: String,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
+    ) async -> HeistExecutionStepResult {
+        switch actionCommandResolution(command, environment: environment) {
+        case .failed(let failure):
+            return actionCommandResolutionFailureReceipt(
+                command: command,
+                failure: failure,
+                path: path,
+                start: start
+            )
+
+        case .resolved(let resolvedCommand):
+            let actionResult = await runtime.execute(resolvedCommand)
+            guard actionResult.success, let expectation else {
+                return actionResultNode(
+                    command: command,
+                    actionResult: actionResult,
+                    path: path,
+                    start: start
+                )
+            }
+            return await actionExpectationResult(
+                command: command,
+                actionResult: actionResult,
+                wait: expectation,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment
+            )
+        }
+    }
+
     private func actionExpectationResult(
         command: HeistActionCommand,
         actionResult: ActionResult,
@@ -102,40 +234,36 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        let resolvedWait: ResolvedWaitStep
-        do {
-            resolvedWait = try wait.resolve(in: environment)
-        } catch {
+        switch waitResolution(wait, purpose: .actionExpectation, environment: environment) {
+        case .failed(let failure):
             return expectationResolutionFailure(
                 command: command,
                 actionResult: actionResult,
-                wait: wait,
                 path: path,
                 start: start,
-                error: error
+                failure: failure
+            )
+
+        case .resolved(let resolvedWait):
+            let receipt = await runtime.wait(.actionEndpoint(
+                resolvedWait,
+                trace: actionResult.accessibilityTrace
+            ))
+            let evaluation = waitEvaluation(wait: wait, receipt: receipt, purpose: .actionExpectation)
+            return heistActionReceipt(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                intent: actionIntent(command),
+                evidence: HeistActionEvidence(
+                    command: command,
+                    actionResult: actionResult,
+                    expectationActionResult: evaluation.receipt.actionResult,
+                    expectation: evaluation.receipt.expectation,
+                    warning: actionWarning(command: command, actionResult: actionResult)
+                ),
+                failure: evaluation.failure
             )
         }
-        let receipt = await runtime.wait(.actionEndpoint(
-            resolvedWait,
-            trace: actionResult.accessibilityTrace
-        ))
-        let failure = expectationFailure(
-            wait: wait,
-            receipt: receipt
-        )
-        return heistActionReceipt(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: actionIntent(command),
-            evidence: HeistActionEvidence(
-                command: command,
-                actionResult: actionResult,
-                expectationActionResult: receipt.actionResult,
-                expectation: receipt.expectation,
-                warning: actionWarning(command: command, actionResult: actionResult)
-            ),
-            failure: failure
-        )
     }
 
     private func actionResultNode(
@@ -162,47 +290,45 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedWait: ResolvedWaitStep
-        do {
-            resolvedWait = try wait.resolve(in: environment)
-        } catch {
+        switch waitResolution(wait, purpose: .standaloneWait, environment: environment) {
+        case .failed(let failure):
             return waitResolutionFailure(
                 wait: wait,
                 path: path,
                 start: start,
-                error: error
+                failure: failure
             )
-        }
 
-        let receipt = await runtime.wait(.standalone(resolvedWait))
-        let failure = waitFailure(wait: wait, receipt: receipt)
-        if failure != nil, let elseBody = wait.elseBody {
-            return await waitElseResult(
-                elseBody: elseBody,
-                wait: wait,
-                receipt: receipt,
-                path: path,
-                start: start,
-                runtime: runtime,
-                environment: environment,
-                scope: scope
-            )
+        case .resolved(let resolvedWait):
+            let receipt = await runtime.wait(.standalone(resolvedWait))
+            let evaluation = waitEvaluation(wait: wait, receipt: receipt, purpose: .standaloneWait)
+            switch standaloneWaitExecution(wait: wait, evaluation: evaluation) {
+            case .elseBody(let elseBody, let failedEvaluation):
+                return await waitElseResult(
+                    elseBody: elseBody,
+                    wait: wait,
+                    receipt: failedEvaluation.receipt,
+                    path: path,
+                    start: start,
+                    runtime: runtime,
+                    environment: environment,
+                    scope: scope
+                )
+
+            case .receipt(let evaluation):
+                return waitResult(
+                    wait: wait,
+                    evaluation: evaluation,
+                    path: path,
+                    start: start
+                )
+            }
         }
-        return waitResult(
-            wait: wait,
-            receipt: receipt,
-            failure: failure,
-            outcome: failure == nil ? .matched : .failed,
-            path: path,
-            start: start
-        )
     }
 
     private func waitResult(
         wait: WaitStep,
-        receipt: HeistWaitReceipt,
-        failure: HeistFailureDetail?,
-        outcome: HeistPredicateEvidenceOutcome,
+        evaluation: HeistWaitEvaluation,
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
@@ -210,8 +336,8 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidencePayload(receipt, outcome: outcome),
-            failure: failure
+            evidence: waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome),
+            failure: evaluation.failure
         )
     }
 
@@ -267,39 +393,70 @@ extension TheBrains {
         )
     }
 
+    private func actionCommandResolution(
+        _ command: HeistActionCommand,
+        environment: HeistExecutionEnvironment
+    ) -> ActionCommandResolution {
+        do {
+            return .resolved(try command.resolveForRuntimeDispatch(in: environment))
+        } catch {
+            return .failed(ActionCommandResolutionFailure(command: command, error: error))
+        }
+    }
+
+    private func actionCommandResolutionFailureReceipt(
+        command: HeistActionCommand,
+        failure: ActionCommandResolutionFailure,
+        path: String,
+        start: CFAbsoluteTime
+    ) -> HeistExecutionStepResult {
+        heistActionReceipt(
+            path: path,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: actionIntent(command),
+            evidence: HeistActionEvidence(command: command, actionResult: nil),
+            failure: failure.detail
+        )
+    }
+
+    private func waitResolution(
+        _ wait: WaitStep,
+        purpose: HeistWaitEvaluationPurpose,
+        environment: HeistExecutionEnvironment
+    ) -> HeistWaitResolution {
+        do {
+            return .resolved(try wait.resolve(in: environment))
+        } catch {
+            return .failed(HeistWaitResolutionFailure(wait: wait, purpose: purpose, error: error))
+        }
+    }
+
     private func waitResolutionFailure(
         wait: WaitStep,
         path: String,
         start: CFAbsoluteTime,
-        error: Error
+        failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
-        let observed = "could not resolve heist wait predicate: \(error)"
         return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            failure: HeistFailureDetail(
-                category: .wait,
-                contract: "wait predicate resolves before evaluation",
-                observed: observed,
-                expected: wait.predicate.description
-            )
+            failure: failure.detail
         )
     }
 
     private func expectationResolutionFailure(
         command: HeistActionCommand,
         actionResult: ActionResult,
-        wait: WaitStep,
         path: String,
         start: CFAbsoluteTime,
-        error: Error
+        failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
         let expectationActionResult = ActionResultBuilder(method: .wait).failure(errorKind: .actionFailed)
         let expectation = ExpectationResult(
             met: false,
             predicate: nil,
-            actual: "could not resolve heist expectation: \(error)"
+            actual: failure.observed
         )
         return heistActionReceipt(
             path: path,
@@ -312,12 +469,7 @@ extension TheBrains {
                 expectation: expectation,
                 warning: actionWarning(command: command, actionResult: actionResult)
             ),
-            failure: HeistFailureDetail(
-                category: .expectation,
-                contract: "action expectation predicate resolves before evaluation",
-                observed: expectation.actual ?? "could not resolve heist expectation",
-                expected: wait.predicate.description
-            )
+            failure: failure.detail
         )
     }
 
@@ -393,30 +545,34 @@ extension TheBrains {
         )
     }
 
-    private func expectationFailure(
+    private func waitEvaluation(
         wait: WaitStep,
-        receipt: HeistWaitReceipt
-    ) -> HeistFailureDetail? {
-        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
-        return HeistFailureDetail(
-            category: .expectation,
-            contract: "post-action expectation is met",
-            observed: expectationObserved(receipt),
-            expected: wait.predicate.description
-        )
+        receipt: HeistWaitReceipt,
+        purpose: HeistWaitEvaluationPurpose
+    ) -> HeistWaitEvaluation {
+        guard !receipt.actionResult.success || !receipt.expectation.met else {
+            return .matched(receipt)
+        }
+        return .failed(FailedHeistWaitEvaluation(
+            receipt: receipt,
+            detail: HeistFailureDetail(
+                category: purpose.failureCategory,
+                contract: purpose.failureContract,
+                observed: expectationObserved(receipt),
+                expected: wait.predicate.description
+            )
+        ))
     }
 
-    private func waitFailure(
+    private func standaloneWaitExecution(
         wait: WaitStep,
-        receipt: HeistWaitReceipt
-    ) -> HeistFailureDetail? {
-        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
-        return HeistFailureDetail(
-            category: .wait,
-            contract: "wait predicate is met before timeout",
-            observed: expectationObserved(receipt),
-            expected: wait.predicate.description
-        )
+        evaluation: HeistWaitEvaluation
+    ) -> StandaloneWaitExecution {
+        guard case .failed(let failedEvaluation) = evaluation,
+              let elseBody = wait.elseBody
+        else { return .receipt(evaluation) }
+
+        return .elseBody(elseBody: elseBody, failedEvaluation: failedEvaluation)
     }
 
     private func actionObserved(_ result: ActionResult, command: HeistActionCommand) -> String {

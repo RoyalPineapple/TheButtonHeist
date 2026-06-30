@@ -58,7 +58,6 @@ struct HeistReportProjection: Sendable {
     let failureScreenshotSummary: String?
     let failureInterfaceDump: String?
     let netDelta: DeltaProjection?
-    let finalScreenId: String?
 
     init(
         result: HeistExecutionResult,
@@ -89,7 +88,6 @@ struct HeistReportProjection: Sendable {
             elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = netDelta.map { DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true) }
-        finalScreenId = reportSummary.finalScreenId
     }
 }
 

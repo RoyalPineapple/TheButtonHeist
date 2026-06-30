@@ -124,7 +124,6 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         XCTAssertEqual(summary.finalScreenId, "checkout")
         XCTAssertEqual(projection.summary.finalScreenId, summary.finalScreenId)
-        XCTAssertEqual(projection.finalScreenId, summary.finalScreenId)
     }
 
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
@@ -803,8 +802,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testPublicHeistEvidenceProjectionEncodesExactlyOneVariantPerEvidenceCase() throws {
         let plan = try evidenceProjectionPlan()
         for testCase in evidenceProjectionCases() {
-            let node = try XCTUnwrap(HeistExecutionEvidenceRollup(steps: [testCase.step]).rootNodes.first)
-            let projection = HeistReportNodeProjection(node: node, profile: .mcp)
+            let evidenceNode = try XCTUnwrap(HeistExecutionEvidenceRollup(steps: [testCase.step]).rootNodes.first)
+            let projection = HeistReportNodeProjection(node: evidenceNode, profile: .mcp)
             XCTAssertEqual(projectedEvidenceKey(projection.evidence), testCase.expectedKey, testCase.name)
 
             let response = FenceResponse.heistExecution(
@@ -812,8 +811,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 result: HeistExecutionResult(steps: [testCase.step], durationMs: testCase.step.durationMs)
             )
             let report = try publicHeistReportResponseDTO(response).report
-            let node = try XCTUnwrap(report.nodes.first, testCase.name)
-            let evidence = try XCTUnwrap(node.evidence, testCase.name)
+            let reportNode = try XCTUnwrap(report.nodes.first, testCase.name)
+            let evidence = try XCTUnwrap(reportNode.evidence, testCase.name)
 
             XCTAssertEqual(evidence.encodedVariantKeys, Set([testCase.expectedKey]), testCase.name)
             try testCase.assertEvidence(evidence)

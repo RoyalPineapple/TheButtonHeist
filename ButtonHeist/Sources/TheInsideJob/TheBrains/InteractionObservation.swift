@@ -95,22 +95,20 @@ final class InteractionObservation {
             outcome: settleOutcome
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
-        let finalEvidence = await postActionObservation.finalSemanticEvidence(
+        let observationOutcome = await postActionObservation.observationOutcome(
             before: before,
             settleEvidence: settleEvidence
         )
         let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
 
         let receiptStart = CFAbsoluteTimeGetCurrent()
-        let result = PostActionObservation.result(
-            PostActionObservation.ResultInput(
-                method: method,
-                outcome: outcome,
-                message: message,
-                before: before,
-                settleEvidence: settleEvidence,
-                finalEvidence: finalEvidence
-            )
+        let result = ActionResult(
+            postActionMethod: method,
+            outcome: outcome,
+            message: message,
+            before: before,
+            settleEvidence: settleEvidence,
+            observationOutcome: observationOutcome
         )
         return result.withTiming(ActionPerformanceTiming(
             settleMs: settleEvidence.timeMs,

@@ -4,13 +4,16 @@ import Network
 enum DeviceConnectionEventStream {
     nonisolated static let bufferLimit = 512
 
-    nonisolated static func makeStream() -> (
-        AsyncStream<DeviceConnectionEvent>,
-        AsyncStream<DeviceConnectionEvent>.Continuation
-    ) {
-        AsyncStream<DeviceConnectionEvent>.makeStream(
+    struct EventStream {
+        let events: AsyncStream<DeviceConnectionEvent>
+        let continuation: AsyncStream<DeviceConnectionEvent>.Continuation
+    }
+
+    nonisolated static func makeStream() -> EventStream {
+        let stream = AsyncStream<DeviceConnectionEvent>.makeStream(
             bufferingPolicy: .bufferingOldest(bufferLimit)
         )
+        return EventStream(events: stream.stream, continuation: stream.continuation)
     }
 
     nonisolated static func yield(
