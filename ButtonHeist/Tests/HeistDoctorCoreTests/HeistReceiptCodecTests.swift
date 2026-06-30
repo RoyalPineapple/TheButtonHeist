@@ -192,8 +192,7 @@ import TheScore
             after,
             context: AccessibilityTrace.Context(screenId: "checkout")
         )
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace,
             subjectEvidence: ActionSubjectEvidence(
@@ -204,16 +203,15 @@ import TheScore
         )
         return HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .action,
-                    status: .passed,
                     durationMs: 12,
                     intent: .action(command: "Activate", target: "target(predicate(label=\"Checkout\"))"),
                     evidence: .action(.expectation(
                         command: .activate(.predicate(.label("Checkout"))),
                         actionResult: result,
-                        expectationActionResult: ActionResult(success: true, method: .wait, message: "screenChanged"),
+                        expectationActionResult: ActionResult.success(method: .wait, message: "screenChanged"),
                         expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
                     ))
                 ),
@@ -225,10 +223,9 @@ import TheScore
     private func failedReceipt() -> HeistExecutionResult {
         HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "stop"),
                     failure: HeistFailureDetail(

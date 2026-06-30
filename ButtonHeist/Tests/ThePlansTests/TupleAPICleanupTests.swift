@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Testing
 @testable import ThePlans
 
@@ -37,10 +38,10 @@ func `parser helpers expose named result values`() {
 func `dotted path definition builder exposes a named result value`() throws {
     let heistContent = try SourceShapeRepository(filePath: #filePath)
         .requiredFile(relativePath: "ButtonHeist/Sources/ThePlans/HeistContent.swift")
-    let resultType = try #require(heistContent.firstBlock(
+    let resultType = try #require(try heistContent.firstBlock(
         matching: #"private struct DottedPathDefinitionBuild\b"#
     ))
-    let helper = try #require(heistContent.firstBlock(
+    let helper = try #require(try heistContent.firstBlock(
         matching: #"private static func buildDefinitionFromDottedPath\("#
     ))
 

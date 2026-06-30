@@ -126,112 +126,126 @@ struct HeistReferenceScope: Sendable, Equatable {
 
     var targetRefs: Set<HeistReferenceName> = []
     var stringRefs: Set<HeistReferenceName> = []
+}
 
-    func bindingTarget(_ reference: HeistReferenceName) -> HeistReferenceScope {
-        var copy = self
-        copy.targetRefs.insert(reference)
-        return copy
+struct HeistReferenceBinding: Sendable, Equatable {
+    enum Value: Sendable, Equatable {
+        case string(String)
+        case elementTarget(ElementTarget)
     }
 
-    func bindingTarget(_ reference: String) -> HeistReferenceScope {
-        bindingTarget(HeistReferenceName(rawValue: reference))
-    }
+    static let runtimeSafetyStringPlaceholder = "__heist_parameter__"
+    static let runtimeSafetyElementTargetPlaceholder = ElementTarget.predicate(.identifier("__heist_parameter__"))
 
-    func bindingString(_ reference: HeistReferenceName) -> HeistReferenceScope {
-        var copy = self
-        copy.stringRefs.insert(reference)
-        return copy
-    }
+    let reference: HeistReferenceName
+    let value: Value
 
-    func bindingString(_ reference: String) -> HeistReferenceScope {
-        bindingString(HeistReferenceName(rawValue: reference))
-    }
-
-    func binding(parameter: HeistParameter) -> HeistReferenceScope {
-        guard let reference = parameter.name else { return self }
+    static func runtimeSafetyPlaceholder(for parameter: HeistParameter) -> HeistReferenceBinding? {
         switch parameter {
         case .none:
-            return self
-        case .string:
-            return bindingString(reference)
-        case .elementTarget:
-            return bindingTarget(reference)
+            return nil
+        case .string(let name):
+            return HeistReferenceBinding(reference: name, value: .string(runtimeSafetyStringPlaceholder))
+        case .elementTarget(let name):
+            return HeistReferenceBinding(reference: name, value: .elementTarget(runtimeSafetyElementTargetPlaceholder))
         }
     }
 }
 
 struct HeistReferenceBindingContext: Sendable, Equatable {
-    static let empty = HeistReferenceBindingContext(
-        scope: .empty,
-        environment: .empty
-    )
+    static let empty = HeistReferenceBindingContext()
 
-    let scope: HeistReferenceScope
-    let environment: HeistExecutionEnvironment
+    let bindings: [HeistReferenceBinding]
 
-    init(
-        scope: HeistReferenceScope,
-        environment: HeistExecutionEnvironment
-    ) {
-        self.scope = scope
-        self.environment = environment
-        precondition(
-            invariantFailures.isEmpty,
-            "Heist reference binding context diverged: \(invariantFailures.joined(separator: "; "))"
-        )
+    init(bindings: [HeistReferenceBinding] = []) {
+        self.bindings = bindings
+    }
+
+    var scope: HeistReferenceScope {
+        bindings.reduce(into: .empty) { scope, binding in
+            switch binding.value {
+            case .string:
+                scope.stringRefs.insert(binding.reference)
+            case .elementTarget:
+                scope.targetRefs.insert(binding.reference)
+            }
+        }
+    }
+
+    var environment: HeistExecutionEnvironment {
+        var targets: [HeistReferenceName: ElementTarget] = [:]
+        var strings: [HeistReferenceName: String] = [:]
+        for binding in bindings {
+            switch binding.value {
+            case .string(let value):
+                strings[binding.reference] = value
+            case .elementTarget(let target):
+                targets[binding.reference] = target
+            }
+        }
+        return HeistExecutionEnvironment(targets: targets, strings: strings)
     }
 
     var invariantFailures: [String] {
         var failures: [String] = []
-        let environmentTargetRefs = Set(environment.targets.keys)
-        if scope.targetRefs != environmentTargetRefs {
+        let projectedScope = scope
+        let projectedEnvironment = environment
+        let environmentTargetRefs = Set(projectedEnvironment.targets.keys)
+        if projectedScope.targetRefs != environmentTargetRefs {
             failures.append(
-                "target refs scope=\(scope.targetRefs.sortedDescriptions) environment=\(environmentTargetRefs.sortedDescriptions)"
+                "target refs scope=\(projectedScope.targetRefs.sortedDescriptions) environment=\(environmentTargetRefs.sortedDescriptions)"
             )
         }
-        let environmentStringRefs = Set(environment.strings.keys)
-        if scope.stringRefs != environmentStringRefs {
+        let environmentStringRefs = Set(projectedEnvironment.strings.keys)
+        if projectedScope.stringRefs != environmentStringRefs {
             failures.append(
-                "string refs scope=\(scope.stringRefs.sortedDescriptions) environment=\(environmentStringRefs.sortedDescriptions)"
+                "string refs scope=\(projectedScope.stringRefs.sortedDescriptions) environment=\(environmentStringRefs.sortedDescriptions)"
             )
         }
         return failures
     }
 
     func binding(target: ElementTarget, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
-        HeistReferenceBindingContext(
-            scope: scope.bindingTarget(parameter),
-            environment: environment.binding(target: target, to: parameter)
-        )
+        binding(HeistReferenceBinding(reference: parameter, value: .elementTarget(target)))
     }
 
     func binding(string: String, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
-        HeistReferenceBindingContext(
-            scope: scope.bindingString(parameter),
-            environment: environment.binding(string: string, to: parameter)
-        )
+        binding(HeistReferenceBinding(reference: parameter, value: .string(string)))
     }
 
     func binding(parameter: HeistParameter) -> HeistReferenceBindingContext {
-        switch parameter {
-        case .none:
-            return self
-        case .string(let name):
-            return binding(string: "__heist_parameter__", to: name)
-        case .elementTarget(let name):
-            return binding(target: .predicate(.identifier("__heist_parameter__")), to: name)
-        }
+        guard let binding = HeistReferenceBinding.runtimeSafetyPlaceholder(for: parameter) else { return self }
+        return self.binding(binding)
     }
 
     func binding(argument: HeistArgument, to parameter: HeistParameter) throws -> HeistReferenceBindingContext {
-        HeistReferenceBindingContext(
-            scope: scope.binding(parameter: parameter),
-            environment: try environment.binding(argument: argument, to: parameter)
-        )
+        guard argument.kind == parameter.kind else {
+            throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
+        }
+        switch (parameter, argument) {
+        case (.none, .none):
+            return self
+        case (.string(let name), .string(let value)):
+            return binding(string: try value.resolve(in: environment), to: name)
+        case (.elementTarget(let name), .elementTarget(let target)):
+            return binding(target: try target.resolve(in: environment), to: name)
+        default:
+            throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
+        }
     }
 
     static func runtimeSafetyPlaceholder(for parameter: HeistParameter) -> HeistReferenceBindingContext {
         empty.binding(parameter: parameter)
+    }
+
+    private func binding(_ binding: HeistReferenceBinding) -> HeistReferenceBindingContext {
+        HeistReferenceBindingContext(bindings: bindings + [binding])
+    }
+}
+
+extension HeistPlan {
+    var parameterReferenceBindings: HeistReferenceBindingContext {
+        HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: parameter)
     }
 }
 

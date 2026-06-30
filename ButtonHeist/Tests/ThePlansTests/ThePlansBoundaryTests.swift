@@ -166,6 +166,18 @@ func `heist planning admission request carries one closed source`() throws {
 }
 
 @Test
+func `heist planning raw IR boundary keys map to a closed rejected source field set`() throws {
+    let fields = HeistPlanRejectedPublicSourceField.sourceFields(in: [
+        "version",
+        "path",
+        "body",
+        "argument",
+    ])
+
+    #expect(fields == [.version, .body])
+}
+
+@Test
 func `heist planning admission rejects missing public source`() throws {
     do {
         _ = try HeistPlanning.admissionRequest(commandName: "run_heist", path: nil, inlineDSL: nil)
@@ -224,9 +236,9 @@ func `heist planning rejects standalone raw json path as public source`() throws
 @Test
 func `heist planning rejects raw structured JSON IR fields as public source`() throws {
     do {
-        try HeistPlanning.rejectRawStructuredJSONIRFields(
+        try HeistPlanning.rejectRawStructuredJSONIRSourceFields(
             commandName: "run_heist",
-            fields: ["version", "body"]
+            fields: [.version, .body]
         )
         Issue.record("Expected raw structured JSON fields to fail")
     } catch {

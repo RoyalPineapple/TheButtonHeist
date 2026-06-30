@@ -103,9 +103,9 @@ final class TheGetaway {
     private func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
         let method = actionMethod(for: command)
         guard command.durableHeistActionFailure != nil else {
-            var builder = ActionResultBuilder(method: method)
+            var builder = ActionResultBuilder()
             builder.message = "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
-            return builder.failure(errorKind: .validationError)
+            return builder.failure(method: method, errorKind: .validationError)
         }
         guard brains.semanticObservationIsActive else {
             return brains.runtimeInactiveResult(method: method)
@@ -113,9 +113,9 @@ final class TheGetaway {
         do {
             return await brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
         } catch {
-            var builder = ActionResultBuilder(method: method)
+            var builder = ActionResultBuilder()
             builder.message = "Could not resolve direct runtime action: \(error)"
-            return builder.failure(errorKind: .validationError)
+            return builder.failure(method: method, errorKind: .validationError)
         }
     }
 

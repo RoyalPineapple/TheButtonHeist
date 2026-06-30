@@ -14,9 +14,9 @@ extension TheBrains {
             return runtimeInactiveResult(method: .wait)
         }
         guard beginChangedWait() else {
-            var builder = ActionResultBuilder(method: .wait)
+            var builder = ActionResultBuilder()
             builder.message = "wait already in progress"
-            return builder.failure(errorKind: .actionFailed)
+            return builder.failure(method: .wait, errorKind: .actionFailed)
         }
         defer { finishChangedWait() }
 

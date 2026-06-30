@@ -14,8 +14,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
-                    actionResult: ActionResult(success: true, method: .activate),
-                    expectationActionResult: ActionResult(success: true, method: .wait),
+                    actionResult: ActionResult.success(method: .activate),
+                    expectationActionResult: ActionResult.success(method: .wait),
                     expectation: ExpectationResult(met: true, predicate: expectationPredicate)
                 ),
             ],
@@ -49,12 +49,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[0]",
                     command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
-                    actionResult: ActionResult(success: true, method: .activate),
+                    actionResult: ActionResult.success(method: .activate),
                     warning: actionWarning
                 ),
                 waitStep(
                     path: "$.body[1]",
-                    actionResult: ActionResult(success: true, method: .wait),
+                    actionResult: ActionResult.success(method: .wait),
                     expectation: ExpectationResult(
                         met: true,
                         predicate: .state(.exists(ElementPredicate(label: "Ready")))
@@ -110,8 +110,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
-                    actionResult: ActionResult(
-                        success: true,
+                    actionResult: ActionResult.success(
                         method: .activate,
                         accessibilityTrace: trace
                     )
@@ -130,7 +129,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
-            actionResult: ActionResult(success: true, method: .activate),
+            actionResult: ActionResult.success(method: .activate),
             warning: .activationWeakAffordanceEvidence(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
         )
 
@@ -165,7 +164,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[9]",
                     command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
-                    actionResult: ActionResult(success: true, method: .activate)
+                    actionResult: ActionResult.success(method: .activate)
                 ),
             ],
             durationMs: 5
@@ -182,12 +181,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
-                    actionResult: ActionResult(
-                        success: false,
+                    actionResult: ActionResult.failure(
                         method: .activate,
-                        message: "Delete not found",
-                        errorKind: .elementNotFound
-                    ),
+                        errorKind: .elementNotFound,
+                        message: "Delete not found"),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "action dispatch succeeds",
@@ -222,12 +219,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 actionStep(
-                    actionResult: ActionResult(
-                        success: false,
+                    actionResult: ActionResult.failure(
                         method: .activate,
-                        message: "Delete failed",
-                        errorKind: .actionFailed
-                    ),
+                        errorKind: .actionFailed,
+                        message: "Delete failed"),
                     failure: HeistFailureDetail(
                         category: .action,
                         contract: "action dispatch succeeds",
@@ -279,11 +274,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
-                    actionResult: ActionResult(success: true, method: .activate, accessibilityTrace: actionTrace)
+                    actionResult: ActionResult.success(method: .activate, accessibilityTrace: actionTrace)
                 ),
                 waitStep(
                     path: "$.body[1]",
-                    actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: waitTrace)
+                    actionResult: ActionResult.success(method: .wait, accessibilityTrace: waitTrace)
                 ),
             ],
             durationMs: 10
@@ -299,12 +294,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testResultFailureAndFirstFailedStepDeriveFromTree() {
         let childFailure = actionStep(
             path: "$.body[0].heist.body[0]",
-            actionResult: ActionResult(
-                success: false,
+            actionResult: ActionResult.failure(
                 method: .activate,
-                message: "boom",
-                errorKind: .actionFailed
-            ),
+                errorKind: .actionFailed,
+                message: "boom"),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "action dispatch succeeds",
@@ -313,12 +306,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .heist,
-                    status: .failed,
                     durationMs: 5,
                     intent: .heist(name: "Wrapper"),
+                    evidence: .invocation(HeistInvocationEvidence(
+                        name: "heist Wrapper",
+                        childFailedPath: "$.body[0].heist.body[0]"
+                    )),
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "child execution completes without failure",
@@ -352,16 +348,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .action,
-                    status: .failed,
                     durationMs: 5,
                     intent: .action(command: "activate", target: "label=Pay"),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                        actionResult: ActionResult(success: true, method: .activate),
-                        expectationActionResult: ActionResult(success: true, method: .wait, message: "screen did not change"),
+                        actionResult: ActionResult.success(method: .activate),
+                        expectationActionResult: ActionResult.success(method: .wait, message: "screen did not change"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -409,7 +404,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     children: [
                         actionStep(
                             path: "$.body[0].conditional.cases[0].body[0]",
-                            actionResult: ActionResult(success: true, method: .activate)
+                            actionResult: ActionResult.success(method: .activate)
                         ),
                     ]
                 ),
@@ -434,7 +429,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 waitStep(
-                    actionResult: ActionResult(success: false, method: .wait, message: "timed out after 2s", errorKind: .timeout),
+                    actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
                     expectation: ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s"),
                     failure: failure
                 ),
@@ -455,15 +450,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .wait,
-                    status: .passed,
                     durationMs: 2000,
                     intent: .wait(predicate: predicate.description, timeout: 2),
                     evidence: .wait(HeistWaitEvidence(
                         outcome: .handledElse,
-                        actionResult: ActionResult(success: false, method: .wait, message: "timed out after 2s", errorKind: .timeout),
+                        actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
                         expectation: expectation
                     )),
                     children: [
@@ -518,10 +512,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 warnStep(message: "Heads up"),
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[1]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "Stop here"),
                     failure: HeistFailureDetail(
@@ -550,12 +543,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let child = actionStep(
             path: "$.body[0].invoke.body[0]",
-            actionResult: ActionResult(
-                success: false,
+            actionResult: ActionResult.failure(
                 method: .activate,
-                message: "Add to Cart not found",
-                errorKind: .actionFailed
-            ),
+                errorKind: .actionFailed,
+                message: "Add to Cart not found"),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "action dispatch succeeds",
@@ -564,10 +555,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .invoke,
-                    status: .failed,
                     durationMs: 5,
                     intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
                     evidence: .invocation(HeistInvocationEvidence(
@@ -622,12 +612,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
-                    actionResult: ActionResult(
-                        success: false,
+                    actionResult: ActionResult.failure(
                         method: .activate,
-                        message: "Delete not found",
-                        errorKind: .elementNotFound
-                    ),
+                        errorKind: .elementNotFound,
+                        message: "Delete not found"),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "activate command succeeds",
@@ -657,22 +645,27 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let predicate = AccessibilityPredicate.change(.screen())
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .action,
-                    status: .failed,
                     durationMs: 5,
                     intent: .action(command: "activate", target: "label=Pay"),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                        actionResult: ActionResult(success: true, method: .activate),
-                        expectationActionResult: ActionResult(success: true, method: .wait, message: "elementsChanged"),
+                        actionResult: ActionResult.success(method: .activate),
+                        expectationActionResult: ActionResult.success(method: .wait, message: "elementsChanged"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "elementsChanged"
                         )
-                    ))
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .expectation,
+                        contract: "action expectation is met",
+                        observed: "elementsChanged",
+                        expected: predicate.description
+                    )
                 ),
             ],
             durationMs: 5,
@@ -710,10 +703,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "stop"),
                     failure: HeistFailureDetail(
@@ -722,10 +714,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         observed: "stop"
                     )
                 ),
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0].failure.actions[0]",
                     kind: .action,
-                    status: .passed,
                     durationMs: 1,
                     intent: .action(command: "takeScreenshot", target: nil),
                     evidence: .action(.dispatch(
@@ -762,10 +753,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 warnStep(message: "before"),
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[1]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "stop"),
                     failure: HeistFailureDetail(
@@ -774,10 +764,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         observed: "stop"
                     )
                 ),
-                HeistExecutionStepResult(
+                .skipped(
                     path: "$.body[2]",
                     kind: .action,
-                    status: .skipped,
                     durationMs: 0
                 ),
             ],
@@ -856,7 +845,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             name: "action",
             step: actionStep(
                 command: .activate(.target(.predicate(ElementPredicate(label: "Button")))),
-                actionResult: ActionResult(success: true, method: .activate),
+                actionResult: ActionResult.success(method: .activate),
                 warning: .activationWeakAffordanceEvidence(evidence: #"label="Button" traits=[staticText] actions=[activate]"#)
             ),
             expectedKey: "action",
@@ -875,7 +864,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         (
             name: "wait",
             step: waitStep(
-                actionResult: ActionResult(success: true, method: .wait),
+                actionResult: ActionResult.success(method: .wait),
                 expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate()),
                 warning: HeistPredicateWarning(
                     code: "transition_not_observed_final_state_satisfied",
@@ -918,10 +907,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func forEachStringEvidenceProjectionCase() -> EvidenceProjectionCase {
         (
             name: "forEachString",
-            step: HeistExecutionStepResult(
+            step: .passed(
                 path: "$.body[0]",
                 kind: .forEachString,
-                status: .passed,
                 durationMs: 4,
                 intent: .forEachString(parameter: "item", count: 2),
                 evidence: .forEachString(HeistForEachStringEvidence(
@@ -943,10 +931,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func forEachElementEvidenceProjectionCase() -> EvidenceProjectionCase {
         (
             name: "forEachElement",
-            step: HeistExecutionStepResult(
+            step: .passed(
                 path: "$.body[0]",
                 kind: .forEachElement,
-                status: .passed,
                 durationMs: 5,
                 intent: .forEachElement(parameter: "row", matching: "label=Row", limit: 3),
                 evidence: .forEachElement(HeistForEachElementEvidence(
@@ -973,10 +960,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let predicate = evidenceProjectionPredicate()
         return (
             name: "repeatUntil",
-            step: HeistExecutionStepResult(
+            step: .passed(
                 path: "$.body[0]",
                 kind: .repeatUntil,
-                status: .passed,
                 durationMs: 6,
                 intent: .repeatUntil(predicate: predicate.description, timeout: 2),
                 evidence: .repeatUntil(HeistRepeatUntilEvidence(
@@ -985,7 +971,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     timeout: 2,
                     iterationCount: 1,
                     expectation: ExpectationResult(met: true, predicate: predicate),
-                    actionResult: ActionResult(success: true, method: .wait),
+                    actionResult: ActionResult.success(method: .wait),
                     lastObservedSummary: "Ready"
                 ))
             ),
@@ -1002,10 +988,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func heistInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
         (
             name: "heistInvocation",
-            step: HeistExecutionStepResult(
+            step: .passed(
                 path: "$.body[0]",
                 kind: .heist,
-                status: .passed,
                 durationMs: 7,
                 intent: .heist(name: "Nested"),
                 evidence: .invocation(HeistInvocationEvidence(name: "Nested"))
@@ -1027,21 +1012,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let expectation = ExpectationResult(met: true, predicate: predicate, actual: "Ready")
         return (
             name: "invokeInvocation",
-            step: HeistExecutionStepResult(
+            step: .passed(
                 path: "$.body[0]",
                 kind: .invoke,
-                status: .passed,
                 durationMs: 8,
                 intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
                 evidence: .invocation(HeistInvocationEvidence(
                     invocation: invocation,
                     name: "LibraryScreen.addToCart",
                     argument: "Milk",
-                    expectationActionResult: ActionResult(success: true, method: .wait),
+                    expectationActionResult: ActionResult.success(method: .wait),
                     expectation: expectation,
                     expectationEvidence: HeistWaitEvidence(
                         outcome: .matched,
-                        actionResult: ActionResult(success: true, method: .wait),
+                        actionResult: ActionResult.success(method: .wait),
                         expectation: expectation,
                         baselineSummary: "before addToCart",
                         finalSummary: "Ready"
@@ -1122,22 +1106,32 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             evidence = .dispatch(command: command, actionResult: actionResult, warning: warning)
         }
 
-        return HeistExecutionStepResult(
+        let intent = command.map {
+            HeistStepIntent.action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+        }
+        let receiptEvidence = HeistStepEvidence.action(evidence)
+        if let failure {
+            return .failed(
+                path: path,
+                kind: .action,
+                durationMs: 5,
+                intent: intent,
+                evidence: receiptEvidence,
+                failure: failure
+            )
+        }
+        return .passed(
             path: path,
             kind: .action,
-            status: failure == nil ? .passed : .failed,
             durationMs: 5,
-            intent: command.map {
-                .action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
-            },
-            evidence: .action(evidence),
-            failure: failure
+            intent: intent,
+            evidence: receiptEvidence
         )
     }
 
     private func waitStep(
         path: String = "$.body[0]",
-        actionResult: ActionResult = ActionResult(success: true, method: .wait),
+        actionResult: ActionResult = ActionResult.success(method: .wait),
         expectation: ExpectationResult = ExpectationResult(
             met: true,
             predicate: .state(.exists(ElementPredicate(label: "Done")))
@@ -1145,19 +1139,28 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         warning: HeistPredicateWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        let evidence = HeistStepEvidence.wait(HeistWaitEvidence(
+            outcome: failure == nil ? .matched : .failed,
+            actionResult: actionResult,
+            expectation: expectation,
+            warning: warning
+        ))
+        if let failure {
+            return .failed(
+                path: path,
+                kind: .wait,
+                durationMs: 20,
+                intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
+                evidence: evidence,
+                failure: failure
+            )
+        }
+        return .passed(
             path: path,
             kind: .wait,
-            status: failure == nil ? .passed : .failed,
             durationMs: 20,
             intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
-            evidence: .wait(HeistWaitEvidence(
-                outcome: failure == nil ? .matched : .failed,
-                actionResult: actionResult,
-                expectation: expectation,
-                warning: warning
-            )),
-            failure: failure
+            evidence: evidence
         )
     }
 
@@ -1168,24 +1171,52 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         failure: HeistFailureDetail? = nil,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        let evidence = HeistStepEvidence.caseSelection(HeistCaseSelectionEvidence(selection: selection))
+        if let abortedAtChildPath = children.firstFailedStep?.path {
+            return .childAborted(
+                path: "$.body[0]",
+                kind: kind,
+                durationMs: selection.elapsedMs,
+                intent: .conditional,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: .invocation,
+                    contract: "selected case body completes without failure",
+                    observed: "child failed at \(abortedAtChildPath)"
+                ),
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
+            )
+        }
+        if status == .failed {
+            return .failed(
+                path: "$.body[0]",
+                kind: kind,
+                durationMs: selection.elapsedMs,
+                intent: .conditional,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: .validation,
+                    contract: "conditional branch completes",
+                    observed: "conditional failed"
+                ),
+                children: children
+            )
+        }
+        return .passed(
             path: "$.body[0]",
             kind: kind,
-            status: status,
             durationMs: selection.elapsedMs,
             intent: .conditional,
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            failure: failure,
-            abortedAtChildPath: children.firstFailedStep?.path,
+            evidence: evidence,
             children: children
         )
     }
 
     private func warnStep(path: String = "$.body[0]", message: String) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: path,
             kind: .warn,
-            status: .passed,
             durationMs: 1,
             intent: .warn(message: message),
             evidence: .warning(HeistExecutionWarning(path: path, message: message))
@@ -1194,10 +1225,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     private func forEachStringFailureResult() -> HeistExecutionResult {
         let failedActionPath = "$.body[0].for_each_string.iterations[1].body[0]"
-        let firstIteration = HeistExecutionStepResult(
+        let firstIteration = HeistExecutionStepResult.passed(
             path: "$.body[0].for_each_string.iterations[0]",
             kind: .forEachIteration,
-            status: .passed,
             durationMs: 5,
             intent: .forEachString(parameter: "item", count: 2),
             evidence: .forEachString(HeistForEachStringEvidence(
@@ -1211,14 +1241,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
                     command: .typeText(text: .literal("Milk"), target: nil),
-                    actionResult: ActionResult(success: true, method: .typeText)
+                    actionResult: ActionResult.success(method: .typeText)
                 ),
             ]
         )
-        let secondIteration = HeistExecutionStepResult(
+        let secondIteration = HeistExecutionStepResult.childAborted(
             path: "$.body[0].for_each_string.iterations[1]",
             kind: .forEachIteration,
-            status: .failed,
             durationMs: 6,
             intent: .forEachString(parameter: "item", count: 2),
             evidence: .forEachString(HeistForEachStringEvidence(
@@ -1239,12 +1268,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: failedActionPath,
                     command: .typeText(text: .literal("Eggs"), target: nil),
-                    actionResult: ActionResult(
-                        success: false,
+                    actionResult: ActionResult.failure(
                         method: .typeText,
-                        message: "field missing",
-                        errorKind: .elementNotFound
-                    ),
+                        errorKind: .elementNotFound,
+                        message: "field missing"),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "action dispatch succeeds",
@@ -1255,10 +1282,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         return HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .forEachString,
-                    status: .failed,
                     durationMs: 30,
                     intent: .forEachString(parameter: "item", count: 2),
                     evidence: .forEachString(HeistForEachStringEvidence(
@@ -1295,10 +1321,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         return HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .forEachString,
-                    status: .passed,
                     durationMs: 30,
                     intent: .forEachString(parameter: "item", count: 2),
                     evidence: .forEachString(HeistForEachStringEvidence(
@@ -1318,10 +1343,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         value: String,
         actionPath: String
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: "$.body[0].for_each_string.iterations[\(ordinal)]",
             kind: .forEachIteration,
-            status: .passed,
             durationMs: 5,
             intent: .forEachString(parameter: "item", count: 2),
             evidence: .forEachString(HeistForEachStringEvidence(
@@ -1335,7 +1359,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: actionPath,
                     command: .typeText(text: .literal(value), target: nil),
-                    actionResult: ActionResult(success: true, method: .typeText)
+                    actionResult: ActionResult.success(method: .typeText)
                 ),
             ]
         )

@@ -198,9 +198,9 @@ private extension TheFence {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
         let path = try arguments.schemaString(.path)
         let inlineDSL = try arguments.schemaString(.plan)
-        let requestResult = HeistPlanning.rejectRawStructuredJSONIRFieldsResult(
+        let requestResult = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(
             commandName: commandName,
-            fields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys)
+            fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)
         )
         .flatMap {
             HeistPlanning.admissionRequestResult(
@@ -230,14 +230,14 @@ private extension TheFence {
         }
     }
 
-    func rawStructuredJSONIRFields(
+    func rawStructuredJSONIRSourceFields(
         in arguments: CommandArgumentEnvelope,
         dropping keys: Set<FenceParameterKey>
-    ) -> Set<String> {
+    ) -> Set<HeistPlanRejectedPublicSourceField> {
         var fieldNames = Set(arguments.argumentValues.keys)
         fieldNames.remove(FenceParameterKey.requestId.rawValue)
         fieldNames.subtract(keys.map(\.rawValue))
-        return fieldNames.intersection(HeistPlanning.rawStructuredJSONIRFieldNames)
+        return HeistPlanRejectedPublicSourceField.sourceFields(in: fieldNames)
     }
 
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {

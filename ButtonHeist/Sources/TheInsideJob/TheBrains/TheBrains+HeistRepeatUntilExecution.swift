@@ -17,7 +17,7 @@ extension TheBrains {
     private struct RepeatUntilProgress {
         let iterationCount: Int
         let expectation: ExpectationResult
-        let waitOutcome: HeistWaitOutcome?
+        let waitReceipt: HeistWaitReceipt?
         let lastObservedSummary: String?
         let iterationNodes: [HeistExecutionStepResult]
 
@@ -25,7 +25,7 @@ extension TheBrains {
             RepeatUntilProgress(
                 iterationCount: iterationCount,
                 expectation: expectation,
-                waitOutcome: waitOutcome,
+                waitReceipt: waitReceipt,
                 lastObservedSummary: lastObservedSummary,
                 iterationNodes: iterationNodes
             )
@@ -129,7 +129,7 @@ extension TheBrains {
     }
 
     private enum RepeatUntilWaitProgress {
-        case observed(HeistWaitOutcome)
+        case observed(HeistWaitReceipt)
         case deadlineElapsed
 
         var observedSequence: SettledObservationSequence? {
@@ -168,7 +168,7 @@ extension TheBrains {
             }
         }
 
-        var heistWaitOutcome: HeistWaitOutcome? {
+        var heistWaitReceipt: HeistWaitReceipt? {
             switch self {
             case .observed(let outcome):
                 return outcome
@@ -200,7 +200,7 @@ extension TheBrains {
         var observedTrace: AccessibilityTrace?
         var lastObservedSummary: String?
         var lastExpectation: ExpectationResult
-        var lastWaitOutcome: HeistWaitOutcome?
+        var lastWaitReceipt: HeistWaitReceipt?
         var iterationNodes: [HeistExecutionStepResult] = []
 
         init(
@@ -208,10 +208,10 @@ extension TheBrains {
             initialProgress: RepeatUntilProgress
         ) {
             observedSequence = initialObservedSequence
-            observedTrace = initialProgress.waitOutcome?.accessibilityTrace
+            observedTrace = initialProgress.waitReceipt?.accessibilityTrace
             lastObservedSummary = initialProgress.lastObservedSummary
             lastExpectation = initialProgress.expectation
-            lastWaitOutcome = initialProgress.waitOutcome
+            lastWaitReceipt = initialProgress.waitReceipt
         }
 
         mutating func applyPostBody(_ postBody: RepeatUntilPostBodyResult) {
@@ -223,14 +223,14 @@ extension TheBrains {
             }
             lastObservedSummary = postBody.lastObservedSummary ?? lastObservedSummary
             lastExpectation = postBody.expectation
-            lastWaitOutcome = postBody.waitProgress.heistWaitOutcome ?? lastWaitOutcome
+            lastWaitReceipt = postBody.waitProgress.heistWaitReceipt ?? lastWaitReceipt
         }
 
         func progress(iterationCount: Int) -> RepeatUntilProgress {
             RepeatUntilProgress(
                 iterationCount: iterationCount,
                 expectation: lastExpectation,
-                waitOutcome: lastWaitOutcome,
+                waitReceipt: lastWaitReceipt,
                 lastObservedSummary: lastObservedSummary,
                 iterationNodes: iterationNodes
             )
@@ -312,7 +312,7 @@ extension TheBrains {
         return RepeatUntilProgress(
             iterationCount: 0,
             expectation: receipt.expectation,
-            waitOutcome: receipt.waitOutcome,
+            waitReceipt: receipt,
             lastObservedSummary: receipt.observationSummary,
             iterationNodes: []
         )
@@ -426,7 +426,7 @@ extension TheBrains {
             progress: RepeatUntilProgress(
                 iterationCount: frame.count,
                 expectation: expectation,
-                waitOutcome: nil,
+                waitReceipt: nil,
                 lastObservedSummary: lastObservedSummary,
                 iterationNodes: []
             ),
@@ -440,7 +440,7 @@ extension TheBrains {
                 progress: RepeatUntilProgress(
                     iterationCount: frame.count,
                     expectation: expectation,
-                    waitOutcome: nil,
+                    waitReceipt: nil,
                     lastObservedSummary: lastObservedSummary,
                     iterationNodes: iterationNodes
                 ),
@@ -555,11 +555,11 @@ extension TheBrains {
         ))
         let expectation = repeatUntilStopExpectation(
             step.predicate,
-            trace: receipt.waitOutcome.accessibilityTrace,
-            fallback: receipt.waitOutcome.message ?? receipt.expectation.actual
+            trace: receipt.accessibilityTrace,
+            fallback: receipt.message ?? receipt.expectation.actual
         )
         return RepeatUntilPostBodyResult(
-            waitProgress: .observed(receipt.waitOutcome),
+            waitProgress: .observed(receipt),
             expectation: expectation
         )
     }

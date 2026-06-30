@@ -512,63 +512,67 @@ extension PropertyChange: Codable {
 
 extension PropertyChange {
     package func satisfies(_ expected: AnyPropertyChange) -> Bool {
-        switch expected {
-        case .value(let expected):
-            return satisfies(expected)
-        case .traits(let expected):
-            return satisfies(expected)
-        case .hint(let expected):
-            return satisfies(expected)
-        case .actions(let expected):
-            return satisfies(expected)
-        case .frame(let expected):
-            return satisfies(expected)
-        case .activationPoint(let expected):
-            return satisfies(expected)
-        case .customContent(let expected):
-            return satisfies(expected)
-        case .rotors(let expected):
-            return satisfies(expected)
+        switch self {
+        case .value(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .traits(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .hint(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .actions(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .frame(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .activationPoint(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .customContent(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .rotors(let observed):
+            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+        case .label, .identifier:
+            return false
         }
     }
+}
 
-    private func satisfies(_ expected: ElementPropertyChange<ValueProperty>) -> Bool {
-        guard case .value(let observed) = self else { return false }
-        return observed.satisfies(expected)
+private protocol PropertyChangeExpectationVisitor {
+    associatedtype Result
+
+    func visit<P: ElementPropertyValueKind>(_ expected: ElementPropertyChange<P>) -> Result
+}
+
+private extension AnyPropertyChange {
+    func accept<Visitor: PropertyChangeExpectationVisitor>(_ visitor: Visitor) -> Visitor.Result {
+        switch self {
+        case .value(let expected):
+            return visitor.visit(expected)
+        case .traits(let expected):
+            return visitor.visit(expected)
+        case .hint(let expected):
+            return visitor.visit(expected)
+        case .actions(let expected):
+            return visitor.visit(expected)
+        case .frame(let expected):
+            return visitor.visit(expected)
+        case .activationPoint(let expected):
+            return visitor.visit(expected)
+        case .customContent(let expected):
+            return visitor.visit(expected)
+        case .rotors(let expected):
+            return visitor.visit(expected)
+        }
     }
+}
 
-    private func satisfies(_ expected: ElementPropertyChange<TraitsProperty>) -> Bool {
-        guard case .traits(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
+private struct ObservedPropertyChangeSatisfier<P: ElementPropertyValueKind>: PropertyChangeExpectationVisitor {
+    let observed: ElementPropertyValueChange<P>
 
-    private func satisfies(_ expected: ElementPropertyChange<HintProperty>) -> Bool {
-        guard case .hint(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<ActionsProperty>) -> Bool {
-        guard case .actions(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<FrameProperty>) -> Bool {
-        guard case .frame(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<ActivationPointProperty>) -> Bool {
-        guard case .activationPoint(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<CustomContentProperty>) -> Bool {
-        guard case .customContent(let observed) = self else { return false }
-        return observed.satisfies(expected)
-    }
-
-    private func satisfies(_ expected: ElementPropertyChange<RotorsProperty>) -> Bool {
-        guard case .rotors(let observed) = self else { return false }
+    func visit<Expected: ElementPropertyValueKind>(_ expected: ElementPropertyChange<Expected>) -> Bool {
+        guard P.property == Expected.property,
+              let expected = expected as? ElementPropertyChange<P>
+        else {
+            return false
+        }
         return observed.satisfies(expected)
     }
 }
@@ -813,11 +817,7 @@ extension CustomContentProperty: ElementPropertyValueKind {
 
     public static func matches(_ checker: CustomContentMatch<String>, value: [HeistCustomContent]?) -> Bool {
         guard let value else { return false }
-        return value.contains { content in
-            (checker.label.map { $0.matches(content.label) } ?? true)
-                && (checker.value.map { $0.matches(content.value) } ?? true)
-                && (checker.isImportant.map { $0 == content.isImportant } ?? true)
-        }
+        return value.contains { checker.matches($0) }
     }
 
     public static func erasedValue(_ value: [HeistCustomContent]) -> ElementPropertyValue {
@@ -844,11 +844,8 @@ extension RotorsProperty: ElementPropertyValueKind {
     public static func matches(_ checker: RotorSetMatch<String>, value: [HeistRotor]?) -> Bool {
         guard let value else { return false }
         let rotorNames = value.map(\.name)
-        return checker.include.allSatisfy { match in
-            rotorNames.contains { match.matches($0) }
-        } && checker.exclude.allSatisfy { match in
-            !rotorNames.contains { match.matches($0) }
-        }
+        return checker.include.allSatisfy { rotorNames.contains(matching: $0) }
+            && checker.exclude.allSatisfy { !rotorNames.contains(matching: $0) }
     }
 
     public static func erasedValue(_ value: [HeistRotor]) -> ElementPropertyValue {
@@ -857,6 +854,26 @@ extension RotorsProperty: ElementPropertyValueKind {
 
     public static func change(old: [HeistRotor]?, new: [HeistRotor]?) -> PropertyChange {
         .rotors(old: old, new: new)
+    }
+}
+
+private extension CustomContentMatch where Value == String {
+    func matches(_ content: HeistCustomContent) -> Bool {
+        label.matches(content.label)
+            && value.matches(content.value)
+            && (isImportant.map { $0 == content.isImportant } ?? true)
+    }
+}
+
+private extension Optional where Wrapped == StringMatch<String> {
+    func matches(_ text: String) -> Bool {
+        map { $0.matches(text) } ?? true
+    }
+}
+
+private extension Collection where Element == String {
+    func contains(matching match: StringMatch<String>) -> Bool {
+        contains { match.matches($0) }
     }
 }
 

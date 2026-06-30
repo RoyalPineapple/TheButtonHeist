@@ -697,7 +697,7 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedTypes: [RuntimeActionType] = []
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
-            return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
+            return ActionResult.success(method: .heistPlan, message: command.runtimeType.rawValue)
         }
         let plan = try HeistPlan(body: commands.map { .action(try ActionStep(command: $0)) })
 
@@ -735,12 +735,11 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 dispatchedTypes.append(command.runtimeType)
-                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
             },
             wait: { request in
                 waitRequests.append(request)
-                return ActionResult(
-                    success: true,
+                return ActionResult.success(
                     method: .wait,
                     accessibilityTrace: AccessibilityTrace(capture: observedReady.capture)
                 )
@@ -785,8 +784,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult(
-                    success: true,
+                ActionResult.success(
                     method: .activate,
                     subjectEvidence: ActionSubjectEvidence(
                         source: .resolvedSemanticTarget,
@@ -832,11 +830,10 @@ final class TheBrainsActionTests: XCTestCase {
             if case .takeScreenshot = command {
                 return ActionResult.success(payload: .screenshot(screenshot))
             }
-            return ActionResult(
-                success: false,
+            return ActionResult.failure(
                 method: .activate,
+                errorKind: .actionFailed,
                 message: "activate failed",
-                errorKind: .actionFailed
             )
         }
         let plan = try HeistPlan(body: [
@@ -868,13 +865,12 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
             if case .takeScreenshot = command {
-                return ActionResult(success: true, method: .takeScreenshot)
+                return ActionResult.success(method: .takeScreenshot)
             }
-            return ActionResult(
-                success: false,
+            return ActionResult.failure(
                 method: .activate,
+                errorKind: .actionFailed,
                 message: "activate failed",
-                errorKind: .actionFailed
             )
         }
         let plan = try HeistPlan(body: [
@@ -1009,7 +1005,7 @@ final class TheBrainsActionTests: XCTestCase {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult(success: true, method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -1049,7 +1045,7 @@ final class TheBrainsActionTests: XCTestCase {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult(success: true, method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
             },
             observedTimeouts: { observedTimeouts.append($0) }
         )
@@ -1088,15 +1084,14 @@ final class TheBrainsActionTests: XCTestCase {
                 if case .activate = command {
                     activationCount += 1
                     if activationCount == 2 {
-                        return ActionResult(
-                            success: false,
+                        return ActionResult.failure(
                             method: .activate,
+                            errorKind: .actionFailed,
                             message: "Element is disabled (has 'notEnabled' trait)",
-                            errorKind: .actionFailed
                         )
                     }
                 }
-                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -1137,15 +1132,14 @@ final class TheBrainsActionTests: XCTestCase {
                 if case .activate = command {
                     activationCount += 1
                     if activationCount == 2 {
-                        return ActionResult(
-                            success: false,
+                        return ActionResult.failure(
                             method: .activate,
+                            errorKind: .actionFailed,
                             message: "Element is disabled (has 'notEnabled' trait)",
-                            errorKind: .actionFailed
                         )
                     }
                 }
-                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -1195,7 +1189,7 @@ final class TheBrainsActionTests: XCTestCase {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult(success: true, method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -1632,11 +1626,11 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             },
             wait: { request in
                 waitRequests.append(request)
-                return ActionResult(success: true, method: .wait)
+                return ActionResult.success(method: .wait)
             }
         )
         let plan = try HeistPlan(body: [
@@ -1669,7 +1663,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [observedReady],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             },
             observedScopes: { scope in
                 observedScopes.append(scope)
@@ -1742,7 +1736,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlanAdmissionCandidate(definitions: [
@@ -1790,7 +1784,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -1842,7 +1836,7 @@ final class TheBrainsActionTests: XCTestCase {
                 observedState(labels: ["Payment Complete"]),
             ],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -1886,7 +1880,7 @@ final class TheBrainsActionTests: XCTestCase {
                 ]),
             ],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -1933,7 +1927,7 @@ final class TheBrainsActionTests: XCTestCase {
                 observedState(labels: ["Receipt"], screenId: "receipt"),
             ],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -1976,7 +1970,7 @@ final class TheBrainsActionTests: XCTestCase {
                 ]),
             ],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -2027,7 +2021,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlanAdmissionCandidate(definitions: [
@@ -2057,7 +2051,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .typeText)
+                return ActionResult.success(method: .typeText)
             }
         )
         let plan = try HeistPlan(
@@ -2092,7 +2086,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -2141,7 +2135,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(definitions: [
@@ -2210,7 +2204,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                ActionResult.success(method: .activate, accessibilityTrace: trace)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2240,14 +2234,13 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult(success: true, method: .activate)
+                ActionResult.success(method: .activate)
             },
             wait: { _ in
-                ActionResult(
-                    success: false,
+                ActionResult.failure(
                     method: .wait,
-                    message: "timed out after 0.2s — expectation not met",
                     errorKind: .timeout,
+                    message: "timed out after 0.2s — expectation not met",
                     accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 )
             }
@@ -2350,7 +2343,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Ready"])],
             execute: { _ in
                 demandDuringAction = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             },
             observedScopes: { _ in
                 demandDuringObservation = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
@@ -2379,7 +2372,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [],
             execute: { _ in
                 demandDuringActions.append(self.brains.stash.semanticObservationStream.hasActiveObservationDemand)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2509,9 +2502,9 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { command in
                 executedCommands.append(command)
                 if case .takeScreenshot = command {
-                    return ActionResult(success: true, method: .takeScreenshot)
+                    return ActionResult.success(method: .takeScreenshot)
                 }
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2551,7 +2544,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, initialState, initialState],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2599,7 +2592,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, initialState],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2636,7 +2629,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, afterFirstMutation],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2679,7 +2672,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, afterAddition],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2718,7 +2711,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, stateOnlyMutation],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
+                return ActionResult.success(method: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -2751,11 +2744,10 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [initialState],
             execute: { _ in
-                ActionResult(
-                    success: false,
+                ActionResult.failure(
                     method: .activate,
+                    errorKind: .actionFailed,
                     message: "activate failed",
-                    errorKind: .actionFailed
                 )
             }
         )
@@ -2809,16 +2801,14 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [initialState, stillPresentState],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult(
-                    success: true,
+                return ActionResult.success(
                     method: .activate,
                     accessibilityTrace: AccessibilityTrace(capture: stillPresentState.capture)
                 )
             },
             wait: { request in
                 waitedSteps.append(request.step)
-                return ActionResult(
-                    success: true,
+                return ActionResult.success(
                     method: .wait,
                     accessibilityTrace: AccessibilityTrace(capture: waitObservedState.capture)
                 )
@@ -3935,78 +3925,13 @@ final class TheBrainsActionTests: XCTestCase {
                 if let execute {
                     return await execute(command)
                 }
-                return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
+                return ActionResult.success(method: .heistPlan, message: command.runtimeType.rawValue)
             },
             wait: { request in
-                let waitStep = request.step
-                let initialTrace = request.initialTrace
-                let afterSequence = request.afterSequence
-                let observationScope = SemanticObservationScope.discovery
-                if let wait {
-                    return self.heistWaitReceipt(for: waitStep, result: await wait(request))
-                }
-                if let initialTrace, afterSequence == nil {
-                    let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace)
-                    if expectation.met || waitStep.timeout == 0 {
-                        let result = ActionResult(
-                            success: expectation.met,
-                            method: .wait,
-                            message: expectation.actual,
-                            errorKind: expectation.met ? nil : .timeout,
-                            accessibilityTrace: initialTrace
-                        )
-                        return HeistWaitReceipt(actionResult: result, expectation: expectation)
-                    }
-                }
-                if waitStep.timeout == 0,
-                   afterSequence == nil,
-                   let observation = observationSource.immediate(scope: observationScope) {
-                    let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: observation)
-                    let result = ActionResult(
-                        success: expectation.met,
-                        method: .wait,
-                        message: expectation.actual,
-                        errorKind: expectation.met ? nil : .timeout,
-                        accessibilityTrace: observation.accessibilityTrace
-                    )
-                    return HeistWaitReceipt(
-                        actionResult: result,
-                        expectation: expectation,
-                        observedSequence: observation.event.sequence,
-                        observationSummary: observation.summary
-                    )
-                }
-                guard let observation = observationSource.next(
-                    scope: observationScope,
-                    timeout: waitStep.timeout
-                ) else {
-                    let expectation = ExpectationResult(
-                        met: false,
-                        predicate: waitStep.predicate,
-                        actual: "no settled semantic observation available"
-                    )
-                    let result = ActionResult(
-                        success: false,
-                        method: .wait,
-                        message: expectation.actual,
-                        errorKind: .timeout
-                    )
-                    return HeistWaitReceipt(actionResult: result, expectation: expectation)
-                }
-                let trace = observation.accessibilityTrace
-                let met = PredicateEvaluation.evaluate(waitStep.predicate, in: observation)
-                let result = ActionResult(
-                    success: met.met,
-                    method: .wait,
-                    message: met.actual,
-                    errorKind: met.met ? nil : .timeout,
-                    accessibilityTrace: trace
-                )
-                return HeistWaitReceipt(
-                    actionResult: result,
-                    expectation: met,
-                    observedSequence: observation.event.sequence,
-                    observationSummary: observation.summary
+                await self.heistRuntimeWaitReceipt(
+                    for: request,
+                    wait: wait,
+                    observationSource: observationSource
                 )
             },
             selectPredicateCase: { cases, timeout in
@@ -4024,6 +3949,73 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
+    private func heistRuntimeWaitReceipt(
+        for request: TheBrains.HeistRuntimeWaitRequest,
+        wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)?,
+        observationSource: ScriptedHeistObservationSource
+    ) async -> HeistWaitReceipt {
+        let waitStep = request.step
+        let initialTrace = request.initialTrace
+        let afterSequence = request.afterSequence
+        let observationScope = SemanticObservationScope.discovery
+        if let wait {
+            return heistWaitReceipt(for: waitStep, result: await wait(request))
+        }
+        if let initialTrace, afterSequence == nil {
+            let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace)
+            if expectation.met || waitStep.timeout == 0 {
+                let result = makeWaitActionResult(
+                    met: expectation.met,
+                    message: expectation.actual,
+                    accessibilityTrace: initialTrace
+                )
+                return heistWaitReceipt(for: waitStep, result: result, expectation: expectation)
+            }
+        }
+        if waitStep.timeout == 0,
+           afterSequence == nil,
+           let observation = observationSource.immediate(scope: observationScope) {
+            return heistWaitReceipt(for: waitStep, observation: observation)
+        }
+        guard let observation = observationSource.next(
+            scope: observationScope,
+            timeout: waitStep.timeout
+        ) else {
+            let expectation = ExpectationResult(
+                met: false,
+                predicate: waitStep.predicate,
+                actual: "no settled semantic observation available"
+            )
+            let result = ActionResult.failure(
+                method: .wait,
+                errorKind: .timeout,
+                message: expectation.actual
+            )
+            return heistWaitReceipt(for: waitStep, result: result, expectation: expectation)
+        }
+        return heistWaitReceipt(for: waitStep, observation: observation)
+    }
+
+    private func heistWaitReceipt(
+        for step: ResolvedWaitStep,
+        observation: HeistSemanticObservation
+    ) -> HeistWaitReceipt {
+        let expectation = PredicateEvaluation.evaluate(step.predicate, in: observation)
+        let result = makeWaitActionResult(
+            met: expectation.met,
+            message: expectation.actual,
+            accessibilityTrace: observation.accessibilityTrace
+        )
+        return HeistWaitReceipt(
+            status: heistWaitStatus(for: result),
+            message: result.message,
+            accessibilityTrace: result.accessibilityTrace,
+            expectation: expectation,
+            observedSequence: observation.event.sequence,
+            observationSummary: observation.summary
+        )
+    }
+
     private func heistWaitReceipt(
         for step: ResolvedWaitStep,
         result: ActionResult
@@ -4038,7 +4030,29 @@ final class TheBrainsActionTests: XCTestCase {
                 actual: result.message ?? "failed"
             )
         }
-        return HeistWaitReceipt(actionResult: result, expectation: expectation)
+        return heistWaitReceipt(for: step, result: result, expectation: expectation)
+    }
+
+    private func heistWaitReceipt(
+        for _: ResolvedWaitStep,
+        result: ActionResult,
+        expectation: ExpectationResult
+    ) -> HeistWaitReceipt {
+        HeistWaitReceipt(
+            status: heistWaitStatus(for: result),
+            message: result.message,
+            accessibilityTrace: result.accessibilityTrace,
+            expectation: expectation
+        )
+    }
+
+    private func heistWaitStatus(for result: ActionResult) -> HeistWaitReceipt.Status {
+        if result.success {
+            return .matched
+        }
+        return result.errorKind == .timeout
+            ? .timedOut
+            : .failed(result.errorKind ?? .general)
     }
 
     private func normalizedActionMessage(
@@ -4206,6 +4220,26 @@ private extension ActionResult {
         guard case .heistExecution(let result) = payload else { return nil }
         return result
     }
+}
+
+private func makeWaitActionResult(
+    met: Bool,
+    message: String?,
+    accessibilityTrace: AccessibilityTrace?
+) -> ActionResult {
+    if met {
+        return ActionResult.success(
+            method: .wait,
+            message: message,
+            accessibilityTrace: accessibilityTrace
+        )
+    }
+    return ActionResult.failure(
+        method: .wait,
+        errorKind: .timeout,
+        message: message,
+        accessibilityTrace: accessibilityTrace
+    )
 }
 
 #endif

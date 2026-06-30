@@ -554,15 +554,13 @@ extension PredicateWait {
                 settledDiagnostics: settledDiagnostics
             ))
         return HeistWaitReceipt(
-            waitOutcome: HeistWaitOutcome(
-                status: success ? .matched : .timedOut,
-                message: message,
-                accessibilityTrace: trace,
-                expectation: expectation,
-                observedSequence: observedSequence,
-                observationSummary: observationSummary,
-                warning: warning
-            )
+            status: success ? .matched : .timedOut,
+            message: message,
+            accessibilityTrace: trace,
+            expectation: expectation,
+            observedSequence: observedSequence,
+            observationSummary: observationSummary,
+            warning: warning
         )
     }
 

@@ -230,7 +230,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult(success: true, method: .increment)
+            return ActionResult.success(method: .increment)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -267,7 +267,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult(success: true, method: .increment)
+            return ActionResult.success(method: .increment)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -350,10 +350,9 @@ final class HeistReceiptTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "stop"),
                     failure: HeistFailureDetail(
@@ -362,10 +361,9 @@ final class HeistReceiptTests: XCTestCase {
                         observed: "stop"
                     )
                 ),
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0].failure.actions[0]",
                     kind: .action,
-                    status: .passed,
                     durationMs: 1,
                     intent: .action(command: "takeScreenshot", target: nil),
                     evidence: .action(.dispatch(
@@ -475,12 +473,12 @@ private final class ReceiptWaitScript {
                 predicate: step.predicate,
                 actual: "no settled semantic observation available"
             )
-            return HeistWaitReceipt(waitOutcome: HeistWaitOutcome(
+            return HeistWaitReceipt(
                 status: .timedOut,
                 message: expectation.actual,
                 accessibilityTrace: nil,
                 expectation: expectation
-            ))
+            )
         }
 
         let state = states.removeFirst()
@@ -490,14 +488,14 @@ private final class ReceiptWaitScript {
         previousCapture = state.capture
 
         let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace)
-        return HeistWaitReceipt(waitOutcome: HeistWaitOutcome(
+        return HeistWaitReceipt(
             status: expectation.met ? .matched : .timedOut,
             message: expectation.actual,
             accessibilityTrace: trace,
             expectation: expectation,
             observedSequence: nextSequence,
             observationSummary: "known: \(state.interface.projectedElements.count) elements"
-        ))
+        )
     }
 }
 

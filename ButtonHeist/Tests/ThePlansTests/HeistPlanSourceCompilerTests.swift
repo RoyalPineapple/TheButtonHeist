@@ -905,9 +905,9 @@ import Testing
 }
 
 @Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanning.rejectRawStructuredJSONIRFieldsResult(
+    let result = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(
         commandName: "run_heist",
-        fields: ["body", "version"]
+        fields: [.body, .version]
     )
 
     guard let diagnostic = result.failureDiagnostics?.first else {

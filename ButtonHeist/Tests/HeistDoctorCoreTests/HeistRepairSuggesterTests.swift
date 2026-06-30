@@ -985,30 +985,43 @@ private let expectedRepairJSONReportJSON = """
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
             ?? AccessibilityTrace(first: before)
-        let step = HeistExecutionStepResult(
-            path: path,
-            kind: .action,
-            status: status,
-            durationMs: 1,
-            intent: .action(command: "activate", target: target.description),
-            evidence: .action(.dispatch(
-                command: .activate(.target(target)),
-                actionResult: ActionResult(
-                    success: actionSucceeded,
-                    method: .activate,
-                    message: actionSucceeded ? nil : "No element matching \(target)",
-                    errorKind: actionSucceeded ? nil : .elementNotFound,
-                    accessibilityTrace: trace
-                )
-            )),
-            failure: status == .failed
-                ? HeistFailureDetail(
+        let actionResult = if actionSucceeded {
+            ActionResult.success(
+                method: .activate,
+                accessibilityTrace: trace
+            )
+        } else {
+            ActionResult.failure(
+                method: .activate,
+                errorKind: .elementNotFound,
+                message: "No element matching \(target)",
+                accessibilityTrace: trace
+            )
+        }
+        let evidence = HeistStepEvidence.action(.dispatch(
+            command: .activate(.target(target)),
+            actionResult: actionResult
+        ))
+        let step = status == .failed
+            ? HeistExecutionStepResult.failed(
+                path: path,
+                kind: .action,
+                durationMs: 1,
+                intent: .action(command: "activate", target: target.description),
+                evidence: evidence,
+                failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action dispatch succeeds",
                     observed: "No element matching \(target)",
                     expected: target.description
                 )
-                : nil
+            )
+            : HeistExecutionStepResult.passed(
+                path: path,
+                kind: .action,
+                durationMs: 1,
+                intent: .action(command: "activate", target: target.description),
+                evidence: evidence
         )
         return HeistExecutionResult(
             steps: [step],

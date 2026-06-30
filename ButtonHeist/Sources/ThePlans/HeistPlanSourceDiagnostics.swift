@@ -509,12 +509,12 @@ extension HeistPlanRuntimeSafetyError {
 }
 
 public extension HeistPlanning {
-    static func rejectRawStructuredJSONIRFieldsResult(
+    static func rejectRawStructuredJSONIRSourceFieldsResult(
         commandName: String,
-        fields: Set<String>
+        fields: Set<HeistPlanRejectedPublicSourceField>
     ) -> ValidationResult<Void, HeistBuildDiagnostic> {
         do {
-            try rejectRawStructuredJSONIRFields(commandName: commandName, fields: fields)
+            try rejectRawStructuredJSONIRSourceFields(commandName: commandName, fields: fields)
             return .success((), diagnostics: [])
         } catch let error as HeistPlanningError {
             return .failure(error.diagnostics)

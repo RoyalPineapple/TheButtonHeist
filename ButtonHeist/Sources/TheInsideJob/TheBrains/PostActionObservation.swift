@@ -521,7 +521,7 @@ extension ActionResult {
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) -> Self {
-        var builder = ActionResultBuilder(method: method, capture: capture)
+        var builder = ActionResultBuilder(capture: capture)
         builder.message = message
         if let accessibilityTrace {
             builder.accessibilityTrace = accessibilityTrace
@@ -532,11 +532,11 @@ extension ActionResult {
         builder.activationTrace = activationTrace
         switch (outcome, payload) {
         case (.success, .none):
-            return builder.success()
+            return builder.success(method: method)
         case (.success, .payload(let payload)):
             return builder.success(payload: payload)
         case (.failure(let errorKind), .none):
-            return builder.failure(errorKind: errorKind)
+            return builder.failure(method: method, errorKind: errorKind)
         case (.failure(let errorKind), .payload(let payload)):
             return builder.failure(errorKind: errorKind, payload: payload)
         }

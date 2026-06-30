@@ -372,7 +372,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
         default:
-            return .actionResult(ActionResult(success: true, method: .activate))
+            return .actionResult(ActionResult.success(method: .activate))
         }
     }
 
@@ -397,7 +397,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 ))
             }
-            return .actionResult(ActionResult(success: true, method: .activate))
+            return .actionResult(ActionResult.success(method: .activate))
         }
         return probe
     }
@@ -551,12 +551,25 @@ func makeTestHeistActionStep(
         evidence = .dispatch(command: command, actionResult: result)
     }
 
-    return HeistExecutionStepResult(
+    let receiptEvidence = HeistStepEvidence.action(evidence)
+    guard !result.success else {
+        return .passed(
+            path: path,
+            kind: .action,
+            durationMs: durationMs,
+            evidence: receiptEvidence
+        )
+    }
+    return .failed(
         path: path,
         kind: .action,
-        status: result.success ? .passed : .failed,
         durationMs: durationMs,
-        evidence: .action(evidence)
+        evidence: receiptEvidence,
+        failure: HeistFailureDetail(
+            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            contract: "action dispatch succeeds",
+            observed: result.message ?? "action failed"
+        )
     )
 }
 

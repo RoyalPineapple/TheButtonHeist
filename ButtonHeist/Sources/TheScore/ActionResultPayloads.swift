@@ -303,7 +303,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case success
         case failure(ErrorKind)
 
-        init?(success: Bool, errorKind: ErrorKind?) {
+        private init?(decodedSuccess success: Bool, errorKind: ErrorKind?) {
             switch (success, errorKind) {
             case (true, nil):
                 self = .success
@@ -312,6 +312,12 @@ public struct ActionResult: Codable, Sendable, Equatable {
             case (true, .some), (false, nil):
                 return nil
             }
+        }
+
+        /// Boundary-only adapter for external JSON where success/errorKind
+        /// arrive as separate wire fields.
+        fileprivate static func decoded(success: Bool, errorKind: ErrorKind?) -> Outcome? {
+            Outcome(decodedSuccess: success, errorKind: errorKind)
         }
 
         var success: Bool {
@@ -462,10 +468,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        success: Bool,
+        outcome: Outcome,
         method: ActionMethod,
         message: String? = nil,
-        errorKind: ErrorKind? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -473,9 +478,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
-        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
-            preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
-        }
         self.init(
             outcome: outcome,
             method: method,
@@ -491,10 +493,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        success: Bool,
+        outcome: Outcome,
         payload: ActionResultPayload,
         message: String? = nil,
-        errorKind: ErrorKind? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -502,9 +503,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
-        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
-            preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
-        }
         self.init(
             outcome: outcome,
             method: payload.method,
@@ -567,7 +565,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind)
         let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
 
-        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
+        guard let outcome = Outcome.decoded(success: success, errorKind: errorKind) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .errorKind,
                 in: container,

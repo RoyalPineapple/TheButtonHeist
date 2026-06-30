@@ -27,24 +27,11 @@ extension TheBrains {
     }
 }
 
-struct HeistWaitOutcome {
+struct HeistWaitReceipt {
     enum Status {
         case matched
         case timedOut
         case failed(ErrorKind)
-
-        init(actionResult: ActionResult) {
-            if actionResult.success {
-                self = .matched
-            } else if actionResult.errorKind == .timeout {
-                self = .timedOut
-            } else {
-                guard let errorKind = actionResult.errorKind else {
-                    preconditionFailure("Failed wait ActionResult must carry an ErrorKind")
-                }
-                self = .failed(errorKind)
-            }
-        }
 
         var succeeded: Bool {
             guard case .matched = self else { return false }
@@ -71,6 +58,10 @@ struct HeistWaitOutcome {
     let observationSummary: String?
     let warning: HeistPredicateWarning?
 
+    var actionResult: ActionResult {
+        makeActionResult()
+    }
+
     var succeeded: Bool {
         status.succeeded
     }
@@ -93,82 +84,34 @@ struct HeistWaitOutcome {
         self.warning = warning
     }
 
-    init(
-        actionResult: ActionResult,
-        expectation: ExpectationResult,
-        observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
-    ) {
-        self.init(
-            status: Status(actionResult: actionResult),
-            message: actionResult.message,
-            accessibilityTrace: actionResult.accessibilityTrace,
-            expectation: expectation,
-            observedSequence: observedSequence,
-            observationSummary: observationSummary,
-            warning: warning
-        )
-    }
-
-    @MainActor
-    func actionResult(method: ActionMethod = .wait) -> ActionResult {
-        var builder = ActionResultBuilder(method: method)
-        builder.message = message
-        builder.accessibilityTrace = accessibilityTrace
+    func makeActionResult(method: ActionMethod = .wait) -> ActionResult {
         switch status {
         case .matched:
-            return builder.success()
+            return ActionResult.success(
+                method: method,
+                message: message,
+                accessibilityTrace: accessibilityTrace
+            )
         case .timedOut:
-            return builder.failure(errorKind: .timeout)
+            return ActionResult.failure(
+                method: method,
+                errorKind: .timeout,
+                message: message,
+                accessibilityTrace: accessibilityTrace
+            )
         case .failed(let errorKind):
-            return builder.failure(errorKind: errorKind)
+            return ActionResult.failure(
+                method: method,
+                errorKind: errorKind,
+                message: message,
+                accessibilityTrace: accessibilityTrace
+            )
         }
     }
 }
 
-struct HeistWaitReceipt {
-    let actionResult: ActionResult
-    let waitOutcome: HeistWaitOutcome
-    let expectation: ExpectationResult
-    let observedSequence: SettledObservationSequence?
-    let observationSummary: String?
-    let warning: HeistPredicateWarning?
-
-    init(
-        actionResult: ActionResult,
-        expectation: ExpectationResult,
-        observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
-    ) {
-        self.actionResult = actionResult
-        self.waitOutcome = HeistWaitOutcome(
-            actionResult: actionResult,
-            expectation: expectation,
-            observedSequence: observedSequence,
-            observationSummary: observationSummary,
-            warning: warning
-        )
-        self.expectation = expectation
-        self.observedSequence = observedSequence
-        self.observationSummary = observationSummary
-        self.warning = warning
-    }
-
-    @MainActor
-    init(waitOutcome: HeistWaitOutcome) {
-        self.actionResult = waitOutcome.actionResult()
-        self.waitOutcome = waitOutcome
-        self.expectation = waitOutcome.expectation
-        self.observedSequence = waitOutcome.observedSequence
-        self.observationSummary = waitOutcome.observationSummary
-        self.warning = waitOutcome.warning
-    }
-}
-
-extension HeistWaitOutcome.Status: Equatable {
-    static func == (lhs: HeistWaitOutcome.Status, rhs: HeistWaitOutcome.Status) -> Bool {
+extension HeistWaitReceipt.Status: Equatable {
+    static func == (lhs: HeistWaitReceipt.Status, rhs: HeistWaitReceipt.Status) -> Bool {
         switch (lhs, rhs) {
         case (.matched, .matched), (.timedOut, .timedOut):
             return true

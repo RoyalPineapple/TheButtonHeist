@@ -84,6 +84,40 @@ import Testing
         )
     }
 
+    @Test func `heist wait receipt is the single typed wait result source`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistWaitExecution.swift")
+        let receipt = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+HeistWaitReceipt\b"#),
+            "The wait pipeline should expose one canonical typed receipt"
+        )
+        let predicateWait = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
+
+        #expect(
+            !source.contents.contains("struct HeistWaitOutcome"),
+            "HeistWaitReceipt should be the canonical typed wait result; do not add a parallel outcome wrapper"
+        )
+        #expect(receipt.contents.contains("enum Status"))
+        #expect(receipt.contents.contains("case matched"))
+        #expect(receipt.contents.contains("case timedOut"))
+        #expect(receipt.contents.contains("case failed("))
+        #expect(
+            try !receipt.containsMatch(#"\blet\s+actionResult\s*:"#),
+            "HeistWaitReceipt must derive ActionResult at the output boundary, not store it"
+        )
+        #expect(
+            try !receipt.containsMatch(#"\blet\s+waitOutcome\s*:"#),
+            "HeistWaitReceipt must not store a second wait outcome source of truth"
+        )
+        #expect(
+            try receipt.containsMatch(#"\bvar\s+actionResult\s*:\s*ActionResult\b"#),
+            "ActionResult should remain a computed output projection for wait callers"
+        )
+        #expect(
+            try !predicateWait.containsMatch(#"\bActionResult\s*\("#),
+            "PredicateWait should reduce typed evidence to HeistWaitReceipt, then project ActionResult at callers"
+        )
+    }
+
     @Test func `post action receipts use explicit observation outcome`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
         let observationOutcome = try #require(

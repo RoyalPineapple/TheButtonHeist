@@ -931,7 +931,7 @@ final class TheFenceHandlerTests: XCTestCase {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
             return probe
         }
@@ -1810,19 +1810,16 @@ final class TheFenceHandlerTests: XCTestCase {
         // A failed child must mark the response as failure even when the top-level
         // abort location is carried by the receipt instead of an index.
         let childPath = "$.body[0].heist.body[0]"
-        let child = HeistExecutionStepResult(
+        let child = HeistExecutionStepResult.failed(
             path: childPath,
             kind: .action,
-            status: .failed,
             durationMs: 5,
             evidence: .action(.dispatch(
                 command: nil,
-                actionResult: ActionResult(
-                    success: false,
+                actionResult: ActionResult.failure(
                     method: .activate,
-                    message: "boom",
-                    errorKind: .actionFailed
-                )
+                    errorKind: .actionFailed,
+                    message: "boom")
             )),
             failure: HeistFailureDetail(
                 category: .action,
@@ -1832,11 +1829,14 @@ final class TheFenceHandlerTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .heist,
-                    status: .failed,
                     durationMs: 5,
+                    evidence: .invocation(HeistInvocationEvidence(
+                        name: "heist",
+                        childFailedPath: childPath
+                    )),
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "heist body completes without failure",
@@ -3249,10 +3249,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
-            return .actionResult(ActionResult(
-                success: true,
+            return .actionResult(ActionResult.success(
                 method: .wait,
                 accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 1, edits: ElementEdits())))
             ))
@@ -3276,10 +3275,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
-            return .actionResult(ActionResult(
-                success: true,
+            return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
                 accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
@@ -3306,13 +3304,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
-            return .actionResult(ActionResult(
-                success: false,
+            return .actionResult(ActionResult.failure(
                 method: .wait,
-                message: "timed out after 0.2s — expectation not met",
                 errorKind: .timeout,
+                message: "timed out after 0.2s — expectation not met",
                 accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
             ))
         }
@@ -3365,20 +3362,18 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.runtimeActionResponse = { message in
             switch message {
             case .activate:
-                return .actionResult(ActionResult(
-                    success: true,
+                return .actionResult(ActionResult.success(
                     method: .activate,
                     accessibilityTrace: trace
                 ))
             case .wait:
-                return .actionResult(ActionResult(
-                    success: true,
+                return .actionResult(ActionResult.success(
                     method: .wait,
                     message: "expectation met after observed change",
                     accessibilityTrace: trace
                 ))
             default:
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 
@@ -3834,7 +3829,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .requestInterface:
                 return .interface(interfaceFixture)
             default:
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 
@@ -3873,7 +3868,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     )
                 ))
             default:
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 
@@ -3962,7 +3957,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .requestInterface:
                 return .interface(makeReceiptTestInterface([submit]))
             default:
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 

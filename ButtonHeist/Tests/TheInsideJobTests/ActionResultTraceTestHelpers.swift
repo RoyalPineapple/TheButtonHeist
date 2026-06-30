@@ -144,12 +144,25 @@ func makeTestHeistActionStep(
     result: ActionResult = makeTestActionResult(),
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
-    HeistExecutionStepResult(
+    let evidence = HeistStepEvidence.action(.dispatch(command: command, actionResult: result))
+    guard !result.success else {
+        return .passed(
+            path: path,
+            kind: .action,
+            durationMs: durationMs,
+            evidence: evidence
+        )
+    }
+    return .failed(
         path: path,
         kind: .action,
-        status: result.success ? .passed : .failed,
         durationMs: durationMs,
-        evidence: .action(.dispatch(command: command, actionResult: result))
+        evidence: evidence,
+        failure: HeistFailureDetail(
+            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            contract: "action dispatch succeeds",
+            observed: result.message ?? "action failed"
+        )
     )
 }
 

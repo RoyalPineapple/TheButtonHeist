@@ -216,8 +216,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             parentHash: first.hash,
             context: AccessibilityTrace.Context(screenId: "settings")
         )
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: AccessibilityTrace(captures: [first, last])
         )
@@ -246,8 +245,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             return XCTFail("Expected no-change endpoint delta, got \(String(describing: trace.endpointDelta))")
         }
 
-        let action = ActionResult(
-            success: true,
+        let action = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace
         )
@@ -261,8 +259,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testScreenChangedRequiresTraceEndpointEdge() {
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: AccessibilityTrace(interface: Interface(
                 timestamp: Date(timeIntervalSince1970: 0),
@@ -735,8 +732,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedAllFieldsMatch() {
-        let result = ActionResult(
-            success: true, method: .activate,
+        let result = ActionResult.success(
+            method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                 makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
             ]))))
@@ -748,8 +745,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedNoFilters() {
-        let result = ActionResult(
-            success: true, method: .activate,
+        let result = ActionResult.success(
+            method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                 makeUpdate(label: "any", property: .value, old: "A", new: "B"),
             ]))))
@@ -758,8 +755,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedNoUpdatesInResult() {
-        let result = ActionResult(
-            success: true, method: .activate,
+        let result = ActionResult.success(
+            method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
         )
         let outcome = AccessibilityPredicate.change(.elements(.updatedElement(.any))).validate(against: result)
@@ -768,8 +765,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedPropertyMismatch() {
-        let result = ActionResult(
-            success: true, method: .activate,
+        let result = ActionResult.success(
+            method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                 makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
             ]))))
@@ -790,8 +787,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testPresentMetAgainstFinalInterface() {
         let newElement = makeElement(label: "No receipt", traits: [.button])
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
-        let result = ActionResult(
-            success: true, method: .wait,
+        let result = ActionResult.success(
+            method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
         let predicate = AccessibilityPredicate.exists(ElementPredicate(label: "No receipt"))
@@ -801,8 +798,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testPresentNotMetAgainstFinalInterfaceWhenAbsent() {
         let otherElement = makeElement(label: "New sale", traits: [.button])
         let newInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
-        let result = ActionResult(
-            success: true, method: .wait,
+        let result = ActionResult.success(
+            method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
         let predicate = AccessibilityPredicate.exists(ElementPredicate(label: "No receipt"))
@@ -821,8 +818,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testAbsentMetAgainstFinalInterface() {
         let newElement = makeElement(label: "Done", traits: [.button])
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
-        let result = ActionResult(
-            success: true, method: .wait,
+        let result = ActionResult.success(
+            method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
         let predicate = AccessibilityPredicate.missing(ElementPredicate(label: "Recording payment"))
@@ -832,8 +829,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testAbsentNotMetAgainstFinalInterfaceWhenStillPresent() {
         let sameElement = makeElement(label: "Header", traits: [.header])
         let newInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
-        let result = ActionResult(
-            success: true, method: .wait,
+        let result = ActionResult.success(
+            method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
         let predicate = AccessibilityPredicate.missing(ElementPredicate(label: "Header"))
@@ -1082,11 +1079,19 @@ final class AccessibilityPredicateTests: XCTestCase {
         message: String? = nil,
         delta: AccessibilityTrace.Delta? = nil
     ) -> ActionResult {
-        ActionResult(
-            success: success,
+        let trace = delta.map(AccessibilityTrace.projectingForTests)
+        if success {
+            return ActionResult.success(
+                method: .syntheticTap,
+                message: message,
+                accessibilityTrace: trace
+            )
+        }
+        return ActionResult.failure(
             method: .syntheticTap,
+            errorKind: .actionFailed,
             message: message,
-            accessibilityTrace: delta.map(AccessibilityTrace.projectingForTests)
+            accessibilityTrace: trace
         )
     }
 }

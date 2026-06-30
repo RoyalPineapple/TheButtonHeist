@@ -42,33 +42,65 @@ struct ConnectionScopeClassifyTests {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("example.local")) == .network)
     }
 
-    // MARK: - classify with loopback interface
+    // MARK: - classify with interface platform heuristics
 
-    @Test func classifiesLoopbackInterfaceAsSimulator() {
+    @Test func platformHeuristicClassifiesLoopbackInterfaceEvidenceAsSimulator() {
+        let evidence = ConnectionPathEvidence(
+            host: NWEndpoint.Host("169.254.239.217"),
+            interfaceNames: ["lo0"]
+        )
+
+        #expect(evidence.interfaceFacts == [
+            ConnectionPathEvidence.InterfaceFact(name: "lo0")
+        ])
+        #expect(evidence.path == .simulator(.loopbackInterface(name: "lo0")))
+        #expect(ConnectionScope.classify(evidence) == .simulator)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("169.254.239.217"), interfaceNames: ["lo0"]) == .simulator)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["lo0"]) == .simulator)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["lo0"]) == .simulator)
     }
 
-    // MARK: - classify with interfaces (anpi detection)
+    @Test func platformHeuristicClassifiesAppleNetworkPrivateInterfaceEvidenceAsUSB() {
+        let evidence = ConnectionPathEvidence(
+            host: NWEndpoint.Host("fd9a:6190:eed7::1"),
+            interfaceNames: ["anpi0"]
+        )
 
-    @Test func classifiesAnpiInterfaceAsUSB() {
+        #expect(evidence.interfaceFacts == [
+            ConnectionPathEvidence.InterfaceFact(name: "anpi0")
+        ])
+        #expect(evidence.path == .usb(.appleNetworkPrivateInterface(name: "anpi0")))
+        #expect(ConnectionScope.classify(evidence) == .usb)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaceNames: ["anpi0"]) == .usb)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["anpi0"]) == .usb)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("2001:db8::1"), interfaceNames: ["anpi0"]) == .usb)
     }
 
-    @Test func classifiesAnpiVariantsAsUSB() {
+    @Test func platformHeuristicClassifiesAppleNetworkPrivateInterfaceVariantsAsUSB() {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["anpi1"]) == .usb)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["anpi2"]) == .usb)
     }
 
-    @Test func nonAnpiInterfaceIsNotUSB() {
+    @Test func platformHeuristicLeavesNonMatchingInterfaceEvidenceAsNetwork() {
+        let evidence = ConnectionPathEvidence(
+            host: NWEndpoint.Host("fd9a:6190:eed7::1"),
+            interfaceNames: ["en0"]
+        )
+
+        #expect(evidence.interfaceFacts == [
+            ConnectionPathEvidence.InterfaceFact(name: "en0")
+        ])
+        #expect(evidence.path == .network(.noLocalPathEvidence))
+        #expect(ConnectionScope.classify(evidence) == .network)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaceNames: ["en0"]) == .network)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["en0"]) == .network)
     }
 
-    @Test func loopbackStillSimulatorWithAnpiInterface() {
+    @Test func loopbackAddressStillClassifiesAsSimulatorWithUSBInterfaceEvidence() {
+        let evidence = ConnectionPathEvidence(host: .ipv4(.loopback), interfaceNames: ["anpi0"])
+
+        #expect(evidence.path == .simulator(.ipv4LoopbackAddress))
+        #expect(ConnectionScope.classify(evidence) == .simulator)
         #expect(ConnectionScope.classify(host: .ipv4(.loopback), interfaceNames: ["anpi0"]) == .simulator)
         #expect(ConnectionScope.classify(host: .ipv6(.loopback), interfaceNames: ["anpi0"]) == .simulator)
     }

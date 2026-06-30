@@ -58,10 +58,9 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
         let heistResult = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .warn,
-                    status: .passed,
                     durationMs: 1,
                     evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "heads up"))
                 ),
@@ -87,8 +86,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult(
-                success: true,
+            result: ActionResult.success(
                 method: .activate,
                 message: "activated"
             )
@@ -150,20 +148,17 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testHeistReportNodeFailureEncodesCanonicalFailureDetails() throws {
-        let actionResult = ActionResult(
-            success: false,
+        let actionResult = ActionResult.failure(
             method: .activate,
-            message: "Delete not found",
-            errorKind: .elementNotFound
-        )
+            errorKind: .elementNotFound,
+            message: "Delete not found")
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             result: HeistExecutionResult(
                 steps: [
-                    HeistExecutionStepResult(
+                    .failed(
                         path: "$.body[0]",
                         kind: .action,
-                        status: .failed,
                         durationMs: 7,
                         evidence: .action(.dispatch(command: nil, actionResult: actionResult)),
                         failure: HeistFailureDetail(
@@ -195,8 +190,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
         let subject = makeReceiptTestElement(label: "Pay", identifier: "pay")
-        let actionResult = ActionResult(
-            success: true,
+        let actionResult = ActionResult.success(
             method: .activate,
             subjectEvidence: ActionSubjectEvidence(
                 source: .resolvedSemanticTarget,
@@ -217,8 +211,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let addedRows = (0..<8).map { index in
             makeReceiptTestElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
-        let actionResult = ActionResult(
-            success: true,
+        let actionResult = ActionResult.success(
             method: .activate,
             accessibilityTrace: makeReceiptTestTrace(
                 before: makeReceiptTestInterface([]),
@@ -245,8 +238,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let addedRows = (0..<8).map { index in
             makeReceiptTestElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
-        let actionResult = ActionResult(
-            success: true,
+        let actionResult = ActionResult.success(
             method: .activate,
             accessibilityTrace: makeReceiptTestTrace(
                 before: makeReceiptTestInterface([]),
@@ -281,8 +273,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "home"),
             transition: AccessibilityTrace.Transition(transient: transient)
         )
-        let actionResult = ActionResult(
-            success: true,
+        let actionResult = ActionResult.success(
             method: .activate,
             accessibilityTrace: AccessibilityTrace(captures: [before, after])
         )
@@ -320,8 +311,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "home"),
             transition: AccessibilityTrace.Transition(transient: transient)
         )
-        let actionResult = ActionResult(
-            success: true,
+        let actionResult = ActionResult.success(
             method: .activate,
             accessibilityTrace: AccessibilityTrace(captures: [before, after])
         )
@@ -351,11 +341,10 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func treeUnavailableActionResult(accessibilityTrace: AccessibilityTrace? = nil) -> ActionResult {
-        ActionResult(
-            success: false,
+        ActionResult.failure(
             method: .activate,
-            message: Self.treeUnavailableMessage,
             errorKind: .accessibilityTreeUnavailable,
+            message: Self.treeUnavailableMessage,
             accessibilityTrace: accessibilityTrace
         )
     }
@@ -365,14 +354,25 @@ final class PublicActionResultJSONTests: XCTestCase {
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
     ) throws -> PublicHeistActionResultDTO {
-        let step = HeistExecutionStepResult(
-            path: "$.body[0]",
-            kind: .action,
-            status: status,
-            durationMs: 7,
-            evidence: .action(.dispatch(command: nil, actionResult: result)),
-            failure: failure
-        )
+        let evidence = HeistStepEvidence.action(.dispatch(command: nil, actionResult: result))
+        let step = status == .failed
+            ? HeistExecutionStepResult.failed(
+                path: "$.body[0]",
+                kind: .action,
+                durationMs: 7,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+                    contract: "action dispatch succeeds",
+                    observed: result.message ?? "action failed"
+                )
+            )
+            : HeistExecutionStepResult.passed(
+                path: "$.body[0]",
+                kind: .action,
+                durationMs: 7,
+                evidence: evidence
+            )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             result: HeistExecutionResult(steps: [step], durationMs: 7)

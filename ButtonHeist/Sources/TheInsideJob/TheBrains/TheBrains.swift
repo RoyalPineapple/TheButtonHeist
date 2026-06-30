@@ -79,19 +79,19 @@ final class TheBrains {
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
-        var builder = ActionResultBuilder(method: method)
+        var builder = ActionResultBuilder()
         if let diagnostic = stash.latestSemanticObservationFailureDiagnostic() {
             builder.message = "Could not observe accessibility tree; \(diagnostic)"
         } else {
             builder.message = TheBrains.treeUnavailableMessage
         }
-        return builder.failure(errorKind: .accessibilityTreeUnavailable)
+        return builder.failure(method: method, errorKind: .accessibilityTreeUnavailable)
     }
 
     func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
-        var builder = ActionResultBuilder(method: method)
+        var builder = ActionResultBuilder()
         builder.message = TheBrains.runtimeInactiveMessage
-        return builder.failure(errorKind: .actionFailed)
+        return builder.failure(method: method, errorKind: .actionFailed)
     }
 
     // MARK: - Clear

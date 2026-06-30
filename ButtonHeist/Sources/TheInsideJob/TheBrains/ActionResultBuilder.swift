@@ -8,16 +8,15 @@ import TheScore
 /// enforces that error-only fields (errorKind) cannot appear on success results.
 ///
 /// Usage:
-///     var builder = ActionResultBuilder(method: .activate)
+///     var builder = ActionResultBuilder()
 ///     builder.message = "Tapped Sign In"
 ///     builder.accessibilityTrace = trace
-///     return builder.success()
+///     return builder.success(method: .activate)
 ///
 /// `@MainActor` justification: builder reads from MainActor-bound state during
 /// construction; the produced ActionResult is Sendable but the builder itself
 /// stages MainActor data.
 @MainActor struct ActionResultBuilder { // swiftlint:disable:this agent_main_actor_value_type
-    let method: ActionMethod
     var message: String?
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
@@ -26,17 +25,14 @@ import TheScore
     var activationTrace: ActivationTrace?
     var timing: ActionPerformanceTiming?
 
-    init(method: ActionMethod) {
-        self.method = method
-    }
+    init() {}
 
     /// Create a builder from an accessibility capture receipt.
-    init(method: ActionMethod, capture: AccessibilityTrace.Capture) {
-        self.method = method
+    init(capture: AccessibilityTrace.Capture) {
         self.accessibilityTrace = AccessibilityTrace(capture: capture)
     }
 
-    func success() -> ActionResult {
+    func success(method: ActionMethod) -> ActionResult {
         ActionResult.success(
             method: method,
             message: message,
@@ -50,8 +46,7 @@ import TheScore
     }
 
     func success(payload: ActionResultPayload) -> ActionResult {
-        precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
-        return ActionResult.success(
+        ActionResult.success(
             payload: payload,
             message: message,
             accessibilityTrace: accessibilityTrace,
@@ -63,7 +58,7 @@ import TheScore
         )
     }
 
-    func failure(errorKind: ErrorKind = .actionFailed) -> ActionResult {
+    func failure(method: ActionMethod, errorKind: ErrorKind = .actionFailed) -> ActionResult {
         ActionResult.failure(
             method: method,
             errorKind: errorKind,
@@ -78,8 +73,7 @@ import TheScore
     }
 
     func failure(errorKind: ErrorKind = .actionFailed, payload: ActionResultPayload) -> ActionResult {
-        precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
-        return ActionResult.failure(
+        ActionResult.failure(
             payload: payload,
             errorKind: errorKind,
             message: message,

@@ -180,8 +180,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             receiptGenerationMs: 0,
             totalMs: 116
         )
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             message: "activated",
             timing: timing
@@ -192,8 +191,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithTimingMergesWithoutErasingExistingFields() {
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             timing: ActionPerformanceTiming(
                 beforeObservationMs: 1,
@@ -961,7 +959,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let result = HeistExecutionResult.failed(
             steps: [
-                .failed(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .conditional,
                     durationMs: 6,

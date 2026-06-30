@@ -9,8 +9,7 @@ final class AutoSettleFieldsTests: XCTestCase {
     // MARK: - ActionResult
 
     func testActionResultRoundTripsWithSettleFields() throws {
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             settled: true,
             settleTimeMs: 1234
@@ -22,11 +21,10 @@ final class AutoSettleFieldsTests: XCTestCase {
     }
 
     func testFailedActionResultRoundTripsWithSettleFields() throws {
-        let result = ActionResult(
-            success: false,
+        let result = ActionResult.failure(
             method: .wait,
-            message: "timed out",
             errorKind: .timeout,
+            message: "timed out",
             settled: false,
             settleTimeMs: 750
         )

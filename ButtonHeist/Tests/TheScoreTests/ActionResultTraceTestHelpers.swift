@@ -156,7 +156,12 @@ func makeTestHeistActionStep(
         path: path,
         kind: .action,
         durationMs: durationMs,
-        evidence: evidence
+        evidence: evidence,
+        failure: HeistFailureDetail(
+            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            contract: "action dispatch succeeds",
+            observed: result.message ?? "action failed"
+        )
     )
 }
 

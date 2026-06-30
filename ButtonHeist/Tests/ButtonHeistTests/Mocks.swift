@@ -219,10 +219,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             durationMs: 0,
             abortedAtPath: abortedAtPath
         )
-        return .actionResult(ActionResult(
-            success: abortedAtPath == nil,
+        if abortedAtPath == nil {
+            return .actionResult(ActionResult.success(payload: .heistExecution(result)))
+        }
+        return .actionResult(ActionResult.failure(
             payload: .heistExecution(result),
-            errorKind: abortedAtPath == nil ? nil : .actionFailed
+            errorKind: .actionFailed
         ))
     }
 
@@ -255,43 +257,50 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 )
             }
             let abortedAtChildPath = children.firstFailedStep?.path
-            return HeistExecutionStepResult(
+            let evidence = HeistStepEvidence.invocation(HeistInvocationEvidence(
+                name: plan.name.map { "heist \($0)" },
+                childFailedPath: abortedAtChildPath
+            ))
+            if let abortedAtChildPath {
+                return .childAborted(
+                    path: path,
+                    kind: .heist,
+                    durationMs: heistStepDurationMs,
+                    intent: .heist(name: plan.name),
+                    evidence: evidence,
+                    failure: mockChildFailure(abortedAtChildPath, category: .invocation),
+                    abortedAtChildPath: abortedAtChildPath,
+                    children: children
+                )
+            }
+            return .passed(
                 path: path,
                 kind: .heist,
-                status: abortedAtChildPath == nil ? .passed : .failed,
                 durationMs: heistStepDurationMs,
                 intent: .heist(name: plan.name),
-                evidence: .invocation(HeistInvocationEvidence(
-                    name: plan.name.map { "heist \($0)" },
-                    childFailedPath: abortedAtChildPath
-                )),
-                failure: abortedAtChildPath.map { mockChildFailure($0, category: .invocation) },
-                abortedAtChildPath: abortedAtChildPath,
+                evidence: evidence,
                 children: children
             )
         case .invoke(let invoke):
-            return HeistExecutionStepResult(
+            return .passed(
                 path: path,
                 kind: .invoke,
-                status: .passed,
                 durationMs: heistStepDurationMs,
                 intent: .invoke(path: invoke.path.joined(separator: "."), argument: nil),
                 evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invoke.path.joined(separator: ".")))
             )
         case .warn(let warn):
-            return HeistExecutionStepResult(
+            return .passed(
                 path: path,
                 kind: .warn,
-                status: .passed,
                 durationMs: heistStepDurationMs,
                 intent: .warn(message: warn.message),
                 evidence: .warning(HeistExecutionWarning(path: path, message: warn.message))
             )
         case .fail(let fail):
-            return HeistExecutionStepResult(
+            return .failed(
                 path: path,
                 kind: .fail,
-                status: .failed,
                 durationMs: heistStepDurationMs,
                 intent: .fail(message: fail.message),
                 failure: HeistFailureDetail(
@@ -310,10 +319,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else {
-            return HeistExecutionStepResult(
+            return .failed(
                 path: path,
                 kind: .action,
-                status: .failed,
                 durationMs: heistStepDurationMs,
                 intent: mockActionIntent(action.command),
                 evidence: .action(.commandResolutionFailure(command: action.command)),
@@ -337,14 +345,22 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 expectation: $0.result
             )
         } ?? .dispatch(command: action.command, actionResult: actionResult)
-        return HeistExecutionStepResult(
+        if let failure {
+            return .failed(
+                path: path,
+                kind: .action,
+                durationMs: heistStepDurationMs,
+                intent: mockActionIntent(action.command),
+                evidence: .action(actionEvidence),
+                failure: failure
+            )
+        }
+        return .passed(
             path: path,
             kind: .action,
-            status: failure == nil ? .passed : .failed,
             durationMs: heistStepDurationMs,
             intent: mockActionIntent(action.command),
-            evidence: .action(actionEvidence),
-            failure: failure
+            evidence: .action(actionEvidence)
         )
     }
 
@@ -355,10 +371,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         guard let resolved = try? wait.resolve(in: .empty) else {
-            return HeistExecutionStepResult(
+            return .failed(
                 path: path,
                 kind: .wait,
-                status: .failed,
                 durationMs: heistStepDurationMs,
                 intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
                 failure: HeistFailureDetail(
@@ -382,18 +397,27 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 expected: wait.predicate.description
             )
             : nil
-        return HeistExecutionStepResult(
+        let evidence = HeistStepEvidence.wait(HeistWaitEvidence(
+            outcome: failure == nil ? .matched : .failed,
+            actionResult: result,
+            expectation: expectation
+        ))
+        if let failure {
+            return .failed(
+                path: path,
+                kind: .wait,
+                durationMs: heistStepDurationMs,
+                intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+                evidence: evidence,
+                failure: failure
+            )
+        }
+        return .passed(
             path: path,
             kind: .wait,
-            status: failure == nil ? .passed : .failed,
             durationMs: heistStepDurationMs,
             intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
-            evidence: .wait(HeistWaitEvidence(
-                outcome: failure == nil ? .matched : .failed,
-                actionResult: result,
-                expectation: expectation
-            )),
-            failure: failure
+            evidence: evidence
         )
     }
 
@@ -402,10 +426,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         index: Int,
         path: String
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: path,
             kind: .conditional,
-            status: .passed,
             durationMs: heistStepDurationMs,
             intent: .conditional,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
@@ -421,10 +444,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         index: Int,
         path: String
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: path,
             kind: .forEachElement,
-            status: .passed,
             durationMs: heistStepDurationMs,
             intent: .forEachElement(
                 parameter: forEach.parameter,
@@ -446,10 +468,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         index: Int,
         path: String
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: path,
             kind: .forEachString,
-            status: .passed,
             durationMs: heistStepDurationMs,
             intent: .forEachString(parameter: forEach.parameter, count: forEach.values.count),
             evidence: .forEachString(HeistForEachStringEvidence(
@@ -467,10 +488,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         let predicate = (try? repeatUntil.predicate.resolve(in: .empty))
             ?? .state(.exists(ElementPredicate(label: "unresolved")))
-        return HeistExecutionStepResult(
+        return .passed(
             path: path,
             kind: .repeatUntil,
-            status: .passed,
             durationMs: heistStepDurationMs,
             intent: .repeatUntil(predicate: predicate.description, timeout: repeatUntil.timeout),
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
@@ -500,12 +520,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     ) -> (actionResult: ActionResult, result: ExpectationResult)? {
         guard let expectation else { return nil }
         guard let resolved = try? expectation.resolve(in: .empty) else {
-            let result = ActionResult(
-                success: false,
+            let result = ActionResult.failure(
                 method: .wait,
-                message: "mock could not resolve heist expectation predicate",
-                errorKind: .validationError
-            )
+                errorKind: .validationError,
+                message: "mock could not resolve heist expectation predicate")
             return (
                 result,
                 ExpectationResult(
@@ -570,14 +588,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         case .actionResult(let result):
             return result
         case .error(let error):
-            return ActionResult(
-                success: false,
+            return ActionResult.failure(
                 method: actionMethod(for: command),
-                message: error.message,
-                errorKind: .general
-            )
+                errorKind: .general,
+                message: error.message)
         default:
-            return ActionResult(success: true, method: actionMethod(for: command))
+            return ActionResult.success(method: actionMethod(for: command))
         }
     }
 

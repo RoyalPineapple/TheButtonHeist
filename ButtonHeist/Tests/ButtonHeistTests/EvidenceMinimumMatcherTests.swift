@@ -47,8 +47,7 @@ private func semanticActionResult(
     after: [HeistElement],
     settled: Bool = true
 ) -> ActionResult {
-    ActionResult(
-        success: true,
+    ActionResult.success(
         method: method,
         accessibilityTrace: makeReceiptTestTrace(
             before: makeReceiptTestInterface(before),

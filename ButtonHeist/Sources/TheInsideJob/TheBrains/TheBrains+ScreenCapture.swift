@@ -56,7 +56,7 @@ extension TheBrains {
 
     func executeTakeScreenshot() async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
-        var builder = ActionResultBuilder(method: .takeScreenshot)
+        var builder = ActionResultBuilder()
         switch await captureScreenPayload() {
         case .success(let payload):
             builder.message = "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"
@@ -65,7 +65,7 @@ extension TheBrains {
         case .failure(let failure):
             builder.message = failure.message
             builder.timing = ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
-            return builder.failure(errorKind: .general)
+            return builder.failure(method: .takeScreenshot, errorKind: .general)
         }
     }
 }
