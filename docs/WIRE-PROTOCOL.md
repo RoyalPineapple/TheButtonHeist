@@ -276,9 +276,11 @@ media only through explicit, size-bounded opt-ins.
 
 The host evaluates the predicate against the current settled accessibility
 state first, then waits for later settled accessibility state until the
-predicate is true or the timeout expires. Absence predicates are satisfied by
-current absence. The response is a heist execution receipt, even for a single
-wait.
+predicate's final state is true or the timeout expires. Absence predicates are
+satisfied by current absence. Standalone waits using element transition
+predicates can pass with a warning when the implied final state is true but the
+transition was not observed. The response is a heist execution receipt, even for
+a single wait.
 
 ## Action Results
 

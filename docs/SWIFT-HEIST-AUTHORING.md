@@ -211,13 +211,13 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.updated(...)` for explicit same-screen property-delta assertions. The
-first argument may be an element matcher and the second argument is the property
-change matcher. Use `from:` and `to:` when the previous value matters; use the
-unlabeled form for a destination-only value. For example, `.value("3")` is exact
-and `.value(.contains("items"))` is explicitly broad. This remains an
-observed-change predicate and does not infer the action's target from hidden
-context.
+Use `.updated(...)` for explicit same-screen property-delta assertions in
+action expectations. The first argument may be an element matcher and the second
+argument is the property change matcher. Use `from:` and `to:` when the previous
+value matters; use the unlabeled form for a destination-only value. For example,
+`.value("3")` is exact and `.value(.contains("items"))` is explicitly broad.
+This remains an observed-change predicate for `.expect(...)` and does not infer
+the action's target from hidden context.
 
 When text entry or validation can reflow the interface, prefer a settled-state
 assertion such as `.exists(.element(..., .value(...)))` or a `WaitFor(...)`
@@ -227,6 +227,13 @@ same-screen element deltas.
 `.expect(.updated(...))` lowers to an element-change predicate. Include an
 explicit element matcher when the assertion must be tied to a durable element:
 `.updated(.label("Quantity"), .value(from: "2", to: "3"))`.
+
+Standalone `WaitFor(...)` is final-state oriented. Transition predicates still
+communicate intent, but `WaitFor(.appeared(...))`,
+`WaitFor(.disappeared(...))`, and `WaitFor(.updated(...))` can pass with a
+warning when their implied final state is already true or becomes true without
+an observed transition. Use snapshot predicates for destination state after an
+action when the transition itself does not matter.
 
 Use `.screenChanged(...)` for navigation. Assertions inside `screenChanged` are
 destination snapshot assertions, not element-delta predicates:

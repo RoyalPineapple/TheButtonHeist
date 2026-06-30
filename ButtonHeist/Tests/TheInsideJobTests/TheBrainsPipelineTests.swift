@@ -698,6 +698,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
         XCTAssertTrue(receipt.warning?.message.contains("already absent") == true)
+        XCTAssertEqual(receipt.warning?.evidence, "Loading")
     }
 
     func testAppearedWaitWarnsWhenFinalStateIsAlreadyPresent() async throws {
@@ -722,10 +723,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.success)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertEqual(receipt.warning?.evidence, "label=Ready")
         XCTAssertTrue(receipt.warning?.message.contains("already present") == true)
     }
 
-    func testDestinationOnlyUpdatedWaitWarnsWhenFinalStateAlreadyMatches() async throws {
+    func testUpdatedWaitWarnsWhenFinalStateAlreadyMatches() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let quantity = AccessibilityElement.make(
@@ -753,10 +755,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.success)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertEqual(receipt.warning?.finalStateTiming, "baseline")
+        XCTAssertTrue(receipt.warning?.impliedPredicate?.contains("destination_state") == true)
+        XCTAssertEqual(receipt.warning?.evidence, "label=Quantity")
         XCTAssertTrue(receipt.warning?.message.contains("no update transition was observed") == true)
     }
 
-    func testFromToUpdatedWaitRequiresObservedTransition() async throws {
+    func testFromToUpdatedWaitWarnsWhenFinalStateAlreadyMatches() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let quantity = AccessibilityElement.make(
@@ -781,12 +786,48 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
+        XCTAssertEqual(receipt.warning?.finalStateTiming, "baseline")
+        XCTAssertTrue(receipt.warning?.impliedPredicate?.contains("destination_state") == true)
+        XCTAssertEqual(receipt.warning?.evidence, "label=Quantity")
+    }
+
+    func testFromToUpdatedWaitWarningCanBeDisabledForActionExpectationSemantics() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let quantity = AccessibilityElement.make(
+            label: "Quantity",
+            value: "3",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let quantityScreen = Screen.makeForTests(elements: [
+            (quantity, HeistId(rawValue: "quantity")),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(
+                WaitStep(
+                    predicate: .change(.updated(.label("Quantity"), .value(from: "2", to: "3"))),
+                    timeout: 0.05
+                ),
+                allowsTransitionFinalStateWarning: false
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+
+        let receipt = await receiptTask.value
+
         XCTAssertFalse(receipt.actionResult.success)
         XCTAssertEqual(receipt.expectation.met, false)
         XCTAssertNil(receipt.warning)
     }
 
-    func testDisappearedWaitWarningCanBeDisabledForActionExpectationSemantics() async throws {
+    func testTransitionFinalStateWarningCanBeDisabledForActionExpectationSemantics() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let emptyScreen = Screen.makeForTests(elements: [])
@@ -797,7 +838,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                     predicate: .disappeared(.label("Loading")),
                     timeout: 0.05
                 ),
-                allowsDisappearanceFinalStateWarning: false
+                allowsTransitionFinalStateWarning: false
             )
         }
 

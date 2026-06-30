@@ -93,6 +93,13 @@ WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
 
+Standalone `WaitFor(...)` is final-state oriented. If you write
+`WaitFor(.appeared(...))`, `WaitFor(.disappeared(...))`, or
+`WaitFor(.updated(...))`, The Button Heist will still try to observe that
+transition, but it may pass with a warning when the implied final state is
+already true. Use action `.expect(...)` when you need to prove what the action
+changed.
+
 For text entry that may reflow the interface, assert the settled field state:
 
 ```swift
@@ -222,8 +229,8 @@ WaitFor(.label("Receipt"), timeout: .seconds(10))
 
 If the action receipt shows a spinner or loading overlay instead of the final state,
 run `WaitFor(...)` through `perform(step:)`. The Button Heist checks the
-current settled hierarchy first, then watches settled accessibility state until the
-predicate is true or the timeout expires.
+current settled hierarchy first, then watches settled accessibility state until
+the final state is true or the timeout expires.
 
 ## Expectations
 

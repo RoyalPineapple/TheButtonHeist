@@ -877,15 +877,24 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
 public struct HeistPredicateWarning: Codable, Sendable, Equatable {
     public let code: String
     public let predicate: String
+    public let impliedPredicate: String?
+    public let finalStateTiming: String?
+    public let evidence: String?
     public let message: String
 
     public init(
         code: String,
         predicate: String,
+        impliedPredicate: String? = nil,
+        finalStateTiming: String? = nil,
+        evidence: String? = nil,
         message: String
     ) {
         self.code = code
         self.predicate = predicate
+        self.impliedPredicate = impliedPredicate
+        self.finalStateTiming = finalStateTiming
+        self.evidence = evidence
         self.message = message
     }
 }

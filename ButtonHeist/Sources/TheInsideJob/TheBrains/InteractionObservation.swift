@@ -137,13 +137,13 @@ final class InteractionObservation {
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsDisappearanceFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsDisappearanceFinalStateWarning: allowsDisappearanceFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
         )
     }
 
@@ -151,13 +151,13 @@ final class InteractionObservation {
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsDisappearanceFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsDisappearanceFinalStateWarning: allowsDisappearanceFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
         )
     }
 
