@@ -9,14 +9,13 @@ extension FenceResponse {
         if let abortedAtPath = projection.summary.abortedAtPath {
             text += " (stopped at \(abortedAtPath))"
         }
-        let checked = projection.summary.expectationsChecked
-        if checked > 0 {
-            text += " [expectations: \(projection.summary.expectationsMet)/\(checked)]"
+        if let expectations = projection.summary.expectations {
+            text += " [expectations: \(expectations.met)/\(expectations.checked)]"
         }
         if let netDelta = projection.netDelta {
             text += " [net: \(netDelta.kind.rawValue)]"
         }
-        if let lastScreenId = projection.finalScreenId {
+        if let lastScreenId = projection.summary.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
         for (index, step) in projection.outputNodes.enumerated() {

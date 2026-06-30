@@ -94,6 +94,14 @@ report_matches() {
   fi
 }
 
+report_git_grep() {
+  local label="$1"
+  local pattern="$2"
+  shift 2
+
+  report_matches "$label" "$(git_grep "$pattern" "$@")"
+}
+
 filter_allowed_normalized_lines() {
   local matches="$1"
   shift
@@ -145,8 +153,32 @@ filter_allowed_paths() {
 for check in "${CHECKS[@]}"; do
   label="${check%%::*}"
   pattern="${check#*::}"
-  report_matches "$label" "$(git_grep "$pattern" "${EXISTING_PATHS[@]}")"
+  report_git_grep "$label" "$pattern" "${EXISTING_PATHS[@]}"
 done
+
+RUNTIME_REDUCER_GUARD_PATHS=(
+  ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift
+  ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift
+  ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift
+)
+EXISTING_RUNTIME_REDUCER_GUARD_PATHS=()
+for path in "${RUNTIME_REDUCER_GUARD_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_RUNTIME_REDUCER_GUARD_PATHS+=("$path")
+  fi
+done
+
+# Keep broad retired-shape checks here. Formatting-sensitive function-body
+# invariants live in PureReducerSourceShapeTests via SourceShapeProbe.
+report_git_grep \
+  "retired action/wait duplicate failure helper" \
+  '\bprivate[[:space:]]+func[[:space:]]+(expectationFailure|waitFailure)[[:space:]]*\(' \
+  "${EXISTING_RUNTIME_REDUCER_GUARD_PATHS[@]}"
+
+report_git_grep \
+  "post-action receipt input modeled as optional final evidence" \
+  '\bfinalEvidence[[:space:]]*:[[:space:]]*FinalEvidence[?]' \
+  "${EXISTING_RUNTIME_REDUCER_GUARD_PATHS[@]}"
 
 TOOLING_PUBLIC_API_GUARD_PATHS=(
   ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift

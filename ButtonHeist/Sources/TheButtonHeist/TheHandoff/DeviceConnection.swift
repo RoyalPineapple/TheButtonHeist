@@ -86,11 +86,11 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         eventConsumerTask?.cancel()
         eventContinuation?.finish()
 
-        let (stream, continuation) = DeviceConnectionEventStream.makeStream()
-        eventContinuation = continuation
+        let eventStream = DeviceConnectionEventStream.makeStream()
+        eventContinuation = eventStream.continuation
 
         conn.stateUpdateHandler = { state in
-            DeviceConnectionEventStream.yield(.state(state, connection: conn), to: continuation) { [weak self, weak conn] in
+            DeviceConnectionEventStream.yield(.state(state, connection: conn), to: eventStream.continuation) { [weak self, weak conn] in
                 guard let conn else { return }
                 Task { @ButtonHeistActor [weak self] in
                     self?.handleEventStreamOverflow(connection: conn)
@@ -99,7 +99,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         }
 
         eventConsumerTask = Task { @ButtonHeistActor [weak self] in
-            for await event in stream {
+            for await event in eventStream.events {
                 guard let self else { return }
                 switch event {
                 case .state(let state, let connection):

@@ -52,6 +52,11 @@ extension TheTripwire {
         let isKeyWindow: Bool
     }
 
+    struct WindowTraversalRoot {
+        let window: UIWindow
+        let rootView: UIView
+    }
+
     // MARK: - Window Access
 
     /// All visible windows in foreground-active scenes, sorted by window level
@@ -74,15 +79,15 @@ extension TheTripwire {
 
     /// All visible windows in foreground-active scenes, sorted by window level
     /// (front to back).
-    func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
+    func getTraversableWindows() -> [WindowTraversalRoot] {
         Self.orderedVisibleWindows()
-            .map { ($0, $0 as UIView) }
+            .map { WindowTraversalRoot(window: $0, rootView: $0) }
     }
 
     /// Tripwire identity sampled from public UIKit state without touching AX.
     func tripwireSignal() -> TripwireSignal {
         let windows = Self.orderedVisibleWindows()
-        let entries = windows.map { ($0, $0 as UIView) }
+        let entries = windows.map { WindowTraversalRoot(window: $0, rootView: $0) }
         let topmost = Self.topmostViewController(in: entries)
         return TripwireSignal(
             topmostVC: topmost.map(ObjectIdentifier.init),
@@ -144,7 +149,7 @@ extension TheTripwire {
     ///
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
-    func getAccessibleWindows() -> [(window: UIWindow, rootView: UIView)] {
+    func getAccessibleWindows() -> [WindowTraversalRoot] {
         Self.filterToAccessibleWindows(getTraversableWindows())
     }
 
@@ -164,9 +169,9 @@ extension TheTripwire {
     /// passthrough branch can be exercised without instantiating private
     /// UIKit window classes.
     static func filterToAccessibleWindows(
-        _ windows: [(window: UIWindow, rootView: UIView)],
+        _ windows: [WindowTraversalRoot],
         isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
-    ) -> [(window: UIWindow, rootView: UIView)] {
+    ) -> [WindowTraversalRoot] {
         guard !windows.isEmpty else { return [] }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
@@ -177,14 +182,16 @@ extension TheTripwire {
     /// Parser-level UIKit guards handle private intermediary views; keeping the
     /// presented controller root preserves modal boundary metadata.
     private static func accessibleRootEntry(
-        _ entry: (window: UIWindow, rootView: UIView)
-    ) -> (window: UIWindow, rootView: UIView)? {
+        _ entry: WindowTraversalRoot
+    ) -> WindowTraversalRoot? {
         guard let rootVC = entry.window.rootViewController else { return nil }
         let chain = Array(sequence(first: rootVC, next: \.presentedViewController))
         guard let deepest = chain.last else { return nil }
         guard let rootView = deepest.view else { return nil }
-        guard rootView !== entry.rootView else { return deepest !== rootVC ? (entry.window, rootView) : nil }
-        return (window: entry.window, rootView: rootView)
+        guard rootView !== entry.rootView else {
+            return deepest !== rootVC ? WindowTraversalRoot(window: entry.window, rootView: rootView) : nil
+        }
+        return WindowTraversalRoot(window: entry.window, rootView: rootView)
     }
 
     // MARK: - View Controller Identity
@@ -203,7 +210,7 @@ extension TheTripwire {
     /// inject a custom predicate without instantiating private UIKit window
     /// classes.
     static func topmostViewController(
-        in windows: [(window: UIWindow, rootView: UIView)],
+        in windows: [WindowTraversalRoot],
         isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
     ) -> UIViewController? {
         guard let root = windows

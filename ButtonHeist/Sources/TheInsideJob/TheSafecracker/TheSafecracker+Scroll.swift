@@ -16,6 +16,11 @@ extension TheSafecracker {
         case unavailable
     }
 
+    private struct ScrollFingerPath {
+        let start: CGPoint
+        let end: CGPoint
+    }
+
     /// Scroll by one page in the given direction with a 44pt overlap.
     /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
@@ -180,28 +185,28 @@ extension TheSafecracker {
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
         travel: CGFloat
-    ) -> (start: CGPoint, end: CGPoint)? {
+    ) -> ScrollFingerPath? {
         let center = CGPoint(x: frame.midX, y: frame.midY)
         switch direction {
         case .down, .next:
-            return (
-                CGPoint(x: center.x, y: center.y + frame.height * travel / 2),
-                CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+            return ScrollFingerPath(
+                start: CGPoint(x: center.x, y: center.y + frame.height * travel / 2),
+                end: CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
             )
         case .up, .previous:
-            return (
-                CGPoint(x: center.x, y: center.y - frame.height * travel / 2),
-                CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+            return ScrollFingerPath(
+                start: CGPoint(x: center.x, y: center.y - frame.height * travel / 2),
+                end: CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
             )
         case .right:
-            return (
-                CGPoint(x: center.x + frame.width * travel / 2, y: center.y),
-                CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+            return ScrollFingerPath(
+                start: CGPoint(x: center.x + frame.width * travel / 2, y: center.y),
+                end: CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
             )
         case .left:
-            return (
-                CGPoint(x: center.x - frame.width * travel / 2, y: center.y),
-                CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+            return ScrollFingerPath(
+                start: CGPoint(x: center.x - frame.width * travel / 2, y: center.y),
+                end: CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
             )
         @unknown default:
             return nil

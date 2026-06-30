@@ -86,7 +86,9 @@ final class TheBurglar {
 
         let isMultiWindow = windows.count > 1
 
-        for (window, rootView) in windows {
+        for entry in windows {
+            let window = entry.window
+            let rootView = entry.rootView
             let containsModalBoundary = autoreleasepool { () -> Bool in
                 let captured = parser.parseAccessibilityHierarchy(
                     in: rootView,

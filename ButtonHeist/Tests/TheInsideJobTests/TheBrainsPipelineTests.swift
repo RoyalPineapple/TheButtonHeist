@@ -895,13 +895,14 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testPredicateWaitUsesExplicitOutcomeAndBaselineShapes() throws {
         let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
+        let reducerSource = try String(contentsOf: predicateWaitReducerSourceURL(), encoding: .utf8)
         let waitExecutionSource = try String(contentsOf: heistWaitExecutionSourceURL(), encoding: .utf8)
 
         XCTAssertFalse(source.contains("case finished(success: Bool)"))
         XCTAssertFalse(source.contains(".finished(success:"))
         XCTAssertFalse(source.contains("var changeBaselineSequence: SettledObservationSequence?"))
-        XCTAssertTrue(source.contains("case matched"))
-        XCTAssertTrue(source.contains("case timedOut"))
+        XCTAssertTrue(reducerSource.contains("case satisfied("))
+        XCTAssertTrue(reducerSource.contains("case failed("))
         XCTAssertTrue(source.contains("case observing(PredicateChangeObservationCursor)"))
         XCTAssertTrue(source.contains("let baseline: WaitChangeBaseline"))
         XCTAssertTrue(source.contains("case observingSince(SettledObservationSequence)"))
@@ -912,12 +913,35 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testHeistExecutionUsesExplicitStateMachine() throws {
         let source = try String(contentsOf: heistExecutionSourceURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("private struct HeistExecutionState"))
+        XCTAssertTrue(source.contains("private struct HeistExecutionAccumulator"))
         XCTAssertTrue(source.contains("private enum HeistExecutionPhase: Equatable"))
-        XCTAssertTrue(source.contains("mutating func beginStep(at path: String) -> HeistExecutionStepDecision"))
-        XCTAssertTrue(source.contains("mutating func finishStep(_ result: HeistExecutionStepResult)"))
-        XCTAssertTrue(source.contains("mutating func finishPlan() -> HeistExecutionCompletion"))
+        XCTAssertTrue(source.contains("private enum HeistStepTransition"))
+        XCTAssertTrue(source.contains("func decision(for path: String) -> HeistExecutionStepDecision"))
+        XCTAssertTrue(source.contains("mutating func apply(_ transition: HeistStepTransition)"))
+        XCTAssertTrue(source.contains("mutating func complete()"))
+        XCTAssertTrue(source.contains("private func executeHeistStepAccumulator("))
+        XCTAssertTrue(source.contains("let abortedAtPath = execution.abortedPath"))
+        XCTAssertFalse(source.contains("private struct HeistExecutionState"))
+        XCTAssertFalse(source.contains("var executionState = HeistExecutionState()"))
+        XCTAssertFalse(source.contains("var stepResults: [HeistExecutionStepResult] = []"))
+        XCTAssertFalse(source.contains("executionState.finishStep("))
+        XCTAssertFalse(source.contains("HeistExecutionCompletion"))
         XCTAssertFalse(source.contains("private enum HeistStepExecutionPhase"))
+    }
+
+    func testHeistActionExecutionUsesTypedResolutionAndWaitEvaluation() throws {
+        let source = try String(contentsOf: heistActionExecutionSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private enum ActionCommandResolution"))
+        XCTAssertTrue(source.contains("private struct ActionCommandResolutionFailure"))
+        XCTAssertTrue(source.contains("private enum HeistWaitResolution"))
+        XCTAssertTrue(source.contains("private enum HeistWaitEvaluation"))
+        XCTAssertTrue(source.contains("private enum HeistWaitEvaluationPurpose"))
+        XCTAssertTrue(source.contains("private enum StandaloneWaitExecution"))
+        XCTAssertFalse(source.contains("private func expectationFailure("))
+        XCTAssertFalse(source.contains("private func waitFailure("))
+        XCTAssertFalse(source.contains("let failure = expectationFailure("))
+        XCTAssertFalse(source.contains("let failure = waitFailure("))
     }
 
     func testPredicatePollingStateProbesDiscoveryInitiallyThenUsesVisibleTickCadence() {
@@ -1514,6 +1538,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWait.swift")
     }
 
+    private func predicateWaitReducerSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWaitReducer.swift")
+    }
+
     private func predicateEvaluationSourceURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1536,6 +1568,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift")
+    }
+
+    private func heistActionExecutionSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {

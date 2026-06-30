@@ -70,7 +70,7 @@ extension TheStash {
     }
 
     static func makeScreenCapturePlan(
-        for windows: [(window: UIWindow, rootView: UIView)]
+        for windows: [TheTripwire.WindowTraversalRoot]
     ) -> ScreenCapturePlan? {
         let captureWindows = windows
             .map { (window: $0.window, geometry: ScreenCaptureWindowGeometry(window: $0.window)) }

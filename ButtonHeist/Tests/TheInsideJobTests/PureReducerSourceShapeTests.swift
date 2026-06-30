@@ -1,0 +1,208 @@
+import ButtonHeistTestSupport
+import Foundation
+import Testing
+
+@Suite struct PureReducerSourceShapeTests {
+    private static let brainsRoot = "ButtonHeist/Sources/TheInsideJob/TheBrains"
+
+    private let repository = SourceShapeRepository(filePath: #filePath)
+
+    @Test func `predicate wait reducer is value typed and effect free once introduced`() throws {
+        let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
+
+        try expectEffectFreeReducerSource(reducer)
+        try expectType("PredicateWaitReducer", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicateWaitState", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicateWaitObservation", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicateWaitEvent", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicateWaitDecision", in: reducer, conformsTo: ["Sendable", "Equatable"])
+
+        let reducerType = try #require(
+            try reducer.firstBlock(matching: #"\bstruct\s+PredicateWaitReducer\b"#),
+            "\(reducer.relativePath) should declare PredicateWaitReducer as a value type"
+        )
+        let decisionType = try #require(
+            try reducer.firstBlock(matching: #"\benum\s+PredicateWaitDecision\b"#),
+            "\(reducer.relativePath) should declare PredicateWaitDecision as a value type"
+        )
+
+        #expect(try reducerType.containsMatch(#"\bfunc\s+reduce\s*\("#))
+        #expect(try reducerType.containsMatch(#"\bfunc\s+decision\s*\("#))
+        #expect(
+            try reducerType.containsMatch(#"\blastEvaluation[.]met\b"#),
+            "PredicateWaitReducer should own direct expectation.met branching"
+        )
+        #expect(decisionType.contents.contains("case poll("))
+        #expect(decisionType.contents.contains("case satisfied("))
+        #expect(decisionType.contents.contains("case failed("))
+    }
+
+    @Test func `predicate wait orchestration stops owning predicate decisions after reducer lands`() throws {
+        _ = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
+        let resolvedWait = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+wait\s*\(\s*for\s+step:\s+ResolvedWaitStep\b"#),
+            "PredicateWait.swift should keep the resolved wait orchestration as a single function"
+        )
+        let missingInitialObservation = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+waitReceiptWithoutInitialObservation\b"#),
+            "PredicateWait.swift should keep the no-initial-observation orchestration explicit"
+        )
+        let orchestrationSource = SourceShapeFile(
+            relativePath: source.relativePath,
+            contents: [
+                resolvedWait.contents,
+                missingInitialObservation.contents,
+            ].joined(separator: "\n")
+        )
+        let directExpectationBranches = try orchestrationSource.lines(
+            matching: #"\b(if|guard)\b.*\bexpectation[.]met\b|\bexpectation[.]met\b\s*[?:]"#
+        )
+        let finalStateWarningCalls = try orchestrationSource.lines(
+            matching: #"\bfinalStateSatisfiedTransitionWarning\s*\("#
+        )
+
+        #expect(
+            directExpectationBranches.isEmpty,
+            """
+            PredicateWait orchestration should feed observations into PredicateWaitReducer \
+            instead of branching directly on expectation.met:
+            \(directExpectationBranches.joined(separator: "\n"))
+            """
+        )
+        #expect(
+            finalStateWarningCalls.isEmpty,
+            """
+            Final-state warning decisions should live in PredicateWaitReducer or a pure \
+            collaborator used by it:
+            \(finalStateWarningCalls.joined(separator: "\n"))
+            """
+        )
+        #expect(
+            !source.contents.contains("PredicateWaitPollEvaluation"),
+            "Predicate polling should return PredicateWaitDecision directly"
+        )
+    }
+
+    @Test func `post action receipts use explicit observation outcome`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
+        let observationOutcome = try #require(
+            try source.firstBlock(matching: #"\benum\s+ObservationOutcome\b"#),
+            "PostActionObservation should declare an explicit observation outcome enum"
+        )
+        let receiptBuilder = try #require(
+            try source.firstBlock(matching: #"\binit\s*\(\s*postActionMethod\s+method:\s+ActionMethod\b"#),
+            "Post-action receipt construction should be a typed ActionResult initializer"
+        )
+
+        #expect(observationOutcome.contents.contains("case cancelled("))
+        #expect(observationOutcome.contents.contains("case parseFailed"))
+        #expect(observationOutcome.contents.contains("case settled("))
+        #expect(
+            try receiptBuilder.containsMatch(#"\bswitch\s+observationOutcome\b"#),
+            "post-action receipt construction should switch over observationOutcome"
+        )
+        #expect(
+            try !source.containsMatch(#"\bstruct\s+PostActionReceiptReducer\b"#),
+            "Post-action receipt construction should stay on ActionResult instead of a stateless reducer object"
+        )
+
+        #expect(
+            try !source.containsMatch(#"\bstruct\s+ResultInput\b"#),
+            "The old ResultInput bag should not exist once receipt construction is typed"
+        )
+        #expect(
+            try !source.containsMatch(#"\bfinalEvidence\s*:\s*FinalEvidence[?]"#),
+            """
+            Post-action receipt construction should receive an explicit outcome enum, not \
+            optional final evidence:
+            \(source.relativePath)
+            """
+        )
+        #expect(
+            try !receiptBuilder.containsMatch(#"\bguard\s+let\s+finalEvidence\b|\bif\s+let\s+finalEvidence\b"#),
+            """
+            Cancellation and parse failure should be enum cases, not inferred from \
+            missing final evidence:
+            \(receiptBuilder.contents)
+            """
+        )
+    }
+
+    @Test func `heist action execution keeps one wait evaluation path`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistActionExecution.swift")
+
+        #expect(try source.containsMatch(#"\bprivate\s+enum\s+HeistWaitEvaluation\b"#))
+        #expect(try source.containsMatch(#"\bprivate\s+enum\s+HeistWaitEvaluationPurpose\b"#))
+        #expect(try source.containsMatch(#"\bprivate\s+func\s+waitEvaluation\s*\("#))
+
+        let retiredFailureHelpers = try source.lines(
+            matching: #"\bprivate\s+func\s+(expectationFailure|waitFailure)\s*\("#
+        )
+        let retiredFailureCallSites = try source.lines(
+            matching: #"\blet\s+failure\s*=\s*(expectationFailure|waitFailure)\s*\("#
+        )
+
+        #expect(
+            retiredFailureHelpers.isEmpty,
+            """
+            Action expectations and standalone waits should share HeistWaitEvaluation:
+            \(retiredFailureHelpers.joined(separator: "\n"))
+            """
+        )
+        #expect(
+            retiredFailureCallSites.isEmpty,
+            """
+            Action expectations and standalone waits should not branch through retired \
+            duplicate helper call sites:
+            \(retiredFailureCallSites.joined(separator: "\n"))
+            """
+        )
+    }
+}
+
+private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {
+    for forbidden in [
+        "import UIKit",
+        "CFAbsoluteTimeGetCurrent",
+        "Date(",
+        "FileManager.default",
+        "URLSession",
+        "NWConnection",
+        "Task.sleep",
+        "await ",
+    ] {
+        #expect(
+            !source.contents.contains(forbidden),
+            "\(source.relativePath) should stay pure and effect-free; found \(forbidden)"
+        )
+    }
+}
+
+private func expectType(
+    _ typeName: String,
+    in source: SourceShapeFile,
+    conformsTo conformances: [String]
+) throws {
+    let declaration = try #require(
+        try declaration(named: typeName, in: source),
+        "\(source.relativePath) should declare \(typeName) with explicit conformances"
+    )
+    for conformance in conformances {
+        #expect(
+            declaration.contains(conformance),
+            "\(typeName) should conform to \(conformance) in \(source.relativePath)"
+        )
+    }
+}
+
+private func declaration(
+    named typeName: String,
+    in source: SourceShapeFile
+) throws -> String? {
+    let escapedType = NSRegularExpression.escapedPattern(for: typeName)
+    return try source.matches(
+        of: #"\b(?:struct|enum)\s+\#(escapedType)\s*:\s*[^{}]+"#,
+        options: [.dotMatchesLineSeparators]
+    ).first
+}

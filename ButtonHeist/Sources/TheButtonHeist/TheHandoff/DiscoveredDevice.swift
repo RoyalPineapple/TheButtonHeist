@@ -84,6 +84,15 @@ struct DiscoveryIdentity: Hashable, Sendable, Codable, CustomStringConvertible, 
     }
 }
 
+private struct DiscoveryHostPortTarget: Equatable, Sendable {
+    let host: String
+    let port: UInt16
+
+    var displayValue: String {
+        "\(host):\(port)"
+    }
+}
+
 struct DiscoveryResolutionQuery: Equatable, Sendable, CustomStringConvertible {
     let rawValue: String
     let normalizedValue: String
@@ -167,13 +176,13 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         id: String? = nil,
         name: String? = nil
     ) -> DiscoveredDevice? {
-        guard let (host, port) = parseHostPort(from: value) else { return nil }
-        let resolvedId = DiscoveryDeviceID(id ?? "\(host):\(port)")
-        let resolvedName = name ?? "\(host):\(port)"
+        guard let target = parseHostPort(from: value) else { return nil }
+        let resolvedId = DiscoveryDeviceID(id ?? target.displayValue)
+        let resolvedName = name ?? target.displayValue
         return DiscoveredDevice(
             deviceID: resolvedId,
             name: resolvedName,
-            endpoint: .hostPort(host: .init(host), port: .init(integerLiteral: port))
+            endpoint: .hostPort(host: .init(target.host), port: .init(integerLiteral: target.port))
         )
     }
 
@@ -192,10 +201,10 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     static func directConnectTarget(from filter: String?) -> DiscoveredDevice? {
         guard let filter else { return nil }
         let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let (host, port) = parseHostPort(from: trimmed), isLoopbackHost(host) else {
+        guard let target = parseHostPort(from: trimmed), isLoopbackHost(target.host) else {
             return nil
         }
-        return DiscoveredDevice(host: host, port: port)
+        return DiscoveredDevice(host: target.host, port: target.port)
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -206,7 +215,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         lhs.deviceID == rhs.deviceID
     }
 
-    private static func parseHostPort(from value: String) -> (String, UInt16)? {
+    private static func parseHostPort(from value: String) -> DiscoveryHostPortTarget? {
         guard !value.isEmpty else { return nil }
 
         if value.hasPrefix("["),
@@ -219,14 +228,14 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             let portString = String(value[value.index(after: separator)...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
-            return (host, port)
+            return DiscoveryHostPortTarget(host: host, port: port)
         }
 
         guard let separator = value.lastIndex(of: ":") else { return nil }
         let host = String(value[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
         let portString = String(value[value.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
-        return (host, port)
+        return DiscoveryHostPortTarget(host: host, port: port)
     }
 
     private static func isLoopbackHost(_ host: String) -> Bool {

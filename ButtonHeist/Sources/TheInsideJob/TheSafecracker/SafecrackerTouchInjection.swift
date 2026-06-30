@@ -7,6 +7,11 @@ import ThePlans
 @MainActor
 final class SafecrackerTouchInjection {
 
+    private struct ActiveTouch {
+        var touch: TheSafecracker.SyntheticTouch
+        let window: UIWindow
+    }
+
     private let fingerprints: TheFingerprints
 
     init(fingerprints: TheFingerprints) {
@@ -93,7 +98,7 @@ final class SafecrackerTouchInjection {
         )
     }
 
-    private func beginTouch(at point: CGPoint) -> (touch: TheSafecracker.SyntheticTouch, window: UIWindow)? {
+    private func beginTouch(at point: CGPoint) -> ActiveTouch? {
         guard Self.geometryIsValid([point], field: "touch point") else { return nil }
         guard let window = windowForPoint(point) else {
             insideJobLogger.error("No window found for point \(String(describing: point))")
@@ -113,7 +118,7 @@ final class SafecrackerTouchInjection {
 
         event.send()
         fingerprints.beginTracking(at: [point])
-        return (touch, window)
+        return ActiveTouch(touch: touch, window: window)
     }
 
     @discardableResult

@@ -236,6 +236,11 @@ public struct HeistDef<Input>: Sendable {
     public let parameter: HeistParameter
     private let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
+    private struct DottedPathDefinitionBuild: Sendable {
+        let components: [String]
+        let definition: ValidationResult<HeistPlan, HeistBuildDiagnostic>
+    }
+
     public init<Content: HeistContent>(
         _ path: String,
         @HeistBuilder _ content: @escaping () throws -> Content
@@ -317,15 +322,15 @@ public struct HeistDef<Input>: Sendable {
         path: String,
         parameter: HeistParameter,
         _ content: () throws -> any HeistContent
-    ) -> (components: [String], definition: ValidationResult<HeistPlan, HeistBuildDiagnostic>) {
+    ) -> DottedPathDefinitionBuild {
         switch pathComponents(path) {
         case .success(let components, _):
-            return (
-                components,
-                buildDefinition(path: components, parameter: parameter, content)
+            return DottedPathDefinitionBuild(
+                components: components,
+                definition: buildDefinition(path: components, parameter: parameter, content)
             )
         case .failure(let diagnostics):
-            return ([], .failure(diagnostics))
+            return DottedPathDefinitionBuild(components: [], definition: .failure(diagnostics))
         }
     }
 

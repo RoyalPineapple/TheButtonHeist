@@ -60,10 +60,13 @@ final class PostActionObservation {
     struct FinalEvidence {
         let state: BeforeState
         let trace: AccessibilityTrace
+        let capture: AccessibilityTrace.Capture
+    }
 
-        var capture: AccessibilityTrace.Capture? {
-            trace.captures.last
-        }
+    enum ObservationOutcome {
+        case cancelled(cancelMs: Int)
+        case parseFailed
+        case settled(FinalEvidence)
     }
 
     init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
@@ -149,7 +152,26 @@ final class PostActionObservation {
             final: finalState,
             settleEvidence: settleEvidence
         )
-        return FinalEvidence(state: finalState, trace: trace)
+        guard let capture = trace.captures.last else { return nil }
+        return FinalEvidence(state: finalState, trace: trace, capture: capture)
+    }
+
+    func observationOutcome(
+        before: BeforeState,
+        settleEvidence: SettleEvidence
+    ) async -> ObservationOutcome {
+        if case .cancelled(let cancelMs) = settleEvidence.outcome.outcome {
+            return .cancelled(cancelMs: cancelMs)
+        }
+
+        guard let finalEvidence = await finalSemanticEvidence(
+            before: before,
+            settleEvidence: settleEvidence
+        ) else {
+            return .parseFailed
+        }
+
+        return .settled(finalEvidence)
     }
 
     func captureSemanticState(
@@ -375,11 +397,6 @@ final class PostActionObservation {
         case failure(ActionOutcomeFailure)
     }
 
-    fileprivate enum ReceiptOutcome {
-        case success
-        case failure(ErrorKind)
-    }
-
     struct ActionOutcomeSuccess {
         let payload: ResultPayload?
         let afterStatePayload: ((BeforeState) -> ResultPayload?)?
@@ -415,163 +432,6 @@ final class PostActionObservation {
         }
     }
 
-    /// Inputs for building a post-action receipt from settle and final evidence.
-    struct ResultInput {
-        let method: ActionMethod
-        let outcome: ActionOutcome
-        let message: String?
-        let before: BeforeState
-        let settleEvidence: SettleEvidence
-        let finalEvidence: FinalEvidence?
-    }
-
-    /// Build the action receipt from before/settle/final evidence. Cancellation
-    /// and parse-failure are settled here from the evidence, not by a separate
-    /// worldview.
-    static func result(_ input: ResultInput) -> ActionResult {
-        if let cancelled = cancelledActionResult(
-            method: input.method,
-            payload: input.outcome.payload,
-            subjectEvidence: input.outcome.subjectEvidence,
-            activationTrace: input.outcome.activationTrace,
-            before: input.before,
-            settleEvidence: input.settleEvidence
-        ) {
-            return cancelled
-        }
-
-        guard let finalEvidence = input.finalEvidence else {
-            return parseFailureResult(
-                method: input.method,
-                payload: input.outcome.payload,
-                subjectEvidence: input.outcome.subjectEvidence,
-                activationTrace: input.outcome.activationTrace,
-                before: input.before,
-                settleEvidence: input.settleEvidence
-            )
-        }
-
-        let resolvedPayload = input.outcome.resolvedPayload(after: finalEvidence.state)
-
-        guard finalEvidence.capture != nil else {
-            return failedActionResult(
-                method: input.method,
-                capture: input.before.capture,
-                message: input.message,
-                payload: resolvedPayload,
-                subjectEvidence: input.outcome.subjectEvidence,
-                activationTrace: input.outcome.activationTrace
-            )
-        }
-
-        return actionResult(
-            method: input.method,
-            capture: finalEvidence.capture ?? finalEvidence.state.capture,
-            message: input.message,
-            payload: resolvedPayload,
-            outcome: input.outcome.receiptOutcome,
-            accessibilityTrace: finalEvidence.trace,
-            subjectEvidence: input.outcome.subjectEvidence,
-            activationTrace: input.outcome.activationTrace,
-            settled: input.settleEvidence.didSettleCleanly,
-            settleTimeMs: input.settleEvidence.timeMs
-        )
-    }
-
-    private static func actionResult(
-        method: ActionMethod,
-        capture: AccessibilityTrace.Capture,
-        message: String?,
-        payload: ResultPayload?,
-        outcome: ReceiptOutcome,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil
-    ) -> ActionResult {
-        var builder = ActionResultBuilder(method: method, capture: capture)
-        builder.message = message
-        if let accessibilityTrace {
-            builder.accessibilityTrace = accessibilityTrace
-        }
-        builder.settled = settled
-        builder.settleTimeMs = settleTimeMs
-        builder.subjectEvidence = subjectEvidence
-        builder.activationTrace = activationTrace
-        switch outcome {
-        case .success:
-            return builder.success(payload: payload)
-        case .failure(let errorKind):
-            return builder.failure(errorKind: errorKind, payload: payload)
-        }
-    }
-
-    private static func failedActionResult(
-        method: ActionMethod,
-        capture: AccessibilityTrace.Capture,
-        message: String?,
-        payload: ResultPayload?,
-        errorKind: ErrorKind = .actionFailed,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil
-    ) -> ActionResult {
-        actionResult(
-            method: method,
-            capture: capture,
-            message: message,
-            payload: payload,
-            outcome: .failure(errorKind),
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs
-        )
-    }
-
-    private static func cancelledActionResult(
-        method: ActionMethod,
-        payload: ResultPayload?,
-        subjectEvidence: ActionSubjectEvidence?,
-        activationTrace: ActivationTrace?,
-        before: BeforeState,
-        settleEvidence: SettleEvidence
-    ) -> ActionResult? {
-        guard case .cancelled(let cancelMs) = settleEvidence.outcome.outcome else { return nil }
-        return failedActionResult(
-            method: method,
-            capture: before.capture,
-            message: "cancelled after \(cancelMs)ms",
-            payload: payload,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            settled: false,
-            settleTimeMs: cancelMs
-        )
-    }
-
-    private static func parseFailureResult(
-        method: ActionMethod,
-        payload: ResultPayload?,
-        subjectEvidence: ActionSubjectEvidence?,
-        activationTrace: ActivationTrace?,
-        before: BeforeState,
-        settleEvidence: SettleEvidence
-    ) -> ActionResult {
-        failedActionResult(
-            method: method,
-            capture: before.capture,
-            message: "Could not parse post-action accessibility tree",
-            payload: payload,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            settled: settleEvidence.didSettleCleanly,
-            settleTimeMs: settleEvidence.timeMs
-        )
-    }
-
     // MARK: - Observation Helpers
 
     static func observationSummary(_ state: BeforeState) -> String {
@@ -598,6 +458,151 @@ final class PostActionObservation {
             final: final.elements
         ).map { TheStash.WireConversion.convert($0) }
     }
+}
+
+extension ActionResult {
+    @MainActor init(
+        postActionMethod method: ActionMethod,
+        outcome: PostActionObservation.ActionOutcome,
+        message: String?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence,
+        observationOutcome: PostActionObservation.ObservationOutcome
+    ) {
+        switch observationOutcome {
+        case .cancelled(let cancelMs):
+            self = Self.cancelledPostActionResult(
+                method: method,
+                payload: outcome.payload,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace,
+                before: before,
+                cancelMs: cancelMs
+            )
+
+        case .parseFailed:
+            self = Self.parseFailurePostActionResult(
+                method: method,
+                payload: outcome.payload,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace,
+                before: before,
+                settleEvidence: settleEvidence
+            )
+
+        case .settled(let finalEvidence):
+            self = Self.postActionResult(
+                method: method,
+                capture: finalEvidence.capture,
+                message: message,
+                payload: outcome.resolvedPayload(after: finalEvidence.state),
+                outcome: outcome.receiptOutcome,
+                accessibilityTrace: finalEvidence.trace,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace,
+                settled: settleEvidence.didSettleCleanly,
+                settleTimeMs: settleEvidence.timeMs
+            )
+        }
+    }
+
+    @MainActor private static func postActionResult(
+        method: ActionMethod,
+        capture: AccessibilityTrace.Capture,
+        message: String?,
+        payload: ResultPayload?,
+        outcome: PostActionReceiptOutcome,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil
+    ) -> Self {
+        var builder = ActionResultBuilder(method: method, capture: capture)
+        builder.message = message
+        if let accessibilityTrace {
+            builder.accessibilityTrace = accessibilityTrace
+        }
+        builder.settled = settled
+        builder.settleTimeMs = settleTimeMs
+        builder.subjectEvidence = subjectEvidence
+        builder.activationTrace = activationTrace
+        switch outcome {
+        case .success:
+            return builder.success(payload: payload)
+        case .failure(let errorKind):
+            return builder.failure(errorKind: errorKind, payload: payload)
+        }
+    }
+
+    @MainActor private static func failedPostActionResult(
+        method: ActionMethod,
+        capture: AccessibilityTrace.Capture,
+        message: String?,
+        payload: ResultPayload?,
+        errorKind: ErrorKind = .actionFailed,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil
+    ) -> Self {
+        postActionResult(
+            method: method,
+            capture: capture,
+            message: message,
+            payload: payload,
+            outcome: .failure(errorKind),
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs
+        )
+    }
+
+    @MainActor private static func cancelledPostActionResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?,
+        before: PostActionObservation.BeforeState,
+        cancelMs: Int
+    ) -> Self {
+        failedPostActionResult(
+            method: method,
+            capture: before.capture,
+            message: "cancelled after \(cancelMs)ms",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            settled: false,
+            settleTimeMs: cancelMs
+        )
+    }
+
+    @MainActor private static func parseFailurePostActionResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence
+    ) -> Self {
+        failedPostActionResult(
+            method: method,
+            capture: before.capture,
+            message: "Could not parse post-action accessibility tree",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs
+        )
+    }
+}
+
+private enum PostActionReceiptOutcome {
+    case success
+    case failure(ErrorKind)
 }
 
 private extension PostActionObservation.ActionOutcome {
@@ -628,7 +633,7 @@ private extension PostActionObservation.ActionOutcome {
         }
     }
 
-    var receiptOutcome: PostActionObservation.ReceiptOutcome {
+    var receiptOutcome: PostActionReceiptOutcome {
         switch self {
         case .success:
             return .success
