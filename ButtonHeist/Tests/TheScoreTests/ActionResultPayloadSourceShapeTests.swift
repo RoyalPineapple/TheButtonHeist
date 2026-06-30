@@ -126,6 +126,7 @@ import Testing
         #expect(payload.contents.contains("case none"))
         #expect(payload.contents.contains("case immediate("))
         #expect(payload.contents.contains("case afterState("))
-        #expect(payload.contents.contains("case afterStateWithFallback("))
+        #expect(!payload.contents.contains("afterStateWithFallback"))
+        #expect(!payload.contents.contains("init("))
     }
 }

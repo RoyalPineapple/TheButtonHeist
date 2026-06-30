@@ -88,6 +88,52 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(decoded.rotors, element.rotors)
     }
 
+    func testActionsCanonicalizeAtConstructionBoundary() {
+        let element = HeistElement(
+            description: "Actions",
+            label: "Actions",
+            value: nil,
+            identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.custom("Share"), .activate, .custom("Delete"), .activate, .decrement, .increment]
+        )
+
+        XCTAssertEqual(element.actions, [.activate, .increment, .decrement, .custom("Delete"), .custom("Share")])
+    }
+
+    func testActionsCanonicalizeAtDecodeBoundaryAndEncodeDeterministically() throws {
+        let json = """
+        {
+          "description": "Actions",
+          "label": "Actions",
+          "traits": [],
+          "frameX": 0,
+          "frameY": 0,
+          "frameWidth": 100,
+          "frameHeight": 44,
+          "activationPointX": 50,
+          "activationPointY": 22,
+          "respondsToUserInteraction": true,
+          "actions": [
+            {"custom": "Share"},
+            "activate",
+            {"custom": "Delete"},
+            "activate"
+          ]
+        }
+        """
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8))
+        let encoded = try JSONEncoder().encode(decoded)
+        let encodedObject = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        let encodedActions = try XCTUnwrap(encodedObject?["actions"] as? [Any])
+
+        XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Share")])
+        XCTAssertEqual(encodedActions.count, 3)
+        XCTAssertEqual(encodedActions[0] as? String, "activate")
+        XCTAssertEqual((encodedActions[1] as? [String: Any])?["custom"] as? String, "Delete")
+        XCTAssertEqual((encodedActions[2] as? [String: Any])?["custom"] as? String, "Share")
+    }
+
     // MARK: - Helpers
 
     private func makeElement(label: String) -> HeistElement {

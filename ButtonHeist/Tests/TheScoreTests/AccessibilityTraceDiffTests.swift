@@ -467,6 +467,15 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
 
         XCTAssertNil(projectElementStateChange(
+            old: makeElement(label: "Row", traits: [.button], actions: [.activate, .custom("Share")]),
+            new: makeElement(label: "Row", traits: [.button], actions: [.custom("Share"), .activate, .activate])
+        ))
+        XCTAssertEqual(
+            ElementPropertyValue.actions([.custom("Share"), .activate]),
+            ElementPropertyValue.actions([.activate, .custom("Share"), .activate])
+        )
+
+        XCTAssertNil(projectElementStateChange(
             old: makeElement(label: "Document", traits: [.staticText], customContent: nil),
             new: makeElement(label: "Document", traits: [.staticText], customContent: [])
         ))

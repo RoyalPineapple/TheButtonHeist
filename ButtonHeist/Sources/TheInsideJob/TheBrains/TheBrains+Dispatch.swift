@@ -150,18 +150,21 @@ extension TheBrains {
         let postActionOutcome: PostActionObservation.ActionOutcome
         switch result.outcome {
         case .success(let success):
+            let payload: PostActionObservation.ActionOutcomePayload
+            if let afterStatePayload {
+                payload = .afterState { afterState in
+                    afterStatePayload(PostActionPayloadContext(
+                        afterState: afterState,
+                        resolvedElementId: success.resolvedElementId
+                    ))
+                }
+            } else if let immediatePayload = success.payload {
+                payload = .immediate(immediatePayload)
+            } else {
+                payload = .none
+            }
             postActionOutcome = .success(.init(
-                payload: .init(
-                    immediate: success.payload,
-                    afterState: afterStatePayload.map { payload in
-                        { afterState in
-                            payload(PostActionPayloadContext(
-                                afterState: afterState,
-                                resolvedElementId: success.resolvedElementId
-                            ))
-                        }
-                    }
-                ),
+                payload: payload,
                 subjectEvidence: success.subjectEvidence,
                 activationTrace: success.activationTrace
             ))

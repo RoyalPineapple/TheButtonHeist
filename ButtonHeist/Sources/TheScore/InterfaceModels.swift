@@ -161,7 +161,28 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
         actions: [ElementAction]
     ) {
         self.path = path
-        self.actions = actions
+        self.actions = actions.canonicalElementActionArray
+    }
+}
+
+extension InterfaceElementAnnotation {
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case actions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            path: try container.decode(TreePath.self, forKey: .path),
+            actions: try container.decode(ElementActionSet.self, forKey: .actions).orderedActions
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(ElementActionSet(actions), forKey: .actions)
     }
 }
 

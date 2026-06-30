@@ -41,7 +41,7 @@ public struct ElementPropertyPoint: Codable, Sendable, Equatable, Hashable {
 public enum ElementPropertyValue: Codable, Sendable, Equatable {
     case text(String)
     case traits([HeistTrait])
-    case actions([ElementAction])
+    case actions(ElementActionSet)
     case frame(ElementPropertyFrame)
     case activationPoint(ElementPropertyPoint)
     case customContent([HeistCustomContent])
@@ -77,7 +77,7 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
         case .traits:
             self = .traits(try container.decode([HeistTrait].self, forKey: .traits))
         case .actions:
-            self = .actions(try container.decode([ElementAction].self, forKey: .actions))
+            self = .actions(try container.decode(ElementActionSet.self, forKey: .actions))
         case .frame:
             self = .frame(try container.decode(ElementPropertyFrame.self, forKey: .frame))
         case .activationPoint:
@@ -144,7 +144,7 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
         case .traits(let traits):
             return traits.map(\.rawValue).joined(separator: ", ")
         case .actions(let actions):
-            return actions.map(\.description).joined(separator: ", ")
+            return actions.displayText
         case .frame(let frame):
             return frame.displayText
         case .activationPoint(let point):
@@ -264,8 +264,15 @@ public enum PropertyChange: Sendable, Equatable {
         .hint(ElementPropertyValueChange(old: old, new: new))
     }
 
-    public static func actions(old: [ElementAction]?, new: [ElementAction]?) -> Self {
+    public static func actions(old: ElementActionSet?, new: ElementActionSet?) -> Self {
         .actions(ElementPropertyValueChange(old: old, new: new))
+    }
+
+    public static func actions(old: [ElementAction]?, new: [ElementAction]?) -> Self {
+        .actions(
+            old: old.map { ElementActionSet($0) },
+            new: new.map { ElementActionSet($0) }
+        )
     }
 
     public static func frame(old: ElementPropertyFrame?, new: ElementPropertyFrame?) -> Self {
@@ -698,28 +705,27 @@ extension HintProperty: ElementPropertyValueKind {
 }
 
 extension ActionsProperty: ElementPropertyValueKind {
-    public typealias Value = [ElementAction]
+    public typealias Value = ElementActionSet
 
-    public static func value(in element: HeistElement) -> [ElementAction]? {
-        element.actions
+    public static func value(in element: HeistElement) -> ElementActionSet? {
+        ElementActionSet(element.actions)
     }
 
-    public static func displayText(for value: [ElementAction]) -> String {
-        value.map(\.description).joined(separator: ", ")
+    public static func displayText(for value: ElementActionSet) -> String {
+        value.displayText
     }
 
-    public static func matches(_ checker: ActionSetMatch, value: [ElementAction]?) -> Bool {
+    public static func matches(_ checker: ActionSetMatch, value: ElementActionSet?) -> Bool {
         guard let value else { return false }
-        let actions = Set(value)
-        return checker.include.isSubset(of: actions)
-            && checker.exclude.isDisjoint(with: actions)
+        return checker.include.isSubset(of: value.actions)
+            && checker.exclude.isDisjoint(with: value.actions)
     }
 
-    public static func erasedValue(_ value: [ElementAction]) -> ElementPropertyValue {
+    public static func erasedValue(_ value: ElementActionSet) -> ElementPropertyValue {
         .actions(value)
     }
 
-    public static func change(old: [ElementAction]?, new: [ElementAction]?) -> PropertyChange {
+    public static func change(old: ElementActionSet?, new: ElementActionSet?) -> PropertyChange {
         .actions(old: old, new: new)
     }
 }
