@@ -132,6 +132,9 @@ extension TheFence {
             }
             return .action(action)
         case .wait(let wait):
+            guard wait.elseBody == nil else {
+                throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
+            }
             return .wait(wait)
         case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])

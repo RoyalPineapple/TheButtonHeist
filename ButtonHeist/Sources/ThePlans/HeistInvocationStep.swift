@@ -38,8 +38,8 @@ struct HeistInvocationPath: Sendable, Equatable, Hashable {
         components.joined(separator: ".")
     }
 
-    static func components(fromDottedName dottedName: String) -> [String] {
-        dottedName.split(separator: ".").map(String.init)
+    static func components(fromDottedName dottedName: String) throws -> [String] {
+        try HeistInvocationPath(dottedName: dottedName).components
     }
 
     static func preconditionValidated(components: [String]) -> HeistInvocationPath {

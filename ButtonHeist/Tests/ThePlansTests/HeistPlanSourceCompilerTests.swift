@@ -147,6 +147,25 @@ import Testing
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `inline plan source rejects empty HeistDef path components`() throws {
+    do {
+        _ = try HeistPlanSourceCompiler().compile("""
+        HeistPlan("cart") {
+            HeistDef<Void>("Cart..checkout") {
+                Warn("checkout")
+            }
+
+            RunHeist("Cart.checkout")
+        }
+        """)
+        Issue.record("Expected source compiler to reject empty HeistDef path component")
+    } catch let error as HeistPlanSourceCompilerError {
+        expect(error.description, contains: "heist invocation path component at index 1 must not be empty")
+    } catch {
+        Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
+    }
+}
+
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))

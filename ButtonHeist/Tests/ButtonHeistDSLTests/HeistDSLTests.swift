@@ -912,6 +912,36 @@ func invalidRunHeistNamesSurfaceBuildDiagnostics() throws {
 }
 
 @Test
+func invalidHeistDefinitionNamesSurfaceBuildDiagnostics() throws {
+    let definition = HeistDef<Void>("LibraryScreen..checkout") {
+        Warn("checkout")
+    }
+    let diagnostic = try #require(definition.heistBuildDiagnostics.first)
+
+    #expect(definition.path == [])
+    #expect(definition.heistBuildDiagnostics.count == 1)
+    #expect(diagnostic.code == .dslInvalidDefinition)
+    #expect(diagnostic.phase == .dslBuild)
+    #expect(diagnostic.path == "LibraryScreen..checkout")
+    #expect(diagnostic.message.contains("HeistDef path is invalid"))
+    #expect(diagnostic.message.contains("heist invocation path component at index 1 must not be empty"))
+    #expect(diagnostic.hint == "Use a non-empty dot-separated heist capability name with no empty components.")
+
+    do {
+        _ = try HeistPlan {
+            definition
+        }
+        Issue.record("Expected invalid HeistDef name to fail")
+    } catch let error as HeistPlanBuildError {
+        let buildDiagnostic = try #require(error.diagnostics.first)
+        #expect(error.diagnostics.count == 1)
+        #expect(buildDiagnostic == diagnostic)
+    } catch {
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
+    }
+}
+
+@Test
 func runHeistResolvesNamedCapabilityThroughValidation() throws {
     _ = try HeistPlan(
         definitions: [

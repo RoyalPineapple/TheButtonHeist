@@ -1028,6 +1028,25 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPerformRejectsWaitForElseBranch() async {
+        let fence = TheFence(configuration: .init())
+
+        XCTAssertThrowsError(try fence.decodePerformRequest(TheFence.CommandArgumentEnvelope(values: [
+            "step": .string("""
+            WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
+                Warn("fallback")
+            }
+            """),
+        ]))) { error in
+            let message = String(describing: error)
+            XCTAssertTrue(
+                message.contains("perform accepts one action statement or one simple WaitFor statement"),
+                message
+            )
+        }
+    }
+
+    @ButtonHeistActor
     func testPerformUnsupportedStepDiagnosticBranchUsesCodeNotMessage() async {
         let fence = TheFence(configuration: .init())
         let guidance = "perform accepts one action statement or one simple WaitFor statement"
