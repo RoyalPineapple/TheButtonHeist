@@ -55,7 +55,7 @@ public enum RepairAfterDiffObservation: Codable, Sendable, Hashable {
 }
 
 extension RepairSuggestionReason {
-    var prose: String {
+    package var prose: String {
         switch self {
         case .oldTargetResolvedInLastSuccessfulSnapshot:
             return "Old target resolved to one element in the last successful before snapshot."
@@ -125,7 +125,7 @@ extension RepairScoringReason {
 }
 
 extension RepairCaveat {
-    var prose: String {
+    package var prose: String {
         switch self {
         case .candidateDoesNotExposeSameActionFamily:
             return "Candidate does not expose the same action family."
