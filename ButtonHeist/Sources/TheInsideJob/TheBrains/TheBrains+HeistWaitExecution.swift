@@ -66,6 +66,7 @@ struct HeistWaitOutcome {
     let expectation: ExpectationResult
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
+    let warning: HeistPredicateWarning?
 
     var succeeded: Bool {
         status.succeeded
@@ -77,7 +78,8 @@ struct HeistWaitOutcome {
         accessibilityTrace: AccessibilityTrace?,
         expectation: ExpectationResult,
         observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil
+        observationSummary: String? = nil,
+        warning: HeistPredicateWarning? = nil
     ) {
         self.status = status
         self.message = message
@@ -85,13 +87,15 @@ struct HeistWaitOutcome {
         self.expectation = expectation
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
+        self.warning = warning
     }
 
     init(
         actionResult: ActionResult,
         expectation: ExpectationResult,
         observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil
+        observationSummary: String? = nil,
+        warning: HeistPredicateWarning? = nil
     ) {
         self.init(
             status: Status(actionResult: actionResult),
@@ -99,7 +103,8 @@ struct HeistWaitOutcome {
             accessibilityTrace: actionResult.accessibilityTrace,
             expectation: expectation,
             observedSequence: observedSequence,
-            observationSummary: observationSummary
+            observationSummary: observationSummary,
+            warning: warning
         )
     }
 
@@ -121,23 +126,27 @@ struct HeistWaitReceipt {
     let expectation: ExpectationResult
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
+    let warning: HeistPredicateWarning?
 
     init(
         actionResult: ActionResult,
         expectation: ExpectationResult,
         observedSequence: SettledObservationSequence? = nil,
-        observationSummary: String? = nil
+        observationSummary: String? = nil,
+        warning: HeistPredicateWarning? = nil
     ) {
         self.actionResult = actionResult
         self.waitOutcome = HeistWaitOutcome(
             actionResult: actionResult,
             expectation: expectation,
             observedSequence: observedSequence,
-            observationSummary: observationSummary
+            observationSummary: observationSummary,
+            warning: warning
         )
         self.expectation = expectation
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
+        self.warning = warning
     }
 
     @MainActor
@@ -147,6 +156,7 @@ struct HeistWaitReceipt {
         self.expectation = waitOutcome.expectation
         self.observedSequence = waitOutcome.observedSequence
         self.observationSummary = waitOutcome.observationSummary
+        self.warning = waitOutcome.warning
     }
 }
 

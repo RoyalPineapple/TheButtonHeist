@@ -164,7 +164,7 @@ TypeText("Bruschetta", into: .label("Search Items"))
     .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.change(.updated(element: .label("Quantity"), .value(before: "2", after: "3"))))
+    .expect(.updated(.label("Quantity"), .value(from: "2", to: "3")))
 
 Increment(.label("Volume"))
     .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
@@ -211,11 +211,12 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.updated(...)` for explicit property-delta assertions.
-`before` and `after` are optional element predicates using the same matcher
-grammar as targets and state assertions. For example, `.value(after: "3")` is
-exact and `.value(after: .contains("items"))` is explicitly broad. This remains
-an observed-change predicate and does not infer the action's target from hidden
+Use `.updated(...)` for explicit same-screen property-delta assertions. The
+first argument may be an element matcher and the second argument is the property
+change matcher. Use `from:` and `to:` when the previous value matters; use the
+unlabeled form for a destination-only value. For example, `.value("3")` is exact
+and `.value(.contains("items"))` is explicitly broad. This remains an
+observed-change predicate and does not infer the action's target from hidden
 context.
 
 When text entry or validation can reflow the interface, prefer a settled-state
@@ -223,12 +224,14 @@ assertion such as `.exists(.element(..., .value(...)))` or a `WaitFor(...)`
 over `.updated(...)`. Keep `.updated(...)` for changes that should remain
 same-screen element deltas.
 
-`.expect(.updated(...))` lowers to an element-change predicate. Include
-`element:` when the assertion must be tied to a durable element predicate.
+`.expect(.updated(...))` lowers to an element-change predicate. Include an
+explicit element matcher when the assertion must be tied to a durable element:
+`.updated(.label("Quantity"), .value(from: "2", to: "3"))`.
 
-Do not assert label or identifier changes as property updates. The current diff
-model uses those fields for element identity, so a label or identifier change is
-not a safe `.updated(property:)` contract.
+Use `.screenChanged(...)` for navigation. Assertions inside `screenChanged` are
+destination snapshot assertions, not element-delta predicates:
+`.screenChanged(.exists(.label("Receipt")))`. Do not put `.appeared(...)`,
+`.disappeared(...)`, or `.updated(...)` inside `.screenChanged(...)`.
 
 `ForEach` has two durable authoring forms:
 
@@ -302,7 +305,10 @@ same DSL concept: `Activate(.label("Pay"))` is shorthand for a target built from
 the `.label("Pay")` predicate, `WaitFor(.label("Pay"))` is shorthand for an
 element existence predicate, and `.expect(.appeared(.label("Toast")))` is
 shorthand for an element-change assertion. Sugar must stay local and
-unambiguous; write `.change(.screen())`, not a renamed predicate alias.
+unambiguous; write `.screenChanged` or
+`.screenChanged(.exists(.label("Receipt")))` for navigation, and use
+`.appeared(...)`, `.disappeared(...)`, or `.updated(...)` only for same-screen
+element deltas.
 
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.

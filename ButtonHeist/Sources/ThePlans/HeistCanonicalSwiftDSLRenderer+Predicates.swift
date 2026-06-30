@@ -26,6 +26,9 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(changePredicate change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {
+        if case .screenScope(let assertions) = change {
+            return try renderScreenChanged(assertions: assertions, environment: environment)
+        }
         if case .elementsScope(let assertions) = change, assertions.count == 1 {
             return try render(elementDelta: assertions[0], environment: environment)
         }
@@ -33,8 +36,11 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(changePredicate change: AccessibilityPredicate.Change, environment: RenderEnvironment) throws -> String {
+        if case .screenScope(let assertions) = change {
+            return try renderScreenChanged(assertions: assertions, environment: environment)
+        }
         if case .elementsScope(let assertions) = change, assertions.count == 1 {
-            return render(elementDelta: assertions[0])
+            return try render(elementDelta: assertions[0])
         }
         return try ".change(\(render(change: change, environment: environment)))"
     }
@@ -74,15 +80,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .any:
             return ""
         case .screenScope(let assertions):
-            return try ".screen(\(assertions.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
+            return try renderScreenChanged(assertions: assertions, environment: environment)
         case .elementsScope(let assertions):
             switch assertions.count {
             case 0:
                 return ".elements()"
             case 1:
-                return render(elementDelta: assertions[0])
+                return try render(elementDelta: assertions[0])
             default:
-                return ".elements(\(assertions.map { render(elementDelta: $0) }.joined(separator: ", ")))"
+                return try ".elements(\(assertions.map { try render(elementDelta: $0) }.joined(separator: ", ")))"
             }
         case .allScopes(let changes):
             return try changes.map { try render(change: $0, environment: environment) }
@@ -96,7 +102,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .any:
             return ""
         case .screenScope(let assertions):
-            return try ".screen(\(assertions.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
+            return try renderScreenChanged(assertions: assertions, environment: environment)
         case .elementsScope(let assertions):
             switch assertions.count {
             case 0:
@@ -113,14 +119,66 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(elementDelta: ElementDeltaPredicate) -> String {
+    func renderScreenChanged(assertions: [StatePredicateExpr], environment: RenderEnvironment) throws -> String {
+        switch assertions.count {
+        case 0:
+            return ".screenChanged"
+        case 1:
+            return try ".screenChanged(\(renderScreenAssertion(assertions[0], environment: environment)))"
+        default:
+            return try ".screenChanged(\(renderScreenAssertion(.all(assertions), environment: environment)))"
+        }
+    }
+
+    func renderScreenChanged(assertions: [AccessibilityPredicate.State], environment: RenderEnvironment) throws -> String {
+        switch assertions.count {
+        case 0:
+            return ".screenChanged"
+        case 1:
+            return ".screenChanged(\(renderScreenAssertion(assertions[0])))"
+        default:
+            return ".screenChanged(\(renderScreenAssertion(.all(assertions))))"
+        }
+    }
+
+    func renderScreenAssertion(_ state: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
+        switch state {
+        case .exists(let predicate):
+            return try ".exists(\(render(predicate: predicate, environment: environment)))"
+        case .missing(let predicate):
+            return try ".missing(\(render(predicate: predicate, environment: environment)))"
+        case .existsTarget(let target):
+            return try ".exists(\(render(target: target, environment: environment)))"
+        case .missingTarget(let target):
+            return try ".missing(\(render(target: target, environment: environment)))"
+        case .all(let states):
+            return try ".all(\(states.map { try renderScreenAssertion($0, environment: environment) }.joined(separator: ", ")))"
+        }
+    }
+
+    func renderScreenAssertion(_ state: AccessibilityPredicate.State) -> String {
+        switch state {
+        case .exists(let predicate):
+            return ".exists(\(render(predicate: predicate)))"
+        case .missing(let predicate):
+            return ".missing(\(render(predicate: predicate)))"
+        case .existsTarget(let target):
+            return ".exists(\(render(target: target)))"
+        case .missingTarget(let target):
+            return ".missing(\(render(target: target)))"
+        case .all(let states):
+            return ".all(\(states.map(renderScreenAssertion).joined(separator: ", ")))"
+        }
+    }
+
+    func render(elementDelta: ElementDeltaPredicate) throws -> String {
         switch elementDelta {
         case .appearedElement(let element):
             return ".appeared(\(render(predicate: element)))"
         case .disappearedElement(let element):
             return ".disappeared(\(render(predicate: element)))"
         case .updatedElement(let update):
-            return ".updated(\(render(update: update)))"
+            return try ".updated(\(render(update: update)))"
         }
     }
 
@@ -135,20 +193,30 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(update: ElementUpdatePredicate) -> String {
-        let fields = [
-            update.element.map { "element: \(render(predicate: $0))" },
-            update.change.map { render(propertyChange: $0) },
-        ].compactMap { $0 }
-        return fields.joined(separator: ", ")
+    func render(update: ElementUpdatePredicate) throws -> String {
+        switch (update.element, update.change) {
+        case (.none, .some(let change)):
+            return render(propertyChange: change)
+        case (.some(let element), .some(let change)):
+            return "\(render(predicate: element)), \(render(propertyChange: change))"
+        case (.some, .none):
+            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("updated element matcher without an update matcher")
+        case (.none, .none):
+            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("empty updated predicate")
+        }
     }
 
     func render(update: ElementUpdatePredicateExpr, environment: RenderEnvironment) throws -> String {
-        let fields = try [
-            update.element.map { "element: \(try render(predicate: $0, environment: environment))" },
-            update.change.map { try render(propertyChange: $0, environment: environment) },
-        ].compactMap { $0 }
-        return fields.joined(separator: ", ")
+        switch (update.element, update.change) {
+        case (.none, .some(let change)):
+            return try render(propertyChange: change, environment: environment)
+        case (.some(let element), .some(let change)):
+            return try "\(render(predicate: element, environment: environment)), \(render(propertyChange: change, environment: environment))"
+        case (.some, .none):
+            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("updated element matcher without an update matcher")
+        case (.none, .none):
+            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("empty updated predicate")
+        }
     }
 
     func render(propertyChange change: AnyPropertyChange) -> String {
@@ -212,8 +280,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         render: (Checker) throws -> String
     ) rethrows -> String {
         let fields = try [
-            before.map { "before: \(try render($0))" },
-            after.map { "after: \(try render($0))" },
+            before.map { "from: \(try render($0))" },
+            after.map { "to: \(try render($0))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
@@ -227,8 +295,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".value(\(renderCallArgument(after)))"
         }
         let fields = [
-            before.map { "before: \(renderFieldArgument($0))" },
-            after.map { "after: \(renderFieldArgument($0))" },
+            before.map { "from: \(renderFieldArgument($0))" },
+            after.map { "to: \(renderFieldArgument($0))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
@@ -243,16 +311,16 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try ".value(\(renderCallArgument(after, environment: environment)))"
         }
         let fields = try [
-            before.map { "before: \(try renderFieldArgument($0, environment: environment))" },
-            after.map { "after: \(try renderFieldArgument($0, environment: environment))" },
+            before.map { "from: \(try renderFieldArgument($0, environment: environment))" },
+            after.map { "to: \(try renderFieldArgument($0, environment: environment))" },
         ].compactMap { $0 }
         return ".\(name)(\(fields.joined(separator: ", ")))"
     }
 
     func renderTraitsPropertyChange(before: TraitSetMatch?, after: TraitSetMatch?) -> String {
         let fields = [
-            before.map { "before: \(render(traitSet: $0))" },
-            after.map { "after: \(render(traitSet: $0))" },
+            before.map { "from: \(render(traitSet: $0))" },
+            after.map { "to: \(render(traitSet: $0))" },
         ].compactMap { $0 }
         return ".traits(\(fields.joined(separator: ", ")))"
     }

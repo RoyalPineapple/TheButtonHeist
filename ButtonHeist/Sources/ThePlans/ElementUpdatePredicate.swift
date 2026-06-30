@@ -489,6 +489,13 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .label(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func label(
+        from: StringMatch<String>? = nil,
+        to: StringMatch<String>
+    ) -> Self {
+        .label(before: from, after: to)
+    }
+
     public static func label(_ after: String) -> Self {
         .label(after: .exact(after))
     }
@@ -500,6 +507,13 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .identifier(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func identifier(
+        from: StringMatch<String>? = nil,
+        to: StringMatch<String>
+    ) -> Self {
+        .identifier(before: from, after: to)
+    }
+
     public static func identifier(_ after: String) -> Self {
         .identifier(after: .exact(after))
     }
@@ -509,6 +523,13 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         after: StringMatch<String>? = nil
     ) -> Self {
         .value(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func value(
+        from: StringMatch<String>? = nil,
+        to: StringMatch<String>
+    ) -> Self {
+        .value(before: from, after: to)
     }
 
     @_disfavoredOverload
@@ -527,11 +548,25 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .traits(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func traits(
+        from: TraitSetMatch? = nil,
+        to: TraitSetMatch
+    ) -> Self {
+        .traits(before: from, after: to)
+    }
+
     public static func hint(
         before: StringMatch<String>? = nil,
         after: StringMatch<String>? = nil
     ) -> Self {
         .hint(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func hint(
+        from: StringMatch<String>? = nil,
+        to: StringMatch<String>
+    ) -> Self {
+        .hint(before: from, after: to)
     }
 
     public static func actions(
@@ -541,11 +576,25 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .actions(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func actions(
+        from: ActionSetMatch? = nil,
+        to: ActionSetMatch
+    ) -> Self {
+        .actions(before: from, after: to)
+    }
+
     public static func frame(
         before: ElementFrameMatch? = nil,
         after: ElementFrameMatch? = nil
     ) -> Self {
         .frame(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func frame(
+        from: ElementFrameMatch? = nil,
+        to: ElementFrameMatch
+    ) -> Self {
+        .frame(before: from, after: to)
     }
 
     public static func activationPoint(
@@ -555,6 +604,13 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .activationPoint(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func activationPoint(
+        from: ElementPointMatch? = nil,
+        to: ElementPointMatch
+    ) -> Self {
+        .activationPoint(before: from, after: to)
+    }
+
     public static func customContent(
         before: CustomContentMatch<String>? = nil,
         after: CustomContentMatch<String>? = nil
@@ -562,11 +618,25 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .customContent(ElementPropertyChange(before: before, after: after))
     }
 
+    public static func customContent(
+        from: CustomContentMatch<String>? = nil,
+        to: CustomContentMatch<String>
+    ) -> Self {
+        .customContent(before: from, after: to)
+    }
+
     public static func rotors(
         before: RotorSetMatch<String>? = nil,
         after: RotorSetMatch<String>? = nil
     ) -> Self {
         .rotors(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func rotors(
+        from: RotorSetMatch<String>? = nil,
+        to: RotorSetMatch<String>
+    ) -> Self {
+        .rotors(before: from, after: to)
     }
 }
 
@@ -690,6 +760,13 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .label(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func label(
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>
+    ) -> Self {
+        .label(before: from, after: to)
+    }
+
     public static func label(_ after: StringExpr) -> Self {
         .label(after: .exact(after))
     }
@@ -705,6 +782,13 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .identifier(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func identifier(
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>
+    ) -> Self {
+        .identifier(before: from, after: to)
+    }
+
     public static func identifier(_ after: StringExpr) -> Self {
         .identifier(after: .exact(after))
     }
@@ -718,6 +802,13 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         after: StringMatch<StringExpr>? = nil
     ) -> Self {
         .value(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func value(
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>
+    ) -> Self {
+        .value(before: from, after: to)
     }
 
     @_disfavoredOverload
@@ -740,11 +831,25 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .traits(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func traits(
+        from: TraitSetMatch? = nil,
+        to: TraitSetMatch
+    ) -> Self {
+        .traits(before: from, after: to)
+    }
+
     public static func hint(
         before: StringMatch<StringExpr>? = nil,
         after: StringMatch<StringExpr>? = nil
     ) -> Self {
         .hint(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func hint(
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>
+    ) -> Self {
+        .hint(before: from, after: to)
     }
 
     public static func actions(
@@ -754,11 +859,25 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .actions(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func actions(
+        from: ActionSetMatch? = nil,
+        to: ActionSetMatch
+    ) -> Self {
+        .actions(before: from, after: to)
+    }
+
     public static func frame(
         before: ElementFrameMatch? = nil,
         after: ElementFrameMatch? = nil
     ) -> Self {
         .frame(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func frame(
+        from: ElementFrameMatch? = nil,
+        to: ElementFrameMatch
+    ) -> Self {
+        .frame(before: from, after: to)
     }
 
     public static func activationPoint(
@@ -768,6 +887,13 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .activationPoint(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func activationPoint(
+        from: ElementPointMatch? = nil,
+        to: ElementPointMatch
+    ) -> Self {
+        .activationPoint(before: from, after: to)
+    }
+
     public static func customContent(
         before: CustomContentMatch<StringExpr>? = nil,
         after: CustomContentMatch<StringExpr>? = nil
@@ -775,11 +901,25 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         .customContent(ElementPropertyChangeExpr(before: before, after: after))
     }
 
+    public static func customContent(
+        from: CustomContentMatch<StringExpr>? = nil,
+        to: CustomContentMatch<StringExpr>
+    ) -> Self {
+        .customContent(before: from, after: to)
+    }
+
     public static func rotors(
         before: RotorSetMatch<StringExpr>? = nil,
         after: RotorSetMatch<StringExpr>? = nil
     ) -> Self {
         .rotors(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func rotors(
+        from: RotorSetMatch<StringExpr>? = nil,
+        to: RotorSetMatch<StringExpr>
+    ) -> Self {
+        .rotors(before: from, after: to)
     }
 }
 

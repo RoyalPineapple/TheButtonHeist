@@ -69,7 +69,7 @@ extension FenceResponse {
     ) -> String? {
         if expectation.predicate == .change(.screen()),
            expectation.actual == AccessibilityTrace.DeltaKind.elementsChanged.rawValue {
-            return ".change(.screen()) requires a screen-level transition; " +
+            return ".screenChanged requires a screen-level transition; " +
                 "use .change(.elements()) for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }

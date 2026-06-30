@@ -139,7 +139,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try expectation.bool("met"), false)
         XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
-        XCTAssertTrue(compact.contains(".change(.screen()) requires a screen-level transition"), compact)
+        XCTAssertTrue(compact.contains(".screenChanged requires a screen-level transition"), compact)
         XCTAssertTrue(response.isFailure)
     }
 

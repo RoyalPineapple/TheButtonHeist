@@ -1821,6 +1821,192 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.reportExpectation?.met, true)
     }
 
+    func testHeistInvocationSnapshotExpectationEvaluatesFinalNestedState() async throws {
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Checkout"]),
+                observedState(labels: ["Payment Complete"]),
+            ],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            definitions: [
+                try HeistPlan(name: "Checkout", definitions: [
+                    try HeistPlan(name: "pay", body: [
+                        .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                    ]),
+                ], body: []),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Checkout", "pay"],
+                    expectation: WaitStep(
+                        predicate: .exists(.label("Payment Complete")),
+                        timeout: defaultActionExpectationTimeout
+                    )
+                )),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.kind, .invoke)
+        XCTAssertEqual(step.invocationEvidence?.expectation?.met, true)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.success, true)
+        XCTAssertEqual(step.children.count, 1)
+    }
+
+    func testHeistInvocationTransitionExpectationEvaluatesAcrossNestedCall() async throws {
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [
+                    (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
+                ]),
+                observedState(elements: [
+                    (makeElement(label: "subtotal", value: "2 items", identifier: "subtotal"), "subtotal"),
+                ]),
+            ],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            definitions: [
+                try HeistPlan(name: "Cart", definitions: [
+                    try HeistPlan(
+                        name: "addItem",
+                        parameter: .string(name: "item"),
+                        body: [
+                            .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                        ]
+                    ),
+                ], body: []),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Cart", "addItem"],
+                    argument: .string(.literal("Eggs")),
+                    expectation: WaitStep(
+                        predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                            element: .label("subtotal"),
+                            change: .value(after: .contains("2 items"))
+                        )))),
+                        timeout: defaultActionExpectationTimeout
+                    )
+                )),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.kind, .invoke)
+        XCTAssertEqual(step.invocationEvidence?.expectation?.met, true)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.success, true)
+    }
+
+    func testHeistInvocationScreenChangeExpectationEvaluatesAcrossNestedCall() async throws {
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Checkout"]),
+                observedState(labels: ["Receipt"]),
+            ],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            definitions: [
+                try HeistPlan(name: "Checkout", definitions: [
+                    try HeistPlan(name: "pay", body: [
+                        .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                    ]),
+                ], body: []),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Checkout", "pay"],
+                    expectation: WaitStep(
+                        predicate: .change(.screen(.exists(.label("Receipt")))),
+                        timeout: defaultActionExpectationTimeout
+                    )
+                )),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.kind, .invoke)
+        XCTAssertEqual(step.invocationEvidence?.expectation?.met, true)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.success, true)
+    }
+
+    func testHeistInvocationAttachedExpectationFailureStaysOnInvokeNode() async throws {
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [
+                    (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
+                ]),
+                observedState(elements: [
+                    (makeElement(label: "subtotal", value: "1 item", identifier: "subtotal"), "subtotal"),
+                ]),
+            ],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            definitions: [
+                try HeistPlan(name: "Cart", definitions: [
+                    try HeistPlan(
+                        name: "addItem",
+                        parameter: .string(name: "item"),
+                        body: [
+                            .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                        ]
+                    ),
+                ], body: []),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Cart", "addItem"],
+                    argument: .string(.literal("Eggs")),
+                    expectation: WaitStep(
+                        predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                            element: .label("subtotal"),
+                            change: .value(after: .contains("2 items"))
+                        )))),
+                        timeout: defaultActionExpectationTimeout
+                    )
+                )),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(step.kind, .invoke)
+        XCTAssertEqual(step.status, .failed)
+        XCTAssertNil(step.abortedAtChildPath)
+        XCTAssertEqual(step.failure?.category, .expectation)
+        XCTAssertEqual(step.invocationEvidence?.expectation?.met, false)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.success, false)
+        XCTAssertTrue(step.children.allSatisfy { $0.status == .passed })
+    }
+
     func testHeistInvocationExecutesQualifiedExportedNamespaceDependency() async throws {
         var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(

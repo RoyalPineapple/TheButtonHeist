@@ -197,7 +197,7 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 The public predicate layer is intentionally one tree language:
 
 - State predicates: `.exists(...)`, `.missing(...)`.
-- Change predicates: `.change(.screen(...), .elements(...))`, `.noChange`.
+- Change predicates: `.screenChanged(...)`, `.change(.elements(...))`, `.noChange`.
 - Element delta assertions: `.appeared(...)`, `.disappeared(...)`,
   `.updated(...)`.
 

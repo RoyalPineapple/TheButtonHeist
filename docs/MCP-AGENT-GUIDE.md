@@ -34,7 +34,7 @@ MAY inspect or control the current live session, but they MUST NOT appear inside
 Allowed `perform(step:)` statements are one action or one `WaitFor(...)` statement:
 
 ```swift
-Activate(.label("Pay")).expect(.change(.screen()))
+Activate(.label("Pay")).expect(.screenChanged)
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
@@ -86,7 +86,7 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.change(.screen()), timeout: .seconds(10))
+WaitFor(.screenChanged, timeout: .seconds(10))
 WaitFor(.label("Receipt"), timeout: .seconds(5))
 WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
@@ -105,18 +105,14 @@ element in place:
 
 ```swift
 Increment(.label("Quantity"))
-    .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
+    .expect(.updated(.label("Quantity"), .value(from: "2", to: "3")))
 ```
 
-`before` and `after` are optional element predicates using the same matcher
-grammar as targets and state assertions. Omit both to match any updated element
-in the observed delta. Property updates support `value`, `traits`, `hint`,
-`actions`, `frame`, `activationPoint`, `customContent`, and `rotors`; they do
-not promise label or identifier changes because those fields are used for diff
-identity.
+`from` and `to` use the same matcher grammar as targets and state assertions.
+Omit `from:` for destination-only updates such as `.value("3")`; include an
+element matcher when the update must be tied to a durable element predicate.
 The shorthand `.expect(.updated(...))` is only sugar for an observed element
-delta. It does not infer the action target. Include `element:` when the update
-must be tied to a durable element predicate.
+delta. It does not infer the action target.
 
 **Composing**: `run_heist` executes a durable `HeistPlan` in a single call.
 Prefer the `plan` field with canonical ButtonHeist source when authoring compact
@@ -126,7 +122,7 @@ stored artifact:
 ```swift
 HeistPlan {
     Activate(.label("Pay"))
-        .expect(.change(.screen()))
+        .expect(.screenChanged)
 
     TypeText("milk", into: .label("Search"))
         .expect(.exists(.element(.label("Search"), .value("milk"))))
@@ -148,11 +144,14 @@ HeistPlan("shop") {
     }
 
     RunHeist("Cart.addItem", "Milk")
-        .expect(.appeared(.label("subtotal")))
+        .expect(.appeared(.element(
+            .label("subtotal"),
+            .value(.contains("1 item"))
+        )))
 
     If(.label("Pay")) {
         Activate(.label("Pay"))
-            .expect(.change(.screen()))
+            .expect(.screenChanged)
     }.else {
         Warn("Pay button unavailable")
     }
@@ -216,7 +215,7 @@ For operations that take time, keep using the DSL:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.change(.screen()))
+    .expect(.screenChanged(.exists(.label("Receipt"))))
 
 WaitFor(.label("Receipt"), timeout: .seconds(10))
 ```
@@ -233,7 +232,7 @@ know what should change:
 
 ```swift
 Activate(.label("Continue"))
-    .expect(.change(.screen()))
+    .expect(.screenChanged)
 
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))

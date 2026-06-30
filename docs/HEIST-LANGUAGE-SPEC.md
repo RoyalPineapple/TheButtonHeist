@@ -174,7 +174,7 @@ Use `HeistPlan` for reusable or multi-step behavior:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.change(.screen()))
+        .expect(.screenChanged(.exists(.label("Receipt"))))
 
     WaitFor(.label("Receipt"), timeout: .seconds(10))
 }
@@ -184,7 +184,7 @@ Use `perform(step:)` for one durable step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.change(.screen()))
+    .expect(.screenChanged(.exists(.label("Receipt"))))
 ```
 
 Use definitions and composition inside a durable plan:

@@ -30,13 +30,15 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        allowsDisappearanceFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         do {
             return await wait(
                 for: try step.resolve(in: .empty),
                 initialTrace: initialTrace,
-                after: sequence
+                after: sequence,
+                allowsDisappearanceFinalStateWarning: allowsDisappearanceFinalStateWarning
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -60,7 +62,8 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        allowsDisappearanceFinalStateWarning: Bool = true
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
@@ -126,6 +129,17 @@ enum PredicateObservationDiagnostics {
             if reduction.expectation.met {
                 return waitReceipt(for: step, state: state, start: start, success: true)
             }
+        }
+
+        if allowsDisappearanceFinalStateWarning,
+           let warning = disappearanceFinalStateWarning(for: step.predicate, state: state) {
+            return waitReceipt(
+                for: step,
+                state: state,
+                start: start,
+                success: true,
+                warning: warning
+            )
         }
 
         return waitReceipt(
@@ -268,6 +282,38 @@ enum PredicateObservationDiagnostics {
         )
     }
 
+    private func disappearanceFinalStateWarning(
+        for predicate: AccessibilityPredicate,
+        state: WaitPredicateState
+    ) -> HeistPredicateWarning? {
+        guard let element = predicate.singleDisappearedElementMatcher,
+              let baselineElements = state.changeBaseline?.capture?.interface.projectedElements else {
+            return nil
+        }
+        let baselinePresent = !ElementMatchSet(elements: baselineElements).matching(element).isEmpty
+        guard !baselinePresent else { return nil }
+
+        let finalElements = state.finalElements ?? baselineElements
+        let finalAbsent = ElementMatchSet(elements: finalElements).matching(element).isEmpty
+        guard finalAbsent else { return nil }
+
+        let subject = Self.disappearanceWarningSubject(for: element)
+        return HeistPredicateWarning(
+            code: "transition_not_observed_final_state_satisfied",
+            predicate: predicate.description,
+            message: "\(subject) was already absent when the wait began, so no disappearance was observed. The final state satisfied the wait."
+        )
+    }
+
+    private static func disappearanceWarningSubject(for predicate: ElementPredicate) -> String {
+        for check in predicate.checks {
+            if case .label(.exact(let label)) = check, !label.isEmpty {
+                return label
+            }
+        }
+        return "The element"
+    }
+
     private func waitReceipt(
         for step: ResolvedWaitStep,
         trace: AccessibilityTrace? = nil,
@@ -275,6 +321,7 @@ enum PredicateObservationDiagnostics {
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
         success: Bool,
+        warning: HeistPredicateWarning? = nil,
         changeBaseline: WaitChangeBaseline? = nil,
         sawObservationAfterBaseline: Bool = false,
         observedSequence: SettledObservationSequence? = nil
@@ -298,6 +345,7 @@ enum PredicateObservationDiagnostics {
             expectation: expectation,
             elapsed: elapsed,
             success: success,
+            warning: warning,
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence,
@@ -309,15 +357,20 @@ enum PredicateObservationDiagnostics {
         for step: ResolvedWaitStep,
         state: WaitPredicateState,
         start: CFAbsoluteTime,
-        success: Bool
+        success: Bool,
+        warning: HeistPredicateWarning? = nil
     ) -> HeistWaitReceipt {
+        let expectation = warning.map {
+            ExpectationResult(met: true, predicate: step.predicate, actual: $0.message)
+        } ?? state.lastEvaluation
         waitReceipt(
             for: step,
             trace: state.lastTrace,
             observationSummary: state.lastObservationSummary,
-            expectation: state.lastEvaluation,
+            expectation: expectation,
             start: start,
             success: success,
+            warning: warning,
             changeBaseline: state.changeBaseline,
             sawObservationAfterBaseline: state.sawObservationAfterBaseline,
             observedSequence: state.observedSequence
@@ -405,12 +458,13 @@ enum PredicateObservationDiagnostics {
         expectation: ExpectationResult,
         elapsed: String,
         success: Bool,
+        warning: HeistPredicateWarning? = nil,
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary receiptObservationSummary: String? = nil
     ) -> HeistWaitReceipt {
-        let message = success
+        let message = warning?.message ?? (success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
             : waitTimeoutMessage(
                 for: step,
@@ -419,7 +473,7 @@ enum PredicateObservationDiagnostics {
                 elapsed: elapsed,
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
-            )
+            ))
         return HeistWaitReceipt(
             waitOutcome: HeistWaitOutcome(
                 status: success ? .matched : .timedOut,
@@ -427,7 +481,8 @@ enum PredicateObservationDiagnostics {
                 accessibilityTrace: trace,
                 expectation: expectation,
                 observedSequence: observedSequence,
-                observationSummary: receiptObservationSummary
+                observationSummary: receiptObservationSummary,
+                warning: warning
             )
         )
     }
@@ -1218,6 +1273,17 @@ private extension HeistSemanticObservation {
     }
 }
 
+private extension AccessibilityPredicate {
+    var singleDisappearedElementMatcher: ElementPredicate? {
+        guard case .changePredicate(.elementsScope(let assertions)) = self,
+              assertions.count == 1,
+              case .disappearedElement(let element) = assertions[0] else {
+            return nil
+        }
+        return element
+    }
+}
+
 private struct WaitPredicateState {
     var lastTrace: AccessibilityTrace?
     var lastObservationSummary: String?
@@ -1233,6 +1299,10 @@ private struct WaitPredicateState {
             predicate: predicate,
             actual: "no settled semantic observation available"
         )
+    }
+
+    var finalElements: [HeistElement]? {
+        lastTrace?.captures.last?.interface.projectedElements
     }
 
     mutating func record(_ reduction: PredicateObservationReduction) {

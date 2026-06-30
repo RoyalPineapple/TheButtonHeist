@@ -353,16 +353,20 @@ public extension AccessibilityPredicateExpr {
         .change(.disappeared(predicate))
     }
 
-    static func updated() -> AccessibilityPredicateExpr {
-        .change(.updated())
-    }
-
     static func updated(_ change: AnyPropertyChangeExpr) -> AccessibilityPredicateExpr {
         .change(.updated(change))
     }
 
-    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> AccessibilityPredicateExpr {
-        .change(.updated(element: element, change))
+    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> AccessibilityPredicateExpr {
+        .change(.updated(element, change))
+    }
+
+    static var screenChanged: AccessibilityPredicateExpr {
+        .change(.screenChanged)
+    }
+
+    static func screenChanged(_ assertions: StatePredicateExpr...) -> AccessibilityPredicateExpr {
+        .change(.screenChanged(assertions))
     }
 }
 
@@ -462,6 +466,18 @@ public extension ChangePredicateExpr {
         .screenScope([first] + rest)
     }
 
+    static var screenChanged: ChangePredicateExpr {
+        .screenScope([])
+    }
+
+    static func screenChanged(_ assertions: [StatePredicateExpr]) -> ChangePredicateExpr {
+        .screenScope(assertions)
+    }
+
+    static func screenChanged(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangePredicateExpr {
+        .screenScope([first] + rest)
+    }
+
     static func elements() -> ChangePredicateExpr {
         .elementsScope([])
     }
@@ -478,15 +494,11 @@ public extension ChangePredicateExpr {
         .elementsScope([.disappearedElement(predicate)])
     }
 
-    static func updated() -> ChangePredicateExpr {
-        .elementsScope([.updatedElement(ElementUpdatePredicateExpr())])
-    }
-
     static func updated(_ change: AnyPropertyChangeExpr) -> ChangePredicateExpr {
         .elementsScope([.updatedElement(ElementUpdatePredicateExpr(change: change))])
     }
 
-    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ChangePredicateExpr {
+    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ChangePredicateExpr {
         .elementsScope([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
     }
 
@@ -501,6 +513,18 @@ public extension AccessibilityPredicate.Change {
     }
 
     static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change {
+        .screenScope([first] + rest)
+    }
+
+    static var screenChanged: AccessibilityPredicate.Change {
+        .screenScope([])
+    }
+
+    static func screenChanged(_ assertions: [AccessibilityPredicate.State]) -> AccessibilityPredicate.Change {
+        .screenScope(assertions)
+    }
+
+    static func screenChanged(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change {
         .screenScope([first] + rest)
     }
 
@@ -520,15 +544,11 @@ public extension AccessibilityPredicate.Change {
         .elementsScope([.disappearedElement(predicate)])
     }
 
-    static func updated() -> AccessibilityPredicate.Change {
-        .elementsScope([.updatedElement(ElementUpdatePredicate())])
-    }
-
     static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.Change {
         .elementsScope([.updatedElement(ElementUpdatePredicate(change: change))])
     }
 
-    static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> AccessibilityPredicate.Change {
+    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> AccessibilityPredicate.Change {
         .elementsScope([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
     }
 
@@ -546,15 +566,11 @@ public extension ElementDeltaPredicateExpr {
         .disappearedElement(predicate)
     }
 
-    static func updated() -> ElementDeltaPredicateExpr {
-        .updatedElement(ElementUpdatePredicateExpr())
-    }
-
     static func updated(_ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr {
         .updatedElement(ElementUpdatePredicateExpr(change: change))
     }
 
-    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ElementDeltaPredicateExpr {
+    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr {
         .updatedElement(ElementUpdatePredicateExpr(element: element, change: change))
     }
 }
@@ -568,15 +584,11 @@ public extension ElementDeltaPredicate {
         .disappearedElement(predicate)
     }
 
-    static func updated() -> ElementDeltaPredicate {
-        .updatedElement(ElementUpdatePredicate())
-    }
-
     static func updated(_ change: AnyPropertyChange) -> ElementDeltaPredicate {
         .updatedElement(ElementUpdatePredicate(change: change))
     }
 
-    static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> ElementDeltaPredicate {
+    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> ElementDeltaPredicate {
         .updatedElement(ElementUpdatePredicate(element: element, change: change))
     }
 }

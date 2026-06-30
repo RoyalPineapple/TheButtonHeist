@@ -10,6 +10,9 @@ extension HeistPlanSourceParser {
         if let target = try parseTargetRefIfPresent() {
             return target
         }
+        if case .string = currentToken.kind {
+            throw error(currentToken, "target expression requires an explicit accessibility property such as .label(...)")
+        }
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "label":

@@ -855,19 +855,38 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
     public let expectation: ExpectationResult
     public let baselineSummary: String?
     public let finalSummary: String?
+    public let warning: HeistPredicateWarning?
 
     public init(
         outcome: HeistPredicateEvidenceOutcome,
         actionResult: ActionResult,
         expectation: ExpectationResult,
         baselineSummary: String? = nil,
-        finalSummary: String? = nil
+        finalSummary: String? = nil,
+        warning: HeistPredicateWarning? = nil
     ) {
         self.outcome = outcome
         self.actionResult = actionResult
         self.expectation = expectation
         self.baselineSummary = baselineSummary
         self.finalSummary = finalSummary
+        self.warning = warning
+    }
+}
+
+public struct HeistPredicateWarning: Codable, Sendable, Equatable {
+    public let code: String
+    public let predicate: String
+    public let message: String
+
+    public init(
+        code: String,
+        predicate: String,
+        message: String
+    ) {
+        self.code = code
+        self.predicate = predicate
+        self.message = message
     }
 }
 
@@ -979,6 +998,7 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
     public let childFailedPath: String?
     public let expectationActionResult: ActionResult?
     public let expectation: ExpectationResult?
+    public let expectationEvidence: HeistWaitEvidence?
 
     public init(
         invocation: HeistInvocationStep? = nil,
@@ -986,7 +1006,8 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
         argument: String? = nil,
         childFailedPath: String? = nil,
         expectationActionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil
+        expectation: ExpectationResult? = nil,
+        expectationEvidence: HeistWaitEvidence? = nil
     ) {
         self.invocation = invocation
         self.name = name
@@ -994,6 +1015,7 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
         self.childFailedPath = childFailedPath
         self.expectationActionResult = expectationActionResult
         self.expectation = expectation
+        self.expectationEvidence = expectationEvidence
     }
 }
 

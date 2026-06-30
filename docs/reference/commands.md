@@ -310,7 +310,7 @@ Parameters:
 Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
 Examples:
-`Activate(.label("Pay")).expect(.change(.screen()))`
+`Activate(.label("Pay")).expect(.screenChanged)`
 `TypeText("milk", into: .label("Search")).expect(.change(.elements()))`
 `Increment(.label("Quantity"))`
 `Decrement(.label("Quantity"))`
@@ -382,9 +382,9 @@ Run a durable heist from a ButtonHeist source plan in `plan`, or from a generate
 Author plans as ButtonHeist source, not raw JSON IR:
 `HeistPlan("shop") { ... }`
 `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
-`RunHeist("Cart.addItem", "Milk").expect(.appeared(.label("subtotal")))`
+`RunHeist("Cart.addItem", "Milk").expect(.appeared(.element(.label("subtotal"), .value(.contains("1 item")))))`
 `If(.label("Pay")) { ... }.else { ... }`
-`WaitFor(.change(.screen()), timeout: .seconds(10)).else { ... }`
+`WaitFor(.screenChanged, timeout: .seconds(10)).else { ... }`
 `ForEach("Milk", "Bread") { item in ... }`
 `ForEach(.element(.label(.prefix("Delete")), .traits([.button])), limit: 20) { target in ... }`
 `Warn("message")`
