@@ -22,7 +22,11 @@ import Testing
         let explorationScanningSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ExplorationScanning.swift"
         )
-        #expect(explorationScanningSource.contains("let semanticContainer: SemanticScreen.Container"))
+        #expect(
+            explorationScanningSource.matches(
+                of: #"for\s+semanticContainer\s*:\s*SemanticScreen[.]Container"#
+            ).count == 1
+        )
         #expect(explorationScanningSource.contains("private func sortedPendingContainers(in exploration: SemanticExploration) -> [SemanticScreen.Container]"))
 
         let root = repositoryRoot()
