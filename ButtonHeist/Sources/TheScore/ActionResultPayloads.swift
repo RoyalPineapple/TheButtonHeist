@@ -232,22 +232,17 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 /// point if needed.
 public struct ActivationTrace: Codable, Sendable, Equatable {
     public let axActivateReturned: Bool?
-    /// Populated only by older receipts from runtimes that retried activation
-    /// after refresh.
-    public let retryAxActivateReturned: Bool?
     public let tapActivationDispatched: Bool
     public let tapActivationPoint: ScreenPoint?
     public let tapActivationSucceeded: Bool?
 
     public init(
         axActivateReturned: Bool?,
-        retryAxActivateReturned: Bool? = nil,
         tapActivationDispatched: Bool = false,
         tapActivationPoint: ScreenPoint? = nil,
         tapActivationSucceeded: Bool? = nil
     ) {
         self.axActivateReturned = axActivateReturned
-        self.retryAxActivateReturned = retryAxActivateReturned
         self.tapActivationDispatched = tapActivationDispatched
         self.tapActivationPoint = tapActivationPoint
         self.tapActivationSucceeded = tapActivationSucceeded
@@ -471,7 +466,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         message: String? = nil,
         errorKind: ErrorKind? = nil,
-        payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -482,14 +476,40 @@ public struct ActionResult: Codable, Sendable, Equatable {
         guard let outcome = Outcome(success: success, errorKind: errorKind) else {
             preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
         }
-        guard Self.payload(payload, isCompatibleWith: method) else {
-            preconditionFailure(Self.payloadValidationMessage(method: method, payload: payload))
-        }
         self.init(
             outcome: outcome,
             method: method,
             message: message,
-            payload: payload,
+            payload: nil,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    package init(
+        success: Bool,
+        payload: ActionResultPayload,
+        message: String? = nil,
+        errorKind: ErrorKind? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
+            preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
+        }
+        self.init(
+            outcome: outcome,
+            method: payload.method,
+            message: message,
+            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,

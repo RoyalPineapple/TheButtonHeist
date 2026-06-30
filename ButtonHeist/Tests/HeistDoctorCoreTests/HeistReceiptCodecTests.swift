@@ -210,9 +210,10 @@ import TheScore
                     status: .passed,
                     durationMs: 12,
                     intent: .action(command: "Activate", target: "target(predicate(label=\"Checkout\"))"),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.expectation(
                         command: .activate(.predicate(.label("Checkout"))),
                         actionResult: result,
+                        expectationActionResult: ActionResult(success: true, method: .wait, message: "screenChanged"),
                         expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
                     ))
                 ),

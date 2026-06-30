@@ -1010,7 +1010,7 @@ private let expectedRepairJSONReportJSON = """
             status: status,
             durationMs: 1,
             intent: .action(command: "activate", target: target.description),
-            evidence: .action(HeistActionEvidence(
+            evidence: .action(.dispatch(
                 command: .activate(.target(target)),
                 actionResult: ActionResult(
                     success: actionSucceeded,

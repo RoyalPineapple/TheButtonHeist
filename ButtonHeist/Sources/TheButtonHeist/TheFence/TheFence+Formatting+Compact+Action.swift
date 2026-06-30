@@ -100,9 +100,6 @@ extension FenceResponse {
 
     static func compactActivationTrace(_ trace: ActivationTrace) -> String {
         var parts = ["ax=\(formatBool(trace.axActivateReturned))"]
-        if let retry = trace.retryAxActivateReturned {
-            parts.append("retryAx=\(retry)")
-        }
         parts.append("tapActivationDispatched=\(trace.tapActivationDispatched)")
         if let point = trace.tapActivationPoint {
             parts.append("tapActivationPoint=\(point.description)")

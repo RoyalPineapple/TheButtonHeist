@@ -254,7 +254,7 @@ extension TheBrains {
                 path: path,
                 durationMs: elapsedMilliseconds(since: start),
                 intent: actionIntent(command),
-                evidence: HeistActionEvidence(
+                evidence: .expectation(
                     command: command,
                     actionResult: actionResult,
                     expectationActionResult: evaluation.receipt.actionResult,
@@ -414,7 +414,7 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: HeistActionEvidence(command: command, actionResult: nil),
+            evidence: .commandResolutionFailure(command: command),
             failure: failure.detail
         )
     }
@@ -462,7 +462,7 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: HeistActionEvidence(
+            evidence: .expectation(
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: expectationActionResult,
@@ -477,7 +477,7 @@ extension TheBrains {
         command: HeistActionCommand,
         actionResult: ActionResult
     ) -> HeistActionEvidence {
-        HeistActionEvidence(
+        .dispatch(
             command: command,
             actionResult: actionResult,
             warning: actionWarning(command: command, actionResult: actionResult)

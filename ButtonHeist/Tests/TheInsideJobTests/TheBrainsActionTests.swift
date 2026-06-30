@@ -830,7 +830,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
             if case .takeScreenshot = command {
-                return ActionResult(success: true, method: .takeScreenshot, payload: .screenshot(screenshot))
+                return ActionResult.success(payload: .screenshot(screenshot))
             }
             return ActionResult(
                 success: false,

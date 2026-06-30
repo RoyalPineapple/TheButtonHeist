@@ -368,13 +368,9 @@ final class HeistReceiptTests: XCTestCase {
                     status: .passed,
                     durationMs: 1,
                     intent: .action(command: "takeScreenshot", target: nil),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.dispatch(
                         command: .takeScreenshot,
-                        actionResult: ActionResult(
-                            success: true,
-                            method: .takeScreenshot,
-                            payload: .screenshot(screenshot)
-                        )
+                        actionResult: ActionResult.success(payload: .screenshot(screenshot))
                     ))
                 ),
             ],

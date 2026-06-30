@@ -876,7 +876,8 @@ struct HeistCompilerTests {
     @Test
     func `production source avoids tuple return APIs while allowing closure local tuples`() throws {
         let root = try repositoryRoot()
-        let tupleReturnAPIPattern = #"(?m)(?:^\s*(?:(?:@\w+(?:\([^)]*\))?|public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated|final|override)\s+)*"#
+        let modifiers = #"@\w+(?:\([^)]*\))?|public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated|final|override"#
+        let tupleReturnAPIPattern = #"(?m)(?:^\s*(?:(?:"# + modifiers + #")\s+)*"#
             + #"func\s+\w+[^{=;]*?\)\s*(?:async\s+)?(?:(?:throws|rethrows)\s+)?->\s*\((?!\s*@Sendable\b)[^()]*,[^()]*\)\??"#
             + #"|^\s*(?:(?:public|package|internal|private|fileprivate)\s+)*typealias\s+\w+[^=\n]*=[^;\n]*->\s*\((?!\s*@Sendable\b)[^()]*,[^()]*\)\??)"#
         let tupleReturnAPIs = try sourceSnippets(

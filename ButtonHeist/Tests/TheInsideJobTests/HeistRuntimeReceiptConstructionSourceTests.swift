@@ -23,10 +23,13 @@ import Testing
             try receiptSourceOccurrenceCount(#"\bHeistExecutionStepResult\s*\("#, in: helperSource) == 0,
             "Receipt helper should use the typed public step factories, not raw HeistExecutionStepResult construction"
         )
-        #expect(helperSource.contains("private func heistReceipt("))
+        #expect(
+            !helperSource.contains("private func heistReceipt("),
+            "Runtime receipt construction should not route through a generic status/evidence/failure funnel"
+        )
         #expect(helperSource.contains("return .passed("))
         #expect(helperSource.contains("return .failed("))
-        #expect(helperSource.contains("return .skipped("))
+        #expect(helperSource.contains(".skipped("))
 
         let genericReceiptParameters = try receiptSourceLines(
             matching: #"\b(status\s+requestedStatus|requestedStatus)\s*:\s*HeistExecutionStepStatus\?|\bevidence\s*:\s*HeistStepEvidence\?"#,

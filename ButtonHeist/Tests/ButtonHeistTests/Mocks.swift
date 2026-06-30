@@ -221,9 +221,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         )
         return .actionResult(ActionResult(
             success: abortedAtPath == nil,
-            method: .heistPlan,
-            errorKind: abortedAtPath == nil ? nil : .actionFailed,
-            payload: .heistExecution(result)
+            payload: .heistExecution(result),
+            errorKind: abortedAtPath == nil ? nil : .actionFailed
         ))
     }
 
@@ -317,7 +316,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 status: .failed,
                 durationMs: heistStepDurationMs,
                 intent: mockActionIntent(action.command),
-                evidence: .action(HeistActionEvidence(command: action.command, actionResult: nil)),
+                evidence: .action(.commandResolutionFailure(command: action.command)),
                 failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action command resolves before dispatch",
@@ -330,18 +329,21 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             ? heistExpectation(for: action.expectation, handler: handler)
             : nil
         let failure = mockActionFailure(command: action.command, actionResult: actionResult, expectation: expectation?.result)
+        let actionEvidence = expectation.map {
+            HeistActionEvidence.expectation(
+                command: action.command,
+                actionResult: actionResult,
+                expectationActionResult: $0.actionResult,
+                expectation: $0.result
+            )
+        } ?? .dispatch(command: action.command, actionResult: actionResult)
         return HeistExecutionStepResult(
             path: path,
             kind: .action,
             status: failure == nil ? .passed : .failed,
             durationMs: heistStepDurationMs,
             intent: mockActionIntent(action.command),
-            evidence: .action(HeistActionEvidence(
-                command: action.command,
-                actionResult: actionResult,
-                expectationActionResult: expectation?.actionResult,
-                expectation: expectation?.result
-            )),
+            evidence: .action(actionEvidence),
             failure: failure
         )
     }

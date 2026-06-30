@@ -26,6 +26,25 @@ import Testing
         )
     }
 
+    @Test func `package result construction derives method from typed payload`() throws {
+        let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/ActionResultPayloads.swift")
+        let packageInitializers = try source.matches(of: #"\bpackage\s+init\s*\([\s\S]*?\)\s*\{"#)
+
+        #expect(
+            !packageInitializers.contains(where: {
+                $0.range(of: #"payload\s*:\s*ResultPayload[?]"#, options: .regularExpression) != nil
+            }),
+            "Package ActionResult construction should not accept raw ResultPayload?."
+        )
+        #expect(
+            !packageInitializers.contains(where: {
+                $0.range(of: #"method\s*:\s*ActionMethod[\s\S]*payload\s*:\s*ActionResultPayload"#, options: .regularExpression) != nil
+            }),
+            "Payload-bearing package ActionResult construction should derive method from ActionResultPayload."
+        )
+        #expect(try source.containsMatch(#"\bpackage\s+init\s*\(\s*success\s*:\s*Bool,\s*payload\s*:\s*ActionResultPayload\b"#))
+    }
+
     @Test func `runtime result builder does not accept raw result payload bags`() throws {
         let builder = try repository.requiredFile(
             relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/ActionResultBuilder.swift"

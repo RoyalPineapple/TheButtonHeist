@@ -535,17 +535,28 @@ func makeTestHeistActionStep(
     expectation: ExpectationResult? = nil,
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
-    HeistExecutionStepResult(
-        path: path,
-        kind: .action,
-        status: result.success ? .passed : .failed,
-        durationMs: durationMs,
-        evidence: .action(HeistActionEvidence(
+    let evidence: HeistActionEvidence
+    if let expectationActionResult, let expectation {
+        guard let command else {
+            preconditionFailure("Expectation action evidence requires a command")
+        }
+        evidence = .expectation(
             command: command,
             actionResult: result,
             expectationActionResult: expectationActionResult,
             expectation: expectation
-        ))
+        )
+    } else {
+        precondition(expectationActionResult == nil && expectation == nil)
+        evidence = .dispatch(command: command, actionResult: result)
+    }
+
+    return HeistExecutionStepResult(
+        path: path,
+        kind: .action,
+        status: result.success ? .passed : .failed,
+        durationMs: durationMs,
+        evidence: .action(evidence)
     )
 }
 

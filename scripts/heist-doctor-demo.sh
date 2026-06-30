@@ -180,7 +180,7 @@ struct DoctorDemoFixture {
                 message: "No element matching \(target)",
                 accessibilityTrace: trace
             )
-        let evidence = HeistStepEvidence.action(HeistActionEvidence(
+        let evidence = HeistStepEvidence.action(.dispatch(
             command: .activate(.target(target)),
             actionResult: actionResult
         ))

@@ -52,7 +52,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
-                success: false,
+                succeeded: false,
                 method: .activate,
                 message: "button disabled",
                 errorKind: .elementNotFound
@@ -78,7 +78,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.action(
             command: .wait,
             result: makeTestActionResult(
-                success: false,
+                succeeded: false,
                 method: .wait,
                 message: "timed out after 2s",
                 errorKind: .timeout
@@ -100,7 +100,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
-                success: false,
+                succeeded: false,
                 method: .activate,
                 message: "Could not access accessibility tree: no traversable app windows",
                 errorKind: .accessibilityTreeUnavailable
@@ -606,6 +606,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childResult = actionReceiptStep(
             path: "$.body[0].conditional.cases[0].body[0]",
             result: ActionResult(success: true, method: .activate),
+            expectationActionResult: ActionResult(success: true, method: .wait),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = HeistExecutionResult(steps: [
@@ -1748,7 +1749,23 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         expectation: ExpectationResult? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        let evidence: HeistActionEvidence
+        if let expectationActionResult, let expectation {
+            guard let command else {
+                preconditionFailure("Expectation action evidence requires a command")
+            }
+            evidence = .expectation(
+                command: command,
+                actionResult: result,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation
+            )
+        } else {
+            precondition(expectationActionResult == nil && expectation == nil)
+            evidence = .dispatch(command: command, actionResult: result)
+        }
+
+        return HeistExecutionStepResult(
             path: path,
             kind: .action,
             status: failure == nil ? .passed : .failed,
@@ -1756,12 +1773,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             intent: command.map {
                 .action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
             },
-            evidence: .action(HeistActionEvidence(
-                command: command,
-                actionResult: result,
-                expectationActionResult: expectationActionResult,
-                expectation: expectation
-            )),
+            evidence: .action(evidence),
             failure: failure
         )
     }

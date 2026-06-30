@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistTestSupport
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
@@ -399,10 +400,9 @@ private func detailedSurfacePlan() throws -> HeistPlan {
 }
 
 private func discoverySource() throws -> String {
-    let testFile = URL(fileURLWithPath: #filePath)
-    let packageRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
-    let sourceURL = packageRoot.appendingPathComponent("Sources/ThePlans/HeistPlan+Discovery.swift")
-    return try String(contentsOf: sourceURL, encoding: .utf8)
+    try SourceShapeRepository(filePath: #filePath)
+        .requiredFile(relativePath: "ButtonHeist/Sources/ThePlans/HeistPlan+Discovery.swift")
+        .contents
 }
 
 private func sourceSection(_ source: String, from startMarker: String, to endMarker: String) throws -> String {
