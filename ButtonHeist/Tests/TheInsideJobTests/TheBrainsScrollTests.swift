@@ -614,7 +614,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("has no scroll membership"))
     }
 
-    func testFreshLiveRebindMissPreservesVisibleTargetDiagnostics() async throws {
+    func testStaleLiveObjectRefreshExhaustsRetryState() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
         rootView.addSubview(makeButton(label: "Current Visible", frame: CGRect(x: 40, y: 120, width: 240, height: 44)))
@@ -635,7 +635,11 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [(staleTarget, HeistId(rawValue: "gone_target"))],
             objects: [HeistId(rawValue: "gone_target"): nil]
         )
-        brains.navigation.elementInflation.discoverTarget = { _ in staleScreen }
+        var discoveryAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in
+            discoveryAttempts += 1
+            return staleScreen
+        }
         defer {
             brains.navigation.elementInflation.discoverTarget = nil
         }
@@ -651,12 +655,11 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(failure.failedStep, .staleRefresh)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)
+        XCTAssertEqual(discoveryAttempts, 2)
         XCTAssertTrue(failure.message.contains("element inflation failed [staleRefresh]"))
-        XCTAssertTrue(failure.message.contains("target was not found in fresh live geometry"))
-        XCTAssertTrue(failure.message.contains("No match for"))
-        XCTAssertTrue(failure.message.contains("Gone Target"))
-        XCTAssertTrue(failure.message.contains("scope: visible"))
-        XCTAssertFalse(failure.message.contains("live target became stale"))
+        XCTAssertTrue(failure.message.contains("inflation exhausted 2 retry attempts"))
+        XCTAssertTrue(failure.message.contains("the live object was deallocated"))
+        XCTAssertFalse(failure.message.contains("target was not found in fresh live geometry"))
     }
 
     func testKnownOffscreenTargetWithoutLiveScrollParentFailsNoRevealPath() async {
