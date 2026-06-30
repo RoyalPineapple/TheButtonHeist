@@ -5,6 +5,10 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
+    struct PostActionPayloadContext {
+        let afterState: PostActionObservation.BeforeState
+        let resolvedElementId: HeistId?
+    }
 
     // MARK: - Command Dispatch
 
@@ -65,7 +69,13 @@ extension TheBrains {
             return await performInteraction(
                 method: .typeText,
                 observationScope: .discovery,
-                afterStatePayload: { self.actions.typeTextPayload(for: target, resolvedElementId: $1, in: $0) },
+                afterStatePayload: { context in
+                    self.actions.typeTextPayload(
+                        for: target,
+                        resolvedElementId: context.resolvedElementId,
+                        in: context.afterState
+                    )
+                },
                 interaction: { await self.actions.executeTypeText(target) }
             )
         case .scroll(let target):
@@ -99,11 +109,13 @@ extension TheBrains {
 
     func executePasteboardRead() -> ActionResult {
         let result = actions.executeGetPasteboard()
-        return ActionResult(
-            success: result.success,
-            method: result.method,
-            message: result.message,
-            errorKind: result.success ? nil : Self.actionErrorKind(for: result),
+        var builder = ActionResultBuilder(method: result.method)
+        builder.message = result.message
+        if result.success {
+            return builder.success(payload: result.payload)
+        }
+        return builder.failure(
+            errorKind: Self.actionErrorKind(for: result) ?? .actionFailed,
             payload: result.payload
         )
     }
@@ -115,7 +127,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionObservation.BeforeState, HeistId?) -> ResultPayload?)? = nil,
+        afterStatePayload: ((PostActionPayloadContext) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
@@ -142,7 +154,12 @@ extension TheBrains {
             message: result.message,
             payload: result.payload,
             afterStatePayload: afterStatePayload.map { payload in
-                { afterState in payload(afterState, result.resolvedElementId) }
+                { afterState in
+                    payload(PostActionPayloadContext(
+                        afterState: afterState,
+                        resolvedElementId: result.resolvedElementId
+                    ))
+                }
             },
             errorKind: Self.actionErrorKind(for: result),
             subjectEvidence: result.subjectEvidence,
