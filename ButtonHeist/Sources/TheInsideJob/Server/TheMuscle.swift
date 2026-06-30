@@ -124,7 +124,7 @@ actor TheMuscle {
 
     /// Called when a ping is received from an authenticated client.
     func noteClientActivity(_ clientId: Int) {
-        applySessionReleaseTimerAction(session.noteClientActivity(clientId))
+        applySessionEffect(session.noteClientActivity(clientId))
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -151,7 +151,7 @@ actor TheMuscle {
     func handleClientDisconnected(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
         await applyAdmissionEffect(admission.removeClient(clientId))
-        applySessionReleaseTimerAction(session.removeConnection(clientId))
+        applySessionEffect(session.removeConnection(clientId))
     }
 
     func tearDown() async {
@@ -181,8 +181,8 @@ actor TheMuscle {
             driverIdentity: authentication.driverIdentity,
             clientId: authentication.clientId
         ) {
-        case .accepted(let acceptance):
-            applySessionReleaseTimerAction(acceptance.releaseTimerAction)
+        case .accepted(let sessionEffect):
+            applySessionEffect(sessionEffect)
             let effect = admission.completeAuthentication(authentication)
             cancelAuthenticationDeadline(for: authentication.clientId)
             await applyAdmissionEffect(effect)
@@ -258,7 +258,27 @@ actor TheMuscle {
     }
 
     private func releaseSession() async {
-        applySessionReleaseTimerAction(session.release())
+        applySessionEffect(session.release())
+    }
+
+    private func applySessionEffect(_ effect: TheMuscleSession.Effect) {
+        for logEvent in effect.logEvents {
+            logSessionEvent(logEvent)
+        }
+        applySessionReleaseTimerAction(effect.releaseTimerAction)
+    }
+
+    private func logSessionEvent(_ event: TheMuscleSession.LogEvent) {
+        switch event {
+        case .sessionClaimed(let clientId):
+            muscleLogger.info("Session claimed by client \(clientId)")
+        case .clientRejoinedDuringGracePeriod(let clientId):
+            muscleLogger.info("Client \(clientId) rejoined session during grace period")
+        case .sessionReleased:
+            muscleLogger.info("Session released")
+        case .releaseTimerStarted(let timeout):
+            muscleLogger.info("All session connections gone, starting \(timeout)s release timer")
+        }
     }
 
     private func applySessionReleaseTimerAction(_ action: TheMuscleSession.ReleaseTimerAction) {
