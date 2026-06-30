@@ -160,7 +160,13 @@ import Testing
         """)
         Issue.record("Expected source compiler to reject empty HeistDef path component")
     } catch let error as HeistPlanSourceCompilerError {
-        expect(error.description, contains: "heist invocation path component at index 1 must not be empty")
+        let diagnostic = error.diagnostic
+        #expect(diagnostic.code == .dslInvalidDefinition)
+        #expect(diagnostic.title == "Invalid heist definition")
+        #expect(diagnostic.phase == .sourceCompilation)
+        #expect(diagnostic.path == "Cart..checkout")
+        #expect(diagnostic.sourceSpan?.line == 2)
+        expect(error.description, contains: "heist definition path component at index 1 must not be empty")
     } catch {
         Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
     }

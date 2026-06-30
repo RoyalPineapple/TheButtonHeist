@@ -1,48 +1,131 @@
 import Foundation
 
-struct HeistInvocationPath: Sendable, Equatable, Hashable {
-    enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+public struct HeistDefinitionPath: Sendable, Equatable, Hashable, CustomStringConvertible {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
         case emptyPath
         case emptyComponent(index: Int)
+        case invalidComponent(index: Int, component: String)
 
-        var description: String {
+        public var description: String {
+            switch self {
+            case .emptyPath:
+                return "heist definition path must not be empty"
+            case .emptyComponent(let index):
+                return "heist definition path component at index \(index) must not be empty"
+            case .invalidComponent(let index, let component):
+                return "heist definition path component at index \(index) must be a Swift-style identifier: \(component)"
+            }
+        }
+    }
+
+    public let components: [String]
+
+    public init(components: [String]) throws {
+        guard !components.isEmpty else { throw ValidationError.emptyPath }
+        for (index, component) in components.enumerated() {
+            guard !component.isEmpty else { throw ValidationError.emptyComponent(index: index) }
+            guard HeistParameterName.isValid(component) else {
+                throw ValidationError.invalidComponent(index: index, component: component)
+            }
+        }
+        self.components = components
+    }
+
+    public init(dottedName: String) throws {
+        guard !dottedName.isEmpty else { throw ValidationError.emptyPath }
+        try self.init(components: Self.strictComponents(fromDottedName: dottedName))
+    }
+
+    public var dottedName: String {
+        Self.render(components)
+    }
+
+    public var description: String {
+        dottedName
+    }
+
+    public static func render(_ components: [String]) -> String {
+        components.joined(separator: ".")
+    }
+
+    public static func components(fromDottedName dottedName: String) throws -> [String] {
+        try HeistDefinitionPath(dottedName: dottedName).components
+    }
+
+    public static func preconditionValidated(components: [String]) -> HeistDefinitionPath {
+        do {
+            return try HeistDefinitionPath(components: components)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
+    public static func preconditionValidated(dottedName: String) -> HeistDefinitionPath {
+        do {
+            return try HeistDefinitionPath(dottedName: dottedName)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
+    private static func strictComponents(fromDottedName dottedName: String) -> [String] {
+        dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+    }
+}
+
+public struct HeistInvocationPath: Sendable, Equatable, Hashable, CustomStringConvertible {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case emptyPath
+        case emptyComponent(index: Int)
+        case invalidComponent(index: Int, component: String)
+
+        public var description: String {
             switch self {
             case .emptyPath:
                 return "heist invocation path must not be empty"
             case .emptyComponent(let index):
                 return "heist invocation path component at index \(index) must not be empty"
+            case .invalidComponent(let index, let component):
+                return "heist invocation path component at index \(index) must be a Swift-style identifier: \(component)"
             }
         }
     }
 
-    let components: [String]
+    public let components: [String]
 
-    init(components: [String]) throws {
+    public init(components: [String]) throws {
         guard !components.isEmpty else { throw ValidationError.emptyPath }
-        for (index, component) in components.enumerated() where component.isEmpty {
-            throw ValidationError.emptyComponent(index: index)
+        for (index, component) in components.enumerated() {
+            guard !component.isEmpty else { throw ValidationError.emptyComponent(index: index) }
+            guard HeistParameterName.isValid(component) else {
+                throw ValidationError.invalidComponent(index: index, component: component)
+            }
         }
         self.components = components
     }
 
-    init(dottedName: String) throws {
+    public init(dottedName: String) throws {
         guard !dottedName.isEmpty else { throw ValidationError.emptyPath }
         try self.init(components: Self.strictComponents(fromDottedName: dottedName))
     }
 
-    var dottedName: String {
+    public var dottedName: String {
         Self.render(components)
     }
 
-    static func render(_ components: [String]) -> String {
+    public var description: String {
+        dottedName
+    }
+
+    public static func render(_ components: [String]) -> String {
         components.joined(separator: ".")
     }
 
-    static func components(fromDottedName dottedName: String) throws -> [String] {
+    public static func components(fromDottedName dottedName: String) throws -> [String] {
         try HeistInvocationPath(dottedName: dottedName).components
     }
 
-    static func preconditionValidated(components: [String]) -> HeistInvocationPath {
+    public static func preconditionValidated(components: [String]) -> HeistInvocationPath {
         do {
             return try HeistInvocationPath(components: components)
         } catch {
@@ -50,7 +133,7 @@ struct HeistInvocationPath: Sendable, Equatable, Hashable {
         }
     }
 
-    static func preconditionValidated(dottedName: String) -> HeistInvocationPath {
+    public static func preconditionValidated(dottedName: String) -> HeistInvocationPath {
         do {
             return try HeistInvocationPath(dottedName: dottedName)
         } catch {
@@ -85,7 +168,19 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         )
     }
 
-    init(
+    public init(
+        validatingPath path: [String],
+        argument: HeistArgument = .none,
+        expectation: WaitStep? = nil
+    ) throws {
+        self.init(
+            invocationPath: try HeistInvocationPath(components: path),
+            argument: argument,
+            expectation: expectation
+        )
+    }
+
+    public init(
         invocationPath: HeistInvocationPath,
         argument: HeistArgument = .none,
         expectation: WaitStep? = nil

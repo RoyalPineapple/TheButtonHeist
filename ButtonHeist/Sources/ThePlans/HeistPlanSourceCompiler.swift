@@ -12,7 +12,7 @@ package struct HeistPlanSourceCompiler: Sendable {
             let tokens = try lexer.lex()
             var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
             let plan = try parser.parseProgram()
-            return plan.runtimeSafetyValidationResult()
+            return plan.semanticValidationResult()
         } catch let error as HeistPlanSourceCompilerError {
             return .failure(error.diagnostics)
         } catch let error as HeistPlanRuntimeSafetyError {

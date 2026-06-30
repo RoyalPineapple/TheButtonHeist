@@ -155,6 +155,10 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         renderedMessage
     }
 
+    public var title: String {
+        code.title
+    }
+
     public var renderedMessage: String {
         let location: String
         if let sourceSpan {
@@ -166,6 +170,30 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         }
         let suffix = hint.map { " Hint: \($0)" } ?? ""
         return "\(kind.rawValue): \(location)\(message)\(suffix)"
+    }
+}
+
+public extension HeistBuildDiagnosticCode {
+    var title: String {
+        if self == .dslInvalidActionExpectation { return "Invalid action expectation" }
+        if self == .dslInvalidActionUntil { return "Invalid action until clause" }
+        if self == .dslInvalidDefinition { return "Invalid heist definition" }
+        if self == .dslInvalidForEachElement { return "Invalid element loop" }
+        if self == .dslInvalidForEachString { return "Invalid string loop" }
+        if self == .dslInvalidInvocationExpectation { return "Invalid RunHeist expectation" }
+        if self == .dslInvalidInvocationPath { return "Invalid RunHeist path" }
+        if self == .dslInvalidRepeatUntil { return "Invalid repeat-until" }
+        if self == .sourceInvalidSyntax { return "Invalid ButtonHeist source" }
+        if self == .sourceWaitForGate { return "Invalid WaitFor source" }
+        if self == .nonDurableAction { return "Non-durable action" }
+        if self == .planRuntimeSafety { return "Plan semantic validation failed" }
+        if self == .performWrongStepCount { return "Invalid perform step count" }
+        if self == .performUnsupportedStep { return "Unsupported perform step" }
+        return rawValue
+            .split(separator: ".")
+            .last
+            .map { String($0).replacingOccurrences(of: "_", with: " ") }
+            ?? rawValue
     }
 }
 
@@ -278,6 +306,9 @@ extension Sequence {
 }
 
 extension HeistBuildDiagnostic {
+    static let heistPathComponentHint =
+        "Use a non-empty dot-separated heist capability name with Swift-style identifier components."
+
     static func dslBuild(
         code: HeistBuildDiagnosticCode,
         path: String? = nil,
@@ -293,6 +324,38 @@ extension HeistBuildDiagnostic {
         )
     }
 
+    static func invalidDefinitionPath(
+        _ path: String,
+        error: Error,
+        phase: HeistBuildPhase,
+        sourceSpan: HeistBuildSourceSpan? = nil
+    ) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: .dslInvalidDefinition,
+            phase: phase,
+            sourceSpan: sourceSpan,
+            path: pathForDiagnostic(path),
+            message: "HeistDef path is invalid: \(String(describing: error))",
+            hint: heistPathComponentHint
+        )
+    }
+
+    static func invalidInvocationPath(
+        _ path: String,
+        error: Error,
+        phase: HeistBuildPhase,
+        sourceSpan: HeistBuildSourceSpan? = nil
+    ) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: .dslInvalidInvocationPath,
+            phase: phase,
+            sourceSpan: sourceSpan,
+            path: pathForDiagnostic(path),
+            message: "RunHeist name is invalid: \(String(describing: error))",
+            hint: heistPathComponentHint
+        )
+    }
+
     func withPath(_ path: String) -> HeistBuildDiagnostic {
         HeistBuildDiagnostic(
             code: code,
@@ -304,19 +367,17 @@ extension HeistBuildDiagnostic {
             hint: hint
         )
     }
+
+    private static func pathForDiagnostic(_ path: String) -> String? {
+        path.isEmpty ? nil : path
+    }
 }
 
 extension HeistPlanAdmissionCandidate {
     func runtimeSafetyValidationResult(
         limits: HeistPlanRuntimeSafetyLimits = .standard
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
-        let plan = uncheckedPlanForRuntimeSafetyValidation()
-        let failures = validator.failures(in: plan)
-        guard failures.isEmpty else {
-            return .failure(failures.map(\.diagnostic))
-        }
-        return .success(plan, diagnostics: [])
+        semanticValidationResult(limits: limits)
     }
 }
 
@@ -581,6 +642,16 @@ extension HeistPlanSourceParser {
     ) -> HeistPlanSourceCompilerError {
         HeistPlanSourceCompilerError(
             message: message,
+            sourceName: sourceName,
+            offset: token.marker.offset,
+            line: token.marker.line,
+            column: token.marker.column,
+            length: token.marker.length
+        )
+    }
+
+    func sourceSpan(for token: HeistPlanSourceToken) -> HeistBuildSourceSpan {
+        HeistBuildSourceSpan(
             sourceName: sourceName,
             offset: token.marker.offset,
             line: token.marker.line,
