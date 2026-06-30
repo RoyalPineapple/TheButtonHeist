@@ -230,6 +230,53 @@ private let expectedRepairJSONReportJSON = """
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
     }
 
+    @Test("No suggestion reason reports no target repair needed")
+    func noSuggestionReasonReportsNoTargetRepairNeeded() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let before = listInterface(rows: [
+            ("Milk", "Delete"),
+        ])
+        let last = evidence(
+            target: target,
+            before: before,
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: before,
+            succeeded: false
+        )
+
+        let reason = HeistRepairSuggester.noSuggestionReason(for: request(last, current))
+
+        #expect(reason == "old target still resolves and supports the requested action; no target repair needed")
+    }
+
+    @Test("No suggestion reason reports missing target without a safe successor")
+    func noSuggestionReasonReportsMissingTargetWithoutASafeSuccessor() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: false
+        )
+
+        let reason = HeistRepairSuggester.noSuggestionReason(for: request(last, current))
+        let expectedReason = "old target is missing in the current before snapshot; "
+            + "no safe successor satisfied semantic continuity and unique-matcher requirements"
+
+        #expect(reason == expectedReason)
+    }
+
     @Test("Missing target suggests renamed equivalent using row context")
     func missingTargetSuggestsRenamedEquivalentUsingRowContext() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
