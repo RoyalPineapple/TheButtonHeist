@@ -817,8 +817,8 @@ extension TheBrains {
                 expectation: expectationReceipt?.expectation
             )),
             childFailureCategory: .invocation,
-            failure: failure,
-            children: children
+            children: children,
+            failure: failure
         )
     }
 
