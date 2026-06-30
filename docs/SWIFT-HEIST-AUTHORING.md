@@ -164,7 +164,7 @@ TypeText("Bruschetta", into: .label("Search Items"))
     .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.updated(.label("Quantity"), .value(from: "2", to: "3")))
+    .expect(.updated(.label("Quantity"), .value(before: "2", after: "3")))
 
 Increment(.label("Volume"))
     .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
@@ -213,9 +213,9 @@ match any element in practice.
 
 Use `.updated(...)` for explicit same-screen property-delta assertions in
 action expectations. The first argument may be an element matcher and the second
-argument is the property change matcher. Use `from:` and `to:` when the previous
-value matters; use the unlabeled form for a destination-only value. For example,
-`.value("3")` is exact and `.value(.contains("items"))` is explicitly broad.
+argument is the property change matcher. Use `before:` and `after:` when the
+previous value matters; use the unlabeled form for a destination-only value. For
+example, `.value("3")` is exact and `.value(.contains("items"))` is explicitly broad.
 This remains an observed-change predicate for `.expect(...)` and does not infer
 the action's target from hidden context.
 
@@ -226,7 +226,7 @@ same-screen element deltas.
 
 `.expect(.updated(...))` lowers to an element-change predicate. Include an
 explicit element matcher when the assertion must be tied to a durable element:
-`.updated(.label("Quantity"), .value(from: "2", to: "3"))`.
+`.updated(.label("Quantity"), .value(before: "2", after: "3"))`.
 
 Standalone `WaitFor(...)` is final-state oriented. Transition predicates still
 communicate intent, but `WaitFor(.appeared(...))`,

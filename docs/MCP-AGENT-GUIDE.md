@@ -112,11 +112,11 @@ element in place:
 
 ```swift
 Increment(.label("Quantity"))
-    .expect(.updated(.label("Quantity"), .value(from: "2", to: "3")))
+    .expect(.updated(.label("Quantity"), .value(before: "2", after: "3")))
 ```
 
-`from` and `to` use the same matcher grammar as targets and state assertions.
-Omit `from:` for destination-only updates such as `.value("3")`; include an
+`before` and `after` use the same matcher grammar as targets and state assertions.
+Omit `before:` for destination-only updates such as `.value("3")`; include an
 element matcher when the update must be tied to a durable element predicate.
 The shorthand `.expect(.updated(...))` is only sugar for an observed element
 delta. It does not infer the action target.
