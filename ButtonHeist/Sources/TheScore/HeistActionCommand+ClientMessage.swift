@@ -8,51 +8,6 @@ import ThePlans
 /// `ClientMessage.runtimeAction`. Both lower to `RuntimeActionMessage` for
 /// primitive dispatch inside the app runtime.
 package extension HeistActionCommand {
-    init(runtimeActionMessage: RuntimeActionMessage) throws {
-        switch runtimeActionMessage {
-        case .activate(let target):
-            self = .activate(.target(target))
-        case .increment(let target):
-            self = .increment(.target(target))
-        case .decrement(let target):
-            self = .decrement(.target(target))
-        case .performCustomAction(let target):
-            self = .customAction(name: target.actionName, target: .target(target.elementTarget))
-        case .rotor(let target):
-            self = .rotor(selection: target.selection, target: .target(target.elementTarget), direction: target.direction)
-        case .typeText(let target):
-            self = .typeText(
-                text: .literal(target.text),
-                target: target.elementTarget.map(ElementTargetExpr.target),
-                replacingExisting: target.replacingExisting
-            )
-        case .oneFingerTap(let target):
-            self = .mechanicalTap(target)
-        case .longPress(let target):
-            self = .mechanicalLongPress(target)
-        case .swipe(let target):
-            self = .mechanicalSwipe(target)
-        case .drag(let target):
-            self = .mechanicalDrag(target)
-        case .scroll(let target):
-            self = .viewportScroll(target)
-        case .scrollToVisible(let target):
-            self = .viewportScrollToVisible(.target(target.elementTarget))
-        case .scrollToEdge(let target):
-            self = .viewportScrollToEdge(target)
-        case .editAction(let target):
-            self = .editAction(target)
-        case .setPasteboard(let target):
-            self = .setPasteboard(target)
-        case .takeScreenshot:
-            self = .takeScreenshot
-        case .resignFirstResponder:
-            self = .dismissKeyboard
-        case .wait:
-            throw HeistExpressionError.unsupportedHeistActionCommand(runtimeActionMessage.runtimeType.rawValue)
-        }
-    }
-
     var runtimeActionType: RuntimeActionType {
         switch self {
         case .activate: return .activate

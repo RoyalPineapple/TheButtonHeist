@@ -637,24 +637,35 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistCommandsMatchSingleCommandMatcherFailures() async throws {
         let matcher = ElementPredicate(identifier: "missing_target")
         let target = ElementTarget.predicate(matcher)
-        let commands: [(String, RuntimeActionMessage, Bool)] = [
-            ("activate", .activate(target), false),
-            ("custom action", .performCustomAction(CustomActionTarget(
-                elementTarget: target,
-                actionName: "Archive"
+        let customAction = CustomActionTarget(elementTarget: target, actionName: "Archive")
+        let rotor = RotorTarget(elementTarget: target, selection: .named("Links"))
+        let tap = TapTarget(selection: .element(target))
+        let swipe = SwipeTarget(selection: .elementDirection(target, .left))
+        let typeText = TypeTextTarget(text: "hello", elementTarget: target)
+        let wait = WaitTarget(predicate: .state(.exists(matcher)), timeout: 0.01)
+        let commands: [(String, RuntimeActionMessage, HeistStep, Bool)] = [
+            ("activate", .activate(target), .action(try ActionStep(command: .activate(.target(target)))), false),
+            ("custom action", .performCustomAction(customAction), .action(try ActionStep(
+                command: .customAction(name: customAction.actionName, target: .target(customAction.elementTarget))
             )), false),
-            ("rotor", .rotor(RotorTarget(elementTarget: target, selection: .named("Links"))), false),
-            ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
-            ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left))), false),
-            ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
-            ("wait", .wait(WaitTarget(predicate: .state(.exists(matcher)), timeout: 0.01)), true),
+            ("rotor", .rotor(rotor), .action(try ActionStep(
+                command: .rotor(selection: rotor.selection, target: .target(rotor.elementTarget), direction: rotor.direction)
+            )), false),
+            ("tap", .oneFingerTap(tap), .action(try ActionStep(command: .mechanicalTap(tap))), false),
+            ("swipe", .swipe(swipe), .action(try ActionStep(command: .mechanicalSwipe(swipe))), false),
+            ("type text", .typeText(typeText), .action(try ActionStep(command: .typeText(
+                text: .literal(typeText.text),
+                target: typeText.elementTarget.map(ElementTargetExpr.target),
+                replacingExisting: typeText.replacingExisting
+            ))), false),
+            ("wait", .wait(wait), .wait(WaitStep(predicate: wait.predicate, timeout: wait.resolvedTimeout)), true),
         ]
 
-        for (label, command, normalizingTimeoutDuration) in commands {
+        for (label, command, heistStep, normalizingTimeoutDuration) in commands {
             brains.clearCache()
             let single = await brains.executeRuntimeAction(command)
             brains.clearCache()
-            let heist = try await heistStepResult(for: command)
+            let heist = try await heistStepResult(for: heistStep, runtimeType: command.runtimeType)
             assertSameActionResult(
                 label,
                 single: single,
@@ -3621,24 +3632,12 @@ final class TheBrainsActionTests: XCTestCase {
         message.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
     }
 
-    private func heistStepResult(for command: RuntimeActionMessage) async throws -> ActionResult {
-        let step: HeistStep
-        if case .wait(let target) = command {
-            step = .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))
-        } else {
-            do {
-                step = .action(try ActionStep(command: HeistActionCommand(runtimeActionMessage: command)))
-            } catch {
-                XCTFail("Expected heist primitive command for \(command.runtimeType.rawValue): \(error)")
-                return ActionResultBuilder(method: .heistPlan).failure(errorKind: .validationError)
-            }
-        }
-
+    private func heistStepResult(for step: HeistStep, runtimeType: RuntimeActionType) async throws -> ActionResult {
         let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
         guard case .heistExecution(let heist) = result.payload,
               let stepResult = heist.steps.first,
               let actionResult = stepResult.reportActionResult else {
-            XCTFail("Expected heist execution step result for \(command.runtimeType.rawValue)")
+            XCTFail("Expected heist execution step result for \(runtimeType.rawValue)")
             return result
         }
         return actionResult

@@ -329,6 +329,13 @@ public_scrollable_container_list_projection_matches="$(
 )"
 report_matches "public scrollable container projected as list" "$public_scrollable_container_list_projection_matches"
 
+retired_runtime_action_ingress_matches="$(
+  git_grep \
+    '\b(NonEmptyRuntimeActionMessages|runtimeActionMessages|runtimeActionDispatch|executableRuntimeActions)\b|HeistActionCommand[[:space:]]*\([[:space:]]*runtimeActionMessage:' \
+    "${EXISTING_SOURCE_PATHS[@]}"
+)"
+report_matches "retired runtime-message action ingress surface" "$retired_runtime_action_ingress_matches"
+
 TOOL_STDOUT_ALLOWED_LINES=(
   'ButtonHeist/Sources/HeistDoctorTool/main.swift:LINE:        FileHandle.standardOutput.write(Data((line + "\n").utf8))'
   'ButtonHeist/Sources/HeistPlanTool/main.swift:LINE:        FileHandle.standardOutput.write(data)'

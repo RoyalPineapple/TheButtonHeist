@@ -13,24 +13,24 @@ extension TheFence {
         let actionName = try input.optionalNonEmptyString("action")
         return appInteractionDispatch(
             SemanticActionCommand.activate.command,
-            Self.accessibilityRuntimeAction(target: target, actionName: actionName)
+            Self.accessibilityActionCommand(target: target, actionName: actionName)
         )
     }
 
-    static func accessibilityRuntimeAction(
+    static func accessibilityActionCommand(
         target: ElementTarget,
         actionName: String?
-    ) -> RuntimeActionMessage {
+    ) -> HeistActionCommand {
         guard let actionName else {
-            return .activate(target)
+            return .activate(.target(target))
         }
         switch actionName {
         case ElementAction.increment.description:
-            return .increment(target)
+            return .increment(.target(target))
         case ElementAction.decrement.description:
-            return .decrement(target)
+            return .decrement(.target(target))
         default:
-            return .performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName))
+            return .customAction(name: actionName, target: .target(target))
         }
     }
 }

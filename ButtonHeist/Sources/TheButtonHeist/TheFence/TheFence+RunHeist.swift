@@ -52,33 +52,32 @@ extension TheFence {
 
     /// Build a one-step `HeistPlan` for a single executable command, or `nil`
     /// when the command is not an action/wait (e.g. the `get_pasteboard` read,
-    /// interface/screen/session commands) or when it is a transient runtime
-    /// action that must use direct client dispatch.
+    /// interface/screen/session commands) or when it is a transient action that
+    /// must use direct client dispatch.
     ///
     /// A `wait` command becomes a single wait step; UI action commands become
     /// action steps carrying the request's `expect` predicate on the final
-    /// step. Any non-durable or otherwise non-heist-valid message falls back to
+    /// step. Any non-durable or otherwise non-heist-valid command falls back to
     /// the direct path.
     func singleStepHeistPlan(for parsed: ParsedRequest) throws -> HeistPlan? {
-        guard let runtimeActionMessages = parsed.runtimeActionMessages else { return nil }
-        let messages = runtimeActionMessages.values
-
-        if messages.count == 1, case .wait(let target) = runtimeActionMessages.first {
-            return try HeistPlan(body: [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
+        guard let executable = parsed.executableRequest else { return nil }
+        if case .wait(let step) = executable {
+            return try HeistPlan(body: [.wait(step)])
         }
+        guard case .actions(let actions) = executable else { return nil }
 
         let expectationStep = parsed.expectationPayload.expectation.map {
             WaitStep(predicate: $0, timeout: min(parsed.expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout))
         }
 
         var steps: [HeistStep] = []
-        for (index, message) in messages.enumerated() {
-            let actionCommand = try HeistActionCommand(runtimeActionMessage: message)
-            guard actionCommand.durableHeistActionFailure == nil else {
+        let commands = actions.values
+        for (index, command) in commands.enumerated() {
+            guard command.durableHeistActionFailure == nil else {
                 return nil
             }
-            let expectation = index == messages.count - 1 ? expectationStep : nil
-            steps.append(.action(try ActionStep(command: actionCommand, expectation: expectation)))
+            let expectation = index == commands.count - 1 ? expectationStep : nil
+            steps.append(.action(try ActionStep(command: command, expectation: expectation)))
         }
         return try HeistPlan(body: steps)
     }
@@ -91,17 +90,20 @@ extension TheFence {
     }
 
     private func singleStepTimeout(for parsed: ParsedRequest) -> TimeInterval {
-        guard let messages = parsed.runtimeActionMessages else {
-            preconditionFailure("singleStepTimeout requires executable runtime action dispatch")
+        guard let executable = parsed.executableRequest else {
+            preconditionFailure("singleStepTimeout requires executable request dispatch")
         }
         let actionBudget: TimeInterval
-        switch messages.first {
-        case .wait(let target):
-            return target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
-        case .typeText:
-            actionBudget = Timeouts.longActionSeconds
-        default:
-            actionBudget = Timeouts.actionSeconds
+        switch executable {
+        case .wait(let wait):
+            return wait.timeout + config.postActionExpectationTimeoutBuffer
+        case .actions(let actions):
+            switch actions.first {
+            case .typeText:
+                actionBudget = Timeouts.longActionSeconds
+            default:
+                actionBudget = Timeouts.actionSeconds
+            }
         }
         guard parsed.expectationPayload.expectation != nil else {
             return max(actionBudget, explicitSingleActionTimeout(for: parsed) ?? actionBudget)
