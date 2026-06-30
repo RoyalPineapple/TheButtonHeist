@@ -68,7 +68,8 @@ import Testing
         #expect(toolDefinitions.contains("MCPValueBridge.value(from: descriptor.inputJSONSchema)"))
 
         let preflight = try sourceFile(relativePath: "ButtonHeistMCP/Sources/MCPArgumentInputPreflight.swift")
-        #expect(preflight.contains("typealias MCPRawArgumentObject = [String: Value]"))
+        let rawArgumentTypealias = "typealias MCPRawArgumentObject = [String: " + "Value]"
+        #expect(preflight.contains(rawArgumentTypealias))
         #expect(preflight.contains("try MCPValueBridge.commandEnvelope(from: arguments)"))
         #expect(!preflight.contains("static func heistValue(from value: Value)"))
 
