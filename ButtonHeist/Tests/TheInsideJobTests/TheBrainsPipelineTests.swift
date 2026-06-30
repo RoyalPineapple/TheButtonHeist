@@ -761,7 +761,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.warning?.message.contains("no update transition was observed") == true)
     }
 
-    func testFromToUpdatedWaitWarnsWhenFinalStateAlreadyMatches() async throws {
+    func testFromToUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let quantity = AccessibilityElement.make(
@@ -786,12 +786,10 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertTrue(receipt.actionResult.success)
-        XCTAssertEqual(receipt.expectation.met, true)
-        XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
-        XCTAssertEqual(receipt.warning?.finalStateTiming, "baseline")
-        XCTAssertTrue(receipt.warning?.impliedPredicate?.contains("destination_state") == true)
-        XCTAssertEqual(receipt.warning?.evidence, "label=Quantity")
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertEqual(receipt.expectation.met, false)
+        XCTAssertNil(receipt.warning)
     }
 
     func testFromToUpdatedWaitWarningCanBeDisabledForActionExpectationSemantics() async throws {
