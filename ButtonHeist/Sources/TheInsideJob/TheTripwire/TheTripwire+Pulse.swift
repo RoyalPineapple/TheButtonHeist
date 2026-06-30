@@ -73,7 +73,7 @@ extension TheTripwire {
     /// pulse was already settled.
     ///
     /// The caller owns pulse lifetime. Runtime commands get their pulse from
-    /// `InsideJobRuntimeLease`; standalone tests and tools must start it
+    /// TheInsideJob runtime resources; standalone tests and tools must start it
     /// explicitly.
     ///
     /// Returns true if settled before timeout, false if timed out.

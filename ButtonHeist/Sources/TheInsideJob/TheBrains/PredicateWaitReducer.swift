@@ -25,10 +25,11 @@ struct PredicateWaitReducer: Sendable, Equatable {
         _ state: PredicateWaitState,
         timedOutWhenUnmatched: Bool = true
     ) -> PredicateWaitDecision {
-        if state.lastEvaluation.met {
+        if state.evaluation.met {
             return .satisfied(state, warning: nil)
         }
         if allowsTransitionFinalStateWarning,
+           state.changeReadiness.canEvaluateFinalStateWarning,
            let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
             return .satisfied(state, warning: warning)
         }
@@ -246,49 +247,79 @@ struct PredicateWaitReducer: Sendable, Equatable {
     }
 }
 
-struct PredicateWaitState: Sendable, Equatable {
-    var lastTrace: AccessibilityTrace?
-    var lastObservationSummary: String?
-    var lastVisibleFingerprint: PredicateVisibleFingerprint = .unknown
-    var observedSequence: SettledObservationSequence?
-    var changeBaseline: WaitChangeBaseline?
-    var sawObservationAfterBaseline = false
-    var lastEvaluation: ExpectationResult
+enum PredicateWaitState: Sendable, Equatable {
+    case unobserved(ExpectationResult)
+    case observed(PredicateWaitSnapshot)
 
     init(predicate: AccessibilityPredicate) {
-        lastEvaluation = ExpectationResult(
+        self = .unobserved(ExpectationResult(
             met: false,
             predicate: predicate,
             actual: "no settled semantic observation available"
-        )
+        ))
+    }
+
+    var evaluation: ExpectationResult {
+        switch self {
+        case .unobserved(let expectation):
+            return expectation
+        case .observed(let snapshot):
+            return snapshot.expectation
+        }
+    }
+
+    var lastTrace: AccessibilityTrace? {
+        guard case .observed(let snapshot) = self else { return nil }
+        return snapshot.observation.trace
+    }
+
+    var lastObservationSummary: String? {
+        guard case .observed(let snapshot) = self else { return nil }
+        return snapshot.observation.summary
+    }
+
+    var lastVisibleFingerprint: PredicateVisibleFingerprint {
+        guard case .observed(let snapshot) = self else { return .unknown }
+        return snapshot.observation.visibleFingerprint
+    }
+
+    var observedSequence: SettledObservationSequence? {
+        guard case .observed(let snapshot) = self else { return nil }
+        return snapshot.observation.sequence
+    }
+
+    var changeBaseline: WaitChangeBaseline? {
+        guard case .observed(let snapshot) = self else { return nil }
+        return snapshot.changeReadiness.baseline
+    }
+
+    var changeReadiness: PredicateChangeReadiness {
+        guard case .observed(let snapshot) = self else { return .notRequired }
+        return snapshot.changeReadiness
+    }
+
+    var observedChangeAfterBaseline: Bool {
+        guard case .observed(let snapshot) = self else { return false }
+        return snapshot.changeReadiness.observedChangeAfterBaseline
     }
 
     var finalElements: [HeistElement]? {
         lastTrace?.captures.last?.interface.projectedElements
     }
 
-    func recording(_ observation: PredicateWaitObservation) -> PredicateWaitState {
-        var next = self
-        next.lastTrace = observation.trace
-        next.lastObservationSummary = observation.summary
-        next.lastVisibleFingerprint = observation.visibleFingerprint
-        next.lastEvaluation = observation.expectation
-        next.observedSequence = observation.sequence
-        next.changeBaseline = observation.changeBaseline
-        next.sawObservationAfterBaseline = observation.sawObservationAfterBaseline
-        return next
+    func recording(_ snapshot: PredicateWaitSnapshot) -> PredicateWaitState {
+        .observed(snapshot)
     }
 
-    func recordingBaseline(_ observation: PredicateWaitObservation) -> PredicateWaitState {
-        var next = self
-        next.lastTrace = observation.trace
-        next.lastObservationSummary = observation.summary
-        next.lastVisibleFingerprint = observation.visibleFingerprint
-        next.observedSequence = observation.sequence
-        next.changeBaseline = observation.changeBaseline
-        next.sawObservationAfterBaseline = observation.sawObservationAfterBaseline
-        return next
+    func recordingBaseline(_ snapshot: PredicateWaitSnapshot) -> PredicateWaitState {
+        .observed(snapshot)
     }
+}
+
+struct PredicateWaitSnapshot: Sendable, Equatable {
+    let observation: PredicateWaitObservation
+    let expectation: ExpectationResult
+    let changeReadiness: PredicateChangeReadiness
 }
 
 struct WaitChangeBaseline: Sendable, Equatable {
@@ -305,19 +336,65 @@ struct WaitChangeBaseline: Sendable, Equatable {
     }
 }
 
+struct PredicateObservedChange: Sendable, Equatable {
+    let baseline: WaitChangeBaseline
+    let observedSequence: SettledObservationSequence
+
+    init?(
+        baseline: WaitChangeBaseline,
+        observedSequence: SettledObservationSequence
+    ) {
+        guard observedSequence > baseline.sequence else { return nil }
+        self.baseline = baseline
+        self.observedSequence = observedSequence
+    }
+}
+
+enum PredicateChangeReadiness: Sendable, Equatable {
+    case notRequired
+    case baselineOnly(WaitChangeBaseline)
+    case observedTransition(PredicateObservedChange)
+    case unavailableTrace(PredicateObservedChange)
+
+    var baseline: WaitChangeBaseline? {
+        switch self {
+        case .notRequired:
+            return nil
+        case .baselineOnly(let baseline):
+            return baseline
+        case .observedTransition(let transition),
+             .unavailableTrace(let transition):
+            return transition.baseline
+        }
+    }
+
+    var observedChangeAfterBaseline: Bool {
+        switch self {
+        case .observedTransition, .unavailableTrace:
+            return true
+        case .notRequired, .baselineOnly:
+            return false
+        }
+    }
+
+    var canEvaluateFinalStateWarning: Bool {
+        switch self {
+        case .notRequired, .baselineOnly, .observedTransition, .unavailableTrace:
+            return true
+        }
+    }
+}
+
 struct PredicateWaitObservation: Sendable, Equatable {
     let trace: AccessibilityTrace?
     let summary: String
     let visibleFingerprint: PredicateVisibleFingerprint
     let sequence: SettledObservationSequence
-    let changeBaseline: WaitChangeBaseline?
-    let sawObservationAfterBaseline: Bool
-    let expectation: ExpectationResult
 }
 
 enum PredicateWaitEvent: Sendable, Equatable {
-    case baseline(PredicateWaitObservation)
-    case observation(PredicateWaitObservation)
+    case baseline(PredicateWaitSnapshot)
+    case observation(PredicateWaitSnapshot)
 }
 
 enum PredicateWaitDecision: Sendable, Equatable {

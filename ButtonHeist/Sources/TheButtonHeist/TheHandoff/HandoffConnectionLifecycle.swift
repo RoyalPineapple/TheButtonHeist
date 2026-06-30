@@ -149,8 +149,8 @@ final class HandoffConnectionLifecycle {
         }
     }
 
-    func markReconnecting(target: HandoffReconnectTarget) {
-        setPhase(.reconnecting(HandoffReconnectAttempt(target: target)))
+    func markReconnecting(target: HandoffReconnectTarget, runID: UUID) {
+        setPhase(.reconnecting(HandoffReconnectAttempt(runID: runID, target: target)))
     }
 
     func recordServerInfo(_ info: ServerInfo) {
@@ -244,11 +244,13 @@ final class HandoffConnectionLifecycle {
     ) -> Bool {
         switch (lhs, rhs) {
         case (.disconnected, .disconnected),
-             (.reconnecting, .reconnecting),
              (.connecting, .connecting),
              (.connected, .connected),
              (.failed, .failed):
             return true
+        case (.reconnecting(let lhsAttempt), .reconnecting(let rhsAttempt)):
+            return lhsAttempt.runID == rhsAttempt.runID
+                && lhsAttempt.target == rhsAttempt.target
         default:
             return false
         }

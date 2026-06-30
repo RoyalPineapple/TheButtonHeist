@@ -56,7 +56,7 @@ final class ServerTransport {
 
     /// Test hook for deterministic listener-start failures after TLS setup.
     @MainActor var startOverride: ((_ port: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)?
-    @MainActor var stopOverride: (() -> Task<Void, Never>)?
+    @MainActor var stopOverride: (() async -> Void)?
 
     @MainActor
     func setEventBacklogOverflowHandler(
@@ -70,8 +70,7 @@ final class ServerTransport {
         if let handler = eventBacklogOverflowHandler {
             await handler(maxEvents)
         } else {
-            let stopTask = stop()
-            await stopTask.value
+            await stop()
         }
     }
 
@@ -132,20 +131,26 @@ final class ServerTransport {
 
     /// Stop the TCP server and any Bonjour advertisement.
     @MainActor
-    @discardableResult
-    func stop() -> Task<Void, Never> {
+    func stop() async {
         advertisement.stop()
         eventStream.finish()
-        if let stopOverride {
-            let task = stopOverride()
-            stopTask = task
-            return task
+        if let stopTask {
+            await stopTask.value
+            self.stopTask = nil
+            return
         }
-        let task = Task { [server] in
-            await server.stop()
+
+        let task: Task<Void, Never>
+        if let stopOverride {
+            task = Task { await stopOverride() }
+        } else {
+            task = Task { [server] in
+                await server.stop()
+            }
         }
         stopTask = task
-        return task
+        await task.value
+        self.stopTask = nil
     }
 
     /// Await completion of any in-flight stop operation.

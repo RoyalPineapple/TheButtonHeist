@@ -29,7 +29,7 @@ import Testing
         #expect(try reducerType.containsMatch(#"\bfunc\s+reduce\s*\("#))
         #expect(try reducerType.containsMatch(#"\bfunc\s+decision\s*\("#))
         #expect(
-            try reducerType.containsMatch(#"\blastEvaluation[.]met\b"#),
+            try reducerType.containsMatch(#"\bevaluation[.]met\b"#),
             "PredicateWaitReducer should own direct expectation.met branching"
         )
         #expect(decisionType.contents.contains("case poll("))
@@ -82,6 +82,59 @@ import Testing
             !source.contents.contains("PredicateWaitPollEvaluation"),
             "Predicate polling should return PredicateWaitDecision directly"
         )
+    }
+
+    @Test func `predicate wait state keeps observation and transition evidence exclusive`() throws {
+        let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
+        let waitState = try #require(
+            try reducer.firstBlock(matching: #"\benum\s+PredicateWaitState\b"#),
+            "PredicateWaitState should be an enum with exclusive unobserved and observed cases"
+        )
+        let waitObservation = try #require(
+            try reducer.firstBlock(matching: #"\bstruct\s+PredicateWaitObservation\b"#),
+            "PredicateWaitObservation should be a payload, not a flattened state bag"
+        )
+        let waitSnapshot = try #require(
+            try reducer.firstBlock(matching: #"\bstruct\s+PredicateWaitSnapshot\b"#),
+            "PredicateWaitSnapshot should pair payload, expectation, and readiness"
+        )
+        let streamState = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+PredicateObservationStreamState\b"#),
+            "PredicateObservationStreamState should be a typed stream reducer state"
+        )
+        let pollingResult = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+PredicatePollingResult\b"#),
+            "PredicatePollingResult should expose paired observation/evaluation evidence"
+        )
+
+        #expect(waitState.contents.contains("case unobserved(ExpectationResult)"))
+        #expect(waitState.contents.contains("case observed(PredicateWaitSnapshot)"))
+        #expect(reducer.contents.contains("struct PredicateWaitSnapshot"))
+        #expect(reducer.contents.contains("enum PredicateChangeReadiness"))
+        #expect(reducer.contents.contains("case baselineOnly(WaitChangeBaseline)"))
+        #expect(reducer.contents.contains("case observedTransition(PredicateObservedChange)"))
+        #expect(reducer.contents.contains("case unavailableTrace(PredicateObservedChange)"))
+        #expect(waitSnapshot.contents.contains("let observation: PredicateWaitObservation"))
+        #expect(waitSnapshot.contents.contains("let expectation: ExpectationResult"))
+        #expect(waitSnapshot.contents.contains("let changeReadiness: PredicateChangeReadiness"))
+        #expect(!waitObservation.contents.contains("ExpectationResult"))
+        #expect(!waitObservation.contents.contains("PredicateChangeReadiness"))
+        #expect(!waitObservation.contents.contains("changeBaseline: WaitChangeBaseline?"))
+        #expect(!waitObservation.contents.contains("sawObservationAfterBaseline"))
+        #expect(try !reducer.containsMatch(#"\bvar\s+sawObservationAfterBaseline\b"#))
+        #expect(!source.contents.contains("WaitAccumulatedTrace?"))
+        #expect(!source.contents.contains("observedNoChangeAfterBaseline"))
+        #expect(try !source.containsMatch(#"\bfunc\s+prepareForObservation\s*\([^)]*\)\s*->\s*Bool\b"#))
+        #expect(!streamState.contents.contains("latestReduction"))
+        #expect(source.contents.contains("private enum WaitAccumulatedTrace"))
+        #expect(source.contents.contains("case noChangeAfterBaseline(WaitNoChangeAfterBaselineEvidence)"))
+        #expect(source.contents.contains("struct PredicatePollingObservationEvaluation"))
+        #expect(pollingResult.contents.contains("let last: PredicatePollingObservationEvaluation<Evaluation>?"))
+        #expect(!pollingResult.contents.contains("lastObservation"))
+        #expect(!pollingResult.contents.contains("lastEvaluation"))
+        #expect(source.contents.contains("preconditionFailure(\"visible-only predicate polling cannot record discovery probe\")"))
+        #expect(source.contents.contains("struct PredicateVisibleTickCount"))
     }
 
     @Test func `heist wait receipt is the single typed wait result source`() throws {
@@ -161,6 +214,53 @@ import Testing
             \(receiptBuilder.contents)
             """
         )
+    }
+
+    @Test func `settle loop reducer owns settle decisions and remains effect free`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/SettleSession.swift")
+        let reducer = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+SettleLoopReducer\b"#),
+            "SettleSession.swift should declare SettleLoopReducer"
+        )
+        #expect(try source.containsMatch(#"@MainActor\s+struct\s+SettleSession\b"#))
+        #expect(try source.containsMatch(#"@MainActor\s+struct\s+SemanticQuietSettleSession\b"#))
+        let fixedSession = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+SettleSession\b"#),
+            "SettleSession.swift should keep fixed settle orchestration in SettleSession"
+        )
+        let quietSession = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+SemanticQuietSettleSession\b"#),
+            "SettleSession.swift should keep quiet settle orchestration in SemanticQuietSettleSession"
+        )
+        let fixedRun = try #require(
+            try fixedSession.firstBlock(matching: #"\bfunc\s+run\s*\(\s*start:\s+CFAbsoluteTime\b"#),
+            "SettleSession.run should remain explicit"
+        )
+        let quietRun = try #require(
+            try quietSession.firstBlock(matching: #"\bfunc\s+run\s*\(\s*start:\s+CFAbsoluteTime\b"#),
+            "SemanticQuietSettleSession.run should remain explicit"
+        )
+
+        for forbidden in [
+            "await ",
+            "Task.sleep",
+            "CFAbsoluteTimeGetCurrent",
+            "parseProvider",
+            "tripwireSignalProvider",
+            "stash.",
+        ] {
+            #expect(
+                !reducer.contents.contains(forbidden),
+                "SettleLoopReducer should stay effect-free; found \(forbidden)"
+            )
+        }
+
+        for runBlock in [fixedRun, quietRun] {
+            #expect(
+                try !runBlock.containsMatch(#"\b(?:let|var)\s+(stableCycles|quietStartedAt|previousFingerprint)\b"#),
+                "settle run methods should feed SettleLoopReducer instead of owning stability locals"
+            )
+        }
     }
 
     @Test func `heist action execution keeps one wait evaluation path`() throws {

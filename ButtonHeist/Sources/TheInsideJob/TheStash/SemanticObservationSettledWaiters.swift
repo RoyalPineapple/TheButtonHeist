@@ -89,28 +89,40 @@ final class SemanticObservationSettledWaiters {
 }
 
 struct SemanticObservationWaiterContinuation<Value: Sendable> {
-    private struct State {
-        var continuation: CheckedContinuation<Value, Never>?
-        var didResume = false
+    private enum State {
+        case pending
+        case registered(CheckedContinuation<Value, Never>)
+        case resumed
     }
 
-    private let lock = OSAllocatedUnfairLock(initialState: State())
+    private let lock = OSAllocatedUnfairLock(initialState: State.pending)
 
     func register(_ continuation: CheckedContinuation<Value, Never>) -> Bool {
         lock.withLock { state -> Bool in
-            guard !state.didResume else { return false }
-            state.continuation = continuation
-            return true
+            switch state {
+            case .pending:
+                state = .registered(continuation)
+                return true
+            case .registered:
+                preconditionFailure("Semantic observation waiter continuation registered twice")
+            case .resumed:
+                return false
+            }
         }
     }
 
     func resume(returning value: Value) {
         let continuationToResume = lock.withLock { state -> CheckedContinuation<Value, Never>? in
-            guard !state.didResume else { return nil }
-            state.didResume = true
-            let continuation = state.continuation
-            state.continuation = nil
-            return continuation
+            switch state {
+            case .pending:
+                state = .resumed
+                return nil
+            case .registered(let continuation):
+                state = .resumed
+                return continuation
+            case .resumed:
+                return nil
+            }
         }
         continuationToResume?.resume(returning: value)
     }

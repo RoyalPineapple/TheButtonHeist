@@ -14,22 +14,25 @@ enum ClientAdmission: Sendable {
     case handled
 }
 
-struct MuscleAdmissionEffect {
-    var outputs: [MuscleAdmissionOutput] = []
-    var delayedDisconnectClientId: Int?
-
-    static let none = MuscleAdmissionEffect()
+enum MuscleAdmissionEffect {
+    case sendResponse(ServerMessage, requestId: String?, respond: TheMuscleAdmission.ResponseHandler)
+    case sendClient(ServerMessage, requestId: String?, clientId: Int)
+    case delayedDisconnect(clientId: Int)
+    case log(MuscleAdmissionLogEvent)
 
     static func response(
         _ message: ServerMessage,
         requestId: String? = nil,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         disconnect clientId: Int? = nil
-    ) -> MuscleAdmissionEffect {
-        MuscleAdmissionEffect(
-            outputs: [.response(message, requestId: requestId, respond: respond)],
-            delayedDisconnectClientId: clientId
-        )
+    ) -> [MuscleAdmissionEffect] {
+        var effects: [MuscleAdmissionEffect] = [
+            .sendResponse(message, requestId: requestId, respond: respond),
+        ]
+        if let clientId {
+            effects.append(.delayedDisconnect(clientId: clientId))
+        }
+        return effects
     }
 
     static func client(
@@ -37,17 +40,31 @@ struct MuscleAdmissionEffect {
         requestId: String? = nil,
         clientId: Int,
         disconnect: Bool = false
-    ) -> MuscleAdmissionEffect {
-        MuscleAdmissionEffect(
-            outputs: [.client(message, requestId: requestId, clientId: clientId)],
-            delayedDisconnectClientId: disconnect ? clientId : nil
-        )
+    ) -> [MuscleAdmissionEffect] {
+        var effects: [MuscleAdmissionEffect] = [
+            .sendClient(message, requestId: requestId, clientId: clientId),
+        ]
+        if disconnect {
+            effects.append(.delayedDisconnect(clientId: clientId))
+        }
+        return effects
     }
 }
 
-enum MuscleAdmissionOutput {
-    case response(ServerMessage, requestId: String?, respond: TheMuscleAdmission.ResponseHandler)
-    case client(ServerMessage, requestId: String?, clientId: Int)
+enum MuscleAdmissionLogEvent {
+    case clientAuthenticatedWithToken(clientId: Int)
+    case sessionLockRejected(clientId: Int, message: String)
+    case rateLimited(clientId: Int)
+    case undecodableUnauthenticatedMessage(clientId: Int)
+    case undecodableAuthenticatedMessage(clientId: Int)
+    case authenticatedProtocolMessage(clientId: Int, wireType: ClientWireMessageType)
+    case unauthenticatedMessage(clientId: Int, message: String)
+    case authenticationDeadline(clientId: Int, deadlineSeconds: UInt64)
+    case versionMismatch(clientId: Int, serverVersion: String, clientVersion: String)
+    case missingRegisteredAddress(clientId: Int)
+    case lockedOut(clientId: Int, address: String)
+    case invalidToken(clientId: Int, attempts: Int)
+    case lockoutStarted(address: String, attempts: Int)
 }
 
 struct MuscleAuthentication {
@@ -64,7 +81,7 @@ enum MuscleAuthenticationSource {
 
 enum MuscleAdmissionDecision {
     case admitted(AdmittedClientMessage)
-    case handled(MuscleAdmissionEffect)
+    case handled([MuscleAdmissionEffect])
     case authenticate(MuscleAuthentication)
 }
 
@@ -108,7 +125,7 @@ struct TheMuscleAdmission {
         )
     }
 
-    mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
+    mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> [MuscleAdmissionEffect] {
         self.authentication.completeAuthentication(authentication)
     }
 
@@ -116,15 +133,15 @@ struct TheMuscleAdmission {
         _ clientId: Int,
         diagnostic: SessionLease.SessionLockDiagnostic,
         respond: @escaping ResponseHandler
-    ) -> MuscleAdmissionEffect {
+    ) -> [MuscleAdmissionEffect] {
         authentication.rejectForSessionLock(clientId, diagnostic: diagnostic, respond: respond)
     }
 
-    mutating func removeClient(_ clientId: Int) -> MuscleAdmissionEffect {
+    mutating func removeClient(_ clientId: Int) -> [MuscleAdmissionEffect] {
         authentication.removeClient(clientId)
     }
 
-    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> MuscleAdmissionEffect {
+    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> [MuscleAdmissionEffect] {
         authentication.authenticationDeadline(clientId, deadlineSeconds: deadlineSeconds)
     }
 }

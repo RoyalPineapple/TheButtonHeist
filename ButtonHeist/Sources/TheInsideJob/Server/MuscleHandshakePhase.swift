@@ -11,17 +11,18 @@ struct MuscleHandshakePhase {
         tokenAdmission: inout SessionAdmission
     ) -> MuscleAdmissionDecision {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
-            muscleAuthenticationLogger.warning(
-                "Client \(clientId) buttonHeistVersion mismatch: server=\(buttonHeistVersion), client=\(envelope.buttonHeistVersion)"
-            )
-            return .handled(.response(
-                .protocolMismatch(ProtocolMismatchPayload(
+            return .handled([
+                .log(.versionMismatch(
+                    clientId: clientId,
+                    serverVersion: buttonHeistVersion,
+                    clientVersion: envelope.buttonHeistVersion
+                )),
+                .sendResponse(.protocolMismatch(ProtocolMismatchPayload(
                     serverButtonHeistVersion: buttonHeistVersion,
                     clientButtonHeistVersion: envelope.buttonHeistVersion
-                )),
-                respond: respond,
-                disconnect: clientId
-            ))
+                )), requestId: nil, respond: respond),
+                .delayedDisconnect(clientId: clientId),
+            ])
         }
 
         switch envelope.message {
@@ -65,7 +66,7 @@ struct MuscleHandshakePhase {
                 respond: respond
             ))
         }
-        return .handled(.response(.authRequired, respond: respond))
+        return .handled(MuscleAdmissionEffect.response(.authRequired, respond: respond))
     }
 
     private static func handleAuthenticate(
@@ -86,16 +87,23 @@ struct MuscleHandshakePhase {
         }
 
         guard let phase = clientRegistry.phase(for: clientId) else {
-            muscleAuthenticationLogger.warning("Client \(clientId) has no registered address, rejecting auth")
-            return .handled(.response(
-                .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
-                respond: respond,
-                disconnect: clientId
-            ))
+            return .handled([
+                .log(.missingRegisteredAddress(clientId: clientId)),
+                .sendResponse(
+                    .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
+                    requestId: nil,
+                    respond: respond
+                ),
+                .delayedDisconnect(clientId: clientId),
+            ])
         }
 
         if payload.token.isEmpty {
-            return .handled(.response(.error(tokenAdmission.emptyTokenError()), respond: respond, disconnect: clientId))
+            return .handled(MuscleAdmissionEffect.response(
+                .error(tokenAdmission.emptyTokenError()),
+                respond: respond,
+                disconnect: clientId
+            ))
         }
 
         return MuscleTokenAuthenticationPhase.authenticate(

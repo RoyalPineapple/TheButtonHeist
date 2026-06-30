@@ -207,6 +207,7 @@ struct HandoffConnectionAttempt {
 }
 
 struct HandoffReconnectAttempt {
+    let runID: UUID
     let target: HandoffReconnectTarget
 }
 
@@ -219,7 +220,7 @@ enum HandoffConnectionPhase {
 }
 
 /// Concrete device identity auto-reconnect is allowed to recover.
-struct HandoffReconnectTarget: Equatable {
+struct HandoffReconnectTarget: Equatable, Sendable {
     let filter: String?
     let device: DiscoveredDevice
 }

@@ -65,7 +65,7 @@ struct MuscleAuthenticationFlow {
         )
     }
 
-    mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
+    mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> [MuscleAdmissionEffect] {
         clientRegistry.authenticate(
             authentication.clientId,
             address: authentication.address
@@ -73,8 +73,7 @@ struct MuscleAuthenticationFlow {
 
         switch authentication.source {
         case .token:
-            muscleAuthenticationLogger.info("Client \(authentication.clientId) authenticated with token")
-            return .none
+            return [.log(.clientAuthenticatedWithToken(clientId: authentication.clientId))]
         }
     }
 
@@ -82,19 +81,22 @@ struct MuscleAuthenticationFlow {
         _ clientId: Int,
         diagnostic: SessionLease.SessionLockDiagnostic,
         respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionEffect {
+    ) -> [MuscleAdmissionEffect] {
         let payload = diagnostic.payload()
-        muscleAuthenticationLogger.warning("Client \(clientId) rejected - \(payload.message, privacy: .public)")
-        return .response(.sessionLocked(payload), respond: respond, disconnect: clientId)
+        return [
+            .log(.sessionLockRejected(clientId: clientId, message: payload.message)),
+            .sendResponse(.sessionLocked(payload), requestId: nil, respond: respond),
+            .delayedDisconnect(clientId: clientId),
+        ]
     }
 
-    mutating func removeClient(_ clientId: Int) -> MuscleAdmissionEffect {
+    mutating func removeClient(_ clientId: Int) -> [MuscleAdmissionEffect] {
         messageRateLimiters.removeValue(forKey: clientId)
         _ = clientRegistry.remove(clientId)
-        return .none
+        return []
     }
 
-    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> MuscleAdmissionEffect {
+    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> [MuscleAdmissionEffect] {
         MuscleAuthenticationDeadlinePhase.effect(
             clientId: clientId,
             phase: clientRegistry.phase(for: clientId),
@@ -106,7 +108,7 @@ struct MuscleAuthenticationFlow {
         _ clientId: Int,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         at now: Date
-    ) -> MuscleAdmissionEffect? {
+    ) -> [MuscleAdmissionEffect]? {
         var limiter = messageRateLimiters[clientId] ?? MessageRateLimiter()
         guard limiter.recordMessage(at: now) else {
             messageRateLimiters[clientId] = limiter
@@ -115,11 +117,13 @@ struct MuscleAuthenticationFlow {
 
         let shouldNotify = limiter.markNotifiedIfNeeded()
         messageRateLimiters[clientId] = limiter
-        muscleAuthenticationLogger.warning("Client \(clientId) rate limited, handling message")
-        guard shouldNotify else { return MuscleAdmissionEffect.none }
+        guard shouldNotify else { return [.log(.rateLimited(clientId: clientId))] }
 
         let message = "Rate limited: max \(MessageRateLimiter.defaultMaxMessagesPerSecond) messages per second"
-        return .response(.error(ServerError(kind: .general, message: message)), respond: respond)
+        return [
+            .log(.rateLimited(clientId: clientId)),
+            .sendResponse(.error(ServerError(kind: .general, message: message)), requestId: nil, respond: respond),
+        ]
     }
 }
 #endif // DEBUG

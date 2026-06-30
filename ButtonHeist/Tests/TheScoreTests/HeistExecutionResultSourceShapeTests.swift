@@ -50,4 +50,19 @@ import Testing
         #expect(childAbortedOutcome.contents.contains("let evidence: HeistStepEvidence"))
         #expect(childAbortedOutcome.contents.contains("let abortedAtChildPath: String"))
     }
+
+    @Test func `repeat until evidence construction uses outcome-specific factories`() throws {
+        let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult.swift")
+        let evidence = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+HeistRepeatUntilEvidence\b"#),
+            "HeistRepeatUntilEvidence should remain the public Codable receipt shape"
+        )
+
+        #expect(evidence.contents.contains("@available(*, unavailable"))
+        #expect(evidence.contents.contains("public static func predicateMet("))
+        #expect(evidence.contents.contains("public static func timedOut("))
+        #expect(evidence.contents.contains("public static func timeoutHandledByElse("))
+        #expect(evidence.contents.contains("private init("))
+        #expect(!evidence.contents.contains("public let observedSequence"))
+    }
 }

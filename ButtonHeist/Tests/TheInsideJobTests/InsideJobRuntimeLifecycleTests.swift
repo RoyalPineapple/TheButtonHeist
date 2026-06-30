@@ -27,26 +27,27 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         try await harness.job.start()
 
         assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
-        XCTAssertTrue(harness.job.lifecycleObservationActive)
+        XCTAssertTrue(harness.job.lifecycleObservationIsInstalled)
         XCTAssertEqual(harness.stopCallCount(), 0)
 
         await harness.job.stop()
     }
 
-    func testStartWhileRunningDoesNotCreateAnotherLease() async throws {
+    func testStartWhileRunningDoesNotCreateAnotherRuntime() async throws {
         let harness = makeRuntimeHarness(actualPort: 23456)
         try await harness.job.start()
 
-        guard case .running(let originalLease) = harness.job.serverPhase else {
+        guard case .running(let originalResources) = harness.job.serverPhase else {
             return XCTFail("Expected running phase, got \(harness.job.serverPhase)")
         }
 
         try await harness.job.start()
 
-        guard case .running(let currentLease) = harness.job.serverPhase else {
+        guard case .running(let currentResources) = harness.job.serverPhase else {
             return XCTFail("Expected running phase, got \(harness.job.serverPhase)")
         }
-        XCTAssertTrue(currentLease === originalLease)
+        XCTAssertTrue(currentResources.transport === originalResources.transport)
+        XCTAssertEqual(currentResources.actualPort, originalResources.actualPort)
         assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
         XCTAssertEqual(harness.startCallCount(), 1)
         XCTAssertEqual(harness.stopCallCount(), 0)
@@ -95,20 +96,20 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
         await harness.job.resume()
         await resumeStartGate.waitUntilEntered()
-        guard case .resuming(let originalResumeID, let resumeTask) = harness.job.serverPhase else {
+        guard case .resuming(let originalAttempt) = harness.job.serverPhase else {
             return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
         }
 
         await harness.job.resume()
 
-        guard case .resuming(let currentResumeID, _) = harness.job.serverPhase else {
+        guard case .resuming(let currentAttempt) = harness.job.serverPhase else {
             return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
         }
-        XCTAssertEqual(currentResumeID, originalResumeID)
+        XCTAssertEqual(currentAttempt.id, originalAttempt.id)
         XCTAssertEqual(harness.startCallCount(), 2)
 
         resumeStartGate.release()
-        await resumeTask.value
+        await originalAttempt.task.value
 
         assertRunning(harness.job, transport: harness.transport, actualPort: 23457)
         XCTAssertEqual(harness.startCallCount(), 2)
@@ -129,12 +130,12 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
         await harness.job.resume()
         await resumeStartGate.waitUntilEntered()
-        guard case .resuming(_, let resumeTask) = harness.job.serverPhase else {
+        guard case .resuming(let attempt) = harness.job.serverPhase else {
             return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
         }
 
         resumeStartGate.release()
-        await resumeTask.value
+        await attempt.task.value
 
         assertSuspendedPreservingLifecycleObservation(harness.job)
         XCTAssertEqual(
@@ -194,7 +195,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         }
         transport.stopOverride = {
             counters.stopCount += 1
-            return Task {}
         }
 
         let job = TheInsideJob(
@@ -217,15 +217,16 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case .running(let lease) = job.serverPhase else {
+        guard case .running(let resources) = job.serverPhase else {
             return XCTFail("Expected running phase, got \(job.serverPhase)", file: file, line: line)
         }
-        XCTAssertTrue(lease.transport === expectedTransport, file: file, line: line)
-        XCTAssertEqual(lease.actualPort, actualPort, file: file, line: line)
+        XCTAssertTrue(resources.transport === expectedTransport, file: file, line: line)
+        XCTAssertEqual(resources.actualPort, actualPort, file: file, line: line)
         guard let currentTransport = job.transport else {
             return XCTFail("Expected job transport to be set", file: file, line: line)
         }
         XCTAssertTrue(currentTransport === expectedTransport, file: file, line: line)
+        XCTAssertNotNil(job.retainedIdleTimerBaseline, file: file, line: line)
     }
 
     private func assertSuspendedPreservingLifecycleObservation(
@@ -237,8 +238,8 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             return XCTFail("Expected suspended phase, got \(job.serverPhase)", file: file, line: line)
         }
         XCTAssertNil(job.transport, file: file, line: line)
-        XCTAssertTrue(job.lifecycleObservationActive, file: file, line: line)
-        XCTAssertNil(job.pendingForegroundResumeTask, file: file, line: line)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled, file: file, line: line)
+        XCTAssertNotNil(job.retainedIdleTimerBaseline, file: file, line: line)
         XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
     }
 
@@ -251,19 +252,12 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             return XCTFail("Expected stopped phase, got \(job.serverPhase)", file: file, line: line)
         }
         XCTAssertNil(job.transport, file: file, line: line)
-        XCTAssertFalse(job.lifecycleObservationActive, file: file, line: line)
-        XCTAssertNil(job.pendingForegroundResumeTask, file: file, line: line)
+        XCTAssertFalse(job.lifecycleObservationIsInstalled, file: file, line: line)
         XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
         XCTAssertFalse(job.brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive, file: file, line: line)
         XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
-
-        switch job.idleTimerProtection {
-        case .unmodified:
-            break
-        case .engaged:
-            XCTFail("Expected idle timer baseline to be cleared", file: file, line: line)
-        }
+        XCTAssertNil(job.retainedIdleTimerBaseline, file: file, line: line)
     }
 
     private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {

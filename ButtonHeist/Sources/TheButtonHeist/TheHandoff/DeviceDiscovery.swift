@@ -6,86 +6,198 @@ import TheScore
 
 private let logger = ButtonHeistLog.logger(.handoff(.discovery))
 
+enum DeviceDiscoveryBrowserState: Equatable, Sendable {
+    case setup
+    case waiting
+    case ready
+    case failed(String)
+    case cancelled
+}
+
+protocol DeviceDiscoveryBrowsing: AnyObject {
+    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)? { get set }
+    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)? { get set }
+    func start(queue: DispatchQueue)
+    func cancel()
+}
+
+// NWBrowser invokes its handlers on the configured browser queue; callback slots are assigned by the actor owner before start.
+// swiftlint:disable:next agent_unchecked_sendable_no_comment
+final class NWDeviceDiscoveryBrowser: DeviceDiscoveryBrowsing, @unchecked Sendable {
+    private let browser: NWBrowser
+
+    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)?
+    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
+
+    init() {
+        let parameters = NWParameters()
+        parameters.includePeerToPeer = true
+
+        browser = NWBrowser(
+            for: .bonjourWithTXTRecord(type: buttonHeistServiceType, domain: "local."),
+            using: parameters
+        )
+
+        browser.browseResultsChangedHandler = { [weak self] results, changes in
+            self?.onResultsChanged?(results, changes)
+        }
+
+        browser.stateUpdateHandler = { [weak self] state in
+            self?.onStateChanged?(Self.browserState(from: state))
+        }
+    }
+
+    func start(queue: DispatchQueue) {
+        browser.start(queue: queue)
+    }
+
+    func cancel() {
+        browser.cancel()
+    }
+
+    private static func browserState(from state: NWBrowser.State) -> DeviceDiscoveryBrowserState {
+        switch state {
+        case .setup:
+            return .setup
+        case .waiting:
+            return .waiting
+        case .ready:
+            return .ready
+        case .failed(let error):
+            return .failed(error.localizedDescription)
+        case .cancelled:
+            return .cancelled
+        @unknown default:
+            return .failed(String(describing: state))
+        }
+    }
+}
+
 /// Discovers Button Heist services via Bonjour and emits device found/lost events.
 @ButtonHeistActor
 final class DeviceDiscovery: DeviceDiscovering {
 
     private enum DiscoveryPhase {
         case idle
-        case active(
-            id: UUID,
-            browser: NWBrowser,
-            registry: DiscoveryRegistry,
-            reachabilityTask: Task<Void, Never>?
-        )
+        case active(ActiveDiscovery)
+    }
+
+    private struct ActiveDiscovery {
+        let id: UUID
+        let browser: any DeviceDiscoveryBrowsing
+        var registry: DiscoveryRegistry
+        var reachabilityTask: Task<Void, Never>?
+        var browserState: DeviceDiscoveryBrowserState
     }
 
     private var discoveryPhase: DiscoveryPhase = .idle
     private let browserQueue = DispatchQueue(label: "com.buttonheist.thehandoff.discovery.browser")
     private let reachabilityValidationInterval: TimeInterval
+    private let makeBrowser: () -> any DeviceDiscoveryBrowsing
 
     var discoveredDevices: [DiscoveredDevice] {
         switch discoveryPhase {
         case .idle:
             return []
-        case .active(_, _, let registry, _):
-            return registry.devices
+        case .active(let activeDiscovery):
+            return activeDiscovery.registry.devices
         }
     }
 
     var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
 
-    init(reachabilityValidationInterval: TimeInterval = 3.0) {
+    init(
+        reachabilityValidationInterval: TimeInterval = 3.0,
+        makeBrowser: @escaping () -> any DeviceDiscoveryBrowsing = { NWDeviceDiscoveryBrowser() }
+    ) {
         self.reachabilityValidationInterval = reachabilityValidationInterval
+        self.makeBrowser = makeBrowser
     }
 
     func start() {
+        guard case .idle = discoveryPhase else {
+            logger.info("Bonjour discovery is already active")
+            return
+        }
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
 
-        let parameters = NWParameters()
-        parameters.includePeerToPeer = true
-
         let sessionID = UUID()
-        let browser = NWBrowser(
-            for: .bonjourWithTXTRecord(type: buttonHeistServiceType, domain: "local."),
-            using: parameters
-        )
+        let browser = makeBrowser()
 
-        browser.browseResultsChangedHandler = { [weak self, sessionID] results, changes in
-            Task { [weak self, sessionID] in
+        browser.onResultsChanged = { [weak self, sessionID] results, changes in
+            Task { @ButtonHeistActor [weak self, sessionID] in
                 logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-                await self?.handleResults(results, changes: changes, sessionID: sessionID)
+                self?.handleResults(results, changes: changes, sessionID: sessionID)
             }
         }
 
-        browser.stateUpdateHandler = { [weak self, sessionID] state in
-            Task { [weak self, sessionID] in
+        browser.onStateChanged = { [weak self, sessionID] state in
+            Task { @ButtonHeistActor [weak self, sessionID] in
                 logger.info("Browser state: \(String(describing: state))")
-                await self?.handleStateUpdate(state, sessionID: sessionID)
+                self?.handleStateUpdate(state, sessionID: sessionID)
             }
         }
 
-        discoveryPhase = .active(
+        discoveryPhase = .active(ActiveDiscovery(
             id: sessionID,
             browser: browser,
             registry: DiscoveryRegistry(),
-            reachabilityTask: nil
-        )
+            reachabilityTask: nil,
+            browserState: .setup
+        ))
         browser.start(queue: browserQueue)
-        startReachabilityValidation(sessionID: sessionID)
         logger.info("Browser started")
     }
 
     func stop() {
-        guard case .active(_, let browser, _, let reachabilityTask) = discoveryPhase else { return }
-        reachabilityTask?.cancel()
-        browser.cancel()
+        guard case .active(let activeDiscovery) = discoveryPhase else { return }
+        activeDiscovery.reachabilityTask?.cancel()
+        activeDiscovery.browser.cancel()
         discoveryPhase = .idle
     }
 
-    private func handleStateUpdate(_ state: NWBrowser.State, sessionID: UUID) {
-        guard isCurrentSession(sessionID) else { return }
-        onEvent?(.stateChanged(isReady: state == .ready))
+    private func handleStateUpdate(_ state: DeviceDiscoveryBrowserState, sessionID: UUID) {
+        guard case .active(var activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID else { return }
+
+        switch state {
+        case .ready:
+            activeDiscovery.browserState = .ready
+            discoveryPhase = .active(activeDiscovery)
+            onEvent?(.stateChanged(isReady: true))
+            startReachabilityValidation(sessionID: sessionID)
+        case .setup, .waiting:
+            activeDiscovery.browserState = state
+            activeDiscovery.reachabilityTask?.cancel()
+            activeDiscovery.reachabilityTask = nil
+            discoveryPhase = .active(activeDiscovery)
+            onEvent?(.stateChanged(isReady: false))
+        case .failed(let description):
+            finishTerminalBrowserState(
+                activeDiscovery,
+                failure: .connectionFailed("Bonjour discovery failed: \(description)"),
+                cancelBrowser: true
+            )
+        case .cancelled:
+            finishTerminalBrowserState(
+                activeDiscovery,
+                failure: .connectionFailed("Bonjour discovery was cancelled"),
+                cancelBrowser: false
+            )
+        }
+    }
+
+    private func finishTerminalBrowserState(
+        _ activeDiscovery: ActiveDiscovery,
+        failure: HandoffConnectionError,
+        cancelBrowser: Bool
+    ) {
+        activeDiscovery.reachabilityTask?.cancel()
+        if cancelBrowser {
+            activeDiscovery.browser.cancel()
+        }
+        discoveryPhase = .idle
+        onEvent?(.failed(failure))
     }
 
     private func handleResults(
@@ -93,33 +205,23 @@ final class DeviceDiscovery: DeviceDiscovering {
         changes: Set<NWBrowser.Result.Change>,
         sessionID: UUID
     ) {
-        guard case .active(let activeSessionID, let browser, var registry, let reachabilityTask) = discoveryPhase,
-              activeSessionID == sessionID else { return }
+        guard case .active(var activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID else { return }
         for change in changes {
             switch change {
             case .added(let result):
                 logger.info("Service added: \(String(describing: result.endpoint))")
                 if let device = makeDevice(from: result) {
                     logger.info("Device found: \(device.name)")
-                    let mutations = registry.recordFound(device)
-                    discoveryPhase = .active(
-                        id: sessionID,
-                        browser: browser,
-                        registry: registry,
-                        reachabilityTask: reachabilityTask
-                    )
+                    let mutations = activeDiscovery.registry.recordFound(device)
+                    discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
             case .removed(let result):
                 logger.info("Service removed: \(String(describing: result.endpoint))")
                 if case let .service(name, _, _, _) = result.endpoint {
-                    let mutations = registry.recordLost(DiscoveryServiceName(name))
-                    discoveryPhase = .active(
-                        id: sessionID,
-                        browser: browser,
-                        registry: registry,
-                        reachabilityTask: reachabilityTask
-                    )
+                    let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(name))
+                    discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
             case .changed(let old, let new, _):
@@ -127,23 +229,13 @@ final class DeviceDiscovery: DeviceDiscovering {
                 if case let .service(oldName, _, _, _) = old.endpoint,
                    case let .service(newName, _, _, _) = new.endpoint,
                    oldName != newName {
-                    let mutations = registry.recordLost(DiscoveryServiceName(oldName))
-                    discoveryPhase = .active(
-                        id: sessionID,
-                        browser: browser,
-                        registry: registry,
-                        reachabilityTask: reachabilityTask
-                    )
+                    let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(oldName))
+                    discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
                 if let device = makeDevice(from: new) {
-                    let mutations = registry.recordFound(device)
-                    discoveryPhase = .active(
-                        id: sessionID,
-                        browser: browser,
-                        registry: registry,
-                        reachabilityTask: reachabilityTask
-                    )
+                    let mutations = activeDiscovery.registry.recordFound(device)
+                    discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
             case .identical:
@@ -167,9 +259,10 @@ final class DeviceDiscovery: DeviceDiscovering {
     }
 
     private func startReachabilityValidation(sessionID: UUID) {
-        guard case .active(let activeSessionID, let browser, let registry, let existingTask) = discoveryPhase,
-              activeSessionID == sessionID else { return }
-        existingTask?.cancel()
+        guard case .active(var activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID,
+              activeDiscovery.browserState == .ready else { return }
+        activeDiscovery.reachabilityTask?.cancel()
         let task = Task { [weak self, sessionID] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -178,13 +271,15 @@ final class DeviceDiscovery: DeviceDiscovering {
                 await self.validateVisibleDevicesReachability(sessionID: sessionID)
             }
         }
-        discoveryPhase = .active(id: sessionID, browser: browser, registry: registry, reachabilityTask: task)
+        activeDiscovery.reachabilityTask = task
+        discoveryPhase = .active(activeDiscovery)
     }
 
     private func validateVisibleDevicesReachability(sessionID: UUID) async {
-        guard case .active(let activeSessionID, _, let registry, _) = discoveryPhase,
-              activeSessionID == sessionID else { return }
-        let visibleDevices = registry.devices
+        guard case .active(let activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID,
+              activeDiscovery.browserState == .ready else { return }
+        let visibleDevices = activeDiscovery.registry.devices
         guard !visibleDevices.isEmpty else { return }
 
         let unreachableServiceNames = await withTaskGroup(of: String?.self) { group in
@@ -203,25 +298,15 @@ final class DeviceDiscovery: DeviceDiscovering {
             return unreachable
         }
 
-        guard case .active(let activeSessionID, let currentBrowser, var currentRegistry, let currentReachabilityTask) = discoveryPhase,
-              activeSessionID == sessionID else {
+        guard case .active(var activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID else {
             return
         }
         for serviceName in unreachableServiceNames {
             logger.info("Evicting unreachable device advertisement: \(serviceName)")
-            let mutations = currentRegistry.recordLost(DiscoveryServiceName(serviceName))
-            discoveryPhase = .active(
-                id: sessionID,
-                browser: currentBrowser,
-                registry: currentRegistry,
-                reachabilityTask: currentReachabilityTask
-            )
+            let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(serviceName))
+            discoveryPhase = .active(activeDiscovery)
             apply(mutations)
         }
-    }
-
-    private func isCurrentSession(_ sessionID: UUID) -> Bool {
-        guard case .active(let activeSessionID, _, _, _) = discoveryPhase else { return false }
-        return activeSessionID == sessionID
     }
 }

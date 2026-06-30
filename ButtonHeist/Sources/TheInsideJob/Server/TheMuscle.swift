@@ -124,7 +124,7 @@ actor TheMuscle {
 
     /// Called when a ping is received from an authenticated client.
     func noteClientActivity(_ clientId: Int) {
-        applySessionEffect(session.noteClientActivity(clientId))
+        applySessionEffects(session.noteClientActivity(clientId))
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -150,8 +150,8 @@ actor TheMuscle {
 
     func handleClientDisconnected(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
-        await applyAdmissionEffect(admission.removeClient(clientId))
-        applySessionEffect(session.removeConnection(clientId))
+        await applyAdmissionEffects(admission.removeClient(clientId))
+        applySessionEffects(session.removeConnection(clientId))
     }
 
     func tearDown() async {
@@ -168,7 +168,7 @@ actor TheMuscle {
         case .admitted(let message):
             return .admitted(message)
         case .handled(let effect):
-            await applyAdmissionEffect(effect)
+            await applyAdmissionEffects(effect)
             return .handled
         case .authenticate(let authentication):
             await completeAuthentication(authentication)
@@ -182,14 +182,14 @@ actor TheMuscle {
             clientId: authentication.clientId
         ) {
         case .accepted(let sessionEffect):
-            applySessionEffect(sessionEffect)
+            applySessionEffects(sessionEffect)
             let effect = admission.completeAuthentication(authentication)
             cancelAuthenticationDeadline(for: authentication.clientId)
-            await applyAdmissionEffect(effect)
+            await applyAdmissionEffects(effect)
             _ = await delivery.clientAuthenticated(authentication.clientId, respond: authentication.respond)
 
         case .rejected(let diagnostic):
-            await applyAdmissionEffect(admission.rejectForSessionLock(
+            await applyAdmissionEffects(admission.rejectForSessionLock(
                 authentication.clientId,
                 diagnostic: diagnostic,
                 respond: authentication.respond
@@ -197,18 +197,53 @@ actor TheMuscle {
         }
     }
 
-    private func applyAdmissionEffect(_ effect: MuscleAdmissionEffect) async {
-        for output in effect.outputs {
-            switch output {
-            case .response(let message, let requestId, let respond):
+    private func applyAdmissionEffects(_ effects: [MuscleAdmissionEffect]) async {
+        for effect in effects {
+            switch effect {
+            case .sendResponse(let message, let requestId, let respond):
                 await sendResponse(message, requestId: requestId, to: .response(respond))
-            case .client(let message, let requestId, let clientId):
+            case .sendClient(let message, let requestId, let clientId):
                 await sendResponse(message, requestId: requestId, to: .client(clientId))
+            case .delayedDisconnect(let clientId):
+                scheduleDelayedDisconnect(clientId)
+            case .log(let event):
+                logAdmissionEvent(event)
             }
         }
+    }
 
-        if let clientId = effect.delayedDisconnectClientId {
-            scheduleDelayedDisconnect(clientId)
+    private func logAdmissionEvent(_ event: MuscleAdmissionLogEvent) {
+        switch event {
+        case .clientAuthenticatedWithToken(let clientId):
+            muscleAuthenticationLogger.info("Client \(clientId) authenticated with token")
+        case .sessionLockRejected(let clientId, let message):
+            muscleAuthenticationLogger.warning("Client \(clientId) rejected - \(message, privacy: .public)")
+        case .rateLimited(let clientId):
+            muscleAuthenticationLogger.warning("Client \(clientId) rate limited, handling message")
+        case .undecodableUnauthenticatedMessage(let clientId):
+            muscleAuthenticationLogger.warning("Client \(clientId) sent unparsable message before authenticating")
+        case .undecodableAuthenticatedMessage(let clientId):
+            muscleAuthenticationLogger.warning("Authenticated client \(clientId) sent unparsable message")
+        case .authenticatedProtocolMessage(let clientId, let wireType):
+            muscleAuthenticationLogger.warning(
+                "Authenticated client \(clientId) sent protocol message \(wireType.rawValue, privacy: .public) after admission"
+            )
+        case .unauthenticatedMessage(let clientId, let message):
+            muscleAuthenticationLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
+        case .authenticationDeadline(let clientId, let deadlineSeconds):
+            muscleAuthenticationLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
+        case .versionMismatch(let clientId, let serverVersion, let clientVersion):
+            muscleAuthenticationLogger.warning(
+                "Client \(clientId) buttonHeistVersion mismatch: server=\(serverVersion), client=\(clientVersion)"
+            )
+        case .missingRegisteredAddress(let clientId):
+            muscleAuthenticationLogger.warning("Client \(clientId) has no registered address, rejecting auth")
+        case .lockedOut(let clientId, let address):
+            muscleAuthenticationLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
+        case .invalidToken(let clientId, let attempts):
+            muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
+        case .lockoutStarted(let address, let attempts):
+            muscleAuthenticationLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
         }
     }
 
@@ -244,7 +279,7 @@ actor TheMuscle {
 
     private func handleAuthenticationDeadline(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
-        await applyAdmissionEffect(admission.authenticationDeadline(
+        await applyAdmissionEffects(admission.authenticationDeadline(
             clientId,
             deadlineSeconds: Self.authDeadlineSeconds
         ))
@@ -258,14 +293,20 @@ actor TheMuscle {
     }
 
     private func releaseSession() async {
-        applySessionEffect(session.release())
+        applySessionEffects(session.release())
     }
 
-    private func applySessionEffect(_ effect: TheMuscleSession.Effect) {
-        for logEvent in effect.logEvents {
-            logSessionEvent(logEvent)
+    private func applySessionEffects(_ effects: [TheMuscleSession.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .log(let event):
+                logSessionEvent(event)
+            case .cancelReleaseTimer:
+                cancelSessionReleaseTimer()
+            case .replaceReleaseTimer(let timeout):
+                replaceSessionReleaseTimer(timeout: timeout)
+            }
         }
-        applySessionReleaseTimerAction(effect.releaseTimerAction)
     }
 
     private func logSessionEvent(_ event: TheMuscleSession.LogEvent) {
@@ -278,17 +319,6 @@ actor TheMuscle {
             muscleLogger.info("Session released")
         case .releaseTimerStarted(let timeout):
             muscleLogger.info("All session connections gone, starting \(timeout)s release timer")
-        }
-    }
-
-    private func applySessionReleaseTimerAction(_ action: TheMuscleSession.ReleaseTimerAction) {
-        switch action {
-        case .none:
-            break
-        case .cancel:
-            cancelSessionReleaseTimer()
-        case .replace(let timeout):
-            replaceSessionReleaseTimer(timeout: timeout)
         }
     }
 

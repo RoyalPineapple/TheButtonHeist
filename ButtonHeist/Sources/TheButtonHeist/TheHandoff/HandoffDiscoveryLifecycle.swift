@@ -14,13 +14,32 @@ final class HandoffDiscoveryLifecycle {
         let discovery: any DeviceDiscovering
     }
 
-    private var discoverySession: DiscoverySession?
+    private enum HandoffDiscoveryPhase {
+        case idle
+        case starting(DiscoverySession)
+        case ready(DiscoverySession, devices: [DiscoveredDevice])
+        case waiting(DiscoverySession, devices: [DiscoveredDevice])
+        case failed(HandoffConnectionError)
+    }
 
-    private(set) var discoveredDevices: [DiscoveredDevice] = []
-    private(set) var isDiscovering = false
+    private var phase: HandoffDiscoveryPhase = .idle
+
+    var discoveredDevices: [DiscoveredDevice] {
+        switch phase {
+        case .ready(_, let devices), .waiting(_, let devices):
+            return devices
+        case .idle, .starting, .failed:
+            return []
+        }
+    }
+
+    var isDiscovering: Bool {
+        if case .ready = phase { return true }
+        return false
+    }
 
     var hasDiscoverySession: Bool {
-        discoverySession != nil
+        currentSession != nil
     }
 
     @discardableResult
@@ -29,14 +48,12 @@ final class HandoffDiscoveryLifecycle {
         onDeviceFound: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void,
         onDeviceLost: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void
     ) -> Bool {
-        guard discoverySession == nil else { return false }
-
-        discoveredDevices.removeAll()
-        isDiscovering = false
+        guard currentSession == nil else { return false }
 
         let sessionID = UUID()
         let activeDiscovery = makeDiscovery()
-        discoverySession = DiscoverySession(id: sessionID, discovery: activeDiscovery)
+        let session = DiscoverySession(id: sessionID, discovery: activeDiscovery)
+        phase = .starting(session)
         activeDiscovery.onEvent = { [weak self, sessionID] event in
             guard let self, self.isCurrentSession(sessionID) else { return }
             self.handle(event, onDeviceFound: onDeviceFound, onDeviceLost: onDeviceLost)
@@ -46,15 +63,24 @@ final class HandoffDiscoveryLifecycle {
     }
 
     func stop() {
-        let activeDiscovery = discoverySession?.discovery
-        discoverySession = nil
-        isDiscovering = false
-        discoveredDevices = []
+        let activeDiscovery = currentSession?.discovery
+        phase = .idle
         activeDiscovery?.stop()
     }
 
+    private var currentSession: DiscoverySession? {
+        switch phase {
+        case .starting(let session),
+             .ready(let session, _),
+             .waiting(let session, _):
+            return session
+        case .idle, .failed:
+            return nil
+        }
+    }
+
     private func isCurrentSession(_ sessionID: UUID) -> Bool {
-        discoverySession?.id == sessionID
+        currentSession?.id == sessionID
     }
 
     private func handle(
@@ -65,15 +91,43 @@ final class HandoffDiscoveryLifecycle {
         switch event {
         case .found(let device):
             discoveryLogger.info("Device found: \(device.name)")
-            discoveredDevices = discoverySession?.discovery.discoveredDevices ?? []
+            replaceDevicesWithCurrentDiscoveryProjection()
             onDeviceFound(device)
         case .lost(let device):
             discoveryLogger.info("Device lost: \(device.name)")
-            discoveredDevices = discoverySession?.discovery.discoveredDevices ?? []
+            replaceDevicesWithCurrentDiscoveryProjection()
             onDeviceLost(device)
         case .stateChanged(let isReady):
             discoveryLogger.info("Discovery state changed: isReady=\(isReady)")
-            isDiscovering = isReady
+            replaceReadiness(isReady)
+        case .failed(let failure):
+            discoveryLogger.error("Discovery failed: \(failure.localizedDescription)")
+            let activeDiscovery = currentSession?.discovery
+            phase = .failed(failure)
+            activeDiscovery?.stop()
+        }
+    }
+
+    private func replaceDevicesWithCurrentDiscoveryProjection() {
+        guard let session = currentSession else { return }
+        let devices = session.discovery.discoveredDevices
+        switch phase {
+        case .ready:
+            phase = .ready(session, devices: devices)
+        case .starting, .waiting:
+            phase = .waiting(session, devices: devices)
+        case .idle, .failed:
+            break
+        }
+    }
+
+    private func replaceReadiness(_ isReady: Bool) {
+        guard let session = currentSession else { return }
+        let devices = session.discovery.discoveredDevices
+        if isReady {
+            phase = .ready(session, devices: devices)
+        } else {
+            phase = .waiting(session, devices: devices)
         }
     }
 }

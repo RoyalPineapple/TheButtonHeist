@@ -41,13 +41,14 @@ import Testing
         }
     }
 
-    @Test func `startup and resume leases share transport setup and callback wiring`() throws {
+    @Test func `startup and resume resources share transport setup and callback wiring`() throws {
         let source = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift"
         )
 
-        #expect(sourceOccurrenceCount("startRuntimeLease(phase: .startup", in: source) == 1)
-        #expect(sourceOccurrenceCount("startRuntimeLease(phase: .resume", in: source) == 1)
+        #expect(sourceOccurrenceCount("startRuntimeResources(", in: source) == 3)
+        #expect(sourceOccurrenceCount("phase: .startup", in: source) == 1)
+        #expect(sourceOccurrenceCount("phase: .resume", in: source) == 1)
         #expect(sourceOccurrenceCount("transportFactory(token, runtimeConfiguration.allowedScopes)", in: source) == 1)
         #expect(sourceOccurrenceCount("installTransportOverflowHandler(transport)", in: source) == 1)
         #expect(sourceOccurrenceCount("await getaway.wireTransport(transport)", in: source) == 1)
@@ -66,9 +67,9 @@ import Testing
 
         #expect(
             observed == [
-                "ButtonHeist/Sources/TheInsideJob/InsideJobAppLifecycle.swift": 2,
-                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeLease.swift": 1,
-                "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift": 3,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobAppLifecycle.swift": 3,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeResources.swift": 1,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift": 4,
             ],
             "Unexpected TheInsideJob serverPhase writes: \(observed)"
         )
@@ -82,11 +83,45 @@ import Testing
 
         #expect(
             observed == [
-                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeLease.swift": 1,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeResources.swift": 1,
                 "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift": 2,
             ],
             "Unexpected TheInsideJob tlsActive writes: \(observed)"
         )
+    }
+
+    @Test func `runtime lifecycle has one phase and no sidecar lease state`() throws {
+        let lifecycleSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/InsideJobLifecycleState.swift"
+        )
+        let jobSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift"
+        )
+        let transportSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift"
+        )
+
+        #expect(lifecycleSource.contains("case running(InsideJobRuntimeResources)"))
+        #expect(lifecycleSource.contains("case suspending(InsideJobSuspension)"))
+        #expect(lifecycleSource.contains("case suspended(InsideJobSuspendedRuntime)"))
+        #expect(lifecycleSource.contains("case resuming(InsideJobResumeAttempt)"))
+        #expect(lifecycleSource.contains("case stopping(InsideJobStopAttempt)"))
+
+        for forbidden in [
+            "InsideJobRuntimeLease",
+            "pendingTransportStopTask",
+            "pendingForegroundResumeTask",
+            "lifecycleObservationActive",
+            "IdleTimerProtection",
+            "releaseTask",
+            "isActive",
+        ] {
+            #expect(!lifecycleSource.contains(forbidden))
+            #expect(!jobSource.contains(forbidden))
+        }
+
+        #expect(!transportSource.contains("func stop() -> Task"))
+        #expect(!transportSource.contains("@discardableResult\n    func stop()"))
     }
 }
 

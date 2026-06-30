@@ -1233,6 +1233,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public let lastObservedSummary: String?
     public let failureReason: String?
 
+    @available(*, unavailable, message: "Use outcome-specific HeistRepeatUntilEvidence factories.")
     public init(
         outcome: HeistPredicateEvidenceOutcome,
         predicate: AccessibilityPredicate,
@@ -1244,6 +1245,20 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil,
         failureReason: String? = nil
     ) {
+        preconditionFailure("Use outcome-specific HeistRepeatUntilEvidence factories.")
+    }
+
+    private init(
+        uncheckedOutcome outcome: HeistPredicateEvidenceOutcome,
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        iterationOrdinal: Int?,
+        expectation: ExpectationResult,
+        actionResult: ActionResult?,
+        lastObservedSummary: String?,
+        failureReason: String?
+    ) {
         self.outcome = outcome
         self.predicate = predicate
         self.timeout = timeout
@@ -1253,6 +1268,258 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         self.actionResult = actionResult
         self.lastObservedSummary = lastObservedSummary
         self.failureReason = failureReason
+    }
+
+    public static func predicateMet(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        expectation: ExpectationResult,
+        actionResult: ActionResult? = nil,
+        lastObservedSummary: String? = nil
+    ) -> HeistRepeatUntilEvidence? {
+        guard expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .matched,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
+            expectation: expectation,
+            actionResult: actionResult,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: nil
+        )
+    }
+
+    public static func continued(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        expectation: ExpectationResult,
+        actionResult: ActionResult? = nil,
+        lastObservedSummary: String? = nil
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .continued,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
+            expectation: expectation,
+            actionResult: actionResult,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: nil
+        )
+    }
+
+    public static func timedOut(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        expectation: ExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .failed,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: nil,
+            expectation: expectation,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public static func bodyFailed(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        expectation: ExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .failed,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: nil,
+            expectation: expectation,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public static func initialObservationUnavailable(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        expectation: ExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .failed,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: 0,
+            iterationOrdinal: nil,
+            expectation: expectation,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public static func failedIteration(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        expectation: ExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .failed,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
+            expectation: expectation,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public static func timeoutHandledByElse(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        expectation: ExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String? = nil
+    ) -> HeistRepeatUntilEvidence? {
+        guard !expectation.met else { return nil }
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .handledElse,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: nil,
+            expectation: expectation,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case outcome
+        case predicate
+        case timeout
+        case iterationCount
+        case iterationOrdinal
+        case expectation
+        case actionResult
+        case lastObservedSummary
+        case failureReason
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until evidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let outcome = try container.decode(HeistPredicateEvidenceOutcome.self, forKey: .outcome)
+        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
+        let timeout = try container.decode(Double.self, forKey: .timeout)
+        let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
+        let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
+        let expectation = try container.decode(ExpectationResult.self, forKey: .expectation)
+        let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
+        let lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
+        try Self.validate(
+            outcome: outcome,
+            iterationOrdinal: iterationOrdinal,
+            expectation: expectation,
+            failureReason: failureReason,
+            codingPath: container.codingPath
+        )
+        self.init(
+            uncheckedOutcome: outcome,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: iterationOrdinal,
+            expectation: expectation,
+            actionResult: actionResult,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(outcome, forKey: .outcome)
+        try container.encode(predicate, forKey: .predicate)
+        try container.encode(timeout, forKey: .timeout)
+        try container.encode(iterationCount, forKey: .iterationCount)
+        try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
+        try container.encode(expectation, forKey: .expectation)
+        try container.encodeIfPresent(actionResult, forKey: .actionResult)
+        try container.encodeIfPresent(lastObservedSummary, forKey: .lastObservedSummary)
+        try container.encodeIfPresent(failureReason, forKey: .failureReason)
+    }
+
+    private static func validate(
+        outcome: HeistPredicateEvidenceOutcome,
+        iterationOrdinal: Int?,
+        expectation: ExpectationResult,
+        failureReason: String?,
+        codingPath: [CodingKey]
+    ) throws {
+        switch outcome {
+        case .matched:
+            guard expectation.met, failureReason == nil else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath + [CodingKeys.outcome],
+                    debugDescription: "matched repeat_until evidence requires a met expectation and no failure reason"
+                ))
+            }
+        case .continued:
+            guard !expectation.met, iterationOrdinal != nil, failureReason == nil else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath + [CodingKeys.outcome],
+                    debugDescription: "continued repeat_until evidence requires an unmet iteration expectation and no failure reason"
+                ))
+            }
+        case .handledElse:
+            guard !expectation.met else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath + [CodingKeys.outcome],
+                    debugDescription: "handled_else repeat_until evidence requires an unmet expectation"
+                ))
+            }
+        case .failed:
+            guard !expectation.met, failureReason != nil else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath + [CodingKeys.outcome],
+                    debugDescription: "failed repeat_until evidence requires an unmet expectation and failure reason"
+                ))
+            }
+        }
     }
 }
 

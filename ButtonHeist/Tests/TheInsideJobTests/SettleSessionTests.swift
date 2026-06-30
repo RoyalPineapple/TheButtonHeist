@@ -41,6 +41,26 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
+    private func recordedObservation(
+        _ screen: Screen,
+        ledger: inout SettleObservationLedger
+    ) -> SettleRecordedObservation {
+        ledger.record(screen)
+    }
+
+    private func reduceObservation(
+        _ screen: Screen,
+        elapsedMs: Int,
+        reducer: SettleLoopReducer,
+        ledger: inout SettleObservationLedger,
+        state: inout SettleLoopState
+    ) -> SettleLoopDecision {
+        reducer.reduce(
+            .observation(recordedObservation(screen, ledger: &ledger), elapsedMs: elapsedMs),
+            state: &state
+        )
+    }
+
     /// Drives the loop with scripted parse results. The first script entry
     /// is consumed by the synchronous baseline-seed parse; subsequent
     /// entries feed the post-sleep parses. The last entry is repeated
@@ -138,6 +158,178 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
+    // MARK: - Reducer
+
+    func testReducerSettlesFixedCadenceAfterRequiredConsecutiveCycles() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .consecutiveCycles(required: 2),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, reducer: reducer, ledger: &ledger, state: &state))
+        let decision = reduceObservation(stable, elapsedMs: 2, reducer: reducer, ledger: &ledger, state: &state)
+
+        guard case .settled(let observation, let timeMs) = decision else {
+            return XCTFail("Expected settled decision, got \(decision)")
+        }
+        XCTAssertEqual(timeMs, 2)
+        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testReducerSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .quietWindow(milliseconds: 30),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 20, reducer: reducer, ledger: &ledger, state: &state))
+        let decision = reduceObservation(stable, elapsedMs: 30, reducer: reducer, ledger: &ledger, state: &state)
+
+        guard case .settled(let observation, let timeMs) = decision else {
+            return XCTFail("Expected settled decision, got \(decision)")
+        }
+        XCTAssertEqual(timeMs, 30)
+        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testReducerFingerprintChangeResetsStability() {
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
+        ])
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .consecutiveCycles(required: 2),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(loading, elapsedMs: 1, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 2, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduceObservation(ready, elapsedMs: 3, reducer: reducer, ledger: &ledger, state: &state))
+        let decision = reduceObservation(ready, elapsedMs: 4, reducer: reducer, ledger: &ledger, state: &state)
+
+        guard case .settled(let observation, let timeMs) = decision else {
+            return XCTFail("Expected settled decision after post-change stability, got \(decision)")
+        }
+        XCTAssertEqual(timeMs, 4)
+        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testReducerTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
+        let stale = makeParseResult([
+            makeElement(label: "Stale", traits: .staticText),
+        ])
+        let baseline = Self.tripwireSignal(topmostVC: nil)
+        let changedObject = NSObject()
+        let changed = Self.tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .consecutiveCycles(required: 1),
+            tripwireBaseline: baseline
+        )
+
+        XCTAssertContinue(reduceObservation(stale, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reducer.reduce(.tripwireSignal(changed), state: &state))
+        let outcome = SettleSession.outcome(
+            for: reducer.reduce(.timeout(elapsedMs: 10), state: &state),
+            state: state
+        )
+
+        XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 10))
+        XCTAssertNil(outcome?.finalScreen)
+        XCTAssertEqual(outcome?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
+        _ = changedObject
+    }
+
+    func testReducerCancellationDecisionProjectsCancelledOutcome() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .consecutiveCycles(required: 2),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+
+        let outcome = SettleSession.outcome(
+            for: reducer.reduce(.yieldFailed(.cancellation, elapsedMs: 7), state: &state),
+            state: state
+        )
+
+        XCTAssertEqual(outcome?.outcome, .cancelled(timeMs: 7))
+        XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testReducerTimeoutDecisionProjectsTimedOutOutcome() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .quietWindow(milliseconds: 30),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+
+        let outcome = SettleSession.outcome(
+            for: reducer.reduce(.timeout(elapsedMs: 99), state: &state),
+            state: state
+        )
+
+        XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 99))
+        XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testReducerNonCancellationYieldErrorProjectsTimedOutOutcome() {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .quietWindow(milliseconds: 30),
+            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        )
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+
+        let decision = reducer.reduce(.yieldFailed(.error, elapsedMs: 11), state: &state)
+        guard case .yieldFailed(let timeMs) = decision else {
+            return XCTFail("Expected yieldFailed decision, got \(decision)")
+        }
+        XCTAssertEqual(timeMs, 11)
+        XCTAssertEqual(SettleSession.outcome(for: decision, state: state)?.outcome, .timedOut(timeMs: 11))
+    }
+
+    private func XCTAssertContinue(
+        _ decision: SettleLoopDecision,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case .continuePolling = decision else {
+            return XCTFail("Expected continuePolling, got \(decision)", file: file, line: line)
+        }
+    }
+
     // MARK: - Stable Settle
 
     func testSemanticQuietSettleUsesQuietWindowInsteadOfFixedCycles() async {
@@ -202,7 +394,7 @@ final class SettleSessionTests: XCTestCase {
             baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
         )
 
-        XCTAssertEqual(outcome.outcome, .settled(timeMs: 40))
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
         XCTAssertEqual(outcome.events, [
             .tripwireSignalChanged(
                 from: Self.tripwireSignal(topmostVC: nil),

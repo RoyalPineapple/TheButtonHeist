@@ -753,8 +753,8 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        cycles.beginCycle()
-        cycles.finishCycle(didObserve: true, scope: .discovery)
+        let discoveryCycle = cycles.beginCycle(scope: .discovery)
+        cycles.finishCycle(token: discoveryCycle, didObserve: true)
         await visibleWaiter.value
         XCTAssertEqual(cycles.waiterCount, 0)
 
@@ -766,12 +766,12 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        cycles.beginCycle()
-        cycles.finishCycle(didObserve: true, scope: .visible)
+        let visibleCycle = cycles.beginCycle(scope: .visible)
+        cycles.finishCycle(token: visibleCycle, didObserve: true)
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        cycles.beginCycle()
-        cycles.finishCycle(didObserve: true, scope: .discovery)
+        let fulfillingDiscoveryCycle = cycles.beginCycle(scope: .discovery)
+        cycles.finishCycle(token: fulfillingDiscoveryCycle, didObserve: true)
         await discoveryWaiter.value
         XCTAssertEqual(cycles.waiterCount, 0)
     }

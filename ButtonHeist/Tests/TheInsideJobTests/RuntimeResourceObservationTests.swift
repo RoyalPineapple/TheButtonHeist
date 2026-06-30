@@ -7,112 +7,116 @@ import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
-final class RuntimeLeaseObservationTests: XCTestCase {
+final class RuntimeResourceObservationTests: XCTestCase {
 
     private var job: TheInsideJob!
-    private var lease: InsideJobRuntimeLease!
+    private var resources: TheInsideJob.InsideJobRuntimeResources!
     private var originalIdleTimerDisabled = false
 
     override func setUp() async throws {
         try await super.setUp()
         originalIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
-        job = TheInsideJob(token: "runtime-lease-test-token")
-        lease = InsideJobRuntimeLease(
-            transport: ServerTransport(),
+        job = TheInsideJob(token: "runtime-resource-test-token")
+        resources = TheInsideJob.InsideJobRuntimeResources(
+            transport: ServerTransport(token: "runtime-resource-test-token"),
             actualPort: 0,
-            bonjourServiceName: nil
+            bonjourServiceName: nil,
+            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
         )
     }
 
     override func tearDown() async throws {
-        if let lease, let job {
-            await lease.release(from: job, policy: .stop)?.value
+        if let job {
+            await job.stop()
         }
         job = nil
-        lease = nil
+        resources = nil
         UIApplication.shared.isIdleTimerDisabled = originalIdleTimerDisabled
         try await super.tearDown()
     }
 
-    func testLeaseActivationIsIdempotent() {
+    func testRuntimeActivationIsIdempotent() {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.lifecycleObservationActive)
+        XCTAssertFalse(job.lifecycleObservationIsInstalled)
 
-        lease.activate(on: job)
-
-        XCTAssertTrue(job.brains.semanticObservationIsActive)
-        XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
-        XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.lifecycleObservationActive)
-        assertIdleTimerProtection(on: job, engagedWithBaseline: idleTimerBaseline)
-
-        lease.activate(on: job)
+        job.activateRuntime(resources)
 
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.lifecycleObservationActive)
-        assertIdleTimerProtection(on: job, engagedWithBaseline: idleTimerBaseline)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
+        assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
+
+        job.activateRuntime(resources)
+
+        XCTAssertTrue(job.brains.semanticObservationIsActive)
+        XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertTrue(job.tripwire.isPulseRunning)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
+        assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
     }
 
-    func testSuspendReleaseStopsRuntimeOwnedObservationButPreservesLifecycleObservation() async {
+    func testSuspendStopsRuntimeOwnedObservationButPreservesLifecycleObservation() async {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
-        lease.activate(on: job)
+        job.activateRuntime(resources)
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.lifecycleObservationActive)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
 
-        await lease.release(from: job, policy: .suspend)?.value
+        await job.suspend()
 
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertTrue(job.lifecycleObservationActive)
-        assertIdleTimerProtection(on: job, engagedWithBaseline: idleTimerBaseline)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
+        assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
     }
 
-    func testStopReleaseClearsLifecycleObservationAndIdleTimerBaseline() async {
+    func testStopClearsLifecycleObservationAndIdleTimerBaseline() async {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
-        lease.activate(on: job)
-        XCTAssertTrue(job.lifecycleObservationActive)
-        assertIdleTimerProtection(on: job, engagedWithBaseline: idleTimerBaseline)
+        job.activateRuntime(resources)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
+        assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
 
-        await lease.release(from: job, policy: .stop)?.value
+        await job.stop()
 
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
-        XCTAssertFalse(job.lifecycleObservationActive)
-        assertIdleTimerProtectionIsUnmodified(on: job)
+        XCTAssertFalse(job.lifecycleObservationIsInstalled)
+        assertIdleTimerProtectionIsCleared(on: job)
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
     }
 
-    func testSuspendReleasePreservesLatestSettleFailureDiagnostic() async {
-        lease.activate(on: job)
+    func testSuspendResourceReleasePreservesLatestSettleFailureDiagnostic() async {
+        job.activateRuntime(resources)
         let diagnostic = await recordSettleFailureDiagnostic()
 
-        await lease.release(from: job, policy: .suspend)?.value
+        job.releaseRuntimeOwnedResources(
+            policy: .suspend,
+            idleTimerBaseline: resources.idleTimerBaseline
+        )
 
         XCTAssertEqual(job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
-        XCTAssertTrue(job.lifecycleObservationActive)
+        XCTAssertTrue(job.lifecycleObservationIsInstalled)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
     }
 
-    func testStopReleasePreservesLatestSettleFailureDiagnostic() async {
-        lease.activate(on: job)
+    func testStopPreservesLatestSettleFailureDiagnostic() async {
+        job.activateRuntime(resources)
         let diagnostic = await recordSettleFailureDiagnostic()
 
-        await lease.release(from: job, policy: .stop)?.value
+        await job.stop()
 
         XCTAssertEqual(job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
-        XCTAssertFalse(job.lifecycleObservationActive)
+        XCTAssertFalse(job.lifecycleObservationIsInstalled)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
@@ -134,7 +138,7 @@ final class RuntimeLeaseObservationTests: XCTestCase {
             events: [],
             finalScreen: Screen.makeForTests(),
             elementsByKey: [:],
-            instabilityDescription: "runtime lease diagnostic"
+            instabilityDescription: "runtime resource diagnostic"
         )
         _ = await job.brains.stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
@@ -144,7 +148,7 @@ final class RuntimeLeaseObservationTests: XCTestCase {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }
-        XCTAssertTrue(diagnostic.contains("runtime lease diagnostic"))
+        XCTAssertTrue(diagnostic.contains("runtime resource diagnostic"))
         return diagnostic
     }
 }
@@ -152,30 +156,21 @@ final class RuntimeLeaseObservationTests: XCTestCase {
 @MainActor
 private func assertIdleTimerProtection(
     on job: TheInsideJob,
-    engagedWithBaseline expectedBaseline: Bool,
+    retainedBaseline expectedBaseline: Bool,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    switch job.idleTimerProtection {
-    case .engaged(let baseline):
-        XCTAssertEqual(baseline, expectedBaseline, file: file, line: line)
-    case .unmodified:
-        XCTFail("Expected idle timer protection to preserve baseline", file: file, line: line)
-    }
+    XCTAssertEqual(job.retainedIdleTimerBaseline, expectedBaseline, file: file, line: line)
+    XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, file: file, line: line)
 }
 
 @MainActor
-private func assertIdleTimerProtectionIsUnmodified(
+private func assertIdleTimerProtectionIsCleared(
     on job: TheInsideJob,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    switch job.idleTimerProtection {
-    case .unmodified:
-        break
-    case .engaged:
-        XCTFail("Expected idle timer protection baseline to be cleared", file: file, line: line)
-    }
+    XCTAssertNil(job.retainedIdleTimerBaseline, file: file, line: line)
 }
 
 #endif // canImport(UIKit)
