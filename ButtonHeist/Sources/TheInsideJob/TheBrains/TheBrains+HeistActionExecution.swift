@@ -131,7 +131,8 @@ extension TheBrains {
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: receipt.actionResult,
-                expectation: receipt.expectation
+                expectation: receipt.expectation,
+                warning: actionWarning(command: command, actionResult: actionResult)
             ),
             failure: failure
         )
@@ -148,7 +149,7 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: HeistActionEvidence(command: command, actionResult: actionResult),
+            evidence: actionEvidence(command: command, actionResult: actionResult),
             failure: failure
         )
     }
@@ -308,7 +309,8 @@ extension TheBrains {
                 command: command,
                 actionResult: actionResult,
                 expectationActionResult: expectationActionResult,
-                expectation: expectation
+                expectation: expectation,
+                warning: actionWarning(command: command, actionResult: actionResult)
             ),
             failure: HeistFailureDetail(
                 category: .expectation,
@@ -317,6 +319,54 @@ extension TheBrains {
                 expected: wait.predicate.description
             )
         )
+    }
+
+    private func actionEvidence(
+        command: HeistActionCommand,
+        actionResult: ActionResult
+    ) -> HeistActionEvidence {
+        HeistActionEvidence(
+            command: command,
+            actionResult: actionResult,
+            warning: actionWarning(command: command, actionResult: actionResult)
+        )
+    }
+
+    private func actionWarning(
+        command: HeistActionCommand,
+        actionResult: ActionResult
+    ) -> HeistActionWarning? {
+        guard case .activate = command,
+              actionResult.success,
+              let subject = actionResult.subjectEvidence,
+              !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits)
+        else { return nil }
+
+        return .activationWeakAffordanceEvidence(
+            evidence: activationAffordanceEvidenceDescription(for: subject.element)
+        )
+    }
+
+    private func activationAffordanceEvidenceDescription(for element: HeistElement) -> String {
+        var parts: [String] = []
+        if let label = element.label, !label.isEmpty {
+            parts.append("label=\(quotedEvidence(label))")
+        }
+        if let identifier = element.identifier, !identifier.isEmpty {
+            parts.append("identifier=\(quotedEvidence(identifier))")
+        }
+        let traits = AccessibilityPolicy.orderedMatcherTraits(element.traits).map(\.rawValue)
+        parts.append("traits=[\(traits.joined(separator: ", "))]")
+        let actions = element.actions.map(\.description).sorted()
+        parts.append("actions=[\(actions.joined(separator: ", "))]")
+        return parts.joined(separator: " ")
+    }
+
+    private func quotedEvidence(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {

@@ -111,13 +111,12 @@ extension TheBrains {
         let result = actions.executeGetPasteboard()
         var builder = ActionResultBuilder(method: result.method)
         builder.message = result.message
-        if result.success {
-            return builder.success(payload: result.payload)
+        switch result.outcome {
+        case .success(let success):
+            return builder.success(payload: success.payload)
+        case .failure(let failure):
+            return builder.failure(errorKind: Self.actionErrorKind(for: failure.kind))
         }
-        return builder.failure(
-            errorKind: Self.actionErrorKind(for: result) ?? .actionFailed,
-            payload: result.payload
-        )
     }
 
     // MARK: - Interaction Pipeline
@@ -147,23 +146,33 @@ extension TheBrains {
         let interactionStart = CFAbsoluteTimeGetCurrent()
         let result = await interaction()
         let interactionMs = elapsedMilliseconds(since: interactionStart)
+        let postActionOutcome: PostActionObservation.ActionOutcome
+        switch result.outcome {
+        case .success(let success):
+            postActionOutcome = .success(.init(
+                payload: success.payload,
+                afterStatePayload: afterStatePayload.map { payload in
+                    { afterState in
+                        payload(PostActionPayloadContext(
+                            afterState: afterState,
+                            resolvedElementId: success.resolvedElementId
+                        ))
+                    }
+                },
+                subjectEvidence: success.subjectEvidence,
+                activationTrace: success.activationTrace
+            ))
+        case .failure(let failure):
+            postActionOutcome = .failure(.init(
+                errorKind: Self.actionErrorKind(for: failure.kind),
+                activationTrace: failure.activationTrace
+            ))
+        }
 
         let actionResult = await interactionObservation.finishAfterAction(
-            success: result.success,
             method: result.method,
+            outcome: postActionOutcome,
             message: result.message,
-            payload: result.payload,
-            afterStatePayload: afterStatePayload.map { payload in
-                { afterState in
-                    payload(PostActionPayloadContext(
-                        afterState: afterState,
-                        resolvedElementId: result.resolvedElementId
-                    ))
-                }
-            },
-            errorKind: Self.actionErrorKind(for: result),
-            subjectEvidence: result.subjectEvidence,
-            activationTrace: result.activationTrace,
             before: before,
             postActionCommitScope: postActionCommitScope
         )
@@ -196,8 +205,18 @@ extension TheBrains {
     }
 
     static func actionErrorKind(for result: TheSafecracker.InteractionResult) -> ErrorKind? {
-        guard !result.success else { return nil }
-        switch result.failureKind {
+        switch result.outcome {
+        case .success:
+            return nil
+        case .failure(let failure):
+            return actionErrorKind(for: failure.kind)
+        }
+    }
+
+    static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {
+        switch failureKind {
+        case .actionFailed:
+            return .actionFailed
         case .treeUnavailable:
             return .accessibilityTreeUnavailable
         case .timeout:
@@ -206,8 +225,6 @@ extension TheBrains {
             return .validationError
         case .targetUnavailable:
             return .elementNotFound
-        case .none:
-            return .actionFailed
         }
     }
 

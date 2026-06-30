@@ -11,9 +11,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(
+        try appInteractionDispatch(
             SpatialActionCommand.oneFingerTap.command,
-            .mechanicalTap(try fence.decodeTapTarget(arguments))
+            .mechanicalTap(try fence.decodeTapTarget(arguments)),
+            expectationPayload: expectationPayload
         )
     }
 
@@ -23,9 +24,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(
+        try appInteractionDispatch(
             SpatialActionCommand.longPress.command,
-            .mechanicalLongPress(try fence.decodeLongPressTarget(arguments))
+            .mechanicalLongPress(try fence.decodeLongPressTarget(arguments)),
+            expectationPayload: expectationPayload
         )
     }
 
@@ -35,9 +37,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(
+        try appInteractionDispatch(
             SpatialActionCommand.swipe.command,
-            .mechanicalSwipe(try fence.decodeSwipeTarget(arguments))
+            .mechanicalSwipe(try fence.decodeSwipeTarget(arguments)),
+            expectationPayload: expectationPayload
         )
     }
 
@@ -47,9 +50,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(
+        try appInteractionDispatch(
             SpatialActionCommand.drag.command,
-            .mechanicalDrag(try fence.decodeDragTarget(arguments))
+            .mechanicalDrag(try fence.decodeDragTarget(arguments)),
+            expectationPayload: expectationPayload
         )
     }
 }

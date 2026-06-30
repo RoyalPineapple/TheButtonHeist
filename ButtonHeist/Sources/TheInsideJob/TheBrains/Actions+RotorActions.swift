@@ -187,7 +187,7 @@ extension Actions {
         element: TheStash.ScreenElement,
         liveObject: NSObject,
         suggestion: String,
-        failureKind: TheSafecracker.FailureKind? = nil
+        failureKind: TheSafecracker.FailureKind = .actionFailed
     ) -> TheSafecracker.InteractionResult {
         .failure(
             .rotor,

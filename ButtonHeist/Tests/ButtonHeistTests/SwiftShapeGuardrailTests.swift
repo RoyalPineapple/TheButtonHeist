@@ -90,6 +90,63 @@ import Testing
         )
     }
 
+    @Test func `handoff receive callbacks collapse into device receive events`() throws {
+        let connectionSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnection.swift"
+        )
+        #expect(connectionSource.contains("case received(DeviceReceiveEvent, connection: NWConnection)"))
+        #expect(connectionSource.matches(
+            of: #"\bcase\s+received\s*\(\s*content\s*:\s*Data\?"#,
+            options: [.dotMatchesLineSeparators]
+        ).isEmpty)
+
+        let receivingSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnectionReceiving.swift"
+        )
+        #expect(receivingSource.contains("enum DeviceReceiveEvent"))
+        #expect(receivingSource.contains("func handleReceive(_ event: DeviceReceiveEvent, connection: NWConnection)"))
+
+        let rawReceiveHandlerMatches = receivingSource.matches(
+            of: #"\bfunc\s+handleReceive\s*\(\s*content\s*:\s*Data\?\s*,\s*isComplete\s*:\s*Bool\s*,\s*error\s*:\s*NWError\?"#,
+            options: [.dotMatchesLineSeparators]
+        )
+        #expect(
+            rawReceiveHandlerMatches.isEmpty,
+            """
+            DeviceConnection receive handling should accept DeviceReceiveEvent, not independent optional callback state:
+            \(rawReceiveHandlerMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    @Test func `storage cleanup results expose only outcome shaped construction`() throws {
+        let storageCleanupSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/Storage/StorageCleanup.swift"
+        )
+        #expect(storageCleanupSource.contains("private enum Outcome"))
+        #expect(storageCleanupSource.contains("private init(operation: StorageCleanupOperation, path: String?, outcome: Outcome)"))
+
+        let root = repositoryRoot()
+        let guardedFiles = try swiftFiles(
+            in: root.appendingPathComponent("ButtonHeist", isDirectory: true)
+        ).filter {
+            repositoryRelativePath($0, root: root) != "ButtonHeist/Sources/TheButtonHeist/Storage/StorageCleanup.swift"
+        }
+        let directInitializerMatches = try sourceMatches(
+            in: guardedFiles,
+            root: root,
+            pattern: #"StorageCleanupResult\s*\(\s*operation\s*:"#
+        )
+
+        #expect(
+            directInitializerMatches.isEmpty,
+            """
+            StorageCleanupResult should be constructed through success/failure factories outside StorageCleanup.swift:
+            \(directInitializerMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
     @Test func `public action payload projections explicitly surface screenshot and heist execution data`() throws {
         let actionProjectionSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/ActionProjection.swift"
@@ -117,11 +174,48 @@ import Testing
         #expect(!actionJSONSource.matchesCaseBody(#"screenshot"#, containing: #"break"#))
         #expect(!actionJSONSource.matchesCaseBody(#"heistExecution"#, containing: #"break"#))
     }
+
+    @Test func `the fence projections model mutually exclusive state with enums`() throws {
+        let deltaProjectionSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift"
+        )
+        #expect(deltaProjectionSource.contains("enum DeltaProjection: Sendable"))
+        #expect(deltaProjectionSource.contains("case elementsChanged(DeltaElementsChangedProjection)"))
+        #expect(deltaProjectionSource.contains("case screenChanged(DeltaScreenChangedProjection)"))
+        #expect(!deltaProjectionSource.contains("struct DeltaProjection: Sendable"))
+        #expect(deltaProjectionSource.matches(of: #"(?m)^\s*let\s+kind\s*:\s*DeltaProjectionKind\b"#).isEmpty)
+        #expect(deltaProjectionSource.matches(of: #"(?m)^\s*let\s+edits\s*:\s*DeltaEditsProjection[?]"#).isEmpty)
+        #expect(deltaProjectionSource.matches(of: #"(?m)^\s*let\s+screen\s*:\s*DeltaScreenProjection[?]"#).isEmpty)
+
+        #expect(deltaProjectionSource.contains("enum ScreenshotProjectionStorage: Sendable"))
+        #expect(deltaProjectionSource.contains("case artifact(path: String)"))
+        #expect(deltaProjectionSource.contains("case inlinePNG(String)"))
+        #expect(deltaProjectionSource.matches(of: #"(?m)^\s*let\s+pngData\s*:\s*String[?]"#).isEmpty)
+        #expect(deltaProjectionSource.matches(of: #"(?m)^\s*let\s+path\s*:\s*String[?]"#).isEmpty)
+
+        let responseModelSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponseModels.swift"
+        )
+        #expect(responseModelSource.contains("public enum SessionConnectionState: Sendable, Equatable"))
+        #expect(responseModelSource.contains("public let state: SessionConnectionState"))
+        #expect(responseModelSource.matches(of: #"(?m)^\s*public\s+let\s+connected\s*:\s*Bool\b"#).isEmpty)
+        #expect(responseModelSource.matches(of: #"(?m)^\s*public\s+let\s+phase\s*:\s*SessionConnectionPhase\b"#).isEmpty)
+
+        let fenceSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence.swift"
+        )
+        #expect(fenceSource.contains("let state: SessionConnectionState"))
+        #expect(fenceSource.matches(of: #"(?m)^\s*let\s+connected\s*:\s*Bool\b"#).isEmpty)
+        #expect(fenceSource.matches(of: #"(?m)^\s*let\s+phase\s*:\s*SessionConnectionPhase\b"#).isEmpty)
+    }
 }
 
 private extension String {
-    func matches(of pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+    func matches(
+        of pattern: String,
+        options: NSRegularExpression.Options = []
+    ) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
         let fullRange = NSRange(startIndex..<endIndex, in: self)
         return regex.matches(in: self, range: fullRange).compactMap { match in
             Range(match.range, in: self).map { String(self[$0]) }

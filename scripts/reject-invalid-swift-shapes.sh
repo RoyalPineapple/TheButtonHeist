@@ -464,6 +464,48 @@ transport_send_action_failed_matches="$(
 )"
 report_matches "typed transport send failure flattened to request.action_failed" "$transport_send_action_failed_matches"
 
+raw_handoff_receive_event_matches="$(
+  git_grep \
+    '\bcase[[:space:]]+received[[:space:]]*\([[:space:]]*content[[:space:]]*:' \
+    ButtonHeist/Sources/TheButtonHeist/TheHandoff
+)"
+report_matches "raw tuple DeviceConnection receive event" "$raw_handoff_receive_event_matches"
+
+raw_handoff_receive_handler_matches="$(
+  for file in ButtonHeist/Sources/TheButtonHeist/TheHandoff/*.swift; do
+    [[ -f "$file" ]] || continue
+    perl -0ne 'while (/\bfunc\s+handleReceive\s*\(\s*content\s*:\s*Data\?\s*,\s*isComplete\s*:\s*Bool\s*,\s*error\s*:\s*NWError\?/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$file"
+  done
+)"
+report_matches "raw tuple DeviceConnection receive handler" "$raw_handoff_receive_handler_matches"
+
+STORAGE_CLEANUP_RESULT_INITIALIZER_ALLOWED_PATHS=(
+  '^ButtonHeist/Sources/TheButtonHeist/Storage/StorageCleanup\.swift$'
+)
+storage_cleanup_result_initializer_matches="$(git_grep '\bStorageCleanupResult[[:space:]]*\([[:space:]]*operation[[:space:]]*:' "${EXISTING_PATHS[@]}")"
+storage_cleanup_result_initializer_matches="$(
+  filter_allowed_paths \
+    "$storage_cleanup_result_initializer_matches" \
+    "${STORAGE_CLEANUP_RESULT_INITIALIZER_ALLOWED_PATHS[@]}"
+)"
+report_matches "direct StorageCleanupResult outcome initializer outside StorageCleanup.swift" "$storage_cleanup_result_initializer_matches"
+
+DOCTOR_DEMO_GENERATED_SWIFT_PATHS=(
+  scripts/heist-doctor-demo.sh
+)
+EXISTING_DOCTOR_DEMO_GENERATED_SWIFT_PATHS=()
+for path in "${DOCTOR_DEMO_GENERATED_SWIFT_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_DOCTOR_DEMO_GENERATED_SWIFT_PATHS+=("$path")
+  fi
+done
+doctor_demo_raw_receipt_initializer_matches="$(
+  git_grep \
+    '\b(ActionResult[[:space:]]*\([[:space:]]*success[[:space:]]*:|HeistExecutionResult[[:space:]]*\([[:space:]]*steps[[:space:]]*:|HeistExecutionStepResult[[:space:]]*\([[:space:]]*path[[:space:]]*:)' \
+    "${EXISTING_DOCTOR_DEMO_GENERATED_SWIFT_PATHS[@]}"
+)"
+report_matches "doctor demo generated Swift bypasses receipt factories" "$doctor_demo_raw_receipt_initializer_matches"
+
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'
 

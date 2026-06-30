@@ -169,36 +169,60 @@ struct DoctorDemoFixture {
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
             ?? AccessibilityTrace(first: before)
-        let step = HeistExecutionStepResult(
-            path: "$.body[0]",
-            kind: .action,
-            status: status,
-            durationMs: 1,
-            intent: .action(command: "activate", target: target.description),
-            evidence: .action(HeistActionEvidence(
-                command: .activate(.target(target)),
-                actionResult: ActionResult(
-                    success: actionSucceeded,
-                    method: .activate,
-                    message: actionSucceeded ? nil : "No element matching \(target)",
-                    errorKind: actionSucceeded ? nil : .elementNotFound,
-                    accessibilityTrace: trace
-                )
-            )),
-            failure: status == .failed
-                ? HeistFailureDetail(
+        let actionResult = actionSucceeded
+            ? ActionResult.success(
+                method: .activate,
+                accessibilityTrace: trace
+            )
+            : ActionResult.failure(
+                method: .activate,
+                errorKind: .elementNotFound,
+                message: "No element matching \(target)",
+                accessibilityTrace: trace
+            )
+        let evidence = HeistStepEvidence.action(HeistActionEvidence(
+            command: .activate(.target(target)),
+            actionResult: actionResult
+        ))
+        let intent = HeistStepIntent.action(command: "activate", target: target.description)
+        let step: HeistExecutionStepResult
+        switch status {
+        case .passed:
+            step = .passed(
+                path: "$.body[0]",
+                kind: .action,
+                durationMs: 1,
+                intent: intent,
+                evidence: evidence
+            )
+        case .failed:
+            step = .failed(
+                path: "$.body[0]",
+                kind: .action,
+                durationMs: 1,
+                intent: intent,
+                evidence: evidence,
+                failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action dispatch succeeds",
                     observed: "No element matching \(target)",
                     expected: target.description
                 )
-                : nil
-        )
-        return HeistExecutionResult(
-            steps: [step],
-            durationMs: 1,
-            abortedAtPath: status == .failed ? "$.body[0]" : nil
-        )
+            )
+        case .skipped:
+            step = .skipped(
+                path: "$.body[0]",
+                kind: .action,
+                intent: intent
+            )
+        }
+
+        switch status {
+        case .failed:
+            return .failed(steps: [step], durationMs: 1, abortedAtPath: "$.body[0]")
+        case .passed, .skipped:
+            return .passed(steps: [step], durationMs: 1)
+        }
     }
 
     private static func menuInterface(primaryAction: String) -> Interface {

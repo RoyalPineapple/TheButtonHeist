@@ -50,9 +50,14 @@ struct VisibleSemanticObservationEvidence {
 }
 
 struct PostActionSettleObservation {
+    enum Result {
+        case committed(SettledSemanticObservationEvent)
+        case diagnostic(Screen)
+        case unavailable
+    }
+
     let settle: SettleSession.Outcome
-    let event: SettledSemanticObservationEvent?
-    let diagnosticScreen: Screen?
+    let result: Result
 }
 
 private struct SemanticObservationFulfillmentState {
@@ -383,8 +388,7 @@ final class SemanticObservationStream {
                     finalScreen: nil,
                     elementsByKey: [:]
                 ),
-                event: nil,
-                diagnosticScreen: nil
+                result: .unavailable
             )
         }
         let outcome: SettleSession.Outcome
@@ -403,13 +407,13 @@ final class SemanticObservationStream {
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
-            return PostActionSettleObservation(settle: outcome, event: nil, diagnosticScreen: nil)
+            return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(nil)
-            return PostActionSettleObservation(settle: outcome, event: nil, diagnosticScreen: nil)
+            return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
             let event: SettledSemanticObservationEvent
@@ -419,15 +423,14 @@ final class SemanticObservationStream {
             case .discovery:
                 event = commitSettledDiscoveryObservation(stash.settledSemanticScreen.merging(finalScreen))
             }
-            return PostActionSettleObservation(settle: outcome, event: event, diagnosticScreen: nil)
+            return PostActionSettleObservation(settle: outcome, result: .committed(event))
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         stash.recordFailedSettleDiagnosticEvidence(finalScreen)
         return PostActionSettleObservation(
             settle: outcome,
-            event: nil,
-            diagnosticScreen: stash.latestFailedSettleDiagnosticEvidence
+            result: stash.latestFailedSettleDiagnosticEvidence.map { .diagnostic($0) } ?? .unavailable
         )
     }
 

@@ -331,7 +331,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     // MARK: - Init
 
-    package static func success(
+    public static func success(
         method: ActionMethod,
         message: String? = nil,
         payload: ResultPayload? = nil,
@@ -356,7 +356,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         )
     }
 
-    package static func failure(
+    public static func failure(
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
@@ -382,7 +382,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         )
     }
 
-    public init(
+    package init(
         success: Bool,
         method: ActionMethod,
         message: String? = nil,

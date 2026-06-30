@@ -1,10 +1,31 @@
 import Foundation
 
+struct HandoffAuthToken: Sendable, Equatable {
+    let rawValue: String
+
+    init?(_ token: String?) {
+        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        self.rawValue = token
+    }
+}
+
 /// Client-side admission protocol: respond to server handshake/auth messages
 /// and name terminal admission failures.
 struct HandoffAdmission {
-    var token: String?
+    private var authToken: HandoffAuthToken?
     var driverId: String?
+
+    var token: String? {
+        get { authToken?.rawValue }
+        set { authToken = HandoffAuthToken(newValue) }
+    }
+
+    init(token: String? = nil, driverId: String? = nil) {
+        self.authToken = HandoffAuthToken(token)
+        self.driverId = driverId
+    }
 
     var effectiveDriverId: String {
         HandoffDriverIdentity.effectiveDriverId(explicit: driverId)
@@ -15,11 +36,11 @@ struct HandoffAdmission {
         case .serverHello:
             return .send(.clientHello)
         case .authRequired:
-            guard let token = validToken(token) else {
+            guard let authToken else {
                 return .terminalFailure(.disconnected(.missingToken))
             }
             return .send(.authenticate(AuthenticatePayload(
-                token: token,
+                token: authToken.rawValue,
                 driverId: effectiveDriverId
             )))
         case .sessionLocked(let payload):
@@ -42,13 +63,6 @@ struct HandoffAdmission {
         case .info, .interface, .actionResult, .screen, .status, .pong:
             return nil
         }
-    }
-
-    private func validToken(_ token: String?) -> String? {
-        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return token
     }
 }
 

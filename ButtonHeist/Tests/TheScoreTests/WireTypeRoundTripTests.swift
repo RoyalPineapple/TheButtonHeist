@@ -809,29 +809,28 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
         let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Save"))))
-        let result = HeistExecutionResult(
+        let failure = HeistFailureDetail(
+            category: .targetResolution,
+            contract: "action dispatch succeeds",
+            observed: "No element matching label \"Save\"",
+            expected: "predicate(label=\"Save\")"
+        )
+        let result = HeistExecutionResult.failed(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .action,
-                    status: .failed,
                     durationMs: 0,
                     intent: .action(command: "activate", target: "predicate(label=\"Save\")"),
                     evidence: .action(HeistActionEvidence(
                         command: command,
-                        actionResult: ActionResult(
-                            success: false,
+                        actionResult: .failure(
                             method: .activate,
+                            errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
-                            errorKind: .elementNotFound
                         )
                     )),
-                    failure: HeistFailureDetail(
-                        category: .targetResolution,
-                        contract: "action dispatch succeeds",
-                        observed: "No element matching label \"Save\"",
-                        expected: "predicate(label=\"Save\")"
-                    )
+                    failure: failure
                 ),
             ],
             durationMs: 1,
@@ -857,12 +856,11 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
         let matching = ElementPredicate(label: "Row")
-        let result = HeistExecutionResult(
+        let result = HeistExecutionResult.passed(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .forEachElement,
-                    status: .passed,
                     durationMs: 500,
                     intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
                     evidence: .forEachElement(HeistForEachElementEvidence(
@@ -905,12 +903,11 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachFailure() throws {
-        let result = HeistExecutionResult(
+        let result = HeistExecutionResult.failed(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .forEachElement,
-                    status: .failed,
                     durationMs: 200,
                     intent: .forEachElement(parameter: "row", matching: "predicate(label=\"Row\")", limit: 10),
                     evidence: .forEachElement(HeistForEachElementEvidence(
@@ -944,18 +941,16 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
         let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
-        let child = HeistExecutionStepResult(
+        let child = HeistExecutionStepResult.failed(
             path: "$.body[0].conditional.cases[0].body[0]",
             kind: .action,
-            status: .failed,
             durationMs: 4,
             evidence: .action(HeistActionEvidence(
                 command: nil,
-                actionResult: ActionResult(
-                    success: false,
+                actionResult: .failure(
                     method: .activate,
+                    errorKind: .actionFailed,
                     message: "button disabled",
-                    errorKind: .actionFailed
                 )
             )),
             failure: HeistFailureDetail(
@@ -964,12 +959,11 @@ final class WireTypeRoundTripTests: XCTestCase {
                 observed: "button disabled"
             )
         )
-        let result = HeistExecutionResult(
+        let result = HeistExecutionResult.failed(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .conditional,
-                    status: .failed,
                     durationMs: 6,
                     intent: .conditional,
                     evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
@@ -1051,10 +1045,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         matching: ElementPredicate
     ) -> HeistExecutionStepResult {
         let path = "$.body[0].for_each_element.iterations[\(index)]"
-        return HeistExecutionStepResult(
+        return .passed(
             path: path,
             kind: .forEachIteration,
-            status: .passed,
             durationMs: durationMs,
             intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
             evidence: .forEachElement(HeistForEachElementEvidence(
@@ -1068,14 +1061,13 @@ final class WireTypeRoundTripTests: XCTestCase {
                 targetSummary: "predicate(label=\"Row\", ordinal: \(index))"
             )),
             children: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "\(path).body[0]",
                     kind: .action,
-                    status: .passed,
                     durationMs: durationMs,
                     evidence: .action(HeistActionEvidence(
                         command: nil,
-                        actionResult: ActionResult(success: true, method: .activate, message: "activated")
+                        actionResult: .success(method: .activate, message: "activated")
                     ))
                 ),
             ]

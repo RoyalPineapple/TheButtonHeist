@@ -11,9 +11,13 @@ extension TheFence {
     }
 
     struct ScreenRequest {
-        let outputPath: String?
+        let destination: ScreenshotDestination
         let requestId: String
-        let inlineData: Bool
+    }
+
+    package enum ScreenshotDestination: Sendable, Equatable {
+        case artifact(outputPath: String?)
+        case inlineData
     }
 
     static func decodeGetInterfaceRequest(
@@ -67,20 +71,27 @@ extension TheFence {
         _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ScreenRequest {
+        return ScreenRequest(
+            destination: try screenshotDestination(arguments),
+            requestId: requestId
+        )
+    }
+
+    private func screenshotDestination(_ arguments: CommandArgumentEnvelope) throws -> ScreenshotDestination {
         let outputPath = try arguments.schemaString(.output)
         let inlineData = try arguments.schemaBoolean(.inlineData) ?? false
-        if inlineData, outputPath != nil {
+        switch (inlineData, outputPath) {
+        case (true, nil):
+            return .inlineData
+        case (false, let outputPath):
+            return .artifact(outputPath: outputPath)
+        case (true, .some):
             throw SchemaValidationError(
                 field: "inlineData/output",
                 observed: "inlineData=true with output",
                 expected: "choose output for an artifact path or inlineData=true for inline PNG data, not both"
             )
         }
-        return ScreenRequest(
-            outputPath: outputPath,
-            requestId: requestId,
-            inlineData: inlineData
-        )
     }
 
     private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {

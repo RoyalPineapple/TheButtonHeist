@@ -3,10 +3,7 @@ import Foundation
 import TheScore
 
 struct SessionConnectionSnapshot {
-    let connected: Bool
-    let phase: SessionConnectionPhase
-    let device: SessionDevicePayload?
-    let lastFailure: SessionFailurePayload?
+    let state: SessionConnectionState
 }
 
 /// Named timeout constants for TheFence operations.
@@ -76,12 +73,7 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     var sessionConnectionSnapshot: SessionConnectionSnapshot {
-        SessionConnectionSnapshot(
-            connected: handoff.isConnected,
-            phase: sessionConnectionPhase,
-            device: sessionDevicePayload,
-            lastFailure: sessionFailurePayload
-        )
+        SessionConnectionSnapshot(state: sessionConnectionState)
     }
     let screenshotArtifacts: ScreenshotArtifactWriter
     let pendingRequests = PendingRequestTrackers()
@@ -95,40 +87,36 @@ public final class TheFence {
         wireUpResponseCallbacks()
     }
 
-    private var sessionConnectionPhase: SessionConnectionPhase {
+    private var sessionConnectionState: SessionConnectionState {
         switch handoff.connectionPhase {
         case .disconnected:
-            return .disconnected
+            return .disconnected(lastFailure: handoff.connectionDiagnosticFailure.map(sessionFailurePayload(for:)))
         case .reconnecting, .connecting:
-            return .connecting
-        case .connected:
-            return .connected
-        case .failed:
-            return .failed
+            return .connecting(lastFailure: handoff.connectionDiagnosticFailure.map(sessionFailurePayload(for:)))
+        case .connected(let session):
+            return .connected(device: sessionDevicePayload(for: session.device))
+        case .failed(let failure):
+            return .failed(sessionFailurePayload(for: failure))
         }
     }
 
-    private var sessionDevicePayload: SessionDevicePayload? {
-        handoff.connectedDevice.map { device in
-            SessionDevicePayload(
-                deviceName: handoff.displayName(for: device),
-                appName: device.appName,
-                connectionType: device.connectionType,
-                shortId: device.shortId
-            )
-        }
+    private func sessionDevicePayload(for device: DiscoveredDevice) -> SessionDevicePayload {
+        SessionDevicePayload(
+            deviceName: handoff.displayName(for: device),
+            appName: device.appName,
+            connectionType: device.connectionType,
+            shortId: device.shortId
+        )
     }
 
-    private var sessionFailurePayload: SessionFailurePayload? {
-        handoff.connectionDiagnosticFailure.map { failure in
-            SessionFailurePayload(
-                errorCode: failure.failureCode,
-                phase: failure.phase,
-                retryable: failure.retryable,
-                message: failure.errorDescription,
-                hint: failure.hint
-            )
-        }
+    private func sessionFailurePayload(for failure: HandoffConnectionError) -> SessionFailurePayload {
+        SessionFailurePayload(
+            errorCode: failure.failureCode,
+            phase: failure.phase,
+            retryable: failure.retryable,
+            message: failure.errorDescription,
+            hint: failure.hint
+        )
     }
 
     private func wireUpResponseCallbacks() {
@@ -169,7 +157,14 @@ public final class TheFence {
     // MARK: - Command Dispatch (thin router)
 
     func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
-        try await parsed.handler(self, parsed)
+        switch parsed.dispatch {
+        case .singleStepHeist(let request):
+            return try await executeSingleStepHeist(request)
+        case .directAction(let request):
+            return try await handleDirectActionRequest(request)
+        case .handler(let handler):
+            return try await handler(self, parsed)
+        }
     }
 
     // Expectation parsing (`parseExpectation` and its helpers) lives in

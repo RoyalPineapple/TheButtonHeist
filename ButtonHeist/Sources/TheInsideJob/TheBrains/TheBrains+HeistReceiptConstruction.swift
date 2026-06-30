@@ -48,11 +48,9 @@ extension TheBrains {
         kind: HeistExecutionStepKind,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        heistReceipt(
+        .skipped(
             path: path,
             kind: kind,
-            status: .skipped,
-            durationMs: 0,
             children: children
         )
     }
@@ -209,17 +207,36 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let resolvedAbortedAtChildPath = abortedAtChildPath ?? children.firstFailedStep?.path
         let status = requestedStatus ?? (failure != nil || resolvedAbortedAtChildPath != nil ? .failed : .passed)
-        return HeistExecutionStepResult(
-            path: path,
-            kind: kind,
-            status: status,
-            durationMs: durationMs,
-            intent: intent,
-            evidence: evidence,
-            failure: failure,
-            abortedAtChildPath: resolvedAbortedAtChildPath,
-            children: children
-        )
+        switch status {
+        case .passed:
+            return .passed(
+                path: path,
+                kind: kind,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: evidence,
+                children: children
+            )
+        case .failed:
+            return .failed(
+                path: path,
+                kind: kind,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: evidence,
+                failure: failure,
+                abortedAtChildPath: resolvedAbortedAtChildPath,
+                children: children
+            )
+        case .skipped:
+            return .skipped(
+                path: path,
+                kind: kind,
+                durationMs: durationMs,
+                intent: intent,
+                children: children
+            )
+        }
     }
 }
 

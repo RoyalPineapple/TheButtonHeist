@@ -98,27 +98,29 @@ struct DeltaScreenProjection: Sendable {
     }
 }
 
+enum ScreenshotProjectionStorage: Sendable {
+    case artifact(path: String)
+    case inlinePNG(String)
+}
+
 struct ScreenshotProjection: Sendable {
     let width: Double
     let height: Double
-    let pngData: String?
+    let storage: ScreenshotProjectionStorage
     let interface: InterfaceProjection?
-    let path: String?
 
     init(
-        path: String?,
+        storage: ScreenshotProjectionStorage,
         payload: ScreenPayload,
-        includePNGData: Bool,
         includeInterface: Bool,
         profile: ProjectionProfile
     ) {
         width = payload.width
         height = payload.height
-        pngData = includePNGData ? payload.pngData : nil
+        self.storage = storage
         interface = includeInterface
             ? payload.interface.map { InterfaceProjection(interface: $0, profile: profile) }
             : nil
-        self.path = path
     }
 }
 
@@ -128,55 +130,91 @@ enum DeltaProjectionKind: String, Sendable {
     case screenChanged
 }
 
-struct DeltaProjection: Sendable {
-    let kind: DeltaProjectionKind
+struct DeltaProjectionMetadata: Sendable {
     let elementCount: Int
     let captureEdge: AccessibilityTrace.CaptureEdge?
     let interactionDigest: AccessibilityTrace.InteractionDigest?
     let transient: ElementProjectionBucket
-    let edits: DeltaEditsProjection?
-    let screen: DeltaScreenProjection?
+
+    init(
+        elementCount: Int,
+        captureEdge: AccessibilityTrace.CaptureEdge?,
+        interactionDigest: AccessibilityTrace.InteractionDigest?,
+        transient: [HeistElement],
+        profile: ProjectionProfile
+    ) {
+        self.elementCount = elementCount
+        self.captureEdge = captureEdge
+        self.interactionDigest = interactionDigest
+        self.transient = ElementProjectionBucket(
+            elements: transient,
+            limit: profile.limits.deltaElementsPerBucket
+        )
+    }
+}
+
+struct DeltaElementsChangedProjection: Sendable {
+    let metadata: DeltaProjectionMetadata
+    let edits: DeltaEditsProjection
+}
+
+struct DeltaScreenChangedProjection: Sendable {
+    let metadata: DeltaProjectionMetadata
+    let screen: DeltaScreenProjection
+}
+
+enum DeltaProjection: Sendable {
+    case noChange(DeltaProjectionMetadata)
+    case elementsChanged(DeltaElementsChangedProjection)
+    case screenChanged(DeltaScreenChangedProjection)
+
+    var kind: DeltaProjectionKind {
+        switch self {
+        case .noChange:
+            return .noChange
+        case .elementsChanged:
+            return .elementsChanged
+        case .screenChanged:
+            return .screenChanged
+        }
+    }
 
     init(delta: AccessibilityTrace.Delta, profile: ProjectionProfile, includeScreenInterface: Bool = false) {
         switch delta {
         case .noChange(let payload):
-            kind = .noChange
-            elementCount = payload.elementCount
-            captureEdge = payload.captureEdge
-            interactionDigest = payload.interactionDigest
-            transient = ElementProjectionBucket(
-                elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket
-            )
-            edits = nil
-            screen = nil
+            self = .noChange(DeltaProjectionMetadata(
+                elementCount: payload.elementCount,
+                captureEdge: payload.captureEdge,
+                interactionDigest: payload.interactionDigest,
+                transient: payload.transient,
+                profile: profile
+            ))
         case .elementsChanged(let payload):
-            kind = .elementsChanged
-            elementCount = payload.elementCount
-            captureEdge = payload.captureEdge
-            interactionDigest = payload.interactionDigest
-            transient = ElementProjectionBucket(
-                elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket
-            )
-            let editProjection = DeltaEditsProjection(edits: payload.edits, profile: profile)
-            edits = editProjection.isEmpty ? nil : editProjection
-            screen = nil
+            self = .elementsChanged(DeltaElementsChangedProjection(
+                metadata: DeltaProjectionMetadata(
+                    elementCount: payload.elementCount,
+                    captureEdge: payload.captureEdge,
+                    interactionDigest: payload.interactionDigest,
+                    transient: payload.transient,
+                    profile: profile
+                ),
+                edits: DeltaEditsProjection(edits: payload.edits, profile: profile)
+            ))
         case .screenChanged(let payload):
-            kind = .screenChanged
-            elementCount = payload.elementCount
-            captureEdge = payload.captureEdge
-            interactionDigest = payload.interactionDigest
-            transient = ElementProjectionBucket(
-                elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket
-            )
-            edits = nil
-            screen = DeltaScreenProjection(
-                interface: payload.newInterface,
-                profile: profile,
-                includeInterface: includeScreenInterface
-            )
+            self = .screenChanged(DeltaScreenChangedProjection(
+                metadata: DeltaProjectionMetadata(
+                    elementCount: payload.elementCount,
+                    captureEdge: payload.captureEdge,
+                    interactionDigest: payload.interactionDigest,
+                    transient: payload.transient,
+                    profile: profile
+                ),
+                screen: DeltaScreenProjection(
+                    interface: payload.newInterface,
+                    profile: profile,
+                    includeInterface: includeScreenInterface
+                )
+            ))
         }
     }
 }

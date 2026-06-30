@@ -28,27 +28,10 @@ extension TheFence {
 
     // MARK: - Handler: Executable Commands
 
-    func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
-        let executable = try executableRequest(for: request)
-        guard case .actions(let actions) = executable else {
-            return .failure(FenceError.invalidRequest(
-                "command \"\(request.command.rawValue)\" direct dispatch requires an action command"
-            ))
-        }
-        guard actions.count == 1 else {
-            return .failure(FenceError.invalidRequest(
-                "command \"\(request.command.rawValue)\" direct dispatch requires exactly one action command"
-            ))
-        }
-        guard request.expectationPayload.expectation == nil else {
-            return .failure(FenceError.invalidRequest(
-                "command \"\(request.command.rawValue)\" direct dispatch does not support expect"
-            ))
-        }
-        let command = actions.first
+    func handleDirectActionRequest(_ request: DirectActionRequest) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(
-            .runtimeAction(command),
-            timeout: directActionTimeout(for: command)
+            .runtimeAction(request.action),
+            timeout: directActionTimeout(for: request.action)
         )
         return .action(command: request.command, result: result)
     }

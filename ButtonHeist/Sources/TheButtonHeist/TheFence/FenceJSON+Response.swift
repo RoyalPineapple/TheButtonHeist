@@ -138,17 +138,15 @@ struct PublicResponseModel: FencePublicJSONResponse {
             )).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
             try PublicScreenshotResponse(projection: ScreenshotProjection(
-                path: path,
+                storage: .artifact(path: path),
                 payload: payload,
-                includePNGData: false,
                 includeInterface: options.includeInterface,
                 profile: profile
             )).encode(to: encoder)
         case .screenshotData(let payload, let options):
             try PublicScreenshotResponse(projection: ScreenshotProjection(
-                path: nil,
+                storage: .inlinePNG(payload.pngData),
                 payload: payload,
-                includePNGData: true,
                 includeInterface: options.includeInterface,
                 profile: profile
             )).encode(to: encoder)

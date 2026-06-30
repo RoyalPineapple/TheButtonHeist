@@ -3,15 +3,15 @@ import Foundation
 extension FenceResponse {
 
     static func compactSessionState(_ payload: SessionStatePayload) -> String {
-        switch payload.phase {
+        switch payload.state {
         case .connected:
             return "session: connected"
         case .connecting:
             return "session: connecting"
-        case .failed:
-            return compactSessionStateFailure(payload.lastFailure, label: "failed") ?? "session: failed"
-        case .disconnected:
-            return compactSessionStateFailure(payload.lastFailure, label: "disconnected") ?? "session: not connected"
+        case .failed(let failure):
+            return compactSessionStateFailure(failure, label: "failed") ?? "session: failed"
+        case .disconnected(let lastFailure):
+            return compactSessionStateFailure(lastFailure, label: "disconnected") ?? "session: not connected"
         }
     }
 

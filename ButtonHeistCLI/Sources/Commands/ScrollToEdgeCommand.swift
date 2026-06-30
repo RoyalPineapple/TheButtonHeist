@@ -18,10 +18,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
-
-    @Option(name: .long, help: "Current-capture containerName from get_interface")
-    var container: String?
+    @OptionGroup var selection: ScrollSelectionInput
 
     @Option(
         name: .shortAndLong,
@@ -33,40 +30,28 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    func validate() throws {
-        if let container, container.isEmpty {
-            throw ValidationError("--container must not be empty")
-        }
-        if container != nil, try element.hasTarget {
-            throw ValidationError("--container cannot be combined with element target options")
-        }
-    }
-
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let scrollEdge = Self.catalogCanonicalStringValue(edge, for: .edge) else {
-            throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
-        }
-
-        let target: ElementTarget?
-        if container != nil {
-            target = nil
-        } else {
-            target = try element.parsedTarget()
-        }
-        let arguments = Self.fenceArguments(
-            target: target,
-            CommandArgumentWriter.value(.edge, scrollEdge),
-            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.container, container)
-        )
-
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: arguments,
+            arguments: try requestArguments(),
             statusMessage: "Sending scroll_to_edge..."
+        )
+    }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        guard let scrollEdge = Self.catalogCanonicalStringValue(edge, for: .edge) else {
+            throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
+        }
+
+        let scrollSelection = try selection.scrollSelection()
+        return Self.fenceArguments(
+            target: scrollSelection.cliTarget,
+            CommandArgumentWriter.value(.edge, scrollEdge),
+            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
+            CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }

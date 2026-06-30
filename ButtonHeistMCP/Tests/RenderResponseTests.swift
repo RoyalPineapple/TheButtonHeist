@@ -51,12 +51,11 @@ struct RenderResponseTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: HeistExecutionResult(
+            result: HeistExecutionResult.passed(
                 steps: [
-                    HeistExecutionStepResult(
+                    HeistExecutionStepResult.passed(
                         path: "$.body[0]",
                         kind: .action,
-                        status: .passed,
                         durationMs: 1,
                         intent: .action(
                             command: command.wireType.rawValue,
@@ -64,8 +63,7 @@ struct RenderResponseTests {
                         ),
                         evidence: .action(HeistActionEvidence(
                             command: command,
-                            actionResult: ActionResult(
-                                success: true,
+                            actionResult: ActionResult.success(
                                 method: .activate,
                                 accessibilityTrace: trace
                             )
@@ -96,15 +94,15 @@ struct RenderResponseTests {
         #expect(node["action"] == nil)
         #expect(actionResult["method"]?.stringValue == "activate")
         #expect(delta["kind"]?.stringValue == "elementsChanged")
-        #expect(digest["elementCountBefore"] == .int(1))
-        #expect(digest["elementCountAfter"] == .int(2))
-        #expect(digest["elementCountChanged"] == .bool(true))
-        #expect(digest["elementSetChanged"] == .bool(true))
+        #expect(digest["elementCountBefore"] == Value.int(1))
+        #expect(digest["elementCountAfter"] == Value.int(2))
+        #expect(digest["elementCountChanged"] == Value.bool(true))
+        #expect(digest["elementSetChanged"] == Value.bool(true))
         #expect(addedElement["label"]?.stringValue == "Lazy Row")
         #expect(addedElement["value"]?.stringValue == "Loaded by scroll")
         #expect(addedElement["identifier"]?.stringValue == "lazy_row")
         #expect(traceOmission["projectedAs"]?.stringValue == "delta")
-        #expect(traceOmission["omittedCount"] == .int(2))
+        #expect(traceOmission["omittedCount"] == Value.int(2))
         #expect(!containsObjectKey("captures", in: result.structuredContent))
         guard case .text(let text, _, _)? = result.content.first else {
             Issue.record("expected compact text content")
@@ -193,12 +191,12 @@ struct RenderResponseTests {
         #expect(root["kind"]?.stringValue == expected.kind.rawValue)
         #expect(root["errorCode"]?.stringValue == expected.code)
         #expect(root["phase"]?.stringValue == expected.details.phase.rawValue)
-        #expect(root["retryable"] == .bool(expected.details.retryable))
+        #expect(root["retryable"] == Value.bool(expected.details.retryable))
         #expect(root["hint"]?.stringValue == expected.details.hint)
         #expect(details["code"]?.stringValue == expected.code)
         #expect(details["kind"]?.stringValue == expected.kind.rawValue)
         #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
-        #expect(details["retryable"] == .bool(expected.details.retryable))
+        #expect(details["retryable"] == Value.bool(expected.details.retryable))
         #expect(details["hint"]?.stringValue == expected.details.hint)
     }
 
@@ -214,11 +212,11 @@ struct RenderResponseTests {
         #expect(root["kind"]?.stringValue == "client")
         #expect(root["errorCode"]?.stringValue == "formatting.json_encoding_failed")
         #expect(root["phase"]?.stringValue == "client")
-        #expect(root["retryable"] == .bool(false))
+        #expect(root["retryable"] == Value.bool(false))
         #expect(details["code"]?.stringValue == "formatting.json_encoding_failed")
         #expect(details["kind"]?.stringValue == "client")
         #expect(details["phase"]?.stringValue == "client")
-        #expect(details["retryable"] == .bool(false))
+        #expect(details["retryable"] == Value.bool(false))
     }
 
     private static func interfaceFixture() -> Interface {

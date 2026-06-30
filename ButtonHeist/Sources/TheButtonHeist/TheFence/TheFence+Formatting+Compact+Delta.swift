@@ -5,7 +5,14 @@ import TheScore
 extension FenceResponse {
 
     static func compactDeltaKind(_ delta: AccessibilityTrace.Delta) -> String {
-        DeltaProjection(delta: delta, profile: .summary).kind.rawValue
+        switch DeltaProjection(delta: delta, profile: .summary) {
+        case .noChange:
+            return DeltaProjectionKind.noChange.rawValue
+        case .elementsChanged:
+            return DeltaProjectionKind.elementsChanged.rawValue
+        case .screenChanged:
+            return DeltaProjectionKind.screenChanged.rawValue
+        }
     }
 
     static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
@@ -20,42 +27,41 @@ extension FenceResponse {
     }
 
     static func compactDelta(_ projection: DeltaProjection, method: String) -> String {
-        switch projection.kind {
-        case .noChange:
+        switch projection {
+        case .noChange(let metadata):
             // Auto-settle can produce a no-change delta carrying transients
             // when an element appeared and disappeared during settle but
             // baseline and final are otherwise identical. Surface those.
-            if projection.transient.elements.isEmpty {
+            if metadata.transient.elements.isEmpty {
                 return "\(method): no change"
             }
-            var lines: [String] = ["\(method): no net change (\(projection.elementCount) elements)"]
-            for element in projection.transient.elements {
+            var lines: [String] = ["\(method): no net change (\(metadata.elementCount) elements)"]
+            for element in metadata.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
             }
-            if let omitted = projection.transient.omittedCount {
+            if let omitted = metadata.transient.omittedCount {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
             return lines.joined(separator: "\n")
 
-        case .elementsChanged:
-            var lines: [String] = ["\(method): elements changed (\(projection.elementCount) elements)"]
-            if let edits = projection.edits {
-                lines.append(contentsOf: compactEditLines(edits))
-            }
-            for element in projection.transient.elements {
+        case .elementsChanged(let delta):
+            let metadata = delta.metadata
+            var lines: [String] = ["\(method): elements changed (\(metadata.elementCount) elements)"]
+            lines.append(contentsOf: compactEditLines(delta.edits))
+            for element in metadata.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
             }
-            if let omitted = projection.transient.omittedCount {
+            if let omitted = metadata.transient.omittedCount {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
             return lines.joined(separator: "\n")
 
-        case .screenChanged:
+        case .screenChanged(let delta):
             var lines: [String] = ["\(method): screen changed"]
-            if let interface = projection.screen?.interface {
+            if let interface = delta.screen.interface {
                 lines.append(compactInterface(interface))
-            } else if let screen = projection.screen {
-                lines.append("\(screen.screenDescription) (\(screen.elementCount) elements)")
+            } else {
+                lines.append("\(delta.screen.screenDescription) (\(delta.screen.elementCount) elements)")
             }
             return lines.joined(separator: "\n")
         }

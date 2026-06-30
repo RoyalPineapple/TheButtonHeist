@@ -36,33 +36,44 @@ extension TheFence {
         }
     }
 
-    enum ExecutableRequest {
-        case actions(NonEmptyHeistActionCommands)
+    struct DurableHeistActionCommands {
+        let first: HeistActionCommand
+        private let additional: [HeistActionCommand]
+
+        init?(_ actions: NonEmptyHeistActionCommands) {
+            guard actions.values.allSatisfy({ $0.durableHeistActionFailure == nil }) else {
+                return nil
+            }
+            self.first = actions.first
+            self.additional = Array(actions.values.dropFirst())
+        }
+
+        var count: Int {
+            1 + additional.count
+        }
+
+        var values: [HeistActionCommand] {
+            [first] + additional
+        }
+    }
+
+    enum SingleStepHeistRequest {
+        case actions(DurableHeistActionCommands, expectation: ExpectationPayload)
         case wait(WaitStep)
     }
 
+    struct DirectActionRequest {
+        let command: Command
+        let action: HeistActionCommand
+    }
+
     enum DecodedRequestDispatch {
-        case executable(ExecutableRequest)
+        case singleStepHeist(SingleStepHeistRequest)
+        case directAction(DirectActionRequest)
         case handler(ParsedRequestHandler)
 
         init(handler: @escaping ParsedRequestHandler) {
             self = .handler(handler)
-        }
-
-        var executableRequest: ExecutableRequest? {
-            guard case .executable(let request) = self else { return nil }
-            return request
-        }
-
-        var handler: ParsedRequestHandler {
-            switch self {
-            case .executable:
-                return { fence, request in
-                    try await fence.handleClientActionRequest(request)
-                }
-            case .handler(let handler):
-                return handler
-            }
         }
     }
 
@@ -87,26 +98,44 @@ extension TheFence {
             self.expectationPayload = expectationPayload
         }
 
-        var executableRequest: ExecutableRequest? {
-            dispatch.executableRequest
+        var singleStepHeistRequest: SingleStepHeistRequest? {
+            guard case .singleStepHeist(let request) = dispatch else { return nil }
+            return request
         }
 
-        var handler: ParsedRequestHandler {
-            dispatch.handler
+        var directActionRequest: DirectActionRequest? {
+            guard case .directAction(let request) = dispatch else { return nil }
+            return request
         }
     }
 
     static func waitDispatch(_ step: WaitStep) -> DecodedRequestDispatch {
-        .executable(.wait(step))
+        .singleStepHeist(.wait(step))
     }
 
     static func appInteractionDispatch(
         _ command: Command,
         _ firstCommand: HeistActionCommand,
-        _ additionalCommands: HeistActionCommand...
-    ) -> DecodedRequestDispatch {
+        _ additionalCommands: HeistActionCommand...,
+        expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
         precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
-        return .executable(.actions(NonEmptyHeistActionCommands(firstCommand, additional: additionalCommands)))
+        let actions = NonEmptyHeistActionCommands(firstCommand, additional: additionalCommands)
+        if let durableActions = DurableHeistActionCommands(actions) {
+            return .singleStepHeist(.actions(durableActions, expectation: expectationPayload))
+        }
+
+        guard actions.count == 1 else {
+            throw FenceError.invalidRequest(
+                "command \"\(command.rawValue)\" direct dispatch requires exactly one action command"
+            )
+        }
+        guard expectationPayload.expectation == nil else {
+            throw FenceError.invalidRequest(
+                "command \"\(command.rawValue)\" direct dispatch does not support expect"
+            )
+        }
+        return .directAction(DirectActionRequest(command: command, action: actions.first))
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

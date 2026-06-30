@@ -82,14 +82,9 @@ final class InteractionObservation {
     }
 
     func finishAfterAction(
-        success: Bool,
         method: ActionMethod,
+        outcome: PostActionObservation.ActionOutcome,
         message: String? = nil,
-        payload: ResultPayload? = nil,
-        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
-        errorKind: ErrorKind? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         before: PostActionObservation.BeforeState,
         postActionCommitScope: SemanticObservationScope = .visible,
         settleOutcome: SettleSession.Outcome? = nil
@@ -109,14 +104,9 @@ final class InteractionObservation {
         let receiptStart = CFAbsoluteTimeGetCurrent()
         let result = PostActionObservation.result(
             PostActionObservation.ResultInput(
-                success: success,
                 method: method,
+                outcome: outcome,
                 message: message,
-                payload: payload,
-                afterStatePayload: afterStatePayload,
-                errorKind: errorKind,
-                subjectEvidence: subjectEvidence,
-                activationTrace: activationTrace,
                 before: before,
                 settleEvidence: settleEvidence,
                 finalEvidence: finalEvidence
