@@ -935,24 +935,102 @@ public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable 
 }
 
 public struct HeistActionEvidence: Codable, Sendable, Equatable {
-    public let command: HeistActionCommand?
-    public let actionResult: ActionResult?
-    public let expectationActionResult: ActionResult?
-    public let expectation: ExpectationResult?
-    public let warning: HeistActionWarning?
+    private let storage: Storage
 
-    public init(
+    public var command: HeistActionCommand? {
+        switch storage {
+        case .commandResolutionFailure(let command):
+            return command
+        case .dispatch(let command, _, _):
+            return command
+        case .expectation(let command, _, _, _, _):
+            return command
+        }
+    }
+
+    public var actionResult: ActionResult? {
+        switch storage {
+        case .commandResolutionFailure:
+            return nil
+        case .dispatch(_, let result, _),
+             .expectation(_, let result, _, _, _):
+            return result
+        }
+    }
+
+    public var expectationActionResult: ActionResult? {
+        switch storage {
+        case .commandResolutionFailure, .dispatch:
+            return nil
+        case .expectation(_, _, let result, _, _):
+            return result
+        }
+    }
+
+    public var expectation: ExpectationResult? {
+        switch storage {
+        case .commandResolutionFailure, .dispatch:
+            return nil
+        case .expectation(_, _, _, let expectation, _):
+            return expectation
+        }
+    }
+
+    public var warning: HeistActionWarning? {
+        switch storage {
+        case .commandResolutionFailure:
+            return nil
+        case .dispatch(_, _, let warning),
+             .expectation(_, _, _, _, let warning):
+            return warning
+        }
+    }
+
+    public static func commandResolutionFailure(
+        command: HeistActionCommand
+    ) -> HeistActionEvidence {
+        HeistActionEvidence(storage: .commandResolutionFailure(command: command))
+    }
+
+    public static func dispatch(
         command: HeistActionCommand?,
-        actionResult: ActionResult?,
-        expectationActionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
+        actionResult: ActionResult,
         warning: HeistActionWarning? = nil
-    ) {
-        self.command = command
-        self.actionResult = actionResult
-        self.expectationActionResult = expectationActionResult
-        self.expectation = expectation
-        self.warning = warning
+    ) -> HeistActionEvidence {
+        precondition(command != nil || warning == nil, "Action warning evidence requires a command")
+        return HeistActionEvidence(storage: .dispatch(command: command, actionResult: actionResult, warning: warning))
+    }
+
+    public static func expectation(
+        command: HeistActionCommand,
+        actionResult: ActionResult,
+        expectationActionResult: ActionResult,
+        expectation: ExpectationResult,
+        warning: HeistActionWarning? = nil
+    ) -> HeistActionEvidence {
+        HeistActionEvidence(storage: .expectation(
+            command: command,
+            actionResult: actionResult,
+            expectationActionResult: expectationActionResult,
+            expectation: expectation,
+            warning: warning
+        ))
+    }
+
+    private init(storage: Storage) {
+        self.storage = storage
+    }
+
+    private enum Storage: Sendable, Equatable {
+        case commandResolutionFailure(command: HeistActionCommand)
+        case dispatch(command: HeistActionCommand?, actionResult: ActionResult, warning: HeistActionWarning?)
+        case expectation(
+            command: HeistActionCommand,
+            actionResult: ActionResult,
+            expectationActionResult: ActionResult,
+            expectation: ExpectationResult,
+            warning: HeistActionWarning?
+        )
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -966,13 +1044,42 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            command: try container.decodeIfPresent(HeistActionCommand.self, forKey: .command),
-            actionResult: try container.decodeIfPresent(ActionResult.self, forKey: .actionResult),
-            expectationActionResult: try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult),
-            expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation),
-            warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
-        )
+        let command = try container.decodeIfPresent(HeistActionCommand.self, forKey: .command)
+        let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
+        let expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
+        let expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
+        let warning = try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+
+        switch (command, actionResult, expectationActionResult, expectation, warning) {
+        case (.some(let command), .none, .none, .none, .none):
+            self = .commandResolutionFailure(command: command)
+        case (let command, .some(let actionResult), .none, .none, let warning):
+            self = .dispatch(command: command, actionResult: actionResult, warning: warning)
+        case (.some(let command), .some(let actionResult), .some(let expectationActionResult), .some(let expectation), let warning):
+            self = .expectation(
+                command: command,
+                actionResult: actionResult,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation,
+                warning: warning
+            )
+        case (.none, .none, .none, .none, .none):
+            throw Self.evidenceError("heist action evidence must include command or actionResult", codingPath: container.codingPath)
+        case (.none, _, .some, _, _):
+            throw Self.evidenceError("heist action expectation evidence requires command", codingPath: container.codingPath)
+        case (_, _, .some, .none, _),
+             (_, _, .none, .some, _):
+            throw Self.evidenceError(
+                "heist action expectation evidence requires both expectationActionResult and expectation",
+                codingPath: container.codingPath
+            )
+        case (_, .none, .some, _, _):
+            throw Self.evidenceError("heist action expectation evidence requires actionResult", codingPath: container.codingPath)
+        case (.none, .none, .none, .none, .some):
+            throw Self.evidenceError("heist action warning evidence requires actionResult", codingPath: container.codingPath)
+        case (.some, .none, .none, .none, .some):
+            throw Self.evidenceError("heist action warning evidence requires actionResult", codingPath: container.codingPath)
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -982,6 +1089,10 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
         try container.encodeIfPresent(expectation, forKey: .expectation)
         try container.encodeIfPresent(warning, forKey: .warning)
+    }
+
+    private static func evidenceError(_ message: String, codingPath: [CodingKey]) -> DecodingError {
+        .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
     }
 }
 

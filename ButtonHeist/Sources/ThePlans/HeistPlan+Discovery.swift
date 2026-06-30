@@ -205,7 +205,7 @@ private extension HeistPlan {
             requiresArgument: heist.entry.requiresArgument,
             summary: nil,
             validationStatus: .validated,
-            semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist)
+            semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist).projectedSurface
         )
     }
 
@@ -271,7 +271,7 @@ private extension HeistPlan {
     }
 
     static func discoveryEnvironment(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: parameter)
+        HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: parameter).environment
     }
 
     func catalogEntry(
@@ -325,10 +325,10 @@ private extension HeistPlan {
             tags: tags,
             parameterName: base.parameterName,
             nestedRunHeists: surface.nestedRunHeists.isEmpty ? nil : surface.nestedRunHeists,
-            actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
+            actionCommands: surface.actionCommands.isEmpty ? nil : surface.catalogActionCommands,
             waitCount: surface.waits.count,
             expectationCount: surface.expectations.count,
-            semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
+            semanticSurfaces: surface.semanticFacets.isEmpty ? nil : surface.catalogSemanticSurfaces,
             validationStatus: .validated
         )
     }
@@ -341,7 +341,7 @@ private extension HeistPlan {
         return summary
     }
 
-    func catalogTags(for entry: HeistCatalogEntry, surface: HeistSemanticSurface) -> [String] {
+    func catalogTags(for entry: HeistCatalogEntry, surface: HeistCollectedSemanticSurface) -> [String] {
         var tags: [String] = []
         appendUnique(entry.role.rawValue, to: &tags)
         if entry.requiresArgument {
@@ -353,43 +353,22 @@ private extension HeistPlan {
         if !surface.waits.isEmpty || !surface.expectations.isEmpty {
             appendUnique("assertion", to: &tags)
         }
-        if surface.actionCommands.contains("typeText") || surface.actionCommands.contains("type_text") {
-            appendUnique("text-input", to: &tags)
-        }
-        if surface.actionCommands.contains(where: Self.isViewportAction) {
-            appendUnique("viewport", to: &tags)
-        }
-        if surface.actionCommands.contains(where: Self.isGestureAction) {
-            appendUnique("gesture", to: &tags)
-        }
-        if surface.actionCommands.contains(where: Self.isSemanticAction) {
-            appendUnique("semantic-action", to: &tags)
+        for command in surface.actionCommands {
+            switch command {
+            case .typeText:
+                appendUnique("text-input", to: &tags)
+            case .scroll, .scrollToVisible, .scrollToEdge:
+                appendUnique("viewport", to: &tags)
+            case .oneFingerTap, .longPress, .swipe, .drag:
+                appendUnique("gesture", to: &tags)
+            case .activate, .increment, .decrement, .performCustomAction, .rotor,
+                    .editAction, .setPasteboard, .resignFirstResponder:
+                appendUnique("semantic-action", to: &tags)
+            case .takeScreenshot:
+                break
+            }
         }
         return tags
-    }
-
-    static func isSemanticAction(_ command: String) -> Bool {
-        [
-            "activate",
-            "increment",
-            "decrement",
-            "performCustomAction",
-            "rotor",
-            "editAction",
-            "edit_action",
-            "setPasteboard",
-            "set_pasteboard",
-            "resignFirstResponder",
-            "resign_first_responder",
-        ].contains(command)
-    }
-
-    static func isGestureAction(_ command: String) -> Bool {
-        ["oneFingerTap", "one_finger_tap", "longPress", "long_press", "swipe", "drag"].contains(command)
-    }
-
-    static func isViewportAction(_ command: String) -> Bool {
-        ["scroll", "scrollToVisible", "scroll_to_visible", "scrollToEdge", "scroll_to_edge"].contains(command)
     }
 }
 
@@ -402,16 +381,118 @@ struct ResolvedCatalogHeist {
     let invocationStack: [HeistCallGraph.Node]
 }
 
+private struct HeistCollectedSemanticSurface {
+    let actionCommands: [HeistActionCommandType]
+    let targetPredicates: [String]
+    let waits: [String]
+    let expectations: [String]
+    let nestedRunHeists: [String]
+    let expectedEffects: [String]
+    let semanticFacets: [HeistSemanticSurfaceFacet]
+
+    var catalogActionCommands: [String] {
+        actionCommands.map(\.rawValue)
+    }
+
+    var catalogSemanticSurfaces: [String] {
+        semanticFacets.map(\.catalogValue)
+    }
+
+    var projectedSurface: HeistSemanticSurface {
+        HeistSemanticSurface(
+            actionCommands: catalogActionCommands,
+            targetPredicates: targetPredicates,
+            waits: waits,
+            expectations: expectations,
+            nestedRunHeists: nestedRunHeists,
+            expectedEffects: expectedEffects,
+            semanticSurfaces: catalogSemanticSurfaces
+        )
+    }
+}
+
+private enum HeistSemanticSurfaceFacet: Sendable, Equatable, Hashable {
+    case label(HeistSemanticStringMatch)
+    case identifier(HeistSemanticStringMatch)
+    case value(HeistSemanticStringMatch)
+    case traits(Set<HeistTrait>)
+    case excludeTraits(Set<HeistTrait>)
+
+    var catalogValue: String {
+        switch self {
+        case .label(let match):
+            return "label=\(match.catalogValue)"
+        case .identifier(let match):
+            return "identifier=\(match.catalogValue)"
+        case .value(let match):
+            return "value=\(match.catalogValue)"
+        case .traits(let traits):
+            return "traits=\(traits.catalogValue)"
+        case .excludeTraits(let traits):
+            return "excludeTraits=\(traits.catalogValue)"
+        }
+    }
+}
+
+private struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
+    let mode: StringMatch<String>.Mode
+    let value: HeistSemanticStringValue
+
+    init(_ match: StringMatch<String>) {
+        self.mode = match.mode
+        self.value = .literal(match.value)
+    }
+
+    init(_ match: StringMatch<StringExpr>) {
+        self.mode = StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact
+        self.value = HeistSemanticStringValue(match.value)
+    }
+
+    var catalogValue: String {
+        guard mode != .exact else { return value.catalogValue }
+        return "\(mode.rawValue)(\(value.catalogValue))"
+    }
+}
+
+private enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
+    case literal(String)
+    case reference(HeistReferenceName)
+
+    init(_ expression: StringExpr) {
+        switch expression {
+        case .literal(let literal):
+            self = .literal(literal)
+        case .ref(let reference):
+            self = .reference(reference)
+        }
+    }
+
+    var catalogValue: String {
+        switch self {
+        case .literal(let literal):
+            return literal
+        case .reference(let reference):
+            return "\(reference.rawValue)_ref"
+        }
+    }
+}
+
+private extension Set where Element == HeistTrait {
+    var catalogValue: String {
+        canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|")
+    }
+}
+
 private struct HeistSemanticSurfaceBuilder {
-    var actionCommands: [String] = []
+    var actionCommands: [HeistActionCommandType] = []
     var targetPredicates: [String] = []
     var waits: [String] = []
     var expectations: [String] = []
     var nestedRunHeists: [String] = []
     var expectedEffects: [String] = []
-    var semanticSurfaces: [String] = []
+    var semanticFacets: [HeistSemanticSurfaceFacet] = []
 
-    static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
+    static func surface(for resolved: ResolvedCatalogHeist) -> HeistCollectedSemanticSurface {
         var builder = Self()
         builder.collect(
             steps: resolved.plan.body,
@@ -420,14 +501,14 @@ private struct HeistSemanticSurfaceBuilder {
             environment: resolved.environment,
             invocationStack: resolved.invocationStack
         )
-        return HeistSemanticSurface(
+        return HeistCollectedSemanticSurface(
             actionCommands: builder.actionCommands,
             targetPredicates: builder.targetPredicates,
             waits: builder.waits,
             expectations: builder.expectations,
             nestedRunHeists: builder.nestedRunHeists,
             expectedEffects: builder.expectedEffects,
-            semanticSurfaces: builder.semanticSurfaces
+            semanticFacets: builder.semanticFacets
         )
     }
 
@@ -458,7 +539,7 @@ private struct HeistSemanticSurfaceBuilder {
     ) {
         switch step {
         case .action(let action):
-            appendUnique(action.command.wireType.rawValue, to: &actionCommands)
+            appendUnique(action.command.wireType, to: &actionCommands)
             collectTargets(from: action.command)
             if let expectation = action.expectation {
                 collectExpectation(expectation.predicate)
@@ -648,21 +729,15 @@ private struct HeistSemanticSurfaceBuilder {
         for check in predicate.checks {
             switch check {
             case .label(let label) where label.hasPredicateLiteral:
-                appendUnique("label=\(label)", to: &semanticSurfaces)
+                appendUnique(.label(HeistSemanticStringMatch(label)), to: &semanticFacets)
             case .identifier(let identifier) where identifier.hasPredicateLiteral:
-                appendUnique("identifier=\(identifier)", to: &semanticSurfaces)
+                appendUnique(.identifier(HeistSemanticStringMatch(identifier)), to: &semanticFacets)
             case .value(let value) where value.hasPredicateLiteral:
-                appendUnique("value=\(value)", to: &semanticSurfaces)
+                appendUnique(.value(HeistSemanticStringMatch(value)), to: &semanticFacets)
             case .traits(let traits) where !traits.isEmpty:
-                appendUnique(
-                    "traits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
-                    to: &semanticSurfaces
-                )
+                appendUnique(.traits(traits), to: &semanticFacets)
             case .excludeTraits(let traits) where !traits.isEmpty:
-                appendUnique(
-                    "excludeTraits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
-                    to: &semanticSurfaces
-                )
+                appendUnique(.excludeTraits(traits), to: &semanticFacets)
             case .label, .identifier, .value, .traits, .excludeTraits:
                 break
             }
@@ -673,40 +748,19 @@ private struct HeistSemanticSurfaceBuilder {
         for check in predicate.checks {
             switch check {
             case .label(let label):
-                appendUnique("label=\(semanticString(label))", to: &semanticSurfaces)
+                appendUnique(.label(HeistSemanticStringMatch(label)), to: &semanticFacets)
             case .identifier(let identifier):
-                appendUnique("identifier=\(semanticString(identifier))", to: &semanticSurfaces)
+                appendUnique(.identifier(HeistSemanticStringMatch(identifier)), to: &semanticFacets)
             case .value(let value):
-                appendUnique("value=\(semanticString(value))", to: &semanticSurfaces)
+                appendUnique(.value(HeistSemanticStringMatch(value)), to: &semanticFacets)
             case .traits(let traits) where !traits.isEmpty:
-                appendUnique(
-                    "traits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
-                    to: &semanticSurfaces
-                )
+                appendUnique(.traits(traits), to: &semanticFacets)
             case .excludeTraits(let traits) where !traits.isEmpty:
-                appendUnique(
-                    "excludeTraits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
-                    to: &semanticSurfaces
-                )
+                appendUnique(.excludeTraits(traits), to: &semanticFacets)
             case .traits, .excludeTraits:
                 break
             }
         }
-    }
-
-    func semanticString(_ expression: StringExpr) -> String {
-        switch expression {
-        case .literal(let literal):
-            return literal
-        case .ref(let reference):
-            return "\(reference)_ref"
-        }
-    }
-
-    func semanticString(_ match: StringMatch<StringExpr>) -> String {
-        let value = semanticString(match.value)
-        guard !match.isExact else { return value }
-        return "\(match.mode.rawValue)(\(value))"
     }
 
     mutating func appendPredicateTargets(_ predicate: AccessibilityPredicateExpr) {

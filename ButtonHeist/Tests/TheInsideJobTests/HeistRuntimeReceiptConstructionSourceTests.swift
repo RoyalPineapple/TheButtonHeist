@@ -23,10 +23,26 @@ import Testing
             try receiptSourceOccurrenceCount(#"\bHeistExecutionStepResult\s*\("#, in: helperSource) == 0,
             "Receipt helper should use the typed public step factories, not raw HeistExecutionStepResult construction"
         )
-        #expect(helperSource.contains("private func heistReceipt("))
+        #expect(
+            !helperSource.contains("private func heistReceipt("),
+            "Runtime receipt construction should not route through a generic status/evidence/failure funnel"
+        )
         #expect(helperSource.contains("return .passed("))
         #expect(helperSource.contains("return .failed("))
-        #expect(helperSource.contains("return .skipped("))
+        #expect(helperSource.contains(".skipped("))
+
+        let genericReceiptParameters = try receiptSourceLines(
+            matching: #"\b(status\s+requestedStatus|requestedStatus)\s*:\s*HeistExecutionStepStatus\?|\bevidence\s*:\s*HeistStepEvidence\?"#,
+            in: helperSource
+        )
+        #expect(
+            genericReceiptParameters.isEmpty,
+            """
+            Runtime receipt helpers should expose typed receipt-specific evidence/status \
+            decisions instead of generic status or erased optional evidence parameters:
+            \(genericReceiptParameters.joined(separator: "\n"))
+            """
+        )
 
         for helper in [
             "func heistActionReceipt",
@@ -84,6 +100,18 @@ private func receiptSourceOccurrenceCount(_ pattern: String, in source: String) 
     let regex = try NSRegularExpression(pattern: pattern)
     let range = NSRange(source.startIndex..<source.endIndex, in: source)
     return regex.numberOfMatches(in: source, range: range)
+}
+
+private func receiptSourceLines(matching pattern: String, in source: String) throws -> [String] {
+    let regex = try NSRegularExpression(pattern: pattern)
+    return source
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init)
+        .filter { line in
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            return regex.firstMatch(in: line, range: range) != nil
+        }
+        .map { $0.trimmingCharacters(in: .whitespaces) }
 }
 
 private func receiptRepositoryRoot() -> URL {

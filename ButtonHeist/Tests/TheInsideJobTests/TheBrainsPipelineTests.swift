@@ -109,9 +109,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             tapActivationSucceeded: true
         )
         let success = TheSafecracker.InteractionResult.success(
-            method: .activate,
+            payload: .setPasteboard("ok"),
             message: "completed",
-            payload: .value("ok"),
             subjectEvidence: originalEvidence,
             resolvedElementId: "checkout_button"
         )
@@ -121,9 +120,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         .withTiming(ActionPerformanceTiming(settleMs: 7, totalMs: 30))
 
         XCTAssertTrue(success.success)
-        XCTAssertEqual(success.method, .activate)
+        XCTAssertEqual(success.method, .setPasteboard)
         XCTAssertEqual(success.message, "completed")
-        XCTAssertEqual(success.payload, .value("ok"))
+        XCTAssertEqual(success.payload, .setPasteboard("ok"))
         XCTAssertEqual(success.subjectEvidence, replacementEvidence)
         XCTAssertEqual(success.resolvedElementId, "checkout_button")
         XCTAssertEqual(success.activationTrace, activationTrace)
@@ -182,7 +181,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let result = await brains.interactionObservation.finishAfterAction(
             method: .getPasteboard,
-            outcome: failureOutcome(payload: .value("")),
+            outcome: failureOutcome(payload: .getPasteboard("")),
             message: "pasteboard empty",
             before: before,
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
@@ -1489,12 +1488,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Helpers
 
     private func successOutcome(
-        payload: ResultPayload? = nil,
+        payload: ActionResultPayload? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil
     ) -> PostActionObservation.ActionOutcome {
         .success(PostActionObservation.ActionOutcomeSuccess(
-            payload: payload,
+            payload: payload.map(PostActionObservation.ActionOutcomePayload.immediate) ?? .none,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace
         ))
@@ -1502,12 +1501,12 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     private func failureOutcome(
         errorKind: ErrorKind = .actionFailed,
-        payload: ResultPayload? = nil,
+        payload: ActionResultPayload? = nil,
         activationTrace: ActivationTrace? = nil
     ) -> PostActionObservation.ActionOutcome {
         .failure(PostActionObservation.ActionOutcomeFailure(
             errorKind: errorKind,
-            payload: payload,
+            payload: payload.map(PostActionObservation.ActionOutcomePayload.immediate) ?? .none,
             activationTrace: activationTrace
         ))
     }

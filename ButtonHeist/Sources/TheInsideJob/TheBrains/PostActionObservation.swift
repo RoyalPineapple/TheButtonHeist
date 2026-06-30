@@ -397,20 +397,40 @@ final class PostActionObservation {
         case failure(ActionOutcomeFailure)
     }
 
+    enum ActionOutcomePayload {
+        case none
+        case immediate(ActionResultPayload)
+        case afterState((BeforeState) -> ActionResultPayload?)
+        case afterStateWithFallback((BeforeState) -> ActionResultPayload?, fallback: ActionResultPayload)
+
+        init(
+            immediate: ActionResultPayload?,
+            afterState: ((BeforeState) -> ActionResultPayload?)?
+        ) {
+            switch (immediate, afterState) {
+            case (nil, nil):
+                self = .none
+            case (.some(let payload), nil):
+                self = .immediate(payload)
+            case (nil, .some(let afterState)):
+                self = .afterState(afterState)
+            case (.some(let payload), .some(let afterState)):
+                self = .afterStateWithFallback(afterState, fallback: payload)
+            }
+        }
+    }
+
     struct ActionOutcomeSuccess {
-        let payload: ResultPayload?
-        let afterStatePayload: ((BeforeState) -> ResultPayload?)?
+        let payload: ActionOutcomePayload
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
 
         init(
-            payload: ResultPayload? = nil,
-            afterStatePayload: ((BeforeState) -> ResultPayload?)? = nil,
+            payload: ActionOutcomePayload = .none,
             subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil
         ) {
             self.payload = payload
-            self.afterStatePayload = afterStatePayload
             self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
         }
@@ -418,12 +438,12 @@ final class PostActionObservation {
 
     struct ActionOutcomeFailure {
         let errorKind: ErrorKind
-        let payload: ResultPayload?
+        let payload: ActionOutcomePayload
         let activationTrace: ActivationTrace?
 
         init(
             errorKind: ErrorKind,
-            payload: ResultPayload? = nil,
+            payload: ActionOutcomePayload = .none,
             activationTrace: ActivationTrace? = nil
         ) {
             self.errorKind = errorKind
@@ -473,7 +493,7 @@ extension ActionResult {
         case .cancelled(let cancelMs):
             self = Self.cancelledPostActionResult(
                 method: method,
-                payload: outcome.payload,
+                payload: outcome.immediatePayload,
                 subjectEvidence: outcome.subjectEvidence,
                 activationTrace: outcome.activationTrace,
                 before: before,
@@ -483,7 +503,7 @@ extension ActionResult {
         case .parseFailed:
             self = Self.parseFailurePostActionResult(
                 method: method,
-                payload: outcome.payload,
+                payload: outcome.immediatePayload,
                 subjectEvidence: outcome.subjectEvidence,
                 activationTrace: outcome.activationTrace,
                 before: before,
@@ -510,7 +530,7 @@ extension ActionResult {
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
-        payload: ResultPayload?,
+        payload: PostActionReceiptPayload,
         outcome: PostActionReceiptOutcome,
         accessibilityTrace: AccessibilityTrace? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
@@ -527,10 +547,14 @@ extension ActionResult {
         builder.settleTimeMs = settleTimeMs
         builder.subjectEvidence = subjectEvidence
         builder.activationTrace = activationTrace
-        switch outcome {
-        case .success:
+        switch (outcome, payload) {
+        case (.success, .none):
+            return builder.success()
+        case (.success, .payload(let payload)):
             return builder.success(payload: payload)
-        case .failure(let errorKind):
+        case (.failure(let errorKind), .none):
+            return builder.failure(errorKind: errorKind)
+        case (.failure(let errorKind), .payload(let payload)):
             return builder.failure(errorKind: errorKind, payload: payload)
         }
     }
@@ -539,7 +563,7 @@ extension ActionResult {
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
-        payload: ResultPayload?,
+        payload: PostActionReceiptPayload,
         errorKind: ErrorKind = .actionFailed,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
@@ -561,7 +585,7 @@ extension ActionResult {
 
     @MainActor private static func cancelledPostActionResult(
         method: ActionMethod,
-        payload: ResultPayload?,
+        payload: PostActionReceiptPayload,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?,
         before: PostActionObservation.BeforeState,
@@ -581,7 +605,7 @@ extension ActionResult {
 
     @MainActor private static func parseFailurePostActionResult(
         method: ActionMethod,
-        payload: ResultPayload?,
+        payload: PostActionReceiptPayload,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?,
         before: PostActionObservation.BeforeState,
@@ -605,13 +629,43 @@ private enum PostActionReceiptOutcome {
     case failure(ErrorKind)
 }
 
+private enum PostActionReceiptPayload {
+    case none
+    case payload(ActionResultPayload)
+}
+
+private extension PostActionObservation.ActionOutcomePayload {
+    var immediateReceiptPayload: PostActionReceiptPayload {
+        switch self {
+        case .none, .afterState:
+            return .none
+        case .immediate(let payload), .afterStateWithFallback(_, fallback: let payload):
+            return .payload(payload)
+        }
+    }
+
+    func resolvedReceiptPayload(after state: PostActionObservation.BeforeState) -> PostActionReceiptPayload {
+        switch self {
+        case .none:
+            return .none
+        case .immediate(let payload):
+            return .payload(payload)
+        case .afterState(let resolve):
+            guard let payload = resolve(state) else { return .none }
+            return .payload(payload)
+        case .afterStateWithFallback(let resolve, fallback: let fallback):
+            return .payload(resolve(state) ?? fallback)
+        }
+    }
+}
+
 private extension PostActionObservation.ActionOutcome {
-    var payload: ResultPayload? {
+    var immediatePayload: PostActionReceiptPayload {
         switch self {
         case .success(let success):
-            return success.payload
+            return success.payload.immediateReceiptPayload
         case .failure(let failure):
-            return failure.payload
+            return failure.payload.immediateReceiptPayload
         }
     }
 
@@ -642,12 +696,12 @@ private extension PostActionObservation.ActionOutcome {
         }
     }
 
-    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ResultPayload? {
+    func resolvedPayload(after state: PostActionObservation.BeforeState) -> PostActionReceiptPayload {
         switch self {
         case .success(let success):
-            return success.afterStatePayload?(state) ?? success.payload
+            return success.payload.resolvedReceiptPayload(after: state)
         case .failure(let failure):
-            return failure.payload
+            return failure.payload.immediateReceiptPayload
         }
     }
 }

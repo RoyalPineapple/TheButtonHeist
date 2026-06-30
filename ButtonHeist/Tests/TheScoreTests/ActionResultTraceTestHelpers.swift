@@ -72,11 +72,11 @@ func makeTestHeistElement(
 }
 
 func makeTestActionResult(
-    success: Bool = true,
+    succeeded: Bool = true,
     method: ActionMethod = .activate,
     message: String? = nil,
     errorKind: ErrorKind? = nil,
-    payload: ResultPayload? = nil,
+    payload: ActionResultPayload? = nil,
     accessibilityTrace: AccessibilityTrace? = nil,
     settled: Bool? = nil,
     settleTimeMs: Int? = nil,
@@ -84,11 +84,22 @@ func makeTestActionResult(
     activationTrace: ActivationTrace? = nil,
     timing: ActionPerformanceTiming? = nil
 ) -> ActionResult {
-    if success {
-        return .success(
+    if succeeded {
+        if let payload {
+            return ActionResult.success(
+                payload: payload,
+                message: message,
+                accessibilityTrace: accessibilityTrace,
+                settled: settled,
+                settleTimeMs: settleTimeMs,
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
+        }
+        return ActionResult.success(
             method: method,
             message: message,
-            payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -100,11 +111,23 @@ func makeTestActionResult(
     guard let errorKind else {
         preconditionFailure("failed test ActionResult requires errorKind")
     }
-    return .failure(
+    if let payload {
+        return ActionResult.failure(
+            payload: payload,
+            errorKind: errorKind,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+    return ActionResult.failure(
         method: method,
         errorKind: errorKind,
         message: message,
-        payload: payload,
         accessibilityTrace: accessibilityTrace,
         settled: settled,
         settleTimeMs: settleTimeMs,
@@ -120,7 +143,7 @@ func makeTestHeistActionStep(
     result: ActionResult = makeTestActionResult(),
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
-    let evidence = HeistStepEvidence.action(HeistActionEvidence(command: command, actionResult: result))
+    let evidence = HeistStepEvidence.action(.dispatch(command: command, actionResult: result))
     if result.success {
         return .passed(
             path: path,

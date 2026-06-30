@@ -2,44 +2,30 @@ import ThePlans
 import TheScore
 
 enum HeistRepairSuggestionRenderer {
-    static func noSuggestionReason(for request: HeistRepairRequest) -> String {
-        if !request.lastSuccess.result.succeeded {
-            return "last receipt step did not pass"
+    static func noSuggestionReason(for analysis: HeistRepairAnalysis) -> String {
+        switch analysis {
+        case .ineligible(let reason):
+            return reason.noSuggestionReason
+        case .eligible(let analysis):
+            return noSuggestionReason(for: analysis)
         }
-        if request.currentFailure.result.succeeded {
-            return "current receipt step did not fail"
-        }
-        if request.lastSuccess.stepPath != request.currentFailure.stepPath {
-            return "receipts refer to different step paths"
-        }
-        if !repairFingerprintsAreCompatible(request.lastSuccess.heistFingerprint, request.currentFailure.heistFingerprint) {
-            return "heist fingerprints are incompatible"
-        }
+    }
 
-        let lastScreen = RepairScreen(interface: request.lastSuccess.beforeSnapshot)
-        let currentScreen = RepairScreen(interface: request.currentFailure.beforeSnapshot)
-        guard case .resolved = lastScreen.resolve(request.lastSuccess.target) else {
-            return "old target did not resolve exactly once in the last successful before snapshot"
-        }
-
-        let actionFamily = RepairActionFamily(actionIdentity: request.currentFailure.actionIdentity)
-        switch currentScreen.resolve(request.lastSuccess.target) {
-        case .resolved(let element, _):
-            if !actionFamily.isKnown || actionFamily.isSupported(by: element.element) {
-                return "old target still resolves and supports the requested action; no target repair needed"
-            }
+    private static func noSuggestionReason(for analysis: HeistEligibleRepairAnalysis) -> String {
+        switch analysis.failureKind {
+        case .wrongCapability:
             return """
                 old target still resolves but does not support the requested action; \
                 no safe compatible successor satisfied semantic continuity and unique-matcher requirements
                 """
 
-        case .notFound:
+        case .missingTarget:
             return """
                 old target is missing in the current before snapshot; \
                 no safe successor satisfied semantic continuity and unique-matcher requirements
                 """
 
-        case .ambiguous:
+        case .ambiguousTarget:
             return """
                 old target is ambiguous in the current before snapshot; \
                 no candidate could be safely disambiguated
@@ -49,14 +35,11 @@ enum HeistRepairSuggestionRenderer {
 
     static func suggestion(
         for candidate: ScoredCandidate,
-        oldResolved: RepairScreen.Element,
-        currentScreen: RepairScreen,
+        analysis: HeistEligibleRepairAnalysis,
         request: HeistRepairRequest,
-        failureKind: HeistRepairFailureKind,
-        currentResolution: RepairTargetResolution,
-        actionFamily: RepairActionFamily,
         tiedBestCount: Int
     ) -> HeistRepairSuggestion? {
+        let currentScreen = analysis.currentScreen
         let selectionContext = currentScreen.selectionContext()
         guard let selection = minimumUniquePredicate(for: candidate.element.id, in: selectionContext),
               case .resolved(let validation, _) = currentScreen.resolve(selection.target),
@@ -65,13 +48,13 @@ enum HeistRepairSuggestionRenderer {
             return nil
         }
 
-        if actionFamily.isKnown, !actionFamily.isSupported(by: candidate.element.element) {
+        if analysis.actionFamily.isKnown, !analysis.actionFamily.isSupported(by: candidate.element.element) {
             return nil
         }
 
         var reasons = baseReasons(
-            failureKind: failureKind,
-            currentResolution: currentResolution,
+            failureKind: analysis.failureKind,
+            currentResolution: analysis.currentResolution,
             selection: selection,
             lastSuccess: request.lastSuccess,
             currentFailure: request.currentFailure
@@ -99,9 +82,9 @@ enum HeistRepairSuggestionRenderer {
 
         return HeistRepairSuggestion(
             stepPath: request.currentFailure.stepPath,
-            failureKind: failureKind,
+            failureKind: analysis.failureKind,
             oldTarget: request.lastSuccess.target,
-            oldResolvedElement: oldResolved.summary,
+            oldResolvedElement: analysis.oldResolved.summary,
             newTarget: selection.target,
             newResolvedElement: candidate.element.summary,
             confidence: confidence(
@@ -109,7 +92,7 @@ enum HeistRepairSuggestionRenderer {
                 selection: selection,
                 oldTargetHadOrdinal: request.lastSuccess.target.hasOrdinal,
                 tiedBestCount: tiedBestCount,
-                failureKind: failureKind
+                failureKind: analysis.failureKind
             ),
             reasons: unique(reasons).map(\.prose),
             caveats: unique(caveats).map(\.prose)
@@ -222,5 +205,24 @@ enum HeistRepairSuggestionRenderer {
             return .medium
         }
         return .low
+    }
+}
+
+extension HeistRepairIneligibility {
+    var noSuggestionReason: String {
+        switch self {
+        case .lastReceiptStepDidNotPass:
+            return "last receipt step did not pass"
+        case .currentReceiptStepDidNotFail:
+            return "current receipt step did not fail"
+        case .differentStepPaths:
+            return "receipts refer to different step paths"
+        case .incompatibleHeistFingerprints:
+            return "heist fingerprints are incompatible"
+        case .oldTargetDidNotResolveExactlyOnce:
+            return "old target did not resolve exactly once in the last successful before snapshot"
+        case .oldTargetStillResolvesAndSupportsRequestedAction:
+            return "old target still resolves and supports the requested action; no target repair needed"
+        }
     }
 }

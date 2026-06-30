@@ -1,36 +1,32 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import os
-
-import TheScore
-
-private let sessionLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 /// Owns the runtime lease state for a ButtonHeist session.
 struct TheMuscleSession {
-    enum ReleaseTimerAction {
+    enum ReleaseTimerAction: Equatable, Sendable {
         case none
         case cancel
         case replace(timeout: TimeInterval)
     }
 
-    enum Acquisition {
-        case accepted(AcceptanceEffect)
-        case rejected(SessionLease.SessionLockDiagnostic)
+    enum LogEvent: Equatable, Sendable {
+        case sessionClaimed(clientId: Int)
+        case clientRejoinedDuringGracePeriod(clientId: Int)
+        case sessionReleased
+        case releaseTimerStarted(timeout: TimeInterval)
     }
 
-    struct AcceptanceEffect {
-        let leaseEffect: SessionLease.AcquisitionEffect
+    struct Effect: Equatable, Sendable {
+        var releaseTimerAction: ReleaseTimerAction = .none
+        var logEvents: [LogEvent] = []
 
-        var releaseTimerAction: ReleaseTimerAction {
-            switch leaseEffect {
-            case .claimedSession:
-                return .none
-            case .rejoinedDuringGracePeriod:
-                return .cancel
-            }
-        }
+        static let none = Effect()
+    }
+
+    enum Acquisition: Equatable, Sendable {
+        case accepted(Effect)
+        case rejected(SessionLease.SessionLockDiagnostic)
     }
 
     private var lease: SessionLease
@@ -64,42 +60,45 @@ struct TheMuscleSession {
         case .accepted(let effect):
             switch effect {
             case .claimedSession:
-                sessionLogger.info("Session claimed by client \(clientId)")
+                return .accepted(Effect(logEvents: [.sessionClaimed(clientId: clientId)]))
             case .rejoinedDuringGracePeriod:
-                sessionLogger.info("Client \(clientId) rejoined session during grace period")
+                return .accepted(Effect(
+                    releaseTimerAction: .cancel,
+                    logEvents: [.clientRejoinedDuringGracePeriod(clientId: clientId)]
+                ))
             }
-            return .accepted(AcceptanceEffect(leaseEffect: effect))
 
         case .rejected(let diagnostic):
             return .rejected(diagnostic)
         }
     }
 
-    mutating func release() -> ReleaseTimerAction {
+    mutating func release() -> Effect {
         switch lease.release() {
         case .releasedSession:
-            sessionLogger.info("Session released")
+            return Effect(releaseTimerAction: .cancel, logEvents: [.sessionReleased])
         case .noActiveSession:
-            break
+            return Effect(releaseTimerAction: .cancel)
         }
-        return .cancel
     }
 
-    mutating func removeConnection(_ clientId: Int) -> ReleaseTimerAction {
+    mutating func removeConnection(_ clientId: Int) -> Effect {
         switch lease.removeConnection(clientId) {
         case .draining:
             let releaseTimeout = lease.releaseTimeout
-            sessionLogger.info("All session connections gone, starting \(releaseTimeout)s release timer")
-            return .replace(timeout: releaseTimeout)
+            return Effect(
+                releaseTimerAction: .replace(timeout: releaseTimeout),
+                logEvents: [.releaseTimerStarted(timeout: releaseTimeout)]
+            )
         case .active, .unchanged:
             return .none
         }
     }
 
-    mutating func noteClientActivity(_ clientId: Int) -> ReleaseTimerAction {
+    mutating func noteClientActivity(_ clientId: Int) -> Effect {
         guard lease.activeSessionConnections.contains(clientId) else { return .none }
         if lease.resetInactivityTimer() != nil {
-            return .replace(timeout: lease.releaseTimeout)
+            return Effect(releaseTimerAction: .replace(timeout: lease.releaseTimeout))
         }
         return .none
     }

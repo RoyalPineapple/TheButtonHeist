@@ -30,25 +30,56 @@ public enum HeistPlanning {
     }
 
     public static func admitPlanSource(from request: HeistPlanSourceAdmissionRequest) throws -> HeistPlanLoadRequest {
-        guard request.rawStructuredJSONIRFields.isEmpty else {
-            throw HeistPlanningError.rawStructuredJSONIRFields(
-                commandName: request.commandName,
-                fields: request.rawStructuredJSONIRFields.sorted()
-            )
-        }
-
-        switch (request.path, request.inlineDSL) {
-        case (.some, .some):
-            throw HeistPlanningError.multiplePlanSources(commandName: request.commandName)
-        case (.none, .none):
-            throw HeistPlanningError.missingPlanSource(commandName: request.commandName)
-        case (.some(let path), .none):
+        switch request.source {
+        case .artifactPath(let path):
             return HeistPlanLoadRequest(commandName: request.commandName, source: .artifactPath(path))
-        case (.none, .some(let source)):
+        case .inlineDSL(let source):
             guard request.sourcePolicy.acceptsInlineDSL else {
                 throw HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName)
             }
             return HeistPlanLoadRequest(commandName: request.commandName, source: .inlineDSL(source))
+        }
+    }
+
+    public static func admissionRequest(
+        commandName: String,
+        path: String?,
+        inlineDSL: String?,
+        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
+    ) throws -> HeistPlanSourceAdmissionRequest {
+        HeistPlanSourceAdmissionRequest(
+            commandName: commandName,
+            source: try admittedSource(commandName: commandName, path: path, inlineDSL: inlineDSL),
+            sourcePolicy: sourcePolicy
+        )
+    }
+
+    public static func admittedSource(
+        commandName: String,
+        path: String?,
+        inlineDSL: String?
+    ) throws -> HeistPlanSource {
+        switch (path, inlineDSL) {
+        case (.some, .some):
+            throw HeistPlanningError.multiplePlanSources(commandName: commandName)
+        case (.none, .none):
+            throw HeistPlanningError.missingPlanSource(commandName: commandName)
+        case (.some(let path), .none):
+            return .artifactPath(path)
+        case (.none, .some(let source)):
+            return .inlineDSL(source)
+        }
+    }
+
+    public static func rejectRawStructuredJSONIRFields(
+        commandName: String,
+        fields: Set<String>
+    ) throws {
+        guard fields.isEmpty else {
+            throw HeistPlanningError.rawStructuredJSONIRFields(
+                commandName: commandName,
+                fields: fields.sorted()
+            )
         }
     }
 
@@ -144,22 +175,16 @@ public enum HeistPlanSourceAdmissionPolicy: Sendable, Equatable {
 
 public struct HeistPlanSourceAdmissionRequest: Sendable, Equatable {
     public let commandName: String
-    public let path: String?
-    public let inlineDSL: String?
-    public let rawStructuredJSONIRFields: Set<String>
+    public let source: HeistPlanSource
     public let sourcePolicy: HeistPlanSourceAdmissionPolicy
 
     public init(
         commandName: String,
-        path: String? = nil,
-        inlineDSL: String? = nil,
-        rawStructuredJSONIRFields: Set<String> = [],
+        source: HeistPlanSource,
         sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
     ) {
         self.commandName = commandName
-        self.path = path
-        self.inlineDSL = inlineDSL
-        self.rawStructuredJSONIRFields = rawStructuredJSONIRFields
+        self.source = source
         self.sourcePolicy = sourcePolicy
     }
 }

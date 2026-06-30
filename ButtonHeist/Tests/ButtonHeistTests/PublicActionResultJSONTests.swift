@@ -23,11 +23,9 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testStandaloneActionResponseEncodesValuePayload() throws {
         let response = FenceResponse.action(
             command: .typeText,
-            result: ActionResult(
-                success: true,
-                method: .typeText,
-                message: "typed",
-                payload: .value("Hello")
+            result: ActionResult.success(
+                payload: .typeText("Hello"),
+                message: "typed"
             )
         )
 
@@ -43,11 +41,9 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testStandaloneActionResponseEncodesScreenshotPayloadSummary() throws {
         let response = FenceResponse.action(
             command: .getScreen,
-            result: ActionResult(
-                success: true,
-                method: .takeScreenshot,
-                message: "captured",
-                payload: .screenshot(ScreenPayload(pngData: "abc", width: 393, height: 852))
+            result: ActionResult.success(
+                payload: .screenshot(ScreenPayload(pngData: "abc", width: 393, height: 852)),
+                message: "captured"
             )
         )
 
@@ -74,11 +70,9 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .runHeist,
-            result: ActionResult(
-                success: true,
-                method: .heistPlan,
-                message: "ran",
-                payload: .heistExecution(heistResult)
+            result: ActionResult.success(
+                payload: .heistExecution(heistResult),
+                message: "ran"
             )
         )
 
@@ -171,7 +165,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                         kind: .action,
                         status: .failed,
                         durationMs: 7,
-                        evidence: .action(HeistActionEvidence(command: nil, actionResult: actionResult)),
+                        evidence: .action(.dispatch(command: nil, actionResult: actionResult)),
                         failure: HeistFailureDetail(
                             category: .targetResolution,
                             contract: "action dispatch succeeds",
@@ -341,10 +335,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func rotorActionResult() -> ActionResult {
-        ActionResult(
-            success: true,
-            method: .rotor,
-            message: "moved to next heading",
+        ActionResult.success(
             payload: .rotor(RotorResult(
                 rotor: "Headings",
                 direction: .next,
@@ -354,7 +345,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                     endOffset: 9,
                     rangeDescription: "0..<9"
                 )
-            ))
+            )),
+            message: "moved to next heading"
         )
     }
 
@@ -378,7 +370,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             kind: .action,
             status: status,
             durationMs: 7,
-            evidence: .action(HeistActionEvidence(command: nil, actionResult: result)),
+            evidence: .action(.dispatch(command: nil, actionResult: result)),
             failure: failure
         )
         let response = FenceResponse.heistExecution(

@@ -15,6 +15,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
                     actionResult: ActionResult(success: true, method: .activate),
+                    expectationActionResult: ActionResult(success: true, method: .wait),
                     expectation: ExpectationResult(met: true, predicate: expectationPredicate)
                 ),
             ],
@@ -27,7 +28,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.reportStepName, "action")
         XCTAssertEqual(result.steps.first?.reportCommandName, "activate")
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
-        XCTAssertEqual(result.reportedActionResults.map(\.method), [.activate])
+        XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 1)
         XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
@@ -127,7 +128,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
-        let evidence = HeistActionEvidence(
+        let evidence = HeistActionEvidence.dispatch(
             command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
             actionResult: ActionResult(success: true, method: .activate),
             warning: .activationWeakAffordanceEvidence(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
@@ -357,9 +358,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     status: .failed,
                     durationMs: 5,
                     intent: .action(command: "activate", target: "label=Pay"),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
                         actionResult: ActionResult(success: true, method: .activate),
+                        expectationActionResult: ActionResult(success: true, method: .wait, message: "screen did not change"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -661,9 +663,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     status: .failed,
                     durationMs: 5,
                     intent: .action(command: "activate", target: "label=Pay"),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
                         actionResult: ActionResult(success: true, method: .activate),
+                        expectationActionResult: ActionResult(success: true, method: .wait, message: "elementsChanged"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -725,13 +728,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     status: .passed,
                     durationMs: 1,
                     intent: .action(command: "takeScreenshot", target: nil),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.dispatch(
                         command: .takeScreenshot,
-                        actionResult: ActionResult(
-                            success: true,
-                            method: .takeScreenshot,
-                            payload: .screenshot(screenshot)
-                        )
+                        actionResult: ActionResult.success(payload: .screenshot(screenshot))
                     ))
                 ),
             ],
@@ -745,7 +744,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         guard case .failed(let message, let errorKind) = rows.first?.outcome else {
             return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
         }
-        XCTAssertEqual(errorKind, .commandError)
+        XCTAssertEqual(errorKind, HeistJUnitReport.ReportErrorKind.commandError)
         XCTAssertTrue(message.contains("stop"), message)
         XCTAssertTrue(
             message.contains("failure screenshot: 42x24 receipt=$.body[0].failure.actions[0] interface=21 elements"),
@@ -1106,7 +1105,24 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         warning: HeistActionWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        let evidence: HeistActionEvidence
+        if let expectationActionResult, let expectation {
+            guard let command else {
+                preconditionFailure("Expectation action evidence requires a command")
+            }
+            evidence = .expectation(
+                command: command,
+                actionResult: actionResult,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation,
+                warning: warning
+            )
+        } else {
+            precondition(expectationActionResult == nil && expectation == nil)
+            evidence = .dispatch(command: command, actionResult: actionResult, warning: warning)
+        }
+
+        return HeistExecutionStepResult(
             path: path,
             kind: .action,
             status: failure == nil ? .passed : .failed,
@@ -1114,13 +1130,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             intent: command.map {
                 .action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
             },
-            evidence: .action(HeistActionEvidence(
-                command: command,
-                actionResult: actionResult,
-                expectationActionResult: expectationActionResult,
-                expectation: expectation,
-                warning: warning
-            )),
+            evidence: .action(evidence),
             failure: failure
         )
     }

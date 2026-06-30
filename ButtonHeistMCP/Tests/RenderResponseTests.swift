@@ -61,9 +61,9 @@ struct RenderResponseTests {
                             command: command.wireType.rawValue,
                             target: command.reportTarget.map(String.init(describing:))
                         ),
-                        evidence: .action(HeistActionEvidence(
+                        evidence: .action(.dispatch(
                             command: command,
-                            actionResult: ActionResult.success(
+                            actionResult: .success(
                                 method: .activate,
                                 accessibilityTrace: trace
                             )

@@ -168,14 +168,13 @@ extension Actions {
             message += " text range \(textRange.rangeDescription)"
         }
         return .success(
-            method: .rotor,
-            message: message,
             payload: .rotor(RotorResult(
                 rotor: hit.rotor,
                 direction: direction,
                 foundElement: foundElement,
                 textRange: hit.textRange
-            ))
+            )),
+            message: message
         )
     }
 

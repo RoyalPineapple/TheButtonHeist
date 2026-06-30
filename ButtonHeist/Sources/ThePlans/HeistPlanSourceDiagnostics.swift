@@ -388,6 +388,40 @@ extension HeistPlanRuntimeSafetyError {
 }
 
 public extension HeistPlanning {
+    static func rejectRawStructuredJSONIRFieldsResult(
+        commandName: String,
+        fields: Set<String>
+    ) -> ValidationResult<Void, HeistBuildDiagnostic> {
+        do {
+            try rejectRawStructuredJSONIRFields(commandName: commandName, fields: fields)
+            return .success((), diagnostics: [])
+        } catch let error as HeistPlanningError {
+            return .failure(error.diagnostics)
+        } catch {
+            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        }
+    }
+
+    static func admissionRequestResult(
+        commandName: String,
+        path: String?,
+        inlineDSL: String?,
+        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
+    ) -> ValidationResult<HeistPlanSourceAdmissionRequest, HeistBuildDiagnostic> {
+        do {
+            return .success(try admissionRequest(
+                commandName: commandName,
+                path: path,
+                inlineDSL: inlineDSL,
+                sourcePolicy: sourcePolicy
+            ), diagnostics: [])
+        } catch let error as HeistPlanningError {
+            return .failure(error.diagnostics)
+        } catch {
+            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        }
+    }
+
     static func admitPlanSourceResult(
         from request: HeistPlanSourceAdmissionRequest
     ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {

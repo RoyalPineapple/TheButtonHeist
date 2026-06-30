@@ -822,7 +822,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     kind: .action,
                     durationMs: 0,
                     intent: .action(command: "activate", target: "predicate(label=\"Save\")"),
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.dispatch(
                         command: command,
                         actionResult: .failure(
                             method: .activate,
@@ -945,7 +945,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             path: "$.body[0].conditional.cases[0].body[0]",
             kind: .action,
             durationMs: 4,
-            evidence: .action(HeistActionEvidence(
+            evidence: .action(.dispatch(
                 command: nil,
                 actionResult: .failure(
                     method: .activate,
@@ -1065,7 +1065,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "\(path).body[0]",
                     kind: .action,
                     durationMs: durationMs,
-                    evidence: .action(HeistActionEvidence(
+                    evidence: .action(.dispatch(
                         command: nil,
                         actionResult: .success(method: .activate, message: "activated")
                     ))

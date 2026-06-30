@@ -62,13 +62,11 @@ public struct ServerError: Codable, Sendable, Equatable {
     }
 }
 
-/// Command-specific payload carried by an `ActionResult`.
+/// Wire payload carried by an `ActionResult`.
 ///
-/// Modeled as an enum so the "at most one" invariant is structural rather than
-/// documented. Encodes natively as a tagged union under the `payload` key on
-/// `ActionResult`: `{"kind": "value", "data": "..."}`, etc.
-///   - `.value`        → typeText / setPasteboard / getPasteboard
-///   - `.screenshot`   → takeScreenshot
+/// `ResultPayload` is intentionally the decoded/encoded representation. Source
+/// construction should use `ActionResultPayload` so the method is bound to the
+/// payload before an `ActionResult` is built.
 public enum ResultPayload: Codable, Sendable, Equatable {
     case value(String)
     case rotor(RotorResult)
@@ -118,6 +116,45 @@ public enum ResultPayload: Codable, Sendable, Equatable {
             try container.encode(Kind.heistExecution, forKey: .kind)
             try container.encode(result, forKey: .data)
         }
+    }
+}
+
+/// Method-bound payload for source construction of an `ActionResult`.
+///
+/// The wire payload enum remains available for decoding and projection, but
+/// production result factories take this typed wrapper so value/screenshot/
+/// rotor/heist payloads carry their only valid `ActionMethod`.
+public struct ActionResultPayload: Sendable, Equatable {
+    package let method: ActionMethod
+    package let resultPayload: ResultPayload
+
+    private init(method: ActionMethod, resultPayload: ResultPayload) {
+        self.method = method
+        self.resultPayload = resultPayload
+    }
+
+    public static func typeText(_ value: String) -> ActionResultPayload {
+        ActionResultPayload(method: .typeText, resultPayload: .value(value))
+    }
+
+    public static func setPasteboard(_ value: String) -> ActionResultPayload {
+        ActionResultPayload(method: .setPasteboard, resultPayload: .value(value))
+    }
+
+    public static func getPasteboard(_ value: String) -> ActionResultPayload {
+        ActionResultPayload(method: .getPasteboard, resultPayload: .value(value))
+    }
+
+    public static func screenshot(_ screen: ScreenPayload) -> ActionResultPayload {
+        ActionResultPayload(method: .takeScreenshot, resultPayload: .screenshot(screen))
+    }
+
+    public static func rotor(_ rotor: RotorResult) -> ActionResultPayload {
+        ActionResultPayload(method: .rotor, resultPayload: .rotor(rotor))
+    }
+
+    public static func heistExecution(_ result: HeistExecutionResult) -> ActionResultPayload {
+        ActionResultPayload(method: .heistPlan, resultPayload: .heistExecution(result))
     }
 }
 
@@ -195,22 +232,17 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 /// point if needed.
 public struct ActivationTrace: Codable, Sendable, Equatable {
     public let axActivateReturned: Bool?
-    /// Populated only by older receipts from runtimes that retried activation
-    /// after refresh.
-    public let retryAxActivateReturned: Bool?
     public let tapActivationDispatched: Bool
     public let tapActivationPoint: ScreenPoint?
     public let tapActivationSucceeded: Bool?
 
     public init(
         axActivateReturned: Bool?,
-        retryAxActivateReturned: Bool? = nil,
         tapActivationDispatched: Bool = false,
         tapActivationPoint: ScreenPoint? = nil,
         tapActivationSucceeded: Bool? = nil
     ) {
         self.axActivateReturned = axActivateReturned
-        self.retryAxActivateReturned = retryAxActivateReturned
         self.tapActivationDispatched = tapActivationDispatched
         self.tapActivationPoint = tapActivationPoint
         self.tapActivationSucceeded = tapActivationSucceeded
@@ -334,7 +366,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         method: ActionMethod,
         message: String? = nil,
-        payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -346,7 +377,31 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .success,
             method: method,
             message: message,
-            payload: payload,
+            payload: nil,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    public static func success(
+        payload: ActionResultPayload,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) -> ActionResult {
+        ActionResult(
+            outcome: .success,
+            method: payload.method,
+            message: message,
+            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -360,7 +415,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
-        payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -372,7 +426,32 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .failure(errorKind),
             method: method,
             message: message,
-            payload: payload,
+            payload: nil,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    public static func failure(
+        payload: ActionResultPayload,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) -> ActionResult {
+        ActionResult(
+            outcome: .failure(errorKind),
+            method: payload.method,
+            message: message,
+            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -387,7 +466,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         message: String? = nil,
         errorKind: ErrorKind? = nil,
-        payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -398,14 +476,40 @@ public struct ActionResult: Codable, Sendable, Equatable {
         guard let outcome = Outcome(success: success, errorKind: errorKind) else {
             preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
         }
-        guard Self.payload(payload, isCompatibleWith: method) else {
-            preconditionFailure(Self.payloadValidationMessage(method: method, payload: payload))
-        }
         self.init(
             outcome: outcome,
             method: method,
             message: message,
-            payload: payload,
+            payload: nil,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    package init(
+        success: Bool,
+        payload: ActionResultPayload,
+        message: String? = nil,
+        errorKind: ErrorKind? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
+            preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
+        }
+        self.init(
+            outcome: outcome,
+            method: payload.method,
+            message: message,
+            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,

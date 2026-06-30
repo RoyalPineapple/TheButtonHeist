@@ -147,6 +147,26 @@ import Testing
         )
     }
 
+    @Test func `plan source admission request carries only public source choices`() throws {
+        let planningSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/ThePlans/HeistPlanning.swift"
+        )
+        let rawIRAdmissionFields = planningSource.matches(
+            of: #"\bstruct\s+HeistPlanSourceAdmissionRequest\b(?:(?!^\s*}$).)*\brawStructuredJSONIRFields\b"#,
+            options: [.dotMatchesLineSeparators, .anchorsMatchLines]
+        )
+
+        #expect(
+            rawIRAdmissionFields.isEmpty,
+            """
+            HeistPlanSourceAdmissionRequest should model normal public source choices only. \
+            Boundary raw-IR rejection/diagnostics may still validate rawStructuredJSONIRFields \
+            outside the admission request shape:
+            \(rawIRAdmissionFields.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
     @Test func `public action payload projections explicitly surface screenshot and heist execution data`() throws {
         let actionProjectionSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/ActionProjection.swift"

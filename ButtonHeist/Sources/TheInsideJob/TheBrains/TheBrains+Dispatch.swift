@@ -113,7 +113,8 @@ extension TheBrains {
         builder.message = result.message
         switch result.outcome {
         case .success(let success):
-            return builder.success(payload: success.payload)
+            guard let payload = success.payload else { return builder.success() }
+            return builder.success(payload: payload)
         case .failure(let failure):
             return builder.failure(errorKind: Self.actionErrorKind(for: failure.kind))
         }
@@ -126,7 +127,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionPayloadContext) -> ResultPayload?)? = nil,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
@@ -150,15 +151,17 @@ extension TheBrains {
         switch result.outcome {
         case .success(let success):
             postActionOutcome = .success(.init(
-                payload: success.payload,
-                afterStatePayload: afterStatePayload.map { payload in
-                    { afterState in
-                        payload(PostActionPayloadContext(
-                            afterState: afterState,
-                            resolvedElementId: success.resolvedElementId
-                        ))
+                payload: .init(
+                    immediate: success.payload,
+                    afterState: afterStatePayload.map { payload in
+                        { afterState in
+                            payload(PostActionPayloadContext(
+                                afterState: afterState,
+                                resolvedElementId: success.resolvedElementId
+                            ))
+                        }
                     }
-                },
+                ),
                 subjectEvidence: success.subjectEvidence,
                 activationTrace: success.activationTrace
             ))

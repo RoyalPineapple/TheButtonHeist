@@ -180,6 +180,28 @@ report_git_grep \
   '\bfinalEvidence[[:space:]]*:[[:space:]]*FinalEvidence[?]' \
   "${EXISTING_RUNTIME_REDUCER_GUARD_PATHS[@]}"
 
+report_git_grep \
+  "post-action receipt reducer object" \
+  '\bstruct[[:space:]]+PostActionReceiptReducer\b' \
+  "${EXISTING_RUNTIME_REDUCER_GUARD_PATHS[@]}"
+
+RUNTIME_RECEIPT_HELPER_GUARD_PATHS=(
+  ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistReceiptConstruction.swift
+)
+EXISTING_RUNTIME_RECEIPT_HELPER_GUARD_PATHS=()
+for path in "${RUNTIME_RECEIPT_HELPER_GUARD_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_RUNTIME_RECEIPT_HELPER_GUARD_PATHS+=("$path")
+  fi
+done
+
+runtime_receipt_generic_parameter_matches="$(
+  git_grep \
+    '\b(status[[:space:]]+requestedStatus|requestedStatus)[[:space:]]*:[[:space:]]*HeistExecutionStepStatus[?]|\bevidence[[:space:]]*:[[:space:]]*HeistStepEvidence[?]' \
+    "${EXISTING_RUNTIME_RECEIPT_HELPER_GUARD_PATHS[@]}"
+)"
+report_matches "generic runtime receipt helper status/evidence parameter" "$runtime_receipt_generic_parameter_matches"
+
 TOOLING_PUBLIC_API_GUARD_PATHS=(
   ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift
   ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift
@@ -268,16 +290,34 @@ raw_logger_matches="$(git_grep '\bLogger[[:space:]]*\(' "${EXISTING_SOURCE_PATHS
 raw_logger_matches="$(filter_allowed_normalized_lines "$raw_logger_matches" "${RAW_LOGGER_ALLOWED_LINES[@]}")"
 report_matches "direct raw Logger construction outside ButtonHeistLog.logger" "$raw_logger_matches"
 
-TUPLE_RETURN_GUARD_PATHS=(
-  'ButtonHeist/Sources/ThePlans/HeistCompiler.swift'
-  'ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift'
-  'ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift'
-  ':(glob)ButtonHeist/Sources/ThePlans/HeistPlanSource*Parser.swift'
-  ':(glob)ButtonHeist/Sources/TheButtonHeist/TheFence/*.swift'
-  'ButtonHeistMCP/Sources/main.swift'
+THE_MUSCLE_SESSION_GUARD_PATHS=(
+  ButtonHeist/Sources/TheInsideJob/Server/TheMuscleSession.swift
 )
-tuple_return_matches="$(git_grep '[[:space:]]*->[[:space:]]*\([^)]*,[^)]*\)[?]?' "${TUPLE_RETURN_GUARD_PATHS[@]}")"
-report_matches "tuple return APIs in parser/compiler/fence/MCP surfaces" "$tuple_return_matches"
+EXISTING_THE_MUSCLE_SESSION_GUARD_PATHS=()
+for path in "${THE_MUSCLE_SESSION_GUARD_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_THE_MUSCLE_SESSION_GUARD_PATHS+=("$path")
+  fi
+done
+the_muscle_session_logging_matches="$(
+  git_grep \
+    '\b(ButtonHeistLog[.]logger|Logger[[:space:]]*\(|sessionLogger[.])' \
+    "${EXISTING_THE_MUSCLE_SESSION_GUARD_PATHS[@]}"
+)"
+report_matches "direct TheMuscleSession logging" "$the_muscle_session_logging_matches"
+
+production_tuple_return_api_matches="$(
+  for path in "${EXISTING_SOURCE_PATHS[@]}"; do
+    if [[ -d "$path" ]]; then
+      while IFS= read -r file; do
+        perl -0ne 'while (/^[ \t]*(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)]*\))?|public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated|final|override)\s+)*func\s+[A-Za-z_][A-Za-z0-9_]*[^{=;]*?\)[ \t\n]*(?:async[ \t\n]+)?(?:(?:throws|rethrows)[ \t\n]+)?->[ \t\n]*\((?![ \t\n]*@Sendable\b)[^()]*,[^()]*\)\??/msg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; } while (/^[ \t]*(?:(?:public|package|internal|private|fileprivate)\s+)*typealias\s+[A-Za-z_][A-Za-z0-9_]*[^=\n]*=[^;\n]*->[ \t\n]*\((?![ \t\n]*@Sendable\b)[^()]*,[^()]*\)\??/msg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$file"
+      done < <(find "$path" -type f -name '*.swift')
+    elif [[ "$path" == *.swift ]]; then
+      perl -0ne 'while (/^[ \t]*(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)]*\))?|public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated|final|override)\s+)*func\s+[A-Za-z_][A-Za-z0-9_]*[^{=;]*?\)[ \t\n]*(?:async[ \t\n]+)?(?:(?:throws|rethrows)[ \t\n]+)?->[ \t\n]*\((?![ \t\n]*@Sendable\b)[^()]*,[^()]*\)\??/msg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; } while (/^[ \t]*(?:(?:public|package|internal|private|fileprivate)\s+)*typealias\s+[A-Za-z_][A-Za-z0-9_]*[^=\n]*=[^;\n]*->[ \t\n]*\((?![ \t\n]*@Sendable\b)[^()]*,[^()]*\)\??/msg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$path"
+    fi
+  done
+)"
+report_matches "production tuple return API" "$production_tuple_return_api_matches"
 
 GESTURE_PAYLOAD_GUARD_PATHS=(
   ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+GestureTargets.swift
@@ -311,6 +351,14 @@ UNCHECKED_ADMISSION_ALLOWED_PATHS=(
 unchecked_admission_matches="$(git_grep 'uncheckedPlanForRuntimeSafetyValidation[[:space:]]*\(' ButtonHeist/Sources/ThePlans)"
 unchecked_admission_matches="$(filter_allowed_paths "$unchecked_admission_matches" "${UNCHECKED_ADMISSION_ALLOWED_PATHS[@]}")"
 report_matches "unchecked plan admission outside runtime validation boundary" "$unchecked_admission_matches"
+
+raw_structured_admission_request_matches="$(
+  if [[ -f ButtonHeist/Sources/ThePlans/HeistPlanning.swift ]]; then
+    perl -0ne 'while (/\bstruct\s+HeistPlanSourceAdmissionRequest\b(?:(?!^[ \t]*}\s*$).)*\brawStructuredJSONIRFields\b/smg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' \
+      ButtonHeist/Sources/ThePlans/HeistPlanning.swift
+  fi
+)"
+report_matches "raw structured JSON IR field on plan-source admission request" "$raw_structured_admission_request_matches"
 
 PUBLIC_INTERFACE_RAW_ALLOWED_PATHS=(
   '^ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON\+Interface\.swift$'

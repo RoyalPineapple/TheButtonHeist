@@ -905,10 +905,10 @@ import Testing
 }
 
 @Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceAdmissionRequest(
+    let result = HeistPlanning.rejectRawStructuredJSONIRFieldsResult(
         commandName: "run_heist",
-        rawStructuredJSONIRFields: ["body", "version"]
-    ))
+        fields: ["body", "version"]
+    )
 
     guard let diagnostic = result.failureDiagnostics?.first else {
         Issue.record("Expected raw JSON IR fields to fail planning admission")

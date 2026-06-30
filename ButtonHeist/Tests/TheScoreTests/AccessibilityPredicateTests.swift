@@ -1080,14 +1080,12 @@ final class AccessibilityPredicateTests: XCTestCase {
     private func makeResult(
         success: Bool,
         message: String? = nil,
-        value: String? = nil,
         delta: AccessibilityTrace.Delta? = nil
     ) -> ActionResult {
         ActionResult(
             success: success,
             method: .syntheticTap,
             message: message,
-            payload: value.map { .value($0) },
             accessibilityTrace: delta.map(AccessibilityTrace.projectingForTests)
         )
     }
