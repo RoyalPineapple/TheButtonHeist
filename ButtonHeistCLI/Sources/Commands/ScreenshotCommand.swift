@@ -24,14 +24,6 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        var request = CLIRequestParameters()
-        if let outputPath = output {
-            request.set(.output, outputPath)
-        }
-        if inline {
-            request.set(.inlineData, true)
-        }
-
         let commandResultMapper: CLIRunner.CommandResultMapper?
         if inline {
             commandResultMapper = Self.inlineCommandResult(for:)
@@ -42,7 +34,10 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             connection: connection,
             format: .human,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
+            arguments: Self.fenceArguments(
+                CommandArgumentWriter.optional(.output, output),
+                inline ? CommandArgumentWriter.value(.inlineData, true) : nil
+            ),
             statusMessage: "Requesting screenshot...",
             result: commandResultMapper
         )

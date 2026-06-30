@@ -46,18 +46,17 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        var request = CLIRequestParameters()
-        request.set(.direction, rotorDirection)
-        if let rotor { request.set(.rotor, rotor) }
-        if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
-
-        request.set(.timeout, timeoutOption.timeout)
-
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request, target: target),
+            arguments: Self.fenceArguments(
+                target: target,
+                CommandArgumentWriter.value(.direction, rotorDirection),
+                CommandArgumentWriter.optional(.rotor, rotor),
+                CommandArgumentWriter.optional(.rotorIndex, rotorIndex),
+                CommandArgumentWriter.value(.timeout, timeoutOption.timeout)
+            ),
             statusMessage: "Moving rotor..."
         )
     }

@@ -107,68 +107,11 @@ enum CLIRequestBuilder {
     }
 
     static func targetValue(_ target: ElementTarget) -> HeistValue {
-        targetObject(target).heistValue
+        CLIElementTargetPayloadEncoder.value(target)
     }
 
     static func targetObject(_ target: ElementTarget) -> CLIRequestObject {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            var object = predicateArgumentValues(predicate)
-            if let ordinal {
-                object.set(.ordinal, ordinal)
-            }
-            return object
-        }
-    }
-
-    private static func predicateArgumentValues(_ predicate: ElementPredicate) -> CLIRequestObject {
-        var object = CLIRequestObject()
-        for check in predicate.checks {
-            switch check {
-            case .label(let match):
-                appendStringMatch(match, to: .label, in: &object)
-            case .identifier(let match):
-                appendStringMatch(match, to: .identifier, in: &object)
-            case .value(let match):
-                appendStringMatch(match, to: .value, in: &object)
-            case .traits(let traits):
-                appendTraits(traits, to: .traits, in: &object)
-            case .excludeTraits(let traits):
-                appendTraits(traits, to: .excludeTraits, in: &object)
-            }
-        }
-        return object
-    }
-
-    private static func appendStringMatch(
-        _ match: StringMatch<String>,
-        to key: FenceParameterKey,
-        in object: inout CLIRequestObject
-    ) {
-        object.appendOneOrMany(stringMatchValue(match), for: key)
-    }
-
-    private static func appendTraits(
-        _ traits: Set<HeistTrait>,
-        to key: FenceParameterKey,
-        in object: inout CLIRequestObject
-    ) {
-        guard !traits.isEmpty else { return }
-        var values: [HeistValue]
-        if case .array(let existing)? = object[key] {
-            values = existing
-        } else {
-            values = []
-        }
-        values.append(contentsOf: traits.sorted { $0.rawValue < $1.rawValue }.map { .string($0.rawValue) })
-        object.set(key, .array(values))
-    }
-
-    private static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
-        CLIRequestObject([
-            (.mode, .string(match.mode.rawValue)),
-            (.value, .string(match.value)),
-        ]).heistValue
+        CLIElementTargetPayloadEncoder.object(target)
     }
 }
 

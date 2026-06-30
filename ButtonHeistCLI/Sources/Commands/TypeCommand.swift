@@ -33,16 +33,17 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = CLIRequestParameters()
-        request.set(.timeout, timeout)
-        request.set(.text, text)
         let target = try element.parsedTarget()
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request, target: target),
+            arguments: Self.fenceArguments(
+                target: target,
+                CommandArgumentWriter.value(.timeout, timeout),
+                CommandArgumentWriter.value(.text, text)
+            ),
             statusMessage: "Sending type command..."
         )
     }

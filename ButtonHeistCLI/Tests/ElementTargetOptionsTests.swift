@@ -91,6 +91,18 @@ final class ElementTargetOptionsTests: XCTestCase {
         ])
     }
 
+    func testCommandArgumentWriterBuildsTypedParametersAndSkipsNilFields() {
+        let parameters = CommandArgumentWriter.parameters(
+            CommandArgumentWriter.value(.text, "hello"),
+            CommandArgumentWriter.value(.timeout, 2.5),
+            CommandArgumentWriter.optional(.rotor, Optional<String>.none)
+        )
+
+        XCTAssertEqual(parameters[.text], .string("hello"))
+        XCTAssertEqual(parameters[.timeout], .double(2.5))
+        XCTAssertNil(parameters[.rotor])
+    }
+
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
         let command = try TapSubcommand.parse(["--ordinal", "0"])
 

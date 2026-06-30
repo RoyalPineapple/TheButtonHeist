@@ -14,6 +14,39 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testCommandSourcesUseCentralArgumentWriterForRequestConstruction() throws {
+        let commandsURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources", isDirectory: true)
+            .appendingPathComponent("Commands", isDirectory: true)
+        let commandFiles = try FileManager.default.contentsOfDirectory(
+            at: commandsURL,
+            includingPropertiesForKeys: nil
+        )
+        .filter { $0.pathExtension == "swift" }
+        XCTAssertFalse(commandFiles.isEmpty, "Expected CLI command source files")
+
+        let disallowedPatterns = [
+            ("mutable CLIRequestParameters", #"var\s+\w+\s*=\s*CLIRequestParameters\(\)"#),
+            ("manual request mutation", #"\.\s*set\s*\("#),
+            ("raw CLIRequestObject dictionary literal", #"CLIRequestObject\s*\(\s*\["#),
+        ]
+        for fileURL in commandFiles {
+            let source = try String(contentsOf: fileURL)
+            for (description, pattern) in disallowedPatterns {
+                let regex = try NSRegularExpression(pattern: pattern)
+                let range = NSRange(source.startIndex..<source.endIndex, in: source)
+                guard let match = regex.firstMatch(in: source, range: range),
+                      let matchRange = Range(match.range, in: source) else {
+                    continue
+                }
+                let snippet = source[matchRange].replacingOccurrences(of: "\n", with: "\\n")
+                XCTFail("\(fileURL.lastPathComponent) contains \(description): \(snippet)")
+            }
+        }
+    }
+
     func testJSONLinesHelpShowsCurrentUserCommands() {
         let help = TheFence.Command.cliJSONLinesHelp
 
@@ -275,13 +308,14 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testDescribeHeistAddsSelectorWithoutDroppingInlinePlanName() throws {
         let source = #"HeistPlan("flow") { Warn("Check") }"#
-        var arguments = try RunHeistCommand.planArguments(
+        let arguments = try RunHeistCommand.planArguments(
             inline: source,
             path: nil,
             entry: nil,
             commandName: "describe_heist"
+        ).adding(
+            CommandArgumentWriter.value(.heist, "flow")
         )
-        arguments.set(.heist, "flow")
 
         XCTAssertEqual(arguments[.heist], .string("flow"))
         XCTAssertEqual(arguments[.plan], .string(source))
