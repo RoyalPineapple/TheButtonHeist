@@ -37,8 +37,7 @@ import TheScore
     }
 
     func success(payload: ResultPayload? = nil) -> ActionResult {
-        ActionResult(
-            success: true,
+        ActionResult.success(
             method: method,
             message: message,
             payload: payload,
@@ -52,11 +51,10 @@ import TheScore
     }
 
     func failure(errorKind: ErrorKind = .actionFailed, payload: ResultPayload? = nil) -> ActionResult {
-        ActionResult(
-            success: false,
+        ActionResult.failure(
             method: method,
-            message: message,
             errorKind: errorKind,
+            message: message,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
