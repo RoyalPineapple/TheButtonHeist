@@ -1341,7 +1341,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try rendering.int("omittedElementCount"), 0)
         try rendering.assertMissing("visibleElementBudget")
         try rendering.assertMissing("totalNodeBudget")
-        XCTAssertEqual(try scrollContainer.string("type"), "list")
+        XCTAssertEqual(try scrollContainer.string("type"), "scrollable")
         XCTAssertEqual(try scrollContainer.double("contentWidth"), 390)
         XCTAssertEqual(try scrollContainer.double("contentHeight"), 1200)
         XCTAssertEqual(try scrollContainer.string("scrollAxis"), "vertical")
@@ -1415,6 +1415,80 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try omitted.string("containerName"), "main_scroll")
         XCTAssertEqual(try omitted.string("scrollAxis"), "vertical")
         XCTAssertEqual(try omitted.strings("reasonCodes"), ["scroll-attempt-budget"])
+    }
+
+    func testPublicInterfaceJSONProjectsScrollableContainerAsScrollable() throws {
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1_200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "main_scroll",
+                children: [
+                    .element(makeReceiptTestElement(label: "Top")),
+                ]
+            ),
+        ])
+
+        let dto = try publicInterfaceContractDTO(interface)
+        let container = try XCTUnwrap(dto.topLevelContainers.first)
+
+        XCTAssertEqual(container.type, "scrollable")
+        XCTAssertNotEqual(container.type, "list")
+        XCTAssertEqual(container.containerName, "main_scroll")
+        XCTAssertEqual(container.contentWidth, 390)
+        XCTAssertEqual(container.contentHeight, 1_200)
+        XCTAssertEqual(container.scrollAxis, "vertical")
+        XCTAssertEqual(container.pageScrollsY, 3)
+    }
+
+    func testPublicInterfaceJSONKeepsNonScrollableContainerTypesDistinct() throws {
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestSemanticContainer(label: "Actions", value: "Primary", identifier: "actions"),
+                containerName: "actions_group",
+                children: []
+            ),
+            .container(
+                makeReceiptTestContainer(type: .list),
+                containerName: "rows_list",
+                children: []
+            ),
+            .container(
+                makeReceiptTestContainer(type: .landmark),
+                containerName: "main_landmark",
+                children: []
+            ),
+            .container(
+                makeReceiptTestContainer(type: .dataTable(rowCount: 3, columnCount: 2)),
+                containerName: "prices_table",
+                children: []
+            ),
+            .container(
+                makeReceiptTestContainer(type: .tabBar),
+                containerName: "primary_tabs",
+                children: []
+            ),
+        ])
+
+        let containers = try publicInterfaceContractDTO(interface).topLevelContainers
+
+        XCTAssertEqual(containers.map(\.type), [
+            "semanticGroup",
+            "list",
+            "landmark",
+            "dataTable",
+            "tabBar",
+        ])
+        XCTAssertEqual(containers[0].label, "Actions")
+        XCTAssertEqual(containers[0].value, "Primary")
+        XCTAssertEqual(containers[0].identifier, "actions")
+        XCTAssertEqual(containers[1].containerName, "rows_list")
+        XCTAssertEqual(containers[3].rowCount, 3)
+        XCTAssertEqual(containers[3].columnCount, 2)
     }
 
     func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
@@ -1826,4 +1900,39 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
     }
 
+}
+
+private func publicInterfaceContractDTO(
+    _ interface: Interface,
+    detail: InterfaceDetail = .summary
+) throws -> PublicInterfaceContractDTO {
+    let data = try JSONEncoder().encode(PublicInterface(interface: interface, detail: detail))
+    return try JSONDecoder().decode(PublicInterfaceContractDTO.self, from: data)
+}
+
+private struct PublicInterfaceContractDTO: Decodable {
+    let tree: [PublicInterfaceTreeNodeContractDTO]
+
+    var topLevelContainers: [PublicInterfaceContainerContractDTO] {
+        tree.compactMap(\.container)
+    }
+}
+
+private struct PublicInterfaceTreeNodeContractDTO: Decodable {
+    let container: PublicInterfaceContainerContractDTO?
+}
+
+private struct PublicInterfaceContainerContractDTO: Decodable {
+    let type: String
+    let label: String?
+    let value: String?
+    let identifier: String?
+    let rowCount: Int?
+    let columnCount: Int?
+    let contentWidth: Double?
+    let contentHeight: Double?
+    let scrollAxis: String?
+    let pageScrollsY: Int?
+    let containerName: String?
+    let children: [PublicInterfaceTreeNodeContractDTO]
 }
