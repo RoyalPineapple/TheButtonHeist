@@ -2,7 +2,24 @@ import Foundation
 
 struct HeistDefinitionHeader {
     let path: String
+    let pathToken: HeistPlanSourceToken
     let parameter: HeistParameter
+
+    init(path: String, parameter: HeistParameter) {
+        self.path = path
+        self.pathToken = HeistPlanSourceToken(
+            kind: .string(path),
+            sourceName: "synthetic-heist-definition",
+            marker: HeistPlanSourceMarker(offset: 0, line: 1, column: 1, length: path.count)
+        )
+        self.parameter = parameter
+    }
+
+    init(path: String, pathToken: HeistPlanSourceToken, parameter: HeistParameter) {
+        self.path = path
+        self.pathToken = pathToken
+        self.parameter = parameter
+    }
 }
 
 struct HeistPlanHeader {
@@ -60,7 +77,7 @@ extension HeistPlanSourceParser {
             let header = try parseHeistDefHeader(parameterKind: parameterKind)
             let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
             return makeDefinition(
-                path: header.path.split(separator: ".").map(String.init),
+                path: try parseDefinitionPath(header),
                 parameter: header.parameter,
                 definitions: mergeDefinitions(body.definitions),
                 body: body.steps
@@ -108,6 +125,7 @@ extension HeistPlanSourceParser {
         parameterKind: HeistDefinitionParameterKind
     ) throws -> HeistDefinitionHeader {
         try expectSymbol("(")
+        let pathToken = currentToken
         let path = try parseStringLiteral()
         var parameter = HeistParameter.none
         if consumeSymbol(",") {
@@ -135,7 +153,15 @@ extension HeistPlanSourceParser {
         default:
             throw error(previous, "HeistDef parameter type does not match its parameter declaration")
         }
-        return HeistDefinitionHeader(path: path, parameter: parameter)
+        return HeistDefinitionHeader(path: path, pathToken: pathToken, parameter: parameter)
+    }
+
+    mutating func parseDefinitionPath(_ header: HeistDefinitionHeader) throws -> [String] {
+        do {
+            return try HeistInvocationPath.components(fromDottedName: header.path)
+        } catch {
+            throw self.error(header.pathToken, String(describing: error))
+        }
     }
 
     func makeDefinition(

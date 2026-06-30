@@ -240,12 +240,12 @@ public struct HeistDef<Input>: Sendable {
         _ path: String,
         @HeistBuilder _ content: @escaping () throws -> Content
     ) where Input == Void {
-        let components = Self.pathComponents(path)
-        self.path = components
         self.parameter = .none
-        self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content()
         }
+        self.path = result.components
+        self.definitionResult = result.definition
     }
 
     public init<Content: HeistContent>(
@@ -253,13 +253,13 @@ public struct HeistDef<Input>: Sendable {
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
     ) where Input == String {
-        let components = Self.pathComponents(path)
         let reference = parameter
-        self.path = components
         self.parameter = .string(name: reference)
-        self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content(try StringExpr(ref: reference))
         }
+        self.path = result.components
+        self.definitionResult = result.definition
     }
 
     public init<Content: HeistContent>(
@@ -267,12 +267,28 @@ public struct HeistDef<Input>: Sendable {
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
     ) where Input == ElementTarget {
-        let components = Self.pathComponents(path)
         let reference = parameter
-        self.path = components
         self.parameter = .elementTarget(name: reference)
-        self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content(try ElementTargetExpr(ref: reference))
+        }
+        self.path = result.components
+        self.definitionResult = result.definition
+    }
+
+    private static func buildDefinitionFromDottedPath(
+        path: String,
+        parameter: HeistParameter,
+        _ content: () throws -> any HeistContent
+    ) -> (components: [String], definition: ValidationResult<HeistPlan, HeistBuildDiagnostic>) {
+        switch pathComponents(path) {
+        case .success(let components, _):
+            return (
+                components,
+                buildDefinition(path: components, parameter: parameter, content)
+            )
+        case .failure(let diagnostics):
+            return ([], .failure(diagnostics))
         }
     }
 
@@ -340,8 +356,17 @@ public struct HeistDef<Input>: Sendable {
         )
     }
 
-    private static func pathComponents(_ path: String) -> [String] {
-        HeistInvocationPath.components(fromDottedName: path)
+    private static func pathComponents(_ path: String) -> ValidationResult<[String], HeistBuildDiagnostic> {
+        do {
+            return .success(try HeistInvocationPath.components(fromDottedName: path), diagnostics: [])
+        } catch {
+            return .failure([.dslBuild(
+                code: .dslInvalidDefinition,
+                path: path.isEmpty ? nil : path,
+                message: "HeistDef path is invalid: \(String(describing: error))",
+                hint: "Use a non-empty dot-separated heist capability name with no empty components."
+            )])
+        }
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
