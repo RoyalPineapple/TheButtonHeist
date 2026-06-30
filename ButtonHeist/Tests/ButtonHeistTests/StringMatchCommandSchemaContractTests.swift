@@ -7,10 +7,10 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
     func testCommandArgumentEnvelopeDecodesStringMatchPayload() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "label": stringMatchValue(mode: "contains", value: "Pay"),
+            FenceParameterKey.label.rawValue: stringMatchValue(mode: "contains", value: "Pay"),
         ])
 
-        let match = try XCTUnwrap(try envelope.schemaStringMatch("label"))
+        let match = try XCTUnwrap(try envelope.schemaStringMatch(.label))
         XCTAssertEqual(match, .contains("Pay"))
     }
 

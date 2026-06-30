@@ -37,7 +37,7 @@ extension TheFence.CommandArgumentEnvelope {
         return .visibleContainer
     }
 
-    func optionalContainerName(_ key: String) throws -> ContainerName? {
+    func optionalContainerName(_ key: FenceParameterKey) throws -> ContainerName? {
         guard let value = try schemaString(key) else { return nil }
         guard let containerName = ContainerName(parsing: value) else {
             throw SchemaValidationError(
@@ -49,11 +49,7 @@ extension TheFence.CommandArgumentEnvelope {
         return containerName
     }
 
-    func optionalContainerName(_ key: FenceParameterKey) throws -> ContainerName? {
-        try optionalContainerName(key.rawValue)
-    }
-
-    func nonEmptyString(_ key: String) throws -> String {
+    func nonEmptyString(_ key: FenceParameterKey) throws -> String {
         let value = try requiredSchemaString(key)
         if value.isEmpty {
             throw SchemaValidationError(field: field(key), observed: "string \"\"", expected: "non-empty string")
@@ -61,20 +57,12 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func nonEmptyString(_ key: FenceParameterKey) throws -> String {
-        try nonEmptyString(key.rawValue)
-    }
-
-    func optionalNonEmptyString(_ key: String) throws -> String? {
+    func optionalNonEmptyString(_ key: FenceParameterKey) throws -> String? {
         guard let value = try schemaString(key) else { return nil }
         if value.isEmpty {
             throw SchemaValidationError(field: field(key), observed: "string \"\"", expected: "non-empty string")
         }
         return value
-    }
-
-    func optionalNonEmptyString(_ key: FenceParameterKey) throws -> String? {
-        try optionalNonEmptyString(key.rawValue)
     }
 
     func decodeElementTargetPayload() throws -> ElementTarget {

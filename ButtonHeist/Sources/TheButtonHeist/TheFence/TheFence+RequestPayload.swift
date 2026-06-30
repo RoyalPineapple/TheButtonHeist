@@ -140,8 +140,8 @@ extension TheFence {
             return
         }
         throw SchemaValidationError(
-            field: unexpectedKey,
-            observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
+            field: arguments.field(forUnknownKey: unexpectedKey),
+            observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
             expected: "valid \(command.rawValue) parameter"
         )
     }
