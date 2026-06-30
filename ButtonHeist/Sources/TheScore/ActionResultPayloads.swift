@@ -267,7 +267,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
 public struct ActionResult: Codable, Sendable, Equatable {
     // MARK: - Nested Types
 
-    public enum Outcome: Sendable, Equatable {
+    package enum Outcome: Sendable, Equatable {
         case success
         case failure(ErrorKind)
 
@@ -331,7 +331,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     // MARK: - Init
 
-    public static func success(
+    package static func success(
         method: ActionMethod,
         message: String? = nil,
         payload: ResultPayload? = nil,
@@ -356,7 +356,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func failure(
+    package static func failure(
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
