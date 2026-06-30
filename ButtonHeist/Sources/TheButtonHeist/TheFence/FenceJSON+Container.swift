@@ -4,7 +4,7 @@ import AccessibilitySnapshotModel
 import TheScore
 
 struct PublicContainer: Encodable {
-    let type: String
+    let type: ContainerTypeName
     let label: String?
     let value: String?
     let identifier: String?
@@ -74,15 +74,15 @@ struct PublicContainer: Encodable {
     ) -> Fields {
         switch container.type {
         case .semanticGroup(let label, let value, let identifier):
-            return Fields(type: "semanticGroup", label: label, value: value, identifier: identifier)
+            return Fields(type: .semanticGroup, label: label, value: value, identifier: identifier)
         case .list:
-            return Fields(type: "list")
+            return Fields(type: .list)
         case .landmark:
-            return Fields(type: "landmark")
+            return Fields(type: .landmark)
         case .dataTable(let rowCount, let columnCount):
-            return Fields(type: "dataTable", rowCount: rowCount, columnCount: columnCount)
+            return Fields(type: .dataTable, rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
-            return Fields(type: "tabBar")
+            return Fields(type: .tabBar)
         case .scrollable(let contentSize):
             return scrollableFields(
                 contentSize: contentSize,
@@ -120,7 +120,7 @@ struct PublicContainer: Encodable {
             viewportHeight: viewportHeight
         )
         return Fields(
-            type: "list",
+            type: .scrollable,
             contentWidth: contentWidth,
             contentHeight: contentHeight,
             scrollAxis: scrollAxis.rawValue,
@@ -133,7 +133,7 @@ struct PublicContainer: Encodable {
     }
 
     private struct Fields {
-        let type: String
+        let type: ContainerTypeName
         var label: String?
         var value: String?
         var identifier: String?
@@ -147,7 +147,7 @@ struct PublicContainer: Encodable {
         var observedElementCount: Int?
 
         init(
-            type: String,
+            type: ContainerTypeName,
             label: String? = nil,
             value: String? = nil,
             identifier: String? = nil,
