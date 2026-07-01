@@ -18,9 +18,9 @@ enum PendingRequestTrackerError: Error, Equatable, LocalizedError {
     }
 }
 
-/// **Ownership.** Request correlation, owned by `TheFence.PendingRequestTrackers`
-/// (one tracker per response type). Key: `requestId: String`. Lifetime: from
-/// `wait()` registration until `resolve()`, timeout, or cancellation.
+/// **Ownership.** Request correlation primitive for callers that need a typed
+/// continuation table. Key: `requestId: String`. Lifetime: from `wait()`
+/// registration until `resolve()`, timeout, or cancellation.
 /// Invalidation: the entry is removed on each of those paths (owner-scoped
 /// removal is idempotent across orderings). Holds only the awaiting
 /// continuation — never caches a delivered result, so it cannot be derived from
