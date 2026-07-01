@@ -417,6 +417,9 @@ extension TheBrains {
         argument: HeistArgument,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
+        let notificationScope = stash.accessibilityNotifications.beginHeistScope()
+        defer { notificationScope.cancel() }
+
         let demand = stash.beginSemanticObservationDemand(scope: .visible)
         defer { demand.cancel() }
 

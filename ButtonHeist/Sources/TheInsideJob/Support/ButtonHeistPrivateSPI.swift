@@ -2,7 +2,6 @@
 #if DEBUG
 import Darwin
 import Foundation
-import MachO
 
 /// Central inventory and dynamic-loading primitives for private Apple SPI used by TheInsideJob.
 ///
@@ -10,6 +9,85 @@ import MachO
 /// unsafe C function casts in this one static namespace. Callers still own their
 /// domain-specific behavior on top of these primitives.
 enum ButtonHeistPrivateSPI {
+
+    // AccessibilitySupport boolean setter.
+    typealias AccessibilitySetEnabledFunction = @convention(c) (
+        Int32 // enabled
+    ) -> Void
+
+    // UIAccessibility notification observer block.
+    typealias AccessibilityNotificationCallbackBlock = @convention(block) (
+        UInt32, // notificationCode
+        AnyObject?, // notificationData
+        AnyObject? // associatedElement
+    ) -> Void
+
+    // AXAddNotificationCallback.
+    typealias AddAccessibilityNotificationCallbackFunction = @convention(c) (
+        AccessibilityNotificationCallbackBlock, // callbackBlock
+        AnyObject // observerKey
+    ) -> Void
+
+    // AXRemoveNotificationCallback.
+    typealias RemoveAccessibilityNotificationCallbackFunction = @convention(c) (
+        AnyObject // observerKey
+    ) -> Void
+
+    // IOHIDEventCreateDigitizerEvent.
+    typealias IOHIDEventCreateDigitizerEventFunction = @convention(c) (
+        CFAllocator?, // allocator
+        UInt64, // timestamp
+        UInt32, // transducerType
+        UInt32, // index
+        UInt32, // identity
+        UInt32, // eventMask
+        UInt32, // buttonMask
+        Float, // x
+        Float, // y
+        Float, // z
+        Float, // tipPressure
+        Float, // barrelPressure
+        Float, // twist
+        Bool, // range
+        Bool, // touch
+        UInt32 // options
+    ) -> UnsafeMutableRawPointer?
+
+    // IOHIDEventCreateDigitizerFingerEventWithQuality.
+    typealias IOHIDEventCreateDigitizerFingerEventWithQualityFunction = @convention(c) (
+        CFAllocator?, // allocator
+        UInt64, // timestamp
+        UInt32, // index
+        UInt32, // identity
+        UInt32, // eventMask
+        Float, // x
+        Float, // y
+        Float, // z
+        Float, // tipPressure
+        Float, // twist
+        Float, // majorRadius
+        Float, // minorRadius
+        Float, // quality
+        Float, // density
+        Float, // irregularity
+        Bool, // range
+        Bool, // touch
+        UInt32 // options
+    ) -> UnsafeMutableRawPointer?
+
+    // IOHIDEventAppendEvent.
+    typealias IOHIDEventAppendEventFunction = @convention(c) (
+        UnsafeMutableRawPointer, // parentEvent
+        UnsafeMutableRawPointer, // childEvent
+        UInt32 // options
+    ) -> Void
+
+    // IOHIDEventSetFloatValue.
+    typealias IOHIDEventSetFloatValueFunction = @convention(c) (
+        UnsafeMutableRawPointer, // event
+        UInt32, // field
+        Float // value
+    ) -> Void
 
     enum SPISymbolName: String {
         case accessibilityAddNotificationCallback = "AXAddNotificationCallback"
@@ -41,6 +119,28 @@ enum ButtonHeistPrivateSPI {
         }
     }
 
+    struct LibraryHandle: CustomStringConvertible {
+        let source: String
+        fileprivate let rawValue: UnsafeMutableRawPointer
+
+        fileprivate init(source: String, rawValue: UnsafeMutableRawPointer) {
+            self.source = source
+            self.rawValue = rawValue
+        }
+
+        var description: String { source }
+    }
+
+    struct CFunction<Signature>: CustomStringConvertible {
+        let symbolName: SPISymbolName
+
+        fileprivate init(_ symbolName: SPISymbolName) {
+            self.symbolName = symbolName
+        }
+
+        var description: String { symbolName.rawValue }
+    }
+
     static func path(
         _ frameworkPath: SPIFrameworkPath,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -57,55 +157,50 @@ enum ButtonHeistPrivateSPI {
         _ frameworkPath: SPIFrameworkPath,
         flags: Int32 = RTLD_NOW | RTLD_LOCAL,
         environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> UnsafeMutableRawPointer? {
+    ) -> LibraryHandle? {
         openLibrary(at: path(frameworkPath, environment: environment), flags: flags)
     }
 
-    static func openLibrary(at path: String, flags: Int32 = RTLD_NOW | RTLD_LOCAL) -> UnsafeMutableRawPointer? {
-        dlopen(path, flags)
+    static func openLibrary(at path: String, flags: Int32 = RTLD_NOW | RTLD_LOCAL) -> LibraryHandle? {
+        guard let handle = dlopen(path, flags) else { return nil }
+        return LibraryHandle(source: path, rawValue: handle)
     }
 
-    static func processHandle(flags: Int32 = RTLD_NOW) -> UnsafeMutableRawPointer? {
-        dlopen(nil, flags)
-    }
-
-    static func symbol(_ name: SPISymbolName, in handle: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer? {
-        dlsym(handle, name.rawValue)
-    }
-
-    static func function<Function>(
-        _ name: SPISymbolName,
-        in handle: UnsafeMutableRawPointer,
-        as type: Function.Type
-    ) -> Function? {
-        guard let symbol = symbol(name, in: handle) else {
+    static func function<Signature>(
+        _ function: CFunction<Signature>,
+        in handle: LibraryHandle
+    ) -> Signature? {
+        guard let symbol = symbol(function.symbolName, in: handle) else {
             return nil
         }
-        return cast(symbol, to: type)
+        return cast(symbol, to: Signature.self)
     }
 
-    static func function<Function>(
-        _ name: SPISymbolName,
+    static func function<Signature>(
+        _ function: CFunction<Signature>,
         in frameworkPath: SPIFrameworkPath,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        as type: Function.Type
-    ) -> Function? {
-        guard let symbol = resolveSymbol(name, in: frameworkPath, environment: environment) else {
+    ) -> Signature? {
+        guard let symbol = resolveSymbol(function.symbolName, in: frameworkPath, environment: environment) else {
             return nil
         }
-        return cast(symbol, to: type)
+        return cast(symbol, to: Signature.self)
     }
 
-    static func resolveSymbol(
+    static func uniquePreservingOrder(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
+    private static func symbol(_ name: SPISymbolName, in handle: LibraryHandle) -> UnsafeMutableRawPointer? {
+        dlsym(handle.rawValue, name.rawValue)
+    }
+
+    private static func resolveSymbol(
         _ name: SPISymbolName,
         in frameworkPath: SPIFrameworkPath,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> UnsafeMutableRawPointer? {
-        if let processHandle = processHandle(),
-           let symbol = symbol(name, in: processHandle) {
-            return symbol
-        }
-
         guard let handle = open(frameworkPath, environment: environment),
               let symbol = symbol(name, in: handle)
         else {
@@ -114,23 +209,49 @@ enum ButtonHeistPrivateSPI {
         return symbol
     }
 
-    static func loadedImagePaths() -> [String] {
-        var paths: [String] = []
-        for index in 0..<_dyld_image_count() {
-            guard let name = _dyld_get_image_name(index) else { continue }
-            paths.append(String(cString: name))
-        }
-        return uniquePreservingOrder(paths)
-    }
-
-    static func uniquePreservingOrder(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
-    }
-
     private static func cast<Function>(_ symbol: UnsafeMutableRawPointer, to type: Function.Type) -> Function {
         unsafeBitCast(symbol, to: type)
     }
+}
+
+extension ButtonHeistPrivateSPI.CFunction where Signature == ButtonHeistPrivateSPI.AccessibilitySetEnabledFunction {
+    static let accessibilitySetApplicationAccessibilityEnabled = Self(
+        .accessibilitySetApplicationAccessibilityEnabled
+    )
+    static let accessibilitySetAutomationEnabled = Self(.accessibilitySetAutomationEnabled)
+    static let accessibilitySetUnitTestMode = Self(.accessibilitySetUnitTestMode)
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.AddAccessibilityNotificationCallbackFunction {
+    static let accessibilityAddNotificationCallback = Self(.accessibilityAddNotificationCallback)
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.RemoveAccessibilityNotificationCallbackFunction {
+    static let accessibilityRemoveNotificationCallback = Self(.accessibilityRemoveNotificationCallback)
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction {
+    static let ioHIDEventCreateDigitizerEvent = Self(.ioHIDEventCreateDigitizerEvent)
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction {
+    static let ioHIDEventCreateDigitizerFingerEventWithQuality = Self(
+        .ioHIDEventCreateDigitizerFingerEventWithQuality
+    )
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.IOHIDEventAppendEventFunction {
+    static let ioHIDEventAppendEvent = Self(.ioHIDEventAppendEvent)
+}
+
+extension ButtonHeistPrivateSPI.CFunction
+where Signature == ButtonHeistPrivateSPI.IOHIDEventSetFloatValueFunction {
+    static let ioHIDEventSetFloatValue = Self(.ioHIDEventSetFloatValue)
 }
 
 #endif // DEBUG

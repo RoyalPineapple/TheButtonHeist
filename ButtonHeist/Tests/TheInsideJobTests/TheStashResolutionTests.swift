@@ -581,7 +581,38 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        XCTAssertEqual(bagman.accessibilityNotifications.drainPendingEvents().count, 0)
+        XCTAssertEqual(bagman.accessibilityNotifications.claimPendingEvents().count, 0)
+    }
+
+    func testPostActionFailedSettlePreservesPendingAccessibilityNotificationsDuringHeistScope() async {
+        let heist = bagman.accessibilityNotifications.beginHeistScope()
+        defer { heist.cancel() }
+
+        let action = bagman.accessibilityNotifications.beginActionWindow()
+        bagman.accessibilityNotifications.record(
+            code: 1005,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let screen = Screen.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
+        let outcome = SettleSession.Outcome(
+            outcome: .timedOut(timeMs: 1),
+            events: [],
+            finalScreen: screen,
+            elementsByKey: [:]
+        )
+
+        _ = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: outcome,
+            notificationWindow: action
+        )
+
+        XCTAssertEqual(
+            bagman.accessibilityNotifications.pendingEvents().map(\.code),
+            [1005],
+            "The action window may claim attribution, but the heist owns the stream lifetime."
+        )
     }
 
     func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() {

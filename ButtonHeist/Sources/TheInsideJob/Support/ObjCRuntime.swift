@@ -61,6 +61,30 @@ enum ObjCRuntime {
         var description: String { rawValue }
     }
 
+    struct ObjectGetter<Value>: CustomStringConvertible {
+        let rawValue: String
+        fileprivate let selector: Selector
+
+        fileprivate init(_ rawValue: String) {
+            self.rawValue = rawValue
+            selector = NSSelectorFromString(rawValue)
+        }
+
+        var description: String { rawValue }
+    }
+
+    struct ClassGetter<Value>: CustomStringConvertible {
+        let rawValue: String
+        fileprivate let selector: Selector
+
+        fileprivate init(_ rawValue: String) {
+            self.rawValue = rawValue
+            selector = NSSelectorFromString(rawValue)
+        }
+
+        var description: String { rawValue }
+    }
+
     /// A verified object + typed selector pair. Created by `message(_:to:)`.
     struct Message<Target: NSObject, Arguments> {
         let target: Target
@@ -73,6 +97,37 @@ enum ObjCRuntime {
             }
             self.target = target
             self.method = method
+            self.bridge = bridge
+        }
+    }
+
+    /// A verified object + typed getter pair. Created by `resolve(_:from:)`.
+    struct ResolvedObjectGetter<Target: NSObject, Value> {
+        let target: Target
+        let getter: ObjectGetter<Value>
+        private let bridge: RawObjCMessageBridge
+
+        fileprivate init?(target: Target, getter: ObjectGetter<Value>) {
+            guard let bridge = RawObjCMessageBridge(target: target, selector: getter.selector) else {
+                return nil
+            }
+            self.target = target
+            self.getter = getter
+            self.bridge = bridge
+        }
+    }
+
+    /// A verified class object + typed getter pair. Created by
+    /// `resolve(_:on:)`.
+    struct ResolvedClassGetter<Value> {
+        let getter: ClassGetter<Value>
+        private let bridge: RawObjCMessageBridge
+
+        fileprivate init?(targetClass: AnyClass, getter: ClassGetter<Value>) {
+            guard let bridge = RawObjCMessageBridge(targetClass: targetClass, selector: getter.selector) else {
+                return nil
+            }
+            self.getter = getter
             self.bridge = bridge
         }
     }
@@ -101,12 +156,41 @@ enum ObjCRuntime {
         Message(target: target, method: method)
     }
 
+    static func resolve<Target: NSObject, Value>(
+        _ getter: ObjectGetter<Value>,
+        from target: Target
+    ) -> ResolvedObjectGetter<Target, Value>? {
+        ResolvedObjectGetter(target: target, getter: getter)
+    }
+
+    static func get<Target: NSObject, Value: NSObject>(
+        _ getter: ObjectGetter<Value>,
+        from target: Target
+    ) -> Value? {
+        resolve(getter, from: target)?.get()
+    }
+
     static func classMessage<Arguments>(
         _ method: ClassMethod<Arguments>,
         on className: ClassName
     ) -> ClassMessage<Arguments>? {
         guard let cls = NSClassFromString(className.rawValue) else { return nil }
         return ClassMessage(targetClass: cls, method: method)
+    }
+
+    static func resolve<Value>(
+        _ getter: ClassGetter<Value>,
+        on className: ClassName
+    ) -> ResolvedClassGetter<Value>? {
+        guard let cls = NSClassFromString(className.rawValue) else { return nil }
+        return ResolvedClassGetter(targetClass: cls, getter: getter)
+    }
+
+    static func get<Value: NSObject>(
+        _ getter: ClassGetter<Value>,
+        on className: ClassName
+    ) -> Value? {
+        resolve(getter, on: className)?.get()
     }
 }
 
@@ -117,21 +201,27 @@ extension ObjCRuntime.ClassName {
     static let uiHitTestContext = ObjCRuntime.ClassName("_UIHitTestContext")
 }
 
-extension ObjCRuntime.ClassMethod where Arguments == ObjCRuntime.NoArguments {
-    static let sharedInstance = ObjCRuntime.ClassMethod<Arguments>("sharedInstance")
+extension ObjCRuntime.ClassGetter where Value == NSObject {
+    static let sharedInstance = ObjCRuntime.ClassGetter<Value>("sharedInstance")
 }
 
 extension ObjCRuntime.ClassMethod where Arguments == ObjCRuntime.PointRadiusArguments<NSObject> {
     static let contextWithPointRadius = ObjCRuntime.ClassMethod<Arguments>("contextWithPoint:radius:")
 }
 
+extension ObjCRuntime.ObjectGetter where Value == UIEvent {
+    static let applicationTouchesEvent = ObjCRuntime.ObjectGetter<Value>("_touchesEvent")
+}
+
+extension ObjCRuntime.ObjectGetter where Value == NSObject {
+    static let keyboardDelegate = ObjCRuntime.ObjectGetter<Value>("delegate")
+    static let keyboardTaskQueue = ObjCRuntime.ObjectGetter<Value>("taskQueue")
+}
+
 extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.NoArguments {
-    static let keyboardDelegate = ObjCRuntime.ObjectMethod<Arguments>("delegate")
-    static let keyboardTaskQueue = ObjCRuntime.ObjectMethod<Arguments>("taskQueue")
     static let keyboardWaitUntilAllTasksAreFinished = ObjCRuntime.ObjectMethod<Arguments>(
         "waitUntilAllTasksAreFinished"
     )
-    static let applicationTouchesEvent = ObjCRuntime.ObjectMethod<Arguments>("_touchesEvent")
     static let eventClearTouches = ObjCRuntime.ObjectMethod<Arguments>("_clearTouches")
 }
 
@@ -195,10 +285,6 @@ extension ObjCRuntime.Message where Arguments == ObjCRuntime.NoArguments {
     func call() {
         bridge.sendVoid()
     }
-
-    func call<Result: NSObject>() -> Result? {
-        bridge.sendObject()
-    }
 }
 
 extension ObjCRuntime.Message {
@@ -252,13 +338,33 @@ extension ObjCRuntime.Message where Arguments == ObjCRuntime.PointBoolArguments 
     }
 }
 
-// MARK: - Typed Class Calls
+// MARK: - Typed Getter Reads
 
-extension ObjCRuntime.ClassMessage where Arguments == ObjCRuntime.NoArguments {
-    func call<Result: NSObject>() -> Result? {
+extension ObjCRuntime.ResolvedObjectGetter where Value: NSObject {
+    func get() -> Value? {
         bridge.sendObject()
     }
 }
+
+extension ObjCRuntime.ResolvedClassGetter where Value: NSObject {
+    func get() -> Value? {
+        bridge.sendObject()
+    }
+}
+
+extension ObjCRuntime.ResolvedObjectGetter where Value == Int {
+    func get() -> Int {
+        bridge.sendInt()
+    }
+}
+
+extension ObjCRuntime.ResolvedClassGetter where Value == Int {
+    func get() -> Int {
+        bridge.sendInt()
+    }
+}
+
+// MARK: - Typed Class Calls
 
 extension ObjCRuntime.ClassMessage {
     func call<Result: NSObject>(_ point: CGPoint, radius: CGFloat) -> Result?
@@ -276,6 +382,7 @@ private struct RawObjCMessageBridge {
     private typealias RawObjectiveCReceiver = AnyObject
 
     private typealias IMPInt = @convention(c) (RawObjectiveCReceiver, Selector, Int) -> Void
+    private typealias IMPIntReturn = @convention(c) (RawObjectiveCReceiver, Selector) -> Int
     private typealias IMPBool = @convention(c) (RawObjectiveCReceiver, Selector, Bool) -> Void
     private typealias IMPDouble = @convention(c) (RawObjectiveCReceiver, Selector, Double) -> Void
     private typealias IMPPointer = @convention(c) (RawObjectiveCReceiver, Selector, UnsafeMutableRawPointer) -> Void
@@ -325,6 +432,10 @@ private struct RawObjCMessageBridge {
 
     func sendVoid(_ value: Int) {
         imp(as: IMPInt.self)(target, selector, value)
+    }
+
+    func sendInt() -> Int {
+        imp(as: IMPIntReturn.self)(target, selector)
     }
 
     func sendVoid(_ value: Bool) {

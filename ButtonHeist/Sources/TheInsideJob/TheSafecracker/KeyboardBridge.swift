@@ -91,16 +91,18 @@ final class UIKeyboardImplTextInjection {
     static let strategyName = "UIKeyboardImplTextInjection"
 
     private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    private typealias KeyboardObjectGetter = ObjCRuntime.ObjectGetter<NSObject>
     private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
+    typealias TaskQueueGetter = ObjCRuntime.ResolvedObjectGetter<NSObject, NSObject>
 
     struct Runtime: Sendable {
         var addInputString: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.ObjectArgument<NSString>>?
-        var taskQueue: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
+        var taskQueue: @Sendable (NSObject) -> TaskQueueGetter?
         var waitUntilAllTasksAreFinished: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
 
         static let live = Runtime(
             addInputString: { ObjCRuntime.message(.keyboardAddInputString, to: $0) },
-            taskQueue: { ObjCRuntime.message(.keyboardTaskQueue, to: $0) },
+            taskQueue: { ObjCRuntime.resolve(.keyboardTaskQueue, from: $0) },
             waitUntilAllTasksAreFinished: {
                 ObjCRuntime.message(.keyboardWaitUntilAllTasksAreFinished, to: $0)
             }
@@ -132,14 +134,14 @@ final class UIKeyboardImplTextInjection {
     }
 
     func drainTaskQueue(character: String?) -> KeyboardTextInjectionResult {
-        guard let taskQueueMessage = runtime.taskQueue(impl) else {
+        guard let taskQueueGetter = runtime.taskQueue(impl) else {
             return .failed(.missingSelector(
-                KeyboardNoArgumentMethod.keyboardTaskQueue.rawValue,
+                KeyboardObjectGetter.keyboardTaskQueue.rawValue,
                 strategy: Self.strategyName,
                 character: character
             ))
         }
-        guard let taskQueue: NSObject = taskQueueMessage.call() else {
+        guard let taskQueue = taskQueueGetter.get() else {
             return .failed(.unavailableTaskQueue(strategy: Self.strategyName, character: character))
         }
         guard let waitUntilAllTasksAreFinished = runtime.waitUntilAllTasksAreFinished(taskQueue) else {
@@ -179,7 +181,7 @@ final class UIKeyboardImplTextInjection {
     /// Resolve the UIKeyboardImpl singleton. Returns nil if the class or
     /// selector is missing (should never happen on supported iOS versions).
     static func shared() -> KeyboardBridge? {
-        guard let impl: NSObject = ObjCRuntime.classMessage(.sharedInstance, on: .uiKeyboardImpl)?.call() else {
+        guard let impl: NSObject = ObjCRuntime.get(.sharedInstance, on: .uiKeyboardImpl) else {
             return nil
         }
         return KeyboardBridge(impl: impl)
@@ -188,7 +190,7 @@ final class UIKeyboardImplTextInjection {
     /// The keyboard's current input delegate, if any.
     /// Non-nil when a text field or text view is focused.
     var delegate: NSObject? {
-        ObjCRuntime.message(.keyboardDelegate, to: impl)?.call()
+        ObjCRuntime.get(.keyboardDelegate, from: impl)
     }
 
     /// Whether the delegate conforms to UIKeyInput (i.e., can accept text).

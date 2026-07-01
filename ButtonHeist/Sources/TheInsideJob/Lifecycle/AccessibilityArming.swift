@@ -32,8 +32,8 @@ func armApplicationAccessibility(environment: [String: String] = ProcessInfo.pro
         return
     }
 
-    setAccessibilityFlag(handle, symbol: .accessibilitySetApplicationAccessibilityEnabled)
-    setAccessibilityFlag(handle, symbol: .accessibilitySetAutomationEnabled)
+    setAccessibilityFlag(handle, function: .accessibilitySetApplicationAccessibilityEnabled)
+    setAccessibilityFlag(handle, function: .accessibilitySetAutomationEnabled)
 }
 
 /// Computes the path to `libAccessibility.dylib`, prefixing the simulator root when running in a
@@ -44,18 +44,16 @@ func libAccessibilityPath(environment: [String: String] = ProcessInfo.processInf
 
 // MARK: - Private Helpers
 
-private func setAccessibilityFlag(_ handle: UnsafeMutableRawPointer, symbol: ButtonHeistPrivateSPI.SPISymbolName) {
-    typealias SetEnabledFunction = @convention(c) (Int32) -> Void
-    guard let setEnabled: SetEnabledFunction = ButtonHeistPrivateSPI.function(
-        symbol,
-        in: handle,
-        as: SetEnabledFunction.self
-    ) else {
-        accessibilityArmingLogger.debug("\(symbol.rawValue, privacy: .public) not found in libAccessibility")
+private func setAccessibilityFlag(
+    _ handle: ButtonHeistPrivateSPI.LibraryHandle,
+    function: ButtonHeistPrivateSPI.CFunction<ButtonHeistPrivateSPI.AccessibilitySetEnabledFunction>
+) {
+    guard let setEnabled = ButtonHeistPrivateSPI.function(function, in: handle) else {
+        accessibilityArmingLogger.debug("\(function.description, privacy: .public) not found in libAccessibility")
         return
     }
     setEnabled(1)
-    accessibilityArmingLogger.info("Armed accessibility via \(symbol.rawValue, privacy: .public)")
+    accessibilityArmingLogger.info("Armed accessibility via \(function.description, privacy: .public)")
 }
 
 #endif // DEBUG

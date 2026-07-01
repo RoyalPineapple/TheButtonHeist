@@ -1,5 +1,14 @@
 import Foundation
 
+/// Ordered accessibility-notification evidence observed while moving between
+/// two accessibility snapshots.
+///
+/// Notifications are transition-edge product data: snapshots remain the state
+/// truth, while this stream explains what UIKit/SwiftUI announced between
+/// those states. Payload strings and unresolved-object summaries may contain
+/// app content and are intentionally Codable so receipts can preserve the same
+/// evidence an accessibility user or runtime notification exposed. Do not mirror
+/// these payloads into logs.
 public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64
     public let code: UInt32
@@ -27,8 +36,11 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
 
 public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hashable {
     case none
+    /// String payload posted by the app/runtime, for example announcements.
     case string(String)
+    /// Reference to a node in the destination capture's interface tree.
     case element(AccessibilityNotificationElementReference)
+    /// Object payload that could not be correlated to the destination snapshot.
     case unresolvedObject(AccessibilityNotificationObjectPayload)
     case unresolvedElement
 
@@ -87,6 +99,8 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
 
 public struct AccessibilityNotificationObjectPayload: Codable, Sendable, Equatable, Hashable {
     public let className: String
+    /// Product evidence for an unresolved payload. May include app content from
+    /// Objective-C descriptions; keep it in trace artifacts, not logs.
     public let summary: String?
 
     public init(className: String, summary: String?) {

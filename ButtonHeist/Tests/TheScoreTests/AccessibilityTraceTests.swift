@@ -159,6 +159,54 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 
+    func testTransitionCarriesOrderedAccessibilityNotificationsAsProductEvidence() throws {
+        let targetReference = AccessibilityNotificationElementReference(
+            path: TreePath([0]),
+            traversalIndex: 0,
+            resolution: .identity
+        )
+        let notifications = [
+            AccessibilityNotificationEvidence(
+                sequence: 7,
+                code: 1001,
+                name: "layoutChanged",
+                timestamp: Date(timeIntervalSince1970: 7),
+                notificationData: .unresolvedObject(AccessibilityNotificationObjectPayload(
+                    className: "UICollectionView",
+                    summary: "object(class=UICollectionView description=Shipping options changed)"
+                )),
+                associatedElement: .element(targetReference)
+            ),
+            AccessibilityNotificationEvidence(
+                sequence: 8,
+                code: 1000,
+                name: "screenChanged",
+                timestamp: Date(timeIntervalSince1970: 8),
+                notificationData: .string("Checkout"),
+                associatedElement: .none
+            ),
+        ]
+        let capture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: "sha256:before",
+            transition: AccessibilityTrace.Transition(accessibilityNotifications: notifications)
+        )
+
+        let data = try JSONEncoder().encode(capture)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("accessibilityNotifications"))
+        XCTAssertTrue(json.contains("Shipping options changed"))
+        XCTAssertTrue(json.contains("Checkout"))
+
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: data)
+        XCTAssertEqual(decoded.transition.accessibilityNotifications, notifications)
+        XCTAssertEqual(
+            decoded.transition.accessibilityNotifications.map(\.name),
+            ["layoutChanged", "screenChanged"]
+        )
+    }
+
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
         let first = makeElement(label: "First", actions: [.activate])
         let second = makeElement(label: "Second", actions: [.increment])

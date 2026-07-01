@@ -38,7 +38,7 @@ extension TheSafecracker {
 
         /// Package touches into a UIEvent with matching IOHIDEvent data.
         init?(touches: [SyntheticTouch]) {
-            guard let event: UIEvent = ObjCRuntime.message(.applicationTouchesEvent, to: UIApplication.shared)?.call() else {
+            guard let event: UIEvent = ObjCRuntime.get(.applicationTouchesEvent, from: UIApplication.shared) else {
                 insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
                 return nil
             }
@@ -155,57 +155,17 @@ private let kIOHIDEventFieldDigitizerIsDisplayIntegrated: Int = 0x00050001
 
 // MARK: - Dynamic Loading of IOKit Functions
 
-nonisolated(unsafe) private var _IOHIDEventCreateDigitizerEvent: @convention(c) (
-    CFAllocator?,
-    UInt64,
-    UInt32,
-    UInt32,
-    UInt32,
-    UInt32,
-    UInt32,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Bool,
-    Bool,
-    UInt32
-) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
+nonisolated(unsafe) private var _IOHIDEventCreateDigitizerEvent:
+    ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-nonisolated(unsafe) private var _IOHIDEventCreateDigitizerFingerEventWithQuality: @convention(c) (
-    CFAllocator?,
-    UInt64,
-    UInt32,
-    UInt32,
-    UInt32,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Float,
-    Bool,
-    Bool,
-    UInt32
-) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
+nonisolated(unsafe) private var _IOHIDEventCreateDigitizerFingerEventWithQuality:
+    ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-nonisolated(unsafe) private var _IOHIDEventAppendEvent: @convention(c) (
-    UnsafeMutableRawPointer,
-    UnsafeMutableRawPointer,
-    UInt32
-) -> Void = { _, _, _ in }
+nonisolated(unsafe) private var _IOHIDEventAppendEvent:
+    ButtonHeistPrivateSPI.IOHIDEventAppendEventFunction = { _, _, _ in }
 
-nonisolated(unsafe) private var _IOHIDEventSetFloatValue: @convention(c) (
-    UnsafeMutableRawPointer,
-    UInt32,
-    Float
-) -> Void = { _, _, _ in }
+nonisolated(unsafe) private var _IOHIDEventSetFloatValue:
+    ButtonHeistPrivateSPI.IOHIDEventSetFloatValueFunction = { _, _, _ in }
 
 nonisolated(unsafe) private var ioHIDFunctionsLoaded = false
 
@@ -218,35 +178,19 @@ private func loadIOHIDFunctions() {
         return
     }
 
-    if let function = ButtonHeistPrivateSPI.function(
-        .ioHIDEventCreateDigitizerEvent,
-        in: handle,
-        as: type(of: _IOHIDEventCreateDigitizerEvent)
-    ) {
+    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventCreateDigitizerEvent, in: handle) {
         _IOHIDEventCreateDigitizerEvent = function
     }
 
-    if let function = ButtonHeistPrivateSPI.function(
-        .ioHIDEventCreateDigitizerFingerEventWithQuality,
-        in: handle,
-        as: type(of: _IOHIDEventCreateDigitizerFingerEventWithQuality)
-    ) {
+    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventCreateDigitizerFingerEventWithQuality, in: handle) {
         _IOHIDEventCreateDigitizerFingerEventWithQuality = function
     }
 
-    if let function = ButtonHeistPrivateSPI.function(
-        .ioHIDEventAppendEvent,
-        in: handle,
-        as: type(of: _IOHIDEventAppendEvent)
-    ) {
+    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventAppendEvent, in: handle) {
         _IOHIDEventAppendEvent = function
     }
 
-    if let function = ButtonHeistPrivateSPI.function(
-        .ioHIDEventSetFloatValue,
-        in: handle,
-        as: type(of: _IOHIDEventSetFloatValue)
-    ) {
+    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventSetFloatValue, in: handle) {
         _IOHIDEventSetFloatValue = function
     }
 }

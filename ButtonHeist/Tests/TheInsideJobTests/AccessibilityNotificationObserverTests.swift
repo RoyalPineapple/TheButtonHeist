@@ -54,6 +54,40 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
     }
 
+    func testActionWindowClaimsOnlyEventsAfterCursor() {
+        let bus = AccessibilityNotificationBus()
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+
+        let action = bus.beginActionWindow()
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+
+        let claimed = action.finishAndClaimEvents()
+
+        XCTAssertEqual(claimed.map(\.code), [1005])
+        XCTAssertEqual(bus.pendingEvents().map(\.code), [])
+    }
+
+    func testHeistScopeKeepsActionClaimsAppendOnlyUntilScopeEnds() {
+        let bus = AccessibilityNotificationBus()
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+
+        let heist = bus.beginHeistScope()
+        let action = bus.beginActionWindow()
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+
+        let claimed = action.finishAndClaimEvents()
+
+        XCTAssertEqual(claimed.map(\.code), [1005])
+        XCTAssertEqual(
+            bus.pendingEvents().map(\.code),
+            [1005],
+            "Action attribution must not drain the heist-scoped notification stream."
+        )
+
+        heist.cancel()
+        XCTAssertEqual(bus.pendingEvents().map(\.code), [])
+    }
+
     private func waitForNotification(
         code: UInt32,
         in bus: AccessibilityNotificationBus,
@@ -61,7 +95,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         line: UInt = #line
     ) async throws -> PendingAccessibilityNotificationEvent {
         for _ in 0..<100 {
-            if let event = bus.drainPendingEvents().first(where: { $0.code == code }) {
+            if let event = bus.pendingEvents().first(where: { $0.code == code }) {
                 return event
             }
             await Task.yield()

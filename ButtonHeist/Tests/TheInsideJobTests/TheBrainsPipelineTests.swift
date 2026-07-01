@@ -1038,10 +1038,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         let source = try String(contentsOf: semanticObservationStreamSourceURL(), encoding: .utf8)
 
         XCTAssertTrue(source.contains("private func recordNonActionFailedSettleDiagnosticEvidence"))
+        XCTAssertTrue(source.contains("hasActiveNotificationScope"))
         XCTAssertTrue(source.contains("? .preservePendingEvents"))
         XCTAssertTrue(source.contains(": .clearPendingEvents"))
         XCTAssertTrue(source.contains("private func recordPostActionFailedSettleDiagnosticEvidence"))
-        XCTAssertTrue(source.contains("pendingAccessibilityNotificationPolicy: .clearPendingEvents"))
+        XCTAssertTrue(source.contains("notificationWindow.finishAndClaimEvents()"))
         XCTAssertFalse(source.contains("private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash)"))
     }
 

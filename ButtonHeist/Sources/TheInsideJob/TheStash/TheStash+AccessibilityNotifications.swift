@@ -1,12 +1,9 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import os.log
 
 import AccessibilitySnapshotParser
 import TheScore
-
-private let accessibilityNotificationResolutionLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
 extension TheStash {
     func resolveAccessibilityNotificationEvidence(
@@ -22,12 +19,10 @@ extension TheStash {
                     timestamp: event.timestamp,
                     notificationData: resolveAccessibilityNotificationPayload(
                         event.notificationData,
-                        field: "notificationData",
                         in: screen
                     ),
                     associatedElement: resolveAccessibilityNotificationPayload(
                         event.associatedElement,
-                        field: "associatedElement",
                         in: screen
                     )
                 )
@@ -37,7 +32,6 @@ extension TheStash {
 
     private func resolveAccessibilityNotificationPayload(
         _ payload: PendingAccessibilityNotificationPayload,
-        field: String,
         in screen: Screen
     ) -> AccessibilityNotificationPayload {
         switch payload {
@@ -47,24 +41,10 @@ extension TheStash {
             return .string(value)
         case .object(let ref):
             guard let object = ref.object as? NSObject else {
-                accessibilityNotificationResolutionLogger.info(
-                    """
-                    AX notification \(field, privacy: .public) unresolved: \
-                    objectIdentity=\(String(describing: ref.objectIdentifier), privacy: .public) \
-                    class=\(ref.className, privacy: .public) weak payload is gone
-                    """
-                )
                 return unresolvedObjectPayload(ref)
             }
             if let heistId = currentLiveCapture.heistId(matching: object),
                let elementReference = traceElementReference(for: heistId, in: screen, resolution: .identity) {
-                accessibilityNotificationResolutionLogger.info(
-                    """
-                    AX notification \(field, privacy: .public) resolved by object identity \
-                    heistId=\(heistId.rawValue, privacy: .public) \
-                    traversalIndex=\(elementReference.traversalIndex, privacy: .public)
-                    """
-                )
                 return .element(elementReference)
             }
             if let parsedElement = burglar.parseObject(object),
@@ -73,21 +53,8 @@ extension TheStash {
                 in: screen,
                 resolution: .singleElement
                ) {
-                accessibilityNotificationResolutionLogger.info(
-                    """
-                    AX notification \(field, privacy: .public) resolved by single-element parse \
-                    traversalIndex=\(elementReference.traversalIndex, privacy: .public)
-                    """
-                )
                 return .element(elementReference)
             }
-            accessibilityNotificationResolutionLogger.info(
-                """
-                AX notification \(field, privacy: .public) unresolved: \
-                objectIdentity=\(String(describing: ref.objectIdentifier), privacy: .public) \
-                class=\(ref.className, privacy: .public) identity and single-element parse did not match current hierarchy
-                """
-            )
             return unresolvedObjectPayload(ref)
         }
     }

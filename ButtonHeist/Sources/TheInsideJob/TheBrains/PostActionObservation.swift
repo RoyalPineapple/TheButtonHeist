@@ -126,12 +126,14 @@ final class PostActionObservation {
     func settleEvidence(
         before: BeforeState,
         commitScope: SemanticObservationScope = .visible,
-        outcome: SettleSession.Outcome?
+        outcome: SettleSession.Outcome?,
+        notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> SettleEvidence {
         let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
             commitScope: commitScope,
-            settleOutcome: outcome
+            settleOutcome: outcome,
+            notificationWindow: notificationWindow
         )
         return SettleEvidence(
             outcome: settledObservation.settle,

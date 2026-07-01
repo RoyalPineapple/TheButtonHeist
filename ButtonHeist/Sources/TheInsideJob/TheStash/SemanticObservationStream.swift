@@ -514,7 +514,8 @@ final class SemanticObservationStream {
     func settlePostActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         commitScope: SemanticObservationScope = .visible,
-        settleOutcome providedOutcome: SettleSession.Outcome? = nil
+        settleOutcome providedOutcome: SettleSession.Outcome? = nil,
+        notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> PostActionSettleObservation {
         guard let stash else {
             return PostActionSettleObservation(
@@ -542,17 +543,26 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordPostActionFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
+            recordPostActionFailedSettleDiagnosticEvidence(
+                outcome.finalScreen,
+                stash: stash,
+                notificationWindow: notificationWindow
+            )
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordPostActionFailedSettleDiagnosticEvidence(nil, stash: stash)
+            recordPostActionFailedSettleDiagnosticEvidence(
+                nil,
+                stash: stash,
+                notificationWindow: notificationWindow
+            )
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
-            let pendingAccessibilityNotifications = stash.accessibilityNotifications.drainPendingEvents()
+            let pendingAccessibilityNotifications = notificationWindow?.finishAndClaimEvents()
+                ?? stash.accessibilityNotifications.claimPendingEvents()
             let event: SettledSemanticObservationEvent
             switch commitScope {
             case .visible:
@@ -570,7 +580,11 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        recordPostActionFailedSettleDiagnosticEvidence(finalScreen, stash: stash)
+        recordPostActionFailedSettleDiagnosticEvidence(
+            finalScreen,
+            stash: stash,
+            notificationWindow: notificationWindow
+        )
         return PostActionSettleObservation(
             settle: outcome,
             result: stash.latestFailedSettleDiagnosticEvidence.map { .diagnostic($0) } ?? .unavailable
@@ -768,17 +782,26 @@ final class SemanticObservationStream {
         recordFailedSettleDiagnosticEvidence(
             screen,
             stash: stash,
-            pendingAccessibilityNotificationPolicy: hasActiveObservationDemand
+            pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
                 ? .preservePendingEvents
                 : .clearPendingEvents
         )
     }
 
-    private func recordPostActionFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash) {
+    private func recordPostActionFailedSettleDiagnosticEvidence(
+        _ screen: Screen?,
+        stash: TheStash,
+        notificationWindow: AccessibilityNotificationActionWindow?
+    ) {
+        if let notificationWindow {
+            _ = notificationWindow.finishAndClaimEvents()
+        }
         recordFailedSettleDiagnosticEvidence(
             screen,
             stash: stash,
-            pendingAccessibilityNotificationPolicy: .clearPendingEvents
+            pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
+                ? .preservePendingEvents
+                : .clearPendingEvents
         )
     }
 

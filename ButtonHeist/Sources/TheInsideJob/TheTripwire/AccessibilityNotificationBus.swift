@@ -1,18 +1,17 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import os.log
 import UIKit
 
 import TheScore
-
-private let accessibilityNotificationBusLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
 final class AccessibilityNotificationBus {
     private let maxBufferedEvents = 64
     private let lock = NSLock()
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
     private var latestSequenceStorage: UInt64 = 0
+    private var activeHeistScopes = 0
+    private var activeActionWindows = 0
 
     var latestSequence: UInt64 {
         lock.lock()
@@ -20,61 +19,84 @@ final class AccessibilityNotificationBus {
         return latestSequenceStorage
     }
 
+    var hasActiveNotificationScope: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return activeHeistScopes > 0 || activeActionWindows > 0
+    }
+
+    /// Opens the outer correlation window for a running heist.
+    ///
+    /// While this scope is active, action windows may claim attribution, but
+    /// they do not drain the underlying stream. The heist owns stream lifetime.
+    func beginHeistScope() -> AccessibilityNotificationHeistScope {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if activeHeistScopes == 0 && activeActionWindows == 0 {
+            bufferedEvents.removeAll()
+        }
+        activeHeistScopes += 1
+        return AccessibilityNotificationHeistScope(bus: self)
+    }
+
+    /// Opens the inner attribution window for one dispatched action.
+    ///
+    /// Events with sequence numbers greater than this cursor can be attached to
+    /// the action receipt without stealing earlier heist-level context.
+    func beginActionWindow() -> AccessibilityNotificationActionWindow {
+        lock.lock()
+        defer { lock.unlock() }
+
+        activeActionWindows += 1
+        return AccessibilityNotificationActionWindow(
+            bus: self,
+            cursor: AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+        )
+    }
+
     func record(
         code: UInt32,
         notificationData data: CapturedAccessibilityNotificationPayload,
         associatedElement element: CapturedAccessibilityNotificationPayload
     ) {
-        let sequence: UInt64
         let name = Self.name(for: code)
-        do {
-            lock.lock()
-            defer { lock.unlock() }
 
-            latestSequenceStorage += 1
-            sequence = latestSequenceStorage
-            let event = PendingAccessibilityNotificationEvent(
-                sequence: sequence,
-                code: code,
-                name: name,
-                timestamp: Date(),
-                notificationData: data.pendingPayload,
-                associatedElement: element.pendingPayload
-            )
-            bufferedEvents.append(event)
-            if bufferedEvents.count > maxBufferedEvents {
-                bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
-            }
-        }
+        lock.lock()
+        defer { lock.unlock() }
 
-        let sameObject = data.objectIdentifier != nil
-            && data.objectIdentifier == element.objectIdentifier
-        accessibilityNotificationBusLogger.info(
-            """
-            AX notification sequence=\(sequence, privacy: .public) source=axCallback \
-            code=\(code, privacy: .public) name=\(name, privacy: .public) \
-            dataClass=\(data.className, privacy: .public) \
-            associatedElementClass=\(element.className, privacy: .public) \
-            dataEqualsElement=\(sameObject, privacy: .public)
-            """
+        latestSequenceStorage += 1
+        let event = PendingAccessibilityNotificationEvent(
+            sequence: latestSequenceStorage,
+            code: code,
+            name: name,
+            timestamp: Date(),
+            notificationData: data.pendingPayload,
+            associatedElement: element.pendingPayload
         )
-        if let summary = data.summary {
-            accessibilityNotificationBusLogger.info(
-                "AX notification sequence=\(sequence, privacy: .public) notificationData=\(summary, privacy: .public)"
-            )
-        }
-        if let summary = element.summary {
-            accessibilityNotificationBusLogger.info(
-                "AX notification sequence=\(sequence, privacy: .public) associatedElement=\(summary, privacy: .public)"
-            )
+        bufferedEvents.append(event)
+        if bufferedEvents.count > maxBufferedEvents {
+            bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
         }
     }
 
-    func drainPendingEvents() -> [PendingAccessibilityNotificationEvent] {
+    func pendingEvents(after cursor: AccessibilityNotificationCursor = .origin) -> [PendingAccessibilityNotificationEvent] {
         lock.lock()
         defer { lock.unlock() }
+        return bufferedEvents.filter { $0.sequence > cursor.sequence }
+    }
+
+    /// Legacy whole-buffer claim for direct test and fallback paths.
+    ///
+    /// Normal action dispatch should prefer `AccessibilityNotificationActionWindow`.
+    func claimPendingEvents() -> [PendingAccessibilityNotificationEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+
         let events = bufferedEvents
-        bufferedEvents.removeAll()
+        if activeHeistScopes == 0 {
+            bufferedEvents.removeAll()
+        }
         return events
     }
 
@@ -186,6 +208,113 @@ final class AccessibilityNotificationBus {
             return singleLine
         }
         return "\(singleLine.prefix(157))..."
+    }
+
+    fileprivate func finishActionWindow(after cursor: AccessibilityNotificationCursor) -> [PendingAccessibilityNotificationEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let events = bufferedEvents.filter { $0.sequence > cursor.sequence }
+        let upperBound = events.last?.sequence ?? cursor.sequence
+        if activeActionWindows > 0 {
+            activeActionWindows -= 1
+        }
+        if activeHeistScopes == 0 {
+            bufferedEvents.removeAll { $0.sequence <= upperBound }
+        }
+        return events
+    }
+
+    fileprivate func cancelActionWindow() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if activeActionWindows > 0 {
+            activeActionWindows -= 1
+        }
+    }
+
+    fileprivate func endHeistScope() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if activeHeistScopes > 0 {
+            activeHeistScopes -= 1
+        }
+        if activeHeistScopes == 0 && activeActionWindows == 0 {
+            bufferedEvents.removeAll()
+        }
+    }
+}
+
+struct AccessibilityNotificationCursor: Sendable, Equatable {
+    static let origin = AccessibilityNotificationCursor(sequence: 0)
+
+    let sequence: UInt64
+}
+
+/// Lifetime token for a heist-level notification stream.
+/// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
+/// cancellation may cross task boundaries while closing scoped observation.
+final class AccessibilityNotificationHeistScope: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private let lock = NSLock()
+    private weak var bus: AccessibilityNotificationBus?
+
+    fileprivate init(bus: AccessibilityNotificationBus) {
+        self.bus = bus
+    }
+
+    deinit {
+        cancel()
+    }
+
+    func cancel() {
+        let bus: AccessibilityNotificationBus?
+        lock.lock()
+        bus = self.bus
+        self.bus = nil
+        lock.unlock()
+
+        bus?.endHeistScope()
+    }
+}
+
+/// Lifetime token for a single action's notification attribution window.
+/// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
+/// cancellation may cross task boundaries while closing the action window.
+final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    let cursor: AccessibilityNotificationCursor
+
+    private let lock = NSLock()
+    private weak var bus: AccessibilityNotificationBus?
+
+    fileprivate init(bus: AccessibilityNotificationBus, cursor: AccessibilityNotificationCursor) {
+        self.bus = bus
+        self.cursor = cursor
+    }
+
+    deinit {
+        cancel()
+    }
+
+    func finishAndClaimEvents() -> [PendingAccessibilityNotificationEvent] {
+        let bus: AccessibilityNotificationBus?
+        lock.lock()
+        bus = self.bus
+        self.bus = nil
+        lock.unlock()
+
+        return bus?.finishActionWindow(after: cursor) ?? []
+    }
+
+    func cancel() {
+        let bus: AccessibilityNotificationBus?
+        lock.lock()
+        bus = self.bus
+        self.bus = nil
+        lock.unlock()
+
+        bus?.cancelActionWindow()
     }
 }
 

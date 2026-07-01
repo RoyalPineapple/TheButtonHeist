@@ -218,27 +218,6 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
 /// - Private payload objects leave this wrapper only as normalized, weakly-held
 ///   notification evidence.
 private enum AccessibilityNotificationPrivateSPI {
-    // Private UIAccessibility registration API. The block signature is inferred
-    // from `_UIAXBroadcastMainThread`, which invokes each registered block as:
-    //   block(notificationCode, notificationData, associatedElement)
-    private typealias NotificationCallbackBlock = @convention(block) (
-        UInt32,
-        AnyObject?,
-        AnyObject?
-    ) -> Void
-
-    private typealias AddNotificationCallbackFunction = @convention(c) (
-        NotificationCallbackBlock,
-        AnyObject
-    ) -> Void
-
-    private typealias RemoveNotificationCallbackFunction = @convention(c) (AnyObject) -> Void
-
-    // Private AccessibilitySupport switch that lets normal app processes pass
-    // `_UIAXBroadcastMainThread`'s notification gate. This is an arming step,
-    // not the observer mechanism itself.
-    private typealias SetUnitTestModeFunction = @convention(c) (Int32) -> Void
-
     enum InstallError: Error, CustomStringConvertible {
         case notMainThread
         case callbackSymbolsUnavailable(checkedSources: [String])
@@ -256,26 +235,26 @@ private enum AccessibilityNotificationPrivateSPI {
 
     private struct ResolvedSymbols {
         let source: String
-        let handle: UnsafeMutableRawPointer
-        let addCallback: AddNotificationCallbackFunction
-        let removeCallback: RemoveNotificationCallbackFunction
+        let handle: ButtonHeistPrivateSPI.LibraryHandle
+        let addCallback: ButtonHeistPrivateSPI.AddAccessibilityNotificationCallbackFunction
+        let removeCallback: ButtonHeistPrivateSPI.RemoveAccessibilityNotificationCallbackFunction
     }
 
     final class InstalledCallback {
         let source: String
 
-        private let frameworkHandle: UnsafeMutableRawPointer
+        private let frameworkHandle: ButtonHeistPrivateSPI.LibraryHandle
         private let remove: (NSString) -> Void
         private let key: NSString
-        private let retainedCallback: Any
+        private let retainedCallback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock
         private var isInstalled = true
 
         fileprivate init(
             source: String,
-            frameworkHandle: UnsafeMutableRawPointer,
+            frameworkHandle: ButtonHeistPrivateSPI.LibraryHandle,
             remove: @escaping (NSString) -> Void,
             key: NSString,
-            retainedCallback: Any
+            retainedCallback: @escaping ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock
         ) {
             self.source = source
             self.frameworkHandle = frameworkHandle
@@ -306,10 +285,9 @@ private enum AccessibilityNotificationPrivateSPI {
 
     @discardableResult
     static func enableUnitTestModeIfAvailable() -> Bool {
-        guard let setUnitTestMode: SetUnitTestModeFunction = ButtonHeistPrivateSPI.function(
+        guard let setUnitTestMode = ButtonHeistPrivateSPI.function(
             .accessibilitySetUnitTestMode,
-            in: .libAccessibility,
-            as: SetUnitTestModeFunction.self
+            in: .libAccessibility
         ) else {
             return false
         }
@@ -327,7 +305,7 @@ private enum AccessibilityNotificationPrivateSPI {
 
         let symbols = try resolveSymbols()
         let observerKey = "com.buttonheist.accessibility-notification-observer" as NSString
-        let callback: NotificationCallbackBlock = { code, notificationData, associatedElement in
+        let callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock = { code, notificationData, associatedElement in
             // Apple calls this from the broadcast path, normally on main after
             // `AXPerformBlockOnMainThreadAfterDelay(..., 0)`. Keep the
             // no-subscriber path close to a no-op: do not wrap objects or log.
@@ -355,30 +333,13 @@ private enum AccessibilityNotificationPrivateSPI {
     private static func resolveSymbols() throws -> ResolvedSymbols {
         var checkedSources: [String] = []
 
-        if let processHandle = ButtonHeistPrivateSPI.processHandle() {
-            checkedSources.append("process")
-            if let symbols = symbols(in: processHandle, source: "process") {
-                return symbols
-            }
-        }
-
-        for imagePath in ButtonHeistPrivateSPI.loadedImagePaths() {
-            checkedSources.append(imagePath)
-            guard let handle = ButtonHeistPrivateSPI.openLibrary(at: imagePath),
-                  let symbols = symbols(in: handle, source: imagePath)
-            else {
-                continue
-            }
-            return symbols
-        }
-
-        let fallbackSearchOrder = ButtonHeistPrivateSPI.SPIFrameworkPath
+        let searchOrder = ButtonHeistPrivateSPI.SPIFrameworkPath
             .accessibilityNotificationCallbackFallbackSearchOrder
-        for frameworkPath in fallbackSearchOrder {
+        for frameworkPath in searchOrder {
             let path = ButtonHeistPrivateSPI.path(frameworkPath)
             checkedSources.append(path)
             guard let handle = ButtonHeistPrivateSPI.open(frameworkPath),
-                  let symbols = symbols(in: handle, source: path)
+                  let symbols = symbols(in: handle)
             else {
                 continue
             }
@@ -390,26 +351,21 @@ private enum AccessibilityNotificationPrivateSPI {
         )
     }
 
-    private static func symbols(
-        in handle: UnsafeMutableRawPointer,
-        source: String
-    ) -> ResolvedSymbols? {
-        guard let addCallback: AddNotificationCallbackFunction = ButtonHeistPrivateSPI.function(
+    private static func symbols(in handle: ButtonHeistPrivateSPI.LibraryHandle) -> ResolvedSymbols? {
+        guard let addCallback = ButtonHeistPrivateSPI.function(
             .accessibilityAddNotificationCallback,
-            in: handle,
-            as: AddNotificationCallbackFunction.self
+            in: handle
         ),
-              let removeCallback: RemoveNotificationCallbackFunction = ButtonHeistPrivateSPI.function(
+              let removeCallback = ButtonHeistPrivateSPI.function(
                 .accessibilityRemoveNotificationCallback,
-                in: handle,
-                as: RemoveNotificationCallbackFunction.self
+                in: handle
               )
         else {
             return nil
         }
 
         return ResolvedSymbols(
-            source: source,
+            source: handle.source,
             handle: handle,
             addCallback: addCallback,
             removeCallback: removeCallback

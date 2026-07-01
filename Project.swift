@@ -184,6 +184,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ThePlansTests/**"],
             dependencies: [
                 .target(name: "ThePlans"),
+                .target(name: "ButtonHeistTestSupport"),
             ]
         ),
 
@@ -283,6 +284,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("ThePlansTests"),
                 .target("ThePlans"),
+                .target("ButtonHeistTestSupport"),
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ThePlansTests")),
