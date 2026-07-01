@@ -1258,6 +1258,84 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(brains.stash.liveScrollView(for: inflatedTarget.screenElement))
     }
 
+    func testObjectDeallocatedRetryCanRevealKnownSemanticTargetAgain() async {
+        let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let targetId = HeistId(rawValue: "known_coke_button")
+        let visible = makeElement(label: "Visible")
+        let knownTarget = makeElement(label: "Coke", traits: .button)
+        installScreenWithKnownOffscreen(
+            visible: Screen.TestEntry(visible, heistId: "visible_element"),
+            offscreen: KnownOffscreenScrollTarget(
+                knownTarget,
+                heistId: targetId,
+                contentActivationPoint: CGPoint(x: 160, y: 1_200),
+                scrollView: staleScrollView
+            ),
+            includeLiveScrollAncestor: false,
+            scrollContainerPath: TreePath([99])
+        )
+
+        let staleVisibleScreen = Screen.makeForTests(
+            elements: [(knownTarget, targetId)],
+            objects: [targetId: nil]
+        )
+        let retryVisible = makeElement(label: "Still Current")
+        let retryKnownOnlyScreen = Screen.makeForTests(
+            elements: [(retryVisible, HeistId(rawValue: "visible_after_stale_object"))],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownTarget,
+                    heistId: targetId,
+                    scrollContainerPath: TreePath([99])
+                )
+            ]
+        )
+        let recoveredFrame = CGRect(x: 64, y: 180, width: 220, height: 44)
+        let recoveredTarget = AccessibilityElement.make(
+            label: "Coke",
+            traits: .button,
+            frame: recoveredFrame
+        )
+        let recoveredObject = retainLiveObject(makeButton(label: "Coke", frame: recoveredFrame))
+        let recoveredScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                recoveredTarget,
+                heistId: targetId,
+                object: recoveredObject
+            )
+        ])
+        var revealAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.revealKnownTarget = { _ in
+            revealAttempts += 1
+            if revealAttempts == 1 {
+                self.brains.stash.nextVisibleRefreshScreenForTesting = retryKnownOnlyScreen
+                return staleVisibleScreen
+            }
+            return recoveredScreen
+        }
+        defer {
+            brains.navigation.elementInflation.discoverTarget = nil
+            brains.navigation.elementInflation.revealKnownTarget = nil
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected retry to reveal known target again, got \(result)")
+        }
+        XCTAssertEqual(revealAttempts, 2)
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, targetId)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
+        XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
+    }
+
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
         // Contract: Scroll either reveals the requested target or returns a reason it cannot.
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
