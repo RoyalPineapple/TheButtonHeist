@@ -459,7 +459,7 @@ extension TheBrains {
                     abortedPath: abortedPath
                 ))
                 if case .rejected(let rejection) = transition {
-                    return accumulator(rejecting: rejection, accumulated: accumulator)
+                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
                 }
                 continue
 
@@ -474,22 +474,22 @@ extension TheBrains {
                 )
                 let transition = accumulator.apply(.executed(stepResult))
                 if case .rejected(let rejection) = transition {
-                    return accumulator(rejecting: rejection, accumulated: accumulator)
+                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
                 }
 
             case .reject(let rejection):
-                return accumulator(rejecting: rejection, accumulated: accumulator)
+                return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
             }
         }
 
         let completion = accumulator.complete()
         if case .rejected(let rejection) = completion {
-            return accumulator(rejecting: rejection, accumulated: accumulator)
+            return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
         }
         return accumulator
     }
 
-    private func accumulator(
+    private func rejectedAccumulator(
         rejecting rejection: HeistExecutionTransitionRejection,
         accumulated accumulator: HeistExecutionAccumulator
     ) -> HeistExecutionAccumulator {
