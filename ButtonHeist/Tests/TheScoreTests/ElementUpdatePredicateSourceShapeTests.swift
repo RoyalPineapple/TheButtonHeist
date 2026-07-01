@@ -32,6 +32,55 @@ import Testing
         )
     }
 
+    @Test func `text property value kinds share one matcher witness`() throws {
+        let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/TreeChangeModels.swift")
+
+        #expect(
+            try source.containsMatch(#"\bprotocol\s+ElementTextPropertyValueKind\s*:\s*ElementPropertyValueKind\b"#),
+            "Text-backed properties should share one canonical value-kind witness."
+        )
+        #expect(
+            try source.matches(
+                of: #"\bextension\s+(?:ValueProperty|LabelProperty|IdentifierProperty|HintProperty)\s*:\s*ElementTextPropertyValueKind\b"#
+            ).count == 4,
+            "Every text-backed property kind should use the shared value-kind witness."
+        )
+        #expect(
+            try source.matches(
+                of: #"guard\s+let\s+value\s+else\s*\{\s*return\s+false\s*\}\s*return\s+checker[.]matches\s*\(\s*value\s*\)"#,
+                options: [.dotMatchesLineSeparators]
+            ).count == 1,
+            "Text property matching should have one canonical implementation."
+        )
+        #expect(
+            try source.matches(of: #"[.]text\s*\(\s*value\s*\)"#).count == 1,
+            "Text property erasure should have one canonical implementation."
+        )
+    }
+
+    @Test func `updated element evaluation uses matched update projection`() throws {
+        let source = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheScore/AccessibilityPredicate+Evaluation.swift"
+        )
+
+        #expect(
+            try source.containsMatch(#"\bprivate\s+struct\s+MatchedElementUpdate\b"#),
+            "Updated-element filtering should produce a named matched-update record."
+        )
+        #expect(
+            try source.containsMatch(#"\bfunc\s+matching\s*\(\s*_\s+predicate\s*:\s*ElementUpdatePredicate\s*\)\s*->\s*MatchedElementUpdate[?]"#),
+            "ElementUpdate should own its element/property matching projection."
+        )
+        #expect(
+            try !source.containsMatch(#"\bvar\s+targetChanges\s*=\s*edit[.]changes\b"#),
+            "The evaluator loop should not rebuild property-filtering state inline."
+        )
+        #expect(
+            try !source.containsMatch(#"\bprivate\s+static\s+func\s+propertyChange\b"#),
+            "Property-change matching should use the typed PropertyChange witness directly."
+        )
+    }
+
     @Test func `nested custom content and rotor strings use string matcher helpers`() throws {
         let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/TreeChangeModels.swift")
 

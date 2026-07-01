@@ -159,6 +159,15 @@ extension TheBrains {
                 return receipt
             }
         }
+
+        var completedReceiptOutcome: HeistReceiptCompletedOutcome {
+            switch self {
+            case .notEvaluated, .matched:
+                return .passed
+            case .failed(receipt: _, detail: let detail):
+                return .failed(detail)
+            }
+        }
     }
 
     private enum HeistExecutionPhase: Equatable {
@@ -1020,22 +1029,14 @@ extension TheBrains {
             expectation: expectationEvidence?.expectation,
             expectationEvidence: expectationEvidence
         )
-        let outcome: HeistReceiptOutcome<HeistInvocationEvidence>
-        switch childExecution {
-        case .childAborted(let childAbort):
-            outcome = .childAborted(
-                evidence: evidence,
-                failure: childFailureDetail(category: .invocation, childPath: childAbort.abortedAtChildPath),
-                children: childAbort
-            )
-        case .completed(let completed):
-            switch expectationOutcome {
-            case .notEvaluated, .matched:
-                outcome = .passed(evidence: evidence, children: completed)
-            case .failed(receipt: _, detail: let failure):
-                outcome = .failed(evidence: evidence, failure: failure, children: completed)
+        let outcome = HeistReceiptOutcome(
+            evidence: evidence,
+            children: childExecution,
+            completedOutcome: expectationOutcome.completedReceiptOutcome,
+            childFailure: { childAbort in
+                childFailureDetail(category: .invocation, childPath: childAbort.abortedAtChildPath)
             }
-        }
+        )
         return heistInvocationReceipt(
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),

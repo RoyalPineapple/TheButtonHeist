@@ -9,36 +9,50 @@ import AccessibilitySnapshotParser
 
 extension TheBurglar {
 
-    struct ScreenBuildScrollElementIndexKey: Hashable {
-        let containerPath: TreePath
-        let elementPath: TreePath
+    struct ScreenBuildElementScrollFacts: Equatable {
+        let membership: Screen.ScrollMembership
+        let observedScrollContentActivationPoint: Screen.ObservedScrollContentActivationPoint?
+
+        init(
+            containerPath: TreePath,
+            index: Int? = nil,
+            observedScrollContentActivationPoint: Screen.ObservedScrollContentActivationPoint? = nil
+        ) {
+            self.init(
+                membership: Screen.ScrollMembership(containerPath: containerPath, index: index),
+                observedScrollContentActivationPoint: observedScrollContentActivationPoint
+            )
+        }
+
+        init(
+            membership: Screen.ScrollMembership,
+            observedScrollContentActivationPoint: Screen.ObservedScrollContentActivationPoint? = nil
+        ) {
+            self.membership = membership
+            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
+        }
     }
 
     struct ScreenBuildScrollFacts: Equatable {
         let contextContainerPaths: Set<TreePath>
-        let elementIndicesByPath: [ScreenBuildScrollElementIndexKey: Int]
+        let elementsByPath: [TreePath: ScreenBuildElementScrollFacts]
+        let containerObservedScrollContentActivationPointsByPath: [TreePath: Screen.ObservedScrollContentActivationPoint]
         let inventoriesByPath: [TreePath: ScrollInventory]
 
         init(
             contextContainerPaths: Set<TreePath> = [],
-            elementIndicesByPath: [ScreenBuildScrollElementIndexKey: Int] = [:],
+            elementsByPath: [TreePath: ScreenBuildElementScrollFacts] = [:],
+            containerObservedScrollContentActivationPointsByPath: [TreePath: Screen.ObservedScrollContentActivationPoint] = [:],
             inventoriesByPath: [TreePath: ScrollInventory] = [:]
         ) {
             self.contextContainerPaths = contextContainerPaths
-            self.elementIndicesByPath = elementIndicesByPath
+            self.elementsByPath = elementsByPath
+            self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
             self.inventoriesByPath = inventoriesByPath
         }
 
-        func index(
-            forElementAt elementPath: TreePath,
-            in containerPath: TreePath
-        ) -> Int? {
-            elementIndicesByPath[
-                ScreenBuildScrollElementIndexKey(
-                    containerPath: containerPath,
-                    elementPath: elementPath
-                )
-            ]
+        func element(at path: TreePath) -> ScreenBuildElementScrollFacts? {
+            elementsByPath[path]
         }
     }
 
@@ -54,38 +68,18 @@ extension TheBurglar {
         }
     }
 
-    struct ScreenBuildScrollContentActivationPoints: Equatable {
-        let elementByPath: [TreePath: Screen.ObservedScrollContentActivationPoint]
-        let containerByPath: [TreePath: Screen.ObservedScrollContentActivationPoint]
-
-        init(
-            elementByPath: [TreePath: Screen.ObservedScrollContentActivationPoint] = [:],
-            containerByPath: [TreePath: Screen.ObservedScrollContentActivationPoint] = [:]
-        ) {
-            self.elementByPath = elementByPath
-            self.containerByPath = containerByPath
-        }
-
-        func element(at path: TreePath) -> Screen.ObservedScrollContentActivationPoint? {
-            elementByPath[path]
-        }
-    }
-
     /// Value facts extracted from live UIKit / Objective-C accessibility
     /// objects before pure screen projection.
     struct ScreenBuildFacts: Equatable {
         let scroll: ScreenBuildScrollFacts
         let focus: ScreenBuildFocusFacts
-        let activationPoints: ScreenBuildScrollContentActivationPoints
 
         init(
             scroll: ScreenBuildScrollFacts = ScreenBuildScrollFacts(),
-            focus: ScreenBuildFocusFacts = ScreenBuildFocusFacts(),
-            activationPoints: ScreenBuildScrollContentActivationPoints = ScreenBuildScrollContentActivationPoints()
+            focus: ScreenBuildFocusFacts = ScreenBuildFocusFacts()
         ) {
             self.scroll = scroll
             self.focus = focus
-            self.activationPoints = activationPoints
         }
     }
 
@@ -114,8 +108,9 @@ extension TheBurglar.ScreenBuildFacts {
             hierarchy: hierarchy,
             scrollableContainerPaths: scrollContextContainerPaths
         )
-        let scrollElementIndicesByPath = scrollElementIndices(
+        let elementScrollExtraction = elementScrollFacts(
             hierarchy: hierarchy,
+            elementContextsByPath: elementContextsByPath,
             objectsByPath: result.objectsByPath,
             scrollViewsByPath: result.scrollViewsByPath
         )
@@ -123,29 +118,26 @@ extension TheBurglar.ScreenBuildFacts {
         return TheBurglar.ScreenBuildFacts(
             scroll: TheBurglar.ScreenBuildScrollFacts(
                 contextContainerPaths: scrollContextContainerPaths,
-                elementIndicesByPath: scrollElementIndicesByPath,
-                inventoriesByPath: scrollInventories(
+                elementsByPath: elementScrollExtraction.elementsByPath,
+                containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPoints(
                     hierarchy: hierarchy,
-                    indicesByPath: scrollElementIndicesByPath,
+                    identityContext: identityContext,
+                    scrollViewsByPath: result.scrollViewsByPath
+                ),
+                inventoriesByPath: scrollInventories(
+                    visibleIndicesByContainerPath: elementScrollExtraction.visibleIndicesByContainerPath,
                     scrollViewsByPath: result.scrollViewsByPath
                 )
             ),
             focus: TheBurglar.ScreenBuildFocusFacts(
                 firstResponderPaths: firstResponderPaths(in: result.objectsByPath)
-            ),
-            activationPoints: TheBurglar.ScreenBuildScrollContentActivationPoints(
-                elementByPath: elementObservedScrollContentActivationPoints(
-                    hierarchy: hierarchy,
-                    elementContextsByPath: elementContextsByPath,
-                    scrollViewsByPath: result.scrollViewsByPath
-                ),
-                containerByPath: containerObservedScrollContentActivationPoints(
-                    hierarchy: hierarchy,
-                    identityContext: identityContext,
-                    scrollViewsByPath: result.scrollViewsByPath
-                )
             )
         )
+    }
+
+    private struct ElementScrollFactsExtraction {
+        let elementsByPath: [TreePath: TheBurglar.ScreenBuildElementScrollFacts]
+        let visibleIndicesByContainerPath: [TreePath: Set<Int>]
     }
 
     private static func firstResponderPaths(in objectsByPath: [TreePath: NSObject]) -> Set<TreePath> {
@@ -156,51 +148,54 @@ extension TheBurglar.ScreenBuildFacts {
         )
     }
 
-    private static func scrollElementIndices(
+    private static func elementScrollFacts(
         hierarchy: [AccessibilityHierarchy],
+        elementContextsByPath: [TreePath: TheBurglar.ElementContext],
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [TheBurglar.ScreenBuildScrollElementIndexKey: Int] {
-        var indicesByPath: [TheBurglar.ScreenBuildScrollElementIndexKey: Int] = [:]
+    ) -> ElementScrollFactsExtraction {
+        let indexedElements = hierarchy.pathIndexedElements
+        var elementsByPath: [TreePath: TheBurglar.ScreenBuildElementScrollFacts] = [:]
+        var visibleIndicesByContainerPath: [TreePath: Set<Int>] = [:]
+
         for (containerPath, scrollView) in scrollViewsByPath {
-            for item in hierarchy.pathIndexedElements
+            for item in indexedElements
                 where item.path != containerPath && item.path.hasPrefix(containerPath) {
-                guard let index = scrollIndex(
-                    of: objectsByPath[item.path],
-                    in: scrollView
-                ) else { continue }
-                indicesByPath[
-                    TheBurglar.ScreenBuildScrollElementIndexKey(
-                        containerPath: containerPath,
-                        elementPath: item.path
+                let index = scrollIndex(of: objectsByPath[item.path], in: scrollView)
+                if let index {
+                    visibleIndicesByContainerPath[containerPath, default: []].insert(index)
+                }
+                guard elementContextsByPath[item.path]?.scrollMembership?.containerPath == containerPath else {
+                    continue
+                }
+                elementsByPath[item.path] = TheBurglar.ScreenBuildElementScrollFacts(
+                    containerPath: containerPath,
+                    index: index,
+                    observedScrollContentActivationPoint: observedScrollContentActivationPoint(
+                        for: item.element,
+                        in: scrollView
                     )
-                ] = index
+                )
             }
         }
-        return indicesByPath
+
+        return ElementScrollFactsExtraction(
+            elementsByPath: elementsByPath,
+            visibleIndicesByContainerPath: visibleIndicesByContainerPath
+        )
     }
 
     private static func scrollInventories(
-        hierarchy: [AccessibilityHierarchy],
-        indicesByPath: [TheBurglar.ScreenBuildScrollElementIndexKey: Int],
+        visibleIndicesByContainerPath: [TreePath: Set<Int>],
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
             uniqueKeysWithValues: scrollViewsByPath.map { path, scrollView in
-                let visibleIndices = hierarchy.pathIndexedElements.compactMap { item -> Int? in
-                    guard item.path != path, item.path.hasPrefix(path) else { return nil }
-                    return indicesByPath[
-                        TheBurglar.ScreenBuildScrollElementIndexKey(
-                            containerPath: path,
-                            elementPath: item.path
-                        )
-                    ]
-                }
                 return (
                     path,
                     ScrollInventory(
                         totalElementCount: totalElementCount(in: scrollView),
-                        visibleIndices: Array(Set(visibleIndices)).sorted()
+                        visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
                     )
                 )
             }
@@ -218,26 +213,6 @@ extension TheBurglar.ScreenBuildFacts {
         let index = scrollView.index(ofAccessibilityElement: object)
         guard index != NSNotFound, index >= 0 else { return nil }
         return index
-    }
-
-    private static func elementObservedScrollContentActivationPoints(
-        hierarchy: [AccessibilityHierarchy],
-        elementContextsByPath: [TreePath: TheBurglar.ElementContext],
-        scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [TreePath: Screen.ObservedScrollContentActivationPoint] {
-        Dictionary(
-            uniqueKeysWithValues: elementContextsByPath.compactMap { path, context -> (TreePath, Screen.ObservedScrollContentActivationPoint)? in
-                guard let containerPath = context.scrollMembership?.containerPath,
-                      let scrollView = scrollViewsByPath[containerPath],
-                      case .element(let element, _) = hierarchy.node(at: path),
-                      let observedPoint = observedScrollContentActivationPoint(
-                          for: element,
-                          in: scrollView
-                      )
-                else { return nil }
-                return (path, observedPoint)
-            }
-        )
     }
 
     private static func observedScrollContentActivationPoint(

@@ -10,7 +10,7 @@ import Testing
         #expect(offenders.isEmpty, "Raw ActionResult(success:) construction remains in runtime sources: \(offenders)")
     }
 
-    @Test func `heist step receipts are constructed through runtime helpers`() throws {
+    @Test func `heist step result construction stays behind receipt helpers`() throws {
         let helperPath = "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistReceiptConstruction.swift"
         let helperSource = try receiptSourceFile(relativePath: helperPath)
         let nonHelperOffenders = try receiptSourceFiles(relativeRoot: "ButtonHeist/Sources/TheInsideJob/TheBrains")
@@ -30,7 +30,12 @@ import Testing
         #expect(helperSource.contains("return .passed("))
         #expect(helperSource.contains("return .failed("))
         #expect(helperSource.contains(".skipped("))
+    }
 
+    @Test func `heist receipt outcomes are typed before step projection`() throws {
+        let helperSource = try receiptSourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistReceiptConstruction.swift"
+        )
         let genericReceiptParameters = try receiptSourceLines(
             matching: #"\b(status\s+requestedStatus|requestedStatus)\s*:\s*HeistExecutionStepStatus\?|\bevidence\s*:\s*HeistStepEvidence\?"#,
             in: helperSource
@@ -51,12 +56,44 @@ import Testing
             helperSource.contains("enum HeistReceiptOutcome"),
             "Runtime receipt construction should project explicit receipt outcomes, not parallel optionals"
         )
+        #expect(
+            helperSource.contains("enum HeistReceiptCompletedOutcome"),
+            "Completed-child receipt state should be typed before it is reduced into a step outcome"
+        )
+        #expect(
+            helperSource.contains("completedOutcome: HeistReceiptCompletedOutcome = .passed"),
+            "Receipt outcomes should reduce completed-child state through one typed initializer"
+        )
+        #expect(
+            !helperSource.contains("completedFailure: HeistFailureDetail?"),
+            "Receipt outcome reduction should not expose completed failure as an optional parameter"
+        )
+        #expect(
+            helperSource.contains("func stepResult("),
+            "Receipt outcomes should own the single projection into HeistExecutionStepResult"
+        )
+        #expect(
+            try receiptSourceOccurrenceCount(#"case \.passed\(let evidence, let children\)"#, in: helperSource) == 1,
+            "Passed outcome projection should have one canonical spelling"
+        )
+        #expect(
+            try receiptSourceOccurrenceCount(#"case \.failed\(let evidence, let failure, let children\)"#, in: helperSource) == 1,
+            "Failed outcome projection should have one canonical spelling"
+        )
+        #expect(
+            try receiptSourceOccurrenceCount(#"case \.childAborted\(let evidence, let failure, let childAbort\)"#, in: helperSource) == 1,
+            "Child-aborted outcome projection should have one canonical spelling"
+        )
+    }
 
+    @Test func `heist receipt helper signatures accept typed outcomes`() throws {
+        let helperSource = try receiptSourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistReceiptConstruction.swift"
+        )
         for helper in [
             "heistWaitReceipt",
             "heistInvocationReceipt",
             "heistLoopReceipt",
-            "heistLoopIterationReceipt",
         ] {
             let declaration = receiptSourceFunctionDeclaration(named: helper, in: helperSource)
             #expect(
@@ -90,10 +127,17 @@ import Testing
             "func heistWarningReceipt",
             "func heistExplicitFailureReceipt",
             "func heistLoopReceipt",
-            "func heistLoopIterationReceipt",
         ] {
             #expect(helperSource.contains(helper), "Missing runtime receipt helper: \(helper)")
         }
+
+        let loopIterationHelperOffenders = try receiptSourceFiles(relativeRoot: "ButtonHeist/Sources/TheInsideJob/TheBrains")
+            .filter { $0.contents.contains("heistLoopIterationReceipt") }
+            .map(\.relativePath)
+        #expect(
+            loopIterationHelperOffenders.isEmpty,
+            "Loop iteration receipts should use the canonical heistLoopReceipt helper: \(loopIterationHelperOffenders)"
+        )
     }
 }
 

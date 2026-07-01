@@ -47,16 +47,26 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {
         var lease = SessionLease(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted(.claimedSession) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+        guard case .accepted(.claimedSession) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 1,
+            at: now
+        ) else {
             return XCTFail("Expected first driver to claim the session")
         }
 
-        guard case .draining = lease.removeConnection(1) else {
+        guard case .draining(let releaseDeadline) = lease.removeConnection(1, at: now) else {
             return XCTFail("Expected final connection removal to start draining")
         }
+        XCTAssertEqual(releaseDeadline, now.addingTimeInterval(30))
 
-        guard case .rejected(let diagnostic) = lease.acquire(driverIdentity: "driver:beta", clientId: 2) else {
+        guard case .rejected(let diagnostic) = lease.acquire(
+            driverIdentity: "driver:beta",
+            clientId: 2,
+            at: now.addingTimeInterval(12)
+        ) else {
             return XCTFail("Expected different driver to be rejected while draining")
         }
         guard case .drainingOwner(
@@ -65,7 +75,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         ) = diagnostic else {
             return XCTFail("Expected draining lock diagnostic, got \(diagnostic)")
         }
-        XCTAssertGreaterThan(remainingTimeoutSeconds, 0)
+        XCTAssertEqual(remainingTimeoutSeconds, 18)
 
         let payload = diagnostic.payload()
         XCTAssertEqual(payload.activeConnections, 0)
@@ -77,14 +87,20 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testSessionLeaseActiveRejectionUsesTypedDiagnosticWithoutDrainingTimeout() {
         var lease = SessionLease(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted(.claimedSession) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+        guard case .accepted(.claimedSession) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 1,
+            at: now
+        ) else {
             return XCTFail("Expected first driver to claim the session")
         }
 
         guard case .rejected(let sameDriverDiagnostic) = lease.acquire(
             driverIdentity: "driver:alpha",
-            clientId: 2
+            clientId: 2,
+            at: now
         ) else {
             return XCTFail("Expected same driver to be rejected while already active")
         }
@@ -96,7 +112,8 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
         guard case .rejected(let activeOwnerDiagnostic) = lease.acquire(
             driverIdentity: "driver:beta",
-            clientId: 3
+            clientId: 3,
+            at: now
         ) else {
             return XCTFail("Expected different driver to be rejected while active")
         }
@@ -109,17 +126,18 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testSessionLeaseIgnoresNonActiveConnectionRemoval() {
         var lease = SessionLease(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+        guard case .accepted = lease.acquire(driverIdentity: "driver:alpha", clientId: 1, at: now) else {
             return XCTFail("Expected first driver to claim the session")
         }
 
-        guard case .active = lease.removeConnection(2) else {
+        guard case .active = lease.removeConnection(2, at: now) else {
             return XCTFail("Disconnecting a non-session client must not request a release timer")
         }
         XCTAssertEqual(lease.activeSessionConnections, [1])
 
-        guard case .draining = lease.removeConnection(1) else {
+        guard case .draining = lease.removeConnection(1, at: now) else {
             return XCTFail("Expected active session connection removal to start draining")
         }
     }
@@ -127,10 +145,12 @@ final class TheMuscleStateMachineTests: XCTestCase {
     #if canImport(UIKit)
     func testMuscleSessionMutationsReturnTypedEffects() {
         var session = TheMuscleSession(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
         guard case .accepted(let claimEffect) = session.acquire(
             driverIdentity: "driver:alpha",
-            clientId: 1
+            clientId: 1,
+            at: now
         ) else {
             return XCTFail("Expected first driver to claim the session")
         }
@@ -140,7 +160,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            session.removeConnection(1),
+            session.removeConnection(1, at: now),
             [
                 .replaceReleaseTimer(timeout: 30),
                 .log(.releaseTimerStarted(timeout: 30)),
@@ -149,7 +169,8 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
         guard case .accepted(let rejoinEffect) = session.acquire(
             driverIdentity: "driver:alpha",
-            clientId: 2
+            clientId: 2,
+            at: now.addingTimeInterval(1)
         ) else {
             return XCTFail("Expected active driver to rejoin during the grace period")
         }
@@ -205,6 +226,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(sessionSource.contents.contains("case replaceReleaseTimer(timeout: TimeInterval)"))
         XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\s*:"#))
         XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
+        XCTAssertFalse(try sessionSource.containsMatch(#"\bDate\s*\(\s*\)"#))
 
         XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+applySessionEffects\s*\("#))
         XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+logSessionEvent\s*\("#))
@@ -234,6 +256,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\b"#))
         XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
         XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
+        XCTAssertFalse(try sessionSource.containsMatch(#"\bresetInactivityTimer\b"#))
     }
 
     func testSessionLeaseDiagnosticsDoNotRegressToOptionalBags() throws {
@@ -250,6 +273,12 @@ final class TheMuscleStateMachineTests: XCTestCase {
         ))
         XCTAssertFalse(try leaseSource.containsMatch(#"\bownerDriverId\s*:\s*String\?"#))
         XCTAssertFalse(try leaseSource.containsMatch(#"\bremainingTimeoutSeconds\s*:\s*TimeInterval\?"#))
+        XCTAssertFalse(try leaseSource.containsMatch(#"\bresetInactivityTimer\b"#))
+        XCTAssertFalse(try leaseSource.containsMatch(#"->\s*Date\?"#))
+        XCTAssertFalse(try leaseSource.containsMatch(#"\bDate\s*\(\s*\)"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+acquire\s*\([^)]*\bat\s+now:\s*Date"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+removeConnection\s*\([^)]*\bat\s+now:\s*Date"#))
+        XCTAssertTrue(leaseSource.contents.contains("releaseDeadline.timeIntervalSince(now)"))
     }
 
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {

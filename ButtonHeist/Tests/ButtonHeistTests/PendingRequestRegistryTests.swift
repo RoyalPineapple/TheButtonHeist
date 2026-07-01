@@ -6,7 +6,7 @@ final class PendingRequestRegistryTests: XCTestCase {
 
     @ButtonHeistActor
     func testWrongResponseTypeFailsRegisteredExpectation() async throws {
-        let registry = TheFence.PendingRequestTrackers()
+        let registry = TheFence.PendingRequestRegistry()
         let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
@@ -44,7 +44,7 @@ final class PendingRequestRegistryTests: XCTestCase {
 
     @ButtonHeistActor
     func testRequestIdCannotRegisterDifferentResponseShapes() async throws {
-        let registry = TheFence.PendingRequestTrackers()
+        let registry = TheFence.PendingRequestRegistry()
         let requestId = "shared-request-id"
         let registered = expectation(description: "original request registered")
 
@@ -63,7 +63,7 @@ final class PendingRequestRegistryTests: XCTestCase {
             _ = try await registry.waitForPong(requestId: requestId, timeout: 0.01)
             XCTFail("Expected duplicate request id failure")
         } catch {
-            guard case PendingRequestTrackerError.duplicateRequestId(let duplicateId) = error else {
+            guard case TheFence.PendingRequestError.duplicateRequestId(let duplicateId) = error else {
                 return XCTFail("Expected duplicate request id error, got \(error)")
             }
             XCTAssertEqual(duplicateId, requestId)
@@ -78,7 +78,7 @@ final class PendingRequestRegistryTests: XCTestCase {
 
     @ButtonHeistActor
     func testTransientFailureResolvesMatchingRequestOnce() async throws {
-        let registry = TheFence.PendingRequestTrackers()
+        let registry = TheFence.PendingRequestRegistry()
         let failedRegistered = expectation(description: "failed request registered")
         let survivingRegistered = expectation(description: "surviving request registered")
 
@@ -128,7 +128,7 @@ final class PendingRequestRegistryTests: XCTestCase {
 
     @ButtonHeistActor
     func testCancelAllCancelsOutstandingRequests() async throws {
-        let registry = TheFence.PendingRequestTrackers()
+        let registry = TheFence.PendingRequestRegistry()
         let pongRegistered = expectation(description: "pong request registered")
         let interfaceRegistered = expectation(description: "interface request registered")
 

@@ -122,10 +122,8 @@ actor TheMuscle {
         await sendResponse(.serverHello, to: .client(clientId))
     }
 
-    /// Called when a ping is received from an authenticated client.
-    func noteClientActivity(_ clientId: Int) {
-        applySessionEffects(session.noteClientActivity(clientId))
-    }
+    /// Pings do not affect session ownership; release timers are tied to disconnect/rejoin transitions.
+    func noteClientActivity(_: Int) {}
 
     /// Send an already-encoded envelope to a single client.
     @discardableResult
@@ -151,7 +149,7 @@ actor TheMuscle {
     func handleClientDisconnected(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
         await applyAdmissionEffects(admission.removeClient(clientId))
-        applySessionEffects(session.removeConnection(clientId))
+        applySessionEffects(session.removeConnection(clientId, at: Date()))
     }
 
     func tearDown() async {
@@ -179,7 +177,8 @@ actor TheMuscle {
     private func completeAuthentication(_ authentication: MuscleAuthentication) async {
         switch session.acquire(
             driverIdentity: authentication.driverIdentity,
-            clientId: authentication.clientId
+            clientId: authentication.clientId,
+            at: Date()
         ) {
         case .accepted(let sessionEffect):
             applySessionEffects(sessionEffect)

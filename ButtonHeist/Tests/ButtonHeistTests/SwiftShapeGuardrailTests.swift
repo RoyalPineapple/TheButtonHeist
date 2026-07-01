@@ -234,25 +234,32 @@ import Testing
         #expect(fenceSource.matches(of: #"(?m)^\s*let\s+phase\s*:\s*SessionConnectionPhase\b"#).isEmpty)
     }
 
-    @Test func `the fence pending request registry stores typed continuations`() throws {
+    @Test func `the fence pending request registry uses one typed response result`() throws {
         let pendingSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+PendingRequestTrackers.swift"
         )
-        #expect(pendingSource.contains("fileprivate struct PendingRequest<Response: Sendable>: Sendable"))
-        #expect(pendingSource.contains("case action(PendingRequest<ActionResult>)"))
-        #expect(pendingSource.contains("case pong(PendingRequest<PongPayload>)"))
-        #expect(pendingSource.contains("case interface(PendingRequest<Interface>)"))
-        #expect(pendingSource.contains("case screen(PendingRequest<ScreenPayload>)"))
-        #expect(pendingSource.contains("case heistExecution(PendingRequest<HeistExecutionResult>)"))
-        #expect(pendingSource.matches(of: #"\benum\s+PendingResponse\b"#).isEmpty)
-        #expect(!pendingSource.contains("Result<PendingResponse, Error>"))
+        #expect(pendingSource.contains("fileprivate enum PendingResponsePayload: Sendable"))
+        #expect(pendingSource.contains("fileprivate struct PendingRequest: Sendable"))
+        #expect(pendingSource.contains("let expectedKind: PendingResponseKind"))
+        #expect(pendingSource.contains("private var pending: [String: PendingRequest] = [:]"))
+        #expect(pendingSource.contains("Result<PendingResponsePayload, Error>"))
+        #expect(pendingSource.contains("static func result(from message: ServerMessage) -> Result<PendingResponsePayload, Error>?"))
+        #expect(pendingSource.matches(of: #"\bPendingRequest\s*<"#).isEmpty)
+        #expect(pendingSource.matches(of: #"\bPendingResponseContinuation\b"#).isEmpty)
+        #expect(pendingSource.matches(of: #"\bfunc\s+resolve(Action|Pong|Interface|Screen|HeistExecution)\s*\("#).isEmpty)
         #expect(pendingSource.matches(of: #"\bfunc\s+waitForResponse\s*\("#).isEmpty)
+        #expect(!pendingSource.contains("PendingRequestTrackerError"))
+        #expect(!FileManager.default.fileExists(
+            atPath: repositoryRoot()
+                .appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/Support/PendingRequestTracker.swift")
+                .path
+        ))
 
         let transportSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+TransportWaits.swift"
         )
         #expect(transportSource.matches(of: #"\bfunc\s+sendAndAwaitResponse\s*\("#).isEmpty)
-        #expect(transportSource.matches(of: #"\bPendingResponse\b"#).isEmpty)
+        #expect(transportSource.matches(of: #"\bPendingResponsePayload\b"#).isEmpty)
         #expect(!transportSource.contains("responseTypeMismatchError"))
     }
 

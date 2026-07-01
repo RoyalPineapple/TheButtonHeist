@@ -76,7 +76,7 @@ public final class TheFence {
         SessionConnectionSnapshot(state: sessionConnectionState)
     }
     let screenshotArtifacts: ScreenshotArtifactWriter
-    let pendingRequests = PendingRequestTrackers()
+    let pendingRequests = PendingRequestRegistry()
 
     public init(configuration: Configuration) {
         self.config = configuration
