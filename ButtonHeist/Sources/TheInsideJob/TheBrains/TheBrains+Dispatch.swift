@@ -140,6 +140,8 @@ extension TheBrains {
             return treeUnavailableResult(method: method)
         }
         let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
+        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        defer { notificationWindow.cancel() }
 
         let demand = stash.beginSemanticObservationDemand(scope: observationScope)
         defer { demand.cancel() }
@@ -180,7 +182,8 @@ extension TheBrains {
             outcome: postActionOutcome,
             message: result.message,
             before: before,
-            postActionCommitScope: postActionCommitScope
+            postActionCommitScope: postActionCommitScope,
+            notificationWindow: notificationWindow
         )
         return actionResult.withTiming(ActionPerformanceTiming(
             beforeObservationMs: beforeObservationMs,

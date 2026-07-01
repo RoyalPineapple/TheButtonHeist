@@ -12,6 +12,12 @@ private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
     case transition
 }
 
+private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIterable {
+    case screenChangeReason
+    case transient
+    case accessibilityNotifications
+}
+
 public extension AccessibilityTrace {
     struct Capture: Codable, Sendable, Equatable {
         /// 1-based position in this trace's linear capture chain.
@@ -118,17 +124,49 @@ public extension AccessibilityTrace {
         public let screenChangeReason: String?
         /// Elements that appeared and disappeared while settling this edge.
         public let transient: [HeistElement]
+        /// AX notification traffic observed while moving into this capture.
+        /// Element payloads reference nodes in this capture's interface tree.
+        public let accessibilityNotifications: [AccessibilityNotificationEvidence]
 
         public init(
             screenChangeReason: String? = nil,
-            transient: [HeistElement] = []
+            transient: [HeistElement] = [],
+            accessibilityNotifications: [AccessibilityNotificationEvidence] = []
         ) {
             self.screenChangeReason = screenChangeReason
             self.transient = transient
+            self.accessibilityNotifications = accessibilityNotifications
         }
 
         public var isEmpty: Bool {
-            screenChangeReason == nil && transient.isEmpty
+            screenChangeReason == nil && transient.isEmpty && accessibilityNotifications.isEmpty
+        }
+
+        public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(
+                allowed: AccessibilityTraceTransitionCodingKeys.self,
+                typeName: "accessibility trace transition"
+            )
+            let container = try decoder.container(keyedBy: AccessibilityTraceTransitionCodingKeys.self)
+            self.init(
+                screenChangeReason: try container.decodeIfPresent(String.self, forKey: .screenChangeReason),
+                transient: try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? [],
+                accessibilityNotifications: try container.decodeIfPresent(
+                    [AccessibilityNotificationEvidence].self,
+                    forKey: .accessibilityNotifications
+                ) ?? []
+            )
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: AccessibilityTraceTransitionCodingKeys.self)
+            try container.encodeIfPresent(screenChangeReason, forKey: .screenChangeReason)
+            if !transient.isEmpty {
+                try container.encode(transient, forKey: .transient)
+            }
+            if !accessibilityNotifications.isEmpty {
+                try container.encode(accessibilityNotifications, forKey: .accessibilityNotifications)
+            }
         }
     }
 

@@ -1218,8 +1218,12 @@ struct HeistCompilerTests {
 
         #expect(unexpected.isEmpty, "Unexpected broad Any existential uses:\n\(unexpected.sorted().joined(separator: "\n"))")
 
+        let notificationBusPrefix = "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift:"
         let allowedDictionaryBridgeLines: Set<String> = [
             "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift:let dictionary = propertyList as? NSDictionary else {",
+            "\(notificationBusPrefix)guard let dictionary = object as? NSDictionary,",
+            "\(notificationBusPrefix)case let dictionary as NSDictionary:",
+            "\(notificationBusPrefix)private static func dictionarySummary(_ dictionary: NSDictionary) -> String {",
         ]
         let unexpectedDictionaryBridgeLines = try sourceMatches(
             in: productionFiles,
@@ -1239,11 +1243,28 @@ struct HeistCompilerTests {
         let root = try repositoryRoot()
         let productionFiles = try productionSwiftFiles(in: root)
 
+        let privateSPIPrefix = "ButtonHeist/Sources/TheInsideJob/Support/ButtonHeistPrivateSPI.swift:"
+        let objcRuntimePrefix = "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:"
+        let notificationBusPrefix = "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift:"
         let allowedAnyObjectLines: Set<String> = [
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceConnecting: AnyObject {",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceDiscovering: AnyObject {",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol TransportReachabilityConnecting: AnyObject {",
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:private typealias RawObjectiveCReceiver = AnyObject",
+            "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift:protocol DeviceDiscoveryBrowsing: AnyObject {",
+            "\(privateSPIPrefix)AnyObject?, // notificationData",
+            "\(privateSPIPrefix)AnyObject? // associatedElement",
+            "\(privateSPIPrefix)AnyObject // observerKey",
+            "\(objcRuntimePrefix)private typealias RawObjectiveCReceiver = AnyObject",
+            "\(notificationBusPrefix)fileprivate static func stringPayload(_ value: AnyObject?) -> String? {",
+            "\(notificationBusPrefix)fileprivate static func notificationPayloadObject(from object: AnyObject?) -> AnyObject? {",
+            "\(notificationBusPrefix)return data as AnyObject",
+            "\(notificationBusPrefix)fileprivate static func className(for value: AnyObject?) -> String {",
+            "\(notificationBusPrefix)fileprivate static func summary(for value: AnyObject?) -> String? {",
+            "\(notificationBusPrefix)let valueObject = value as AnyObject",
+            "\(notificationBusPrefix)init(_ object: AnyObject?) {",
+            "\(notificationBusPrefix)weak var object: AnyObject?",
+            "\(notificationBusPrefix)init(_ object: AnyObject) {",
+            "\(notificationBusPrefix)init(object: AnyObject, className: String, summary: String?) {",
         ]
         let unexpectedAnyObjectLines = try sourceMatches(
             in: productionFiles,
@@ -1258,10 +1279,10 @@ struct HeistCompilerTests {
         )
 
         let allowedSelectorPerformLines: Set<String> = [
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:_ = target.perform(selector)",
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:_ = target.perform(selector, with: argument)",
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:target.perform(selector)?.takeUnretainedValue() as? Result",
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:target.perform(selector, with: argument)?.takeUnretainedValue() as? Result",
+            "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:_ = target.perform(selector)",
+            "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:_ = target.perform(selector, with: argument)",
+            "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:target.perform(selector)?.takeUnretainedValue() as? Result",
+            "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:target.perform(selector, with: argument)?.takeUnretainedValue() as? Result",
         ]
         let unexpectedSelectorPerformLines = try sourceMatches(
             in: productionFiles,

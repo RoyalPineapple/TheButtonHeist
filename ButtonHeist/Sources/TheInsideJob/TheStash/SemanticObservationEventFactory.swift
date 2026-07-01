@@ -8,14 +8,16 @@ enum SemanticObservationEventFactory {
     static func makeEvent(
         observation: SettledSemanticObservation,
         previous: SettledSemanticObservationEvent?,
-        stash: TheStash
+        stash: TheStash,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
     ) -> SettledSemanticObservationEvent {
         let previousCapture = previous?.trace.captures.last
         let currentCapture = semanticTraceCapture(
             for: observation,
             sequence: previousCapture == nil ? 1 : 2,
             parentHash: previousCapture?.hash,
-            stash: stash
+            stash: stash,
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications
         )
         let trace = if let previousCapture {
             AccessibilityTrace(captures: [previousCapture, currentCapture])
@@ -37,7 +39,8 @@ enum SemanticObservationEventFactory {
         for observation: SettledSemanticObservation,
         sequence: Int,
         parentHash: String?,
-        stash: TheStash
+        stash: TheStash,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent]
     ) -> AccessibilityTrace.Capture {
         let screen = switch observation.scope {
         case .visible:
@@ -46,6 +49,10 @@ enum SemanticObservationEventFactory {
             observation.screen
         }
         let interface = stash.semanticInterfaceWithHash(for: screen).interface
+        let accessibilityNotifications = stash.resolveAccessibilityNotificationEvidence(
+            pendingAccessibilityNotifications,
+            in: screen
+        )
         let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
                 index: index,
@@ -60,6 +67,9 @@ enum SemanticObservationEventFactory {
             context: AccessibilityTrace.Context(
                 screenId: screen.id,
                 windowStack: windows
+            ),
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: accessibilityNotifications
             )
         )
     }

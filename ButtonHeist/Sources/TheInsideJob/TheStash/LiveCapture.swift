@@ -149,6 +149,10 @@ struct LiveCapture: Equatable {
         elementIndex.heistId(matching: object)
     }
 
+    func heistId(matchingObjectIdentifier objectIdentifier: ObjectIdentifier) -> HeistId? {
+        elementIndex.heistId(matchingObjectIdentifier: objectIdentifier)
+    }
+
     func scrollView(for heistId: HeistId) -> UIScrollView? {
         elementIndex.scrollView(for: heistId)
     }
@@ -458,6 +462,12 @@ struct LiveCapture: Equatable {
         func heistId(matching object: NSObject) -> HeistId? {
             orderedElementEntries.first { entry in
                 entry.ref?.object === object
+            }?.heistId
+        }
+
+        func heistId(matchingObjectIdentifier objectIdentifier: ObjectIdentifier) -> HeistId? {
+            orderedElementEntries.first { entry in
+                entry.ref?.object.map(ObjectIdentifier.init) == objectIdentifier
             }?.heistId
         }
 

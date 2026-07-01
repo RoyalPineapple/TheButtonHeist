@@ -87,12 +87,14 @@ final class InteractionObservation {
         message: String? = nil,
         before: PostActionObservation.BeforeState,
         postActionCommitScope: SemanticObservationScope = .visible,
-        settleOutcome: SettleSession.Outcome? = nil
+        settleOutcome: SettleSession.Outcome? = nil,
+        notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> ActionResult {
         let settleEvidence = await postActionObservation.settleEvidence(
             before: before,
             commitScope: postActionCommitScope,
-            outcome: settleOutcome
+            outcome: settleOutcome,
+            notificationWindow: notificationWindow
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
         let observationOutcome = await postActionObservation.observationOutcome(

@@ -451,6 +451,127 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
+    func testScreenChangeNotificationReferencesAreRemappedAfterPruning() async throws {
+        let beforeScreen = makeScreen(elements: [
+            ("ButtonHeist Demo", .header, "root_header"),
+            ("Controls Demo", .button, "controls_demo"),
+            ("Todo List", .button, "todo_list"),
+            ("Words", .button, "words"),
+        ])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let controls = AccessibilityElement.make(
+            label: "Controls Demo",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let todos = AccessibilityElement.make(
+            label: "Todo List",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let words = AccessibilityElement.make(
+            label: "Words",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let section = AccessibilityElement.make(
+            label: "Section A",
+            traits: .header,
+            respondsToUserInteraction: false
+        )
+        let acid = AccessibilityElement.make(
+            label: "A acid",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let abacus = AccessibilityElement.make(
+            label: "abacus major",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let back = AccessibilityElement.make(
+            label: "ButtonHeist Demo",
+            traits: .backButton,
+            respondsToUserInteraction: false
+        )
+        let acidObject = NSObject()
+        let mixedTransitionScreen = Screen.makeForTests([
+            .init(controls, heistId: "controls_demo"),
+            .init(todos, heistId: "todo_list"),
+            .init(words, heistId: "words"),
+            .init(section, heistId: "section_a_header"),
+            .init(acid, heistId: "a_acid", object: acidObject),
+            .init(abacus, heistId: "abacus_major"),
+            .init(back, heistId: "back_button"),
+        ])
+        brains.stash.accessibilityNotifications.record(
+            code: 1001,
+            notificationData: CapturedAccessibilityNotificationPayload(acidObject),
+            associatedElement: .none
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .activate,
+            outcome: successOutcome(),
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
+        )
+
+        let notification = try XCTUnwrap(
+            result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
+        )
+        guard case .element(let reference) = notification.notificationData else {
+            return XCTFail("Expected notification data to resolve to final trace element")
+        }
+        XCTAssertEqual(reference.path, TreePath([1]))
+        XCTAssertEqual(reference.traversalIndex, 1)
+        XCTAssertEqual(reference.resolution, .identity)
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements[1].label, "A acid")
+    }
+
+    func testPassiveSemanticPublishDoesNotDrainPostActionAccessibilityNotifications() async throws {
+        let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let notifiedObject = NSObject()
+        let saved = AccessibilityElement.make(
+            label: "Saved",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let finalScreen = Screen.makeForTests([
+            .init(saved, heistId: "saved", object: notifiedObject),
+        ])
+        brains.stash.accessibilityNotifications.record(
+            code: 1001,
+            notificationData: CapturedAccessibilityNotificationPayload(notifiedObject),
+            associatedElement: .none
+        )
+
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(
+            makeScreen(elements: [("Passive", .staticText, "passive")])
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .activate,
+            outcome: successOutcome(),
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: finalScreen)
+        )
+
+        let notification = try XCTUnwrap(
+            result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
+        )
+        guard case .element(let reference) = notification.notificationData else {
+            return XCTFail("Expected notification data to survive passive publish, got \(notification.notificationData)")
+        }
+        XCTAssertEqual(reference.resolution, .identity)
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
+    }
+
     func testActionResultFinalTraceUsesVisibleSettleNotLaterDiscovery() async throws {
         let beforeScreen = makeScreen(elements: [("Text Input", .header, "text_input")])
         brains.stash.installScreenForTesting(beforeScreen)
@@ -911,6 +1032,18 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(source.contains("case observingSince(SettledObservationSequence)"))
         XCTAssertFalse(waitExecutionSource.contains("case failed(ErrorKind?)"))
         XCTAssertTrue(waitExecutionSource.contains("case failed(ErrorKind)"))
+    }
+
+    func testPassiveSettleFailureDoesNotOwnPostActionNotificationBuffer() throws {
+        let source = try String(contentsOf: semanticObservationStreamSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private func recordNonActionFailedSettleDiagnosticEvidence"))
+        XCTAssertTrue(source.contains("hasActiveNotificationScope"))
+        XCTAssertTrue(source.contains("? .preservePendingEvents"))
+        XCTAssertTrue(source.contains(": .clearPendingEvents"))
+        XCTAssertTrue(source.contains("private func recordPostActionFailedSettleDiagnosticEvidence"))
+        XCTAssertTrue(source.contains("notificationWindow.finishAndClaimEvents()"))
+        XCTAssertFalse(source.contains("private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash)"))
     }
 
     func testHeistExecutionUsesExplicitStateMachine() throws {
@@ -1632,6 +1765,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift")
+    }
+
+    private func semanticObservationStreamSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheStash/SemanticObservationStream.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {

@@ -29,6 +29,7 @@ final class KeyboardInjectionTaskQueue: NSObject {
 @MainActor
 final class KeyboardInjectionKeyboardImpl: NSObject {
     private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    private typealias KeyboardObjectGetter = ObjCRuntime.ObjectGetter<NSObject>
     private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
 
     let inputDelegate = KeyboardInjectionTextInputDelegate()
@@ -64,8 +65,8 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
                 return ObjCRuntime.message(.keyboardAddInputString, to: target)
             },
             taskQueue: { target in
-                guard KeyboardNoArgumentMethod.keyboardTaskQueue.rawValue != selector else { return nil }
-                return ObjCRuntime.message(.keyboardTaskQueue, to: target)
+                guard KeyboardObjectGetter.keyboardTaskQueue.rawValue != selector else { return nil }
+                return ObjCRuntime.resolve(.keyboardTaskQueue, from: target)
             },
             waitUntilAllTasksAreFinished: { target in
                 guard KeyboardNoArgumentMethod.keyboardWaitUntilAllTasksAreFinished.rawValue != selector else { return nil }
