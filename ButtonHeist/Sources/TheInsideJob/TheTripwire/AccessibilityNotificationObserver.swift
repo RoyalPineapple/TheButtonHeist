@@ -24,18 +24,11 @@ private typealias AddAccessibilityNotificationCallbackFunction = @convention(c) 
 
 private typealias RemoveAccessibilityNotificationCallbackFunction = @convention(c) (AnyObject) -> Void
 
-// Darwin `dlsym` usually wants the C symbol spelling, not the leading Mach-O
-// underscore shown by `nm`. These private symbols have appeared in both forms
-// in notes/tools, so try the exact known spellings and nothing broader.
-private let addAccessibilityNotificationCallbackSymbolNames = [
-    "_AXAddNotificationCallback",
-    "AXAddNotificationCallback",
-]
-
-private let removeAccessibilityNotificationCallbackSymbolNames = [
-    "_AXRemoveNotificationCallback",
-    "AXRemoveNotificationCallback",
-]
+// `nm` prints this export as `_AXAddNotificationCallback`: the single leading
+// underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants the C source
+// name, so the lookup string intentionally does not include that decoration.
+private let addAccessibilityNotificationCallbackSymbolName = "AXAddNotificationCallback"
+private let removeAccessibilityNotificationCallbackSymbolName = "AXRemoveNotificationCallback"
 
 // Private AccessibilitySupport switch that lets normal app processes pass
 // `_UIAXBroadcastMainThread`'s notification gate. This is an arming step, not
@@ -46,12 +39,6 @@ private typealias SetUnitTestModeFunction = @convention(c) (Int32) -> Void
 // swiftlint:disable:next agent_unchecked_sendable_no_comment
 final class AccessibilityNotificationObserver: @unchecked Sendable {
     static let shared = AccessibilityNotificationObserver()
-
-    private static let uiAccessibilityInstallNames = [
-        "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility",
-        "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore",
-        "/System/Library/Frameworks/UIKit.framework/UIKit",
-    ]
 
     private let lock = NSLock()
     private var subscribers: [ObjectIdentifier: WeakAccessibilityNotificationSubscriber] = [:]
@@ -80,9 +67,7 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
     func subscribe(_ subscriber: AccessibilityNotificationBus) {
         addSubscriber(subscriber)
         setUnitTestModeIfAvailable()
-        AccessibilityNotificationCallbackState.shared.install(
-            candidatePaths: Self.uiAccessibilityCandidatePaths()
-        )
+        AccessibilityNotificationCallbackState.shared.install()
     }
 
     func unsubscribe(_ subscriber: AccessibilityNotificationBus) {
@@ -144,7 +129,7 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
     private func setUnitTestModeIfAvailable() {
         guard let symbol = Self.resolveSymbol(
             "_AXSSetInUnitTestMode",
-            candidatePaths: Self.libAccessibilityCandidatePaths()
+            libraryPath: libAccessibilityPath()
         ) else {
             accessibilityNotificationLogger.debug("_AXSSetInUnitTestMode not found")
             return
@@ -154,61 +139,18 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
         accessibilityNotificationLogger.info("Armed accessibility notification callback via _AXSSetInUnitTestMode")
     }
 
-    static func uiAccessibilityCandidatePaths(
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> [String] {
-        candidatePaths(
-            installNames: uiAccessibilityInstallNames,
-            environment: environment
-        )
-    }
-
-    private static func libAccessibilityCandidatePaths(
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> [String] {
-        candidatePaths(
-            installNames: ["/usr/lib/libAccessibility.dylib"],
-            environment: environment
-        )
-    }
-
-    private static func candidatePaths(
-        installNames: [String],
-        environment: [String: String]
-    ) -> [String] {
-        let roots = [
-            environment[AccessibilityEnvironmentKey.iPhoneSimulatorRoot.rawValue],
-            environment["SIMULATOR_ROOT"],
-            environment["DYLD_ROOT_PATH"],
-        ].compactMap { $0 }
-
-        let rootedPaths = roots.flatMap { root in
-            installNames.map { (root as NSString).appendingPathComponent($0) }
-        }
-        return uniquePreservingOrder(installNames + rootedPaths)
-    }
-
-    private static func resolveSymbol(_ name: String, candidatePaths: [String]) -> UnsafeMutableRawPointer? {
+    private static func resolveSymbol(_ name: String, libraryPath: String) -> UnsafeMutableRawPointer? {
         if let processHandle = dlopen(nil, RTLD_NOW),
            let symbol = dlsym(processHandle, name) {
             return symbol
         }
 
-        for path in candidatePaths {
-            guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL),
-                  let symbol = dlsym(handle, name)
-            else {
-                continue
-            }
-            return symbol
+        guard let handle = dlopen(libraryPath, RTLD_NOW | RTLD_LOCAL),
+              let symbol = dlsym(handle, name)
+        else {
+            return nil
         }
-
-        return nil
-    }
-
-    fileprivate static func uniquePreservingOrder(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
+        return symbol
     }
 }
 
@@ -234,7 +176,7 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
         return installedRegistration != nil
     }
 
-    func install(candidatePaths: [String]) {
+    func install() {
         lock.lock()
         defer { lock.unlock() }
 
@@ -251,7 +193,6 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
                 )
             }
             installedRegistration = try AccessibilityNotificationCallbackRegistrar.install(
-                candidatePaths: candidatePaths,
                 callback: callbackBlock
             )
             accessibilityNotificationLogger.info(
@@ -319,6 +260,12 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
 /// - If any symbol is absent, installation fails closed and Button Heist simply
 ///   loses this notification signal.
 private enum AccessibilityNotificationCallbackRegistrar {
+    private static let frameworkInstallNames = [
+        "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility",
+        "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore",
+        "/System/Library/Frameworks/UIKit.framework/UIKit",
+    ]
+
     enum InstallError: Error, CustomStringConvertible {
         case notMainThread
         case callbackSymbolsUnavailable(checkedSources: [String])
@@ -385,14 +332,13 @@ private enum AccessibilityNotificationCallbackRegistrar {
     }
 
     static func install(
-        candidatePaths: [String],
         callback: @escaping AccessibilityNotificationCallbackBlock
     ) throws -> InstalledRegistration {
         guard Thread.isMainThread else {
             throw InstallError.notMainThread
         }
 
-        let symbols = try resolveSymbols(candidatePaths: candidatePaths)
+        let symbols = try resolveSymbols()
         let observerKey = "com.buttonheist.accessibility-notification-observer" as NSString
 
         symbols.addCallback(callback, observerKey)
@@ -405,7 +351,7 @@ private enum AccessibilityNotificationCallbackRegistrar {
         )
     }
 
-    private static func resolveSymbols(candidatePaths: [String]) throws -> ResolvedSymbols {
+    private static func resolveSymbols() throws -> ResolvedSymbols {
         var checkedSources: [String] = []
 
         if let processHandle = dlopen(nil, RTLD_NOW) {
@@ -425,7 +371,7 @@ private enum AccessibilityNotificationCallbackRegistrar {
             return symbols
         }
 
-        for path in candidatePaths {
+        for path in frameworkInstallNames {
             checkedSources.append(path)
             guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL),
                   let symbols = symbols(in: handle, source: path)
@@ -436,7 +382,7 @@ private enum AccessibilityNotificationCallbackRegistrar {
         }
 
         throw InstallError.callbackSymbolsUnavailable(
-            checkedSources: AccessibilityNotificationObserver.uniquePreservingOrder(checkedSources)
+            checkedSources: uniquePreservingOrder(checkedSources)
         )
     }
 
@@ -446,15 +392,15 @@ private enum AccessibilityNotificationCallbackRegistrar {
             guard let name = _dyld_get_image_name(index) else { continue }
             paths.append(String(cString: name))
         }
-        return AccessibilityNotificationObserver.uniquePreservingOrder(paths)
+        return uniquePreservingOrder(paths)
     }
 
     private static func symbols(
         in handle: UnsafeMutableRawPointer,
         source: String
     ) -> ResolvedSymbols? {
-        guard let addSymbol = symbol(in: handle, names: addAccessibilityNotificationCallbackSymbolNames),
-              let removeSymbol = symbol(in: handle, names: removeAccessibilityNotificationCallbackSymbolNames)
+        guard let addSymbol = dlsym(handle, addAccessibilityNotificationCallbackSymbolName),
+              let removeSymbol = dlsym(handle, removeAccessibilityNotificationCallbackSymbolName)
         else {
             return nil
         }
@@ -467,16 +413,9 @@ private enum AccessibilityNotificationCallbackRegistrar {
         )
     }
 
-    private static func symbol(
-        in handle: UnsafeMutableRawPointer,
-        names: [String]
-    ) -> UnsafeMutableRawPointer? {
-        for name in names {
-            if let symbol = dlsym(handle, name) {
-                return symbol
-            }
-        }
-        return nil
+    private static func uniquePreservingOrder(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
     }
 }
 
