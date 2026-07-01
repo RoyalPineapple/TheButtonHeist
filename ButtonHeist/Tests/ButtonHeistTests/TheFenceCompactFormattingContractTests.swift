@@ -279,10 +279,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try delta.string("kind"), "screenChanged")
         XCTAssertEqual(try newInterface.array("tree").count, 2)
-        XCTAssertTrue(compact.contains("activate: screen changed\n2 elements"), compact)
+        XCTAssertTrue(compact.contains("activate: screen changed\nCheckout\n2 elements"), compact)
         XCTAssertTrue(compact.contains(#""Checkout" header id="checkout_title""#), compact)
         XCTAssertTrue(compact.contains(#""Pay" button id="pay_button""#), compact)
-        XCTAssertTrue(human.contains("screen changed]\n2 elements"), human)
+        XCTAssertTrue(human.contains("screen changed]\nCheckout\n2 elements"), human)
         XCTAssertTrue(human.contains(#""Checkout" header id="checkout_title""#), human)
     }
 
@@ -1102,6 +1102,24 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertFalse(output.contains("dataTable"), output)
         XCTAssertFalse(output.contains("tabBar containerName"), output)
         XCTAssertFalse(output.contains("stableId"), output)
+    }
+
+    func testCompactInterfaceStartsWithSummaryElementLabel() {
+        let interface = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Inbox", traits: [.header]),
+            makeReceiptTestElement(label: "Messages", traits: [.summaryElement]),
+            makeReceiptTestElement(label: "Search", traits: [.searchField]),
+        ])
+
+        let output = FenceResponse.compactInterface(interface, detail: .summary)
+
+        XCTAssertEqual(output, """
+        Messages
+        3 elements
+        [0] "Inbox" header
+        [1] "Messages" summaryElement
+        [2] "Search" searchField
+        """)
     }
 
     func testCompactInterfaceRendersHorizontalAndBothAxisScrollSummaries() {

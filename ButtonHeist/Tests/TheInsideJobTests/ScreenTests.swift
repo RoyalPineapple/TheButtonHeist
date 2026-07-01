@@ -296,6 +296,32 @@ final class ScreenTests: XCTestCase {
         )
         XCTAssertEqual(screen.name, "Display")
         XCTAssertEqual(screen.id, "display")
+        XCTAssertEqual(screen.summaryElement, navigationTitle)
+    }
+
+    func testSummaryElementTraitTakesPrecedenceOverTopmostHeader() {
+        let navigationTitle = makeElement(
+            label: "Display",
+            traits: .header,
+            shape: .frame(AccessibilityRect(CGRect(x: 120, y: 72, width: 100, height: 44)))
+        )
+        let explicitSummary = makeElement(
+            label: "Messages",
+            traits: .summaryElement,
+            shape: .frame(AccessibilityRect(CGRect(x: 20, y: 240, width: 200, height: 44)))
+        )
+        let screen = Screen(
+            elements: [:],
+            hierarchy: [
+                .element(navigationTitle, traversalIndex: 0),
+                .element(explicitSummary, traversalIndex: 1),
+            ],
+            firstResponderHeistId: nil,
+        )
+
+        XCTAssertEqual(screen.summaryElement, explicitSummary)
+        XCTAssertEqual(screen.name, "Messages")
+        XCTAssertEqual(screen.id, "messages")
     }
 
     func testNameIgnoresHeaderWithoutLabel() {

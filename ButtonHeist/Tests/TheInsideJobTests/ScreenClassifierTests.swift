@@ -16,6 +16,21 @@ final class ScreenClassifierTests: XCTestCase {
         XCTAssertEqual(result, .screenChanged(.primaryHeaderChanged))
     }
 
+    func testExplicitSummaryElementDefinesPrimaryScreenIdentity() {
+        let before = screen(elements: [
+            element(label: "Home Header", traits: .header),
+            element(label: "Messages", traits: .summaryElement),
+        ])
+        let after = screen(elements: [
+            element(label: "Settings Header", traits: .header),
+            element(label: "Messages", traits: .summaryElement),
+        ])
+
+        let result = classify(before: before, after: after)
+
+        XCTAssertEqual(result, .sameScreen)
+    }
+
     func testBackButtonChangeIsScreenChange() {
         let before = screen(elements: [element(label: "Detail", traits: .header)])
         let after = screen(elements: [

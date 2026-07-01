@@ -50,7 +50,11 @@ extension FenceResponse {
     }
 
     static func compactInterface(_ projection: InterfaceProjection) -> String {
-        var lines: [String] = ["\(projection.elementCount) elements"]
+        var lines: [String] = []
+        if let screenTitle = nonEmpty(projection.navigation.screenTitle) {
+            lines.append(screenTitle)
+        }
+        lines.append("\(projection.elementCount) elements")
         lines.append(contentsOf: compactDiscoveryDiagnostics(projection.diagnostics?.discovery))
         lines.append(contentsOf: compactTreeLines(projection))
         return lines.joined(separator: "\n")

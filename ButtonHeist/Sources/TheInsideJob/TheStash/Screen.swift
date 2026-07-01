@@ -128,11 +128,17 @@ struct Screen: Equatable {
         semantic
     }
 
-    /// Derive the screen name from the topmost header element in latest live
-    /// traversal order. Not stored — recomputed on access so it cannot drift
-    /// from the parser tree.
-    var name: String? {
-        liveCapture.hierarchy.sortedElements
+    /// The element that best identifies the current screen.
+    ///
+    /// UIKit exposes `.summaryElement`, but apps rarely set it. Respect an
+    /// explicit trait when present; otherwise use the same topmost-header
+    /// heuristic Button Heist has historically used for screen names.
+    var summaryElement: AccessibilityElement? {
+        let elements = liveCapture.hierarchy.sortedElements
+        if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
+            return explicit
+        }
+        return elements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
                 guard element.traits.contains(.header), element.label != nil else { return nil }
@@ -146,7 +152,13 @@ struct Screen: Equatable {
                 return left.index < right.index
             }?
             .element
-            .label
+    }
+
+    /// Derive the screen name from the summary element in latest live traversal
+    /// order. Not stored — recomputed on access so it cannot drift from the
+    /// parser tree.
+    var name: String? {
+        summaryElement?.label
     }
 
     /// Slugified screen name for machine use (e.g. "controls_demo").
