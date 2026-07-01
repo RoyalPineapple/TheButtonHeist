@@ -24,13 +24,16 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         let harness = makeRuntimeHarness(actualPort: 23456)
 
         XCTAssertNil(harness.job.transport)
+        XCTAssertNil(harness.job.listeningPort)
         try await harness.job.start()
 
         assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
+        XCTAssertEqual(harness.job.listeningPort, 23456)
         XCTAssertTrue(harness.job.lifecycleObservationIsInstalled)
         XCTAssertEqual(harness.stopCallCount(), 0)
 
         await harness.job.stop()
+        XCTAssertNil(harness.job.listeningPort)
     }
 
     func testStartWhileRunningDoesNotCreateAnotherRuntime() async throws {

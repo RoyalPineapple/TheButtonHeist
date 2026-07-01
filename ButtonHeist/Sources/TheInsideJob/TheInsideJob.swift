@@ -140,6 +140,21 @@ public final class TheInsideJob {
         }
     }
 
+    /// Port currently bound by the InsideJob TCP listener, if the runtime is
+    /// running or suspending. This is primarily useful for app-hosted XCTest
+    /// live-driving probes that start the server manually because auto-start is
+    /// disabled under XCTest.
+    public var listeningPort: UInt16? {
+        switch serverPhase {
+        case .running(let resources):
+            return resources.actualPort
+        case .suspending(let suspension):
+            return suspension.resources.actualPort
+        case .stopped, .suspended, .resuming, .stopping:
+            return nil
+        }
+    }
+
     // MARK: - Initialization
 
     public convenience init(

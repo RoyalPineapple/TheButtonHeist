@@ -102,8 +102,52 @@ receipt, and assert on failures. Inside the closure is heist source that
 lowers to `HeistPlan`, validates through the normal plan contract, executes
 through the in-app heist runtime, and returns the normal receipt.
 
+For app-hosted XCTest/KIF-style targets, `runHeistSync(...) { ... }` provides
+the same in-process execution without making
+the test method `async`. They run the heist on the main actor, pump the main run
+loop, and report failures with `XCTFail` at the call site. Use this path when
+your test host shares teardown machinery with KIF/RKT-style app tests; async
+XCTest teardown can race app cleanup in those targets.
+
+Passing runs can record receipts without relying on inherited environment
+variables:
+
+```swift
+func testCheckoutCompletes() {
+    runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+        Activate(.label("Pay"))
+            .expect(.appeared(.label("Payment Complete")))
+    }
+}
+```
+
+If no URL is supplied, explicit sync-test receipts are written under the process
+temporary directory at `buttonheist-receipts/`.
+
 `RunHeist(...)` composes inside durable plans. `runHeist(...)` executes a heist
 now from Swift tests. `run_heist` crosses the CLI/MCP tool boundary.
+
+To stop at a screen, open a ButtonHeist session, and let a human or agent
+connect through MCP or the CLI, halt a synchronous XCTest after ordinary app
+navigation:
+
+```swift
+func test_PARACHUTE_driveCheckout() {
+    logIn()
+    navigateToCheckout()
+    joinHeist(token: "probe", port: 1456)
+}
+```
+
+`joinHeist` defaults to simulator loopback only. Pass `allowedScopes:
+ConnectionScope.default` to accept simulator and USB clients, or
+`allowedScopes: ConnectionScope.all` when LAN clients are intentional.
+
+The helper starts a fresh InsideJob server, prints a ready line after the
+listener reports its bound port, then halts test progression while pumping the
+run loop so the client can interact with the live app. Bazel-launched simulators
+may still need external port forwarding from the host; the app process can
+report the bound simulator-side port but cannot create that host bridge itself.
 
 Inside a durable plan, `RunHeist("Name", argument)` is the composition step
 that invokes a named reusable heist. It is not a Swift helper call:

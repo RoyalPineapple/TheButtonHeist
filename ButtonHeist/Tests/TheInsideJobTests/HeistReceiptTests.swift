@@ -22,6 +22,38 @@ final class HeistReceiptTests: XCTestCase {
         ])
     }
 
+    func testRunHeistSyncRecordsPassingReceiptWhenRequested() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-sync-receipts-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let heist = try XCTUnwrap(runHeistSync(
+            "syncReceipt",
+            recordReceipt: .always,
+            to: directory
+        ) {
+            Warn("sync")
+        })
+
+        let receiptPaths = try FileManager.default
+            .subpathsOfDirectory(atPath: directory.path)
+            .filter { $0.hasSuffix("-passed.json.gz") }
+        XCTAssertEqual(receiptPaths.count, 1)
+        let receipt = try HeistReceiptCodec.decode(
+            contentsOf: directory.appendingPathComponent(receiptPaths[0], isDirectory: false)
+        )
+        XCTAssertEqual(receipt, heist.result)
+    }
+
+    func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
+        XCTExpectFailure("runHeistSync reports failed heists through XCTest at the call site") {
+            let heist = runHeistSync("syncFailure") {
+                Fail("stop")
+            }
+            XCTAssertNil(heist)
+        }
+    }
+
     func testPublicRunHeistFacadeDottedNameRunsAsNamedCapability() async throws {
         let heist = try await runHeist("PublicFacade.warn") {
             Warn("ok")
@@ -330,16 +362,20 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testFailureDescriptionIncludesScreenshotInterfaceDump() {
-        let element = AccessibilityElement.make(
-            label: "Actual Empty State",
-            identifier: "empty_state",
-            traits: .staticText,
-            frame: CGRect(x: 10, y: 20, width: 100, height: 44),
-            respondsToUserInteraction: false
-        )
+        let elements = (0..<21).map { index in
+            AccessibilityElement.make(
+                label: index == 0 ? "Actual Empty State" : "Actual Empty State \(index)",
+                identifier: index == 0 ? "empty_state" : "empty_state_\(index)",
+                traits: .staticText,
+                frame: CGRect(x: 10 + index, y: 20 + index, width: 100, height: 44),
+                respondsToUserInteraction: false
+            )
+        }
         let interface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(element, traversalIndex: 0)]
+            tree: elements.enumerated().map { index, element in
+                .element(element, traversalIndex: index)
+            }
         )
         let screenshot = ScreenPayload(
             pngData: "png",
@@ -380,11 +416,13 @@ final class HeistReceiptTests: XCTestCase {
 
         XCTAssertTrue(description.contains("Heist failed path=$.body[0] kind=fail message=stop"), description)
         XCTAssertTrue(
-            description.contains("failure screenshot: 12x34 receipt=$.body[0].failure.actions[0] interface=1 elements"),
+            description.contains("failure screenshot: 12x34 receipt=$.body[0].failure.actions[0] interface=21 elements"),
             description
         )
-        XCTAssertTrue(description.contains("failure interface: 1 elements"), description)
-        XCTAssertTrue(description.contains("\"Actual Empty State\" staticText id=\"empty_state\""), description)
+        XCTAssertTrue(description.contains("failure interface: 21 elements"), description)
+        XCTAssertTrue(description.contains("[0] \"Actual Empty State\" staticText id=\"empty_state\""), description)
+        XCTAssertTrue(description.contains("[20] \"Actual Empty State 20\" staticText id=\"empty_state_20\""), description)
+        XCTAssertFalse(description.contains("... and 1 more"), description)
         XCTAssertTrue(description.contains("frame=(10,20,100,44) activation=(60,42)"), description)
         XCTAssertEqual(result.failureScreenshotPayload, screenshot)
         XCTAssertEqual(result.failureDiagnosticInterface?.projectedElements.first?.label, "Actual Empty State")
