@@ -4,25 +4,30 @@ import Foundation
 
 @MainActor
 final class SemanticObservationCycles {
-    struct Cycle {
+    struct Cycle: Equatable {
         let id: UInt64
         let scope: SemanticObservationScope
         let baseline: UInt64
+        fileprivate let generation: UInt64
+    }
 
-        fileprivate init(id: UInt64, scope: SemanticObservationScope, baseline: UInt64) {
-            self.id = id
-            self.scope = scope
-            self.baseline = baseline
-        }
+    enum CycleAdmission: Equatable {
+        case started(Cycle)
+        case alreadyRunning(Cycle)
+    }
+
+    enum CycleCompletion: Equatable {
+        case completed
+        case ignoredStaleToken
     }
 
     private enum CyclePhase {
-        case idle(completed: UInt64)
+        case idle(completed: UInt64, generation: UInt64)
         case running(Cycle)
 
         var baseline: UInt64 {
             switch self {
-            case .idle(let completed):
+            case .idle(let completed, _):
                 completed
             case .running(let cycle):
                 cycle.id
@@ -36,7 +41,7 @@ final class SemanticObservationCycles {
         let continuation: SemanticObservationWaiterContinuation<Void>
     }
 
-    private var phase: CyclePhase = .idle(completed: 0)
+    private var phase: CyclePhase = .idle(completed: 0, generation: 0)
     private var nextWaiterID: UInt64 = 0
     private var waiters: [UInt64: Waiter] = [:]
 
@@ -48,30 +53,37 @@ final class SemanticObservationCycles {
         phase.baseline
     }
 
-    func beginCycle(scope: SemanticObservationScope) -> Cycle {
-        guard case .idle(let completed) = phase else {
-            preconditionFailure("Semantic observation cycle already running")
+    func beginCycle(scope: SemanticObservationScope) -> CycleAdmission {
+        switch phase {
+        case .idle(let completed, let generation):
+            let cycle = Cycle(id: completed + 1, scope: scope, baseline: completed, generation: generation)
+            phase = .running(cycle)
+            return .started(cycle)
+        case .running(let cycle):
+            return .alreadyRunning(cycle)
         }
-        let cycle = Cycle(id: completed + 1, scope: scope, baseline: completed)
-        phase = .running(cycle)
-        return cycle
     }
 
-    func finishCycle(token cycle: Cycle, didObserve: Bool) {
+    @discardableResult
+    func finishCycle(token cycle: Cycle, didObserve: Bool) -> CycleCompletion {
         guard case .running(let running) = phase,
-              running.id == cycle.id,
-              running.scope == cycle.scope,
-              running.baseline == cycle.baseline
+              running == cycle
         else {
-            preconditionFailure("Semantic observation cycle finished with a stale token")
+            return .ignoredStaleToken
         }
 
         guard didObserve else {
-            phase = .idle(completed: cycle.baseline)
-            return
+            phase = .idle(completed: cycle.baseline, generation: cycle.generation)
+            return .completed
         }
-        phase = .idle(completed: cycle.id)
+        phase = .idle(completed: cycle.id, generation: cycle.generation)
         completeWaiters(scope: cycle.scope)
+        return .completed
+    }
+
+    func cancelRunningCycle() {
+        guard case .running(let cycle) = phase else { return }
+        phase = .idle(completed: cycle.baseline, generation: cycle.generation + 1)
     }
 
     func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {

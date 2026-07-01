@@ -312,6 +312,7 @@ final class SemanticObservationStream {
     func stop() {
         passiveObservationState.task?.cancel()
         passiveObservationState = .stopped
+        cycles.cancelRunningCycle()
         settledWaiters.completeAll(returning: nil)
         cycles.completeAllWaiters()
     }
@@ -615,8 +616,19 @@ final class SemanticObservationStream {
 
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
-        let cycle = cycles.beginCycle(scope: scope)
+        guard case .started(let cycle) = cycles.beginCycle(scope: scope) else {
+            _ = await Task.cancellableSleep(for: .milliseconds(10))
+            return
+        }
+        guard !Task.isCancelled else {
+            cycles.finishCycle(token: cycle, didObserve: false)
+            return
+        }
         let didObserve = await performObservationCycle(scope: scope)
+        guard !Task.isCancelled else {
+            cycles.finishCycle(token: cycle, didObserve: false)
+            return
+        }
         cycles.finishCycle(token: cycle, didObserve: didObserve)
         guard didObserve else { return }
         await Task.yield()
@@ -641,6 +653,7 @@ final class SemanticObservationStream {
                 await Task.yield()
                 return true
             }
+            guard !Task.isCancelled else { return false }
             _ = commitSettledDiscoveryObservation(exploredScreen)
             await Task.yield()
             return true
@@ -681,6 +694,7 @@ final class SemanticObservationStream {
             return true
         }
 
+        guard !Task.isCancelled else { return false }
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true
@@ -702,6 +716,7 @@ final class SemanticObservationStream {
             return true
         }
 
+        guard !Task.isCancelled else { return false }
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true

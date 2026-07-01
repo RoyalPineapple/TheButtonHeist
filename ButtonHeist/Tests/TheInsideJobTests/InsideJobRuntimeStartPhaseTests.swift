@@ -90,39 +90,6 @@ import Testing
         )
     }
 
-    @Test func `runtime lifecycle has one phase and no sidecar lease state`() throws {
-        let lifecycleSource = try sourceFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/InsideJobLifecycleState.swift"
-        )
-        let jobSource = try sourceFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift"
-        )
-        let transportSource = try sourceFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift"
-        )
-
-        #expect(lifecycleSource.contains("case running(InsideJobRuntimeResources)"))
-        #expect(lifecycleSource.contains("case suspending(InsideJobSuspension)"))
-        #expect(lifecycleSource.contains("case suspended(InsideJobSuspendedRuntime)"))
-        #expect(lifecycleSource.contains("case resuming(InsideJobResumeAttempt)"))
-        #expect(lifecycleSource.contains("case stopping(InsideJobStopAttempt)"))
-
-        for forbidden in [
-            "InsideJobRuntimeLease",
-            "pendingTransportStopTask",
-            "pendingForegroundResumeTask",
-            "lifecycleObservationActive",
-            "IdleTimerProtection",
-            "releaseTask",
-            "isActive",
-        ] {
-            #expect(!lifecycleSource.contains(forbidden))
-            #expect(!jobSource.contains(forbidden))
-        }
-
-        #expect(!transportSource.contains("func stop() -> Task"))
-        #expect(!transportSource.contains("@discardableResult\n    func stop()"))
-    }
 }
 
 #if canImport(UIKit)

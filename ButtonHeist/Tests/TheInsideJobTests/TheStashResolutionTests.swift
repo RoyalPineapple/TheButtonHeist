@@ -753,7 +753,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        let discoveryCycle = cycles.beginCycle(scope: .discovery)
+        let discoveryCycle = startedCycle(cycles.beginCycle(scope: .discovery))
         cycles.finishCycle(token: discoveryCycle, didObserve: true)
         await visibleWaiter.value
         XCTAssertEqual(cycles.waiterCount, 0)
@@ -766,14 +766,26 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        let visibleCycle = cycles.beginCycle(scope: .visible)
+        let visibleCycle = startedCycle(cycles.beginCycle(scope: .visible))
         cycles.finishCycle(token: visibleCycle, didObserve: true)
         XCTAssertEqual(cycles.waiterCount, 1)
 
-        let fulfillingDiscoveryCycle = cycles.beginCycle(scope: .discovery)
+        let fulfillingDiscoveryCycle = startedCycle(cycles.beginCycle(scope: .discovery))
         cycles.finishCycle(token: fulfillingDiscoveryCycle, didObserve: true)
         await discoveryWaiter.value
         XCTAssertEqual(cycles.waiterCount, 0)
+    }
+
+    func testObservationCycleCancellationAllowsReplacementAndIgnoresStaleFinish() {
+        let cycles = SemanticObservationCycles()
+        let staleCycle = startedCycle(cycles.beginCycle(scope: .visible))
+
+        cycles.cancelRunningCycle()
+
+        let replacementCycle = startedCycle(cycles.beginCycle(scope: .visible))
+        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: true), .ignoredStaleToken)
+        XCTAssertEqual(cycles.finishCycle(token: replacementCycle, didObserve: true), .completed)
+        XCTAssertEqual(cycles.baselineCycle(), 1)
     }
 
     func testDiscoveryProjectionMaintainsFullTrace() throws {
@@ -2300,6 +2312,18 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(heist.matches(asciiMatcher),
                       "Client-side must fold typography just like server-side")
     }
+}
+
+private func startedCycle(
+    _ admission: SemanticObservationCycles.CycleAdmission,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) -> SemanticObservationCycles.Cycle {
+    guard case .started(let cycle) = admission else {
+        XCTFail("Expected semantic observation cycle to start", file: file, line: line)
+        fatalError("Expected semantic observation cycle to start")
+    }
+    return cycle
 }
 
 #endif
