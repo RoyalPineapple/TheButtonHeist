@@ -35,15 +35,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     }
 
     func testNestedContainerExpressedInParentScrollableContentSpace() {
-        // A real UIWindow is needed so `convert(_:from: nil)` resolves
-        // through window space rather than the no-window degenerate case.
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
-        scrollView.contentSize = CGSize(width: 320, height: 5000)
-        scrollView.contentOffset = CGPoint(x: 0, y: 100)
-        window.addSubview(scrollView)
-        window.isHidden = false
-
+        let scrollContainerPath = TreePath([0])
         let outer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
@@ -61,7 +53,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let result = TheBurglar.buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
+            scrollableContainerPaths: [scrollContainerPath]
         )
 
         XCTAssertEqual(result.contentFramesByPath[TreePath([0])], outer.frame.cgRect,
@@ -79,21 +71,16 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     }
 
     func testNestedContainerScrollIndependence() {
-        // Same inner container, two different parent contentOffsets: semantic
-        // container identity must not follow moving viewport origin.
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
-        scrollView.contentSize = CGSize(width: 320, height: 5000)
-        window.addSubview(scrollView)
-        window.isHidden = false
+        // Same inner container, two different viewport-relative parser frames:
+        // semantic container identity must not follow moving viewport origin.
+        let scrollContainerPath = TreePath([0])
 
         let outer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
-        // Parse 1: contentOffset 0, inner is at screen-y 200.
-        scrollView.contentOffset = .zero
+        // Parse 1: inner is at screen-y 200.
         let innerParse1 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
@@ -102,13 +89,12 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
-            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
+            scrollableContainerPaths: [scrollContainerPath]
         )
 
-        // Parse 2: scrolled down by 1000pt. The same logical inner container
-        // — same data behind it — is now at screen-y -800. Its identity frame
+        // Parse 2: the same logical inner container — same data behind it — is
+        // now at screen-y -800. Its identity frame
         // should still drop origin and keep size.
-        scrollView.contentOffset = CGPoint(x: 0, y: 1000)
         let innerParse2 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
@@ -117,7 +103,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
-            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
+            scrollableContainerPaths: [scrollContainerPath]
         )
 
         XCTAssertEqual(result1.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5)

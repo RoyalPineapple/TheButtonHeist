@@ -2011,7 +2011,7 @@ final class TheStashResolutionTests: XCTestCase {
     func testElementMatchSetMatchesStashCountAndOrder() {
         let screen = installMatcherParityScreen()
         let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
-        let matchSet = ElementMatchSet(elements: projectedElements)
+        let matchGraph = ElementMatchGraph(elements: projectedElements)
 
         struct MatchCase {
             let name: String
@@ -2090,7 +2090,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         for testCase in cases {
             let stashMatches = bagman.matchScreenElements(testCase.predicate, limit: 100)
-            let setMatches = matchSet.matching(testCase.predicate).elements
+            let setMatches = matchGraph.resolve(testCase.predicate).elements
 
             XCTAssertEqual(stashMatches.map(\.heistId), testCase.expectedIds, testCase.name)
             XCTAssertEqual(
@@ -2104,7 +2104,7 @@ final class TheStashResolutionTests: XCTestCase {
     func testElementMatchSetMatchesResolveTargetBehavior() throws {
         let screen = installMatcherParityScreen()
         let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
-        let matchSet = ElementMatchSet(elements: projectedElements)
+        let matchGraph = ElementMatchGraph(elements: projectedElements)
 
         enum ExpectedResolution {
             case resolved(HeistId)
@@ -2148,7 +2148,7 @@ final class TheStashResolutionTests: XCTestCase {
         ]
 
         for testCase in cases {
-            let setMatches = matchSet.matching(testCase.target)
+            let setMatches = matchGraph.resolve(testCase.target)
             let resolution = bagman.resolveTarget(testCase.target)
 
             switch testCase.expected {

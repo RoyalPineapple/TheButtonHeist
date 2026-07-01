@@ -43,6 +43,44 @@ import Testing
             \(genericReceiptParameters.joined(separator: "\n"))
             """
         )
+        #expect(
+            helperSource.contains("enum HeistReceiptChildren"),
+            "Runtime receipt construction should classify child subtrees with a typed child execution reducer"
+        )
+        #expect(
+            helperSource.contains("enum HeistReceiptOutcome"),
+            "Runtime receipt construction should project explicit receipt outcomes, not parallel optionals"
+        )
+
+        for helper in [
+            "heistWaitReceipt",
+            "heistInvocationReceipt",
+            "heistLoopReceipt",
+            "heistLoopIterationReceipt",
+        ] {
+            let declaration = receiptSourceFunctionDeclaration(named: helper, in: helperSource)
+            #expect(
+                declaration.contains("outcome: HeistReceiptOutcome"),
+                "\(helper) should accept one typed outcome instead of optional status/failure fields"
+            )
+            #expect(
+                !declaration.contains("failure: HeistFailureDetail?"),
+                "\(helper) should not expose optional failure state in its signature"
+            )
+            #expect(
+                !declaration.contains("abortedAtChildPath: String?"),
+                "\(helper) should not expose optional child-abort state in its signature"
+            )
+            #expect(
+                !declaration.contains("children: [HeistExecutionStepResult]"),
+                "\(helper) should accept typed receipt children instead of a raw child bag"
+            )
+        }
+
+        let childParentDeclaration = receiptSourceFunctionDeclaration(named: "heistChildParentReceipt", in: helperSource)
+        #expect(childParentDeclaration.contains("children: HeistReceiptChildren"))
+        #expect(!childParentDeclaration.contains("failure: HeistFailureDetail?"))
+        #expect(!childParentDeclaration.contains("abortedAtChildPath: String?"))
 
         for helper in [
             "func heistActionReceipt",
@@ -112,6 +150,14 @@ private func receiptSourceLines(matching pattern: String, in source: String) thr
             return regex.firstMatch(in: line, range: range) != nil
         }
         .map { $0.trimmingCharacters(in: .whitespaces) }
+}
+
+private func receiptSourceFunctionDeclaration(named name: String, in source: String) -> String {
+    guard let start = source.range(of: "func \(name)(")?.lowerBound else { return "" }
+    guard let end = source[start...].firstIndex(of: "{") else {
+        return String(source[start...])
+    }
+    return String(source[start..<end])
 }
 
 private func receiptRepositoryRoot() -> URL {

@@ -1754,7 +1754,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
-            evidence = .dispatch(command: command, actionResult: result)
+            evidence = command.map {
+                .dispatch(command: $0, actionResult: result)
+            } ?? .dispatch(actionResult: result)
         }
 
         let intent = command.map {

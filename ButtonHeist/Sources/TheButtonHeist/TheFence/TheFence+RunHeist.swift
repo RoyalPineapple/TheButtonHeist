@@ -3,6 +3,64 @@ import Foundation
 import ThePlans
 import TheScore
 
+struct HeistRunProjection {
+    enum Effect: Sendable, Equatable {
+        case recordReceipt(result: HeistExecutionResult, plan: HeistPlan)
+    }
+
+    let projectedResult: HeistExecutionResult
+    let response: FenceResponse
+    let effects: [Effect]
+
+    init(
+        plan: HeistPlan,
+        remoteResult: HeistExecutionResult,
+        totalMs: Int
+    ) {
+        let result = Self.project(remoteResult: remoteResult, totalMs: totalMs)
+        projectedResult = result
+        response = .heistExecution(
+            plan: plan,
+            result: result,
+            accessibilityTrace: Self.heistAccessibilityTrace(result: result)
+        )
+        effects = [.recordReceipt(result: result, plan: plan)]
+    }
+
+    private static func project(
+        remoteResult: HeistExecutionResult,
+        totalMs: Int
+    ) -> HeistExecutionResult {
+        if let abortedAtPath = remoteResult.abortedAtPath {
+            return .failed(
+                steps: remoteResult.steps,
+                durationMs: totalMs,
+                abortedAtPath: abortedAtPath
+            )
+        } else {
+            return .passed(
+                steps: remoteResult.steps,
+                durationMs: totalMs
+            )
+        }
+    }
+
+    private static func heistAccessibilityTrace(
+        result: HeistExecutionResult
+    ) -> AccessibilityTrace? {
+        // Don't emit a net trace if an action step ran without producing a
+        // trace — a partial action trace would be misleading. Wait steps then
+        // contribute their settled-state trace when available; `endpointTrace`
+        // returns nil unless at least two distinct captures survive.
+        let actionResults = result.dispatchedActionResults
+        guard !actionResults.isEmpty,
+              actionResults.allSatisfy({ $0.accessibilityTrace != nil })
+        else { return nil }
+        let traces = result.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
+        return AccessibilityTrace.endpointTrace(from: traces)
+    }
+}
+
 extension TheFence {
 
     // MARK: - Heist Execution and Session State
@@ -34,26 +92,14 @@ extension TheFence {
         let heistStart = CFAbsoluteTimeGetCurrent()
         let executionResult = try await sendAndAwaitHeistExecution(plan, argument: argument, timeout: timeout)
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
-        let result: HeistExecutionResult
-        if let abortedAtPath = executionResult.abortedAtPath {
-            result = .failed(
-                steps: executionResult.steps,
-                durationMs: totalMs,
-                abortedAtPath: abortedAtPath
-            )
-        } else {
-            result = .passed(
-                steps: executionResult.steps,
-                durationMs: totalMs
-            )
-        }
-        HeistReceiptRecorder.recordIfEnabled(result, plan: plan)
-        let accessibilityTrace = Self.heistAccessibilityTrace(plan: plan, result: result)
-        return .heistExecution(
+
+        let projection = HeistRunProjection(
             plan: plan,
-            result: result,
-            accessibilityTrace: accessibilityTrace
+            remoteResult: executionResult,
+            totalMs: totalMs
         )
+        interpret(projection.effects)
+        return projection.response
     }
 
     // MARK: - Single-Step Execution
@@ -123,20 +169,17 @@ extension TheFence {
         }
     }
 
-    private static func heistAccessibilityTrace(
-        plan _: HeistPlan,
-        result: HeistExecutionResult
-    ) -> AccessibilityTrace? {
-        // Don't emit a net trace if an action step ran without producing a
-        // trace — a partial action trace would be misleading. Wait steps then
-        // contribute their settled-state trace when available; `endpointTrace`
-        // returns nil unless at least two distinct captures survive.
-        let actionResults = result.dispatchedActionResults
-        guard !actionResults.isEmpty,
-              actionResults.allSatisfy({ $0.accessibilityTrace != nil })
-        else { return nil }
-        let traces = result.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
-        return AccessibilityTrace.endpointTrace(from: traces)
+    private func interpret(_ effects: [HeistRunProjection.Effect]) {
+        for effect in effects {
+            interpret(effect)
+        }
+    }
+
+    private func interpret(_ effect: HeistRunProjection.Effect) {
+        switch effect {
+        case .recordReceipt(let result, let plan):
+            HeistReceiptRecorder.recordIfEnabled(result, plan: plan)
+        }
     }
 
     // MARK: - Session State

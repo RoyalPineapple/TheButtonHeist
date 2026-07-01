@@ -19,36 +19,6 @@ enum MuscleAdmissionEffect {
     case sendClient(ServerMessage, requestId: String?, clientId: Int)
     case delayedDisconnect(clientId: Int)
     case log(MuscleAdmissionLogEvent)
-
-    static func response(
-        _ message: ServerMessage,
-        requestId: String? = nil,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        disconnect clientId: Int? = nil
-    ) -> [MuscleAdmissionEffect] {
-        var effects: [MuscleAdmissionEffect] = [
-            .sendResponse(message, requestId: requestId, respond: respond),
-        ]
-        if let clientId {
-            effects.append(.delayedDisconnect(clientId: clientId))
-        }
-        return effects
-    }
-
-    static func client(
-        _ message: ServerMessage,
-        requestId: String? = nil,
-        clientId: Int,
-        disconnect: Bool = false
-    ) -> [MuscleAdmissionEffect] {
-        var effects: [MuscleAdmissionEffect] = [
-            .sendClient(message, requestId: requestId, clientId: clientId),
-        ]
-        if disconnect {
-            effects.append(.delayedDisconnect(clientId: clientId))
-        }
-        return effects
-    }
 }
 
 enum MuscleAdmissionLogEvent {

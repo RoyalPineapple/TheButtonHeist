@@ -143,7 +143,13 @@ func makeTestHeistActionStep(
     result: ActionResult = makeTestActionResult(),
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
-    let evidence = HeistStepEvidence.action(.dispatch(command: command, actionResult: result))
+    let actionEvidence: HeistActionEvidence
+    if let command {
+        actionEvidence = .dispatch(command: command, actionResult: result)
+    } else {
+        actionEvidence = .dispatch(actionResult: result)
+    }
+    let evidence = HeistStepEvidence.action(actionEvidence)
     if result.success {
         return .passed(
             path: path,

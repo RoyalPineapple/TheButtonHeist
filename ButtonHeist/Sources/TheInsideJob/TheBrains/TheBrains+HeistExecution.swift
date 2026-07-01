@@ -144,10 +144,99 @@ extension TheBrains {
         case failed(HeistExecutionStepResult)
     }
 
+    private enum InvocationExpectationOutcome {
+        case notEvaluated
+        case matched(HeistWaitReceipt)
+        case failed(receipt: HeistWaitReceipt, detail: HeistFailureDetail)
+
+        var receipt: HeistWaitReceipt? {
+            switch self {
+            case .notEvaluated:
+                return nil
+            case .matched(let receipt):
+                return receipt
+            case .failed(receipt: let receipt, detail: _):
+                return receipt
+            }
+        }
+    }
+
     private enum HeistExecutionPhase: Equatable {
         case ready
         case aborted(failedPath: String)
         case completed(abortedPath: String?)
+    }
+
+    private enum HeistExecutionEffect: Equatable {
+        case captureFailureScreenshot(failedPath: String)
+    }
+
+    private enum HeistExecutionTerminal: Equatable {
+        case passed
+        case failed(abortedPath: String, effects: [HeistExecutionEffect])
+
+        var abortedPath: String? {
+            switch self {
+            case .passed:
+                return nil
+            case .failed(let abortedPath, _):
+                return abortedPath
+            }
+        }
+
+        var effects: [HeistExecutionEffect] {
+            switch self {
+            case .passed:
+                return []
+            case .failed(_, let effects):
+                return effects
+            }
+        }
+    }
+
+    private struct HeistExecutionTransitionRejection: Equatable {
+        let path: String
+        let reason: String
+
+        static func stepAfterCompletion(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot begin heist step after execution completed"
+            )
+        }
+
+        static func skipBeforeAbort(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot skip heist step before execution aborts"
+            )
+        }
+
+        static func executeAfterAbort(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot execute heist step after execution aborts"
+            )
+        }
+
+        static func appendAfterCompletion(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot append heist step after execution completed"
+            )
+        }
+
+        static func completeTwice(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot complete heist plan twice"
+            )
+        }
+    }
+
+    private enum HeistStepTransitionResult: Equatable {
+        case accepted
+        case rejected(HeistExecutionTransitionRejection)
     }
 
     private struct HeistExecutionAccumulator {
@@ -155,12 +244,23 @@ extension TheBrains {
         private(set) var phase: HeistExecutionPhase = .ready
 
         var abortedPath: String? {
+            terminal?.abortedPath
+        }
+
+        var terminalEffects: [HeistExecutionEffect] {
+            terminal?.effects ?? []
+        }
+
+        private var terminal: HeistExecutionTerminal? {
             switch phase {
-            case .aborted(let failedPath):
-                return failedPath
-            case .completed(let abortedPath):
-                return abortedPath
-            case .ready:
+            case .completed(nil):
+                return .passed
+            case .completed(.some(let abortedPath)):
+                return .failed(
+                    abortedPath: abortedPath,
+                    effects: [.captureFailureScreenshot(failedPath: abortedPath)]
+                )
+            case .ready, .aborted:
                 return nil
             }
         }
@@ -172,49 +272,67 @@ extension TheBrains {
             case .aborted(let failedPath):
                 return .skip(abortedPath: failedPath)
             case .completed:
-                preconditionFailure("Cannot begin heist step \(path) after execution completed")
+                return .reject(.stepAfterCompletion(path: path))
             }
         }
 
-        mutating func apply(_ transition: HeistStepTransition) {
+        mutating func apply(_ transition: HeistStepTransition) -> HeistStepTransitionResult {
             switch (phase, transition) {
             case (.ready, .executed(let result)):
                 steps.append(result)
                 phase = result.isFailure
                     ? .aborted(failedPath: result.firstFailedStep?.path ?? result.path)
                     : .ready
+                return .accepted
             case (.aborted, .skipped(let result, let abortedPath)):
                 steps.append(result)
                 phase = .aborted(failedPath: abortedPath)
+                return .accepted
             case (.ready, .skipped):
-                preconditionFailure("Cannot skip heist step before execution aborts")
+                return .rejected(.skipBeforeAbort(path: transition.path))
             case (.aborted, .executed):
-                preconditionFailure("Cannot execute heist step after execution aborts")
+                return .rejected(.executeAfterAbort(path: transition.path))
             case (.completed, _):
-                preconditionFailure("Cannot append heist step after execution completed")
+                return .rejected(.appendAfterCompletion(path: transition.path))
             }
         }
 
-        mutating func complete() {
+        mutating func complete() -> HeistStepTransitionResult {
             switch phase {
             case .ready:
                 phase = .completed(abortedPath: nil)
+                return .accepted
             case .aborted(let failedPath):
                 phase = .completed(abortedPath: failedPath)
+                return .accepted
             case .completed:
-                preconditionFailure("Cannot complete heist plan twice")
+                return .rejected(.completeTwice(path: "$.body"))
             }
+        }
+
+        mutating func reject(_ rejection: HeistExecutionTransitionRejection, result: HeistExecutionStepResult) {
+            steps.append(result)
+            phase = .completed(abortedPath: rejection.path)
         }
     }
 
     private enum HeistExecutionStepDecision: Equatable {
         case execute
         case skip(abortedPath: String)
+        case reject(HeistExecutionTransitionRejection)
     }
 
     private enum HeistStepTransition {
         case executed(HeistExecutionStepResult)
         case skipped(HeistExecutionStepResult, abortedPath: String)
+
+        var path: String {
+            switch self {
+            case .executed(let result),
+                 .skipped(let result, _):
+                return result.path
+            }
+        }
     }
 
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
@@ -258,12 +376,15 @@ extension TheBrains {
         )
         var stepResults = execution.steps
         let abortedAtPath = execution.abortedPath
-        if let abortedAtPath,
-           let failureScreenshotStep = await failureScreenshotStep(
-               runtime: runtime,
-               failedPath: abortedAtPath
-           ) {
-            stepResults.append(failureScreenshotStep)
+        for effect in execution.terminalEffects {
+            switch effect {
+            case .captureFailureScreenshot(let failedPath):
+                guard let failureScreenshotStep = await failureScreenshotStep(
+                    runtime: runtime,
+                    failedPath: failedPath
+                ) else { continue }
+                stepResults.append(failureScreenshotStep)
+            }
         }
         let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
         let heistResult: HeistExecutionResult
@@ -350,10 +471,13 @@ extension TheBrains {
 
             switch accumulator.decision(for: stepPath) {
             case .skip(let abortedPath):
-                accumulator.apply(.skipped(
+                let transition = accumulator.apply(.skipped(
                     skippedHeistStep(step, path: stepPath, scope: scope),
                     abortedPath: abortedPath
                 ))
+                if case .rejected(let rejection) = transition {
+                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
+                }
                 continue
 
             case .execute:
@@ -365,12 +489,48 @@ extension TheBrains {
                     environment: environment,
                     scope: scope
                 )
-                accumulator.apply(.executed(stepResult))
+                let transition = accumulator.apply(.executed(stepResult))
+                if case .rejected(let rejection) = transition {
+                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
+                }
+
+            case .reject(let rejection):
+                return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
             }
         }
 
-        accumulator.complete()
+        let completion = accumulator.complete()
+        if case .rejected(let rejection) = completion {
+            return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
+        }
         return accumulator
+    }
+
+    private func rejectedAccumulator(
+        rejecting rejection: HeistExecutionTransitionRejection,
+        accumulated accumulator: HeistExecutionAccumulator
+    ) -> HeistExecutionAccumulator {
+        var rejected = accumulator
+        rejected.reject(
+            rejection,
+            result: heistTransitionRejectionResult(rejection)
+        )
+        return rejected
+    }
+
+    private func heistTransitionRejectionResult(
+        _ rejection: HeistExecutionTransitionRejection
+    ) -> HeistExecutionStepResult {
+        heistExplicitFailureReceipt(
+            path: rejection.path,
+            durationMs: 0,
+            intent: .fail(message: rejection.reason),
+            failure: HeistFailureDetail(
+                category: .validation,
+                contract: "heist execution state transitions are valid",
+                observed: rejection.reason
+            )
+        )
     }
 
     private func skippedHeistStep(
@@ -578,7 +738,7 @@ extension TheBrains {
             ),
             path: "\(path).heist.body"
         )
-        let abortedAtChildPath = children.firstFailedStep?.path
+        let childExecution = HeistReceiptChildren(children)
         return heistChildParentReceipt(
             path: path,
             kind: .heist,
@@ -586,10 +746,10 @@ extension TheBrains {
             intent: .heist(name: plan.name),
             evidence: .invocation(HeistInvocationEvidence(
                 name: plan.name.map { "heist \($0)" } ?? "inline heist",
-                childFailedPath: abortedAtChildPath
+                childFailedPath: childExecution.abortedAtChildPath
             )),
             childFailureCategory: .invocation,
-            children: children
+            children: childExecution
         )
     }
 
@@ -646,24 +806,17 @@ extension TheBrains {
             ),
             path: "\(path).invoke.body"
         )
-        let abortedAtChildPath = children.firstFailedStep?.path
-        let expectationReceipt = await evaluateInvocationExpectation(
+        let childExecution = HeistReceiptChildren(children)
+        let expectationOutcome = await evaluateInvocationExpectation(
             expectationContext,
             runtime: runtime,
-            childFailed: abortedAtChildPath != nil
-        )
-        let failure = invocationFailure(
-            abortedAtChildPath: abortedAtChildPath,
-            expectationContext: expectationContext,
-            expectationReceipt: expectationReceipt
+            childExecution: childExecution
         )
         return completedInvocationResult(
             context: context,
-            children: children,
-            abortedAtChildPath: abortedAtChildPath,
+            childExecution: childExecution,
             expectationContext: expectationContext,
-            expectationReceipt: expectationReceipt,
-            failure: failure
+            expectationOutcome: expectationOutcome
         )
     }
 
@@ -704,11 +857,14 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
-            failure: HeistFailureDetail(
-                category: .invocation,
-                contract: "heist invocation must not recurse",
-                observed: observed
+            outcome: .failed(
+                evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
+                failure: HeistFailureDetail(
+                    category: .invocation,
+                    contract: "heist invocation must not recurse",
+                    observed: observed
+                ),
+                children: .empty
             )
         )
     }
@@ -721,12 +877,15 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
-            failure: HeistFailureDetail(
-                category: .invocation,
-                contract: "heist invocation path resolves to a definition",
-                observed: observed,
-                expected: context.requestedName
+            outcome: .failed(
+                evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
+                failure: HeistFailureDetail(
+                    category: .invocation,
+                    contract: "heist invocation path resolves to a definition",
+                    observed: observed,
+                    expected: context.requestedName
+                ),
+                children: .empty
             )
         )
     }
@@ -740,14 +899,17 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: HeistInvocationEvidence(
-                invocation: context.invoke,
-                name: context.requestedName
-            ),
-            failure: HeistFailureDetail(
-                category: .validation,
-                contract: "heist invocation argument binds to the target parameter",
-                observed: observed
+            outcome: .failed(
+                evidence: HeistInvocationEvidence(
+                    invocation: context.invoke,
+                    name: context.requestedName
+                ),
+                failure: HeistFailureDetail(
+                    category: .validation,
+                    contract: "heist invocation argument binds to the target parameter",
+                    observed: observed
+                ),
+                children: .empty
             )
         )
     }
@@ -796,18 +958,21 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: HeistInvocationEvidence(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: context.argumentSummary,
-                expectationActionResult: expectationActionResult,
-                expectation: expectationResult
-            ),
-            failure: HeistFailureDetail(
-                category: .expectation,
-                contract: "heist invocation expectation predicate resolves before evaluation",
-                observed: observed,
-                expected: expectation.predicate.description
+            outcome: .failed(
+                evidence: HeistInvocationEvidence(
+                    invocation: context.invoke,
+                    name: context.requestedName,
+                    argument: context.argumentSummary,
+                    expectationActionResult: expectationActionResult,
+                    expectation: expectationResult
+                ),
+                failure: HeistFailureDetail(
+                    category: .expectation,
+                    contract: "heist invocation expectation predicate resolves before evaluation",
+                    observed: observed,
+                    expected: expectation.predicate.description
+                ),
+                children: .empty
             )
         )
     }
@@ -815,61 +980,67 @@ extension TheBrains {
     private func evaluateInvocationExpectation(
         _ context: InvocationExpectationContext?,
         runtime: HeistExecutionRuntime,
-        childFailed: Bool
-    ) async -> HeistWaitReceipt? {
-        guard !childFailed, let context else { return nil }
+        childExecution: HeistReceiptChildren
+    ) async -> InvocationExpectationOutcome {
+        guard case .completed = childExecution, let context else { return .notEvaluated }
+        let receipt: HeistWaitReceipt
         if let observedSequence = context.baseline.observedSequence {
-            return await runtime.wait(.afterObservation(
+            receipt = await runtime.wait(.afterObservation(
                 context.resolved,
                 baselineTrace: context.baseline.actionResult.accessibilityTrace,
                 sequence: observedSequence
             ))
+        } else {
+            receipt = await runtime.wait(.baselineTraceOnly(
+                context.resolved,
+                trace: context.baseline.actionResult.accessibilityTrace
+            ))
         }
-        return await runtime.wait(.baselineTraceOnly(
-            context.resolved,
-            trace: context.baseline.actionResult.accessibilityTrace
-        ))
-    }
-
-    private func invocationFailure(
-        abortedAtChildPath: String?,
-        expectationContext: InvocationExpectationContext?,
-        expectationReceipt: HeistWaitReceipt?
-    ) -> HeistFailureDetail? {
-        if let abortedAtChildPath {
-            return childFailureDetail(category: .invocation, childPath: abortedAtChildPath)
+        guard let failure = invocationExpectationFailure(expectation: context.source, receipt: receipt) else {
+            return .matched(receipt)
         }
-        guard let expectationContext, let expectationReceipt else { return nil }
-        return invocationExpectationFailure(expectation: expectationContext.source, receipt: expectationReceipt)
+        return .failed(receipt: receipt, detail: failure)
     }
 
     private func completedInvocationResult(
         context: InvocationExecutionContext,
-        children: [HeistExecutionStepResult],
-        abortedAtChildPath: String?,
+        childExecution: HeistReceiptChildren,
         expectationContext: InvocationExpectationContext?,
-        expectationReceipt: HeistWaitReceipt?,
-        failure: HeistFailureDetail?
+        expectationOutcome: InvocationExpectationOutcome
     ) -> HeistExecutionStepResult {
-        let expectationEvidence = expectationReceipt.map {
+        let expectationEvidence = expectationOutcome.receipt.map {
             invocationExpectationEvidence(receipt: $0, context: expectationContext)
+        }
+        let evidence = HeistInvocationEvidence(
+            invocation: context.invoke,
+            name: context.requestedName,
+            argument: context.argumentSummary,
+            childFailedPath: childExecution.abortedAtChildPath,
+            expectationActionResult: expectationEvidence?.actionResult,
+            expectation: expectationEvidence?.expectation,
+            expectationEvidence: expectationEvidence
+        )
+        let outcome: HeistReceiptOutcome<HeistInvocationEvidence>
+        switch childExecution {
+        case .childAborted(let childAbort):
+            outcome = .childAborted(
+                evidence: evidence,
+                failure: childFailureDetail(category: .invocation, childPath: childAbort.abortedAtChildPath),
+                children: childAbort
+            )
+        case .completed(let completed):
+            switch expectationOutcome {
+            case .notEvaluated, .matched:
+                outcome = .passed(evidence: evidence, children: completed)
+            case .failed(receipt: _, detail: let failure):
+                outcome = .failed(evidence: evidence, failure: failure, children: completed)
+            }
         }
         return heistInvocationReceipt(
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            evidence: HeistInvocationEvidence(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: context.argumentSummary,
-                childFailedPath: abortedAtChildPath,
-                expectationActionResult: expectationEvidence?.actionResult,
-                expectation: expectationEvidence?.expectation,
-                expectationEvidence: expectationEvidence
-            ),
-            failure: failure,
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            outcome: outcome
         )
     }
 

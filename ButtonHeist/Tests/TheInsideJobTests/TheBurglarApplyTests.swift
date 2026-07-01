@@ -179,6 +179,33 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertNil(screen.liveCapture.firstResponderHeistId)
     }
 
+    func testBuildScreenUsesSyntheticFirstResponderFacts() {
+        let first = makeElement(label: "Email")
+        let second = makeElement(label: "Password")
+        let firstPath = TreePath([0])
+        let secondPath = TreePath([1])
+        let result = TheBurglar.ParseResult(
+            hierarchy: [
+                .element(first, traversalIndex: 0),
+                .element(second, traversalIndex: 1),
+            ],
+            objectsByPath: [
+                firstPath: NSObject(),
+                secondPath: NSObject(),
+            ]
+        )
+        let facts = TheBurglar.ScreenBuildFacts(
+            focus: TheBurglar.ScreenBuildFocusFacts(firstResponderPaths: [secondPath])
+        )
+
+        let screen = TheBurglar.buildScreen(from: result, facts: facts)
+
+        XCTAssertEqual(
+            screen.liveCapture.firstResponderHeistId,
+            screen.liveCapture.heistId(forPath: secondPath)
+        )
+    }
+
     // MARK: - HeistId determinism
 
     func testHeistIdsAreAssignedDeterministically() {
@@ -352,6 +379,77 @@ final class TheBurglarApplyTests: XCTestCase {
         }
 
         XCTAssertNil(screen.findElement(heistId: heistId)?.scrollMembership)
+    }
+
+    func testBuildScreenUsesSyntheticScrollFactsForPureProjection() throws {
+        let scrollPath = TreePath([0])
+        let nestedContainerPath = TreePath([0, 0])
+        let childPath = TreePath([0, 0, 0])
+        let scrollableContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2000)),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 500)
+        )
+        let nestedContainer = AccessibilityContainer(
+            type: .list,
+            frame: AccessibilityRect(x: 0, y: 150, width: 320, height: 100)
+        )
+        let child = makeElement(
+            label: "Cell",
+            traits: .button,
+            frame: CGRect(x: 10, y: 160, width: 120, height: 44)
+        )
+        let observedElementPoint = try XCTUnwrap(
+            Screen.ObservedScrollContentActivationPoint(CGPoint(x: 70, y: 180))
+        )
+        let observedContainerPoint = try XCTUnwrap(
+            Screen.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
+        )
+        let inventory = ScrollInventory(totalElementCount: 20, visibleIndices: [7])
+        let result = TheBurglar.ParseResult(
+            hierarchy: [
+                .container(scrollableContainer, children: [
+                    .container(nestedContainer, children: [
+                        .element(child, traversalIndex: 0),
+                    ]),
+                ]),
+            ]
+        )
+        let facts = TheBurglar.ScreenBuildFacts(
+            scroll: TheBurglar.ScreenBuildScrollFacts(
+                contextContainerPaths: [scrollPath],
+                elementIndicesByPath: [
+                    .init(containerPath: scrollPath, elementPath: childPath): 7,
+                ],
+                inventoriesByPath: [scrollPath: inventory]
+            ),
+            activationPoints: TheBurglar.ScreenBuildScrollContentActivationPoints(
+                elementByPath: [
+                    childPath: observedElementPoint,
+                ],
+                containerByPath: [
+                    nestedContainerPath: observedContainerPoint,
+                ]
+            )
+        )
+
+        let screen = TheBurglar.buildScreen(from: result, facts: facts)
+        let heistId = try XCTUnwrap(screen.liveCapture.heistId(forPath: childPath))
+        let element = try XCTUnwrap(screen.findElement(heistId: heistId))
+
+        XCTAssertEqual(
+            element.scrollMembership,
+            Screen.ScrollMembership(containerPath: scrollPath, index: 7)
+        )
+        XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
+        XCTAssertEqual(screen.liveCapture.scrollInventory(forPath: scrollPath), inventory)
+        XCTAssertEqual(
+            screen.liveCapture.containerScrollMembership(forPath: nestedContainerPath),
+            Screen.ScrollMembership(containerPath: scrollPath, index: nil)
+        )
+        XCTAssertEqual(
+            screen.liveCapture.containerObservedScrollContentActivationPoint(forPath: nestedContainerPath),
+            observedContainerPoint
+        )
     }
 
     // MARK: - Helpers

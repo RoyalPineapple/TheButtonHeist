@@ -969,10 +969,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
-                    expectation: ExpectationResult(met: true, predicate: predicate),
+                    expectation: MetExpectationResult(predicate: predicate),
                     actionResult: ActionResult.success(method: .wait),
                     lastObservedSummary: "Ready"
-                )!)
+                ))
             ),
             expectedKey: "repeatUntil",
             assertEvidence: { evidence in
@@ -1102,7 +1102,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
-            evidence = .dispatch(command: command, actionResult: actionResult, warning: warning)
+            evidence = command.map {
+                .dispatch(command: $0, actionResult: actionResult, warning: warning)
+            } ?? .dispatch(actionResult: actionResult)
         }
 
         let intent = command.map {

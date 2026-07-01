@@ -68,7 +68,7 @@ extension TheBrains {
                     intent: dispatch.intent,
                     evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
                     childFailureCategory: .invocation,
-                    children: []
+                    children: .completed(.empty)
                 )
             }
 
@@ -96,7 +96,7 @@ extension TheBrains {
             intent: dispatch.intent,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
             childFailureCategory: .invocation,
-            children: children
+            children: HeistReceiptChildren(children)
         )
     }
 

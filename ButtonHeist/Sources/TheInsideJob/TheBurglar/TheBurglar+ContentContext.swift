@@ -29,7 +29,7 @@ extension TheBurglar {
 
     static func buildContainerIdentityContext(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
+        scrollableContainerPaths: Set<TreePath> = []
     ) -> ContainerIdentityContext {
         var accumulator = ContainerIdentityAccumulator()
         for (index, node) in hierarchy.enumerated() {
@@ -37,7 +37,7 @@ extension TheBurglar {
                 node: node,
                 path: TreePath([index]),
                 parentScrollContext: nil,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                scrollableContainerPaths: scrollableContainerPaths,
                 accumulator: &accumulator
             )
         }
@@ -52,7 +52,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViewsByPath: [TreePath: UIScrollView],
+        scrollableContainerPaths: Set<TreePath>,
         accumulator: inout ContainerIdentityAccumulator
     ) {
         guard case .container(let container, let children) = node else { return }
@@ -71,15 +71,14 @@ extension TheBurglar {
         }
         accumulator.contentFramesByPath[path] = contentFrame
 
-        if let scrollView = scrollableContainerViewsByPath[path],
-           !scrollView.bhIsUnsafeForProgrammaticScrolling {
-            let childScrollContext = ScrollContext(view: scrollView, containerPath: path)
+        if scrollableContainerPaths.contains(path) {
+            let childScrollContext = ScrollContext(containerPath: path)
             for (index, child) in children.enumerated() {
                 collectContainerContentFrames(
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: childScrollContext,
-                    scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                    scrollableContainerPaths: scrollableContainerPaths,
                     accumulator: &accumulator
                 )
             }
@@ -89,7 +88,7 @@ extension TheBurglar {
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: parentScrollContext,
-                    scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                    scrollableContainerPaths: scrollableContainerPaths,
                     accumulator: &accumulator
                 )
             }
@@ -100,24 +99,21 @@ extension TheBurglar {
 
     struct ElementContext {
         let scrollMembership: SemanticScreen.ScrollMembership?
-        weak var scrollView: UIScrollView?
     }
 
     private struct ScrollContext {
-        let view: UIScrollView
         let containerPath: TreePath
     }
 
-    /// Walk the hierarchy tree to gather per-element scroll membership and scroll
-    /// view refs. Live element objects are read directly from the
-    /// parser result while building the current live capture.
+    /// Walk the hierarchy tree to gather per-element scroll membership from
+    /// typed scroll-container facts.
     static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
+        scrollableContainerPaths: Set<TreePath> = []
     ) -> [AccessibilityElement: ElementContext] {
         let byPath = buildElementContextsByPath(
             hierarchy: hierarchy,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+            scrollableContainerPaths: scrollableContainerPaths
         )
         return Dictionary(
             byPath.compactMap { path, context in
@@ -130,7 +126,7 @@ extension TheBurglar {
 
     static func buildElementContextsByPath(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
+        scrollableContainerPaths: Set<TreePath> = []
     ) -> [TreePath: ElementContext] {
         var contexts: [AccessibilityElement: ElementContext] = [:]
         var contextsByPath: [TreePath: ElementContext] = [:]
@@ -139,7 +135,7 @@ extension TheBurglar {
                 node: node,
                 path: TreePath([index]),
                 parentScrollContext: nil,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                scrollableContainerPaths: scrollableContainerPaths,
                 into: &contexts,
                 byPath: &contextsByPath
             )
@@ -151,7 +147,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViewsByPath: [TreePath: UIScrollView],
+        scrollableContainerPaths: Set<TreePath>,
         into contexts: inout [AccessibilityElement: ElementContext],
         byPath contextsByPath: inout [TreePath: ElementContext]
     ) {
@@ -160,16 +156,14 @@ extension TheBurglar {
             let context = ElementContext(
                 scrollMembership: parentScrollContext.map {
                     SemanticScreen.ScrollMembership(containerPath: $0.containerPath, index: nil)
-                },
-                scrollView: parentScrollContext?.view
+                }
             )
             contexts[element] = context
             contextsByPath[path] = context
         case .container(_, let children):
             let childScrollContext: ScrollContext?
-            if let scrollView = scrollableContainerViewsByPath[path],
-               !scrollView.bhIsUnsafeForProgrammaticScrolling {
-                childScrollContext = ScrollContext(view: scrollView, containerPath: path)
+            if scrollableContainerPaths.contains(path) {
+                childScrollContext = ScrollContext(containerPath: path)
             } else {
                 childScrollContext = parentScrollContext
             }
@@ -179,7 +173,7 @@ extension TheBurglar {
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: childScrollContext,
-                    scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                    scrollableContainerPaths: scrollableContainerPaths,
                     into: &contexts,
                     byPath: &contextsByPath
                 )

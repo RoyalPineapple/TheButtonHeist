@@ -64,7 +64,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(AccessibilityPredicate.State.missing(ElementPredicate(label: "Ready")).evaluatePresence(in: elements))
     }
 
-    func testElementMatchSetKeepsEqualInterfaceElementsDistinctByTreePath() {
+    func testElementMatchGraphKeepsEqualInterfaceElementsDistinctByTreePath() {
         let duplicate = makeElement(label: "Save", traits: [.button])
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(), children: [
@@ -73,8 +73,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             ]),
         ])
 
-        let matches = ElementMatchSet(interface: interface)
-            .matching(ElementPredicate(label: "Save"))
+        let matches = ElementMatchGraph(interface: interface)
+            .resolve(ElementPredicate(label: "Save"))
 
         XCTAssertEqual(matches.count, 2)
         XCTAssertEqual(matches.orderedPaths, [TreePath([0, 0]), TreePath([0, 1])])
@@ -88,13 +88,14 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Cancel", identifier: "primary", traits: [.button]),
         ]
 
-        let matches = ElementMatchSet(elements: elements).matching(ElementPredicate(
-            label: "Save",
-            identifier: "primary",
-            traits: [.button]
-        ))
+        let graph = ElementMatchGraph(elements: elements)
+        let matches = graph.resolve(ElementPredicate(label: "Save", identifier: "primary", traits: [.button]))
+        let expected = graph.resolve(ElementPredicate(label: "Save"))
+            .intersection(graph.resolve(ElementPredicate(identifier: "primary")))
+            .intersection(graph.resolve(ElementPredicate(traits: [.button])))
 
         XCTAssertEqual(matches.elements, [elements[0]])
+        XCTAssertEqual(matches, expected)
         XCTAssertEqual(matches.orderedPaths, [TreePath([0])])
     }
 
@@ -104,9 +105,9 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Other"),
             makeElement(label: "Cancel"),
         ]
-        let allMatches = ElementMatchSet(elements: elements)
-        let cancelMatches = allMatches.matching(ElementPredicate(label: "Cancel"))
-        let saveMatches = allMatches.matching(ElementPredicate(label: "Save"))
+        let graph = ElementMatchGraph(elements: elements)
+        let cancelMatches = graph.resolve(ElementPredicate(label: "Cancel"))
+        let saveMatches = graph.resolve(ElementPredicate(label: "Save"))
 
         XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
     }
@@ -117,15 +118,15 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Save", traits: [.staticText]),
             makeElement(label: "Save", traits: [.button]),
         ]
-        let matches = ElementMatchSet(elements: elements)
+        let graph = ElementMatchGraph(elements: elements)
 
-        let selected = matches.matching(.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1))
+        let selected = graph.resolve(.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1))
 
         XCTAssertEqual(selected.elements, [elements[2]])
         XCTAssertEqual(selected.orderedPaths, [TreePath([2])])
         XCTAssertTrue(AccessibilityPredicate.State.existsTarget(
             .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
-        ).evaluate(in: matches).met)
+        ).evaluate(in: graph).met)
     }
 
     func testStatePredicateRequiresObservedTraceForActionResultValidation() {

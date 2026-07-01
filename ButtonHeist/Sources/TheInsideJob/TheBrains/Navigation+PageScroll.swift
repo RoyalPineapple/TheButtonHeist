@@ -25,7 +25,7 @@ extension Navigation {
         switch resolveContainerScrollTarget(
             selection: selection,
             axis: axis,
-            commandName: "scroll"
+            command: .scroll
         ) {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
@@ -35,8 +35,8 @@ extension Navigation {
             return proof.result == .moved
                 ? .success(method: .scroll)
                 : .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
-        case .failed(let message):
-            return .failure(.scroll, message: message, failureKind: .targetUnavailable)
+        case .failed(let failure):
+            return .failure(failure.command.method, message: failure.message, failureKind: .targetUnavailable)
         }
     }
 
@@ -56,7 +56,7 @@ extension Navigation {
         switch resolveContainerScrollTarget(
             selection: selection,
             axis: axis,
-            commandName: "scroll_to_edge"
+            command: .scrollToEdge
         ) {
         case .resolved(let scrollTarget):
             guard case .uiScrollView(let scrollView) = scrollTarget else {
@@ -79,8 +79,8 @@ extension Navigation {
                     message: "scroll_to_edge failed: selected container cannot be scrolled programmatically"
                 )
             }
-        case .failed(let message):
-            return .failure(.scrollToEdge, message: message, failureKind: .targetUnavailable)
+        case .failed(let failure):
+            return .failure(failure.command.method, message: failure.message, failureKind: .targetUnavailable)
         }
     }
 

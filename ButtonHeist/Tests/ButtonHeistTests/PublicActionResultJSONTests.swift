@@ -160,7 +160,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                         path: "$.body[0]",
                         kind: .action,
                         durationMs: 7,
-                        evidence: .action(.dispatch(command: nil, actionResult: actionResult)),
+                        evidence: .action(.dispatch(actionResult: actionResult)),
                         failure: HeistFailureDetail(
                             category: .targetResolution,
                             contract: "action dispatch succeeds",
@@ -354,7 +354,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
     ) throws -> PublicHeistActionResultDTO {
-        let evidence = HeistStepEvidence.action(.dispatch(command: nil, actionResult: result))
+        let evidence = HeistStepEvidence.action(.dispatch(actionResult: result))
         let step = status == .failed
             ? HeistExecutionStepResult.failed(
                 path: "$.body[0]",

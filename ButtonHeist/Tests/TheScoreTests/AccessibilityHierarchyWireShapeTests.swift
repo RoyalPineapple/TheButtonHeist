@@ -91,6 +91,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         let size = try containerPayload.object("frame").object("size")
         XCTAssertEqual(try size.double("width"), 320)
         XCTAssertEqual(try size.double("height"), 200)
+        XCTAssertTrue(try containerPayload.array("customActions").isEmpty)
         let children = try containerPayload.array("children")
         XCTAssertEqual(children.count, 1)
     }
@@ -148,6 +149,50 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
         XCTAssertEqual(decoded, original)
         XCTAssertEqual(decoded.projectedElements, [element])
+    }
+
+    func testInterfaceContainerRejectsFlatLegacyFramePayload() throws {
+        let original = makeTestInterface(nodes: [
+            testContainer(
+                makeTestAccessibilityContainer(type: .list, frameWidth: 320, frameHeight: 200),
+                children: []
+            ),
+        ])
+        let canonicalPayload = try JSONDecoder().decode(JSONValue.self, from: encoder.encode(original))
+        let legacyPayload = try XCTUnwrap(replacingFirstObjectValue(
+            forKey: "frame",
+            in: canonicalPayload,
+            with: .object([
+                "x": .int(0),
+                "y": .int(0),
+                "width": .int(320),
+                "height": .int(200),
+            ])
+        ))
+        let legacyData = try JSONEncoder().encode(legacyPayload)
+
+        XCTAssertThrowsError(try decoder.decode(Interface.self, from: legacyData)) { error in
+            XCTAssertTrue("\(error)".contains("origin"), "\(error)")
+        }
+    }
+
+    func testInterfaceContainerRejectsMissingCustomActionsPayload() throws {
+        let original = makeTestInterface(nodes: [
+            testContainer(
+                makeTestAccessibilityContainer(type: .list, frameWidth: 320, frameHeight: 200),
+                children: []
+            ),
+        ])
+        let canonicalPayload = try JSONDecoder().decode(JSONValue.self, from: encoder.encode(original))
+        let legacyPayload = try XCTUnwrap(removingFirstObjectValue(
+            forKey: "customActions",
+            in: canonicalPayload
+        ))
+        let legacyData = try JSONEncoder().encode(legacyPayload)
+
+        XCTAssertThrowsError(try decoder.decode(Interface.self, from: legacyData)) { error in
+            XCTAssertTrue("\(error)".contains("customActions"), "\(error)")
+        }
     }
 
     func testNodeLookupHandlesRootAndInvalidPaths() {
@@ -283,6 +328,70 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         let envelope = ResponseEnvelope(message: .interface(interface))
         let data = try encoder.encode(envelope)
         return try JSONProbe(data: data).object("payload")
+    }
+
+    private func replacingFirstObjectValue(
+        forKey key: String,
+        in value: JSONValue,
+        with replacement: JSONValue
+    ) -> JSONValue? {
+        switch value {
+        case .object(var object):
+            if object[key] != nil {
+                object[key] = replacement
+                return .object(object)
+            }
+            for childKey in Array(object.keys) {
+                guard let child = object[childKey],
+                      let replaced = replacingFirstObjectValue(forKey: key, in: child, with: replacement)
+                else { continue }
+                object[childKey] = replaced
+                return .object(object)
+            }
+            return nil
+        case .array(let values):
+            for index in values.indices {
+                guard let replaced = replacingFirstObjectValue(forKey: key, in: values[index], with: replacement)
+                else { continue }
+                var updated = values
+                updated[index] = replaced
+                return .array(updated)
+            }
+            return nil
+        case .string, .int, .double, .bool, .null:
+            return nil
+        }
+    }
+
+    private func removingFirstObjectValue(
+        forKey key: String,
+        in value: JSONValue
+    ) -> JSONValue? {
+        switch value {
+        case .object(var object):
+            if object.removeValue(forKey: key) != nil {
+                return .object(object)
+            }
+            for childKey in Array(object.keys) {
+                guard let child = object[childKey],
+                      let removed = removingFirstObjectValue(forKey: key, in: child)
+                else { continue }
+                object[childKey] = removed
+                return .object(object)
+            }
+            return nil
+        case .array(let values):
+            for index in values.indices {
+                guard let removed = removingFirstObjectValue(forKey: key, in: values[index])
+                else { continue }
+                var updated = values
+                updated[index] = removed
+                return .array(updated)
+            }
+            return nil
+        case .string, .int, .double, .bool, .null:
+            return nil
+        }
     }
 
     private func sampleElement(

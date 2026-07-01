@@ -883,8 +883,8 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         switch storage {
         case .commandResolutionFailure(let command):
             return command
-        case .dispatch(let command, _, _):
-            return command
+        case .dispatch(let dispatch):
+            return dispatch.command
         case .expectation(let command, _, _, _, _):
             return command
         }
@@ -894,8 +894,9 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         switch storage {
         case .commandResolutionFailure:
             return nil
-        case .dispatch(_, let result, _),
-             .expectation(_, let result, _, _, _):
+        case .dispatch(let dispatch):
+            return dispatch.actionResult
+        case .expectation(_, let result, _, _, _):
             return result
         }
     }
@@ -922,8 +923,9 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         switch storage {
         case .commandResolutionFailure:
             return nil
-        case .dispatch(_, _, let warning),
-             .expectation(_, _, _, _, let warning):
+        case .dispatch(let dispatch):
+            return dispatch.warning
+        case .expectation(_, _, _, _, let warning):
             return warning
         }
     }
@@ -935,12 +937,21 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     public static func dispatch(
-        command: HeistActionCommand?,
+        command: HeistActionCommand,
         actionResult: ActionResult,
         warning: HeistActionWarning? = nil
     ) -> HeistActionEvidence {
-        precondition(command != nil || warning == nil, "Action warning evidence requires a command")
-        return HeistActionEvidence(storage: .dispatch(command: command, actionResult: actionResult, warning: warning))
+        return HeistActionEvidence(storage: .dispatch(.command(
+            command: command,
+            actionResult: actionResult,
+            warning: warning
+        )))
+    }
+
+    public static func dispatch(
+        actionResult: ActionResult
+    ) -> HeistActionEvidence {
+        HeistActionEvidence(storage: .dispatch(.commandless(actionResult: actionResult)))
     }
 
     public static func expectation(
@@ -965,7 +976,7 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
 
     private enum Storage: Sendable, Equatable {
         case commandResolutionFailure(command: HeistActionCommand)
-        case dispatch(command: HeistActionCommand?, actionResult: ActionResult, warning: HeistActionWarning?)
+        case dispatch(Dispatch)
         case expectation(
             command: HeistActionCommand,
             actionResult: ActionResult,
@@ -973,6 +984,37 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
             expectation: ExpectationResult,
             warning: HeistActionWarning?
         )
+    }
+
+    private enum Dispatch: Sendable, Equatable {
+        case command(command: HeistActionCommand, actionResult: ActionResult, warning: HeistActionWarning?)
+        case commandless(actionResult: ActionResult)
+
+        var command: HeistActionCommand? {
+            switch self {
+            case .command(let command, _, _):
+                return command
+            case .commandless:
+                return nil
+            }
+        }
+
+        var actionResult: ActionResult {
+            switch self {
+            case .command(_, let actionResult, _),
+                 .commandless(let actionResult):
+                return actionResult
+            }
+        }
+
+        var warning: HeistActionWarning? {
+            switch self {
+            case .command(_, _, let warning):
+                return warning
+            case .commandless:
+                return nil
+            }
+        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -995,8 +1037,12 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         switch (command, actionResult, expectationActionResult, expectation, warning) {
         case (.some(let command), .none, .none, .none, .none):
             self = .commandResolutionFailure(command: command)
-        case (let command, .some(let actionResult), .none, .none, let warning):
+        case (.some(let command), .some(let actionResult), .none, .none, let warning):
             self = .dispatch(command: command, actionResult: actionResult, warning: warning)
+        case (.none, .some(let actionResult), .none, .none, .none):
+            self = .dispatch(actionResult: actionResult)
+        case (.none, .some, .none, .none, .some):
+            throw Self.evidenceError("heist action warning evidence requires command", codingPath: container.codingPath)
         case (.some(let command), .some(let actionResult), .some(let expectationActionResult), .some(let expectation), let warning):
             self = .expectation(
                 command: command,
@@ -1275,18 +1321,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult,
+        expectation: MetExpectationResult,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .matched,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
             failureReason: nil
@@ -1298,18 +1343,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .continued,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
             failureReason: nil
@@ -1320,18 +1364,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1342,18 +1385,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1363,18 +1405,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public static func initialObservationUnavailable(
         predicate: AccessibilityPredicate,
         timeout: Double,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: 0,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1386,18 +1427,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1408,18 +1448,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .handledElse,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason

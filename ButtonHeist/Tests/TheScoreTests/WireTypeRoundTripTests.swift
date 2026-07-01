@@ -944,7 +944,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             kind: .action,
             durationMs: 4,
             evidence: .action(.dispatch(
-                command: nil,
                 actionResult: .failure(
                     method: .activate,
                     errorKind: .actionFailed,
@@ -1000,6 +999,28 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         XCTAssertEqual(decodedStep.children.first?.actionEvidence?.actionResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
+    }
+
+    func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
+        let evidence = HeistActionEvidence.dispatch(
+            actionResult: ActionResult.success(method: .activate)
+        )
+        XCTAssertNil(evidence.command)
+        XCTAssertNil(evidence.warning)
+
+        let invalid = """
+        {
+          "actionResult": { "success": true, "method": "activate" },
+          "warning": {
+            "code": "activation_weak_affordance_evidence",
+            "message": "activate succeeded"
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(HeistActionEvidence.self, from: Data(invalid.utf8))) { error in
+            assertDecodingError(error, contains: ["heist action warning evidence requires command"])
+        }
     }
 
     func testHeistCaseSelectionRejectsLegacyAndLooseOutcomeShapes() throws {
@@ -1064,7 +1085,6 @@ final class WireTypeRoundTripTests: XCTestCase {
                     kind: .action,
                     durationMs: durationMs,
                     evidence: .action(.dispatch(
-                        command: nil,
                         actionResult: .success(method: .activate, message: "activated")
                     ))
                 ),

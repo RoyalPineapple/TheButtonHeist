@@ -17,7 +17,7 @@ public extension AccessibilityPredicate {
         delta: AccessibilityTrace.Delta? = nil
     ) -> ExpectationResult {
         evaluate(
-            currentMatches: ElementMatchSet(elements: currentElements),
+            currentGraph: ElementMatchGraph(elements: currentElements),
             changeEvidence: ChangeEvaluationEvidence(delta: delta)
         )
     }
@@ -28,7 +28,7 @@ public extension AccessibilityPredicate {
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     ) -> ExpectationResult {
         evaluate(
-            currentMatches: ElementMatchSet(elements: currentElements),
+            currentGraph: ElementMatchGraph(elements: currentElements),
             changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta)
         )
     }
@@ -38,7 +38,7 @@ public extension AccessibilityPredicate {
     /// transition window, not only the first-to-last endpoint projection.
     func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult {
         evaluate(
-            currentMatches: ElementMatchSet(elements: evidence.currentElements),
+            currentGraph: ElementMatchGraph(elements: evidence.currentElements),
             changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: evidence.accumulatedDelta)
         )
     }
@@ -46,12 +46,12 @@ public extension AccessibilityPredicate {
 
 private extension AccessibilityPredicate {
     func evaluate(
-        currentMatches: ElementMatchSet,
+        currentGraph: ElementMatchGraph,
         changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
-            return stateClause.evaluate(in: currentMatches).expectation(for: self)
+            return stateClause.evaluate(in: currentGraph).expectation(for: self)
         case .changePredicate(let change):
             return change.evaluate(changeEvidence: changeEvidence)
         case .noChangePredicate:
@@ -91,7 +91,7 @@ public extension AccessibilityPredicate.State {
     /// Evaluate this state against a single observed interface. For `.all`,
     /// every child state must hold against the same `elements`.
     func evaluate(in elements: [HeistElement]) -> PredicateEvaluationResult {
-        evaluate(in: ElementMatchSet(elements: elements))
+        evaluate(in: ElementMatchGraph(elements: elements))
     }
 }
 
@@ -99,17 +99,17 @@ package extension AccessibilityPredicate.State {
     /// Evaluate this state against a path-keyed interface projection. Element
     /// predicates resolve to typed match sets; target ordinals select from the
     /// narrowed set in traversal order.
-    func evaluate(in matches: ElementMatchSet) -> PredicateEvaluationResult {
+    func evaluate(in graph: ElementMatchGraph) -> PredicateEvaluationResult {
         switch contract {
         case .element(let requirement, let predicate):
-            let isPresent = !matches.matching(predicate).isEmpty
+            let isPresent = !graph.resolve(predicate).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
             return PredicateEvaluationResult(
                 met: met,
                 actual: met ? nil : requirement.failureDescription(for: predicate)
             )
         case .target(let requirement, let target):
-            let isPresent = !matches.matching(target).isEmpty
+            let isPresent = !graph.resolve(target).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
             return PredicateEvaluationResult(
                 met: met,
@@ -117,7 +117,7 @@ package extension AccessibilityPredicate.State {
             )
         case .all(let states):
             let failures = states.compactMap { state -> String? in
-                let outcome = state.evaluate(in: matches)
+                let outcome = state.evaluate(in: graph)
                 return outcome.met ? nil : (outcome.actual ?? state.description)
             }
             return PredicateEvaluationResult(
@@ -181,7 +181,7 @@ fileprivate extension AccessibilityPredicate.Change {
         let stateClause: AccessibilityPredicate.State = assertions.count == 1
             ? assertions[0]
             : .all(NonEmptyArray(assertions[0], rest: Array(assertions.dropFirst())))
-        let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
+        let outcome = stateClause.evaluate(in: ElementMatchGraph(interface: payload.newInterface))
         return PredicateEvaluationResult(
             met: outcome.met,
             actual: outcome.met ? nil : "screen changed but new interface failed: \(outcome.actual ?? stateClause.description)"
@@ -211,10 +211,10 @@ fileprivate extension AccessibilityPredicate.Change {
     ) -> ExpectationResult {
         switch predicate {
         case .appearedElement(let element):
-            let met = !ElementMatchSet(elements: edits.added).matching(element).isEmpty
+            let met = !ElementMatchGraph(elements: edits.added).resolve(element).isEmpty
             return ExpectationResult(met: met, predicate: nil, actual: met ? nil : "no appeared element matches \(element)")
         case .disappearedElement(let element):
-            let met = !ElementMatchSet(elements: edits.removed).matching(element).isEmpty
+            let met = !ElementMatchGraph(elements: edits.removed).resolve(element).isEmpty
             return ExpectationResult(met: met, predicate: nil, actual: met ? nil : "no disappeared element matches \(element)")
         case .updatedElement(let update):
             return evaluateUpdated(update: update, edits: edits)

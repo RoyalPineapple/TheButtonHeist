@@ -43,7 +43,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             outcome: failureOutcome(),
             message: "target disappeared",
             before: before,
-            settleOutcome: settledOutcome(finalScreen: afterScreen)
+            settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 44))
         )
 
         XCTAssertFalse(result.success)
@@ -51,6 +51,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.message, "target disappeared")
         XCTAssertEqual(result.errorKind, .actionFailed,
                        "Without explicit errorKind, failures default to actionFailed")
+        XCTAssertEqual(result.settled, true)
+        XCTAssertEqual(result.settleTimeMs, 44)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
         guard case .elementsChanged? = result.accessibilityTrace?.endpointDelta else {
@@ -335,10 +337,12 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: afterScreen)
+            settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 87))
         )
 
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.settled, true)
+        XCTAssertEqual(result.settleTimeMs, 87)
         XCTAssertNotNil(result.accessibilityTrace)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
     }
@@ -882,10 +886,10 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertFalse(source.contains("private struct PredicateStateMatch"))
         XCTAssertFalse(source.contains("PredicateStateMatchSet"))
-        XCTAssertTrue(source.contains("private let stateMatches: ElementMatchSet"))
-        XCTAssertTrue(source.contains("state.evaluate(in: stateMatches).expectation(for: predicate)"))
+        XCTAssertTrue(source.contains("private let stateGraph: ElementMatchGraph"))
+        XCTAssertTrue(source.contains("state.evaluate(in: stateGraph).expectation(for: predicate)"))
         XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
-        XCTAssertTrue(evaluationSource.contains("func evaluate(in matches: ElementMatchSet) -> PredicateEvaluationResult"))
+        XCTAssertTrue(evaluationSource.contains("func evaluate(in graph: ElementMatchGraph) -> PredicateEvaluationResult"))
         XCTAssertTrue(evaluationSource.contains("return PredicateEvaluationResult("))
         XCTAssertFalse(source.contains(streamTupleReturn))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
@@ -943,52 +947,97 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(source.contains("let failure = waitFailure("))
     }
 
-    func testPredicatePollingStateProbesDiscoveryInitiallyThenUsesVisibleTickCadence() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
-            scope: .discovery,
-            needsInitialProbe: true
+    func testPredicatePollingReducerFinishesVisibleMatch() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(scope: .visible, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleObserved(
+                PredicatePollingVisibleObservation(
+                    sequence: 1,
+                    fingerprint: .known("visible-a"),
+                    matched: true
+                ),
+                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0.01)
+            )
         )
 
-        XCTAssertEqual(state.nextProbe, .discovery)
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-        XCTAssertEqual(state.nextProbe, .discovery)
-
-        state.recordDiscoveryProbe()
-        XCTAssertEqual(state.nextProbe, .visible)
-
-        for _ in 0..<(PredicatePollingCadence.discoveryProbeIntervalVisibleTicks - 1) {
-            state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-            XCTAssertEqual(state.nextProbe, .visible)
-        }
-
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-        XCTAssertEqual(state.nextProbe, .discovery)
+        XCTAssertEqual(reduction.effect, .finish(.matched))
     }
 
-    func testPredicatePollingStateProbesDiscoveryWhenVisibleChangesWithoutMatch() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
+    func testPredicatePollingReducerFallsBackToDiscoveryWhenVisibleUnavailable() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(
             scope: .discovery,
-            needsInitialProbe: false
+            initialObservedSequence: nil,
+            initialVisibleFingerprint: .known("visible-a")
         )
 
-        XCTAssertEqual(state.nextProbe, .visible)
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: false))
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
 
-        XCTAssertEqual(state.nextProbe, .discovery)
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 1, elapsed: 0.01))
+        )
+
+        XCTAssertEqual(reduction.effect, .observe(.discovery(after: nil, timeout: 1)))
+        XCTAssertEqual(reduction.state.nextProbe, .discovery)
     }
 
-    func testPredicatePollingStateDoesNotProbeDiscoveryWhenVisibleChangeMatches() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
+    func testPredicatePollingReducerProbesDiscoveryWhenVisibleFingerprintChangesWithoutMatch() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(
             scope: .discovery,
-            needsInitialProbe: false
+            initialObservedSequence: 10,
+            initialVisibleFingerprint: .known("visible-a"),
+            discoveryBootstrap: .afterInitialDiscoveryAttempt
         )
 
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: true))
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: 10)))
 
-        XCTAssertEqual(state.nextProbe, .visible)
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleObserved(
+                PredicatePollingVisibleObservation(
+                    sequence: 11,
+                    fingerprint: .known("visible-b"),
+                    matched: false
+                ),
+                timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0.01)
+            )
+        )
+        XCTAssertEqual(reduction.effect, .observe(.visibleSettled(after: 11, timeout: 0.1)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0.7, elapsed: 0.02))
+        )
+
+        XCTAssertEqual(reduction.effect, .observe(.discovery(after: 11, timeout: 0.7)))
+    }
+
+    func testPredicatePollingReducerTimeoutZeroCanSkipPolling() {
+        let reducer = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
+        let reduction = reducer.start(scope: .discovery, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .finish(.notPolled))
+    }
+
+    func testPredicatePollingReducerFinishesNoMatchAtTimeout() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(scope: .visible, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0, elapsed: 1))
+        )
+
+        XCTAssertEqual(reduction.effect, .finish(.timedOut))
     }
 
     func testPredicatePollingEngineKeepsVisibleTicksBetweenDiscoveryProbes() async {

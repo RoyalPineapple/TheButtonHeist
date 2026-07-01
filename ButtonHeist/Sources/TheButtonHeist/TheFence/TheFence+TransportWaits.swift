@@ -10,56 +10,44 @@ extension TheFence {
     func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(message, requestId: requestId)
-            if case .failed(let failure) = outcome {
-                self.pendingRequests.resolveAction(
-                    requestId: requestId,
-                    result: Result<ActionResult, Error>.failure(FenceError(failure))
-                )
-            }
+        return try await pendingRequests.waitForAction(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(message, requestId: requestId)
         }
     }
 
     func sendAndAwaitPong(timeout: TimeInterval) async throws -> PongPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForPong(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(.ping, requestId: requestId)
-            if case .failed(let failure) = outcome {
-                self.pendingRequests.resolvePong(
-                    requestId: requestId,
-                    result: Result<PongPayload, Error>.failure(FenceError(failure))
-                )
-            }
+        return try await pendingRequests.waitForPong(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(.ping, requestId: requestId)
         }
     }
 
     func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(message, requestId: requestId)
-            if case .failed(let failure) = outcome {
-                self.pendingRequests.resolveInterface(
-                    requestId: requestId,
-                    result: Result<Interface, Error>.failure(FenceError(failure))
-                )
-            }
+        return try await pendingRequests.waitForInterface(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(message, requestId: requestId)
         }
     }
 
     func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(message, requestId: requestId)
-            if case .failed(let failure) = outcome {
-                self.pendingRequests.resolveScreen(
-                    requestId: requestId,
-                    result: Result<ScreenPayload, Error>.failure(FenceError(failure))
-                )
-            }
+        return try await pendingRequests.waitForScreen(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(message, requestId: requestId)
         }
     }
 
@@ -69,19 +57,24 @@ extension TheFence {
         timeout: TimeInterval
     ) async throws -> HeistExecutionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }
+        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan, argument: argument))
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForHeistExecution(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(.heistPlan(HeistPlanRun(plan: plan, argument: argument)), requestId: requestId)
-            if case .failed(let failure) = outcome {
-                self.pendingRequests.resolveHeistExecution(
-                    requestId: requestId,
-                    result: Result<HeistExecutionResult, Error>.failure(FenceError(failure))
-                )
-            }
+        return try await pendingRequests.waitForHeistExecution(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(message, requestId: requestId)
         }
     }
 
     func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
         pendingRequests.cancelAll(error: error)
+    }
+
+    private func sendClientMessage(_ message: ClientMessage, requestId: String) {
+        let outcome = handoff.send(message, requestId: requestId)
+        if case .failed(let failure) = outcome {
+            pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
+        }
     }
 }

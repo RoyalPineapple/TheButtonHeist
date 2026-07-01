@@ -7,14 +7,16 @@ import Testing
 
     @Test func `property update matching is dispatched through typed witnesses`() throws {
         let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/TreeChangeModels.swift")
+        let expectedChangeWitness =
+            #"\bstatic\s+func\s+expectedChange\s*\(\s*from\s+change\s*:\s*AnyPropertyChange\s*\)\s*->\s*ElementPropertyChange<Self>[?]"#
 
         #expect(
-            try source.containsMatch(#"\bprivate\s+struct\s+ObservedPropertyChangeSatisfier<\s*P\s*:\s*ElementPropertyValueKind\s*>"#),
-            "Observed property changes should preserve their typed value witness while matching expected changes."
+            try source.containsMatch(expectedChangeWitness),
+            "Property value kinds should provide the typed witness that extracts matching expected changes."
         )
         #expect(
-            source.contents.contains("let expected = expected as? ElementPropertyChange<P>"),
-            "Expected property changes should only satisfy an observed change after the generic property witness lines up."
+            try source.containsMatch(#"\bguard\s+let\s+expected\s*=\s*P[.]expectedChange\s*\(\s*from\s*:\s*expected\s*\)"#),
+            "Observed property changes should ask their generic property witness for the matching expected change."
         )
         #expect(
             try !source.containsMatch(#"\bpackage\s+func\s+satisfies\s*\([^)]*AnyPropertyChange[^)]*\)\s*->\s*Bool\s*\{\s*switch\s+expected\b"#),
@@ -23,6 +25,10 @@ import Testing
         #expect(
             try !source.containsMatch(#"\bprivate\s+func\s+satisfies\s*\([^)]*ElementPropertyChange<"#),
             "Per-property satisfies overloads reintroduce manual property/value compatibility dispatch."
+        )
+        #expect(
+            !source.contents.contains("as? ElementPropertyChange"),
+            "Property/value compatibility should be represented by typed witnesses, not runtime downcasts."
         )
     }
 

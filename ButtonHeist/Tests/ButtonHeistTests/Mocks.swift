@@ -497,8 +497,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
-                expectation: ExpectationResult(met: true, predicate: predicate)
-            )!)
+                expectation: MetExpectationResult(predicate: predicate)
+            ))
         )
     }
 

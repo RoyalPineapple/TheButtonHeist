@@ -149,10 +149,10 @@ private struct InterfaceContainerWirePayload: Codable {
         let type = try codingContainer.decode(AccessibilityContainer.ContainerType.self, forKey: .type)
         let frame = try codingContainer.decode(InterfaceRectWirePayload.self, forKey: .frame).rect
         let isModalBoundary = try codingContainer.decode(Bool.self, forKey: .isModalBoundary)
-        let customActions = try codingContainer.decodeIfPresent(
+        let customActions = try codingContainer.decode(
             [AccessibilityElement.CustomAction].self,
             forKey: .customActions
-        ) ?? []
+        )
         children = try codingContainer.decode([InterfaceTreeWireNode].self, forKey: .children)
         container = AccessibilityContainer(
             type: type,
@@ -187,16 +187,11 @@ private struct InterfaceRectWirePayload: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           container.contains(.origin),
-           container.contains(.size) {
-            rect = AccessibilityRect(
-                origin: try container.decode(InterfacePointWirePayload.self, forKey: .origin).point,
-                size: try container.decode(InterfaceSizeWirePayload.self, forKey: .size).size
-            )
-        } else {
-            rect = try AccessibilityRect(from: decoder)
-        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rect = AccessibilityRect(
+            origin: try container.decode(InterfacePointWirePayload.self, forKey: .origin).point,
+            size: try container.decode(InterfaceSizeWirePayload.self, forKey: .size).size
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -219,16 +214,11 @@ private struct InterfacePointWirePayload: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           container.contains(.x),
-           container.contains(.y) {
-            point = AccessibilityPoint(
-                x: try container.decode(Double.self, forKey: .x),
-                y: try container.decode(Double.self, forKey: .y)
-            )
-        } else {
-            point = try AccessibilityPoint(from: decoder)
-        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        point = AccessibilityPoint(
+            x: try container.decode(Double.self, forKey: .x),
+            y: try container.decode(Double.self, forKey: .y)
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -251,16 +241,11 @@ private struct InterfaceSizeWirePayload: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           container.contains(.width),
-           container.contains(.height) {
-            size = AccessibilitySize(
-                width: try container.decode(Double.self, forKey: .width),
-                height: try container.decode(Double.self, forKey: .height)
-            )
-        } else {
-            size = try AccessibilitySize(from: decoder)
-        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        size = AccessibilitySize(
+            width: try container.decode(Double.self, forKey: .width),
+            height: try container.decode(Double.self, forKey: .height)
+        )
     }
 
     func encode(to encoder: Encoder) throws {

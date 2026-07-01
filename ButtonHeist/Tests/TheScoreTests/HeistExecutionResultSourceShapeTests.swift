@@ -50,4 +50,35 @@ import Testing
         #expect(childAbortedOutcome.contents.contains("let evidence: HeistStepEvidence"))
         #expect(childAbortedOutcome.contents.contains("let abortedAtChildPath: String"))
     }
+
+    @Test func `action warning dispatch evidence requires a concrete command`() throws {
+        let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult.swift")
+        let actionEvidence = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+HeistActionEvidence\b"#),
+            "HeistActionEvidence should remain the canonical action evidence type"
+        )
+
+        let commandfulDispatchSignature = [
+            #"\bpublic\s+static\s+func\s+dispatch\s*\("#,
+            #"\s*command\s*:\s*HeistActionCommand,\s*"#,
+            #"actionResult\s*:\s*ActionResult,\s*"#,
+            #"warning\s*:\s*HeistActionWarning[?]\s*=\s*nil\s*\)"#
+        ].joined()
+        #expect(try actionEvidence.containsMatch(
+            commandfulDispatchSignature
+        ))
+        #expect(try actionEvidence.containsMatch(
+            #"\bpublic\s+static\s+func\s+dispatch\s*\(\s*actionResult\s*:\s*ActionResult\s*\)"#
+        ))
+        #expect(try !actionEvidence.containsMatch(
+            #"\bpublic\s+static\s+func\s+dispatch\s*\(\s*command\s*:\s*HeistActionCommand[?]"#
+        ))
+        #expect(try !actionEvidence.containsMatch(
+            #"\bcase\s+dispatch\s*\(\s*command\s*:\s*HeistActionCommand[?],\s*actionResult\s*:\s*ActionResult,\s*warning\s*:\s*HeistActionWarning[?]\s*\)"#
+        ))
+        #expect(try actionEvidence.containsMatch(#"\bcase\s+dispatch\s*\(\s*Dispatch\s*\)"#))
+        #expect(try !actionEvidence.containsMatch(
+            #"\bprecondition\s*\(\s*command\s*!=\s*nil[\s\S]*warning\s*==\s*nil"#
+        ))
+    }
 }
