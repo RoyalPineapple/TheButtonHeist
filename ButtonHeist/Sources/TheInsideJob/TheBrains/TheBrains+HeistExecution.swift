@@ -150,17 +150,100 @@ extension TheBrains {
         case completed(abortedPath: String?)
     }
 
+    private enum HeistExecutionEffect: Equatable {
+        case captureFailureScreenshot(failedPath: String)
+    }
+
+    private enum HeistExecutionTerminal: Equatable {
+        case passed
+        case failed(abortedPath: String, effects: [HeistExecutionEffect])
+
+        var abortedPath: String? {
+            switch self {
+            case .passed:
+                return nil
+            case .failed(let abortedPath, _):
+                return abortedPath
+            }
+        }
+
+        var effects: [HeistExecutionEffect] {
+            switch self {
+            case .passed:
+                return []
+            case .failed(_, let effects):
+                return effects
+            }
+        }
+    }
+
+    private struct HeistExecutionTransitionRejection: Equatable {
+        let path: String
+        let reason: String
+
+        static func stepAfterCompletion(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot begin heist step after execution completed"
+            )
+        }
+
+        static func skipBeforeAbort(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot skip heist step before execution aborts"
+            )
+        }
+
+        static func executeAfterAbort(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot execute heist step after execution aborts"
+            )
+        }
+
+        static func appendAfterCompletion(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot append heist step after execution completed"
+            )
+        }
+
+        static func completeTwice(path: String) -> HeistExecutionTransitionRejection {
+            HeistExecutionTransitionRejection(
+                path: path,
+                reason: "cannot complete heist plan twice"
+            )
+        }
+    }
+
+    private enum HeistStepTransitionResult: Equatable {
+        case accepted
+        case rejected(HeistExecutionTransitionRejection)
+    }
+
     private struct HeistExecutionAccumulator {
         private(set) var steps: [HeistExecutionStepResult] = []
         private(set) var phase: HeistExecutionPhase = .ready
 
         var abortedPath: String? {
+            terminal?.abortedPath
+        }
+
+        var terminalEffects: [HeistExecutionEffect] {
+            terminal?.effects ?? []
+        }
+
+        private var terminal: HeistExecutionTerminal? {
             switch phase {
-            case .aborted(let failedPath):
-                return failedPath
-            case .completed(let abortedPath):
-                return abortedPath
-            case .ready:
+            case .completed(nil):
+                return .passed
+            case .completed(.some(let abortedPath)):
+                return .failed(
+                    abortedPath: abortedPath,
+                    effects: [.captureFailureScreenshot(failedPath: abortedPath)]
+                )
+            case .ready, .aborted:
                 return nil
             }
         }
@@ -172,49 +255,67 @@ extension TheBrains {
             case .aborted(let failedPath):
                 return .skip(abortedPath: failedPath)
             case .completed:
-                preconditionFailure("Cannot begin heist step \(path) after execution completed")
+                return .reject(.stepAfterCompletion(path: path))
             }
         }
 
-        mutating func apply(_ transition: HeistStepTransition) {
+        mutating func apply(_ transition: HeistStepTransition) -> HeistStepTransitionResult {
             switch (phase, transition) {
             case (.ready, .executed(let result)):
                 steps.append(result)
                 phase = result.isFailure
                     ? .aborted(failedPath: result.firstFailedStep?.path ?? result.path)
                     : .ready
+                return .accepted
             case (.aborted, .skipped(let result, let abortedPath)):
                 steps.append(result)
                 phase = .aborted(failedPath: abortedPath)
+                return .accepted
             case (.ready, .skipped):
-                preconditionFailure("Cannot skip heist step before execution aborts")
+                return .rejected(.skipBeforeAbort(path: transition.path))
             case (.aborted, .executed):
-                preconditionFailure("Cannot execute heist step after execution aborts")
+                return .rejected(.executeAfterAbort(path: transition.path))
             case (.completed, _):
-                preconditionFailure("Cannot append heist step after execution completed")
+                return .rejected(.appendAfterCompletion(path: transition.path))
             }
         }
 
-        mutating func complete() {
+        mutating func complete() -> HeistStepTransitionResult {
             switch phase {
             case .ready:
                 phase = .completed(abortedPath: nil)
+                return .accepted
             case .aborted(let failedPath):
                 phase = .completed(abortedPath: failedPath)
+                return .accepted
             case .completed:
-                preconditionFailure("Cannot complete heist plan twice")
+                return .rejected(.completeTwice(path: "$.body"))
             }
+        }
+
+        mutating func reject(_ rejection: HeistExecutionTransitionRejection, result: HeistExecutionStepResult) {
+            steps.append(result)
+            phase = .completed(abortedPath: rejection.path)
         }
     }
 
     private enum HeistExecutionStepDecision: Equatable {
         case execute
         case skip(abortedPath: String)
+        case reject(HeistExecutionTransitionRejection)
     }
 
     private enum HeistStepTransition {
         case executed(HeistExecutionStepResult)
         case skipped(HeistExecutionStepResult, abortedPath: String)
+
+        var path: String {
+            switch self {
+            case .executed(let result),
+                 .skipped(let result, _):
+                return result.path
+            }
+        }
     }
 
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
@@ -258,12 +359,15 @@ extension TheBrains {
         )
         var stepResults = execution.steps
         let abortedAtPath = execution.abortedPath
-        if let abortedAtPath,
-           let failureScreenshotStep = await failureScreenshotStep(
-               runtime: runtime,
-               failedPath: abortedAtPath
-           ) {
-            stepResults.append(failureScreenshotStep)
+        for effect in execution.terminalEffects {
+            switch effect {
+            case .captureFailureScreenshot(let failedPath):
+                guard let failureScreenshotStep = await failureScreenshotStep(
+                    runtime: runtime,
+                    failedPath: failedPath
+                ) else { continue }
+                stepResults.append(failureScreenshotStep)
+            }
         }
         let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
         let heistResult: HeistExecutionResult
@@ -350,10 +454,13 @@ extension TheBrains {
 
             switch accumulator.decision(for: stepPath) {
             case .skip(let abortedPath):
-                accumulator.apply(.skipped(
+                let transition = accumulator.apply(.skipped(
                     skippedHeistStep(step, path: stepPath, scope: scope),
                     abortedPath: abortedPath
                 ))
+                if case .rejected(let rejection) = transition {
+                    return accumulator(rejecting: rejection, accumulated: accumulator)
+                }
                 continue
 
             case .execute:
@@ -365,12 +472,48 @@ extension TheBrains {
                     environment: environment,
                     scope: scope
                 )
-                accumulator.apply(.executed(stepResult))
+                let transition = accumulator.apply(.executed(stepResult))
+                if case .rejected(let rejection) = transition {
+                    return accumulator(rejecting: rejection, accumulated: accumulator)
+                }
+
+            case .reject(let rejection):
+                return accumulator(rejecting: rejection, accumulated: accumulator)
             }
         }
 
-        accumulator.complete()
+        let completion = accumulator.complete()
+        if case .rejected(let rejection) = completion {
+            return accumulator(rejecting: rejection, accumulated: accumulator)
+        }
         return accumulator
+    }
+
+    private func accumulator(
+        rejecting rejection: HeistExecutionTransitionRejection,
+        accumulated accumulator: HeistExecutionAccumulator
+    ) -> HeistExecutionAccumulator {
+        var rejected = accumulator
+        rejected.reject(
+            rejection,
+            result: heistTransitionRejectionResult(rejection)
+        )
+        return rejected
+    }
+
+    private func heistTransitionRejectionResult(
+        _ rejection: HeistExecutionTransitionRejection
+    ) -> HeistExecutionStepResult {
+        heistExplicitFailureReceipt(
+            path: rejection.path,
+            durationMs: 0,
+            intent: .fail(message: rejection.reason),
+            failure: HeistFailureDetail(
+                category: .validation,
+                contract: "heist execution state transitions are valid",
+                observed: rejection.reason
+            )
+        )
     }
 
     private func skippedHeistStep(

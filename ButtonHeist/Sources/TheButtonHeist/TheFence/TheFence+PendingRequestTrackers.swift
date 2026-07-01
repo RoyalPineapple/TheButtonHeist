@@ -53,74 +53,74 @@ extension TheFence {
         }
     }
 
+    fileprivate struct PendingRequest: Sendable {
+        let owner: UUID
+        let callback: @Sendable (Result<PendingResponse, Error>) -> Void
+    }
+
+    fileprivate enum PendingResponseContinuation: Sendable {
+        case action(PendingRequest)
+        case pong(PendingRequest)
+        case interface(PendingRequest)
+        case screen(PendingRequest)
+        case heistExecution(PendingRequest)
+
+        init(expectation: PendingResponseExpectation, request: PendingRequest) {
+            switch expectation {
+            case .action:
+                self = .action(request)
+            case .pong:
+                self = .pong(request)
+            case .interface:
+                self = .interface(request)
+            case .screen:
+                self = .screen(request)
+            case .heistExecution:
+                self = .heistExecution(request)
+            }
+        }
+
+        var expectation: PendingResponseExpectation {
+            switch self {
+            case .action:
+                return .action
+            case .pong:
+                return .pong
+            case .interface:
+                return .interface
+            case .screen:
+                return .screen
+            case .heistExecution:
+                return .heistExecution
+            }
+        }
+
+        var owner: UUID {
+            request.owner
+        }
+
+        func resumeSuccess(_ response: PendingResponse) {
+            request.callback(.success(response))
+        }
+
+        func resumeFailure(_ error: Error) {
+            request.callback(.failure(error))
+        }
+
+        private var request: PendingRequest {
+            switch self {
+            case .action(let request),
+                 .pong(let request),
+                 .interface(let request),
+                 .screen(let request),
+                 .heistExecution(let request):
+                return request
+            }
+        }
+    }
+
     @ButtonHeistActor
     final class PendingRequestTrackers {
-        private struct PendingRequest: Sendable {
-            let owner: UUID
-            let callback: @Sendable (Result<PendingResponse, Error>) -> Void
-        }
-
-        private enum PendingResponseContinuation: Sendable {
-            case action(PendingRequest)
-            case pong(PendingRequest)
-            case interface(PendingRequest)
-            case screen(PendingRequest)
-            case heistExecution(PendingRequest)
-
-            init(expectation: PendingResponseExpectation, request: PendingRequest) {
-                switch expectation {
-                case .action:
-                    self = .action(request)
-                case .pong:
-                    self = .pong(request)
-                case .interface:
-                    self = .interface(request)
-                case .screen:
-                    self = .screen(request)
-                case .heistExecution:
-                    self = .heistExecution(request)
-                }
-            }
-
-            var expectation: PendingResponseExpectation {
-                switch self {
-                case .action:
-                    return .action
-                case .pong:
-                    return .pong
-                case .interface:
-                    return .interface
-                case .screen:
-                    return .screen
-                case .heistExecution:
-                    return .heistExecution
-                }
-            }
-
-            var owner: UUID {
-                request.owner
-            }
-
-            func resumeSuccess(_ response: PendingResponse) {
-                request.callback(.success(response))
-            }
-
-            func resumeFailure(_ error: Error) {
-                request.callback(.failure(error))
-            }
-
-            private var request: PendingRequest {
-                switch self {
-                case .action(let request),
-                     .pong(let request),
-                     .interface(let request),
-                     .screen(let request),
-                     .heistExecution(let request):
-                    return request
-                }
-            }
-        }
-
         private var pending: [String: PendingResponseContinuation] = [:]
 
         func waitForAction(
