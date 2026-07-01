@@ -8,32 +8,11 @@ import UIKit
 
 private let accessibilityNotificationLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
-// Private UIAccessibility registration API. The block signature is inferred
-// from `_UIAXBroadcastMainThread`, which invokes each registered block as:
-//   block(notificationCode, notificationData, associatedElement)
-private typealias AccessibilityNotificationCallbackBlock = @convention(block) (
-    UInt32,
-    AnyObject?,
-    AnyObject?
-) -> Void
-
-private typealias AddAccessibilityNotificationCallbackFunction = @convention(c) (
-    AccessibilityNotificationCallbackBlock,
-    AnyObject
-) -> Void
-
-private typealias RemoveAccessibilityNotificationCallbackFunction = @convention(c) (AnyObject) -> Void
-
-// `nm` prints this export as `_AXAddNotificationCallback`: the single leading
-// underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants the C source
-// name, so the lookup string intentionally does not include that decoration.
-private let addAccessibilityNotificationCallbackSymbolName = "AXAddNotificationCallback"
-private let removeAccessibilityNotificationCallbackSymbolName = "AXRemoveNotificationCallback"
-
-// Private AccessibilitySupport switch that lets normal app processes pass
-// `_UIAXBroadcastMainThread`'s notification gate. This is an arming step, not
-// the observer mechanism itself.
-private typealias SetUnitTestModeFunction = @convention(c) (Int32) -> Void
+private struct CapturedAccessibilityNotification {
+    let code: UInt32
+    let notificationData: CapturedAccessibilityNotificationPayload
+    let associatedElement: CapturedAccessibilityNotificationPayload
+}
 
 // Rationale: singleton state is protected by `lock`; callbacks copy weak subscribers before fan-out.
 // swiftlint:disable:next agent_unchecked_sendable_no_comment
@@ -66,7 +45,11 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
 
     func subscribe(_ subscriber: AccessibilityNotificationBus) {
         addSubscriber(subscriber)
-        setUnitTestModeIfAvailable()
+        if AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable() {
+            accessibilityNotificationLogger.info("Armed accessibility notification callback via private unit-test mode SPI")
+        } else {
+            accessibilityNotificationLogger.debug("Private accessibility unit-test mode SPI is unavailable")
+        }
         AccessibilityNotificationCallbackState.shared.install()
     }
 
@@ -125,33 +108,6 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
     private func removeExpiredSubscribers() {
         subscribers = subscribers.filter { $0.value.subscriber != nil }
     }
-
-    private func setUnitTestModeIfAvailable() {
-        guard let symbol = Self.resolveSymbol(
-            "_AXSSetInUnitTestMode",
-            libraryPath: libAccessibilityPath()
-        ) else {
-            accessibilityNotificationLogger.debug("_AXSSetInUnitTestMode not found")
-            return
-        }
-        let setUnitTestMode = unsafeBitCast(symbol, to: SetUnitTestModeFunction.self)
-        setUnitTestMode(1)
-        accessibilityNotificationLogger.info("Armed accessibility notification callback via _AXSSetInUnitTestMode")
-    }
-
-    private static func resolveSymbol(_ name: String, libraryPath: String) -> UnsafeMutableRawPointer? {
-        if let processHandle = dlopen(nil, RTLD_NOW),
-           let symbol = dlsym(processHandle, name) {
-            return symbol
-        }
-
-        guard let handle = dlopen(libraryPath, RTLD_NOW | RTLD_LOCAL),
-              let symbol = dlsym(handle, name)
-        else {
-            return nil
-        }
-        return symbol
-    }
 }
 
 private struct WeakAccessibilityNotificationSubscriber {
@@ -168,7 +124,7 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
     static let shared = AccessibilityNotificationCallbackState()
 
     private let lock = NSLock()
-    private var installedRegistration: AccessibilityNotificationCallbackRegistrar.InstalledRegistration?
+    private var installedRegistration: AccessibilityNotificationPrivateSPI.InstalledCallback?
 
     var isInstalled: Bool {
         lock.lock()
@@ -185,15 +141,13 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
         }
 
         do {
-            let callbackBlock: AccessibilityNotificationCallbackBlock = { code, notificationData, associatedElement in
-                AccessibilityNotificationCallbackState.shared.record(
-                    code: code,
-                    notificationData: notificationData,
-                    associatedElement: associatedElement
-                )
-            }
-            installedRegistration = try AccessibilityNotificationCallbackRegistrar.install(
-                callback: callbackBlock
+            installedRegistration = try AccessibilityNotificationPrivateSPI.installNotificationCallback(
+                shouldCapture: {
+                    AccessibilityNotificationObserver.shared.hasSubscribers
+                },
+                handler: { notification in
+                    AccessibilityNotificationCallbackState.shared.record(notification)
+                }
             )
             accessibilityNotificationLogger.info(
                 "Installed accessibility notification callback source=\(self.installedRegistration?.source ?? "unknown", privacy: .public)"
@@ -221,45 +175,78 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
         accessibilityNotificationLogger.info("Removed accessibility notification callback")
     }
 
-    private func record(
-        code: UInt32,
-        notificationData: AnyObject?,
-        associatedElement: AnyObject?
-    ) {
-        // Apple calls the observer block from the broadcast path, normally on
-        // main after `AXPerformBlockOnMainThreadAfterDelay(..., 0)`. Keep the
-        // no-subscriber path close to a no-op: do not wrap objects or log.
+    private func record(_ notification: CapturedAccessibilityNotification) {
         guard AccessibilityNotificationObserver.shared.hasSubscribers else {
             return
         }
 
-        autoreleasepool {
-            AccessibilityNotificationObserver.shared.rebroadcast(
-                code: code,
-                notificationData: CapturedAccessibilityNotificationPayload(notificationData),
-                associatedElement: CapturedAccessibilityNotificationPayload(associatedElement)
-            )
-        }
+        AccessibilityNotificationObserver.shared.rebroadcast(
+            code: notification.code,
+            notificationData: notification.notificationData,
+            associatedElement: notification.associatedElement
+        )
     }
 
 }
 
-/// Sealed unsafe container for registering with UIAccessibility's notification
-/// observer dictionary.
+/// Safe Swift wrapper around the private accessibility notification SPI.
 ///
-/// This is intentionally much smaller than the old inline patching path. Apple
-/// already has an in-process fan-out table inside `_UIAXBroadcastMainThread`.
-/// We only resolve the private registration symbols, install one keyed block,
-/// and remove that key on uninstall.
+/// This deliberately acknowledges the risk: these are private Apple symbols,
+/// may disappear or change ABI between OS releases, and must never become a
+/// correctness dependency. Button Heist treats this as DEBUG-only tripwire
+/// signal. If the SPI is absent or shape assumptions fail, installation fails
+/// closed and the rest of the evidence pipeline continues without notification
+/// hints.
+///
+/// All unsafe operations live in this type:
+/// - private symbol names and `dlopen`/`dlsym`
+/// - C ABI function typealiases and `unsafeBitCast`
+/// - UIAccessibility's private block registration and removal
+/// - `_AXSSetInUnitTestMode` arming
+///
+/// Everything outside this wrapper gets safe Swift operations:
+/// `enableUnitTestModeIfAvailable()`, `installNotificationCallback(...)`, an
+/// `InstalledCallback` token, and `CapturedAccessibilityNotification` values.
+/// Live Objective-C payloads are converted inside an `autoreleasepool` before
+/// leaving the callback so strong references stay as short-lived as possible.
 ///
 /// Guarantees:
 /// - Exact symbol names only; no fuzzy search and no executable-memory writes.
 /// - Main-thread registration/removal, matching the apparent framework usage.
 /// - The Swift block is retained both by UIAccessibility and by our installed
 ///   registration token for the lifetime of the observer.
-/// - If any symbol is absent, installation fails closed and Button Heist simply
-///   loses this notification signal.
-private enum AccessibilityNotificationCallbackRegistrar {
+/// - Private payload objects leave this wrapper only as normalized, weakly-held
+///   notification evidence.
+private enum AccessibilityNotificationPrivateSPI {
+    // Private UIAccessibility registration API. The block signature is inferred
+    // from `_UIAXBroadcastMainThread`, which invokes each registered block as:
+    //   block(notificationCode, notificationData, associatedElement)
+    private typealias NotificationCallbackBlock = @convention(block) (
+        UInt32,
+        AnyObject?,
+        AnyObject?
+    ) -> Void
+
+    private typealias AddNotificationCallbackFunction = @convention(c) (
+        NotificationCallbackBlock,
+        AnyObject
+    ) -> Void
+
+    private typealias RemoveNotificationCallbackFunction = @convention(c) (AnyObject) -> Void
+
+    // Private AccessibilitySupport switch that lets normal app processes pass
+    // `_UIAXBroadcastMainThread`'s notification gate. This is an arming step,
+    // not the observer mechanism itself.
+    private typealias SetUnitTestModeFunction = @convention(c) (Int32) -> Void
+
+    // `nm` prints this export as `_AXAddNotificationCallback`: the single
+    // leading underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants
+    // the C source name, so the lookup string intentionally does not include
+    // that decoration.
+    private static let addNotificationCallbackSymbolName = "AXAddNotificationCallback"
+    private static let removeNotificationCallbackSymbolName = "AXRemoveNotificationCallback"
+    private static let setUnitTestModeSymbolName = "_AXSSetInUnitTestMode"
+
     private static let frameworkInstallNames = [
         "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility",
         "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore",
@@ -284,31 +271,31 @@ private enum AccessibilityNotificationCallbackRegistrar {
     private struct ResolvedSymbols {
         let source: String
         let handle: UnsafeMutableRawPointer
-        let addCallback: AddAccessibilityNotificationCallbackFunction
-        let removeCallback: RemoveAccessibilityNotificationCallbackFunction
+        let addCallback: AddNotificationCallbackFunction
+        let removeCallback: RemoveNotificationCallbackFunction
     }
 
-    final class InstalledRegistration {
+    final class InstalledCallback {
         let source: String
 
         private let frameworkHandle: UnsafeMutableRawPointer
-        private let removeCallback: RemoveAccessibilityNotificationCallbackFunction
+        private let remove: (NSString) -> Void
         private let key: NSString
-        private let callback: AccessibilityNotificationCallbackBlock
+        private let retainedCallback: Any
         private var isInstalled = true
 
         fileprivate init(
             source: String,
             frameworkHandle: UnsafeMutableRawPointer,
-            removeCallback: RemoveAccessibilityNotificationCallbackFunction,
+            remove: @escaping (NSString) -> Void,
             key: NSString,
-            callback: @escaping AccessibilityNotificationCallbackBlock
+            retainedCallback: Any
         ) {
             self.source = source
             self.frameworkHandle = frameworkHandle
-            self.removeCallback = removeCallback
+            self.remove = remove
             self.key = key
-            self.callback = callback
+            self.retainedCallback = retainedCallback
         }
 
         deinit {
@@ -321,33 +308,61 @@ private enum AccessibilityNotificationCallbackRegistrar {
                 throw InstallError.notMainThread
             }
 
-            removeCallback(key)
+            remove(key)
             isInstalled = false
 
             // Keep the framework loaded. UIAccessibility owns process-global
             // state and may still have internal references to the dictionary.
             _ = frameworkHandle
-            _ = callback
+            _ = retainedCallback
         }
     }
 
-    static func install(
-        callback: @escaping AccessibilityNotificationCallbackBlock
-    ) throws -> InstalledRegistration {
+    @discardableResult
+    static func enableUnitTestModeIfAvailable() -> Bool {
+        guard let symbol = resolveSymbol(
+            setUnitTestModeSymbolName,
+            libraryPath: libAccessibilityPath()
+        ) else {
+            return false
+        }
+        let setUnitTestMode = unsafeBitCast(symbol, to: SetUnitTestModeFunction.self)
+        setUnitTestMode(1)
+        return true
+    }
+
+    static func installNotificationCallback(
+        shouldCapture: @escaping () -> Bool,
+        handler: @escaping (CapturedAccessibilityNotification) -> Void
+    ) throws -> InstalledCallback {
         guard Thread.isMainThread else {
             throw InstallError.notMainThread
         }
 
         let symbols = try resolveSymbols()
         let observerKey = "com.buttonheist.accessibility-notification-observer" as NSString
+        let callback: NotificationCallbackBlock = { code, notificationData, associatedElement in
+            // Apple calls this from the broadcast path, normally on main after
+            // `AXPerformBlockOnMainThreadAfterDelay(..., 0)`. Keep the
+            // no-subscriber path close to a no-op: do not wrap objects or log.
+            guard shouldCapture() else { return }
+
+            autoreleasepool {
+                handler(CapturedAccessibilityNotification(
+                    code: code,
+                    notificationData: CapturedAccessibilityNotificationPayload(notificationData),
+                    associatedElement: CapturedAccessibilityNotificationPayload(associatedElement)
+                ))
+            }
+        }
 
         symbols.addCallback(callback, observerKey)
-        return InstalledRegistration(
+        return InstalledCallback(
             source: symbols.source,
             frameworkHandle: symbols.handle,
-            removeCallback: symbols.removeCallback,
+            remove: { key in symbols.removeCallback(key) },
             key: observerKey,
-            callback: callback
+            retainedCallback: callback
         )
     }
 
@@ -399,8 +414,8 @@ private enum AccessibilityNotificationCallbackRegistrar {
         in handle: UnsafeMutableRawPointer,
         source: String
     ) -> ResolvedSymbols? {
-        guard let addSymbol = dlsym(handle, addAccessibilityNotificationCallbackSymbolName),
-              let removeSymbol = dlsym(handle, removeAccessibilityNotificationCallbackSymbolName)
+        guard let addSymbol = dlsym(handle, addNotificationCallbackSymbolName),
+              let removeSymbol = dlsym(handle, removeNotificationCallbackSymbolName)
         else {
             return nil
         }
@@ -408,9 +423,23 @@ private enum AccessibilityNotificationCallbackRegistrar {
         return ResolvedSymbols(
             source: source,
             handle: handle,
-            addCallback: unsafeBitCast(addSymbol, to: AddAccessibilityNotificationCallbackFunction.self),
-            removeCallback: unsafeBitCast(removeSymbol, to: RemoveAccessibilityNotificationCallbackFunction.self)
+            addCallback: unsafeBitCast(addSymbol, to: AddNotificationCallbackFunction.self),
+            removeCallback: unsafeBitCast(removeSymbol, to: RemoveNotificationCallbackFunction.self)
         )
+    }
+
+    private static func resolveSymbol(_ name: String, libraryPath: String) -> UnsafeMutableRawPointer? {
+        if let processHandle = dlopen(nil, RTLD_NOW),
+           let symbol = dlsym(processHandle, name) {
+            return symbol
+        }
+
+        guard let handle = dlopen(libraryPath, RTLD_NOW | RTLD_LOCAL),
+              let symbol = dlsym(handle, name)
+        else {
+            return nil
+        }
+        return symbol
     }
 
     private static func uniquePreservingOrder(_ values: [String]) -> [String] {
