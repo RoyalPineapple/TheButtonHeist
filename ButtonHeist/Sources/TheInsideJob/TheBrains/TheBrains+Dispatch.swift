@@ -140,6 +140,7 @@ extension TheBrains {
             return treeUnavailableResult(method: method)
         }
         let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
+        stash.accessibilityNotifications.clearPendingEvents()
 
         let demand = stash.beginSemanticObservationDemand(scope: observationScope)
         defer { demand.cancel() }

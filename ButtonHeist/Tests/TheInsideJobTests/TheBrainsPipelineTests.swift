@@ -531,6 +531,47 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements[1].label, "A acid")
     }
 
+    func testPassiveSemanticPublishDoesNotDrainPostActionAccessibilityNotifications() async throws {
+        let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let notifiedObject = NSObject()
+        let saved = AccessibilityElement.make(
+            label: "Saved",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let finalScreen = Screen.makeForTests([
+            .init(saved, heistId: "saved", object: notifiedObject),
+        ])
+        brains.stash.accessibilityNotifications.record(
+            code: 1001,
+            notificationData: CapturedAccessibilityNotificationPayload(notifiedObject),
+            associatedElement: .none
+        )
+
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(
+            makeScreen(elements: [("Passive", .staticText, "passive")])
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .activate,
+            outcome: successOutcome(),
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: finalScreen)
+        )
+
+        let notification = try XCTUnwrap(
+            result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
+        )
+        guard case .element(let reference) = notification.notificationData else {
+            return XCTFail("Expected notification data to survive passive publish, got \(notification.notificationData)")
+        }
+        XCTAssertEqual(reference.resolution, .identity)
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
+    }
+
     func testActionResultFinalTraceUsesVisibleSettleNotLaterDiscovery() async throws {
         let beforeScreen = makeScreen(elements: [("Text Input", .header, "text_input")])
         brains.stash.installScreenForTesting(beforeScreen)

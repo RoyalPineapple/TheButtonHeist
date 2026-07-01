@@ -116,11 +116,11 @@ private struct SemanticObservationFulfillmentState {
         sequence: SettledObservationSequence,
         screen: Screen,
         tripwireSignal: TheTripwire.TripwireSignal,
-        stash: TheStash
+        stash: TheStash,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent]
     ) -> EventsByFulfilledScope {
         var currentEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
         var events: EventsByFulfilledScope = [:]
-        let pendingAccessibilityNotifications = stash.accessibilityNotifications.drainPendingEvents()
         var sourceEvent: SettledSemanticObservationEvent?
         for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
@@ -461,19 +461,34 @@ final class SemanticObservationStream {
     }
 
     @discardableResult
-    func commitSettledVisibleObservation(_ screen: Screen) -> SettledSemanticObservationEvent {
-        publishCommittedObservation(screen, scope: .visible)
+    func commitSettledVisibleObservation(
+        _ screen: Screen,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
+    ) -> SettledSemanticObservationEvent {
+        publishCommittedObservation(
+            screen,
+            scope: .visible,
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications
+        )
     }
 
     @discardableResult
-    func commitSettledDiscoveryObservation(_ screen: Screen) -> SettledSemanticObservationEvent {
-        publishCommittedObservation(screen, scope: .discovery)
+    func commitSettledDiscoveryObservation(
+        _ screen: Screen,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
+    ) -> SettledSemanticObservationEvent {
+        publishCommittedObservation(
+            screen,
+            scope: .discovery,
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications
+        )
     }
 
     @discardableResult
     private func publishCommittedObservation(
         _ screen: Screen,
-        scope: SemanticObservationScope
+        scope: SemanticObservationScope,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
     ) -> SettledSemanticObservationEvent {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
@@ -484,7 +499,11 @@ final class SemanticObservationStream {
         case .discovery:
             stash.commitSettledDiscoveryWorld(screen)
         }
-        return publishCurrentSettledObservation(scope: scope, stash: stash)
+        return publishCurrentSettledObservation(
+            scope: scope,
+            stash: stash,
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications
+        )
     }
 
     func settlePostActionObservation(
@@ -528,12 +547,19 @@ final class SemanticObservationStream {
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
+            let pendingAccessibilityNotifications = stash.accessibilityNotifications.drainPendingEvents()
             let event: SettledSemanticObservationEvent
             switch commitScope {
             case .visible:
-                event = commitSettledVisibleObservation(finalScreen)
+                event = commitSettledVisibleObservation(
+                    finalScreen,
+                    pendingAccessibilityNotifications: pendingAccessibilityNotifications
+                )
             case .discovery:
-                event = commitSettledDiscoveryObservation(stash.settledSemanticScreen.merging(finalScreen))
+                event = commitSettledDiscoveryObservation(
+                    stash.settledSemanticScreen.merging(finalScreen),
+                    pendingAccessibilityNotifications: pendingAccessibilityNotifications
+                )
             }
             return PostActionSettleObservation(settle: outcome, result: .committed(event))
         }
@@ -558,7 +584,8 @@ final class SemanticObservationStream {
 
     private func publishCurrentSettledObservation(
         scope: SemanticObservationScope = .visible,
-        stash: TheStash
+        stash: TheStash,
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
         let events = fulfillmentState.publish(
@@ -566,7 +593,8 @@ final class SemanticObservationStream {
             sequence: settledSequence,
             screen: stash.settledSemanticScreen,
             tripwireSignal: tripwire.tripwireSignal(),
-            stash: stash
+            stash: stash,
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications
         )
         guard let sourceEvent = events[scope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
