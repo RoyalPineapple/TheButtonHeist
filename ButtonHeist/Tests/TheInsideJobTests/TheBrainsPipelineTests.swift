@@ -43,7 +43,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             outcome: failureOutcome(),
             message: "target disappeared",
             before: before,
-            settleOutcome: settledOutcome(finalScreen: afterScreen)
+            settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 44))
         )
 
         XCTAssertFalse(result.success)
@@ -51,6 +51,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.message, "target disappeared")
         XCTAssertEqual(result.errorKind, .actionFailed,
                        "Without explicit errorKind, failures default to actionFailed")
+        XCTAssertEqual(result.settled, true)
+        XCTAssertEqual(result.settleTimeMs, 44)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
         guard case .elementsChanged? = result.accessibilityTrace?.endpointDelta else {
@@ -335,10 +337,12 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: afterScreen)
+            settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 87))
         )
 
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.settled, true)
+        XCTAssertEqual(result.settleTimeMs, 87)
         XCTAssertNotNil(result.accessibilityTrace)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
     }

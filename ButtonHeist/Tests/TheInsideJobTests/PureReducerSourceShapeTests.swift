@@ -128,18 +128,44 @@ import Testing
             try source.firstBlock(matching: #"\binit\s*\(\s*postActionMethod\s+method:\s+ActionMethod\b"#),
             "Post-action receipt construction should be a typed ActionResult initializer"
         )
+        let receiptState = try #require(
+            try source.firstBlock(matching: #"\benum\s+PostActionReceiptState\b"#),
+            "Post-action receipt construction should reduce through one typed receipt state"
+        )
+        let settleEvidence = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+PostActionReceiptSettleEvidence\b"#),
+            "Post-action settle fields should be grouped in immutable receipt evidence"
+        )
 
         #expect(observationOutcome.contents.contains("case cancelled("))
         #expect(observationOutcome.contents.contains("case parseFailed"))
         #expect(observationOutcome.contents.contains("case settled("))
         #expect(
-            try receiptBuilder.containsMatch(#"\bswitch\s+observationOutcome\b"#),
-            "post-action receipt construction should switch over observationOutcome"
+            try receiptBuilder.containsMatch(#"\bPostActionReceiptState\s*\("#),
+            "post-action receipt construction should project through typed receipt state"
+        )
+        #expect(
+            try !receiptBuilder.containsMatch(#"\bActionResultBuilder\b"#),
+            "post-action receipt construction should not stage mutable ActionResultBuilder state"
         )
         #expect(
             try !source.containsMatch(#"\bstruct\s+PostActionReceiptReducer\b"#),
             "Post-action receipt construction should stay on ActionResult instead of a stateless reducer object"
         )
+        #expect(receiptState.contents.contains("case cancelled("))
+        #expect(receiptState.contents.contains("case parseFailed("))
+        #expect(receiptState.contents.contains("case settledSuccess("))
+        #expect(receiptState.contents.contains("case settledFailure("))
+        #expect(
+            try receiptState.containsMatch(#"\bswitch\s+observationOutcome\b"#),
+            "receipt state should be selected by explicit observation outcome"
+        )
+        #expect(
+            try receiptState.containsMatch(#"\bswitch\s+context[.]actionOutcome[.]receiptOutcome\b"#),
+            "settled receipts should separate action success from action failure"
+        )
+        #expect(settleEvidence.contents.contains("let settled: Bool"))
+        #expect(settleEvidence.contents.contains("let settleTimeMs: Int"))
 
         #expect(
             try !source.containsMatch(#"\bstruct\s+ResultInput\b"#),
@@ -160,6 +186,44 @@ import Testing
             missing final evidence:
             \(receiptBuilder.contents)
             """
+        )
+    }
+
+    @Test func `post action screen change pruning returns explicit effect`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
+        let refinement = try #require(
+            try source.firstBlock(matching: #"\benum\s+FinalStateRefinement\b"#),
+            "PostActionObservation should model final-state refinement as a typed value or effect"
+        )
+        let finalSemanticEvidence = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+finalSemanticEvidence\b"#),
+            "Post-action final evidence should be the driver that applies refinement effects"
+        )
+        let refinedScreenChange = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+func\s+refinedScreenChangeFinalState\b"#),
+            "Screen-change refinement should return a typed refinement"
+        )
+        let prunedScreenChange = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+func\s+prunedScreenChangeFinalState\b"#),
+            "Pruned screen-change refinement should return a typed refinement"
+        )
+        let commitPattern = #"\bstash[.]semanticObservationStream[.]commitSettledVisibleObservation\s*\("#
+
+        #expect(refinement.contents.contains("case state("))
+        #expect(refinement.contents.contains("case commitSettledVisibleObservation("))
+        #expect(try refinedScreenChange.containsMatch(#"->\s*FinalStateRefinement[?]"#))
+        #expect(try prunedScreenChange.containsMatch(#"->\s*FinalStateRefinement[?]"#))
+        #expect(
+            try !refinedScreenChange.containsMatch(commitPattern),
+            "refinedScreenChangeFinalState should decide, not commit"
+        )
+        #expect(
+            try !prunedScreenChange.containsMatch(commitPattern),
+            "prunedScreenChangeFinalState should return the commit effect without applying it"
+        )
+        #expect(
+            try finalSemanticEvidence.matches(of: commitPattern).count == 1,
+            "finalSemanticEvidence should apply the final-state commit effect exactly once"
         )
     }
 
