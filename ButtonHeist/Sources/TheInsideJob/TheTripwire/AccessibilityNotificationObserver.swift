@@ -1,8 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
-import Darwin
 import Foundation
-import MachO
 import os.log
 import UIKit
 
@@ -198,11 +196,13 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
 /// closed and the rest of the evidence pipeline continues without notification
 /// hints.
 ///
-/// All unsafe operations live in this type:
-/// - private symbol names and `dlopen`/`dlsym`
-/// - C ABI function typealiases and `unsafeBitCast`
+/// Notification-specific private API handling lives in this type:
+/// - C ABI function typealiases for UIAccessibility's private callbacks
 /// - UIAccessibility's private block registration and removal
-/// - `_AXSSetInUnitTestMode` arming
+/// - accessibility unit-test-mode arming
+///
+/// Raw private symbol names, framework paths, `dlopen`, `dlsym`, and C function
+/// casts are centralized in `ButtonHeistPrivateSPI`.
 ///
 /// Everything outside this wrapper gets safe Swift operations:
 /// `enableUnitTestModeIfAvailable()`, `installNotificationCallback(...)`, an
@@ -238,22 +238,6 @@ private enum AccessibilityNotificationPrivateSPI {
     // `_UIAXBroadcastMainThread`'s notification gate. This is an arming step,
     // not the observer mechanism itself.
     private typealias SetUnitTestModeFunction = @convention(c) (Int32) -> Void
-
-    // `nm` prints this export as `_AXAddNotificationCallback`: the single
-    // leading underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants
-    // the C source name, so the lookup string intentionally does not include
-    // that decoration.
-    private enum SPISymbolName: String {
-        case addNotificationCallback = "AXAddNotificationCallback"
-        case removeNotificationCallback = "AXRemoveNotificationCallback"
-        case setUnitTestMode = "_AXSSetInUnitTestMode"
-    }
-
-    private enum SPIFrameworkPath: String, CaseIterable {
-        case uiAccessibility = "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility"
-        case uiKitCore = "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore"
-        case uiKit = "/System/Library/Frameworks/UIKit.framework/UIKit"
-    }
 
     enum InstallError: Error, CustomStringConvertible {
         case notMainThread
@@ -322,13 +306,13 @@ private enum AccessibilityNotificationPrivateSPI {
 
     @discardableResult
     static func enableUnitTestModeIfAvailable() -> Bool {
-        guard let symbol = resolveSymbol(
-            SPISymbolName.setUnitTestMode.rawValue,
-            libraryPath: libAccessibilityPath()
+        guard let setUnitTestMode: SetUnitTestModeFunction = ButtonHeistPrivateSPI.function(
+            .accessibilitySetUnitTestMode,
+            in: .libAccessibility,
+            as: SetUnitTestModeFunction.self
         ) else {
             return false
         }
-        let setUnitTestMode = unsafeBitCast(symbol, to: SetUnitTestModeFunction.self)
         setUnitTestMode(1)
         return true
     }
@@ -371,16 +355,16 @@ private enum AccessibilityNotificationPrivateSPI {
     private static func resolveSymbols() throws -> ResolvedSymbols {
         var checkedSources: [String] = []
 
-        if let processHandle = dlopen(nil, RTLD_NOW) {
+        if let processHandle = ButtonHeistPrivateSPI.processHandle() {
             checkedSources.append("process")
             if let symbols = symbols(in: processHandle, source: "process") {
                 return symbols
             }
         }
 
-        for imagePath in loadedImagePaths() {
+        for imagePath in ButtonHeistPrivateSPI.loadedImagePaths() {
             checkedSources.append(imagePath)
-            guard let handle = dlopen(imagePath, RTLD_NOW | RTLD_LOCAL),
+            guard let handle = ButtonHeistPrivateSPI.openLibrary(at: imagePath),
                   let symbols = symbols(in: handle, source: imagePath)
             else {
                 continue
@@ -388,10 +372,12 @@ private enum AccessibilityNotificationPrivateSPI {
             return symbols
         }
 
-        for frameworkPath in SPIFrameworkPath.allCases {
-            let path = frameworkPath.rawValue
+        let fallbackSearchOrder = ButtonHeistPrivateSPI.SPIFrameworkPath
+            .accessibilityNotificationCallbackFallbackSearchOrder
+        for frameworkPath in fallbackSearchOrder {
+            let path = ButtonHeistPrivateSPI.path(frameworkPath)
             checkedSources.append(path)
-            guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL),
+            guard let handle = ButtonHeistPrivateSPI.open(frameworkPath),
                   let symbols = symbols(in: handle, source: path)
             else {
                 continue
@@ -400,25 +386,24 @@ private enum AccessibilityNotificationPrivateSPI {
         }
 
         throw InstallError.callbackSymbolsUnavailable(
-            checkedSources: uniquePreservingOrder(checkedSources)
+            checkedSources: ButtonHeistPrivateSPI.uniquePreservingOrder(checkedSources)
         )
-    }
-
-    private static func loadedImagePaths() -> [String] {
-        var paths: [String] = []
-        for index in 0..<_dyld_image_count() {
-            guard let name = _dyld_get_image_name(index) else { continue }
-            paths.append(String(cString: name))
-        }
-        return uniquePreservingOrder(paths)
     }
 
     private static func symbols(
         in handle: UnsafeMutableRawPointer,
         source: String
     ) -> ResolvedSymbols? {
-        guard let addSymbol = dlsym(handle, SPISymbolName.addNotificationCallback.rawValue),
-              let removeSymbol = dlsym(handle, SPISymbolName.removeNotificationCallback.rawValue)
+        guard let addCallback: AddNotificationCallbackFunction = ButtonHeistPrivateSPI.function(
+            .accessibilityAddNotificationCallback,
+            in: handle,
+            as: AddNotificationCallbackFunction.self
+        ),
+              let removeCallback: RemoveNotificationCallbackFunction = ButtonHeistPrivateSPI.function(
+                .accessibilityRemoveNotificationCallback,
+                in: handle,
+                as: RemoveNotificationCallbackFunction.self
+              )
         else {
             return nil
         }
@@ -426,28 +411,9 @@ private enum AccessibilityNotificationPrivateSPI {
         return ResolvedSymbols(
             source: source,
             handle: handle,
-            addCallback: unsafeBitCast(addSymbol, to: AddNotificationCallbackFunction.self),
-            removeCallback: unsafeBitCast(removeSymbol, to: RemoveNotificationCallbackFunction.self)
+            addCallback: addCallback,
+            removeCallback: removeCallback
         )
-    }
-
-    private static func resolveSymbol(_ name: String, libraryPath: String) -> UnsafeMutableRawPointer? {
-        if let processHandle = dlopen(nil, RTLD_NOW),
-           let symbol = dlsym(processHandle, name) {
-            return symbol
-        }
-
-        guard let handle = dlopen(libraryPath, RTLD_NOW | RTLD_LOCAL),
-              let symbol = dlsym(handle, name)
-        else {
-            return nil
-        }
-        return symbol
-    }
-
-    private static func uniquePreservingOrder(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
     }
 }
 

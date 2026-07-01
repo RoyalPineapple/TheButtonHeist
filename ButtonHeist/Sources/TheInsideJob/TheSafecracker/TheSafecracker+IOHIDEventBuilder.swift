@@ -2,16 +2,15 @@
 #if DEBUG
 import UIKit
 
-// This file bridges to IOKit's private HID event API via dlsym. The five
-// file-private `nonisolated(unsafe)` globals below hold C function pointers
-// that are written exactly once (inside `loadIOHIDFunctions`) on first use
-// and read thereafter. Swift has no structured way to express "write-once,
-// lazily-initialised C function pointer" — wrapping in an actor would be
-// incorrect (these are synchronous C entry points called from gesture
-// hot paths) and using a lock would add ceremony for a pattern that is
-// well-known to be safe in this exact shape. This unsafe storage is narrowly
-// scoped to the IOKit bridge; do not introduce further `nonisolated(unsafe)`
-// declarations elsewhere without a comparable justification.
+// This file bridges to IOKit's private HID event API. Raw SPI names, framework
+// paths, dlsym, and typed C casts live in `ButtonHeistPrivateSPI`; the
+// file-private `nonisolated(unsafe)` globals below only cache resolved function
+// pointers written once on first use and read thereafter. Swift has no
+// structured way to express "write-once, lazily-initialised C function pointer"
+// for synchronous C entry points called from gesture hot paths. This unsafe
+// storage is narrowly scoped to the IOKit bridge; do not introduce further
+// `nonisolated(unsafe)` declarations elsewhere without a comparable
+// justification.
 
 extension TheSafecracker {
 
@@ -214,25 +213,41 @@ private func loadIOHIDFunctions() {
     guard !ioHIDFunctionsLoaded else { return }
     ioHIDFunctionsLoaded = true
 
-    guard let handle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW) else {
+    guard let handle = ButtonHeistPrivateSPI.open(.ioKit) else {
         insideJobLogger.error("Failed to load IOKit")
         return
     }
 
-    if let sym = dlsym(handle, "IOHIDEventCreateDigitizerEvent") {
-        _IOHIDEventCreateDigitizerEvent = unsafeBitCast(sym, to: type(of: _IOHIDEventCreateDigitizerEvent))
+    if let function = ButtonHeistPrivateSPI.function(
+        .ioHIDEventCreateDigitizerEvent,
+        in: handle,
+        as: type(of: _IOHIDEventCreateDigitizerEvent)
+    ) {
+        _IOHIDEventCreateDigitizerEvent = function
     }
 
-    if let sym = dlsym(handle, "IOHIDEventCreateDigitizerFingerEventWithQuality") {
-        _IOHIDEventCreateDigitizerFingerEventWithQuality = unsafeBitCast(sym, to: type(of: _IOHIDEventCreateDigitizerFingerEventWithQuality))
+    if let function = ButtonHeistPrivateSPI.function(
+        .ioHIDEventCreateDigitizerFingerEventWithQuality,
+        in: handle,
+        as: type(of: _IOHIDEventCreateDigitizerFingerEventWithQuality)
+    ) {
+        _IOHIDEventCreateDigitizerFingerEventWithQuality = function
     }
 
-    if let sym = dlsym(handle, "IOHIDEventAppendEvent") {
-        _IOHIDEventAppendEvent = unsafeBitCast(sym, to: type(of: _IOHIDEventAppendEvent))
+    if let function = ButtonHeistPrivateSPI.function(
+        .ioHIDEventAppendEvent,
+        in: handle,
+        as: type(of: _IOHIDEventAppendEvent)
+    ) {
+        _IOHIDEventAppendEvent = function
     }
 
-    if let sym = dlsym(handle, "IOHIDEventSetFloatValue") {
-        _IOHIDEventSetFloatValue = unsafeBitCast(sym, to: type(of: _IOHIDEventSetFloatValue))
+    if let function = ButtonHeistPrivateSPI.function(
+        .ioHIDEventSetFloatValue,
+        in: handle,
+        as: type(of: _IOHIDEventSetFloatValue)
+    ) {
+        _IOHIDEventSetFloatValue = function
     }
 }
 
