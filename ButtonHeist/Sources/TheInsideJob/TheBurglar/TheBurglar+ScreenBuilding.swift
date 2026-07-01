@@ -100,8 +100,8 @@ extension TheBurglar {
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: result.objectsByPath[path],
-                scrollView: context?.scrollMembership?.containerPath.flatMap {
-                    result.scrollViewsByPath[$0]
+                scrollView: (context?.scrollMembership).flatMap { membership in
+                    result.scrollViewsByPath[membership.containerPath]
                 }
             )
         }

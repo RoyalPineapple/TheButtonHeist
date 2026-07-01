@@ -118,8 +118,8 @@ extension TheBurglar.ScreenBuildFacts {
         hierarchy: [AccessibilityHierarchy],
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [ScreenBuildScrollElementIndexKey: Int] {
-        var indicesByPath: [ScreenBuildScrollElementIndexKey: Int] = [:]
+    ) -> [TheBurglar.ScreenBuildScrollElementIndexKey: Int] {
+        var indicesByPath: [TheBurglar.ScreenBuildScrollElementIndexKey: Int] = [:]
         for (containerPath, scrollView) in scrollViewsByPath {
             for item in hierarchy.pathIndexedElements
                 where item.path != containerPath && item.path.hasPrefix(containerPath) {
@@ -128,7 +128,7 @@ extension TheBurglar.ScreenBuildFacts {
                     in: scrollView
                 ) else { continue }
                 indicesByPath[
-                    ScreenBuildScrollElementIndexKey(
+                    TheBurglar.ScreenBuildScrollElementIndexKey(
                         containerPath: containerPath,
                         elementPath: item.path
                     )
@@ -140,7 +140,7 @@ extension TheBurglar.ScreenBuildFacts {
 
     private static func scrollInventories(
         hierarchy: [AccessibilityHierarchy],
-        indicesByPath: [ScreenBuildScrollElementIndexKey: Int],
+        indicesByPath: [TheBurglar.ScreenBuildScrollElementIndexKey: Int],
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
@@ -148,7 +148,7 @@ extension TheBurglar.ScreenBuildFacts {
                 let visibleIndices = hierarchy.pathIndexedElements.compactMap { item -> Int? in
                     guard item.path != path, item.path.hasPrefix(path) else { return nil }
                     return indicesByPath[
-                        ScreenBuildScrollElementIndexKey(
+                        TheBurglar.ScreenBuildScrollElementIndexKey(
                             containerPath: path,
                             elementPath: item.path
                         )
