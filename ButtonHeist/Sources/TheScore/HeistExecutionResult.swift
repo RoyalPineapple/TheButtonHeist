@@ -1275,18 +1275,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult,
+        expectation: MetExpectationResult,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .matched,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
             failureReason: nil
@@ -1298,18 +1297,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .continued,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
             failureReason: nil
@@ -1320,18 +1318,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1342,18 +1339,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1363,18 +1359,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public static func initialObservationUnavailable(
         predicate: AccessibilityPredicate,
         timeout: Double,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: 0,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1386,18 +1381,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason
@@ -1408,18 +1402,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
-        expectation: ExpectationResult,
+        expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
         failureReason: String? = nil
-    ) -> HeistRepeatUntilEvidence? {
-        guard !expectation.met else { return nil }
+    ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .handledElse,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             iterationOrdinal: nil,
-            expectation: expectation,
+            expectation: expectation.result,
             actionResult: nil,
             lastObservedSummary: lastObservedSummary,
             failureReason: failureReason

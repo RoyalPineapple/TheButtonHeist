@@ -27,50 +27,104 @@ extension TheBrains {
         }
     }
 
-    private struct RepeatUntilCheck {
+    private struct RepeatUntilMetCheck {
         let observation: RepeatUntilObservation
-        let expectation: ExpectationResult
+        let expectation: MetExpectationResult
         let receipt: HeistWaitReceipt
+    }
+
+    private struct RepeatUntilUnmetCheck {
+        let observation: RepeatUntilObservation
+        let expectation: UnmetExpectationResult
+        let receipt: HeistWaitReceipt
+    }
+
+    private enum RepeatUntilObservedCheck {
+        case met(RepeatUntilMetCheck)
+        case unmet(RepeatUntilUnmetCheck)
 
         init?(
             receipt: HeistWaitReceipt,
             expectation: ExpectationResult? = nil
         ) {
             guard let observation = RepeatUntilObservation(receipt) else { return nil }
-            self.observation = observation
-            self.expectation = expectation ?? receipt.expectation
-            self.receipt = receipt
+            self.init(
+                observation: observation,
+                check: PredicateExpectationCheck(expectation ?? receipt.expectation),
+                receipt: receipt
+            )
+        }
+
+        init(
+            observation: RepeatUntilObservation,
+            check: PredicateExpectationCheck,
+            receipt: HeistWaitReceipt
+        ) {
+            switch check {
+            case .met(let expectation):
+                self = .met(RepeatUntilMetCheck(
+                    observation: observation,
+                    expectation: expectation,
+                    receipt: receipt
+                ))
+            case .unmet(let expectation):
+                self = .unmet(RepeatUntilUnmetCheck(
+                    observation: observation,
+                    expectation: expectation,
+                    receipt: receipt
+                ))
+            }
         }
     }
 
     private enum RepeatUntilInitialCheck {
         case unavailable(HeistWaitReceipt)
-        case met(RepeatUntilCheck)
-        case unmet(RepeatUntilCheck)
+        case met(RepeatUntilMetCheck)
+        case unmet(RepeatUntilUnmetCheck)
 
         static func make(receipt: HeistWaitReceipt) -> RepeatUntilInitialCheck {
-            guard let check = RepeatUntilCheck(receipt: receipt) else {
+            guard let check = RepeatUntilObservedCheck(receipt: receipt) else {
                 return .unavailable(receipt)
             }
-            return check.expectation.met ? .met(check) : .unmet(check)
+            switch check {
+            case .met(let check):
+                return .met(check)
+            case .unmet(let check):
+                return .unmet(check)
+            }
+        }
+    }
+
+    private enum RepeatUntilIterationOutcome {
+        case predicateMet(MetExpectationResult)
+        case continued(UnmetExpectationResult)
+        case failed(expectation: UnmetExpectationResult, childPath: String)
+
+        var abortedAtChildPath: String? {
+            switch self {
+            case .predicateMet, .continued:
+                return nil
+            case .failed(_, let childPath):
+                return childPath
+            }
         }
     }
 
     private enum RepeatUntilPostBodyCheck {
-        case deadlineElapsed(ExpectationResult)
-        case changedMet(RepeatUntilCheck)
-        case changedUnmet(RepeatUntilCheck)
-        case noProgress(observation: RepeatUntilObservation?, expectation: ExpectationResult, receipt: HeistWaitReceipt)
+        case deadlineElapsed(UnmetExpectationResult)
+        case changedMet(RepeatUntilMetCheck)
+        case changedUnmet(RepeatUntilUnmetCheck)
+        case noProgress(observation: RepeatUntilObservation?, expectation: UnmetExpectationResult, receipt: HeistWaitReceipt)
 
-        var expectation: ExpectationResult {
+        var iterationOutcome: RepeatUntilIterationOutcome {
             switch self {
-            case .deadlineElapsed(let expectation):
-                return expectation
-            case .changedMet(let check),
-                 .changedUnmet(let check):
-                return check.expectation
-            case .noProgress(_, let expectation, _):
-                return expectation
+            case .deadlineElapsed(let expectation),
+                 .noProgress(_, let expectation, _):
+                return .continued(expectation)
+            case .changedMet(let check):
+                return .predicateMet(check.expectation)
+            case .changedUnmet(let check):
+                return .continued(check.expectation)
             }
         }
 
@@ -78,8 +132,9 @@ extension TheBrains {
             switch self {
             case .deadlineElapsed:
                 return nil
-            case .changedMet(let check),
-                 .changedUnmet(let check):
+            case .changedMet(let check):
+                return check.observation
+            case .changedUnmet(let check):
                 return check.observation
             case .noProgress(let observation, _, _):
                 return observation
@@ -88,10 +143,10 @@ extension TheBrains {
     }
 
     private struct RepeatUntilRunningState {
-        let currentCheck: RepeatUntilCheck
+        let currentCheck: RepeatUntilUnmetCheck
         let iterationNodes: [HeistExecutionStepResult]
 
-        func appendingIteration(_ node: HeistExecutionStepResult, nextCheck: RepeatUntilCheck) -> RepeatUntilRunningState {
+        func appendingIteration(_ node: HeistExecutionStepResult, nextCheck: RepeatUntilUnmetCheck) -> RepeatUntilRunningState {
             RepeatUntilRunningState(currentCheck: nextCheck, iterationNodes: iterationNodes + [node])
         }
     }
@@ -206,38 +261,38 @@ extension TheBrains {
 
     private enum RepeatUntilLoopEvent {
         case initial(RepeatUntilInitialCheck)
-        case deadlineElapsed(ExpectationResult)
+        case deadlineElapsed(UnmetExpectationResult)
         case iterationPassed(RepeatUntilPassedIterationEvent)
         case iterationFailed(RepeatUntilFailedIterationEvent)
         case elseCompleted([HeistExecutionStepResult])
     }
 
     private enum RepeatUntilTerminal {
-        case predicateMet(check: RepeatUntilCheck, iterationCount: Int, iterationNodes: [HeistExecutionStepResult])
+        case predicateMet(check: RepeatUntilMetCheck, iterationCount: Int, iterationNodes: [HeistExecutionStepResult])
         case timedOut(
             observation: RepeatUntilObservation?,
-            expectation: ExpectationResult,
+            expectation: UnmetExpectationResult,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult]
         )
         case initialObservationUnavailable(HeistWaitReceipt)
         case bodyFailed(
             observation: RepeatUntilObservation,
-            expectation: ExpectationResult,
+            expectation: UnmetExpectationResult,
             iterationIndex: Int,
             childPath: String,
             iterationNodes: [HeistExecutionStepResult]
         )
         case timeoutHandledByElse(
             observation: RepeatUntilObservation?,
-            expectation: ExpectationResult,
+            expectation: UnmetExpectationResult,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult],
             elseChildren: [HeistExecutionStepResult]
         )
         case timeoutElseFailed(
             observation: RepeatUntilObservation?,
-            expectation: ExpectationResult,
+            expectation: UnmetExpectationResult,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult],
             elseChildren: [HeistExecutionStepResult],
@@ -289,20 +344,14 @@ extension TheBrains {
             }
         }
 
-        func expectation(step: ResolvedRepeatUntilStep) -> ExpectationResult {
-            switch self {
-            case .predicateMet(let check, _, _):
-                return check.expectation
-            case .timedOut(_, let expectation, _, _),
-                 .bodyFailed(_, let expectation, _, _, _),
-                 .timeoutHandledByElse(_, let expectation, _, _, _),
-                 .timeoutElseFailed(_, let expectation, _, _, _, _):
-                return expectation
-            case .initialObservationUnavailable(let receipt):
-                return receipt.expectation.met
-                    ? ExpectationResult(met: false, predicate: step.predicate, actual: "initial observation unavailable")
-                    : receipt.expectation
-            }
+        static func initialObservationUnavailableExpectation(
+            step: ResolvedRepeatUntilStep,
+            receipt: HeistWaitReceipt
+        ) -> UnmetExpectationResult {
+            UnmetExpectationResult(receipt.expectation) ?? UnmetExpectationResult(
+                predicate: step.predicate,
+                actual: "initial observation unavailable"
+            )
         }
 
         func lastObservedSummary() -> String? {
@@ -351,7 +400,7 @@ extension TheBrains {
 
         private static func timeoutReason(
             step: ResolvedRepeatUntilStep,
-            expectation: ExpectationResult
+            expectation: UnmetExpectationResult
         ) -> String {
             let timeout = String(
                 format: "%.1f",
@@ -361,7 +410,7 @@ extension TheBrains {
             return [
                 "timed out after \(timeout)s waiting for repeat_until predicate",
                 "expected: \(step.predicate.description)",
-                "last result: \(expectation.actual ?? "not met")",
+                "last result: \(expectation.result.actual ?? "not met")",
             ].joined(separator: "; ")
         }
     }
@@ -383,7 +432,7 @@ extension TheBrains {
         let frame: RepeatUntilIterationFrame
         let failedStep: HeistExecutionStepResult
         let postBody: RepeatUntilPostBodyCheck?
-        let failureExpectation: ExpectationResult
+        let failureExpectation: UnmetExpectationResult
         let predicateMetIterationNode: HeistExecutionStepResult
         let failedIterationNode: HeistExecutionStepResult
     }
@@ -423,8 +472,7 @@ extension TheBrains {
         if case .running = state, timeout <= 0 {
             state = RepeatUntilLoopState.reduce(
                 state,
-                event: .deadlineElapsed(ExpectationResult(
-                    met: false,
+                event: .deadlineElapsed(UnmetExpectationResult(
                     predicate: resolved.predicate,
                     actual: "repeat_until deadline elapsed"
                 ))
@@ -497,9 +545,8 @@ extension TheBrains {
             let iterationNode = repeatUntilIterationResult(
                 frame: frame,
                 step: step,
-                expectation: postBody.expectation,
+                outcome: postBody.iterationOutcome,
                 observation: postBody.observation,
-                abortedAtChildPath: nil,
                 children: iterationResults
             )
             state = RepeatUntilLoopState.reduce(
@@ -518,8 +565,7 @@ extension TheBrains {
         if case .running = state {
             state = RepeatUntilLoopState.reduce(
                 state,
-                event: .deadlineElapsed(ExpectationResult(
-                    met: false,
+                event: .deadlineElapsed(UnmetExpectationResult(
                     predicate: step.predicate,
                     actual: "repeat_until deadline elapsed"
                 ))
@@ -549,18 +595,15 @@ extension TheBrains {
         } else {
             postBody = nil
         }
-        let failureExpectation = ExpectationResult(
-            met: false,
+        let failureExpectation = UnmetExpectationResult(
             predicate: step.predicate,
             actual: "iteration body failed before predicate evaluation"
         )
-        let predicateMetExpectation = postBody?.expectation ?? failureExpectation
         let predicateMetIterationNode = repeatUntilIterationResult(
             frame: frame,
             step: step,
-            expectation: predicateMetExpectation,
+            outcome: postBody?.iterationOutcome ?? .continued(failureExpectation),
             observation: postBody?.observation,
-            abortedAtChildPath: nil,
             children: repeatUntilIterationResultsDroppingRedundantFailure(
                 iterationResults,
                 failedPath: failedStep.path
@@ -569,9 +612,8 @@ extension TheBrains {
         let failedIterationNode = repeatUntilIterationResult(
             frame: frame,
             step: step,
-            expectation: failureExpectation,
+            outcome: .failed(expectation: failureExpectation, childPath: failedStep.path),
             observation: running.currentCheck.observation,
-            abortedAtChildPath: failedStep.path,
             children: iterationResults
         )
         return RepeatUntilFailedIterationEvent(
@@ -622,8 +664,7 @@ extension TheBrains {
     ) async -> RepeatUntilPostBodyCheck {
         let remaining = deadline - CFAbsoluteTimeGetCurrent()
         guard remaining > 0 else {
-            return .deadlineElapsed(ExpectationResult(
-                met: false,
+            return .deadlineElapsed(UnmetExpectationResult(
                 predicate: step.predicate,
                 actual: "repeat_until deadline elapsed"
             ))
@@ -639,24 +680,36 @@ extension TheBrains {
             trace: receipt.accessibilityTrace,
             fallback: receipt.message ?? receipt.expectation.actual
         )
+        let stopCheck = PredicateExpectationCheck(expectation)
+        let observedCheck = RepeatUntilObservation(receipt).map {
+            RepeatUntilObservedCheck(observation: $0, check: stopCheck, receipt: receipt)
+        }
         guard receipt.succeeded,
-              let check = RepeatUntilCheck(receipt: receipt, expectation: expectation) else {
-            let noProgressExpectation = expectation.met
-                ? ExpectationResult(
-                    met: false,
+              let check = observedCheck else {
+            let noProgressExpectation: UnmetExpectationResult
+            switch stopCheck {
+            case .met(let metExpectation):
+                noProgressExpectation = UnmetExpectationResult(
                     predicate: step.predicate,
                     actual: receipt.observedSequence == nil
                         ? "repeat_until post-body check matched without settled observation"
-                        : (expectation.actual ?? "repeat_until post-body check made no progress")
+                        : (metExpectation.result.actual ?? "repeat_until post-body check made no progress")
                 )
-                : expectation
+            case .unmet(let unmetExpectation):
+                noProgressExpectation = unmetExpectation
+            }
             return .noProgress(
                 observation: RepeatUntilObservation(receipt),
                 expectation: noProgressExpectation,
                 receipt: receipt
             )
         }
-        return expectation.met ? .changedMet(check) : .changedUnmet(check)
+        switch check {
+        case .met(let check):
+            return .changedMet(check)
+        case .unmet(let check):
+            return .changedUnmet(check)
+        }
     }
 
     private func repeatUntilStopExpectation(
@@ -684,7 +737,11 @@ extension TheBrains {
         state: RepeatUntilLoopState
     ) async -> HeistExecutionStepResult {
         guard case .terminal(let terminal) = state else {
-            preconditionFailure("repeat_until execution ended without terminal state")
+            return repeatUntilInternalStateFailure(
+                context: context,
+                step: step,
+                observed: "repeat_until execution ended without terminal state"
+            )
         }
         if case .timedOut = terminal,
            let elseBody = step.elseBody {
@@ -710,7 +767,11 @@ extension TheBrains {
         terminalState: RepeatUntilLoopState
     ) -> HeistExecutionStepResult {
         guard case .terminal(let terminal) = terminalState else {
-            preconditionFailure("repeat_until result requires terminal state")
+            return repeatUntilInternalStateFailure(
+                context: context,
+                step: step,
+                observed: "repeat_until result requires terminal state"
+            )
         }
         let failureReason = terminal.failureReason(step: step)
         let failure = repeatUntilFailure(
@@ -760,10 +821,9 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         failureReason: String?
     ) -> HeistRepeatUntilEvidence {
-        let evidence: HeistRepeatUntilEvidence?
         switch terminal {
         case .predicateMet(let check, let iterationCount, _):
-            evidence = HeistRepeatUntilEvidence.predicateMet(
+            return HeistRepeatUntilEvidence.predicateMet(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: iterationCount,
@@ -771,7 +831,7 @@ extension TheBrains {
                 lastObservedSummary: check.observation.summary
             )
         case .timedOut(let observation, let expectation, let iterationCount, _):
-            evidence = HeistRepeatUntilEvidence.timedOut(
+            return HeistRepeatUntilEvidence.timedOut(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: iterationCount,
@@ -780,15 +840,18 @@ extension TheBrains {
                 failureReason: failureReason ?? "repeat_until timed out"
             )
         case .initialObservationUnavailable(let receipt):
-            evidence = HeistRepeatUntilEvidence.initialObservationUnavailable(
+            return HeistRepeatUntilEvidence.initialObservationUnavailable(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                expectation: terminal.expectation(step: step),
+                expectation: RepeatUntilTerminal.initialObservationUnavailableExpectation(
+                    step: step,
+                    receipt: receipt
+                ),
                 lastObservedSummary: receipt.observationSummary,
                 failureReason: failureReason ?? "could not observe settled semantic hierarchy before evaluating repeat_until"
             )
         case .bodyFailed(let observation, let expectation, _, _, _):
-            evidence = HeistRepeatUntilEvidence.bodyFailed(
+            return HeistRepeatUntilEvidence.bodyFailed(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: terminal.iterationCount(),
@@ -797,7 +860,7 @@ extension TheBrains {
                 failureReason: failureReason ?? "repeat_until body failed"
             )
         case .timeoutHandledByElse(let observation, let expectation, let iterationCount, _, _):
-            evidence = HeistRepeatUntilEvidence.timeoutHandledByElse(
+            return HeistRepeatUntilEvidence.timeoutHandledByElse(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: iterationCount,
@@ -806,7 +869,7 @@ extension TheBrains {
                 failureReason: failureReason
             )
         case .timeoutElseFailed(let observation, let expectation, let iterationCount, _, _, _):
-            evidence = HeistRepeatUntilEvidence.timeoutHandledByElse(
+            return HeistRepeatUntilEvidence.timeoutHandledByElse(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: iterationCount,
@@ -815,10 +878,6 @@ extension TheBrains {
                 failureReason: failureReason
             )
         }
-        guard let evidence else {
-            preconditionFailure("Invalid repeat_until terminal evidence")
-        }
-        return evidence
     }
 
     private func repeatUntilFailure(
@@ -853,13 +912,13 @@ extension TheBrains {
     private func repeatUntilIterationResult(
         frame: RepeatUntilIterationFrame,
         step: ResolvedRepeatUntilStep,
-        expectation: ExpectationResult,
+        outcome: RepeatUntilIterationOutcome,
         observation: RepeatUntilObservation?,
-        abortedAtChildPath: String?,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let evidence: HeistRepeatUntilEvidence?
-        if let abortedAtChildPath {
+        let evidence: HeistRepeatUntilEvidence
+        switch outcome {
+        case .failed(let expectation, let childPath):
             evidence = HeistRepeatUntilEvidence.failedIteration(
                 predicate: step.predicate,
                 timeout: step.timeout,
@@ -867,9 +926,9 @@ extension TheBrains {
                 iterationOrdinal: frame.index,
                 expectation: expectation,
                 lastObservedSummary: observation?.summary,
-                failureReason: "child failed at \(abortedAtChildPath)"
+                failureReason: "child failed at \(childPath)"
             )
-        } else if expectation.met {
+        case .predicateMet(let expectation):
             evidence = HeistRepeatUntilEvidence.predicateMet(
                 predicate: step.predicate,
                 timeout: step.timeout,
@@ -878,7 +937,7 @@ extension TheBrains {
                 expectation: expectation,
                 lastObservedSummary: observation?.summary
             )
-        } else {
+        case .continued(let expectation):
             evidence = HeistRepeatUntilEvidence.continued(
                 predicate: step.predicate,
                 timeout: step.timeout,
@@ -887,9 +946,6 @@ extension TheBrains {
                 expectation: expectation,
                 lastObservedSummary: observation?.summary
             )
-        }
-        guard let evidence else {
-            preconditionFailure("Invalid repeat_until iteration evidence")
         }
         return heistLoopIterationReceipt(
             path: frame.path,
@@ -900,8 +956,27 @@ extension TheBrains {
                 timeout: step.timeout
             ),
             evidence: .repeatUntil(evidence),
-            abortedAtChildPath: abortedAtChildPath,
+            abortedAtChildPath: outcome.abortedAtChildPath,
             children: children
+        )
+    }
+
+    private func repeatUntilInternalStateFailure(
+        context: RepeatUntilExecutionContext,
+        step: ResolvedRepeatUntilStep,
+        observed: String
+    ) -> HeistExecutionStepResult {
+        heistFailedReceipt(
+            path: context.path,
+            kind: .repeatUntil,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: .repeatUntil(predicate: step.predicate.description, timeout: step.timeout),
+            failure: HeistFailureDetail(
+                category: .loop,
+                contract: "repeat_until execution reaches a terminal state",
+                observed: observed,
+                expected: "terminal repeat_until state"
+            )
         )
     }
 

@@ -60,6 +60,62 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
     }
 }
 
+public struct MetExpectationResult: Sendable, Equatable {
+    public let result: ExpectationResult
+
+    fileprivate init(unchecked result: ExpectationResult) {
+        self.result = result
+    }
+
+    public init?(_ result: ExpectationResult) {
+        guard result.met else { return nil }
+        self.result = result
+    }
+
+    public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
+        result = ExpectationResult(met: true, predicate: predicate, actual: actual)
+    }
+}
+
+public struct UnmetExpectationResult: Sendable, Equatable {
+    public let result: ExpectationResult
+
+    fileprivate init(unchecked result: ExpectationResult) {
+        self.result = result
+    }
+
+    public init?(_ result: ExpectationResult) {
+        guard !result.met else { return nil }
+        self.result = result
+    }
+
+    public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
+        result = ExpectationResult(met: false, predicate: predicate, actual: actual)
+    }
+}
+
+public enum PredicateExpectationCheck: Sendable, Equatable {
+    case met(MetExpectationResult)
+    case unmet(UnmetExpectationResult)
+
+    public init(_ result: ExpectationResult) {
+        if result.met {
+            self = .met(MetExpectationResult(unchecked: result))
+        } else {
+            self = .unmet(UnmetExpectationResult(unchecked: result))
+        }
+    }
+
+    public var result: ExpectationResult {
+        switch self {
+        case .met(let expectation):
+            return expectation.result
+        case .unmet(let expectation):
+            return expectation.result
+        }
+    }
+}
+
 extension ExpectationResult: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("expectation", [

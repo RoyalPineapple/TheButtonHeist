@@ -969,10 +969,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
-                    expectation: ExpectationResult(met: true, predicate: predicate),
+                    expectation: MetExpectationResult(predicate: predicate),
                     actionResult: ActionResult.success(method: .wait),
                     lastObservedSummary: "Ready"
-                )!)
+                ))
             ),
             expectedKey: "repeatUntil",
             assertEvidence: { evidence in
