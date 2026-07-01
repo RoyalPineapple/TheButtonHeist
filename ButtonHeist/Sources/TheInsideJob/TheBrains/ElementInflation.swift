@@ -57,7 +57,7 @@ final class ElementInflation {
     }
 
     private enum InflationState: CustomStringConvertible {
-        case resolving
+        case resolving(ResolutionPass)
         case revealing(treeElement: TheStash.ScreenElement)
         case refreshing(
             target: ElementTarget,
@@ -106,6 +106,20 @@ final class ElementInflation {
                 return "the live target no longer matched"
             case .activationPointOffscreen:
                 return "the activation point stayed off-screen"
+            }
+        }
+    }
+
+    private enum ResolutionPass {
+        case initial
+        case afterRetry(RetryReason)
+
+        var allowsKnownFallback: Bool {
+            switch self {
+            case .initial, .afterRetry(.objectDeallocated):
+                return true
+            case .afterRetry(.staleTarget), .afterRetry(.activationPointOffscreen):
+                return false
             }
         }
     }
@@ -182,14 +196,14 @@ final class ElementInflation {
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         stash.refreshCurrentVisibleTree()
-        var state: InflationState = .resolving
+        var state: InflationState = .resolving(.initial)
         var attempt = 0
         let maxAttempts = 2
 
         while true {
             switch state {
-            case .resolving:
-                switch await findTargetInTree(target, allowKnownFallback: attempt == 0) {
+            case .resolving(let pass):
+                switch await findTargetInTree(target, allowKnownFallback: pass.allowsKnownFallback) {
                 case .success(.visible(let treeElement)):
                     transition(
                         &state,
@@ -242,7 +256,7 @@ final class ElementInflation {
                     )
                 } else {
                     stash.refreshCurrentVisibleTree()
-                    transition(&state, to: .resolving)
+                    transition(&state, to: .resolving(.afterRetry(reason)))
                 }
 
             case .inflated(let result):
@@ -268,6 +282,18 @@ final class ElementInflation {
 
         let reveal = await revealSemanticTarget(treeElement)
         if case .failed(let failure) = reveal {
+            switch refreshedVisibleTargetResolution(target) {
+            case .success(let visible)?:
+                return .refreshing(
+                    target: target,
+                    screenElement: visible,
+                    didReveal: false
+                )
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                break
+            }
             return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
         }
         return .refreshing(
@@ -275,6 +301,13 @@ final class ElementInflation {
             screenElement: treeElement,
             didReveal: reveal.didReveal
         )
+    }
+
+    private func refreshedVisibleTargetResolution(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
+        guard stash.refreshCurrentVisibleTree() != nil else { return nil }
+        return visibleTargetResolution(target)
     }
 
     private func stateAfterRefresh(
