@@ -141,12 +141,8 @@ import Testing
         let postAction = try repository.requiredFile(
             relativePath: "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift"
         )
-        let success = try #require(
-            try postAction.firstBlock(matching: #"\bstruct\s+ActionOutcomeSuccess\b"#)
-        )
-        let payload = try #require(
-            try postAction.firstBlock(matching: #"\benum\s+ActionOutcomePayload\b"#)
-        )
+        let success = try postAction.requiredBlock(.structure("ActionOutcomeSuccess"))
+        let payload = try postAction.requiredBlock(.enumeration("ActionOutcomePayload"))
 
         #expect(success.contents.contains("let payload: ActionOutcomePayload"))
         #expect(!success.contents.contains("afterStatePayload"))

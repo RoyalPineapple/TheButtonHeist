@@ -837,27 +837,24 @@ extension TheBrains {
         failureReason: String?,
         children: HeistReceiptChildren
     ) -> HeistReceiptOutcome<HeistStepEvidence> {
-        switch children {
-        case .completed(let completed):
-            guard let failure = repeatUntilFailure(
-                terminal: terminal,
-                step: step,
-                failureReason: failureReason
-            ) else {
-                return .passed(evidence: evidence, children: completed)
-            }
-            return .failed(evidence: evidence, failure: failure, children: completed)
-        case .childAborted(let childAbort):
-            return .childAborted(
-                evidence: evidence,
+        return HeistReceiptOutcome(
+            evidence: evidence,
+            children: children,
+            completedOutcome: HeistReceiptCompletedOutcome(
                 failure: repeatUntilFailure(
                     terminal: terminal,
                     step: step,
                     failureReason: failureReason
-                ) ?? childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
-                children: childAbort
-            )
-        }
+                )
+            ),
+            childFailure: { childAbort in
+                repeatUntilFailure(
+                    terminal: terminal,
+                    step: step,
+                    failureReason: failureReason
+                ) ?? childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
+            }
+        )
     }
 
     private func repeatUntilEvidence(
@@ -993,27 +990,19 @@ extension TheBrains {
         }
         let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
         let childExecution = HeistReceiptChildren(children)
-        let receiptOutcome: HeistReceiptOutcome<HeistStepEvidence>
-        switch childExecution {
-        case .completed(let completed):
-            switch outcome {
-            case .failed(expectation: _, childPath: let childPath):
-                receiptOutcome = .failed(
-                    evidence: stepEvidence,
-                    failure: childFailureDetail(category: .loop, childPath: childPath),
-                    children: completed
-                )
-            case .predicateMet, .continued:
-                receiptOutcome = .passed(evidence: stepEvidence, children: completed)
+        let receiptOutcome = HeistReceiptOutcome(
+            evidence: stepEvidence,
+            children: childExecution,
+            completedOutcome: HeistReceiptCompletedOutcome(
+                failure: outcome.abortedAtChildPath.map {
+                    childFailureDetail(category: .loop, childPath: $0)
+                }
+            ),
+            childFailure: { childAbort in
+                childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
             }
-        case .childAborted(let childAbort):
-            receiptOutcome = .childAborted(
-                evidence: stepEvidence,
-                failure: childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
-                children: childAbort
-            )
-        }
-        return heistLoopIterationReceipt(
+        )
+        return heistLoopReceipt(
             path: frame.path,
             kind: .repeatUntilIteration,
             durationMs: elapsedMilliseconds(since: frame.start),

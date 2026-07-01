@@ -48,8 +48,8 @@ struct TheMuscleSession {
         lease.activeSessionConnectionCount
     }
 
-    mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
-        switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
+    mutating func acquire(driverIdentity: String, clientId: Int, at now: Date) -> Acquisition {
+        switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId, at: now) {
         case .accepted(let effect):
             switch effect {
             case .claimedSession:
@@ -75,8 +75,8 @@ struct TheMuscleSession {
         }
     }
 
-    mutating func removeConnection(_ clientId: Int) -> [Effect] {
-        switch lease.removeConnection(clientId) {
+    mutating func removeConnection(_ clientId: Int, at now: Date) -> [Effect] {
+        switch lease.removeConnection(clientId, at: now) {
         case .draining:
             let releaseTimeout = lease.releaseTimeout
             return [
@@ -86,14 +86,6 @@ struct TheMuscleSession {
         case .active, .unchanged:
             return []
         }
-    }
-
-    mutating func noteClientActivity(_ clientId: Int) -> [Effect] {
-        guard lease.activeSessionConnections.contains(clientId) else { return [] }
-        if lease.resetInactivityTimer() != nil {
-            return [.replaceReleaseTimer(timeout: lease.releaseTimeout)]
-        }
-        return []
     }
 }
 #endif // DEBUG

@@ -572,13 +572,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentP21heistBuildDiagnostic
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentPAAE16heistDefinitionsSayAA0C4PlanVGvp	swift.property	public	heistDefinitions	HeistContent.heistDefinitions	var heistDefinitions: [HeistPlan] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentPAAE21heistBuildDiagnosticsSayAA0cF10DiagnosticVGvp	swift.property	public	heistBuildDiagnostics	HeistContent.heistBuildDiagnostics	var heistBuildDiagnostics: [HeistBuildDiagnostic] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO	swift.enum	public	HintProperty	HintProperty	enum HintProperty
-symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE11displayText3forS2S_tFZ	swift.type.method	public	displayText(for:)	HintProperty.displayText(for:)	static func displayText(for value: String) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE11erasedValueyAD07ElementdG0OSSFZ	swift.type.method	public	erasedValue(_:)	HintProperty.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE14expectedChange4fromAA07ElementdG0VyACGSgAA03AnydG0O_tFZ	swift.type.method	public	expectedChange(from:)	HintProperty.expectedChange(from:)	static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<HintProperty>?
-symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE5Valuea	swift.typealias	public	HintProperty.Value	HintProperty.Value	typealias Value = String
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE5value2inSSSgAD12HeistElementV_tFZ	swift.type.method	public	value(in:)	HintProperty.value(in:)	static func value(in element: HeistElement) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE6change3old3newAD0D6ChangeOSSSg_AJtFZ	swift.type.method	public	change(old:new:)	HintProperty.change(old:new:)	static func change(old: String?, new: String?) -> PropertyChange
-symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE7matches_5valueSbAA11StringMatchOySSG_SSSgtFZ	swift.type.method	public	matches(_:value:)	HintProperty.matches(_:value:)	static func matches(_ checker: StringMatch<String>, value: String?) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO11ExprCheckera	swift.typealias	public	HintProperty.ExprChecker	HintProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO7Checkera	swift.typealias	public	HintProperty.Checker	HintProperty.Checker	typealias Checker = StringMatch<String>
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	HintProperty.property	static let property: ElementProperty
@@ -711,13 +707,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistPlanningO37rejectRawStructured
 symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistPlanningO43rejectRawStructuredJSONIRSourceFieldsResult11commandName6fieldsAA010ValidationJ0OyytAA0C15BuildDiagnosticVGSS_ShyAA0C29PlanRejectedPublicSourceFieldOGtFZ	swift.type.method	public	rejectRawStructuredJSONIRSourceFieldsResult(commandName:fields:)	HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(commandName:fields:)	static func rejectRawStructuredJSONIRSourceFieldsResult(commandName: String, fields: Set<HeistPlanRejectedPublicSourceField>) -> ValidationResult<Void, HeistBuildDiagnostic>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistPlanningO8readPlan4fromAA0cF0V10Foundation3URLV_tKFZ	swift.type.method	public	readPlan(from:)	HeistPlanning.readPlan(from:)	static func readPlan(from url: URL) throws -> HeistPlan
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO	swift.enum	public	LabelProperty	LabelProperty	enum LabelProperty
-symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE11displayText3forS2S_tFZ	swift.type.method	public	displayText(for:)	LabelProperty.displayText(for:)	static func displayText(for value: String) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE11erasedValueyAD07ElementdG0OSSFZ	swift.type.method	public	erasedValue(_:)	LabelProperty.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE14expectedChange4fromAA07ElementdG0VyACGSgAA03AnydG0O_tFZ	swift.type.method	public	expectedChange(from:)	LabelProperty.expectedChange(from:)	static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<LabelProperty>?
-symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE5Valuea	swift.typealias	public	LabelProperty.Value	LabelProperty.Value	typealias Value = String
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE5value2inSSSgAD12HeistElementV_tFZ	swift.type.method	public	value(in:)	LabelProperty.value(in:)	static func value(in element: HeistElement) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE6change3old3newAD0D6ChangeOSSSg_AJtFZ	swift.type.method	public	change(old:new:)	LabelProperty.change(old:new:)	static func change(old: String?, new: String?) -> PropertyChange
-symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO0A5ScoreE7matches_5valueSbAA11StringMatchOySSG_SSSgtFZ	swift.type.method	public	matches(_:value:)	LabelProperty.matches(_:value:)	static func matches(_ checker: StringMatch<String>, value: String?) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO11ExprCheckera	swift.typealias	public	LabelProperty.ExprChecker	LabelProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO7Checkera	swift.typealias	public	LabelProperty.Checker	LabelProperty.Checker	typealias Checker = StringMatch<String>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13LabelPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	LabelProperty.property	static let property: ElementProperty
@@ -772,13 +764,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7include7excludeACSay
 symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7includeShyAA05HeistC0OGvp	swift.property	public	include	TraitSetMatch.include	let include: Set<HeistTrait>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7includeyACSayAA05HeistC0OGFZ	swift.type.method	public	include(_:)	TraitSetMatch.include(_:)	static func include(_ traits: [HeistTrait]) -> TraitSetMatch
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO	swift.enum	public	ValueProperty	ValueProperty	enum ValueProperty
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE06erasedC0yAD07ElementdC0OSSFZ	swift.type.method	public	erasedValue(_:)	ValueProperty.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE0C0a	swift.typealias	public	ValueProperty.Value	ValueProperty.Value	typealias Value = String
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE11displayText3forS2S_tFZ	swift.type.method	public	displayText(for:)	ValueProperty.displayText(for:)	static func displayText(for value: String) -> String
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE14expectedChange4fromAA07ElementdG0VyACGSgAA03AnydG0O_tFZ	swift.type.method	public	expectedChange(from:)	ValueProperty.expectedChange(from:)	static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<ValueProperty>?
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE5value2inSSSgAD12HeistElementV_tFZ	swift.type.method	public	value(in:)	ValueProperty.value(in:)	static func value(in element: HeistElement) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE6change3old3newAD0D6ChangeOSSSg_AJtFZ	swift.type.method	public	change(old:new:)	ValueProperty.change(old:new:)	static func change(old: String?, new: String?) -> PropertyChange
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO0A5ScoreE7matches_5valueSbAA11StringMatchOySSG_SSSgtFZ	swift.type.method	public	matches(_:value:)	ValueProperty.matches(_:value:)	static func matches(_ checker: StringMatch<String>, value: String?) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO11ExprCheckera	swift.typealias	public	ValueProperty.ExprChecker	ValueProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO7Checkera	swift.typealias	public	ValueProperty.Checker	ValueProperty.Checker	typealias Checker = StringMatch<String>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	ValueProperty.property	static let property: ElementProperty
@@ -1259,13 +1247,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistReferenceNameV8rawValueACSS_tc
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistReferenceNameV8rawValueSSvp	swift.property	public	rawValue	HeistReferenceName.rawValue	let rawValue: String
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistReferenceNameV9validated4typeACSS_tKF	swift.method	public	validated(type:)	HeistReferenceName.validated(type:)	func validated(type: String = "heist") throws -> HeistReferenceName
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO	swift.enum	public	IdentifierProperty	IdentifierProperty	enum IdentifierProperty
-symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE11displayText3forS2S_tFZ	swift.type.method	public	displayText(for:)	IdentifierProperty.displayText(for:)	static func displayText(for value: String) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE11erasedValueyAD07ElementdG0OSSFZ	swift.type.method	public	erasedValue(_:)	IdentifierProperty.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE14expectedChange4fromAA07ElementdG0VyACGSgAA03AnydG0O_tFZ	swift.type.method	public	expectedChange(from:)	IdentifierProperty.expectedChange(from:)	static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<IdentifierProperty>?
-symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE5Valuea	swift.typealias	public	IdentifierProperty.Value	IdentifierProperty.Value	typealias Value = String
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE5value2inSSSgAD12HeistElementV_tFZ	swift.type.method	public	value(in:)	IdentifierProperty.value(in:)	static func value(in element: HeistElement) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE6change3old3newAD0D6ChangeOSSSg_AJtFZ	swift.type.method	public	change(old:new:)	IdentifierProperty.change(old:new:)	static func change(old: String?, new: String?) -> PropertyChange
-symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO0A5ScoreE7matches_5valueSbAA11StringMatchOySSG_SSSgtFZ	swift.type.method	public	matches(_:value:)	IdentifierProperty.matches(_:value:)	static func matches(_ checker: StringMatch<String>, value: String?) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO11ExprCheckera	swift.typealias	public	IdentifierProperty.ExprChecker	IdentifierProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO7Checkera	swift.typealias	public	IdentifierProperty.Checker	IdentifierProperty.Checker	typealias Checker = StringMatch<String>
 symbol	ButtonHeist.symbols.json	s:8ThePlans18IdentifierPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	IdentifierProperty.property	static let property: ElementProperty
@@ -3350,6 +3334,10 @@ symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV11descr
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV1loiySbAC_ACtFZ	swift.func.op	public	<(_:_:)	PredicateSelectionElementId.<(_:_:)	static func < (lhs: PredicateSelectionElementId, rhs: PredicateSelectionElementId) -> Bool
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV8rawValueACSS_tcfc	swift.init	public	init(rawValue:)	PredicateSelectionElementId.init(rawValue:)	init(rawValue: String)
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV8rawValueSSvp	swift.property	public	rawValue	PredicateSelectionElementId.rawValue	let rawValue: String
+symbol	ButtonHeist.symbols.json	s:8TheScore28ElementTextPropertyValueKindP	swift.protocol	public	ElementTextPropertyValueKind	ElementTextPropertyValueKind	protocol ElementTextPropertyValueKind : ElementPropertyValueKind where Self.Checker == StringMatch<String>, Self.Value == String
+symbol	ButtonHeist.symbols.json	s:8TheScore28ElementTextPropertyValueKindPAAE06erasedF0yAA0ceF0OSSFZ	swift.type.method	public	erasedValue(_:)	ElementTextPropertyValueKind.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
+symbol	ButtonHeist.symbols.json	s:8TheScore28ElementTextPropertyValueKindPAAE07displayD03forS2S_tFZ	swift.type.method	public	displayText(for:)	ElementTextPropertyValueKind.displayText(for:)	static func displayText(for value: String) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore28ElementTextPropertyValueKindPAAE7matches_5valueSb0A5Plans11StringMatchOySSG_SSSgtFZ	swift.type.method	public	matches(_:value:)	ElementTextPropertyValueKind.matches(_:value:)	static func matches(_ checker: StringMatch<String>, value: String?) -> Bool
 symbol	ButtonHeist.symbols.json	s:8TheScore28HeistCaseSelectionMissReasonO	swift.enum	public	HeistCaseSelectionMissReason	HeistCaseSelectionMissReason	enum HeistCaseSelectionMissReason
 symbol	ButtonHeist.symbols.json	s:8TheScore28HeistCaseSelectionMissReasonO7noMatchyA2CmF	swift.enum.case	public	HeistCaseSelectionMissReason.noMatch	HeistCaseSelectionMissReason.noMatch	case noMatch
 symbol	ButtonHeist.symbols.json	s:8TheScore28HeistCaseSelectionMissReasonO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistCaseSelectionMissReason.init(rawValue:)	init?(rawValue: String)
@@ -3666,6 +3654,7 @@ relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:Se	HeistCatalog	Swift.Decod
 relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:s8SendableP	HeistCatalog	Swift.Sendable
 relationship	conformsTo	s:8ThePlans12HintPropertyO	s:8ThePlans19ElementPropertyKindP	HintProperty	ElementPropertyKind
 relationship	conformsTo	s:8ThePlans12HintPropertyO	s:8TheScore24ElementPropertyValueKindP	HintProperty	ElementPropertyValueKind
+relationship	conformsTo	s:8ThePlans12HintPropertyO	s:8TheScore28ElementTextPropertyValueKindP	HintProperty	ElementTextPropertyValueKind
 relationship	conformsTo	s:8ThePlans12HintPropertyO	s:s8SendableP	HintProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans12ScrollTargetV	s:SE	ScrollTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans12ScrollTargetV	s:SQ	ScrollTarget	Swift.Equatable
@@ -3724,6 +3713,7 @@ relationship	conformsTo	s:8ThePlans13HeistCompilerC13ConfigurationV	s:SQ	HeistCo
 relationship	conformsTo	s:8ThePlans13HeistCompilerC13ConfigurationV	s:s8SendableP	HeistCompiler.Configuration	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:8ThePlans19ElementPropertyKindP	LabelProperty	ElementPropertyKind
 relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:8TheScore24ElementPropertyValueKindP	LabelProperty	ElementPropertyValueKind
+relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:8TheScore28ElementTextPropertyValueKindP	LabelProperty	ElementTextPropertyValueKind
 relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:s8SendableP	LabelProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13NonEmptyArrayV	s:SE	NonEmptyArray	Swift.Encodable
 relationship	conformsTo	s:8ThePlans13NonEmptyArrayV	s:SH	NonEmptyArray	Swift.Hashable
@@ -3753,6 +3743,7 @@ relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:s23CustomStringConvertible
 relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:s8SendableP	TraitSetMatch	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:8ThePlans19ElementPropertyKindP	ValueProperty	ElementPropertyKind
 relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:8TheScore24ElementPropertyValueKindP	ValueProperty	ElementPropertyValueKind
+relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:8TheScore28ElementTextPropertyValueKindP	ValueProperty	ElementTextPropertyValueKind
 relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:s8SendableP	ValueProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14ActionSetMatchV	s:SE	ActionSetMatch	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14ActionSetMatchV	s:SQ	ActionSetMatch	Swift.Equatable
@@ -3967,6 +3958,7 @@ relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s43ExpressibleByExten
 relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s8SendableP	HeistReferenceName	Swift.Sendable
 relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:8ThePlans19ElementPropertyKindP	IdentifierProperty	ElementPropertyKind
 relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:8TheScore24ElementPropertyValueKindP	IdentifierProperty	ElementPropertyValueKind
+relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:8TheScore28ElementTextPropertyValueKindP	IdentifierProperty	ElementTextPropertyValueKind
 relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:s8SendableP	IdentifierProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans18ScrollToEdgeTargetV	s:SE	ScrollToEdgeTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans18ScrollToEdgeTargetV	s:SQ	ScrollToEdgeTarget	Swift.Equatable
@@ -4811,6 +4803,9 @@ relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:SQ	Predicate
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:SY	PredicateSelectionElementId	Swift.RawRepresentable
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:s23CustomStringConvertibleP	PredicateSelectionElementId	Swift.CustomStringConvertible
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:s8SendableP	PredicateSelectionElementId	Swift.Sendable
+relationship	conformsTo	s:8TheScore28ElementTextPropertyValueKindP	s:8ThePlans19ElementPropertyKindP	ElementTextPropertyValueKind	ElementPropertyKind
+relationship	conformsTo	s:8TheScore28ElementTextPropertyValueKindP	s:8TheScore24ElementPropertyValueKindP	ElementTextPropertyValueKind	ElementPropertyValueKind
+relationship	conformsTo	s:8TheScore28ElementTextPropertyValueKindP	s:s8SendableP	ElementTextPropertyValueKind	Swift.Sendable
 relationship	conformsTo	s:8TheScore28HeistCaseSelectionMissReasonO	s:SE	HeistCaseSelectionMissReason	Swift.Encodable
 relationship	conformsTo	s:8TheScore28HeistCaseSelectionMissReasonO	s:SH	HeistCaseSelectionMissReason	Swift.Hashable
 relationship	conformsTo	s:8TheScore28HeistCaseSelectionMissReasonO	s:SQ	HeistCaseSelectionMissReason	Swift.Equatable
@@ -4886,6 +4881,9 @@ relationship	defaultImplementationOf	s:8TheScore24ElementPropertyValueKindPAAE11
 relationship	defaultImplementationOf	s:8TheScore26DirectionalWireMessageTypePAAE11descriptionSSvp	s:s23CustomStringConvertibleP11descriptionSSvp	description	Swift.CustomStringConvertible.description
 relationship	defaultImplementationOf	s:8TheScore26DirectionalWireMessageTypePAAE4fromxs7Decoder_p_tKcfc	s:Se4fromxs7Decoder_p_tKcfc	init(from:)	Swift.Decodable.init(from:)
 relationship	defaultImplementationOf	s:8TheScore26DirectionalWireMessageTypePAAE6encode2toys7Encoder_p_tKF	s:SE6encode2toys7Encoder_p_tKF	encode(to:)	Swift.Encodable.encode(to:)
+relationship	defaultImplementationOf	s:8TheScore28ElementTextPropertyValueKindPAAE06erasedF0yAA0ceF0OSSFZ	s:8TheScore24ElementPropertyValueKindP06erasedE0yAA0cdE0O0E0QzFZ	erasedValue(_:)	erasedValue(_:)
+relationship	defaultImplementationOf	s:8TheScore28ElementTextPropertyValueKindPAAE07displayD03forS2S_tFZ	s:8TheScore24ElementPropertyValueKindP11displayText3forSS0E0Qz_tFZ	displayText(for:)	displayText(for:)
+relationship	defaultImplementationOf	s:8TheScore28ElementTextPropertyValueKindPAAE7matches_5valueSb0A5Plans11StringMatchOySSG_SSSgtFZ	s:8TheScore24ElementPropertyValueKindP7matches_5valueSb7CheckerQz_0E0QzSgtFZ	matches(_:value:)	matches(_:value:)
 relationship	requirementOf	s:8ThePlans12HeistContentP10heistStepsSayAA0C4StepOGvp	s:8ThePlans12HeistContentP	heistSteps	HeistContent
 relationship	requirementOf	s:8ThePlans12HeistContentP16heistDefinitionsSayAA0C4PlanVGvp	s:8ThePlans12HeistContentP	heistDefinitions	HeistContent
 relationship	requirementOf	s:8ThePlans12HeistContentP21heistBuildDiagnosticsSayAA0cF10DiagnosticVGvp	s:8ThePlans12HeistContentP	heistBuildDiagnostics	HeistContent

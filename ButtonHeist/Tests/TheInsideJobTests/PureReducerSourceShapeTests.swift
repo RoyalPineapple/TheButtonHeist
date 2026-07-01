@@ -11,18 +11,22 @@ import Testing
         let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
 
         try expectEffectFreeReducerSource(reducer)
-        try expectType("PredicateWaitReducer", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicateWaitState", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicateWaitObservation", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicateWaitEvent", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicateWaitDecision", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try reducer.requireDeclarations([
+            .type("PredicateWaitReducer", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicateWaitState", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicateWaitObservation", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicateWaitEvent", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicateWaitDecision", conformingTo: ["Sendable", "Equatable"]),
+        ])
 
-        let reducerType = try #require(
-            try reducer.firstBlock(matching: #"\bstruct\s+PredicateWaitReducer\b"#),
+        let reducerType = try reducer.requiredBlock(
+            .structure("PredicateWaitReducer"),
+            message:
             "\(reducer.relativePath) should declare PredicateWaitReducer as a value type"
         )
-        let decisionType = try #require(
-            try reducer.firstBlock(matching: #"\benum\s+PredicateWaitDecision\b"#),
+        let decisionType = try reducer.requiredBlock(
+            .enumeration("PredicateWaitDecision"),
+            message:
             "\(reducer.relativePath) should declare PredicateWaitDecision as a value type"
         )
 
@@ -40,18 +44,21 @@ import Testing
     @Test func `predicate polling reducer is value typed and effect free`() throws {
         let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicatePollingReducer.swift")
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
-        let pollingEngine = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+PredicatePollingEngine\b"#),
+        let pollingEngine = try source.requiredBlock(
+            .structure("PredicatePollingEngine"),
+            message:
             "PredicateWait.swift should keep PredicatePollingEngine as the async effect interpreter"
         )
 
         try expectEffectFreeReducerSource(reducer)
-        try expectType("PredicatePollingReducer", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicatePollingState", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicatePollingEvent", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicatePollingEffect", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicatePollingReduction", in: reducer, conformsTo: ["Sendable", "Equatable"])
-        try expectType("PredicatePollingObservationRequest", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try reducer.requireDeclarations([
+            .type("PredicatePollingReducer", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicatePollingState", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicatePollingEvent", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicatePollingEffect", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicatePollingReduction", conformingTo: ["Sendable", "Equatable"]),
+            .type("PredicatePollingObservationRequest", conformingTo: ["Sendable", "Equatable"]),
+        ])
 
         #expect(reducer.contents.contains("case observe("))
         #expect(reducer.contents.contains("case sleep("))
@@ -110,8 +117,9 @@ import Testing
 
     @Test func `heist wait receipt is the single typed wait result source`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistWaitExecution.swift")
-        let receipt = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+HeistWaitReceipt\b"#),
+        let receipt = try source.requiredBlock(
+            .structure("HeistWaitReceipt"),
+            message:
             "The wait pipeline should expose one canonical typed receipt"
         )
         let predicateWait = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
@@ -144,20 +152,23 @@ import Testing
 
     @Test func `post action receipts use explicit observation outcome`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
-        let observationOutcome = try #require(
-            try source.firstBlock(matching: #"\benum\s+ObservationOutcome\b"#),
+        let observationOutcome = try source.requiredBlock(
+            .enumeration("ObservationOutcome"),
+            message:
             "PostActionObservation should declare an explicit observation outcome enum"
         )
         let receiptBuilder = try #require(
             try source.firstBlock(matching: #"\binit\s*\(\s*postActionMethod\s+method:\s+ActionMethod\b"#),
             "Post-action receipt construction should be a typed ActionResult initializer"
         )
-        let receiptState = try #require(
-            try source.firstBlock(matching: #"\benum\s+PostActionReceiptState\b"#),
+        let receiptState = try source.requiredBlock(
+            .enumeration("PostActionReceiptState"),
+            message:
             "Post-action receipt construction should reduce through one typed receipt state"
         )
-        let settleEvidence = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+PostActionReceiptSettleEvidence\b"#),
+        let settleEvidence = try source.requiredBlock(
+            .structure("PostActionReceiptSettleEvidence"),
+            message:
             "Post-action settle fields should be grouped in immutable receipt evidence"
         )
 
@@ -215,8 +226,9 @@ import Testing
 
     @Test func `post action screen change pruning returns explicit effect`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
-        let refinement = try #require(
-            try source.firstBlock(matching: #"\benum\s+FinalStateRefinement\b"#),
+        let refinement = try source.requiredBlock(
+            .enumeration("FinalStateRefinement"),
+            message:
             "PostActionObservation should model final-state refinement as a typed value or effect"
         )
         let finalSemanticEvidence = try #require(
@@ -284,12 +296,14 @@ import Testing
 
     @Test func `text input focus result is a sum type with targeted success evidence`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Actions+TextInputActions.swift")
-        let focusResult = try #require(
-            try source.firstBlock(matching: #"\bprivate\s+enum\s+TextInputFocusResult\b"#),
+        let focusResult = try source.requiredBlock(
+            .enumeration("TextInputFocusResult"),
+            message:
             "TextInputFocusResult should be an enum, not an optional product bag"
         )
-        let focusedInput = try #require(
-            try source.firstBlock(matching: #"\bprivate\s+struct\s+FocusedTextInput\b"#),
+        let focusedInput = try source.requiredBlock(
+            .structure("FocusedTextInput"),
+            message:
             "Targeted focus success should carry a dedicated payload"
         )
         let executeTypeText = try #require(
@@ -331,12 +345,14 @@ import Testing
     @Test func `container scroll resolution failures are typed before diagnostic projection`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+ScrollContainers.swift")
         let pageScroll = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+PageScroll.swift")
-        let resolution = try #require(
-            try source.firstBlock(matching: #"\benum\s+ContainerScrollResolution\b"#),
+        let resolution = try source.requiredBlock(
+            .enumeration("ContainerScrollResolution"),
+            message:
             "ContainerScrollResolution should be a typed result enum"
         )
-        let failure = try #require(
-            try source.firstBlock(matching: #"\benum\s+ContainerScrollFailure\b"#),
+        let failure = try source.requiredBlock(
+            .enumeration("ContainerScrollFailure"),
+            message:
             "Container scroll failures should be represented as cases, not raw diagnostic strings"
         )
         let resolver = try #require(
@@ -387,32 +403,4 @@ private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {
             "\(source.relativePath) should stay pure and effect-free; found \(forbidden)"
         )
     }
-}
-
-private func expectType(
-    _ typeName: String,
-    in source: SourceShapeFile,
-    conformsTo conformances: [String]
-) throws {
-    let declaration = try #require(
-        try declaration(named: typeName, in: source),
-        "\(source.relativePath) should declare \(typeName) with explicit conformances"
-    )
-    for conformance in conformances {
-        #expect(
-            declaration.contains(conformance),
-            "\(typeName) should conform to \(conformance) in \(source.relativePath)"
-        )
-    }
-}
-
-private func declaration(
-    named typeName: String,
-    in source: SourceShapeFile
-) throws -> String? {
-    let escapedType = NSRegularExpression.escapedPattern(for: typeName)
-    return try source.matches(
-        of: #"\b(?:struct|enum)\s+\#(escapedType)\s*:\s*[^{}]+"#,
-        options: [.dotMatchesLineSeparators]
-    ).first
 }

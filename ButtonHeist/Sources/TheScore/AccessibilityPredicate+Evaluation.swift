@@ -229,37 +229,46 @@ fileprivate extension AccessibilityPredicate.Change {
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, predicate: nil, actual: "no element updates")
         }
-        for edit in updates {
-            if let element = update.element {
-                guard element.matches(edit.before) || element.matches(edit.after) else { continue }
-            }
-            var targetChanges = edit.changes
-            if let change = update.change {
-                targetChanges = targetChanges.filter { propertyChange($0, matches: change) }
-                guard !targetChanges.isEmpty else { continue }
-            }
+        if let matchedUpdate = updates.lazy.compactMap({ $0.matching(update) }).first {
             return ExpectationResult(
                 met: true,
                 predicate: nil,
-                actual: Self.describeUpdate(edit, changes: targetChanges)
+                actual: matchedUpdate.description
             )
         }
-        let observed = updates.map { edit in
-            Self.describeUpdate(edit, changes: edit.changes)
-        }.joined(separator: "; ")
+        let observed = updates.map(\.description).joined(separator: "; ")
         return ExpectationResult(met: false, predicate: nil, actual: observed)
     }
+}
 
-    private static func propertyChange(
-        _ observed: PropertyChange,
-        matches change: AnyPropertyChange
-    ) -> Bool {
-        observed.satisfies(change)
+private struct MatchedElementUpdate: Sendable {
+    let update: ElementUpdate
+    let changes: [PropertyChange]
+
+    var description: String {
+        update.describe(changes: changes)
+    }
+}
+
+private extension ElementUpdate {
+    func matching(_ predicate: ElementUpdatePredicate) -> MatchedElementUpdate? {
+        if let element = predicate.element {
+            guard element.matches(before) || element.matches(after) else { return nil }
+        }
+        let matchingChanges = predicate.change.map { change in
+            changes.filter { $0.satisfies(change) }
+        } ?? changes
+        guard predicate.change == nil || !matchingChanges.isEmpty else { return nil }
+        return MatchedElementUpdate(update: self, changes: matchingChanges)
     }
 
-    private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {
+    var description: String {
+        describe(changes: changes)
+    }
+
+    func describe(changes: [PropertyChange]) -> String {
         let properties = changes.map { "\($0.property.rawValue): \($0.displayTransition)" }
-        let name = edit.after.label ?? edit.before.label ?? edit.after.description
+        let name = after.label ?? before.label ?? after.description
         return "\(name): \(properties.joined(separator: ", "))"
     }
 }

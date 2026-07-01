@@ -63,4 +63,37 @@ import Testing
             }
         }
     }
+
+    @Test func `shared SourceShapeProbe reads typed declarations`() throws {
+        let source = SourceShapeFile(
+            relativePath: "Fixture.swift",
+            contents: """
+            public struct TypedResult: Sendable, Equatable {
+                let value: Int
+            }
+
+            private enum RuntimeState {
+                case idle
+            }
+            """
+        )
+
+        try source.requireDeclaration(.type("TypedResult", conformingTo: ["Sendable", "Equatable"]))
+        let state = try source.requiredBlock(.enumeration("RuntimeState"))
+
+        #expect(state.contents.contains("case idle"))
+
+        do {
+            try source.requireDeclaration(.structure("TypedResult", conformingTo: ["Codable"]))
+            Issue.record("Expected missing conformance")
+        } catch let error as SourceShapeProbeError {
+            #expect(
+                error == .missingConformance(
+                    .structure("TypedResult", conformingTo: ["Codable"]),
+                    conformance: "Codable",
+                    relativePath: "Fixture.swift"
+                )
+            )
+        }
+    }
 }

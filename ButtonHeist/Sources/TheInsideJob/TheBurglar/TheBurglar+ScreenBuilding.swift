@@ -46,10 +46,6 @@ extension TheBurglar {
     ) -> ScreenBuildProjection {
         let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
-        let contextsByPath = buildElementContextsByPath(
-            hierarchy: hierarchy,
-            scrollableContainerPaths: facts.scroll.contextContainerPaths
-        )
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerPaths: facts.scroll.contextContainerPaths
@@ -72,13 +68,9 @@ extension TheBurglar {
         for (indexedElement, heistId) in zip(indexedElements, resolvedHeistIds) {
             let parsedElement = indexedElement.element
             let path = indexedElement.path
-            let context = contextsByPath[path]
-            let scrollMembership = scrollMembership(
-                context?.scrollMembership,
-                path: path,
-                facts: facts
-            )
-            let observedScrollContentActivationPoint = facts.activationPoints.element(at: path)
+            let scrollFacts = facts.scroll.element(at: path)
+            let scrollMembership = scrollFacts?.membership
+            let observedScrollContentActivationPoint = scrollFacts?.observedScrollContentActivationPoint
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 scrollMembership: scrollMembership,
@@ -99,7 +91,7 @@ extension TheBurglar {
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: result.objectsByPath[path],
-                scrollView: (context?.scrollMembership).flatMap { membership in
+                scrollView: scrollMembership.flatMap { membership in
                     result.scrollViewsByPath[membership.containerPath]
                 }
             )
@@ -127,7 +119,7 @@ extension TheBurglar {
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: facts.activationPoints.containerByPath,
+            containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
             scrollInventoriesByPath: facts.scroll.inventoriesByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
@@ -181,21 +173,6 @@ extension TheBurglar {
                 children: mappedChildren
             )
         }
-    }
-
-    private static func scrollMembership(
-        _ membership: Screen.ScrollMembership?,
-        path: TreePath,
-        facts: ScreenBuildFacts
-    ) -> Screen.ScrollMembership? {
-        guard let membership else { return nil }
-        return Screen.ScrollMembership(
-            containerPath: membership.containerPath,
-            index: facts.scroll.index(
-                forElementAt: path,
-                in: membership.containerPath
-            )
-        )
     }
 
     private static func logScreenBuildEvents(_ events: [ScreenBuildLogEvent]) {

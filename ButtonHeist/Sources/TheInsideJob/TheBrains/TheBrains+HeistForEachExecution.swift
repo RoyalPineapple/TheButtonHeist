@@ -240,18 +240,14 @@ extension TheBrains {
             targetSummary: currentElement.description,
             failureReason: children.abortedAtChildPath.map { "child failed at \($0)" }
         ))
-        let outcome: HeistReceiptOutcome<HeistStepEvidence>
-        switch children {
-        case .completed(let completed):
-            outcome = .passed(evidence: evidence, children: completed)
-        case .childAborted(let childAbort):
-            outcome = .childAborted(
-                evidence: evidence,
-                failure: childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
-                children: childAbort
-            )
-        }
-        return heistLoopIterationReceipt(
+        let outcome = HeistReceiptOutcome(
+            evidence: evidence,
+            children: children,
+            childFailure: { childAbort in
+                childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
+            }
+        )
+        return heistLoopReceipt(
             path: path,
             kind: .forEachIteration,
             durationMs: elapsedMilliseconds(since: start),
@@ -342,18 +338,14 @@ extension TheBrains {
                 value: value,
                 failureReason: iterationChildren.abortedAtChildPath.map { "child failed at \($0)" }
             ))
-            let outcome: HeistReceiptOutcome<HeistStepEvidence>
-            switch iterationChildren {
-            case .completed(let completed):
-                outcome = .passed(evidence: evidence, children: completed)
-            case .childAborted(let childAbort):
-                outcome = .childAborted(
-                    evidence: evidence,
-                    failure: childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
-                    children: childAbort
-                )
-            }
-            iterationNodes.append(heistLoopIterationReceipt(
+            let outcome = HeistReceiptOutcome(
+                evidence: evidence,
+                children: iterationChildren,
+                childFailure: { childAbort in
+                    childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
+                }
+            )
+            iterationNodes.append(heistLoopReceipt(
                 path: iterationPath,
                 kind: .forEachIteration,
                 durationMs: elapsedMilliseconds(since: iterationStart),
@@ -413,33 +405,24 @@ extension TheBrains {
         contract: String,
         expected: String
     ) -> HeistReceiptOutcome<HeistStepEvidence> {
-        switch outcome.iterationChildren {
-        case .completed(let completed):
-            guard let failureReason = outcome.failureReason else {
-                return .passed(evidence: evidence, children: completed)
-            }
-            return .failed(
-                evidence: evidence,
-                failure: HeistFailureDetail(
-                    category: .loop,
-                    contract: contract,
-                    observed: failureReason,
-                    expected: expected
-                ),
-                children: completed
-            )
-        case .childAborted(let childAbort):
-            return .childAborted(
-                evidence: evidence,
-                failure: HeistFailureDetail(
-                    category: .loop,
-                    contract: contract,
-                    observed: outcome.failureReason ?? "child failed at \(childAbort.abortedAtChildPath)",
-                    expected: expected
-                ),
-                children: childAbort
+        func failure(observed: String) -> HeistFailureDetail {
+            HeistFailureDetail(
+                category: .loop,
+                contract: contract,
+                observed: observed,
+                expected: expected
             )
         }
+        return HeistReceiptOutcome(
+            evidence: evidence,
+            children: outcome.iterationChildren,
+            completedOutcome: HeistReceiptCompletedOutcome(
+                failure: outcome.failureReason.map { failure(observed: $0) }
+            ),
+            childFailure: { childAbort in
+                failure(observed: outcome.failureReason ?? "child failed at \(childAbort.abortedAtChildPath)")
+            }
+        )
     }
 
     private func forEachUnavailableResult(

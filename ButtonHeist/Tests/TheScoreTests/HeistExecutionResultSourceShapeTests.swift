@@ -7,16 +7,19 @@ import Testing
 
     @Test func `step receipt construction uses typed outcomes instead of optional status bags`() throws {
         let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult.swift")
-        let stepType = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+HeistExecutionStepResult\b"#),
+        let stepType = try source.requiredBlock(
+            .structure("HeistExecutionStepResult"),
+            message:
             "HeistExecutionStepResult should remain the canonical receipt node type"
         )
-        let failedOutcome = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+HeistExecutionStepFailedOutcome\b"#),
+        let failedOutcome = try source.requiredBlock(
+            .structure("HeistExecutionStepFailedOutcome"),
+            message:
             "Failed receipt nodes should use a named failure outcome"
         )
-        let childAbortedOutcome = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+HeistExecutionStepChildAbortedOutcome\b"#),
+        let childAbortedOutcome = try source.requiredBlock(
+            .structure("HeistExecutionStepChildAbortedOutcome"),
+            message:
             "Child-aborted receipt nodes should use a named outcome"
         )
         let failedFactory = try #require(
@@ -53,8 +56,9 @@ import Testing
 
     @Test func `action warning dispatch evidence requires a concrete command`() throws {
         let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult.swift")
-        let actionEvidence = try #require(
-            try source.firstBlock(matching: #"\bstruct\s+HeistActionEvidence\b"#),
+        let actionEvidence = try source.requiredBlock(
+            .structure("HeistActionEvidence"),
+            message:
             "HeistActionEvidence should remain the canonical action evidence type"
         )
 

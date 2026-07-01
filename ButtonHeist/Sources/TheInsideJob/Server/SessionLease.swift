@@ -115,7 +115,7 @@ struct SessionLease {
         activeSessionConnections.count
     }
 
-    mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
+    mutating func acquire(driverIdentity: String, clientId: Int, at now: Date) -> Acquisition {
         switch phase {
         case .idle:
             phase = .active(driverId: driverIdentity, clientId: clientId)
@@ -134,7 +134,7 @@ struct SessionLease {
         case .draining(let driverId, let releaseDeadline):
             return .rejected(.drainingOwner(
                 owner: ownerIdentity(from: driverId),
-                remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(Date()))
+                remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(now))
             ))
         }
     }
@@ -145,23 +145,16 @@ struct SessionLease {
         return hadSession ? .releasedSession : .noActiveSession
     }
 
-    mutating func removeConnection(_ clientId: Int) -> ConnectionRemoval {
+    mutating func removeConnection(_ clientId: Int, at now: Date) -> ConnectionRemoval {
         guard case .active(let driverId, let activeClientId) = phase else {
             return .unchanged
         }
         guard activeClientId == clientId else {
             return .active
         }
-        let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
+        let releaseDeadline = now.addingTimeInterval(releaseTimeout)
         phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
         return .draining(releaseDeadline: releaseDeadline)
-    }
-
-    mutating func resetInactivityTimer() -> Date? {
-        guard case .draining(let driverId, _) = phase else { return nil }
-        let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
-        phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
-        return releaseDeadline
     }
 
     private func exposedDriverId(from driverIdentity: String) -> String? {

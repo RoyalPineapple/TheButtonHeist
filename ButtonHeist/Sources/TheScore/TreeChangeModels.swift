@@ -183,6 +183,23 @@ public extension ElementPropertyValueKind {
     }
 }
 
+public protocol ElementTextPropertyValueKind: ElementPropertyValueKind where Value == String, Checker == StringMatch<String> {}
+
+public extension ElementTextPropertyValueKind {
+    static func displayText(for value: String) -> String {
+        value
+    }
+
+    static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
+        guard let value else { return false }
+        return checker.matches(value)
+    }
+
+    static func erasedValue(_ value: String) -> ElementPropertyValue {
+        .text(value)
+    }
+}
+
 public struct ElementPropertyValueChange<P: ElementPropertyValueKind>: Codable, Sendable {
     public let old: P.Value?
     public let new: P.Value?
@@ -543,9 +560,7 @@ extension PropertyChange {
     }
 }
 
-extension ValueProperty: ElementPropertyValueKind {
-    public typealias Value = String
-
+extension ValueProperty: ElementTextPropertyValueKind {
     public static func value(in element: HeistElement) -> String? {
         element.value
     }
@@ -555,27 +570,12 @@ extension ValueProperty: ElementPropertyValueKind {
         return expected
     }
 
-    public static func displayText(for value: String) -> String {
-        value
-    }
-
-    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(value)
-    }
-
-    public static func erasedValue(_ value: String) -> ElementPropertyValue {
-        .text(value)
-    }
-
     public static func change(old: String?, new: String?) -> PropertyChange {
         .value(old: old, new: new)
     }
 }
 
-extension LabelProperty: ElementPropertyValueKind {
-    public typealias Value = String
-
+extension LabelProperty: ElementTextPropertyValueKind {
     public static func value(in element: HeistElement) -> String? {
         element.label
     }
@@ -584,46 +584,18 @@ extension LabelProperty: ElementPropertyValueKind {
         nil
     }
 
-    public static func displayText(for value: String) -> String {
-        value
-    }
-
-    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(value)
-    }
-
-    public static func erasedValue(_ value: String) -> ElementPropertyValue {
-        .text(value)
-    }
-
     public static func change(old: String?, new: String?) -> PropertyChange {
         .label(old: old, new: new)
     }
 }
 
-extension IdentifierProperty: ElementPropertyValueKind {
-    public typealias Value = String
-
+extension IdentifierProperty: ElementTextPropertyValueKind {
     public static func value(in element: HeistElement) -> String? {
         element.identifier
     }
 
     public static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<Self>? {
         nil
-    }
-
-    public static func displayText(for value: String) -> String {
-        value
-    }
-
-    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(value)
-    }
-
-    public static func erasedValue(_ value: String) -> ElementPropertyValue {
-        .text(value)
     }
 
     public static func change(old: String?, new: String?) -> PropertyChange {
@@ -667,9 +639,7 @@ extension TraitsProperty: ElementPropertyValueKind {
     }
 }
 
-extension HintProperty: ElementPropertyValueKind {
-    public typealias Value = String
-
+extension HintProperty: ElementTextPropertyValueKind {
     public static func value(in element: HeistElement) -> String? {
         element.hint
     }
@@ -677,19 +647,6 @@ extension HintProperty: ElementPropertyValueKind {
     public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
         guard case .hint(let expected) = change else { return nil }
         return expected
-    }
-
-    public static func displayText(for value: String) -> String {
-        value
-    }
-
-    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(value)
-    }
-
-    public static func erasedValue(_ value: String) -> ElementPropertyValue {
-        .text(value)
     }
 
     public static func change(old: String?, new: String?) -> PropertyChange {

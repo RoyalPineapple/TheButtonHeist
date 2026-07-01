@@ -417,18 +417,17 @@ final class TheBurglarApplyTests: XCTestCase {
         let facts = TheBurglar.ScreenBuildFacts(
             scroll: TheBurglar.ScreenBuildScrollFacts(
                 contextContainerPaths: [scrollPath],
-                elementIndicesByPath: [
-                    .init(containerPath: scrollPath, elementPath: childPath): 7,
+                elementsByPath: [
+                    childPath: TheBurglar.ScreenBuildElementScrollFacts(
+                        containerPath: scrollPath,
+                        index: 7,
+                        observedScrollContentActivationPoint: observedElementPoint
+                    ),
+                ],
+                containerObservedScrollContentActivationPointsByPath: [
+                    nestedContainerPath: observedContainerPoint,
                 ],
                 inventoriesByPath: [scrollPath: inventory]
-            ),
-            activationPoints: TheBurglar.ScreenBuildScrollContentActivationPoints(
-                elementByPath: [
-                    childPath: observedElementPoint,
-                ],
-                containerByPath: [
-                    nestedContainerPath: observedContainerPoint,
-                ]
             )
         )
 
