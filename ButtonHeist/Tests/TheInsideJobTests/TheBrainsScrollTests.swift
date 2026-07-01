@@ -10,6 +10,7 @@ import UIKit
 final class TheBrainsScrollTests: XCTestCase {
 
     private var brains: TheBrains!
+    private var retainedLiveObjects: [NSObject] = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -22,7 +23,17 @@ final class TheBrainsScrollTests: XCTestCase {
         brains?.stopSemanticObservation()
         brains?.tripwire.stopPulse()
         brains = nil
+        retainedLiveObjects.removeAll()
         try await super.tearDown()
+    }
+
+    private func retainLiveObject<Object: NSObject>(_ object: Object) -> Object {
+        retainedLiveObjects.append(object)
+        return object
+    }
+
+    private func retainedLiveObject() -> NSObject {
+        retainLiveObject(NSObject())
     }
 
     private func observedContentActivationPoint(
@@ -1132,7 +1143,7 @@ final class TheBrainsScrollTests: XCTestCase {
             traits: .button,
             frame: recoveredFrame
         )
-        let recoveredObject = NSObject()
+        let recoveredObject = retainedLiveObject()
         let recoveredEntry = TheStash.ScreenElement(
             heistId: "target_button",
             scrollMembership: nil,
@@ -1167,6 +1178,84 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.screenElement.heistId, recoveredEntry.heistId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
+    }
+
+    func testKnownTargetWithMissingLiveScrollAncestorRecapturesVisibleActionableTarget() async {
+        let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let knownTarget = makeElement(label: "Coke", traits: .button)
+        installScreenWithKnownOffscreen(
+            visible: Screen.TestEntry(visible, heistId: "visible_element"),
+            offscreen: KnownOffscreenScrollTarget(
+                knownTarget,
+                heistId: "known_coke_button",
+                contentActivationPoint: CGPoint(x: 160, y: 1_200),
+                scrollView: staleScrollView
+            ),
+            includeLiveScrollAncestor: false,
+            scrollContainerPath: TreePath([99])
+        )
+
+        let comfortZone = ElementInflation.interactionComfortZone
+        let recoveredFrame = CGRect(
+            x: comfortZone.midX - 100,
+            y: comfortZone.midY - 22,
+            width: 200,
+            height: 44
+        )
+        let recoveredTarget = AccessibilityElement.make(
+            label: "Coke",
+            traits: .button,
+            frame: recoveredFrame
+        )
+        let recoveredObject = retainLiveObject(makeButton(label: "Coke", frame: recoveredFrame))
+        let scrollContainerPath = TreePath([0])
+        let recoveredEntry = TheStash.ScreenElement(
+            heistId: "current_coke_button",
+            scrollMembership: Screen.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            element: recoveredTarget
+        )
+        let recoveredScreen = Screen(
+            elements: [recoveredEntry.heistId: recoveredEntry],
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(recoveredTarget, traversalIndex: 0)
+                ])
+            ],
+            containerNamesByPath: [scrollContainerPath: "current_drinks_scroll"],
+            heistIdsByPath: [scrollContainerPath.appending(0): recoveredEntry.heistId],
+            elementRefs: [
+                recoveredEntry.heistId: .init(object: recoveredObject, scrollView: nil)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [:]
+        )
+        XCTAssertTrue(recoveredScreen.visibleIds.contains(recoveredEntry.heistId))
+        XCTAssertNotNil(recoveredScreen.liveCapture.object(for: recoveredEntry.heistId))
+        var revealAttempts = 0
+        brains.navigation.elementInflation.revealKnownTarget = { _ in
+            revealAttempts += 1
+            self.brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+            return nil
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "activation dispatch"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected current visible target recovery, got \(result)")
+        }
+        XCTAssertEqual(revealAttempts, 1)
+        XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, recoveredEntry.heistId)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
+        XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
+        XCTAssertNil(brains.stash.liveScrollView(for: inflatedTarget.screenElement))
     }
 
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {

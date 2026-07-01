@@ -268,6 +268,18 @@ final class ElementInflation {
 
         let reveal = await revealSemanticTarget(treeElement)
         if case .failed(let failure) = reveal {
+            switch refreshedVisibleTargetResolution(target) {
+            case .success(let visible)?:
+                return .refreshing(
+                    target: target,
+                    screenElement: visible,
+                    didReveal: false
+                )
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                break
+            }
             return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
         }
         return .refreshing(
@@ -275,6 +287,13 @@ final class ElementInflation {
             screenElement: treeElement,
             didReveal: reveal.didReveal
         )
+    }
+
+    private func refreshedVisibleTargetResolution(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
+        guard stash.refreshCurrentVisibleTree() != nil else { return nil }
+        return visibleTargetResolution(target)
     }
 
     private func stateAfterRefresh(
