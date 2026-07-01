@@ -1,5 +1,7 @@
 import os
 
+import ButtonHeistSupport
+
 enum ReadyConnectionAcceptance: Equatable, Sendable {
     case registered(clientId: Int)
     case rejected

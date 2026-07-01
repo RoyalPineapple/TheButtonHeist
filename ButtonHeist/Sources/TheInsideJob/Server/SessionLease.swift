@@ -1,5 +1,6 @@
 import Foundation
 
+import ButtonHeistSupport
 import TheScore
 
 /// Explicit session lease state machine for ButtonHeist driver ownership.

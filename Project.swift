@@ -23,6 +23,18 @@ let project = Project(
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [
+        // MARK: - Package-Internal Shared Support
+        .target(
+            name: "ButtonHeistSupport",
+            destinations: [.iPhone, .iPad, .mac],
+            product: .framework,
+            bundleId: "com.buttonheist.support",
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/ButtonHeistSupport/**"],
+            dependencies: []
+        ),
+
         // MARK: - Pure Heist Language
         .target(
             name: "ThePlans",
@@ -96,6 +108,7 @@ let project = Project(
             ),
 
             dependencies: [
+                .target(name: "ButtonHeistSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotParser"),
@@ -144,6 +157,20 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TestSupport/**"],
             dependencies: []
+        ),
+
+        // MARK: - ButtonHeistSupport Tests
+        .target(
+            name: "ButtonHeistSupportTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.buttonheist.support.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/ButtonHeistSupportTests/**"],
+            dependencies: [
+                .target(name: "ButtonHeistSupport"),
+            ]
         ),
 
         // MARK: - ThePlans Tests
@@ -237,9 +264,20 @@ let project = Project(
         frameworkScheme(name: "TheScore"),
         frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
+        frameworkScheme(name: "ButtonHeistSupport"),
         frameworkScheme(name: "ButtonHeistTesting"),
         frameworkScheme(name: "ButtonHeistTestSupport"),
         frameworkScheme(name: "TheInsideJob"),
+        .scheme(
+            name: "ButtonHeistSupportTests",
+            buildAction: .buildAction(targets: [
+                .target("ButtonHeistSupportTests"),
+                .target("ButtonHeistSupport"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("ButtonHeistSupportTests")),
+            ])
+        ),
         .scheme(
             name: "ThePlansTests",
             buildAction: .buildAction(targets: [

@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import TheScore
 
 struct PredicatePollingReducer: Sendable, Equatable {

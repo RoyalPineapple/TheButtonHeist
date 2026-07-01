@@ -25,6 +25,12 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "ButtonHeistSupport",
+            dependencies: [],
+            path: "Sources/ButtonHeistSupport",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
             name: "ThePlans",
             dependencies: [],
             path: "Sources/ThePlans",
@@ -86,6 +92,7 @@ let package = Package(
         .target(
             name: "TheInsideJob",
             dependencies: [
+                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
                 .product(
@@ -133,6 +140,12 @@ let package = Package(
             name: "TheScoreTests",
             dependencies: ["ButtonHeistTestSupport", "ThePlans", "TheScore"],
             path: "Tests/TheScoreTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .testTarget(
+            name: "ButtonHeistSupportTests",
+            dependencies: ["ButtonHeistSupport"],
+            path: "Tests/ButtonHeistSupportTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(

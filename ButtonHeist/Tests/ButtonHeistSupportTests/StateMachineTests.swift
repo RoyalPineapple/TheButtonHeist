@@ -1,5 +1,5 @@
 import XCTest
-@testable import TheInsideJob
+@testable import ButtonHeistSupport
 
 final class StateMachineTests: XCTestCase {
     func testDriverAppliesChangedTransitionEffectsAndState() {
