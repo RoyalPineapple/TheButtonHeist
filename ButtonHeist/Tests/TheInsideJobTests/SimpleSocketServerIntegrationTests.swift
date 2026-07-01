@@ -64,6 +64,33 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(admission.recordReady(), .ignore)
     }
 
+    func testConnectionAdmissionIgnoresDuplicateReadyDuringAcceptance() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertEqual(admission.recordReady(), .accept)
+        XCTAssertEqual(admission.recordReady(), .ignore)
+        XCTAssertEqual(
+            admission.recordAcceptance(.registered(clientId: 7)),
+            .keepRegisteredClient
+        )
+        XCTAssertEqual(admission.recordCancellation(), .removeRegisteredClient(7))
+    }
+
+    func testConnectionAdmissionIgnoresAcceptanceBeforeReady() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertEqual(
+            admission.recordAcceptance(.registered(clientId: 7)),
+            .noRegisteredClient
+        )
+        XCTAssertEqual(admission.recordReady(), .accept)
+        XCTAssertEqual(
+            admission.recordAcceptance(.registered(clientId: 8)),
+            .keepRegisteredClient
+        )
+        XCTAssertEqual(admission.recordCancellation(), .removeRegisteredClient(8))
+    }
+
     // MARK: - ServerPhase transitions
 
     func testStartTransitionsToListening() async throws {

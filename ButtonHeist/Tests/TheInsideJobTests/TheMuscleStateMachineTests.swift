@@ -142,6 +142,53 @@ final class TheMuscleStateMachineTests: XCTestCase {
         }
     }
 
+    func testSessionLeaseRejoinsDuringGracePeriod() {
+        var lease = SessionLease(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        guard case .accepted(.claimedSession) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 1,
+            at: now
+        ) else {
+            return XCTFail("Expected first driver to claim the session")
+        }
+        guard case .draining = lease.removeConnection(1, at: now) else {
+            return XCTFail("Expected final connection removal to start draining")
+        }
+
+        guard case .accepted(.rejoinedDuringGracePeriod) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 2,
+            at: now.addingTimeInterval(5)
+        ) else {
+            return XCTFail("Expected active driver to rejoin during the grace period")
+        }
+        XCTAssertEqual(lease.activeSessionDriverId, "driver:alpha")
+        XCTAssertEqual(lease.exposedActiveDriverId, "alpha")
+        XCTAssertEqual(lease.activeSessionConnections, [2])
+    }
+
+    func testSessionLeaseReleaseReportsIdleAndActiveOutcomes() {
+        var lease = SessionLease(releaseTimeout: 30)
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        XCTAssertEqual(lease.release(), .noActiveSession)
+
+        guard case .accepted(.claimedSession) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 1,
+            at: now
+        ) else {
+            return XCTFail("Expected first driver to claim the session")
+        }
+
+        XCTAssertEqual(lease.release(), .releasedSession)
+        XCTAssertNil(lease.activeSessionDriverId)
+        XCTAssertEqual(lease.activeSessionConnections, [])
+        XCTAssertEqual(lease.release(), .noActiveSession)
+    }
+
     #if canImport(UIKit)
     func testMuscleSessionMutationsReturnTypedEffects() {
         var session = TheMuscleSession(releaseTimeout: 30)
@@ -278,6 +325,18 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertFalse(try leaseSource.containsMatch(#"\bDate\s*\(\s*\)"#))
         XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+acquire\s*\([^)]*\bat\s+now:\s*Date"#))
         XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+removeConnection\s*\([^)]*\bat\s+now:\s*Date"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\bstruct\s+Machine\s*:\s*SimpleStateMachine\b"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Event\b"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Effect\b"#))
+        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Rejection\b"#))
+        XCTAssertTrue(leaseSource.contents.contains("case acquire(driverIdentity: String, clientId: Int, at: Date)"))
+        XCTAssertTrue(leaseSource.contents.contains("case removeConnection(clientId: Int, at: Date)"))
+        XCTAssertTrue(leaseSource.contents.contains("case acquisition(AcquisitionEffect)"))
+        XCTAssertTrue(leaseSource.contents.contains("case release(ReleaseEffect)"))
+        XCTAssertTrue(leaseSource.contents.contains("case connectionRemoval(ConnectionRemoval)"))
+        XCTAssertTrue(leaseSource.contents.contains("case acquisition(SessionLockDiagnostic)"))
+        XCTAssertTrue(leaseSource.contents.contains("StateDriver<Machine>"))
+        XCTAssertTrue(leaseSource.contents.contains("switch (state, event)"))
         XCTAssertTrue(leaseSource.contents.contains("releaseDeadline.timeIntervalSince(now)"))
     }
 

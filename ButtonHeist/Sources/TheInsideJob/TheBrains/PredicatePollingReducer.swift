@@ -1,10 +1,18 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import TheScore
 
 struct PredicatePollingReducer: Sendable, Equatable {
     let timeout: Double
     let pollWhenTimeoutZero: Bool
+
+    private var lifecycleMachine: PredicatePollingLifecycleMachine {
+        PredicatePollingLifecycleMachine(
+            timeout: timeout,
+            pollWhenTimeoutZero: pollWhenTimeoutZero
+        )
+    }
 
     func start(
         scope: SemanticObservationScope,
@@ -12,7 +20,7 @@ struct PredicatePollingReducer: Sendable, Equatable {
         initialVisibleFingerprint: PredicateVisibleFingerprint = .unknown,
         discoveryBootstrap: PredicateDiscoveryBootstrap = .ifNoObservation
     ) -> PredicatePollingReduction {
-        var state = PredicatePollingState(
+        let state = PredicatePollingState(
             observedSequence: initialObservedSequence,
             initialVisibleFingerprint: initialVisibleFingerprint,
             scope: scope,
@@ -21,19 +29,32 @@ struct PredicatePollingReducer: Sendable, Equatable {
             )
         )
 
-        guard timeout > 0 || pollWhenTimeoutZero else {
-            state.finish()
-            return PredicatePollingReduction(state: state, effect: .finish(.notPolled))
-        }
-
-        return beginVisibleTick(state)
+        return lifecycleMachine.advance(state, with: .begin).reduction
     }
 
     func reduce(
         _ state: PredicatePollingState,
         event: PredicatePollingEvent
     ) -> PredicatePollingReduction {
+        lifecycleMachine.advance(state, with: PredicatePollingLifecycleEvent(event)).reduction
+    }
+}
+
+private struct PredicatePollingLifecycleMachine: SimpleStateMachine, Equatable {
+    let timeout: Double
+    let pollWhenTimeoutZero: Bool
+
+    func advance(
+        _ state: PredicatePollingState,
+        with event: PredicatePollingLifecycleEvent
+    ) -> PredicatePollingLifecycleChange {
         switch event {
+        case .begin:
+            guard timeout > 0 || pollWhenTimeoutZero else {
+                return finish(state, reason: .notPolled)
+            }
+            return beginVisibleTick(state)
+
         case .visibleObserved(let observation, let timing):
             return reduceVisibleObserved(observation, timing: timing, state: state)
         case .visibleUnavailable(let timing):
@@ -52,14 +73,14 @@ struct PredicatePollingReducer: Sendable, Equatable {
         }
     }
 
-    private func beginVisibleTick(_ state: PredicatePollingState) -> PredicatePollingReduction {
+    private func beginVisibleTick(_ state: PredicatePollingState) -> PredicatePollingLifecycleChange {
         var nextState = state
         let context = PredicateVisibleTickContext(
             allowSettledWait: timeout > 0 && nextState.nextProbe != .discovery
         )
         nextState.beginImmediateVisibleTick(context)
-        return PredicatePollingReduction(
-            state: nextState,
+        return change(
+            to: nextState,
             effect: .observe(.visibleImmediate(after: nextState.observedSequence))
         )
     }
@@ -68,7 +89,7 @@ struct PredicatePollingReducer: Sendable, Equatable {
         _ observation: PredicatePollingVisibleObservation,
         timing: PredicatePollingTickTiming,
         state: PredicatePollingState
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         var nextState = state
         nextState.recordObservedSequence(observation.sequence)
 
@@ -93,8 +114,8 @@ struct PredicatePollingReducer: Sendable, Equatable {
                     immediateObservation: observation
                 )
             )
-            return PredicatePollingReduction(
-                state: nextState,
+            return change(
+                to: nextState,
                 effect: .observe(.visibleSettled(
                     after: nextState.observedSequence,
                     timeout: visibleSettledTimeout(remaining: timing.remaining)
@@ -109,14 +130,14 @@ struct PredicatePollingReducer: Sendable, Equatable {
             )
 
         case .idle, .awaitingDiscovery, .sleeping, .finished:
-            return PredicatePollingReduction(state: nextState, effect: .finish(.timedOut))
+            return change(to: nextState, effect: .finish(.timedOut))
         }
     }
 
     private func reduceVisibleUnavailable(
         timing: PredicatePollingTickTiming,
         state: PredicatePollingState
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         var nextState = state
         switch nextState.phase {
         case .awaitingImmediateVisible(let context):
@@ -128,8 +149,8 @@ struct PredicatePollingReducer: Sendable, Equatable {
                     immediateObservation: nil
                 )
             )
-            return PredicatePollingReduction(
-                state: nextState,
+            return change(
+                to: nextState,
                 effect: .observe(.visibleSettled(
                     after: nextState.observedSequence,
                     timeout: visibleSettledTimeout(remaining: timing.remaining)
@@ -147,7 +168,7 @@ struct PredicatePollingReducer: Sendable, Equatable {
             return finishAfterVisibleTick(.unavailable, state: nextState, timing: timing)
 
         case .idle, .awaitingDiscovery, .sleeping, .finished:
-            return PredicatePollingReduction(state: nextState, effect: .finish(.timedOut))
+            return change(to: nextState, effect: .finish(.timedOut))
         }
     }
 
@@ -155,7 +176,7 @@ struct PredicatePollingReducer: Sendable, Equatable {
         _ tick: PredicateVisibleTick,
         state: PredicatePollingState,
         timing: PredicatePollingTickTiming
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         var nextState = state
         nextState.recordVisibleTick(tick)
 
@@ -168,8 +189,8 @@ struct PredicatePollingReducer: Sendable, Equatable {
         }
 
         nextState.beginDiscoveryProbe()
-        return PredicatePollingReduction(
-            state: nextState,
+        return change(
+            to: nextState,
             effect: .observe(.discovery(
                 after: nextState.observedSequence,
                 timeout: discoveryTimeout(remaining: timing.remaining)
@@ -181,7 +202,7 @@ struct PredicatePollingReducer: Sendable, Equatable {
         _ observation: PredicatePollingDiscoveryObservation,
         timing: PredicatePollingTickTiming,
         state: PredicatePollingState
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         var nextState = state
         nextState.recordObservedSequence(observation.sequence)
         nextState.recordDiscoveryProbe()
@@ -195,14 +216,14 @@ struct PredicatePollingReducer: Sendable, Equatable {
     private func reduceDiscoveryUnavailable(
         timing: PredicatePollingTickTiming,
         state: PredicatePollingState
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         continueAfterTick(state, timing: timing)
     }
 
     private func continueAfterTick(
         _ state: PredicatePollingState,
         timing: PredicatePollingTickTiming
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         guard timeout > 0 else {
             return finish(state, reason: .timedOut)
         }
@@ -220,8 +241,8 @@ struct PredicatePollingReducer: Sendable, Equatable {
 
         var nextState = state
         nextState.beginSleep()
-        return PredicatePollingReduction(
-            state: nextState,
+        return change(
+            to: nextState,
             effect: .sleep(PredicatePollingSleep(duration: sleepSeconds))
         )
     }
@@ -229,10 +250,17 @@ struct PredicatePollingReducer: Sendable, Equatable {
     private func finish(
         _ state: PredicatePollingState,
         reason: PredicatePollingFinish
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingLifecycleChange {
         var nextState = state
         nextState.finish()
-        return PredicatePollingReduction(state: nextState, effect: .finish(reason))
+        return change(to: nextState, effect: .finish(reason))
+    }
+
+    private func change(
+        to state: PredicatePollingState,
+        effect: PredicatePollingEffect
+    ) -> PredicatePollingLifecycleChange {
+        .changed(to: state, effects: [effect])
     }
 
     private func visibleSettledTimeout(remaining: Double) -> Double {
@@ -241,6 +269,58 @@ struct PredicatePollingReducer: Sendable, Equatable {
 
     private func discoveryTimeout(remaining: Double) -> Double {
         min(max(0, remaining), SemanticObservationTiming.defaultTimeout)
+    }
+}
+
+private typealias PredicatePollingLifecycleChange = StateChange<
+    PredicatePollingState,
+    PredicatePollingEffect,
+    PredicatePollingLifecycleRejection
+>
+
+private enum PredicatePollingLifecycleEvent: Sendable, Equatable {
+    case begin
+    case visibleObserved(PredicatePollingVisibleObservation, timing: PredicatePollingTickTiming)
+    case visibleUnavailable(timing: PredicatePollingTickTiming)
+    case discoveryObserved(PredicatePollingDiscoveryObservation, timing: PredicatePollingTickTiming)
+    case discoveryUnavailable(timing: PredicatePollingTickTiming)
+    case sleepCompleted(remaining: Double)
+    case sleepCancelled
+
+    init(_ event: PredicatePollingEvent) {
+        switch event {
+        case .visibleObserved(let observation, let timing):
+            self = .visibleObserved(observation, timing: timing)
+        case .visibleUnavailable(let timing):
+            self = .visibleUnavailable(timing: timing)
+        case .discoveryObserved(let observation, let timing):
+            self = .discoveryObserved(observation, timing: timing)
+        case .discoveryUnavailable(let timing):
+            self = .discoveryUnavailable(timing: timing)
+        case .sleepCompleted(let remaining):
+            self = .sleepCompleted(remaining: remaining)
+        case .sleepCancelled:
+            self = .sleepCancelled
+        }
+    }
+}
+
+private enum PredicatePollingLifecycleRejection: Sendable, Equatable {}
+
+private extension StateChange
+where State == PredicatePollingState,
+      Effect == PredicatePollingEffect,
+      Rejection == PredicatePollingLifecycleRejection {
+    var reduction: PredicatePollingReduction {
+        switch self {
+        case .changed(let state, _):
+            guard let effect = singleEffect else {
+                preconditionFailure("Predicate polling lifecycle must emit exactly one effect.")
+            }
+            return PredicatePollingReduction(state: state, effect: effect)
+        case .rejected(let rejection, _):
+            switch rejection {}
+        }
     }
 }
 

@@ -2,6 +2,7 @@
 #if DEBUG
 import Foundation
 
+import ButtonHeistSupport
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
@@ -170,17 +171,17 @@ extension TheBrains {
         }
     }
 
-    private enum HeistExecutionPhase: Equatable {
+    private enum HeistExecutionPhase: Equatable, Sendable {
         case ready
         case aborted(failedPath: String)
         case completed(abortedPath: String?)
     }
 
-    private enum HeistExecutionEffect: Equatable {
+    private enum HeistExecutionEffect: Equatable, Sendable {
         case captureFailureScreenshot(failedPath: String)
     }
 
-    private enum HeistExecutionTerminal: Equatable {
+    private enum HeistExecutionTerminal: Equatable, Sendable {
         case passed
         case failed(abortedPath: String, effects: [HeistExecutionEffect])
 
@@ -203,7 +204,7 @@ extension TheBrains {
         }
     }
 
-    private struct HeistExecutionTransitionRejection: Equatable {
+    private struct HeistExecutionTransitionRejection: Equatable, Sendable {
         let path: String
         let reason: String
 
@@ -243,14 +244,86 @@ extension TheBrains {
         }
     }
 
-    private enum HeistStepTransitionResult: Equatable {
+    private enum HeistStepTransitionResult: Equatable, Sendable {
         case accepted
         case rejected(HeistExecutionTransitionRejection)
     }
 
+    private enum HeistStepTransition: Equatable, Sendable {
+        case executed(HeistExecutionStepResult)
+        case skipped(HeistExecutionStepResult, abortedPath: String)
+
+        var path: String {
+            switch self {
+            case .executed(let result),
+                 .skipped(let result, _):
+                return result.path
+            }
+        }
+    }
+
+    private enum HeistStepLifecycleEvent: Equatable, Sendable {
+        case transition(HeistStepTransition)
+        case complete
+        case reject(HeistExecutionTransitionRejection, result: HeistExecutionStepResult)
+    }
+
+    private enum HeistStepLifecycleEffect: Equatable, Sendable {
+        case appendStep(HeistExecutionStepResult)
+    }
+
+    private typealias HeistStepLifecycleChange = StateChange<
+        HeistExecutionPhase,
+        HeistStepLifecycleEffect,
+        HeistExecutionTransitionRejection
+    >
+
+    private struct HeistStepLifecycleMachine: SimpleStateMachine {
+        func advance(_ state: HeistExecutionPhase, with event: HeistStepLifecycleEvent) -> HeistStepLifecycleChange {
+            switch (state, event) {
+            case (.ready, .transition(.executed(let result))):
+                return .changed(
+                    to: result.isFailure
+                        ? .aborted(failedPath: result.firstFailedStep?.path ?? result.path)
+                        : .ready,
+                    effects: [.appendStep(result)]
+                )
+            case (.aborted, .transition(.skipped(let result, let abortedPath))):
+                return .changed(
+                    to: .aborted(failedPath: abortedPath),
+                    effects: [.appendStep(result)]
+                )
+            case (.ready, .transition(let transition)):
+                return .rejected(.skipBeforeAbort(path: transition.path), stayingIn: state)
+            case (.aborted, .transition(let transition)):
+                return .rejected(.executeAfterAbort(path: transition.path), stayingIn: state)
+            case (.completed, .transition(let transition)):
+                return .rejected(.appendAfterCompletion(path: transition.path), stayingIn: state)
+            case (.ready, .complete):
+                return .changed(to: .completed(abortedPath: nil))
+            case (.aborted(let failedPath), .complete):
+                return .changed(to: .completed(abortedPath: failedPath))
+            case (.completed, .complete):
+                return .rejected(.completeTwice(path: "$.body"), stayingIn: state)
+            case (_, .reject(let rejection, let result)):
+                return .changed(
+                    to: .completed(abortedPath: rejection.path),
+                    effects: [.appendStep(result)]
+                )
+            }
+        }
+    }
+
     private struct HeistExecutionAccumulator {
         private(set) var steps: [HeistExecutionStepResult] = []
-        private(set) var phase: HeistExecutionPhase = .ready
+        private var lifecycle = StateDriver(
+            initial: HeistExecutionPhase.ready,
+            machine: HeistStepLifecycleMachine()
+        )
+
+        private var phase: HeistExecutionPhase {
+            lifecycle.state
+        }
 
         var abortedPath: String? {
             terminal?.abortedPath
@@ -286,62 +359,42 @@ extension TheBrains {
         }
 
         mutating func apply(_ transition: HeistStepTransition) -> HeistStepTransitionResult {
-            switch (phase, transition) {
-            case (.ready, .executed(let result)):
-                steps.append(result)
-                phase = result.isFailure
-                    ? .aborted(failedPath: result.firstFailedStep?.path ?? result.path)
-                    : .ready
-                return .accepted
-            case (.aborted, .skipped(let result, let abortedPath)):
-                steps.append(result)
-                phase = .aborted(failedPath: abortedPath)
-                return .accepted
-            case (.ready, .skipped):
-                return .rejected(.skipBeforeAbort(path: transition.path))
-            case (.aborted, .executed):
-                return .rejected(.executeAfterAbort(path: transition.path))
-            case (.completed, _):
-                return .rejected(.appendAfterCompletion(path: transition.path))
-            }
+            let change = lifecycle.send(.transition(transition))
+            return record(change)
         }
 
         mutating func complete() -> HeistStepTransitionResult {
-            switch phase {
-            case .ready:
-                phase = .completed(abortedPath: nil)
-                return .accepted
-            case .aborted(let failedPath):
-                phase = .completed(abortedPath: failedPath)
-                return .accepted
-            case .completed:
-                return .rejected(.completeTwice(path: "$.body"))
-            }
+            let change = lifecycle.send(.complete)
+            return record(change)
         }
 
         mutating func reject(_ rejection: HeistExecutionTransitionRejection, result: HeistExecutionStepResult) {
-            steps.append(result)
-            phase = .completed(abortedPath: rejection.path)
+            let change = lifecycle.send(.reject(rejection, result: result))
+            record(change)
+        }
+
+        @discardableResult
+        private mutating func record(_ change: HeistStepLifecycleChange) -> HeistStepTransitionResult {
+            for effect in change.effects {
+                switch effect {
+                case .appendStep(let result):
+                    steps.append(result)
+                }
+            }
+
+            switch change {
+            case .changed:
+                return .accepted
+            case .rejected(let rejection, _):
+                return .rejected(rejection)
+            }
         }
     }
 
-    private enum HeistExecutionStepDecision: Equatable {
+    private enum HeistExecutionStepDecision: Equatable, Sendable {
         case execute
         case skip(abortedPath: String)
         case reject(HeistExecutionTransitionRejection)
-    }
-
-    private enum HeistStepTransition {
-        case executed(HeistExecutionStepResult)
-        case skipped(HeistExecutionStepResult, abortedPath: String)
-
-        var path: String {
-            switch self {
-            case .executed(let result),
-                 .skipped(let result, _):
-                return result.path
-            }
-        }
     }
 
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {

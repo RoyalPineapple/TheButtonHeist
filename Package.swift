@@ -28,6 +28,12 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "ButtonHeistSupport",
+            dependencies: [],
+            path: "ButtonHeist/Sources/ButtonHeistSupport",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .target(
             name: "ThePlans",
             dependencies: [],
             path: "ButtonHeist/Sources/ThePlans",
@@ -89,6 +95,7 @@ let package = Package(
         .target(
             name: "TheInsideJob",
             dependencies: [
+                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
                 .product(
