@@ -7,6 +7,29 @@ import Testing
 
     private let repository = SourceShapeRepository(filePath: #filePath)
 
+    @Test func `settle loop is a simple state machine with terminal effects`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/SettleSession.swift")
+
+        try source.requireDeclaration(.structure("SettleLoopMachine", conformingTo: ["SimpleStateMachine"]))
+        #expect(try source.containsMatch(#"\benum\s+State\s*:"#))
+        #expect(try source.containsMatch(#"\benum\s+Event\s*:"#))
+        #expect(try source.containsMatch(#"\benum\s+Effect\s*:"#))
+        #expect(try source.containsMatch(#"\benum\s+Rejection\s*:"#))
+        #expect(source.contents.contains("case continuePolling"))
+        #expect(source.contents.contains("case terminal(Terminal)"))
+        #expect(source.contents.contains("SettleLoopMachine must emit exactly one effect per input."))
+        #expect(source.contents.contains("StateDriver("))
+
+        #expect(
+            !source.contents.contains("SettleLoopReducer"),
+            "Settle loop should not reintroduce the old reducer wrapper."
+        )
+        #expect(
+            try !source.containsMatch(#"\bstate\s*:\s*inout\s+SettleLoop"#),
+            "Settle loop state changes should go through SettleLoopMachine events."
+        )
+    }
+
     @Test func `predicate wait reducer is value typed and effect free once introduced`() throws {
         let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
 
@@ -424,6 +447,240 @@ import Testing
             "Container scroll resolver should construct typed failure cases before message projection"
         )
     }
+
+    @Test func `element inflation reducer is value typed and effect free`() throws {
+        let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/ElementInflationReducer.swift")
+
+        try expectEffectFreeReducerSource(reducer)
+        try reducer.requireDeclarations([
+            .structure("ElementInflationReducer", conformingTo: ["Sendable", "Equatable"]),
+            .type("ElementInflationState", conformingTo: ["Sendable", "Equatable"]),
+            .type("ElementInflationEvent", conformingTo: ["Sendable", "Equatable"]),
+        ])
+
+        let reducerType = try reducer.requiredBlock(
+            .structure("ElementInflationReducer"),
+            message:
+            "\(reducer.relativePath) should keep the pure element inflation transition table in a value type"
+        )
+
+        #expect(try reducerType.containsMatch(#"\bfunc\s+reduce\s*\("#))
+        for forbidden in [
+            "UIKit",
+            "@MainActor",
+            "TheStash",
+            "TheSafecracker",
+            "TheTripwire",
+        ] {
+            #expect(
+                !reducer.contents.contains(forbidden),
+                "\(reducer.relativePath) should stay detached from UIKit/effectful collaborators; found \(forbidden)"
+            )
+        }
+    }
+
+    @Test func `navigation scan traversal keeps one move parse fold goal primitive and preserves manifests`() throws {
+        let scanning = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+ExplorationScanning.swift")
+        let explore = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+Explore.swift")
+        let traversalPrimitiveBlocks = try (
+            privateFunctionBlocks(in: scanning) + privateTypeBlocks(in: scanning)
+        ).filter { block in
+            block.contents.contains("setContentOffset")
+                && block.contents.contains("absorbExplorationPage")
+                && (block.contents.contains("scanGoalTerminal") || block.contents.contains("goal.terminal"))
+        }
+        let primitiveDescriptions = traversalPrimitiveBlocks.map(\.relativePath).joined(separator: "\n")
+
+        #expect(
+            traversalPrimitiveBlocks.count == 1,
+            """
+            Navigation scroll discovery should have one internal primitive that owns \
+            move -> parse -> fold -> goal repeat. Candidates:
+            \(primitiveDescriptions)
+            """
+        )
+
+        if let primitive = traversalPrimitiveBlocks.first {
+            #expect(try primitive.containsMatch(#"\b(for|while)\b"#))
+            #expect(try primitive.containsMatch(#"\bsetContentOffset\s*\("#))
+            #expect(try primitive.containsMatch(#"\babsorbExplorationPage\s*\("#))
+            #expect(try primitive.containsMatch(#"\brecordScrollAttempt\s*\("#))
+            #expect(try primitive.containsMatch(#"\b(scanGoalTerminal|goal[.]terminal)\b"#))
+        }
+
+        let scanForHeistId = try #require(
+            try firstBlock(in: [scanning, explore], matching: #"\bfunc\s+scanForHeistId\s*\("#),
+            "scanForHeistId should remain discoverable to source-shape tests"
+        )
+        let exploreScreen = try #require(
+            try firstBlock(in: [scanning, explore], matching: #"\bfunc\s+exploreScreen\s*\("#),
+            "exploreScreen should remain discoverable to source-shape tests"
+        )
+
+        for entry in [
+            ("scanForHeistId", scanForHeistId),
+            ("exploreScreen", exploreScreen),
+        ] {
+            #expect(
+                try !entry.1.containsMatch(#"->\s*Screen[?]"#),
+                "\(entry.0) should return exploration facts instead of dropping ScreenManifest state to Screen?."
+            )
+            #expect(
+                try !entry.1.containsMatch(#"[.]finish\s*\([^)]*\)[.]screen\b"#),
+                "\(entry.0) should not strip ExploredScreen/SemanticExploration down to Screen."
+            )
+        }
+    }
+
+    @Test func `screen build derives screen maps from typed element entries`() throws {
+        let source = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/TheBurglar/TheBurglar+ScreenBuilding.swift"
+        )
+        let projection = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+static\s+func\s+buildScreenProjection\s*\("#),
+            "Screen building should keep one pure projection entry point"
+        )
+
+        #expect(
+            try source.containsMatch(#"\bstruct\s+ScreenBuildEntry\b"#),
+            "Screen building should project each parsed element and heistId as one row-shaped value."
+        )
+        #expect(
+            try projection.containsMatch(#"\blet\s+entries\s*=\s*buildScreenEntries\s*\("#),
+            "Screen maps should be derived from one typed element entry collection."
+        )
+        #expect(
+            try !projection.containsMatch(#"\bzip\s*\(\s*indexedElements\s*,\s*(?:(?:resolved|base)HeistIds|heistIds)\s*\)"#),
+            "Screen building should not pair parsed elements with heistIds by zip."
+        )
+        #expect(
+            try !projection.containsMatch(#"\bresolvedHeistIds\b"#),
+            "Screen building should not stage a parallel resolvedHeistIds array."
+        )
+        #expect(
+            try !projection.containsMatch(#"\blet\s+elements\s*=\s*indexedElements[.]map\s*\("#),
+            "Screen building should not fork parsed elements away from their tree paths before assigning IDs."
+        )
+        #expect(
+            try !projection.containsMatch(#"\b(NSObject|UIScrollView|ParseResult)\b"#),
+            "Pure screen projection should stay value-only; live refs belong at the capture boundary."
+        )
+    }
+
+    @Test func `settle and auth migrations use state drivers for phase transitions`() throws {
+        let settle = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/SettleSession.swift")
+        let settleRun = try #require(
+            try settle.firstBlock(matching: #"\bfunc\s+run\s*\("#),
+            "SettleSession should keep its run loop discoverable to source-shape tests"
+        )
+        let authMachineSource = try #require(
+            try firstAvailableFile(
+                in: repository,
+                relativePaths: [
+                    "ButtonHeist/Sources/TheInsideJob/Server/ClientAuthenticationMachine.swift",
+                    "ButtonHeist/Sources/TheInsideJob/Server/ClientAuthenticationState.swift",
+                    "ButtonHeist/Sources/TheInsideJob/Server/ClientRegistry.swift",
+                ]
+            ),
+            "Client auth should expose a source file for the auth state machine"
+        )
+        let authMachine = try #require(
+            try authMachineSource.firstBlock(matching: #"\bstruct\s+ClientAuthenticationMachine\b"#),
+            "Client authentication should be modeled by ClientAuthenticationMachine"
+        )
+        let clientRegistry = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ClientRegistry.swift"
+        )
+        let authAdmission = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleAdmission+Authentication.swift"
+        )
+        let authHandshake = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/MuscleHandshakePhase.swift"
+        )
+        let authSources = [authMachineSource, clientRegistry, authAdmission, authHandshake]
+        let authCombinedSource = SourceShapeFile(
+            relativePath: authSources.map(\.relativePath).joined(separator: ", "),
+            contents: authSources.map(\.contents).joined(separator: "\n")
+        )
+
+        #expect(try settle.containsMatch(#"\bstruct\s+SettleLoopMachine\s*:\s*SimpleStateMachine\b"#))
+        #expect(try settle.containsMatch(#"\bStateDriver\s*<\s*SettleLoopMachine\s*>|StateDriver\s*\(\s*initial:[\s\S]*machine:\s*SettleLoopMachine"#))
+        #expect(
+            try !settleRun.containsMatch(#"\breducer[.]reduce\s*\("#),
+            "SettleSession.run should drive SettleLoopMachine through StateDriver, not call a reducer directly."
+        )
+        #expect(
+            try !settleRun.containsMatch(#"\bvar\s+state\s*=\s*SettleLoopState\b"#),
+            "SettleSession.run should not own raw mutable settle phase state."
+        )
+
+        #expect(try authMachine.containsMatch(#"\bstruct\s+ClientAuthenticationMachine\s*:\s*SimpleStateMachine\b"#))
+        #expect(
+            try authCombinedSource.containsMatch(
+                #"\bStateDriver\s*<\s*ClientAuthenticationMachine\s*>|StateDriver\s*\(\s*initial:[\s\S]*machine:\s*ClientAuthenticationMachine"#
+            ),
+            "Client auth should store phase state in StateDriver<ClientAuthenticationMachine>."
+        )
+
+        for source in authSources {
+            let outsideAuthMachine = SourceShapeFile(
+                relativePath: source.relativePath,
+                contents: source.contents.replacingOccurrences(of: authMachine.contents, with: "")
+            )
+            let directPhaseWrites = try outsideAuthMachine.lines(
+                matching: #"\bclients\s*\[\s*clientId\s*\]\s*=\s*[.](authenticated|helloValidated)\b"#
+            )
+            #expect(
+                directPhaseWrites.isEmpty,
+                """
+                Auth phase writes should flow through ClientAuthenticationMachine:
+                \(directPhaseWrites.joined(separator: "\n"))
+                """
+            )
+        }
+    }
+
+    @Test func `element diagnostics use shared diagnostic summary renderer`() throws {
+        let renderer = try #require(
+            try firstAvailableFile(
+                in: repository,
+                relativePaths: [
+                    "ButtonHeist/Sources/TheScore/ElementDiagnosticSummary.swift",
+                    "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementDiagnosticSummary.swift",
+                    "ButtonHeist/Sources/TheInsideJob/TheStash/ElementDiagnosticSummary.swift",
+                ]
+            ),
+            "ElementDiagnosticSummary should exist as the shared element diagnostic renderer"
+        )
+        _ = try renderer.requiredBlock(
+            .type("ElementDiagnosticSummary"),
+            message: "ElementDiagnosticSummary should be the canonical element diagnostics renderer"
+        )
+        #expect(try renderer.containsMatch(#"\b(render|description)\b"#))
+
+        for source in [
+            try repository.requiredFile(relativePath: "\(Self.brainsRoot)/ActionCapabilityDiagnostic.swift"),
+            try repository.requiredFile(relativePath: "\(Self.brainsRoot)/ElementInflation+Diagnostics.swift"),
+            try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistActionExecution.swift"),
+            try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolutionDiagnostics.swift"),
+        ] {
+            #expect(
+                source.contents.contains("ElementDiagnosticSummary"),
+                "\(source.relativePath) should render element facts through ElementDiagnosticSummary."
+            )
+            let duplicateHelpers = try source.lines(
+                matching: #"\bfunc\s+(candidateSummary|containerCandidateSummary|formatElement|formatList|formatQuotedList|quote|quotedEvidence)\s*\("#
+            )
+            #expect(
+                duplicateHelpers.isEmpty,
+                """
+                \(source.relativePath) should not duplicate element quote/list rendering helpers:
+                \(duplicateHelpers.joined(separator: "\n"))
+                """
+            )
+        }
+    }
+
 }
 
 private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {
@@ -441,5 +698,43 @@ private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {
             !source.contents.contains(forbidden),
             "\(source.relativePath) should stay pure and effect-free; found \(forbidden)"
         )
+    }
+}
+
+private func firstAvailableFile(
+    in repository: SourceShapeRepository,
+    relativePaths: [String]
+) throws -> SourceShapeFile? {
+    for relativePath in relativePaths {
+        if let file = try repository.file(relativePath: relativePath) {
+            return file
+        }
+    }
+    return nil
+}
+
+private func firstBlock(
+    in sources: [SourceShapeFile],
+    matching pattern: String
+) throws -> SourceShapeFile? {
+    for source in sources {
+        if let block = try source.firstBlock(matching: pattern) {
+            return block
+        }
+    }
+    return nil
+}
+
+private func privateFunctionBlocks(in source: SourceShapeFile) throws -> [SourceShapeFile] {
+    let signatures = try source.matches(of: #"\bprivate\s+func\s+[A-Za-z_][A-Za-z0-9_]*\s*\("#)
+    return try signatures.compactMap { signature in
+        try source.firstBlock(matching: NSRegularExpression.escapedPattern(for: signature))
+    }
+}
+
+private func privateTypeBlocks(in source: SourceShapeFile) throws -> [SourceShapeFile] {
+    let signatures = try source.matches(of: #"\bprivate\s+(struct|enum)\s+[A-Za-z_][A-Za-z0-9_]*\b"#)
+    return try signatures.compactMap { signature in
+        try source.firstBlock(matching: NSRegularExpression.escapedPattern(for: signature))
     }
 }

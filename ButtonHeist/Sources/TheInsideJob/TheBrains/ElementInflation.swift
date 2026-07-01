@@ -58,14 +58,15 @@ final class ElementInflation {
 
     private enum InflationState: CustomStringConvertible {
         case resolving(ResolutionPass)
-        case revealing(treeElement: TheStash.ScreenElement)
+        case revealing(treeElement: TheStash.ScreenElement, attempt: Int)
         case refreshing(
             target: ElementTarget,
             screenElement: TheStash.ScreenElement,
+            attempt: Int,
             didReveal: Bool
         )
-        case placing(inflatedTarget: InflatedElementTarget, didReveal: Bool)
-        case retrying(attempt: Int, reason: RetryReason)
+        case placing(inflatedTarget: InflatedElementTarget, attempt: Int, didReveal: Bool)
+        case retrying(failedAttempt: Int, reason: RetryReason)
         case inflated(InflatedElementTarget)
         case failed(ElementInflationFailure)
 
@@ -73,14 +74,14 @@ final class ElementInflation {
             switch self {
             case .resolving:
                 return "resolving"
-            case .revealing(let treeElement):
-                return "revealing(element: \(treeElement.heistId))"
-            case .refreshing(_, let screenElement, let didReveal):
-                return "refreshing(element: \(screenElement.heistId), didReveal: \(didReveal))"
-            case .placing(let inflatedTarget, let didReveal):
-                return "placing(element: \(inflatedTarget.screenElement.heistId), didReveal: \(didReveal))"
-            case .retrying(let attempt, let reason):
-                return "retrying(attempt: \(attempt), reason: \(reason.description))"
+            case .revealing(let treeElement, let attempt):
+                return "revealing(element: \(treeElement.heistId), attempt: \(attempt))"
+            case .refreshing(_, let screenElement, let attempt, let didReveal):
+                return "refreshing(element: \(screenElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
+            case .placing(let inflatedTarget, let attempt, let didReveal):
+                return "placing(element: \(inflatedTarget.screenElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
+            case .retrying(let failedAttempt, let reason):
+                return "retrying(failedAttempt: \(failedAttempt), reason: \(reason.description))"
             case .inflated(let inflatedTarget):
                 return "inflated(element: \(inflatedTarget.screenElement.heistId))"
             case .failed(let failure):
@@ -89,40 +90,8 @@ final class ElementInflation {
         }
     }
 
-    private enum RetryReason: String, CustomStringConvertible {
-        case objectDeallocated
-        case staleTarget
-        case activationPointOffscreen
-
-        var description: String {
-            rawValue
-        }
-
-        var failureDescription: String {
-            switch self {
-            case .objectDeallocated:
-                return "the live object was deallocated"
-            case .staleTarget:
-                return "the live target no longer matched"
-            case .activationPointOffscreen:
-                return "the activation point stayed off-screen"
-            }
-        }
-    }
-
-    private enum ResolutionPass {
-        case initial
-        case afterRetry(RetryReason)
-
-        var allowsKnownFallback: Bool {
-            switch self {
-            case .initial, .afterRetry(.objectDeallocated):
-                return true
-            case .afterRetry(.staleTarget), .afterRetry(.activationPointOffscreen):
-                return false
-            }
-        }
-    }
+    private typealias RetryReason = ElementInflationRetryReason
+    private typealias ResolutionPass = ElementInflationResolutionPass
 
     private enum FreshElementTargetResolution {
         case success(InflatedElementTarget)
@@ -197,8 +166,8 @@ final class ElementInflation {
     ) async -> ElementInflationResult {
         stash.refreshCurrentVisibleTree()
         var state: InflationState = .resolving(.initial)
-        var attempt = 0
         let maxAttempts = 2
+        let reducer = ElementInflationReducer(maxAttempts: maxAttempts)
 
         while true {
             switch state {
@@ -210,19 +179,20 @@ final class ElementInflation {
                         to: .refreshing(
                             target: target,
                             screenElement: treeElement,
+                            attempt: pass.attempt,
                             didReveal: false
                         )
                     )
                 case .success(.known(let treeElement)):
-                    transition(&state, to: .revealing(treeElement: treeElement))
+                    transition(&state, to: .revealing(treeElement: treeElement, attempt: pass.attempt))
                 case .failure(let failure):
                     transition(&state, to: .failed(failure))
                 }
 
-            case .revealing(let treeElement):
-                transition(&state, to: await stateAfterReveal(treeElement, target: target))
+            case .revealing(let treeElement, let attempt):
+                transition(&state, to: await stateAfterReveal(treeElement, target: target, attempt: attempt))
 
-            case .refreshing(let target, let screenElement, let didReveal):
+            case .refreshing(let target, let screenElement, let attempt, let didReveal):
                 transition(
                     &state,
                     to: stateAfterRefresh(
@@ -236,7 +206,7 @@ final class ElementInflation {
                     )
                 )
 
-            case .placing(let inflatedTarget, let didReveal):
+            case .placing(let inflatedTarget, let attempt, let didReveal):
                 transition(
                     &state,
                     to: await stateAfterPlacement(
@@ -247,16 +217,21 @@ final class ElementInflation {
                     )
                 )
 
-            case .retrying(let currentAttempt, let reason):
-                attempt = currentAttempt + 1
-                if attempt >= maxAttempts {
+            case .retrying(let failedAttempt, let reason):
+                switch reducer.reduce(
+                    .retrying(failedAttempt: failedAttempt, reason: reason),
+                    event: .retryReady
+                ) {
+                case .resolving(let pass):
+                    stash.refreshCurrentVisibleTree()
+                    transition(&state, to: .resolving(pass))
+                case .retryExhausted(let reason):
                     transition(
                         &state,
                         to: .failed(retryExhaustedFailure(reason: reason, maxAttempts: maxAttempts))
                     )
-                } else {
-                    stash.refreshCurrentVisibleTree()
-                    transition(&state, to: .resolving(.afterRetry(reason)))
+                case .retrying:
+                    transition(&state, to: .retrying(failedAttempt: failedAttempt, reason: reason))
                 }
 
             case .inflated(let result):
@@ -270,12 +245,14 @@ final class ElementInflation {
 
     private func stateAfterReveal(
         _ treeElement: TheStash.ScreenElement,
-        target: ElementTarget
+        target: ElementTarget,
+        attempt: Int
     ) async -> InflationState {
         if case .success(let visible)? = visibleTargetResolution(target) {
             return .refreshing(
                 target: target,
                 screenElement: visible,
+                attempt: attempt,
                 didReveal: false
             )
         }
@@ -287,6 +264,7 @@ final class ElementInflation {
                 return .refreshing(
                     target: target,
                     screenElement: visible,
+                    attempt: attempt,
                     didReveal: false
                 )
             case .failure(let failure)?:
@@ -299,6 +277,7 @@ final class ElementInflation {
         return .refreshing(
             target: target,
             screenElement: treeElement,
+            attempt: attempt,
             didReveal: reveal.didReveal
         )
     }
@@ -329,9 +308,9 @@ final class ElementInflation {
             if activationPointPolicy == .liveObjectOnly {
                 return .inflated(inflatedTarget)
             }
-            return .placing(inflatedTarget: inflatedTarget, didReveal: didReveal)
+            return .placing(inflatedTarget: inflatedTarget, attempt: attempt, didReveal: didReveal)
         case .retry(let reason):
-            return .retrying(attempt: attempt, reason: reason)
+            return .retrying(failedAttempt: attempt, reason: reason)
         case .failure(let failure):
             return .failed(failure)
         }
@@ -373,7 +352,7 @@ final class ElementInflation {
         case .success(false):
             return .inflated(inflatedTarget)
         case .success(true):
-            return .retrying(attempt: attempt, reason: .activationPointOffscreen)
+            return .retrying(failedAttempt: attempt, reason: .activationPointOffscreen)
         case .failure(let failure):
             return .failed(failure)
         }

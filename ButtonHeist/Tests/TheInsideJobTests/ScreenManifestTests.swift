@@ -85,6 +85,31 @@ final class ScreenManifestTests: XCTestCase {
         XCTAssertTrue(manifest.exploredScrollPaths.contains(path))
     }
 
+    func testMarkOmittedMovesFromPendingToOmittedOnly() {
+        var manifest = Navigation.ScreenManifest()
+        let container = makeScrollableContainer()
+        let path = TreePath([0])
+        manifest.addPendingContainers([semanticContainer(container, path: path)])
+
+        manifest.markOmitted(path, reason: .containerScrollLimit)
+
+        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
+        XCTAssertFalse(manifest.exploredScrollPaths.contains(path))
+        XCTAssertEqual(manifest.omittedScrollPathReasons[path], [.containerScrollLimit])
+    }
+
+    func testOmittedContainerIsNotReaddedToPending() {
+        var manifest = Navigation.ScreenManifest()
+        let container = makeScrollableContainer()
+        let path = TreePath([0])
+
+        manifest.markOmitted(path, reason: .containerScrollLimit)
+        manifest.addPendingContainers([semanticContainer(container, path: path)])
+
+        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
+        XCTAssertEqual(manifest.omittedScrollPathReasons[path], [.containerScrollLimit])
+    }
+
     // MARK: - addPendingContainers
 
     func testAddPendingContainersSkipsAlreadyExplored() {

@@ -91,7 +91,7 @@ struct ActivationPolicy {
         }
         return "activate failed: \(observed); activation-point dispatch was attempted at the fresh " +
             "accessibility activation point and did not complete for " +
-            "\(ActionCapabilityDiagnostic.formatElement(screenElement)); correction: target an element " +
+            "\(ActionCapabilityDiagnostic.elementObservation(screenElement)); correction: target an element " +
             "with primary accessibility activation, or use an explicit mechanical gesture when the " +
             "test intent is viewport coordinate delivery"
     }

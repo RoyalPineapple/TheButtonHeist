@@ -45,6 +45,45 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(error.message, "Too many failed attempts. Try again later.")
     }
 
+    func testClientAuthenticationRejectsAuthenticationBeforeHello() {
+        var registry = TheMuscleClientRegistry()
+        registry.registerAddress(1, address: "127.0.0.1")
+
+        XCTAssertEqual(
+            registry.completeAuthentication(1),
+            .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
+        )
+        XCTAssertEqual(registry.phase(for: 1), .connected(address: "127.0.0.1"))
+    }
+
+    func testClientAuthenticationAdvancesThroughHelloBeforeAuthenticated() {
+        var registry = TheMuscleClientRegistry()
+        registry.registerAddress(1, address: "127.0.0.1")
+
+        XCTAssertEqual(
+            registry.validateHello(1),
+            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+        )
+        XCTAssertEqual(
+            registry.completeAuthentication(1),
+            .advanced(.authenticated(address: "127.0.0.1"), effect: .authenticated)
+        )
+        XCTAssertEqual(registry.phase(for: 1), .authenticated(address: "127.0.0.1"))
+    }
+
+    func testClientAuthenticationRejectsDuplicateHelloAfterValidation() {
+        var registry = TheMuscleClientRegistry()
+        registry.registerAddress(1, address: "127.0.0.1")
+
+        _ = registry.validateHello(1)
+
+        XCTAssertEqual(
+            registry.validateHello(1),
+            .rejected(.helloAlreadyValidated, state: .helloValidated(address: "127.0.0.1"))
+        )
+        XCTAssertEqual(registry.phase(for: 1), .helloValidated(address: "127.0.0.1"))
+    }
+
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
@@ -363,5 +402,42 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(capturedDiagnostic.reason, .posix(code: Int(POSIXErrorCode.ECONNRESET.rawValue)))
         XCTAssertTrue(capturedDiagnostic.description.contains("posix"))
         XCTAssertTrue(failure.localizedDescription.contains("posix"))
+    }
+
+    func testClientAuthenticationPhaseSourceShapeUsesStateMachine() throws {
+        let stateSource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ClientAuthenticationState.swift"
+        )
+        let registrySource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ClientRegistry.swift"
+        )
+        let admissionSource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/SessionAdmission.swift"
+        )
+
+        XCTAssertTrue(try stateSource.containsMatch(#"\bstruct\s+ClientAuthenticationMachine\s*:\s*SimpleStateMachine\b"#))
+        XCTAssertTrue(stateSource.contents.contains("case (.connected(let address), .validateHello)"))
+        XCTAssertTrue(stateSource.contents.contains("case (.helloValidated(let address), .completeAuthentication)"))
+        XCTAssertTrue(registrySource.contents.contains("StateDriver<ClientAuthenticationMachine>"))
+        XCTAssertTrue(registrySource.contents.contains("validateHello(_ clientId: Int)"))
+        XCTAssertTrue(registrySource.contents.contains("completeAuthentication(_ clientId: Int)"))
+        XCTAssertFalse(registrySource.contents.contains("markHelloValidated"))
+
+        let directLatePhaseWrites = try registrySource.lines(
+            matching: #"clients\[[^]]+\]\s*=\s*[.](helloValidated|authenticated)\("#
+        )
+        XCTAssertTrue(
+            directLatePhaseWrites.isEmpty,
+            """
+            Client authentication must not assign hello/authenticated phases outside the machine:
+            \(directLatePhaseWrites.joined(separator: "\n"))
+            """
+        )
+
+        XCTAssertTrue(try admissionSource.containsMatch(#"\bstruct\s+AddressAuthenticationFailureMachine\s*:\s*SimpleStateMachine\b"#))
+        XCTAssertTrue(admissionSource.contents.contains("case clean"))
+        XCTAssertTrue(admissionSource.contents.contains("case failing(attempts: Int)"))
+        XCTAssertTrue(admissionSource.contents.contains("case lockedOut(until: Date, attempts: Int)"))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bcase\s+nil\s*:\s*0\b"#))
     }
 }

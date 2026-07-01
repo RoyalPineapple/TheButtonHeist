@@ -28,7 +28,7 @@ public enum HeistFailureDiagnostics {
     ) -> String {
         var parts = ["failure screenshot: unavailable", "receipt=\(receiptPath)"]
         if let message, !message.isEmpty {
-            parts.append("message=\(quotedString(message))")
+            parts.append("message=\(ElementDiagnosticSummary.RenderProfile.failureInterface().renderString(message))")
         }
         return parts.joined(separator: " ")
     }
@@ -59,52 +59,13 @@ public enum HeistFailureDiagnostics {
         displayIndex: Int? = nil,
         includeGeometry: Bool = false
     ) -> String {
-        var parts: [String] = []
-        if let displayIndex { parts.append("[\(displayIndex)]") }
-
-        var labelValue = quotedString(nonEmpty(element.label) ?? "")
-        if let value = nonEmpty(element.value) {
-            labelValue += ":\(quotedString(value))"
-        }
-        parts.append(labelValue)
-
-        let traits = element.traits.filter { $0.rawValue != "none" }
-        if !traits.isEmpty {
-            parts.append(traits.map(\.rawValue).joined(separator: " | "))
-        }
-
-        let actions = meaningfulActions(element)
-        if !actions.isEmpty {
-            parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
-        }
-        if let rotors = element.rotors?.compactMap({ nonEmpty($0.name) }), !rotors.isEmpty {
-            parts.append("[\(rotors.joined(separator: ", "))]")
-        }
-        if let hint = nonEmpty(element.hint) {
-            parts.append("hint=\(quotedString(hint))")
-        }
-        if let identifier = nonEmpty(element.identifier) {
-            parts.append("id=\(quotedString(identifier))")
-        }
-        if includeGeometry {
-            parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
-            parts.append("activation=(\(Int(element.activationPointX)),\(Int(element.activationPointY)))")
-        }
-
-        return parts.joined(separator: " ")
-    }
-
-    public static func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
-        return value
-    }
-
-    public static func quotedString(_ value: String) -> String {
-        if let data = try? JSONEncoder().encode(value),
-           let encoded = String(data: data, encoding: .utf8) {
-            return encoded
-        }
-        return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+        ElementDiagnosticSummary(
+            element: element,
+            actions: meaningfulActions(element)
+        ).rendered(using: .failureInterface(
+            displayIndex: displayIndex,
+            includeGeometry: includeGeometry
+        ))
     }
 
     private static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {

@@ -47,8 +47,8 @@ import Testing
             "tree report projection should be built from TheScore root evidence nodes"
         )
         #expect(
-            source.contains("outputNodes = rollup.nodes.map { HeistReportNodeProjection(node: $0, profile: profile) }"),
-            "output report projection should be built from TheScore flat evidence nodes"
+            source.contains("outputNodes = rollup.outputNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }"),
+            "output report projection should be built from TheScore event-derived flat evidence nodes"
         )
         #expect(
             !source.contains("result.steps.map { HeistReportNodeProjection"),
@@ -62,6 +62,68 @@ import Testing
             !source.contains("traceResultsInExecutionOrder\n            .compactMap"),
             "final-screen facts should originate in TheScore summary facts"
         )
+    }
+
+    @Test func `summary action and warning rollups reduce typed evidence events`() throws {
+        let relativePath = "ButtonHeist/Sources/TheScore/HeistExecutionResult+Report.swift"
+        let contents = try sourceFile(relativePath)
+        let scoreReport = SourceShapeFile(relativePath: relativePath, contents: contents)
+        let rollup = try scoreReport.requiredBlock(
+            .structure("HeistExecutionEvidenceRollup"),
+            message: "TheScore rollup should own the ordered evidence event stream"
+        )
+        let event = try scoreReport.requiredBlock(
+            .enumeration("HeistExecutionEvidenceEvent"),
+            message: "TheScore should model report facts as typed evidence events"
+        )
+        let builder = try scoreReport.requiredBlock(
+            .structure("HeistExecutionEvidenceEventBuilder"),
+            message: "Event construction should stay owned by TheScore"
+        )
+        let summary = try scoreReport.requiredBlock(
+            .structure("HeistExecutionEvidenceSummary"),
+            message: "Summary facts should reduce typed evidence events"
+        )
+        let actions = try scoreReport.requiredBlock(
+            .structure("HeistExecutionActionEvidenceRollup"),
+            message: "Action rollups should reduce typed evidence events"
+        )
+        let warnings = try scoreReport.requiredBlock(
+            .structure("HeistExecutionWarningEvidenceRollup"),
+            message: "Warning rollups should reduce typed evidence events"
+        )
+
+        #expect(try event.containsMatch(#"\bcase\s+nodeVisited\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+dispatchedActionResult\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+reportedActionResult\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+traceResult\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+expectationChecked\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+warning\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+firstFailure\s*\("#))
+        #expect(try event.containsMatch(#"\bcase\s+finalScreen\s*\("#))
+
+        #expect(try rollup.containsMatch(#"\bpackage\s+let\s+events\s*:\s*\[HeistExecutionEvidenceEvent\]"#))
+        #expect(
+            rollup.contents.contains("self.events = HeistExecutionEvidenceEventBuilder().events(rootNodes: rootNodes)"),
+            "Rollup should store one ordered event stream built from its evidence nodes"
+        )
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]nodeVisited\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]dispatchedActionResult\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]reportedActionResult\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]traceResult\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]expectationChecked\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]warning\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]firstFailure\b"#))
+        #expect(try builder.containsMatch(#"\bevents[.]append\s*\([.]finalScreen\b"#))
+
+        #expect(summary.contents.contains("for event in rollup.events"))
+        #expect(!summary.contents.contains("rollup.nodes.count"))
+        #expect(!summary.contents.contains("rollup.actions.finalScreenId"))
+        #expect(actions.contents.contains("fileprivate let events: [HeistExecutionEvidenceEvent]"))
+        #expect(!actions.contents.contains("nodes.compactMap"))
+        #expect(!actions.contents.contains("traceResultsInExecutionOrder\n            .compactMap"))
+        #expect(warnings.contents.contains("fileprivate let events: [HeistExecutionEvidenceEvent]"))
+        #expect(!warnings.contents.contains("nodes.compactMap"))
     }
 
     @Test func `action report consumers use typed action result evidence`() throws {

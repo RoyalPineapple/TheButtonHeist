@@ -1,6 +1,8 @@
 #if canImport(UIKit) && DEBUG
 import UIKit
 
+import TheScore
+
 extension ElementInflation {
 
     static func liveGeometrySummary(_ liveTarget: TheStash.LiveActionTarget) -> String {
@@ -13,7 +15,7 @@ extension ElementInflation {
         _ failure: SemanticRevealFailure,
         entry: Screen.ScreenElement
     ) -> String {
-        let description = Navigation.ScrollTargetDescription(entry).description
+        let description = Self.semanticTargetDescription(entry)
         switch failure {
         case .missingScrollMembership:
             return "known target \(description) has no scroll membership"
@@ -30,6 +32,20 @@ extension ElementInflation {
         case .scanDidNotRevealTarget:
             return "known target \(description) was not visible after scroll scan"
         }
+    }
+
+    private static func semanticTargetDescription(_ entry: Screen.ScreenElement) -> String {
+        let primaryDescription = Navigation.ScrollTargetDescription(entry).description
+        let element = entry.element
+        let summary = ElementDiagnosticSummary(
+            label: element.label,
+            identifier: element.identifier,
+            value: element.value,
+            traits: element.traits.heistTraits,
+            availability: .offscreen(isReachable: entry.scrollMembership != nil)
+        ).rendered(using: .compactStash)
+        guard !summary.isEmpty else { return primaryDescription }
+        return "\(primaryDescription) [\(summary)]"
     }
 
     private static func formatRect(_ rect: CGRect) -> String {

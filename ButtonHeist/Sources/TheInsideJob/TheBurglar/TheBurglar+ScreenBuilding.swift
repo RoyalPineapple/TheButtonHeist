@@ -22,30 +22,34 @@ extension TheBurglar {
             screenCoordinateHierarchy: hierarchy
         )
         let projection = buildScreenProjection(
-            from: result,
             hierarchy: hierarchy,
             facts: facts
         )
         logScreenBuildEvents(projection.logEvents)
-        return projection.screen
+        return buildScreen(
+            from: projection,
+            result: result
+        )
     }
 
-    /// Pure projection entry used by focused tests with synthetic facts.
+    /// Entry used by focused tests with synthetic facts. Projection stays pure;
+    /// live refs are attached afterward at the live-capture boundary.
     static func buildScreen(from result: ParseResult, facts: ScreenBuildFacts) -> Screen {
-        buildScreenProjection(
-            from: result,
+        let projection = buildScreenProjection(
             hierarchy: screenCoordinateHierarchy(from: result),
             facts: facts
-        ).screen
+        )
+        return buildScreen(
+            from: projection,
+            result: result
+        )
     }
 
     private static func buildScreenProjection(
-        from result: ParseResult,
         hierarchy: [AccessibilityHierarchy],
         facts: ScreenBuildFacts
     ) -> ScreenBuildProjection {
         let indexedElements = hierarchy.pathIndexedElements
-        let elements = indexedElements.map(\.element)
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerPaths: facts.scroll.contextContainerPaths
@@ -55,78 +59,158 @@ extension TheBurglar {
             identityContext: identityContext
         )
 
-        let baseHeistIds = TheStash.IdAssignment.assign(elements)
-        let resolvedHeistIds = baseHeistIds
+        let entries = buildScreenEntries(
+            indexedElements: indexedElements,
+            facts: facts
+        )
 
         var logEvents: [ScreenBuildLogEvent] = []
-        var screenElements: [HeistId: Screen.ScreenElement] = [:]
-        screenElements.reserveCapacity(elements.count)
-        var heistIdsByPath: [TreePath: HeistId] = [:]
-        heistIdsByPath.reserveCapacity(elements.count)
-        var elementRefs: [HeistId: Screen.ElementRef] = [:]
-        elementRefs.reserveCapacity(elements.count)
-        for (indexedElement, heistId) in zip(indexedElements, resolvedHeistIds) {
-            let parsedElement = indexedElement.element
-            let path = indexedElement.path
-            let scrollFacts = facts.scroll.element(at: path)
-            let scrollMembership = scrollFacts?.membership
-            let observedScrollContentActivationPoint = scrollFacts?.observedScrollContentActivationPoint
-            let entry = Screen.ScreenElement(
-                heistId: heistId,
-                scrollMembership: scrollMembership,
-                observedScrollContentActivationPoint: observedScrollContentActivationPoint,
-                element: parsedElement
-            )
-            if let observedScrollContentActivationPoint, let scrollMembership {
+        for entry in entries {
+            if let observedScrollContentActivationPoint = entry.screenElement.observedScrollContentActivationPoint,
+               let scrollMembership = entry.screenElement.scrollMembership {
                 logEvents.append(
                     .capturedObservedScrollContentActivationPoint(
-                        heistId: heistId,
+                        heistId: entry.heistId,
                         containerPath: scrollMembership.containerPath,
                         index: scrollMembership.index,
                         point: observedScrollContentActivationPoint.point.cgPoint
                     )
                 )
             }
-            screenElements[heistId] = entry
-            heistIdsByPath[path] = heistId
-            elementRefs[heistId] = Screen.ElementRef(
-                object: result.objectsByPath[path],
-                scrollView: scrollMembership.flatMap { membership in
-                    result.scrollViewsByPath[membership.containerPath]
-                }
-            )
         }
 
-        let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            facts.focus.isFirstResponder(at: item.path)
-        }
+        let firstResponders = entries.filter(\.isFirstResponder)
         if firstResponders.count > 1 {
-            logEvents.append(.multipleFirstResponders(firstResponders.map { $0.1 }))
+            logEvents.append(.multipleFirstResponders(firstResponders.map(\.heistId)))
         }
 
-        let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
-            Screen.ScrollableViewRef(view: $0)
-        }
-        let containerRefsByPath = result.containerObjectsByPath.mapValues {
-            Screen.ContainerRef(object: $0)
-        }
-        let screen = Screen(
-            elements: screenElements,
+        let heistIdsByPath = Dictionary(
+            uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
+        )
+        let snapshot = LiveCapture.Snapshot(
             hierarchy: hierarchy,
             containerNamesByPath: containerNamesByPath,
             heistIdsByPath: heistIdsByPath,
-            elementRefs: elementRefs,
-            containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: facts.scroll.inventoriesByPath,
-            firstResponderHeistId: firstResponders.first?.1,
-            scrollableContainerViewsByPath: scrollableViewRefsByPath
+            scrollInventoriesByPath: facts.scroll.inventoriesByPath
+        )
+        let semantic = SemanticScreen(
+            elements: Dictionary(
+                uniqueKeysWithValues: entries.map { ($0.heistId, $0.screenElement) }
+            ),
+            containers: semanticContainers(
+                hierarchy: hierarchy,
+                containerNamesByPath: containerNamesByPath,
+                containerContentFramesByPath: identityContext.contentFramesByPath,
+                containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
+                containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
+                scrollInventoriesByPath: facts.scroll.inventoriesByPath
+            )
         )
         return ScreenBuildProjection(
-            screen: screen,
+            semantic: semantic,
+            snapshot: snapshot,
+            entries: entries,
             logEvents: logEvents
+        )
+    }
+
+    private static func buildScreen(
+        from projection: ScreenBuildProjection,
+        result: ParseResult
+    ) -> Screen {
+        let liveReferences = ScreenBuildLiveReferences(
+            result: result,
+            hierarchy: projection.snapshot.hierarchy,
+            entries: projection.entries
+        )
+        let liveElementTable = makeLiveElementTable(
+            entries: projection.entries,
+            liveReferences: liveReferences
+        )
+        let liveCapture = LiveCapture(
+            snapshot: projection.snapshot,
+            liveElementTable: liveElementTable,
+            containerRefsByPath: liveReferences.containerRefsByPath,
+            scrollableContainerViewsByPath: liveReferences.scrollableContainerViewsByPath
+        )
+        return Screen(
+            semantic: projection.semantic,
+            liveCapture: liveCapture
+        )
+    }
+
+    private static func buildScreenEntries(
+        indexedElements: [PathIndexedAccessibilityElement],
+        facts: ScreenBuildFacts
+    ) -> [ScreenBuildEntry] {
+        let heistIds = TheStash.IdAssignment.assign(indexedElements.map(\.element))
+        precondition(
+            heistIds.count == indexedElements.count,
+            "IdAssignment must return one HeistId for each screen-build element"
+        )
+        return indexedElements.indices.map { index in
+            let indexedElement = indexedElements[index]
+            let heistId = heistIds[index]
+            let scrollFacts = facts.scroll.element(at: indexedElement.path)
+            return ScreenBuildEntry(
+                path: indexedElement.path,
+                screenElement: Screen.ScreenElement(
+                    heistId: heistId,
+                    scrollMembership: scrollFacts?.membership,
+                    observedScrollContentActivationPoint: scrollFacts?.observedScrollContentActivationPoint,
+                    element: indexedElement.element
+                ),
+                isFirstResponder: facts.focus.isFirstResponder(at: indexedElement.path)
+            )
+        }
+    }
+
+    private static func makeLiveElementTable(
+        entries: [ScreenBuildEntry],
+        liveReferences: ScreenBuildLiveReferences
+    ) -> LiveCapture.LiveElementTable {
+        do {
+            return try LiveCapture.LiveElementTable(entries: entries.map { entry in
+                LiveCapture.LiveElementEntry(
+                    path: entry.path,
+                    screenElement: entry.screenElement,
+                    ref: liveReferences.elementRef(for: entry),
+                    isFirstResponder: entry.isFirstResponder
+                )
+            })
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            preconditionFailure(error.description)
+        } catch {
+            preconditionFailure("Screen build failed to validate live element table: \(error)")
+        }
+    }
+
+    private static func semanticContainers(
+        hierarchy: [AccessibilityHierarchy],
+        containerNamesByPath: [TreePath: ContainerName],
+        containerContentFramesByPath: [TreePath: ContentRect],
+        containerScrollMembershipsByPath: [TreePath: Screen.ScrollMembership],
+        containerObservedScrollContentActivationPointsByPath: [TreePath: Screen.ObservedScrollContentActivationPoint],
+        scrollInventoriesByPath: [TreePath: ScrollInventory]
+    ) -> [TreePath: SemanticScreen.Container] {
+        Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
+                (
+                    item.path,
+                    SemanticScreen.Container(
+                        container: item.container,
+                        path: item.path,
+                        containerName: containerNamesByPath[item.path],
+                        contentRect: containerContentFramesByPath[item.path],
+                        scrollMembership: containerScrollMembershipsByPath[item.path],
+                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
+                        scrollInventory: scrollInventoriesByPath[item.path]
+                    )
+                )
+            }
         )
     }
 
@@ -284,8 +368,76 @@ extension TheBurglar {
         let subtree: AccessibilityHierarchy
     }
 
+    private struct ScreenBuildEntry: Equatable {
+        let path: TreePath
+        let screenElement: Screen.ScreenElement
+        let isFirstResponder: Bool
+
+        var heistId: HeistId {
+            screenElement.heistId
+        }
+    }
+
+    private struct ScreenBuildLiveReferences {
+        private let objectsByPath: [TreePath: NSObject]
+        private let scrollViewsByPath: [TreePath: UIScrollView]
+        let containerRefsByPath: [TreePath: Screen.ContainerRef]
+        let scrollableContainerViewsByPath: [TreePath: Screen.ScrollableViewRef]
+
+        init(
+            result: ParseResult,
+            hierarchy: [AccessibilityHierarchy],
+            entries: [ScreenBuildEntry]
+        ) {
+            let elementPaths = Set(entries.map(\.path))
+            for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
+                preconditionFailure(
+                    "Screen build received live element object for non-element entry path \(path.indices)"
+                )
+            }
+            for path in result.containerObjectsByPath.keys.sorted() {
+                guard case .container = hierarchy.node(at: path) else {
+                    preconditionFailure(
+                        "Screen build received live container object for non-container path \(path.indices)"
+                    )
+                }
+            }
+            for path in result.scrollViewsByPath.keys.sorted() {
+                guard case .container(let container, _) = hierarchy.node(at: path),
+                      container.isScrollable else {
+                    preconditionFailure(
+                        "Screen build received live scroll view for non-scrollable container path \(path.indices)"
+                    )
+                }
+            }
+
+            objectsByPath = result.objectsByPath
+            scrollViewsByPath = result.scrollViewsByPath
+            containerRefsByPath = result.containerObjectsByPath.mapValues {
+                Screen.ContainerRef(object: $0)
+            }
+            scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
+                Screen.ScrollableViewRef(view: $0)
+            }
+        }
+
+        func elementRef(for entry: ScreenBuildEntry) -> Screen.ElementRef? {
+            let object = objectsByPath[entry.path]
+            let scrollView = entry.screenElement.scrollMembership.flatMap { membership in
+                scrollViewsByPath[membership.containerPath]
+            }
+            guard object != nil || scrollView != nil else { return nil }
+            return Screen.ElementRef(
+                object: object,
+                scrollView: scrollView
+            )
+        }
+    }
+
     private struct ScreenBuildProjection {
-        let screen: Screen
+        let semantic: SemanticScreen
+        let snapshot: LiveCapture.Snapshot
+        let entries: [ScreenBuildEntry]
         let logEvents: [ScreenBuildLogEvent]
     }
 

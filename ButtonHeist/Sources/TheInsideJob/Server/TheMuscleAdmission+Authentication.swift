@@ -66,10 +66,29 @@ struct MuscleAuthenticationFlow {
     }
 
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> [MuscleAdmissionEffect] {
-        clientRegistry.authenticate(
-            authentication.clientId,
-            address: authentication.address
-        )
+        switch clientRegistry.completeAuthentication(authentication.clientId) {
+        case .advanced(_, effect: .authenticated):
+            break
+        case .advanced(_, effect: .helloValidated):
+            preconditionFailure("Authentication completion cannot emit hello validation.")
+        case .missingClient:
+            return [
+                .log(.missingRegisteredAddress(clientId: authentication.clientId)),
+                .sendResponse(
+                    .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
+                    requestId: nil,
+                    respond: authentication.respond
+                ),
+                .delayedDisconnect(clientId: authentication.clientId),
+            ]
+        case .rejected:
+            return MuscleAuthenticationRejection.unauthenticatedMessage(
+                authentication.clientId,
+                message: "Authentication requires clientHello first.",
+                requestId: nil,
+                respond: authentication.respond
+            )
+        }
 
         switch authentication.source {
         case .token:

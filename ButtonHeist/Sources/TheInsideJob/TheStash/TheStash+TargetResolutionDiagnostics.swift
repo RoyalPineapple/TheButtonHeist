@@ -27,23 +27,24 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    static func candidateSummary(_ candidate: TheStash.TargetCandidateFacts) -> String {
-        var parts: [String] = []
-        if let label = candidate.label, !label.isEmpty { parts.append("\"\(label)\"") }
-        if let identifier = candidate.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
-        if let value = candidate.value, !value.isEmpty { parts.append("value=\(value)") }
-        parts.append(availabilityDescription(candidate))
-        return parts.joined(separator: " ")
+    static func elementCandidateDescription(_ candidate: TheStash.TargetCandidateFacts) -> String {
+        ElementDiagnosticSummary(
+            label: candidate.label,
+            identifier: candidate.identifier,
+            value: candidate.value,
+            availability: availability(candidate)
+        ).rendered(using: .targetCandidate)
     }
 
-    static func containerCandidateSummary(_ candidate: TheStash.ContainerCandidateFacts) -> String {
-        [
-            "type=\(candidate.type.rawValue)",
-            candidate.identifier.map { "identifier=\"\($0)\"" },
-            candidate.label.map { "label=\"\($0)\"" },
-            candidate.value.map { "value=\"\($0)\"" },
-            candidate.isModalBoundary ? "modal=true" : nil,
-        ].compactMap { $0 }.joined(separator: " ")
+    static func containerCandidateDescription(_ candidate: TheStash.ContainerCandidateFacts) -> String {
+        ElementDiagnosticSummary(
+            label: candidate.label,
+            identifier: candidate.identifier,
+            value: candidate.value
+        ).rendered(using: .containerCandidate(
+            type: candidate.type.rawValue,
+            isModalBoundary: candidate.isModalBoundary
+        ))
     }
 
     private static func notFoundMessage(_ facts: TheStash.TargetNotFoundFacts) -> String {
@@ -79,7 +80,7 @@ enum TargetResolutionDiagnostics {
         let countLabel = facts.matchedCount > 10 ? "10+" : "\(facts.matchedCount)"
         let rangeLabel = facts.matchedCount > 10 ? "0, 1, 2, ..." : "0–\(facts.matchedCount - 1)"
         let query = TheStash.Diagnostics.formatMatcher(facts.predicate)
-        let candidates = facts.candidates.map(candidateSummary)
+        let candidates = facts.candidates.map(elementCandidateDescription)
         var lines = [
             "\(countLabel) elements match: \(query) (scope: \(facts.resolutionScope.rawValue)) — use ordinal \(rangeLabel) to select one"
         ]
@@ -90,15 +91,11 @@ enum TargetResolutionDiagnostics {
         return lines.joined(separator: "\n")
     }
 
-    private static func availabilityDescription(_ candidate: TheStash.TargetCandidateFacts) -> String {
+    private static func availability(_ candidate: TheStash.TargetCandidateFacts) -> ElementDiagnosticSummary.Availability {
         if candidate.isVisible {
-            return "(visible)"
+            return .visible
         }
-        var details = ["offscreen"]
-        if !candidate.isReachable {
-            details.append("unreachable")
-        }
-        return "(\(details.joined(separator: ", ")))"
+        return .offscreen(isReachable: candidate.isReachable)
     }
 
     private static func containerNotFoundMessage(_ facts: TheStash.ContainerNotFoundFacts) -> String {
@@ -114,7 +111,7 @@ enum TargetResolutionDiagnostics {
     }
 
     private static func containerAmbiguousMessage(_ facts: TheStash.ContainerAmbiguityFacts) -> String {
-        let candidates = facts.candidates.map(containerCandidateSummary)
+        let candidates = facts.candidates.map(containerCandidateDescription)
         return "container target is ambiguous across \(facts.matchedCount) containers; "
             + "narrow by semantic facts or target an element inside the intended region. Candidates: "
             + candidates.joined(separator: "; ")

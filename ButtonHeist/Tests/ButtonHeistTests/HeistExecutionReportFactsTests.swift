@@ -68,6 +68,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         let rollup = result.evidenceRollup
 
+        XCTAssertEqual(rollup.events.map(eventDescription), [
+            "visit:$.body[0]",
+            "dispatch:$.body[0]:activate",
+            "report:$.body[0]:activate",
+            "trace:$.body[0]:activate",
+            "warning:$.body[0]:action",
+            "visit:$.body[1]",
+            "trace:$.body[1]:wait",
+            "expectationChecked:$.body[1]:true",
+            "expectationMet:$.body[1]",
+            "warning:$.body[1]:wait",
+            "visit:$.body[2]",
+            "warning:$.body[2]:explicit",
+        ])
         XCTAssertEqual(rollup.outputReceiptNodes.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
         XCTAssertEqual(rollup.summary.executedTopLevelStepCount, 3)
         XCTAssertEqual(rollup.summary.executedNodeCount, 3)
@@ -91,7 +105,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
 
         XCTAssertEqual(projection.nodes.map(\.path), rollup.rootNodes.map(\.step.path))
-        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.nodes.map(\.step.path))
+        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.outputNodes.map(\.step.path))
         XCTAssertEqual(projection.summary.outputReceiptNodeCount, rollup.summary.outputReceiptNodeCount)
 
         let projectedRoot = try XCTUnwrap(projection.nodes.first)
@@ -122,6 +136,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let summary = HeistExecutionReportSummaryFacts(result: result)
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
 
+        XCTAssertTrue(result.evidenceRollup.events.contains { event in
+            guard case .finalScreen(let path, let screenId) = event else { return false }
+            return path == "$.body[0]" && screenId == "checkout"
+        })
         XCTAssertEqual(summary.finalScreenId, "checkout")
         XCTAssertEqual(projection.summary.finalScreenId, summary.finalScreenId)
     }
@@ -403,6 +421,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(result.firstFailedStep?.path, "$.body[0].heist.body[0]")
+        XCTAssertEqual(result.evidenceRollup.events.map(eventDescription).filter {
+            $0.hasPrefix("firstFailure:")
+        }, [
+            "firstFailure:$.body[0].heist.body[0]:action",
+        ])
         XCTAssertEqual(result.failedStepPath, "$.body[0].heist.body[0]")
         XCTAssertEqual(result.failedStepKind, .action)
         XCTAssertEqual(result.steps.first?.abortedAtChildPath, "$.body[0].heist.body[0]")
@@ -879,6 +902,36 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     // MARK: - Fixtures
+
+    private func eventDescription(_ event: HeistExecutionEvidenceEvent) -> String {
+        switch event {
+        case .nodeVisited(let node):
+            return "visit:\(node.step.path)"
+        case .dispatchedActionResult(let path, let result):
+            return "dispatch:\(path):\(result.method.rawValue)"
+        case .reportedActionResult(let path, let result):
+            return "report:\(path):\(result.method.rawValue)"
+        case .traceResult(let path, let result):
+            return "trace:\(path):\(result.method.rawValue)"
+        case .expectationChecked(let path, let expectation):
+            return "expectationChecked:\(path):\(expectation.met)"
+        case .expectationMet(let path, _):
+            return "expectationMet:\(path)"
+        case .warning(let warning):
+            switch warning {
+            case .action(let path, _):
+                return "warning:\(path):action"
+            case .wait(let path, _):
+                return "warning:\(path):wait"
+            case .explicit(let warning):
+                return "warning:\(warning.path):explicit"
+            }
+        case .firstFailure(let step):
+            return "firstFailure:\(step.path):\(step.kind.rawValue)"
+        case .finalScreen(let path, let screenId):
+            return "finalScreen:\(path):\(screenId)"
+        }
+    }
 
     private typealias EvidenceProjectionCase = (
         name: String,

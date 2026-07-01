@@ -121,7 +121,7 @@ extension TheStash {
 
         var candidates: [String] {
             guard case .ambiguous(let facts) = self else { return [] }
-            return facts.candidates.map(TargetResolutionDiagnostics.candidateSummary)
+            return facts.candidates.map(TargetResolutionDiagnostics.elementCandidateDescription)
         }
     }
 
@@ -136,7 +136,7 @@ extension TheStash {
 
         var candidates: [String] {
             guard case .ambiguous(let facts) = self else { return [] }
-            return facts.candidates.map(TargetResolutionDiagnostics.containerCandidateSummary)
+            return facts.candidates.map(TargetResolutionDiagnostics.containerCandidateDescription)
         }
     }
 

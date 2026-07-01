@@ -230,17 +230,14 @@ extension TheStash {
         diagnosticPredicate: ElementPredicate,
         element: HeistElement
     ) -> String {
-        var observed: [String] = []
-        if failedPredicate.includesCheck(.label), let label = element.label, !label.isEmpty {
-            observed.append("label=\"\(label)\"")
-        }
-        if failedPredicate.includesCheck(.identifier), let identifier = element.identifier, !identifier.isEmpty {
-            observed.append("id=\"\(identifier)\"")
-        }
-        if failedPredicate.includesCheck(.value), let value = element.value, !value.isEmpty {
-            observed.append("value=\"\(value)\"")
-        }
-        return "\(observed.joined(separator: " ")) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
+        let fields: [ElementDiagnosticSummary.Field?] = [
+            failedPredicate.includesCheck(.label) ? .label : nil,
+            failedPredicate.includesCheck(.identifier) ? .identifier : nil,
+            failedPredicate.includesCheck(.value) ? .value : nil,
+        ]
+        let observed = ElementDiagnosticSummary(element: element)
+            .rendered(using: .selectedFields(fields.compactMap { $0 }))
+        return "\(observed) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
     }
 
     private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
@@ -278,16 +275,14 @@ extension TheStash {
         var lines = ["\(screenElements.count) \(resolutionScope) \(noun):"]
         for entry in screenElements.prefix(cap) {
             let element = entry.element
-            var parts: [String] = []
-            if let label = element.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
-            if let identifier = element.identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
-            if let value = element.value, !value.isEmpty { parts.append("value=\"\(value)\"") }
-            let traitNames = AccessibilityTraits.knownTraits
-                .filter { element.traits.contains($0.trait) }
-                .map { $0.name }
-            if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
-            parts.append(availabilityDescription(for: entry, visibleHeistIds: visibleHeistIds))
-            lines.append("  \(parts.joined(separator: " "))")
+            let summary = ElementDiagnosticSummary(
+                label: element.label,
+                identifier: element.identifier,
+                value: element.value,
+                traits: element.traits.heistTraits,
+                availability: availability(for: entry, visibleHeistIds: visibleHeistIds)
+            )
+            lines.append("  \(summary.rendered(using: .compactStash))")
         }
         if screenElements.count > cap {
             lines.append("  ... and \(screenElements.count - cap) more")
@@ -320,22 +315,22 @@ extension TheStash {
         candidate: Screen.ScreenElement,
         visibleHeistIds: Set<HeistId>
     ) -> String {
-        "\(field)=\"\(actual)\" \(availabilityDescription(for: candidate, visibleHeistIds: visibleHeistIds))"
+        let summary = ElementDiagnosticSummary(
+            availability: availability(for: candidate, visibleHeistIds: visibleHeistIds)
+        )
+        return "\(field)=\(ElementDiagnosticSummary.RenderProfile.compactStash.renderString(actual)) "
+            + summary.rendered(using: .availability)
     }
 
-    static func availabilityDescription(
+    static func availability(
         for candidate: Screen.ScreenElement,
         visibleHeistIds: Set<HeistId>
-    ) -> String {
+    ) -> ElementDiagnosticSummary.Availability {
         if visibleHeistIds.contains(candidate.heistId) {
-            return "(visible)"
+            return .visible
         }
 
-        var details = ["offscreen"]
-        if candidate.scrollMembership == nil {
-            details.append("unreachable")
-        }
-        return "(\(details.joined(separator: ", ")))"
+        return .offscreen(isReachable: candidate.scrollMembership != nil)
     }
 
     /// Drop duplicate formatted candidates while keeping the first occurrence's

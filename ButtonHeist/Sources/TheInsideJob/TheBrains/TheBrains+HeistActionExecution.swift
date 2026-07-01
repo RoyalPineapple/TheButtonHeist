@@ -515,25 +515,12 @@ extension TheBrains {
     }
 
     private func activationAffordanceEvidenceDescription(for element: HeistElement) -> String {
-        var parts: [String] = []
-        if let label = element.label, !label.isEmpty {
-            parts.append("label=\(quotedEvidence(label))")
-        }
-        if let identifier = element.identifier, !identifier.isEmpty {
-            parts.append("identifier=\(quotedEvidence(identifier))")
-        }
-        let traits = AccessibilityPolicy.orderedMatcherTraits(element.traits).map(\.rawValue)
-        parts.append("traits=[\(traits.joined(separator: ", "))]")
-        let actions = element.actions.map(\.description).sorted()
-        parts.append("actions=[\(actions.joined(separator: ", "))]")
-        return parts.joined(separator: " ")
-    }
-
-    private func quotedEvidence(_ value: String) -> String {
-        let escaped = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        return "\"\(escaped)\""
+        ElementDiagnosticSummary(
+            label: element.label,
+            identifier: element.identifier,
+            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
+            actions: element.actions.sorted { $0.description < $1.description }
+        ).rendered(using: .activationAffordanceEvidence)
     }
 
     private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {

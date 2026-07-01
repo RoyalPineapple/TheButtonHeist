@@ -10,30 +10,30 @@ import ThePlans
 extension Navigation {
 
     private enum ScanResult: Equatable {
-        case foundTarget
+        case terminal(ScrollTraversalTerminal)
         case completed
         case omitted(ExplorationOmissionReason)
     }
 
     private enum ScrollScanOutcome: Equatable {
-        case foundTarget
+        case terminal(ScrollTraversalTerminal)
         case exhausted
         case limitHit(ExplorationOmissionReason)
     }
 
-    func scanForHeistId(_ heistId: HeistId) async -> Screen? {
+    func scanForHeistId(_ heistId: HeistId) async -> ExploredScreen? {
         let startTime = CACurrentMediaTime()
         var exploration = SemanticExploration(
             baseline: stash.actionDiscoveryBaseline()
         )
         exploration.absorb(stash.refreshLiveCapture())
         if stash.liveContains(heistId: heistId) {
-            return exploration.finish(startTime: startTime).screen
+            return exploration.finish(startTime: startTime)
         }
 
         exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        if await scanPendingContainers(target: nil, targetHeistId: heistId, exploration: &exploration) {
-            return exploration.finish(startTime: startTime).screen
+        if await scanPendingContainers(target: nil, targetHeistId: heistId, exploration: &exploration) != nil {
+            return exploration.finish(startTime: startTime)
         }
         return nil
     }
@@ -42,23 +42,23 @@ extension Navigation {
         target: ElementTarget?,
         targetHeistId: HeistId? = nil,
         exploration: inout SemanticExploration
-    ) async -> Bool {
+    ) async -> ScrollTraversalTerminal? {
         while !exploration.manifest.pendingScrollPaths.isEmpty {
             guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
-                exploration.manifest.discoveryLimitHit = true
-                return false
+                exploration.manifest.markDiscoveryLimitHit()
+                return nil
             }
 
             let batch = sortedPendingContainers(in: exploration)
             guard !batch.isEmpty else {
-                exploration.manifest.pendingScrollPaths.removeAll()
-                return false
+                exploration.manifest.clearPendingContainers()
+                return nil
             }
 
             for container in batch {
                 guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
-                    exploration.manifest.discoveryLimitHit = true
-                    return false
+                    exploration.manifest.markDiscoveryLimitHit()
+                    return nil
                 }
                 guard let containerExploration = prepareContainerExploration(for: container) else {
                     exploration.markExplored(container)
@@ -72,9 +72,9 @@ extension Navigation {
                     exploration: &exploration
                 )
                 switch result {
-                case .foundTarget:
+                case .terminal(let terminal):
                     exploration.markExplored(containerExploration.semanticContainer)
-                    return true
+                    return terminal
                 case .completed:
                     exploration.markExplored(containerExploration.semanticContainer)
                 case .omitted(let reason):
@@ -83,7 +83,7 @@ extension Navigation {
                 exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
             }
         }
-        return false
+        return nil
     }
 
     private func sortedPendingContainers(in exploration: SemanticExploration) -> [SemanticScreen.Container] {
@@ -136,8 +136,8 @@ extension Navigation {
             exploration: &exploration
         )
         switch forward {
-        case .foundTarget:
-            return .foundTarget
+        case .terminal(let terminal):
+            return .terminal(terminal)
         case .limitHit(let reason):
             await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
             return .omitted(reason)
@@ -152,8 +152,8 @@ extension Navigation {
             exploration: &exploration
         )
         switch backward {
-        case .foundTarget:
-            return .foundTarget
+        case .terminal(let terminal):
+            return .terminal(terminal)
         case .limitHit(let reason):
             await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
             return .omitted(reason)
@@ -179,8 +179,8 @@ extension Navigation {
         _ plan: ScrollScanPlan,
         exploration: inout SemanticExploration
     ) async -> ScrollScanOutcome {
-        if scanGoalWasMet(plan.goal, in: exploration.screen) {
-            return .foundTarget
+        if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
+            return .terminal(terminal)
         }
 
         for offset in scanOffsets(for: plan.container, direction: plan.direction) {
@@ -195,8 +195,8 @@ extension Navigation {
             }
             absorbExplorationPage(in: &exploration)
 
-            if scanGoalWasMet(plan.goal, in: exploration.screen) {
-                return .foundTarget
+            if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
+                return .terminal(terminal)
             }
         }
 
@@ -318,18 +318,19 @@ extension Navigation {
         return offsets.filter { seen.insert(CoarseOffset($0)).inserted }
     }
 
-    private func scanGoalWasMet(
+    private func scanGoalTerminal(
         _ goal: ScrollScanGoal,
         in screen: Screen
-    ) -> Bool {
+    ) -> ScrollTraversalTerminal? {
         switch goal {
         case .exhaust:
-            return false
+            return nil
         case .findHeistId(let targetHeistId):
-            guard screen.liveCapture.contains(heistId: targetHeistId) else { return false }
-            return true
+            guard screen.liveCapture.contains(heistId: targetHeistId) else { return nil }
+            return .foundHeistId(targetHeistId)
         case .findTarget(let target):
-            return hasVisibleTerminalExplorationResolution(target, in: screen)
+            guard hasVisibleTerminalExplorationResolution(target, in: screen) else { return nil }
+            return .foundTarget(target)
         }
     }
 
