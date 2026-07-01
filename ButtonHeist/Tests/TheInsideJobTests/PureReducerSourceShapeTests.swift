@@ -29,7 +29,7 @@ import Testing
         #expect(try reducerType.containsMatch(#"\bfunc\s+reduce\s*\("#))
         #expect(try reducerType.containsMatch(#"\bfunc\s+decision\s*\("#))
         #expect(
-            try reducerType.containsMatch(#"\blastEvaluation[.]met\b"#),
+            try reducerType.containsMatch(#"\bevaluation[.]met\b"#),
             "PredicateWaitReducer should own direct expectation.met branching"
         )
         #expect(decisionType.contents.contains("case poll("))

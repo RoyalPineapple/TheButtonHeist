@@ -270,7 +270,7 @@ final class TheMuscleTests: XCTestCase {
             )
         }
 
-        guard case .handled(let effect) = admission.admitClientMessage(
+        guard case .handled(let effects) = admission.admitClientMessage(
             1,
             data: data,
             respond: { _ in },
@@ -279,10 +279,13 @@ final class TheMuscleTests: XCTestCase {
             return XCTFail("Expected over-limit frame to be handled by admission")
         }
 
-        XCTAssertNil(effect.delayedDisconnectClientId)
-        XCTAssertEqual(effect.outputs.count, 1)
-        guard case .response(.error(let error), let requestId, _) = effect.outputs[0] else {
-            return XCTFail("Expected rate-limit response, got \(effect.outputs[0])")
+        XCTAssertEqual(effects.count, 2)
+        guard case .log(.rateLimited(let clientId)) = effects[0] else {
+            return XCTFail("Expected rate-limit log first, got \(effects[0])")
+        }
+        XCTAssertEqual(clientId, 1)
+        guard case .sendResponse(.error(let error), let requestId, _) = effects[1] else {
+            return XCTFail("Expected rate-limit response second, got \(effects[1])")
         }
         XCTAssertNil(requestId)
         XCTAssertEqual(error.kind, .general)
@@ -315,7 +318,14 @@ final class TheMuscleTests: XCTestCase {
         ) else {
             return XCTFail("Expected first over-limit frame to be handled")
         }
-        XCTAssertEqual(firstLimit.outputs.count, 1)
+        XCTAssertEqual(firstLimit.count, 2)
+        guard case .log(.rateLimited(let firstLimitClientId)) = firstLimit[0] else {
+            return XCTFail("Expected first over-limit effect to log rate limiting")
+        }
+        XCTAssertEqual(firstLimitClientId, 1)
+        guard case .sendResponse = firstLimit[1] else {
+            return XCTFail("Expected first over-limit notification to send a response")
+        }
 
         guard case .handled(let repeatedLimit) = admission.admitClientMessage(
             1,
@@ -325,7 +335,11 @@ final class TheMuscleTests: XCTestCase {
         ) else {
             return XCTFail("Expected repeated over-limit frame to be handled")
         }
-        XCTAssertTrue(repeatedLimit.outputs.isEmpty)
+        XCTAssertEqual(repeatedLimit.count, 1)
+        guard case .log(.rateLimited(let repeatedLimitClientId)) = repeatedLimit[0] else {
+            return XCTFail("Expected repeated over-limit frame to only log rate limiting")
+        }
+        XCTAssertEqual(repeatedLimitClientId, 1)
 
         guard case .handled(let nextWindow) = admission.admitClientMessage(
             1,
@@ -335,10 +349,19 @@ final class TheMuscleTests: XCTestCase {
         ) else {
             return XCTFail("Expected next-window frame to continue through normal admission")
         }
-        XCTAssertEqual(nextWindow.outputs.count, 1)
-        guard case .response(.error(let error), _, _) = nextWindow.outputs[0] else {
+        XCTAssertEqual(nextWindow.count, 3)
+        guard case .log(.unauthenticatedMessage(let clientId, let message)) = nextWindow[0] else {
+            return XCTFail("Expected unauthenticated-message log first, got \(nextWindow[0])")
+        }
+        XCTAssertEqual(clientId, 1)
+        XCTAssertEqual(message, "Authentication required before ping.")
+        guard case .sendResponse(.error(let error), _, _) = nextWindow[1] else {
             return XCTFail("Expected normal pre-auth rejection after window reset")
         }
+        guard case .delayedDisconnect(let disconnectClientId) = nextWindow[2] else {
+            return XCTFail("Expected disconnect after response, got \(nextWindow[2])")
+        }
+        XCTAssertEqual(disconnectClientId, 1)
         XCTAssertEqual(error.kind, .authFailure)
         XCTAssertEqual(error.message, "Authentication required before ping.")
     }
@@ -386,7 +409,7 @@ final class TheMuscleTests: XCTestCase {
             }
         }
 
-        guard case .handled(let effect) = admission.admitClientMessage(
+        guard case .handled(let effects) = admission.admitClientMessage(
             1,
             data: pingData,
             respond: respond,
@@ -394,9 +417,13 @@ final class TheMuscleTests: XCTestCase {
         ) else {
             return XCTFail("Expected over-limit authenticated message to be handled by admission")
         }
-        XCTAssertEqual(effect.outputs.count, 1)
-        guard case .response(.error(let error), let requestId, _) = effect.outputs[0] else {
-            return XCTFail("Expected rate-limit response, got \(effect.outputs[0])")
+        XCTAssertEqual(effects.count, 2)
+        guard case .log(.rateLimited(let clientId)) = effects[0] else {
+            return XCTFail("Expected rate-limit log first, got \(effects[0])")
+        }
+        XCTAssertEqual(clientId, 1)
+        guard case .sendResponse(.error(let error), let requestId, _) = effects[1] else {
+            return XCTFail("Expected rate-limit response second, got \(effects[1])")
         }
         XCTAssertNil(requestId)
         XCTAssertEqual(error.kind, .general)

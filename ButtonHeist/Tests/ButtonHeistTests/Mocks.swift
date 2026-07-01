@@ -493,13 +493,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             kind: .repeatUntil,
             durationMs: heistStepDurationMs,
             intent: .repeatUntil(predicate: predicate.description, timeout: repeatUntil.timeout),
-            evidence: .repeatUntil(HeistRepeatUntilEvidence(
-                outcome: .matched,
+            evidence: .repeatUntil(HeistRepeatUntilEvidence.predicateMet(
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
                 expectation: ExpectationResult(met: true, predicate: predicate)
-            ))
+            )!)
         )
     }
 

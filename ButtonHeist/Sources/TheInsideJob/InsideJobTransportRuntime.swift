@@ -1,47 +1,74 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import UIKit
 
 import TheScore
 
 @MainActor
 extension TheInsideJob {
-    func startRuntimeLeaseForStartup() async throws -> InsideJobRuntimeLease {
-        let lease = try await startRuntimeLease(phase: .startup, leavesStoppedOnFailure: true)
-        logStartupSummary(
-            actualPort: lease.actualPort,
-            bonjourServiceName: lease.bonjourServiceName
+    func startRuntimeResourcesForStartup() async throws -> InsideJobRuntimeResources {
+        let resources = try await startRuntimeResources(
+            phase: .startup,
+            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled,
+            leavesStoppedOnFailure: true
         )
-        return lease
+        logStartupSummary(
+            actualPort: resources.actualPort,
+            bonjourServiceName: resources.bonjourServiceName
+        )
+        return resources
     }
 
-    func startRuntimeLeaseForResume() async throws -> InsideJobRuntimeLease {
-        try await startRuntimeLease(phase: .resume, leavesStoppedOnFailure: false)
+    func startRuntimeResourcesForResume(
+        idleTimerBaseline: Bool
+    ) async throws -> InsideJobRuntimeResources {
+        try await startRuntimeResources(
+            phase: .resume,
+            idleTimerBaseline: idleTimerBaseline,
+            leavesStoppedOnFailure: false
+        )
     }
 
     func stopRuntime() async {
-        if case .resuming(_, let task) = serverPhase {
-            task.cancel()
+        if case .resuming(let attempt) = serverPhase {
+            attempt.task.cancel()
+            await attempt.task.value
         }
 
-        let bridge = pendingForegroundResumeTask
-        pendingForegroundResumeTask = nil
-        bridge?.cancel()
-        await bridge?.value
-
-        if case .running(let lease) = serverPhase {
-            pendingTransportStopTask = lease.release(from: self, policy: .stop)
-        } else {
-            releaseRuntimeOwnedResources(policy: .stop)
+        let resourcesToStop: InsideJobRuntimeResources?
+        let idleTimerBaseline: Bool?
+        switch serverPhase {
+        case .running(let resources):
+            resourcesToStop = resources
+            idleTimerBaseline = resources.idleTimerBaseline
+        case .suspending(let suspension):
+            resourcesToStop = suspension.resources
+            idleTimerBaseline = suspension.resources.idleTimerBaseline
+        case .suspended(let suspended):
+            resourcesToStop = nil
+            idleTimerBaseline = suspended.idleTimerBaseline
+        case .resuming:
+            resourcesToStop = nil
+            idleTimerBaseline = retainedIdleTimerBaseline
+        case .stopping, .stopped:
+            return
         }
+
+        serverPhase = .stopping(InsideJobStopAttempt(id: UUID()))
+        if let idleTimerBaseline {
+            releaseRuntimeOwnedResources(policy: .stop, idleTimerBaseline: idleTimerBaseline)
+        }
+        await resourcesToStop?.transport.stop()
 
         serverPhase = .stopped
     }
 
-    private func startRuntimeLease(
+    private func startRuntimeResources(
         phase: InsideJobRuntimeStartPhase,
+        idleTimerBaseline: Bool,
         leavesStoppedOnFailure: Bool
-    ) async throws -> InsideJobRuntimeLease {
+    ) async throws -> InsideJobRuntimeResources {
         let token = try requireRuntimeToken(phase: phase)
         insideJobLogger.info("TLS PSK material ready")
 
@@ -56,10 +83,11 @@ extension TheInsideJob {
                 bindToLoopback: exposure.bindsToLoopbackOnly
             )
             let serviceName = advertiseService(on: transport, port: actualPort)
-            return InsideJobRuntimeLease(
+            return InsideJobRuntimeResources(
                 transport: transport,
                 actualPort: actualPort,
-                bonjourServiceName: serviceName
+                bonjourServiceName: serviceName,
+                idleTimerBaseline: idleTimerBaseline
             )
         } catch {
             await cleanupFailedTransportStartup(transport)
@@ -92,32 +120,21 @@ extension TheInsideJob {
 
     func cleanupFailedTransportStartup(_ transport: ServerTransport?) async {
         if let transport {
-            let stopTask = transport.stop()
-            await stopTask.value
+            await transport.stop()
             await getaway.tearDownIfWired(to: transport)
         }
         getaway.identity.tlsActive = false
     }
 
     func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {
-        guard case .resuming(let currentID, _) = serverPhase else { return false }
-        return currentID == resumeID
+        guard case .resuming(let attempt) = serverPhase else { return false }
+        return attempt.id == resumeID
     }
 
-    func finishFailedResumeAttempt(_ resumeID: UUID, startedTransport: ServerTransport?) {
-        let stopTask = startedTransport?.stop()
-        if let stopTask {
-            if let existingStopTask = pendingTransportStopTask {
-                pendingTransportStopTask = Task {
-                    await existingStopTask.value
-                    await stopTask.value
-                }
-            } else {
-                pendingTransportStopTask = stopTask
-            }
-        }
+    func finishFailedResumeAttempt(_ resumeID: UUID) {
         guard isCurrentResumeAttempt(resumeID) else { return }
-        serverPhase = .suspended
+        guard case .resuming(let attempt) = serverPhase else { return }
+        serverPhase = .suspended(attempt.suspendedRuntime)
     }
 }
 

@@ -1015,7 +1015,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             isMatched: \.met
         )
 
-        XCTAssertFalse(result.lastEvaluation?.met ?? true)
+        XCTAssertFalse(result.last?.evaluation.met ?? true)
         XCTAssertEqual(observedScopes.prefix(2), [.visible, .discovery])
         XCTAssertEqual(observedScopes.filter { $0 == .discovery }.count, 1)
         XCTAssertGreaterThanOrEqual(observedScopes.filter { $0 == .visible }.count, 2)
@@ -1048,7 +1048,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             isMatched: \.met
         )
 
-        XCTAssertTrue(result.lastEvaluation?.met == true)
+        XCTAssertTrue(result.last?.evaluation.met == true)
         XCTAssertEqual(observedScopes, [.visible])
     }
 
@@ -1082,7 +1082,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             isMatched: \.met
         )
 
-        XCTAssertNil(result.lastEvaluation)
+        XCTAssertNil(result.last)
         XCTAssertFalse(observedScopes.contains(.discovery))
         XCTAssertEqual(observedTimeouts.first.flatMap { $0 }, 0)
     }

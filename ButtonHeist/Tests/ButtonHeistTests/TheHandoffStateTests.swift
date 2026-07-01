@@ -1,3 +1,4 @@
+import Network
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
@@ -417,21 +418,25 @@ final class TheHandoffStateTests: XCTestCase {
         guard let oldTarget = controller.targetForDisconnectedDevice(oldDevice) else {
             return XCTFail("Expected old reconnect target")
         }
-        controller.run(target: oldTarget) { _ in }
+        guard let oldRun = controller.run(target: oldTarget, operation: { _ in }) else {
+            return XCTFail("Expected old reconnect run")
+        }
 
         XCTAssertTrue(controller.setup(filter: "NewApp"))
         guard let newTarget = controller.targetForDisconnectedDevice(newDevice) else {
             return XCTFail("Expected new reconnect target")
         }
-        controller.run(target: newTarget) { _ in }
+        guard let newRun = controller.run(target: newTarget, operation: { _ in }) else {
+            return XCTFail("Expected new reconnect run")
+        }
 
-        XCTAssertFalse(controller.finishSuccess(target: oldTarget))
-        XCTAssertFalse(controller.finishFailure(target: oldTarget))
-        XCTAssertTrue(controller.finishSuccess(target: newTarget))
+        XCTAssertFalse(controller.finishSuccess(oldRun))
+        XCTAssertFalse(controller.finishFailure(oldRun, failure: .connectionFailed("stale")))
+        XCTAssertTrue(controller.finishSuccess(newRun))
     }
 
     @ButtonHeistActor
-    func testReconnectFailureClearsActiveTarget() async {
+    func testReconnectControllerRejectsDuplicateRunWhileRunning() async {
         let controller = HandoffReconnectController()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
@@ -439,11 +444,52 @@ final class TheHandoffStateTests: XCTestCase {
         guard let target = controller.targetForDisconnectedDevice(device) else {
             return XCTFail("Expected reconnect target")
         }
-        controller.run(target: target) { _ in }
 
-        XCTAssertTrue(controller.finishFailure(target: target))
-        XCTAssertFalse(controller.finishSuccess(target: target))
-        XCTAssertFalse(controller.finishFailure(target: target))
+        XCTAssertNotNil(controller.run(target: target, operation: { _ in }))
+        XCTAssertNil(controller.run(target: target, operation: { _ in }))
+    }
+
+    @ButtonHeistActor
+    func testReconnectTerminalFailureRequiresExplicitSetupBeforeRearming() async {
+        let controller = HandoffReconnectController()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        XCTAssertTrue(controller.setup(filter: nil))
+        guard let target = controller.targetForDisconnectedDevice(device) else {
+            return XCTFail("Expected reconnect target")
+        }
+        guard let run = controller.run(target: target, operation: { _ in }) else {
+            return XCTFail("Expected reconnect run")
+        }
+
+        XCTAssertTrue(controller.finishFailure(run, failure: .connectionFailed("gave up")))
+        XCTAssertFalse(controller.finishSuccess(run))
+        XCTAssertFalse(controller.finishFailure(run, failure: .connectionFailed("again")))
+        XCTAssertNil(controller.targetForDisconnectedDevice(device))
+
+        XCTAssertTrue(controller.setup(filter: nil))
+        XCTAssertNotNil(controller.targetForDisconnectedDevice(device))
+    }
+
+    @ButtonHeistActor
+    func testReconnectSuccessDoesNotRetainTargetForLaterDisconnect() async {
+        let controller = HandoffReconnectController()
+        let firstDevice = DiscoveredDevice(host: "127.0.0.1", port: 1111)
+        let secondDevice = DiscoveredDevice(host: "127.0.0.1", port: 2222)
+
+        XCTAssertTrue(controller.setup(filter: nil))
+        guard let firstTarget = controller.targetForDisconnectedDevice(firstDevice),
+              let firstRun = controller.run(target: firstTarget, operation: { _ in })
+        else {
+            return XCTFail("Expected first reconnect run")
+        }
+
+        XCTAssertTrue(controller.finishSuccess(firstRun))
+
+        guard let secondTarget = controller.targetForDisconnectedDevice(secondDevice) else {
+            return XCTFail("Expected rearmed reconnect target")
+        }
+        XCTAssertEqual(secondTarget.device, secondDevice)
     }
 
     @ButtonHeistActor
@@ -466,6 +512,27 @@ final class TheHandoffStateTests: XCTestCase {
 
         assertReconnecting(handoff.connectionPhase, device: device)
         handoff.disableAutoReconnect()
+    }
+
+    @ButtonHeistActor
+    func testReconnectPhaseNotifiesWhenRunIdentityChanges() async {
+        let lifecycle = HandoffConnectionLifecycle()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let target = HandoffReconnectTarget(filter: nil, device: device)
+        let firstRunID = UUID()
+        let secondRunID = UUID()
+        var phases: [HandoffConnectionPhase] = []
+        lifecycle.onPhaseChanged = { phases.append($0) }
+
+        lifecycle.markReconnecting(target: target, runID: firstRunID)
+        lifecycle.markReconnecting(target: target, runID: secondRunID)
+
+        XCTAssertEqual(phases.count, 2)
+        guard case .reconnecting(let attempt) = phases.last else {
+            return XCTFail("Expected reconnecting phase")
+        }
+        XCTAssertEqual(attempt.runID, secondRunID)
+        XCTAssertEqual(attempt.target, target)
     }
 
     @ButtonHeistActor
@@ -800,6 +867,30 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDiscoveryFailureClearsDevicesAndStopsSession() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(
+            id: "failed-service",
+            name: "Failed#one",
+            endpoint: .service(name: "failed-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
+        )
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        handoff.makeDiscovery = { mockDiscovery }
+
+        handoff.startDiscovery()
+        XCTAssertTrue(handoff.isDiscovering)
+        XCTAssertEqual(handoff.discoveredDevices, [device])
+
+        mockDiscovery.onEvent?(.failed(.noDeviceFound))
+
+        XCTAssertFalse(handoff.isDiscovering)
+        XCTAssertEqual(handoff.discoveredDevices, [])
+        XCTAssertFalse(handoff.hasActiveDiscoverySession)
+        XCTAssertEqual(mockDiscovery.stopCount, 1)
+    }
+
+    @ButtonHeistActor
     func testReplacedDiscoveryIgnoresCallbacksFromPreviousSession() async {
         let handoff = TheHandoff()
         let staleDevice = DiscoveredDevice(
@@ -831,6 +922,82 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(handoff.isDiscovering)
         XCTAssertEqual(handoff.discoveredDevices, [currentDevice])
         XCTAssertEqual(foundDevices, [currentDevice])
+    }
+
+    @ButtonHeistActor
+    func testDeviceDiscoveryStartTwiceDoesNotReplaceActiveBrowser() async {
+        let browser = FakeDiscoveryBrowser()
+        let discovery = DeviceDiscovery(
+            reachabilityValidationInterval: 60,
+            makeBrowser: { browser }
+        )
+
+        discovery.start()
+        discovery.start()
+
+        XCTAssertEqual(browser.startCount, 1)
+        XCTAssertEqual(browser.cancelCount, 0)
+    }
+
+    @ButtonHeistActor
+    func testDeviceDiscoveryTerminalFailureClearsAndFails() async {
+        let browser = FakeDiscoveryBrowser()
+        let discovery = DeviceDiscovery(
+            reachabilityValidationInterval: 60,
+            makeBrowser: { browser }
+        )
+        var states: [Bool] = []
+        var failures: [HandoffConnectionError] = []
+        discovery.onEvent = { event in
+            switch event {
+            case .stateChanged(let isReady):
+                states.append(isReady)
+            case .failed(let failure):
+                failures.append(failure)
+            case .found, .lost:
+                break
+            }
+        }
+
+        discovery.start()
+        browser.emit(.ready)
+        await Task.yield()
+        browser.emit(.failed("boom"))
+        await Task.yield()
+
+        XCTAssertEqual(states, [true])
+        XCTAssertEqual(failures, [.connectionFailed("Bonjour discovery failed: boom")])
+        XCTAssertEqual(discovery.discoveredDevices, [])
+        XCTAssertEqual(browser.cancelCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testDeviceDiscoveryIgnoresStaleCallbacksAfterStopAndRestart() async {
+        let firstBrowser = FakeDiscoveryBrowser()
+        let secondBrowser = FakeDiscoveryBrowser()
+        var browsers = [firstBrowser, secondBrowser]
+        let discovery = DeviceDiscovery(
+            reachabilityValidationInterval: 60,
+            makeBrowser: { browsers.removeFirst() }
+        )
+        var states: [Bool] = []
+        discovery.onEvent = { event in
+            if case .stateChanged(let isReady) = event {
+                states.append(isReady)
+            }
+        }
+
+        discovery.start()
+        discovery.stop()
+        discovery.start()
+        firstBrowser.emit(.ready)
+        await Task.yield()
+        secondBrowser.emit(.ready)
+        await Task.yield()
+
+        XCTAssertEqual(firstBrowser.cancelCount, 1)
+        XCTAssertEqual(secondBrowser.startCount, 1)
+        XCTAssertEqual(states, [true])
     }
 
     @ButtonHeistActor
@@ -1611,5 +1778,24 @@ final class TheHandoffStateTests: XCTestCase {
         let connection = MockConnection()
         connection.emitTransportReadyOnConnect = true
         return connection
+    }
+}
+
+final class FakeDiscoveryBrowser: DeviceDiscoveryBrowsing {
+    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)?
+    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
+    private(set) var startCount = 0
+    private(set) var cancelCount = 0
+
+    func start(queue: DispatchQueue) {
+        startCount += 1
+    }
+
+    func cancel() {
+        cancelCount += 1
+    }
+
+    func emit(_ state: DeviceDiscoveryBrowserState) {
+        onStateChanged?(state)
     }
 }

@@ -94,14 +94,14 @@ struct PredicateCaseSelection {
             isMatched: { $0.selectedCaseIndex != nil }
         )
 
-        let lastSelection = pollResult.lastEvaluation ?? PredicateCaseSelection.unevaluated(cases)
+        let lastSelection = pollResult.last?.evaluation ?? PredicateCaseSelection.unevaluated(cases)
         if let selectedCaseIndex = lastSelection.selectedCaseIndex {
             return HeistCaseSelectionResult(
                 cases: lastSelection.cases,
                 outcome: .matchedCase(index: selectedCaseIndex),
                 elapsedMs: pollResult.elapsedMs,
                 timeout: rawTimeout,
-                lastObservedSummary: pollResult.lastObservation?.summary
+                lastObservedSummary: pollResult.last?.observation.summary
             )
         }
 
@@ -110,7 +110,7 @@ struct PredicateCaseSelection {
             outcome: PredicateWait.clampedWaitTimeout(rawTimeout) > 0 ? .timedOut : .noMatch,
             elapsedMs: pollResult.elapsedMs,
             timeout: rawTimeout,
-            lastObservedSummary: pollResult.lastObservation?.summary
+            lastObservedSummary: pollResult.last?.observation.summary
         )
     }
 }

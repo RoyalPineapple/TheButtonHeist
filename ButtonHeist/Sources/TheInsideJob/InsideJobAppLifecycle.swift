@@ -6,9 +6,8 @@ import UIKit
 extension TheInsideJob {
     // MARK: - App Lifecycle
 
-    func startLifecycleObservation() {
-        guard !lifecycleObservationActive else { return }
-        lifecycleObservationActive = true
+    func installLifecycleObservationIfNeeded() {
+        guard !lifecycleObservationIsInstalled else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification, object: nil
@@ -31,9 +30,7 @@ extension TheInsideJob {
         )
     }
 
-    func stopLifecycleObservation() {
-        guard lifecycleObservationActive else { return }
-        lifecycleObservationActive = false
+    func stopLifecycleObservationIfNeeded() {
         NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -50,9 +47,8 @@ extension TheInsideJob {
     }
 
     private func beginLifecycleSuspension() {
-        guard beginSuspension() else { return }
         spawnLifecycleTask { [weak self] in
-            await self?.finishSuspension()
+            await self?.suspend()
         }
     }
 
@@ -67,14 +63,22 @@ extension TheInsideJob {
     }
 
     private func scheduleForegroundResume(replacingExisting: Bool) {
-        if replacingExisting {
-            pendingForegroundResumeTask?.cancel()
-        } else if pendingForegroundResumeTask != nil {
+        if case .resuming(let attempt) = serverPhase {
+            guard replacingExisting else { return }
+            attempt.task.cancel()
+            spawnLifecycleTask { [weak self] in
+                await attempt.task.value
+                await self?.resumeAfterLifecycleBoundary()
+            }
             return
         }
-        pendingForegroundResumeTask = Task { @MainActor [weak self] in
-            await self?.resume()
-            self?.pendingForegroundResumeTask = nil
+
+        guard case .suspended = serverPhase else {
+            return
+        }
+
+        spawnLifecycleTask { [weak self] in
+            await self?.resumeAfterLifecycleBoundary()
         }
     }
 
@@ -102,40 +106,43 @@ extension TheInsideJob {
     // MARK: - Suspend / Resume
 
     func suspend() async {
-        guard beginSuspension() else { return }
-        await finishSuspension()
-    }
-
-    @discardableResult
-    private func beginSuspension() -> Bool {
+        let resources: InsideJobRuntimeResources
         switch serverPhase {
-        case .running(let lease):
-            pendingTransportStopTask = lease.release(from: self, policy: .suspend)
-        case .resuming(_, let task):
-            task.cancel()
-            releaseRuntimeOwnedResources(policy: .suspend)
-        case .stopped, .suspended:
-            return false
+        case .running(let runningResources):
+            resources = runningResources
+        case .resuming(let attempt):
+            attempt.task.cancel()
+            await attempt.task.value
+            guard case .suspended = serverPhase else { return }
+            return
+        case .stopped, .suspended, .suspending, .stopping:
+            return
         }
 
         brains.clearCache()
+        let suspension = InsideJobSuspension(id: UUID(), resources: resources)
+        serverPhase = .suspending(suspension)
+        releaseRuntimeOwnedResources(policy: .suspend, idleTimerBaseline: resources.idleTimerBaseline)
 
-        serverPhase = .suspended
-
-        return true
-    }
-
-    private func finishSuspension() async {
+        await resources.transport.stop()
         await muscle.tearDown()
         await getaway.tearDown()
+
+        guard case .suspending(let currentSuspension) = serverPhase,
+              currentSuspension.id == suspension.id
+        else { return }
+        serverPhase = .suspended(InsideJobSuspendedRuntime(idleTimerBaseline: resources.idleTimerBaseline))
 
         insideJobLogger.info("Server suspended")
     }
 
     func resume() async {
         await awaitPendingLifecycleTasks()
+        await resumeAfterLifecycleBoundary()
+    }
 
-        guard case .suspended = serverPhase else { return }
+    private func resumeAfterLifecycleBoundary() async {
+        guard case .suspended(let suspendedRuntime) = serverPhase else { return }
 
         insideJobLogger.info("Resuming server...")
 
@@ -146,13 +153,10 @@ extension TheInsideJob {
             do {
                 try Task.checkCancellation()
 
-                if let pendingTransportStopTask {
-                    await pendingTransportStopTask.value
-                    self.pendingTransportStopTask = nil
-                }
-
-                let lease = try await self.startRuntimeLeaseForResume()
-                startedTransport = lease.transport
+                let resources = try await self.startRuntimeResourcesForResume(
+                    idleTimerBaseline: suspendedRuntime.idleTimerBaseline
+                )
+                startedTransport = resources.transport
 
                 try Task.checkCancellation()
 
@@ -163,40 +167,31 @@ extension TheInsideJob {
                     return
                 }
 
-                lease.activate(on: self)
+                self.activateRuntime(resources)
                 startedTransport = nil
 
-                insideJobLogger.info("Server resumed on port \(lease.actualPort)")
+                insideJobLogger.info("Server resumed on port \(resources.actualPort)")
 
                 insideJobLogger.info("Server resume complete")
             } catch is CancellationError {
                 await self.cleanupFailedTransportStartup(startedTransport)
                 startedTransport = nil
-                self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
+                self.finishFailedResumeAttempt(resumeID)
                 insideJobLogger.info("Server resume cancelled")
             } catch {
                 insideJobLogger.error("Failed to resume server: \(error)")
                 await self.cleanupFailedTransportStartup(startedTransport)
                 startedTransport = nil
-                self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
+                self.finishFailedResumeAttempt(resumeID)
             }
         }
-        serverPhase = .resuming(id: resumeID, task: task)
-    }
-
-    func engageIdleTimerProtection() {
-        if case .unmodified = idleTimerProtection {
-            idleTimerProtection = .engaged(baseline: UIApplication.shared.isIdleTimerDisabled)
-        }
-        UIApplication.shared.isIdleTimerDisabled = true
-    }
-
-    func restoreIdleTimerProtection(clearBaseline: Bool) {
-        guard case .engaged(let baseline) = idleTimerProtection else { return }
-        UIApplication.shared.isIdleTimerDisabled = baseline
-        if clearBaseline {
-            idleTimerProtection = .unmodified
-        }
+        serverPhase = .resuming(
+            InsideJobResumeAttempt(
+                id: resumeID,
+                suspendedRuntime: suspendedRuntime,
+                task: task
+            )
+        )
     }
 }
 

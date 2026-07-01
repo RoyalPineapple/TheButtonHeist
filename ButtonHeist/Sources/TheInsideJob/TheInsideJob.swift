@@ -93,28 +93,51 @@ public final class TheInsideJob {
 
     let runtimeConfiguration: InsideJobRuntimeConfiguration
     let transportFactory: @MainActor (String, Set<ConnectionScope>) -> ServerTransport
-    var pendingTransportStopTask: Task<Void, Never>?
     let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
-    /// The Task spawned from `appWillEnterForeground` to bridge `@objc` ->
-    /// `async resume()`. Kept out of `lifecycleBoundaryTasks` so `resume()`'s
-    /// own drain cannot deadlock by awaiting its own handle. Tests observe
-    /// it to wait on a foreground resume cycle synchronously.
-    var pendingForegroundResumeTask: Task<Void, Never>?
-    var idleTimerProtection: IdleTimerProtection = .unmodified
-    var lifecycleObservationActive = false
 
     // MARK: - Computed State
 
     var isRunning: Bool {
         switch serverPhase {
-        case .running, .suspended, .resuming: return true
-        case .stopped: return false
+        case .running, .suspending, .suspended, .resuming, .stopping: return true
+        case .stopped:
+            return false
         }
     }
 
     var transport: ServerTransport? {
-        if case .running(let lease) = serverPhase { return lease.transport }
-        return nil
+        switch serverPhase {
+        case .running(let resources):
+            return resources.transport
+        case .suspending(let suspension):
+            return suspension.resources.transport
+        case .stopping, .stopped, .suspended, .resuming:
+            return nil
+        }
+    }
+
+    var lifecycleObservationIsInstalled: Bool {
+        switch serverPhase {
+        case .running, .suspending, .suspended, .resuming:
+            return true
+        case .stopped, .stopping:
+            return false
+        }
+    }
+
+    var retainedIdleTimerBaseline: Bool? {
+        switch serverPhase {
+        case .running(let resources):
+            return resources.idleTimerBaseline
+        case .suspending(let suspension):
+            return suspension.resources.idleTimerBaseline
+        case .suspended(let suspended):
+            return suspended.idleTimerBaseline
+        case .resuming(let attempt):
+            return attempt.suspendedRuntime.idleTimerBaseline
+        case .stopped, .stopping:
+            return nil
+        }
     }
 
     // MARK: - Initialization
@@ -202,15 +225,10 @@ public final class TheInsideJob {
             return
         }
 
-        if let pendingTransportStopTask {
-            await pendingTransportStopTask.value
-            self.pendingTransportStopTask = nil
-        }
-
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let lease = try await startRuntimeLeaseForStartup()
-        lease.activate(on: self)
+        let resources = try await startRuntimeResourcesForStartup()
+        activateRuntime(resources)
 
         insideJobLogger.info("Server started successfully")
     }

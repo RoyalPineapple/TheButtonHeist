@@ -7,16 +7,19 @@ struct MuscleAuthenticationDeadlinePhase {
         clientId: Int,
         phase: ClientAuthenticationState?,
         deadlineSeconds: UInt64
-    ) -> MuscleAdmissionEffect {
-        guard let phase, !phase.isAuthenticated else { return .none }
+    ) -> [MuscleAdmissionEffect] {
+        guard let phase, !phase.isAuthenticated else { return [] }
 
-        muscleAuthenticationLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
         let error = ServerError(
             kind: .authFailure,
             message: "Authentication timed out after \(deadlineSeconds) seconds."
         )
 
-        return .client(.error(error), clientId: clientId, disconnect: true)
+        return [
+            .log(.authenticationDeadline(clientId: clientId, deadlineSeconds: deadlineSeconds)),
+            .sendClient(.error(error), requestId: nil, clientId: clientId),
+            .delayedDisconnect(clientId: clientId),
+        ]
     }
 }
 #endif // DEBUG

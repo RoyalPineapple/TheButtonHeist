@@ -11,16 +11,42 @@ enum InsideJobRuntimeStartPhase: Equatable, Sendable {
 extension TheInsideJob {
     enum ServerPhase {
         case stopped
-        case running(lease: InsideJobRuntimeLease)
-        case suspended
-        case resuming(id: UUID, task: Task<Void, Never>)
+        case running(InsideJobRuntimeResources)
+        case suspending(InsideJobSuspension)
+        case suspended(InsideJobSuspendedRuntime)
+        case resuming(InsideJobResumeAttempt)
+        case stopping(InsideJobStopAttempt)
     }
-    /// Idle-timer baseline state. We force `UIApplication.isIdleTimerDisabled`
-    /// on while the server is running so the device doesn't sleep mid-session,
-    /// and restore the prior value on suspend/stop.
-    enum IdleTimerProtection {
-        case unmodified
-        case engaged(baseline: Bool)
+
+    struct InsideJobRuntimeResources {
+        let transport: ServerTransport
+        let actualPort: UInt16
+        let bonjourServiceName: String?
+        let idleTimerBaseline: Bool
+    }
+
+    struct InsideJobSuspendedRuntime {
+        let idleTimerBaseline: Bool
+    }
+
+    struct InsideJobSuspension {
+        let id: UUID
+        let resources: InsideJobRuntimeResources
+    }
+
+    struct InsideJobResumeAttempt {
+        let id: UUID
+        let suspendedRuntime: InsideJobSuspendedRuntime
+        let task: Task<Void, Never>
+    }
+
+    struct InsideJobStopAttempt {
+        let id: UUID
+    }
+
+    enum RuntimeReleasePolicy {
+        case suspend
+        case stop
     }
 
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.

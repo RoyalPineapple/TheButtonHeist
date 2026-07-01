@@ -97,15 +97,15 @@ final class TheMuscleStateMachineTests: XCTestCase {
         }
         XCTAssertEqual(
             claimEffect,
-            TheMuscleSession.Effect(logEvents: [.sessionClaimed(clientId: 1)])
+            [.log(.sessionClaimed(clientId: 1))]
         )
 
         XCTAssertEqual(
             session.removeConnection(1),
-            TheMuscleSession.Effect(
-                releaseTimerAction: .replace(timeout: 30),
-                logEvents: [.releaseTimerStarted(timeout: 30)]
-            )
+            [
+                .replaceReleaseTimer(timeout: 30),
+                .log(.releaseTimerStarted(timeout: 30)),
+            ]
         )
 
         guard case .accepted(let rejoinEffect) = session.acquire(
@@ -116,19 +116,22 @@ final class TheMuscleStateMachineTests: XCTestCase {
         }
         XCTAssertEqual(
             rejoinEffect,
-            TheMuscleSession.Effect(
-                releaseTimerAction: .cancel,
-                logEvents: [.clientRejoinedDuringGracePeriod(clientId: 2)]
-            )
+            [
+                .cancelReleaseTimer,
+                .log(.clientRejoinedDuringGracePeriod(clientId: 2)),
+            ]
         )
 
         XCTAssertEqual(
             session.release(),
-            TheMuscleSession.Effect(releaseTimerAction: .cancel, logEvents: [.sessionReleased])
+            [
+                .cancelReleaseTimer,
+                .log(.sessionReleased),
+            ]
         )
         XCTAssertEqual(
             session.release(),
-            TheMuscleSession.Effect(releaseTimerAction: .cancel)
+            [.cancelReleaseTimer]
         )
     }
     #endif
@@ -157,15 +160,37 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(sessionSource.contents.contains("case clientRejoinedDuringGracePeriod(clientId: Int)"))
         XCTAssertTrue(sessionSource.contents.contains("case sessionReleased"))
         XCTAssertTrue(sessionSource.contents.contains("case releaseTimerStarted(timeout: TimeInterval)"))
-        XCTAssertTrue(try sessionSource.containsMatch(#"\bstruct\s+Effect\b"#))
-        XCTAssertTrue(try sessionSource.containsMatch(#"\breleaseTimerAction\s*:\s*ReleaseTimerAction\b"#))
-        XCTAssertTrue(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
+        XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
+        XCTAssertTrue(sessionSource.contents.contains("case log(LogEvent)"))
+        XCTAssertTrue(sessionSource.contents.contains("case cancelReleaseTimer"))
+        XCTAssertTrue(sessionSource.contents.contains("case replaceReleaseTimer(timeout: TimeInterval)"))
+        XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\s*:"#))
+        XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
 
-        XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+applySessionEffect\s*\("#))
+        XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+applySessionEffects\s*\("#))
         XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+logSessionEvent\s*\("#))
         XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"Session claimed by client"))
         XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"Session released"))
         XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"All session connections gone"))
+    }
+
+    func testMuscleAdmissionAndSessionEffectsDoNotRegressToOptionalBags() throws {
+        let admissionSource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleAdmission.swift"
+        )
+        let sessionSource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleSession.swift"
+        )
+
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bdelayedDisconnectClientId\b"#))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\boutputs\s*:\s*\[MuscleAdmissionOutput\]"#))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bstruct\s+MuscleAdmissionEffect\b"#))
+        XCTAssertTrue(try admissionSource.containsMatch(#"\benum\s+MuscleAdmissionEffect\b"#))
+        XCTAssertTrue(admissionSource.contents.contains("case delayedDisconnect(clientId: Int)"))
+
+        XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\b"#))
+        XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
+        XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
     }
 
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {

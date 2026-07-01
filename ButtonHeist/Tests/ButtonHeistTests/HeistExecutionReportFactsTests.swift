@@ -965,15 +965,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 kind: .repeatUntil,
                 durationMs: 6,
                 intent: .repeatUntil(predicate: predicate.description, timeout: 2),
-                evidence: .repeatUntil(HeistRepeatUntilEvidence(
-                    outcome: .matched,
+                evidence: .repeatUntil(HeistRepeatUntilEvidence.predicateMet(
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
                     expectation: ExpectationResult(met: true, predicate: predicate),
                     actionResult: ActionResult.success(method: .wait),
                     lastObservedSummary: "Ready"
-                ))
+                )!)
             ),
             expectedKey: "repeatUntil",
             assertEvidence: { evidence in

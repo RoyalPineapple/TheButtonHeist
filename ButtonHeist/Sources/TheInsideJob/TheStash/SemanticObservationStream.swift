@@ -63,22 +63,51 @@ struct PostActionSettleObservation {
 private struct SemanticObservationFulfillmentState {
     typealias EventsByFulfilledScope = [SemanticObservationScope: SettledSemanticObservationEvent]
 
-    private(set) var latestSourceEvent: SettledSemanticObservationEvent?
-    private var latestEventsByFulfilledScope: EventsByFulfilledScope = [:]
-    private(set) var latestSettledObservationInvalidated = true
+    struct CurrentFulfillment {
+        let sourceEvent: SettledSemanticObservationEvent
+        var eventsByFulfilledScope: EventsByFulfilledScope
+    }
+
+    enum State {
+        case empty
+        case clean(CurrentFulfillment)
+        case invalidated(CurrentFulfillment?)
+    }
+
+    private var state: State = .empty
+
+    var latestSourceEvent: SettledSemanticObservationEvent? {
+        currentFulfillment?.sourceEvent
+    }
+
+    var latestSettledObservationInvalidated: Bool {
+        switch state {
+        case .empty, .invalidated:
+            true
+        case .clean:
+            false
+        }
+    }
 
     var latestObservation: SettledSemanticObservation? {
         latestSourceEvent?.observation
     }
 
     mutating func clear() {
-        latestSourceEvent = nil
-        latestEventsByFulfilledScope.removeAll()
-        latestSettledObservationInvalidated = true
+        state = .empty
     }
 
     mutating func invalidate() {
-        latestSettledObservationInvalidated = true
+        switch state {
+        case .empty:
+            state = .invalidated(nil)
+        case .clean(let fulfillment):
+            state = .invalidated(fulfillment)
+        case .invalidated(.some(let fulfillment)):
+            state = .invalidated(fulfillment)
+        case .invalidated(.none):
+            break
+        }
     }
 
     @MainActor
@@ -89,7 +118,9 @@ private struct SemanticObservationFulfillmentState {
         tripwireSignal: TheTripwire.TripwireSignal,
         stash: TheStash
     ) -> EventsByFulfilledScope {
+        var currentEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
         var events: EventsByFulfilledScope = [:]
+        var sourceEvent: SettledSemanticObservationEvent?
         for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
                 sequence: sequence,
@@ -99,17 +130,23 @@ private struct SemanticObservationFulfillmentState {
             )
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
-                previous: latestEventsByFulfilledScope[fulfilledScope],
+                previous: currentEvents[fulfilledScope],
                 stash: stash
             )
-            latestEventsByFulfilledScope[fulfilledScope] = event
+            currentEvents[fulfilledScope] = event
             events[fulfilledScope] = event
 
             if fulfilledScope == sourceScope {
-                latestSourceEvent = event
+                sourceEvent = event
             }
         }
-        latestSettledObservationInvalidated = false
+        guard let sourceEvent else {
+            preconditionFailure("Semantic observation scope did not fulfill itself")
+        }
+        state = .clean(CurrentFulfillment(
+            sourceEvent: sourceEvent,
+            eventsByFulfilledScope: currentEvents
+        ))
         return events
     }
 
@@ -117,13 +154,24 @@ private struct SemanticObservationFulfillmentState {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
     ) -> SettledSemanticObservationEvent? {
-        guard !latestSettledObservationInvalidated,
-              let latest = latestEventsByFulfilledScope[scope],
+        guard case .clean(let fulfillment) = state,
+              let latest = fulfillment.eventsByFulfilledScope[scope],
               latest.sequence > (sequence ?? 0)
         else {
             return nil
         }
         return latest
+    }
+
+    private var currentFulfillment: CurrentFulfillment? {
+        switch state {
+        case .empty:
+            return nil
+        case .clean(let fulfillment):
+            return fulfillment
+        case .invalidated(let fulfillment):
+            return fulfillment
+        }
     }
 }
 
@@ -132,6 +180,61 @@ final class SemanticObservationStream {
     /// An active stream is an observation lease. Baseline cycles observe the
     /// visible world; subscribers can widen demand to discovery.
     typealias DiscoveryObservation = @MainActor () async -> Screen?
+
+    private enum PassiveObservationState {
+        case stopped
+        case running(
+            task: Task<Void, Never>,
+            discovery: DiscoveryObservation,
+            settledReading: TheTripwire.PulseReading?
+        )
+
+        var isRunning: Bool {
+            switch self {
+            case .stopped:
+                return false
+            case .running:
+                return true
+            }
+        }
+
+        var task: Task<Void, Never>? {
+            switch self {
+            case .stopped:
+                return nil
+            case .running(let task, _, _):
+                return task
+            }
+        }
+
+        var discovery: DiscoveryObservation? {
+            switch self {
+            case .stopped:
+                return nil
+            case .running(_, let discovery, _):
+                return discovery
+            }
+        }
+
+        var settledReading: TheTripwire.PulseReading? {
+            switch self {
+            case .stopped:
+                return nil
+            case .running(_, _, let settledReading):
+                return settledReading
+            }
+        }
+
+        mutating func replaceDiscovery(_ discovery: @escaping DiscoveryObservation) {
+            guard case .running(let task, _, let settledReading) = self else { return }
+            self = .running(task: task, discovery: discovery, settledReading: settledReading)
+        }
+
+        mutating func updateSettledReading(_ reading: TheTripwire.PulseReading?) {
+            guard case .running(let task, let discovery, _) = self else { return }
+            self = .running(task: task, discovery: discovery, settledReading: reading)
+        }
+    }
 
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
@@ -160,16 +263,14 @@ final class SemanticObservationStream {
 
     // MARK: - Passive Observation Scheduling
 
-    private(set) var passiveObservationTask: Task<Void, Never>?
-    private var discoveryObservation: DiscoveryObservation?
-    private var passiveObservationSettledReading: TheTripwire.PulseReading?
+    private var passiveObservationState: PassiveObservationState = .stopped
 
     var latestObservation: SettledSemanticObservation? {
         fulfillmentState.latestObservation
     }
 
     var isActive: Bool {
-        passiveObservationTask != nil
+        passiveObservationState.isRunning
     }
 
     var settledWaiterCount: Int {
@@ -194,22 +295,24 @@ final class SemanticObservationStream {
     }
 
     func start(discovery: @escaping DiscoveryObservation) {
-        discoveryObservation = discovery
-        guard passiveObservationTask == nil else { return }
+        guard !passiveObservationState.isRunning else {
+            passiveObservationState.replaceDiscovery(discovery)
+            return
+        }
         fulfillmentState.invalidate()
-        passiveObservationTask = Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 await self.runPassiveObservationCycle()
             }
         }
+        passiveObservationState = .running(task: task, discovery: discovery, settledReading: nil)
     }
 
     func stop() {
-        passiveObservationTask?.cancel()
-        passiveObservationTask = nil
-        discoveryObservation = nil
-        passiveObservationSettledReading = nil
+        passiveObservationState.task?.cancel()
+        passiveObservationState = .stopped
+        cycles.cancelRunningCycle()
         settledWaiters.completeAll(returning: nil)
         cycles.completeAllWaiters()
     }
@@ -436,7 +539,7 @@ final class SemanticObservationStream {
 
     func clearSettledObservationHistory() {
         fulfillmentState.clear()
-        passiveObservationSettledReading = nil
+        passiveObservationState.updateSettledReading(nil)
         latestSettleFailureDiagnostic = nil
     }
 
@@ -460,7 +563,7 @@ final class SemanticObservationStream {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
         latestSettleFailureDiagnostic = nil
-        passiveObservationSettledReading = tripwire.latestReading
+        passiveObservationState.updateSettledReading(tripwire.latestReading)
         settledWaiters.completeWaiters(with: events)
         return sourceEvent
     }
@@ -513,9 +616,20 @@ final class SemanticObservationStream {
 
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
-        cycles.beginCycle()
+        guard case .started(let cycle) = cycles.beginCycle(scope: scope) else {
+            _ = await Task.cancellableSleep(for: .milliseconds(10))
+            return
+        }
+        guard !Task.isCancelled else {
+            cycles.finishCycle(token: cycle, didObserve: false)
+            return
+        }
         let didObserve = await performObservationCycle(scope: scope)
-        cycles.finishCycle(didObserve: didObserve, scope: scope)
+        guard !Task.isCancelled else {
+            cycles.finishCycle(token: cycle, didObserve: false)
+            return
+        }
+        cycles.finishCycle(token: cycle, didObserve: didObserve)
         guard didObserve else { return }
         await Task.yield()
     }
@@ -529,16 +643,17 @@ final class SemanticObservationStream {
         case .visible:
             return await observeVisibleSemanticState(stash: stash)
         case .discovery:
-            guard let discoveryObservation else {
+            guard let discovery = passiveObservationState.discovery else {
                 invalidateLatestSettledObservation()
                 await Task.yield()
                 return true
             }
-            guard let exploredScreen = await discoveryObservation() else {
+            guard let exploredScreen = await discovery() else {
                 invalidateLatestSettledObservation()
                 await Task.yield()
                 return true
             }
+            guard !Task.isCancelled else { return false }
             _ = commitSettledDiscoveryObservation(exploredScreen)
             await Task.yield()
             return true
@@ -552,7 +667,7 @@ final class SemanticObservationStream {
 
         if let reading = tripwire.latestReading,
            !latestSettledObservationInvalidated,
-           passiveObservationSettledReading?.tick == reading.tick {
+           passiveObservationState.settledReading?.tick == reading.tick {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
             return true
         }
@@ -579,6 +694,7 @@ final class SemanticObservationStream {
             return true
         }
 
+        guard !Task.isCancelled else { return false }
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true
@@ -600,6 +716,7 @@ final class SemanticObservationStream {
             return true
         }
 
+        guard !Task.isCancelled else { return false }
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true

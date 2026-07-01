@@ -14,27 +14,28 @@ struct MuscleTokenAuthenticationPhase {
     ) -> MuscleAdmissionDecision {
         switch tokenAdmission.decideToken(payload.token, driverId: payload.driverId, address: address) {
         case .lockedOut(let error):
-            muscleAuthenticationLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
-            return .handled(.response(.error(error), respond: respond, disconnect: clientId))
+            return .handled([
+                .log(.lockedOut(clientId: clientId, address: address)),
+                .sendResponse(.error(error), requestId: nil, respond: respond),
+                .delayedDisconnect(clientId: clientId),
+            ])
 
         case .rejected(let rejection):
             switch rejection {
             case .invalidToken(let error, let attempts):
-                muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
-                return .handled(.response(
-                    .error(error),
-                    respond: respond,
-                    disconnect: clientId
-                ))
+                return .handled([
+                    .log(.invalidToken(clientId: clientId, attempts: attempts)),
+                    .sendResponse(.error(error), requestId: nil, respond: respond),
+                    .delayedDisconnect(clientId: clientId),
+                ])
 
             case .lockoutStarted(let error, let attempts):
-                muscleAuthenticationLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
-                muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
-                return .handled(.response(
-                    .error(error),
-                    respond: respond,
-                    disconnect: clientId
-                ))
+                return .handled([
+                    .log(.lockoutStarted(address: address, attempts: attempts)),
+                    .log(.invalidToken(clientId: clientId, attempts: attempts)),
+                    .sendResponse(.error(error), requestId: nil, respond: respond),
+                    .delayedDisconnect(clientId: clientId),
+                ])
             }
 
         case .accepted(let driverIdentity):

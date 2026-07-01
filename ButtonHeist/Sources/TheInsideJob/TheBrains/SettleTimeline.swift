@@ -50,7 +50,7 @@ extension AccessibilityElement {
         self.bucket = bucket
     }
 
-    mutating func record(_ screen: Screen) -> Int {
+    mutating func record(_ screen: Screen) -> SettleRecordedObservation {
         let elements = screen.liveCapture.hierarchy.sortedElements
         if let previousElements {
             latestChangeDescription = SettleTimeline.changeDescription(
@@ -63,8 +63,20 @@ extension AccessibilityElement {
         for element in elements {
             elementsByKey[element.timelineKey(bucket: bucket)] = element
         }
-        return SettleTimeline.fingerprint(of: elements, bucket: bucket)
+        return SettleRecordedObservation(
+            screen: screen,
+            fingerprint: SettleTimeline.fingerprint(of: elements, bucket: bucket),
+            elementsByKey: elementsByKey,
+            instabilityDescription: latestChangeDescription
+        )
     }
+}
+
+struct SettleRecordedObservation {
+    let screen: Screen
+    let fingerprint: Int
+    let elementsByKey: [TimelineKey: AccessibilityElement]
+    let instabilityDescription: String?
 }
 
 @MainActor enum SettleTimeline { // swiftlint:disable:this agent_main_actor_value_type

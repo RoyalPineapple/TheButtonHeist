@@ -118,6 +118,7 @@ enum DiscoveryEvent {
     case found(DiscoveredDevice)
     case lost(DiscoveredDevice)
     case stateChanged(isReady: Bool)
+    case failed(HandoffConnectionError)
 }
 
 // MARK: - Protocols

@@ -151,15 +151,15 @@ extension TheBrains {
         switch result.outcome {
         case .success(let success):
             let payload: PostActionObservation.ActionOutcomePayload
-            if let afterStatePayload {
+            if let immediatePayload = success.payload {
+                payload = .immediate(immediatePayload)
+            } else if let afterStatePayload {
                 payload = .afterState { afterState in
                     afterStatePayload(PostActionPayloadContext(
                         afterState: afterState,
                         resolvedElementId: success.resolvedElementId
                     ))
                 }
-            } else if let immediatePayload = success.payload {
-                payload = .immediate(immediatePayload)
             } else {
                 payload = .none
             }
