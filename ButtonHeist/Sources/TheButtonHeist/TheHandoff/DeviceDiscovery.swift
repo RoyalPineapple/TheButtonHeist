@@ -14,7 +14,7 @@ enum DeviceDiscoveryBrowserState: Equatable, Sendable {
     case cancelled
 }
 
-protocol DeviceDiscoveryBrowsing: AnyObject {
+protocol DeviceDiscoveryBrowsing {
     var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)? { get set }
     var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)? { get set }
     func start(queue: DispatchQueue)
@@ -122,7 +122,7 @@ final class DeviceDiscovery: DeviceDiscovering {
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
 
         let sessionID = UUID()
-        let browser = makeBrowser()
+        var browser = makeBrowser()
 
         browser.onResultsChanged = { [weak self, sessionID] results, changes in
             Task { @ButtonHeistActor [weak self, sessionID] in

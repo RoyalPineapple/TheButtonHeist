@@ -27,6 +27,11 @@ where State: Sendable & Equatable, Effect: Sendable & Equatable, Rejection: Send
             return []
         }
     }
+
+    package var singleEffect: Effect? {
+        guard effects.count == 1 else { return nil }
+        return effects[0]
+    }
 }
 
 package struct StateDriver<Machine: SimpleStateMachine>: Sendable {
