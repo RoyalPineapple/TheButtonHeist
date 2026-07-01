@@ -449,7 +449,6 @@
 		BE1BB4CF679CA7549B85F1D7 /* TheFence+PredicatePayloadValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F330DC2631D650C2C94567 /* TheFence+PredicatePayloadValidation.swift */; };
 		BF404A9690CE743C870767B4 /* TheFence+Formatting+Compact+Interface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC1B4AB7158C64914F79AA7 /* TheFence+Formatting+Compact+Interface.swift */; };
 		BF8943067A421E766C866AF9 /* WaitForIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55705E02DEA7790A18E98DD1 /* WaitForIntegrationTests.swift */; };
-		4BFA37A612A24B9E9D02F311 /* ButtonHeistNetworkTestClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA3BA6103DA437D89B88E22 /* ButtonHeistNetworkTestClient.swift */; };
 		C0416C1CE7CC1DB0DFC69BF5 /* ElementTargetExpressions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A4BFB429819D3BBA7F244E1 /* ElementTargetExpressions.swift */; };
 		C0DD9775AF7798263DFA5CFD /* TheStash+TargetResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81CF9628DD207248D46BFE20 /* TheStash+TargetResolution.swift */; };
 		C122ECEEC6ABF51A9FF5470C /* ArrayHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37A738D26A475EB890AB40A /* ArrayHelpers.swift */; };
@@ -487,6 +486,7 @@
 		CC9E24226AD428055607E838 /* HeistJUnitReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368279598775CC38E084A8F5 /* HeistJUnitReportTests.swift */; };
 		CD2B9EAB96E0F672795E32AC /* HeistPlanSourceCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23F7855082B9E57384EB7C83 /* HeistPlanSourceCompiler.swift */; };
 		CD31A318F123315951A5243C /* DeviceConnectionEventStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30300EF11850AA2835A7ABB7 /* DeviceConnectionEventStream.swift */; };
+		CD937930A4136B2F5001969C /* ButtonHeistNetworkTestClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */; };
 		CDE776C5A28AC8E014AD0DE6 /* InsideJobStartupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D173650692F55CC5D9D0748 /* InsideJobStartupError.swift */; };
 		CE24C75ED12F915BF560DC2B /* HeistPlanSourceControlFlowParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85113D37B71CA7C60F36F035 /* HeistPlanSourceControlFlowParser.swift */; };
 		CEA69A0EA5598AE50635963E /* ThePlansBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18ECA4EE42225148426FBD14 /* ThePlansBoundaryTests.swift */; };
@@ -1415,7 +1415,6 @@
 		BEF65E26EF4959C85C071973 /* IdAssignment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdAssignment.swift; sourceTree = "<group>"; };
 		BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Scroll.swift"; sourceTree = "<group>"; };
 		BF8BA7720C4F2D247438D70F /* SocketReceiveFramerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketReceiveFramerTests.swift; sourceTree = "<group>"; };
-		9DA3BA6103DA437D89B88E22 /* ButtonHeistNetworkTestClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonHeistNetworkTestClient.swift; sourceTree = "<group>"; };
 		C07B9B547FB0FF43521E8241 /* HeistPlanSourcePredicateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlanSourcePredicateParser.swift; sourceTree = "<group>"; };
 		C14C43FC929B828675DC40A1 /* PrivateStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateStorageTests.swift; sourceTree = "<group>"; };
 		C22E288C7ED5647AD70907B9 /* KeyboardBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBridge.swift; sourceTree = "<group>"; };
@@ -1540,6 +1539,7 @@
 		F65CA4E2766945A9FDB6FD07 /* ActivationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationPolicyTests.swift; sourceTree = "<group>"; };
 		F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
 		F70806BEB61DC6949980DC78 /* SettleSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettleSessionTests.swift; sourceTree = "<group>"; };
+		F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonHeistNetworkTestClient.swift; sourceTree = "<group>"; };
 		F81D4AD108F70379DBD8DB42 /* TheGetaway+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheGetaway+Status.swift"; sourceTree = "<group>"; };
 		F8744B3E0A411DA0F9E27D6E /* HandoffAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffAdmission.swift; sourceTree = "<group>"; };
 		F91D600828986B3875995CA1 /* HeistPlan+RuntimeValidationPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeValidationPayloads.swift"; sourceTree = "<group>"; };
@@ -2544,7 +2544,7 @@
 			isa = PBXGroup;
 			children = (
 				728093FC7C1BED2EBBFDB9E1 /* AccessibilityElement+Construction.swift */,
-				9DA3BA6103DA437D89B88E22 /* ButtonHeistNetworkTestClient.swift */,
+				F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */,
 				9EA4D5F0C1DED9EFC339D4C8 /* InterfaceFixture.swift */,
 				10D79C29B3000357A40270A6 /* ScreenFactory.swift */,
 			);
@@ -3599,6 +3599,7 @@
 				7CC18EFE1CB52BF84DEF8842 /* HeistReceiptTests.swift in Sources */,
 				EA154DA271D4705FE7F9FEC0 /* HeistRuntimeReceiptConstructionSourceTests.swift in Sources */,
 				7EBAC5EBAAE8ABABC130164E /* AccessibilityElement+Construction.swift in Sources */,
+				CD937930A4136B2F5001969C /* ButtonHeistNetworkTestClient.swift in Sources */,
 				3D52B8DE6200921BFAC707AA /* InterfaceFixture.swift in Sources */,
 				E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */,
 				E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */,
@@ -3627,7 +3628,6 @@
 				6AC2B7B3C48E49FC43D9ADB3 /* SocketSendBufferTests.swift in Sources */,
 				4C58BD643FF17CE111B32BEE /* StartupConfigurationTests.swift in Sources */,
 				B3CE3A23E2692549AA000FCB /* SynthesisDeterminismTests.swift in Sources */,
-				4BFA37A612A24B9E9D02F311 /* ButtonHeistNetworkTestClient.swift in Sources */,
 				A1DBD280620BA4EE8B43FAD8 /* TLSIntegrationTests.swift in Sources */,
 				F749584E59209A57D9E3E996 /* TaskTrackerTests.swift in Sources */,
 				856D3288A1E027D75B1EB28C /* TestSentinelTask.swift in Sources */,

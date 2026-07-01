@@ -108,63 +108,74 @@ final class TLSIntegrationTests: XCTestCase {
     }
 }
 
+#if canImport(UIKit)
 final class JoinHeistIntegrationTests: XCTestCase {
 
-    func testJoinHeistSessionAcceptsWireClientAndReturnsInterface() throws {
-        let token = "join-heist-\(UUID().uuidString)"
-        let session = try XCTUnwrap(startJoinedHeistSession(
+    func testWithJoinedHeistSessionExposesSessionAndStopsOnScopeExit() throws {
+        let token = "scoped-join-heist-\(UUID().uuidString)"
+        var listeningPort: UInt16?
+        var readyMessage: String?
+
+        withJoinedHeistSession(
             token: token,
             port: 0,
             allowedScopes: [.simulator],
             file: #filePath,
             line: #line
-        ))
-        let client = ButtonHeistWireTestClient(
-            token: token,
-            port: session.listeningPort
-        )
-        defer {
-            client.cancel()
-            stopJoinedHeistSession(session)
+        ) { session in
+            XCTAssertEqual(session.token, token)
+            XCTAssertGreaterThan(session.listeningPort, 0)
+            XCTAssertTrue(session.readyMessage.contains("endpoint=127.0.0.1:\(session.listeningPort)"))
+            XCTAssertTrue(session.readyMessage.contains("token=\(token)"))
+            XCTAssertTrue(session.readyMessage.contains("simulator loopback only"))
+            listeningPort = session.listeningPort
+            readyMessage = session.readyMessage
         }
 
-        let completed = expectation(description: "wire client completed joinHeist probe")
-        let completedFulfillment = SendableXCTestFulfillment(completed)
-        let result = SyncResultBox<JoinHeistProbe>()
-        let probeTask = Task {
-            do {
+        let port = try XCTUnwrap(listeningPort)
+        XCTAssertNotNil(readyMessage)
+
+        let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
+        defer { client.cancel() }
+
+        runHeistSyncOperation(file: #filePath, line: #line) {
+            try await client.connectExpectingRejection(timeout: 1.0)
+        }
+    }
+
+    func testJoinHeistSessionAcceptsWireClientAndReturnsInterface() throws {
+        let token = "join-heist-\(UUID().uuidString)"
+        withJoinedHeistSession(
+            token: token,
+            port: 0,
+            allowedScopes: [.simulator],
+            file: #filePath,
+            line: #line
+        ) { session in
+            let client = ButtonHeistWireTestClient(
+                token: token,
+                port: session.listeningPort
+            )
+            defer { client.cancel() }
+
+            guard let probe = runHeistSyncOperation(file: #filePath, line: #line, {
                 try await client.connect()
                 let info = try await client.authenticate(driverId: "join-heist-integration-test")
                 let interface = try await client.requestInterface()
-                result.finish(.success(JoinHeistProbe(
+                return JoinHeistProbe(
                     reportedPort: info.listeningPort,
                     labels: interface.projectedElements.compactMap(\.label)
-                )))
-            } catch {
-                result.finish(.failure(error))
+                )
+            }) else {
+                return
             }
-            completedFulfillment.fulfill()
+
+            XCTAssertEqual(probe.reportedPort, session.listeningPort)
+            XCTAssertTrue(
+                probe.labels.contains("ButtonHeist Demo"),
+                "Expected joined session to return the live demo app interface, got labels: \(probe.labels)"
+            )
         }
-        defer { probeTask.cancel() }
-
-        wait(for: [completed], timeout: 10.0)
-
-        let probe = try result.value()
-        XCTAssertEqual(probe.reportedPort, session.listeningPort)
-        XCTAssertTrue(
-            probe.labels.contains("ButtonHeist Demo"),
-            "Expected joined session to return the live demo app interface, got labels: \(probe.labels)"
-        )
-    }
-
-    private func stopJoinedHeistSession(_ session: JoinedHeistSession) {
-        let stopped = expectation(description: "joined heist session stopped")
-        let stoppedFulfillment = SendableXCTestFulfillment(stopped)
-        Task { @MainActor in
-            await session.stop()
-            stoppedFulfillment.fulfill()
-        }
-        wait(for: [stopped], timeout: 5.0)
     }
 }
 
@@ -172,41 +183,4 @@ private struct JoinHeistProbe: Sendable {
     let reportedPort: UInt16
     let labels: [String]
 }
-
-/// `@unchecked Sendable` justification: `storage` is written from an async test
-/// task and read by the synchronous XCTest body; every access is serialized by
-/// `lock`.
-private final class SyncResultBox<Value: Sendable>: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let lock = NSLock()
-    private var storage: Result<Value, Error>?
-
-    func finish(_ result: Result<Value, Error>) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard storage == nil else { return }
-        storage = result
-    }
-
-    func value() throws -> Value {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let storage else {
-            throw ButtonHeistNetworkTestFailure("Async test task did not report a result")
-        }
-        return try storage.get()
-    }
-}
-
-/// `@unchecked Sendable` justification: XCTest expectations are fulfilled from
-/// async callbacks in this file, and this wrapper only forwards `fulfill()`.
-private final class SendableXCTestFulfillment: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let expectation: XCTestExpectation
-
-    init(_ expectation: XCTestExpectation) {
-        self.expectation = expectation
-    }
-
-    func fulfill() {
-        expectation.fulfill()
-    }
-}
+#endif

@@ -127,6 +127,9 @@ temporary directory at `buttonheist-receipts/`.
 `RunHeist(...)` composes inside durable plans. `runHeist(...)` executes a heist
 now from Swift tests. `run_heist` crosses the CLI/MCP tool boundary.
 
+If a test already has a `HeistPlan`, run it through the same testing facade with
+`try await runHeist(plan)` instead of constructing `Heist` directly.
+
 To stop at a screen, open a ButtonHeist session, and let a human or agent
 connect through MCP or the CLI, halt a synchronous XCTest after ordinary app
 navigation:
@@ -148,6 +151,23 @@ listener reports its bound port, then halts test progression while pumping the
 run loop so the client can interact with the live app. Bazel-launched simulators
 may still need external port forwarding from the host; the app process can
 report the bound simulator-side port but cannot create that host bridge itself.
+
+For tests that should keep running while a client connects, scope the same live
+session around the code that needs it:
+
+```swift
+func testCheckoutWithExternalProbe() throws {
+    logIn()
+    navigateToCheckout()
+    withJoinedHeistSession(token: "probe") { session in
+        print(session.readyMessage)
+        runExternalProbe(port: session.listeningPort, token: session.token)
+    }
+}
+```
+
+`withJoinedHeistSession` accepts the same `port` and `allowedScopes` parameters
+as `joinHeist`, then stops the fresh InsideJob server when the closure exits.
 
 Inside a durable plan, `RunHeist("Name", argument)` is the composition step
 that invokes a named reusable heist. It is not a Swift helper call:

@@ -364,7 +364,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try CalculatorScreen.addSevenAndFive()
             try DogfoodNavigation.backToRoot()
         }
-        let prebuiltRun = try await Heist(prebuilt, argument: .none)
+        let prebuiltRun = try await runHeist(prebuilt)
 
         XCTAssertEqual(prebuiltRun.result.steps.map(\.kind), [.invoke, .invoke, .invoke])
         XCTAssertEqual(prebuiltRun.result.steps.first?.reportDisplayName, #"RunHeist("DemoHome.openScreen", "Calculator")"#)

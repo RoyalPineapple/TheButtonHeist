@@ -26,6 +26,16 @@ public func runHeist<Content: HeistContent>(
     return try await Heist(request.plan, argument: request.argument)
 }
 
+/// Runs a prebuilt in-process heist plan through the app-hosted test runtime.
+@MainActor
+@discardableResult
+public func runHeist(
+    _ plan: HeistPlan,
+    argument: HeistArgument = .none
+) async throws -> Heist {
+    try await Heist(plan, argument: argument)
+}
+
 func makeRunHeistRequest<Content: HeistContent>(
     _ name: String,
     @HeistBuilder _ content: @escaping () throws -> Content
@@ -404,6 +414,37 @@ public func joinHeist(
     }
 }
 
+/// Opens a ButtonHeist session for the duration of `body` without halting test
+/// progression.
+///
+/// The scoped session follows the same fresh-`TheInsideJob` startup path as
+/// `joinHeist`, exposes the bound port and ready message to the caller, and
+/// stops the session before returning or rethrowing from `body`.
+@discardableResult
+public func withJoinedHeistSession<Result>(
+    token: String,
+    port: UInt16 = 0,
+    allowedScopes: Set<ConnectionScope> = [.simulator],
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ body: (JoinedHeistSession) throws -> Result
+) rethrows -> Result? {
+    guard let session = startJoinedHeistSession(
+        token: token,
+        port: port,
+        allowedScopes: allowedScopes,
+        file: file,
+        line: line
+    ) else {
+        return nil
+    }
+
+    defer {
+        stopJoinedHeistSession(session, file: file, line: line)
+    }
+    return try body(session)
+}
+
 func startJoinedHeistSession(
     token: String,
     port: UInt16,
@@ -411,42 +452,43 @@ func startJoinedHeistSession(
     file: StaticString,
     line: UInt
 ) -> JoinedHeistSession? {
-    guard Thread.isMainThread else {
-        XCTestRuntimeBridge.recordFailure(
-            "joinHeist must be called on the main thread so it can pump the main run loop.",
-            file: file,
-            line: line
-        )
-        return nil
-    }
-
-    let state = HeistSyncState<JoinedHeistSession>()
-    let task = Task { @MainActor in
+    runHeistSyncOperation(file: file, line: line) { @MainActor in
         let job = TheInsideJob(
             token: token,
             allowedScopes: allowedScopes,
             port: port
         )
-        do {
-            try await job.start()
-            guard let listeningPort = job.listeningPort else {
-                state.finish(.failure(JoinHeistError.listenerDidNotReportPort))
-                return
-            }
-            state.finish(.success(JoinedHeistSession(
-                job: job,
-                token: token,
-                requestedPort: port,
-                listeningPort: listeningPort,
-                allowedScopes: allowedScopes
-            )))
-        } catch {
-            state.finish(.failure(error))
+        try await job.start()
+        guard let listeningPort = job.listeningPort else {
+            throw JoinHeistError.listenerDidNotReportPort
         }
+        return JoinedHeistSession(
+            job: job,
+            token: token,
+            requestedPort: port,
+            listeningPort: listeningPort,
+            allowedScopes: allowedScopes
+        )
     }
-    state.retain(task)
+}
 
-    return waitForSynchronousResult(state, file: file, line: line)
+func stopJoinedHeistSession(
+    _ session: JoinedHeistSession,
+    file: StaticString,
+    line: UInt
+) {
+    guard Thread.isMainThread else {
+        XCTestRuntimeBridge.recordFailure(
+            "Joined heist sessions must stop on the main thread so the main run loop can be pumped.",
+            file: file,
+            line: line
+        )
+        return
+    }
+
+    runHeistSyncOperation(file: file, line: line) { @MainActor in
+        await session.stop()
+    }
 }
 
 private func runHeistSyncRequest(
@@ -473,8 +515,7 @@ private func runHeistSyncRequest(
         return nil
     }
 
-    let state = HeistSyncState<Heist>()
-    let task = Task { @MainActor in
+    return runHeistSyncOperation(file: file, line: line) { @MainActor in
         do {
             let heist = try await Heist(request.plan, argument: request.argument)
             try recordReceiptIfRequested(
@@ -483,7 +524,7 @@ private func runHeistSyncRequest(
                 policy: recordReceipt,
                 receiptDirectory: receiptDirectory
             )
-            state.finish(.success(heist))
+            return heist
         } catch let failure as Heist.Failure {
             do {
                 try recordReceiptIfRequested(
@@ -492,13 +533,36 @@ private func runHeistSyncRequest(
                     policy: recordReceipt,
                     receiptDirectory: receiptDirectory
                 )
-                state.finish(.failure(failure))
             } catch {
-                state.finish(.failure(HeistXCTestFailure(
+                throw HeistXCTestFailure(
                     primaryError: failure,
                     receiptRecordingError: error
-                )))
+                )
             }
+            throw failure
+        }
+    }
+}
+
+@discardableResult
+func runHeistSyncOperation<Value>(
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ operation: @escaping @Sendable () async throws -> Value
+) -> Value? {
+    guard Thread.isMainThread else {
+        XCTestRuntimeBridge.recordFailure(
+            "runHeistSyncOperation must be called on the main thread so it can pump the main run loop.",
+            file: file,
+            line: line
+        )
+        return nil
+    }
+
+    let state = HeistSyncState<Value>()
+    let task = Task {
+        do {
+            state.finish(.success(try await operation()))
         } catch {
             state.finish(.failure(error))
         }
@@ -584,19 +648,22 @@ private struct HeistXCTestFailure: Error, CustomStringConvertible {
     }
 }
 
-struct JoinedHeistSession {
+/// `@unchecked Sendable` justification: the public state is immutable Sendable
+/// connection metadata. The private `job` is a main-actor runtime handle and
+/// this module only touches it through main-actor stop/start paths.
+public struct JoinedHeistSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     let job: TheInsideJob
-    let token: String
-    let requestedPort: UInt16
-    let listeningPort: UInt16
-    let allowedScopes: Set<ConnectionScope>
+    public let token: String
+    public let requestedPort: UInt16
+    public let listeningPort: UInt16
+    public let allowedScopes: Set<ConnectionScope>
 
     @MainActor
     func stop() async {
         await job.stop()
     }
 
-    var readyMessage: String {
+    public var readyMessage: String {
         var lines = [
             "ButtonHeist join ready: endpoint=127.0.0.1:\(listeningPort) token=\(token)",
         ]

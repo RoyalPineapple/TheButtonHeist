@@ -29,16 +29,14 @@ import TheScore
 
     @Test func `round trip gzip receipt from file extension`() throws {
         let receipt = sampleReceipt()
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("heist-receipt-codec-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("receipt.json.gz")
-        try HeistReceiptCodec.write(receipt, to: url)
+        try withReceiptDirectory(prefix: "heist-receipt-codec") { directory in
+            let url = directory.appendingPathComponent("receipt.json.gz")
+            try HeistReceiptCodec.write(receipt, to: url)
 
-        let decoded = try HeistReceiptCodec.decode(contentsOf: url)
+            let decoded = try HeistReceiptCodec.decode(contentsOf: url)
 
-        #expect(decoded == receipt)
+            #expect(decoded == receipt)
+        }
     }
 
     @Test func `valid success receipt keeps stable external JSON shape`() throws {

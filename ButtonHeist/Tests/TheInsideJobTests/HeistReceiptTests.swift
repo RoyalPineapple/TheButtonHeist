@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
@@ -23,26 +24,19 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testRunHeistSyncRecordsPassingReceiptWhenRequested() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-sync-receipts-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        try withReceiptDirectory(prefix: "buttonheist-sync-receipts") { directory in
+            let heist = try XCTUnwrap(runHeistSync(
+                "syncReceipt",
+                recordReceipt: .always,
+                to: directory
+            ) {
+                Warn("sync")
+            })
 
-        let heist = try XCTUnwrap(runHeistSync(
-            "syncReceipt",
-            recordReceipt: .always,
-            to: directory
-        ) {
-            Warn("sync")
-        })
-
-        let receiptPaths = try FileManager.default
-            .subpathsOfDirectory(atPath: directory.path)
-            .filter { $0.hasSuffix("-passed.json.gz") }
-        XCTAssertEqual(receiptPaths.count, 1)
-        let receipt = try HeistReceiptCodec.decode(
-            contentsOf: directory.appendingPathComponent(receiptPaths[0], isDirectory: false)
-        )
-        XCTAssertEqual(receipt, heist.result)
+            let receiptURL = try assertSingleReceiptArtifactURL(in: directory, matchingSuffix: "-passed.json.gz")
+            let receipt = try HeistReceiptCodec.decode(contentsOf: receiptURL)
+            XCTAssertEqual(receipt, heist.result)
+        }
     }
 
     func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
@@ -362,20 +356,23 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testFailureDescriptionIncludesScreenshotInterfaceDump() {
-        let elements = (0..<21).map { index in
-            AccessibilityElement.make(
+        var elements: [AccessibilityElement] = []
+        elements.reserveCapacity(21)
+        for index in 0..<21 {
+            elements.append(AccessibilityElement.make(
                 label: index == 0 ? "Actual Empty State" : "Actual Empty State \(index)",
                 identifier: index == 0 ? "empty_state" : "empty_state_\(index)",
                 traits: .staticText,
                 frame: CGRect(x: 10 + index, y: 20 + index, width: 100, height: 44),
                 respondsToUserInteraction: false
-            )
+            ))
+        }
+        let tree: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
+            AccessibilityHierarchy.element(element, traversalIndex: index)
         }
         let interface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
-            tree: elements.enumerated().map { index, element in
-                .element(element, traversalIndex: index)
-            }
+            tree: tree
         )
         let screenshot = ScreenPayload(
             pngData: "png",
