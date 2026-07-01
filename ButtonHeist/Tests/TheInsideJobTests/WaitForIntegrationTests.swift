@@ -148,8 +148,11 @@ final class WaitForIntegrationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<50 where insideJob.brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+        let deadline = CFAbsoluteTimeGetCurrent() + 1
+        while insideJob.brains.stash.semanticObservationStream.settledWaiterCount == 0,
+              CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
+            guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(insideJob.brains.stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
     }
@@ -417,18 +420,17 @@ final class WaitForIntegrationTests: XCTestCase {
 
         var delayedLabel: UILabel?
         defer { delayedLabel?.removeFromSuperview() }
-        let addTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
-            let label = self.addLabel("WaitForChange-Delayed")
-            self.insideJob.brains.stash.invalidateSettledObservationFromTripwire()
-            return label
+        let waitTask = Task { @MainActor in
+            await self.changedWait(
+                expectation: .exists(ElementPredicate(label: "WaitForChange-Delayed")),
+                timeout: 5.0
+            )
         }
-
-        let result = await changedWait(
-            expectation: .exists(ElementPredicate(label: "WaitForChange-Delayed")),
-            timeout: 5.0
-        )
-        delayedLabel = await addTask.value
+        // The mutation must happen after the wait owns a baseline so the receipt carries a two-capture trace.
+        await waitForSettledSemanticWaiter()
+        delayedLabel = addLabel("WaitForChange-Delayed")
+        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
+        let result = await waitTask.value
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
@@ -443,17 +445,19 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let removeTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+        let waitTask = Task { @MainActor in
+            await self.changedWait(
+                expectation: .missing(ElementPredicate(label: "WaitForChange-Removed")),
+                timeout: 5.0
+            )
+        }
+        // The mutation must happen after the wait owns a baseline so the receipt carries a two-capture trace.
+        await waitForSettledSemanticWaiter()
+        mutateVisibleHierarchy {
             label.removeFromSuperview()
-            self.insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         }
 
-        let result = await changedWait(
-            expectation: .missing(ElementPredicate(label: "WaitForChange-Removed")),
-            timeout: 5.0
-        )
-        await removeTask.value
+        let result = await waitTask.value
 
         XCTAssertTrue(result.success, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)

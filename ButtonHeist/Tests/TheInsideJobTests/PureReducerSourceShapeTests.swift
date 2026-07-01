@@ -327,6 +327,48 @@ import Testing
             "TextInputFocusResult enum should not store old optional-bag fields"
         )
     }
+
+    @Test func `container scroll resolution failures are typed before diagnostic projection`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+ScrollContainers.swift")
+        let pageScroll = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Navigation+PageScroll.swift")
+        let resolution = try #require(
+            try source.firstBlock(matching: #"\benum\s+ContainerScrollResolution\b"#),
+            "ContainerScrollResolution should be a typed result enum"
+        )
+        let failure = try #require(
+            try source.firstBlock(matching: #"\benum\s+ContainerScrollFailure\b"#),
+            "Container scroll failures should be represented as cases, not raw diagnostic strings"
+        )
+        let resolver = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+resolveContainerScrollTarget\s*\("#),
+            "Container scroll target resolution should have a single typed entry point"
+        )
+
+        #expect(resolution.contents.contains("case resolved(ScrollableTarget)"))
+        #expect(resolution.contents.contains("case failed(ContainerScrollFailure)"))
+        #expect(source.contents.contains("enum ContainerScrollCommand"))
+        #expect(failure.contents.contains("case elementKnownButNotVisible(command: ContainerScrollCommand)"))
+        #expect(failure.contents.contains("case elementAmbiguous(TheStash.TargetAmbiguityFacts, command: ContainerScrollCommand)"))
+        #expect(failure.contents.contains("case axisMismatch("))
+        #expect(try failure.containsMatch(#"\bvar\s+message\s*:\s*String\b"#))
+        #expect(try failure.containsMatch(#"\bvar\s+command\s*:\s*ContainerScrollCommand\b"#))
+        #expect(try resolver.containsMatch(#"\bcommand\s*:\s*ContainerScrollCommand\b"#))
+        #expect(pageScroll.contents.contains("failure.command.method"))
+        #expect(pageScroll.contents.contains("failure.message"))
+
+        #expect(
+            !source.contents.contains("case failed(String)"),
+            "ContainerScrollResolution should not carry untyped failure diagnostics"
+        )
+        #expect(
+            !source.contents.contains("commandName: String"),
+            "Container scroll command identity should be typed, not an arbitrary string"
+        )
+        #expect(
+            !source.contents.contains("return .failed(\""),
+            "Container scroll resolver should construct typed failure cases before message projection"
+        )
+    }
 }
 
 private func expectEffectFreeReducerSource(_ source: SourceShapeFile) throws {

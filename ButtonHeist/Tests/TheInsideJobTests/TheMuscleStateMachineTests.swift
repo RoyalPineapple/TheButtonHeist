@@ -59,6 +59,13 @@ final class TheMuscleStateMachineTests: XCTestCase {
         guard case .rejected(let diagnostic) = lease.acquire(driverIdentity: "driver:beta", clientId: 2) else {
             return XCTFail("Expected different driver to be rejected while draining")
         }
+        guard case .drainingOwner(
+            owner: .exposed("alpha"),
+            remainingTimeoutSeconds: let remainingTimeoutSeconds
+        ) = diagnostic else {
+            return XCTFail("Expected draining lock diagnostic, got \(diagnostic)")
+        }
+        XCTAssertGreaterThan(remainingTimeoutSeconds, 0)
 
         let payload = diagnostic.payload()
         XCTAssertEqual(payload.activeConnections, 0)
@@ -66,6 +73,38 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(payload.message.contains("owner driver id: alpha"))
         XCTAssertTrue(payload.message.contains("active connections: 0"))
         XCTAssertTrue(payload.message.contains("remaining timeout:"))
+    }
+
+    func testSessionLeaseActiveRejectionUsesTypedDiagnosticWithoutDrainingTimeout() {
+        var lease = SessionLease(releaseTimeout: 30)
+
+        guard case .accepted(.claimedSession) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+            return XCTFail("Expected first driver to claim the session")
+        }
+
+        guard case .rejected(let sameDriverDiagnostic) = lease.acquire(
+            driverIdentity: "driver:alpha",
+            clientId: 2
+        ) else {
+            return XCTFail("Expected same driver to be rejected while already active")
+        }
+        guard case .sameDriverActive(owner: .exposed("alpha")) = sameDriverDiagnostic else {
+            return XCTFail("Expected same-driver active diagnostic, got \(sameDriverDiagnostic)")
+        }
+        XCTAssertEqual(sameDriverDiagnostic.payload().activeConnections, 1)
+        XCTAssertFalse(sameDriverDiagnostic.payload().message.contains("remaining timeout:"))
+
+        guard case .rejected(let activeOwnerDiagnostic) = lease.acquire(
+            driverIdentity: "driver:beta",
+            clientId: 3
+        ) else {
+            return XCTFail("Expected different driver to be rejected while active")
+        }
+        guard case .activeOwner(owner: .exposed("alpha")) = activeOwnerDiagnostic else {
+            return XCTFail("Expected active-owner diagnostic, got \(activeOwnerDiagnostic)")
+        }
+        XCTAssertEqual(activeOwnerDiagnostic.payload().activeConnections, 1)
+        XCTAssertFalse(activeOwnerDiagnostic.payload().message.contains("remaining timeout:"))
     }
 
     func testSessionLeaseIgnoresNonActiveConnectionRemoval() {
@@ -187,10 +226,30 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertFalse(try admissionSource.containsMatch(#"\bstruct\s+MuscleAdmissionEffect\b"#))
         XCTAssertTrue(try admissionSource.containsMatch(#"\benum\s+MuscleAdmissionEffect\b"#))
         XCTAssertTrue(admissionSource.contents.contains("case delayedDisconnect(clientId: Int)"))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bstatic\s+func\s+response\s*\("#))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bstatic\s+func\s+client\s*\("#))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bdisconnect\s+clientId\s*:\s*Int\?"#))
+        XCTAssertFalse(try admissionSource.containsMatch(#"\bdisconnect\s*:\s*Bool\b"#))
 
         XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\b"#))
         XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
         XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
+    }
+
+    func testSessionLeaseDiagnosticsDoNotRegressToOptionalBags() throws {
+        let leaseSource = try sourceRepository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/SessionLease.swift"
+        )
+
+        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+SessionLockDiagnostic\b"#))
+        XCTAssertFalse(try leaseSource.containsMatch(#"\bstruct\s+SessionLockDiagnostic\b"#))
+        XCTAssertTrue(leaseSource.contents.contains("case sameDriverActive(owner: OwnerDriverIdentity)"))
+        XCTAssertTrue(leaseSource.contents.contains("case activeOwner(owner: OwnerDriverIdentity)"))
+        XCTAssertTrue(leaseSource.contents.contains(
+            "case drainingOwner(owner: OwnerDriverIdentity, remainingTimeoutSeconds: TimeInterval)"
+        ))
+        XCTAssertFalse(try leaseSource.containsMatch(#"\bownerDriverId\s*:\s*String\?"#))
+        XCTAssertFalse(try leaseSource.containsMatch(#"\bremainingTimeoutSeconds\s*:\s*TimeInterval\?"#))
     }
 
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {

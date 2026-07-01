@@ -1102,7 +1102,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
-            evidence = .dispatch(command: command, actionResult: actionResult, warning: warning)
+            evidence = command.map {
+                .dispatch(command: $0, actionResult: actionResult, warning: warning)
+            } ?? .dispatch(actionResult: actionResult)
         }
 
         let intent = command.map {

@@ -886,10 +886,10 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertFalse(source.contains("private struct PredicateStateMatch"))
         XCTAssertFalse(source.contains("PredicateStateMatchSet"))
-        XCTAssertTrue(source.contains("private let stateMatches: ElementMatchSet"))
-        XCTAssertTrue(source.contains("state.evaluate(in: stateMatches).expectation(for: predicate)"))
+        XCTAssertTrue(source.contains("private let stateGraph: ElementMatchGraph"))
+        XCTAssertTrue(source.contains("state.evaluate(in: stateGraph).expectation(for: predicate)"))
         XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
-        XCTAssertTrue(evaluationSource.contains("func evaluate(in matches: ElementMatchSet) -> PredicateEvaluationResult"))
+        XCTAssertTrue(evaluationSource.contains("func evaluate(in graph: ElementMatchGraph) -> PredicateEvaluationResult"))
         XCTAssertTrue(evaluationSource.contains("return PredicateEvaluationResult("))
         XCTAssertFalse(source.contains(streamTupleReturn))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))

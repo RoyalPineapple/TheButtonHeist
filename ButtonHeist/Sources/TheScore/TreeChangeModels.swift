@@ -169,6 +169,7 @@ public protocol ElementPropertyValueKind: ElementPropertyKind {
     associatedtype Value: Codable, Sendable, Equatable
 
     static func value(in element: HeistElement) -> Value?
+    static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>?
     static func valuesEqual(_ lhs: Value?, _ rhs: Value?) -> Bool
     static func displayText(for value: Value) -> String
     static func matches(_ checker: Checker, value: Value?) -> Bool
@@ -219,6 +220,11 @@ extension ElementPropertyValueChange: Equatable {
 }
 
 extension ElementPropertyValueChange {
+    func satisfies(_ expected: AnyPropertyChange) -> Bool {
+        guard let expected = P.expectedChange(from: expected) else { return false }
+        return satisfies(expected)
+    }
+
     func satisfies(_ expected: ElementPropertyChange<P>) -> Bool {
         if let before = expected.before {
             guard P.matches(before, value: old) else { return false }
@@ -513,67 +519,27 @@ extension PropertyChange: Codable {
 extension PropertyChange {
     package func satisfies(_ expected: AnyPropertyChange) -> Bool {
         switch self {
+        case .label(let observed):
+            return observed.satisfies(expected)
+        case .identifier(let observed):
+            return observed.satisfies(expected)
         case .value(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .traits(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .hint(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .actions(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .frame(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .activationPoint(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .customContent(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
+            return observed.satisfies(expected)
         case .rotors(let observed):
-            return expected.accept(ObservedPropertyChangeSatisfier(observed: observed))
-        case .label, .identifier:
-            return false
+            return observed.satisfies(expected)
         }
-    }
-}
-
-private protocol PropertyChangeExpectationVisitor {
-    associatedtype Result
-
-    func visit<P: ElementPropertyValueKind>(_ expected: ElementPropertyChange<P>) -> Result
-}
-
-private extension AnyPropertyChange {
-    func accept<Visitor: PropertyChangeExpectationVisitor>(_ visitor: Visitor) -> Visitor.Result {
-        switch self {
-        case .value(let expected):
-            return visitor.visit(expected)
-        case .traits(let expected):
-            return visitor.visit(expected)
-        case .hint(let expected):
-            return visitor.visit(expected)
-        case .actions(let expected):
-            return visitor.visit(expected)
-        case .frame(let expected):
-            return visitor.visit(expected)
-        case .activationPoint(let expected):
-            return visitor.visit(expected)
-        case .customContent(let expected):
-            return visitor.visit(expected)
-        case .rotors(let expected):
-            return visitor.visit(expected)
-        }
-    }
-}
-
-private struct ObservedPropertyChangeSatisfier<P: ElementPropertyValueKind>: PropertyChangeExpectationVisitor {
-    let observed: ElementPropertyValueChange<P>
-
-    func visit<Expected: ElementPropertyValueKind>(_ expected: ElementPropertyChange<Expected>) -> Bool {
-        guard P.property == Expected.property,
-              let expected = expected as? ElementPropertyChange<P>
-        else {
-            return false
-        }
-        return observed.satisfies(expected)
     }
 }
 
@@ -582,6 +548,11 @@ extension ValueProperty: ElementPropertyValueKind {
 
     public static func value(in element: HeistElement) -> String? {
         element.value
+    }
+
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .value(let expected) = change else { return nil }
+        return expected
     }
 
     public static func displayText(for value: String) -> String {
@@ -609,6 +580,10 @@ extension LabelProperty: ElementPropertyValueKind {
         element.label
     }
 
+    public static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        nil
+    }
+
     public static func displayText(for value: String) -> String {
         value
     }
@@ -634,6 +609,10 @@ extension IdentifierProperty: ElementPropertyValueKind {
         element.identifier
     }
 
+    public static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        nil
+    }
+
     public static func displayText(for value: String) -> String {
         value
     }
@@ -657,6 +636,11 @@ extension TraitsProperty: ElementPropertyValueKind {
 
     public static func value(in element: HeistElement) -> [HeistTrait]? {
         element.traits
+    }
+
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .traits(let expected) = change else { return nil }
+        return expected
     }
 
     public static func valuesEqual(_ lhs: [HeistTrait]?, _ rhs: [HeistTrait]?) -> Bool {
@@ -690,6 +674,11 @@ extension HintProperty: ElementPropertyValueKind {
         element.hint
     }
 
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .hint(let expected) = change else { return nil }
+        return expected
+    }
+
     public static func displayText(for value: String) -> String {
         value
     }
@@ -713,6 +702,11 @@ extension ActionsProperty: ElementPropertyValueKind {
 
     public static func value(in element: HeistElement) -> ElementActionSet? {
         ElementActionSet(element.actions)
+    }
+
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .actions(let expected) = change else { return nil }
+        return expected
     }
 
     public static func displayText(for value: ElementActionSet) -> String {
@@ -746,6 +740,11 @@ extension FrameProperty: ElementPropertyValueKind {
         )
     }
 
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .frame(let expected) = change else { return nil }
+        return expected
+    }
+
     public static func displayText(for value: ElementPropertyFrame) -> String {
         value.displayText
     }
@@ -777,6 +776,11 @@ extension ActivationPointProperty: ElementPropertyValueKind {
         )
     }
 
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .activationPoint(let expected) = change else { return nil }
+        return expected
+    }
+
     public static func displayText(for value: ElementPropertyPoint) -> String {
         value.displayText
     }
@@ -802,6 +806,11 @@ extension CustomContentProperty: ElementPropertyValueKind {
     public static func value(in element: HeistElement) -> [HeistCustomContent]? {
         let content = element.customContent?.filter { !$0.label.isEmpty || !$0.value.isEmpty } ?? []
         return content.isEmpty ? nil : content
+    }
+
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .customContent(let expected) = change else { return nil }
+        return expected
     }
 
     public static func displayText(for value: [HeistCustomContent]) -> String {
@@ -835,6 +844,11 @@ extension RotorsProperty: ElementPropertyValueKind {
     public static func value(in element: HeistElement) -> [HeistRotor]? {
         let rotors = element.rotors?.filter { !$0.name.isEmpty } ?? []
         return rotors.isEmpty ? nil : rotors
+    }
+
+    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
+        guard case .rotors(let expected) = change else { return nil }
+        return expected
     }
 
     public static func displayText(for value: [HeistRotor]) -> String {

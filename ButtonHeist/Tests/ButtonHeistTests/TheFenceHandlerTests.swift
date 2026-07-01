@@ -1815,7 +1815,6 @@ final class TheFenceHandlerTests: XCTestCase {
             kind: .action,
             durationMs: 5,
             evidence: .action(.dispatch(
-                command: nil,
                 actionResult: ActionResult.failure(
                     method: .activate,
                     errorKind: .actionFailed,

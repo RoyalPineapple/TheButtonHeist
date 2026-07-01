@@ -20,7 +20,99 @@ extension Navigation {
 
     @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
         case resolved(ScrollableTarget)
-        case failed(String)
+        case failed(ContainerScrollFailure)
+    }
+
+    enum ContainerScrollCommand: Sendable {
+        case scroll
+        case scrollToEdge
+
+        var method: ActionMethod {
+            switch self {
+            case .scroll:
+                return .scroll
+            case .scrollToEdge:
+                return .scrollToEdge
+            }
+        }
+
+        var diagnosticName: String {
+            switch self {
+            case .scroll:
+                return "scroll"
+            case .scrollToEdge:
+                return "scroll_to_edge"
+            }
+        }
+    }
+
+    enum ContainerScrollFailure {
+        case elementKnownButNotVisible(command: ContainerScrollCommand)
+        case elementAmbiguous(TheStash.TargetAmbiguityFacts, command: ContainerScrollCommand)
+        case elementNotFound(TheStash.TargetNotFoundFacts, command: ContainerScrollCommand)
+        case missingScrollableAncestor(ScrollTargetDescription, command: ContainerScrollCommand)
+        case unsafeProgrammaticScroll(ScrollTargetDescription, command: ContainerScrollCommand)
+        case axisMismatch(
+            target: ScrollTargetDescription,
+            available: ScrollAxis,
+            expected: ScrollAxis,
+            command: ContainerScrollCommand
+        )
+        case noNamedVisibleContainer(ContainerName, axis: ScrollAxis, command: ContainerScrollCommand)
+        case ambiguousNamedVisibleContainer(ContainerName, axis: ScrollAxis, command: ContainerScrollCommand)
+        case noVisibleContainer(axis: ScrollAxis, command: ContainerScrollCommand)
+        case ambiguousVisibleContainer(axis: ScrollAxis, command: ContainerScrollCommand)
+
+        var command: ContainerScrollCommand {
+            switch self {
+            case .elementKnownButNotVisible(command: let command),
+                 .elementAmbiguous(_, command: let command),
+                 .elementNotFound(_, command: let command),
+                 .missingScrollableAncestor(_, command: let command),
+                 .unsafeProgrammaticScroll(_, command: let command),
+                 .axisMismatch(target: _, available: _, expected: _, command: let command),
+                 .noNamedVisibleContainer(_, axis: _, command: let command),
+                 .ambiguousNamedVisibleContainer(_, axis: _, command: let command),
+                 .noVisibleContainer(axis: _, command: let command),
+                 .ambiguousVisibleContainer(axis: _, command: let command):
+                return command
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .elementKnownButNotVisible(command: let command):
+                return "\(command.diagnosticName) failed: target is known but not currently visible; "
+                    + "target the element you want made actionable, or use scroll_to_visible as an explicit viewport inspection step."
+            case .elementAmbiguous(let facts, command: let command):
+                return "\(command.diagnosticName) failed: target is not uniquely resolved in the visible hierarchy; "
+                    + "\(TargetResolutionDiagnostics.message(for: .ambiguous(facts)))\nNext: refine the semantic target with "
+                    + "an ordinal or exact label, identifier, value, or trait from get_screen's visible interface."
+            case .elementNotFound(let facts, command: _):
+                return TargetResolutionDiagnostics.message(for: .notFound(facts))
+            case .missingScrollableAncestor(let target, command: _):
+                return "scroll target failed: observed \(target.description) with no live scrollable ancestor; "
+                    + "target an element inside the intended scroll region"
+            case .unsafeProgrammaticScroll(let target, command: _):
+                return "scroll target failed: observed \(target.description) inside a scroll view that is unsafe "
+                    + "for programmatic scrolling; target the element you want made actionable"
+            case .axisMismatch(target: let target, available: let available, expected: let expected, command: _):
+                return "scroll target failed: observed \(target.description) inside a scroll view that supports "
+                    + "\(Navigation.axisDescription(available)); expected \(Navigation.axisDescription(expected)); "
+                    + "try a matching scroll direction or target an element inside the intended scroll region"
+            case .noNamedVisibleContainer(let containerName, axis: let axis, command: let command):
+                return "\(command.diagnosticName) failed: no visible scroll container named \(containerName.rawValue) "
+                    + "supports \(Navigation.axisDescription(axis)); refresh get_interface and use a current containerName"
+            case .ambiguousNamedVisibleContainer(let containerName, axis: let axis, command: let command):
+                return "\(command.diagnosticName) ambiguous: multiple visible scroll containers named \(containerName.rawValue) "
+                    + "support \(Navigation.axisDescription(axis)); refresh get_interface and use a current containerName"
+            case .noVisibleContainer(axis: let axis, command: let command):
+                return "\(command.diagnosticName) failed: no visible scroll container supports \(Navigation.axisDescription(axis))"
+            case .ambiguousVisibleContainer(axis: let axis, command: let command):
+                return "\(command.diagnosticName) ambiguous: multiple visible scroll containers support "
+                    + "\(Navigation.axisDescription(axis)); target an element inside the intended scroll region"
+            }
+        }
     }
 
     nonisolated private static func axisDescription(_ axis: ScrollAxis) -> String {
@@ -35,33 +127,33 @@ extension Navigation {
     func resolveContainerScrollTarget(
         selection: ScrollContainerSelection,
         axis: ScrollAxis,
-        commandName: String
+        command: ContainerScrollCommand
     ) -> ContainerScrollResolution {
         switch selection {
         case .element(let elementTarget):
-            guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-                return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
+            let visibleResolution = stash.resolveVisibleTarget(elementTarget)
+            let resolved: TheStash.ScreenElement
+            switch visibleResolution {
+            case .resolved(let screenElement):
+                resolved = screenElement
+            case .notFound, .ambiguous:
+                return .failed(liveScrollElementFailure(elementTarget, command: command))
             }
-            let targetDescription = Self.ScrollTargetDescription(resolved).description
+            let targetDescription = Self.ScrollTargetDescription(resolved)
             guard let scrollView = stash.liveScrollView(for: resolved) else {
-                return .failed(
-                    "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
-                        + "target an element inside the intended scroll region"
-                )
+                return .failed(.missingScrollableAncestor(targetDescription, command: command))
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
-                return .failed(
-                    "scroll target failed: observed \(targetDescription) inside a scroll view that is unsafe "
-                        + "for programmatic scrolling; target the element you want made actionable"
-                )
+                return .failed(.unsafeProgrammaticScroll(targetDescription, command: command))
             }
             let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
             guard availableAxis.contains(axis) else {
-                return .failed(
-                    "scroll target failed: observed \(targetDescription) inside a scroll view that supports "
-                        + "\(Self.axisDescription(availableAxis)); expected \(Self.axisDescription(axis)); "
-                        + "try a matching scroll direction or target an element inside the intended scroll region"
-                )
+                return .failed(.axisMismatch(
+                    target: targetDescription,
+                    available: availableAxis,
+                    expected: axis,
+                    command: command
+                ))
             }
             return .resolved(.uiScrollView(scrollView))
         case .container(let containerName):
@@ -69,28 +161,19 @@ extension Navigation {
                 stash.liveContainerName(forPath: $0.path) == containerName
             }
             guard !candidates.isEmpty else {
-                return .failed(
-                    "\(commandName) failed: no visible scroll container named \(containerName.rawValue) " +
-                        "supports \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
-                )
+                return .failed(.noNamedVisibleContainer(containerName, axis: axis, command: command))
             }
             guard candidates.count == 1, let plan = candidates.first else {
-                return .failed(
-                    "\(commandName) ambiguous: multiple visible scroll containers named \(containerName.rawValue) " +
-                        "support \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
-                )
+                return .failed(.ambiguousNamedVisibleContainer(containerName, axis: axis, command: command))
             }
             return .resolved(plan.target)
         case .visibleContainer:
             let candidates = scrollCandidates(requiredAxis: axis)
             guard !candidates.isEmpty else {
-                return .failed("\(commandName) failed: no visible scroll container supports \(Self.axisDescription(axis))")
+                return .failed(.noVisibleContainer(axis: axis, command: command))
             }
             guard candidates.count == 1, let plan = candidates.first else {
-                return .failed(
-                    "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
-                        + "target an element inside the intended scroll region"
-                )
+                return .failed(.ambiguousVisibleContainer(axis: axis, command: command))
             }
             return .resolved(plan.target)
         }
@@ -205,20 +288,17 @@ extension Navigation {
     }
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
-    private func liveScrollElementFailureMessage(
+    private func liveScrollElementFailure(
         _ target: ElementTarget,
-        commandName: String
-    ) -> String {
+        command: ContainerScrollCommand
+    ) -> ContainerScrollFailure {
         switch stash.resolveTarget(target) {
         case .resolved:
-            return "\(commandName) failed: target is known but not currently visible; "
-                + "target the element you want made actionable, or use scroll_to_visible as an explicit viewport inspection step."
+            return .elementKnownButNotVisible(command: command)
         case .ambiguous(let facts):
-            return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
-                + "\(TargetResolutionDiagnostics.message(for: .ambiguous(facts)))\nNext: refine the semantic target with "
-                + "an ordinal or exact label, identifier, value, or trait from get_screen's visible interface."
+            return .elementAmbiguous(facts, command: command)
         case .notFound(let facts):
-            return TargetResolutionDiagnostics.message(for: .notFound(facts))
+            return .elementNotFound(facts, command: command)
         }
     }
 }

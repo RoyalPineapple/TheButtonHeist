@@ -104,7 +104,7 @@ extension TheBrains {
             switch self {
             case .predicateMet, .continued:
                 return nil
-            case .failed(_, let childPath):
+            case .failed(expectation: _, childPath: let childPath):
                 return childPath
             }
         }
@@ -179,74 +179,11 @@ extension TheBrains {
                     iterationNodes: running.iterationNodes
                 ))
             case (.running(let running), .iterationPassed(let event)):
-                switch event.postBody {
-                case .changedMet(let check):
-                    let nodes = running.iterationNodes + [event.iterationNode]
-                    return .terminal(.predicateMet(
-                        check: check,
-                        iterationCount: event.frame.count,
-                        iterationNodes: nodes
-                    ))
-                case .changedUnmet(let check):
-                    return .running(running.appendingIteration(event.iterationNode, nextCheck: check))
-                case .deadlineElapsed(let expectation):
-                    return .terminal(.timedOut(
-                        observation: running.currentCheck.observation,
-                        expectation: expectation,
-                        iterationCount: event.frame.count,
-                        iterationNodes: running.iterationNodes + [event.iterationNode]
-                    ))
-                case .noProgress(let observation, let expectation, _):
-                    return .terminal(.timedOut(
-                        observation: observation,
-                        expectation: expectation,
-                        iterationCount: event.frame.count,
-                        iterationNodes: running.iterationNodes + [event.iterationNode]
-                    ))
-                }
+                return reduceIterationPassed(running: running, event: event)
             case (.running(let running), .iterationFailed(let event)):
-                if let postBody = event.postBody,
-                   case .changedMet(let check) = postBody {
-                    return .terminal(.predicateMet(
-                        check: check,
-                        iterationCount: event.frame.count,
-                        iterationNodes: running.iterationNodes + [event.predicateMetIterationNode]
-                    ))
-                }
-                return .terminal(.bodyFailed(
-                    observation: running.currentCheck.observation,
-                    expectation: event.failureExpectation,
-                    iterationIndex: event.frame.index,
-                    childPath: event.failedStep.path,
-                    iterationNodes: running.iterationNodes + [event.failedIterationNode]
-                ))
+                return reduceIterationFailed(running: running, event: event)
             case (.terminal(let terminal), .elseCompleted(let children)):
-                switch terminal {
-                case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes):
-                    if let failedPath = children.firstFailedStep?.path {
-                        return .terminal(.timeoutElseFailed(
-                            observation: observation,
-                            expectation: expectation,
-                            iterationCount: iterationCount,
-                            iterationNodes: iterationNodes,
-                            elseChildren: children,
-                            childPath: failedPath
-                        ))
-                    }
-                    return .terminal(.timeoutHandledByElse(
-                        observation: observation,
-                        expectation: expectation,
-                        iterationCount: iterationCount,
-                        iterationNodes: iterationNodes,
-                        elseChildren: children
-                    ))
-                case .predicateMet,
-                     .initialObservationUnavailable,
-                     .bodyFailed,
-                     .timeoutHandledByElse,
-                     .timeoutElseFailed:
-                    return state
-                }
+                return reduceElseCompleted(state: state, terminal: terminal, children: children)
             case (.awaitingInitial, _),
                  (.running, .initial),
                  (.running, .elseCompleted),
@@ -255,6 +192,86 @@ extension TheBrains {
                  (.terminal, .iterationPassed),
                  (.terminal, .iterationFailed):
                 return state
+            }
+        }
+
+        private static func reduceIterationPassed(
+            running: RepeatUntilRunningState,
+            event: RepeatUntilPassedIterationEvent
+        ) -> RepeatUntilLoopState {
+            switch event.postBody {
+            case .changedMet(let check):
+                return .terminal(.predicateMet(
+                    check: check,
+                    iterationCount: event.frame.count,
+                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                ))
+            case .changedUnmet(let check):
+                return .running(running.appendingIteration(event.iterationNode, nextCheck: check))
+            case .deadlineElapsed(let expectation):
+                return .terminal(.timedOut(
+                    observation: running.currentCheck.observation,
+                    expectation: expectation,
+                    iterationCount: event.frame.count,
+                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                ))
+            case .noProgress(let observation, let expectation, _):
+                return .terminal(.timedOut(
+                    observation: observation,
+                    expectation: expectation,
+                    iterationCount: event.frame.count,
+                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                ))
+            }
+        }
+
+        private static func reduceIterationFailed(
+            running: RepeatUntilRunningState,
+            event: RepeatUntilFailedIterationEvent
+        ) -> RepeatUntilLoopState {
+            if let postBody = event.postBody,
+               case .changedMet(let check) = postBody {
+                return .terminal(.predicateMet(
+                    check: check,
+                    iterationCount: event.frame.count,
+                    iterationNodes: running.iterationNodes + [event.predicateMetIterationNode]
+                ))
+            }
+            return .terminal(.bodyFailed(
+                observation: running.currentCheck.observation,
+                expectation: event.failureExpectation,
+                iterationIndex: event.frame.index,
+                childPath: event.failedStep.path,
+                iterationNodes: running.iterationNodes + [event.failedIterationNode]
+            ))
+        }
+
+        private static func reduceElseCompleted(
+            state: RepeatUntilLoopState,
+            terminal: RepeatUntilTerminal,
+            children: [HeistExecutionStepResult]
+        ) -> RepeatUntilLoopState {
+            guard case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes) = terminal else {
+                return state
+            }
+            switch HeistReceiptChildren(children) {
+            case .childAborted(let childAbort):
+                return .terminal(.timeoutElseFailed(
+                    observation: observation,
+                    expectation: expectation,
+                    iterationCount: iterationCount,
+                    iterationNodes: iterationNodes,
+                    elseChildren: childAbort.children,
+                    childPath: childAbort.abortedAtChildPath
+                ))
+            case .completed(let completed):
+                return .terminal(.timeoutHandledByElse(
+                    observation: observation,
+                    expectation: expectation,
+                    iterationCount: iterationCount,
+                    iterationNodes: iterationNodes,
+                    elseChildren: completed.children
+                ))
             }
         }
     }
@@ -774,11 +791,6 @@ extension TheBrains {
             )
         }
         let failureReason = terminal.failureReason(step: step)
-        let failure = repeatUntilFailure(
-            terminal: terminal,
-            step: step,
-            failureReason: failureReason
-        )
         return repeatUntilResult(
             context: context,
             step: step,
@@ -788,7 +800,6 @@ extension TheBrains {
                 step: step,
                 failureReason: failureReason
             ),
-            failure: failure,
             failureReason: failureReason
         )
     }
@@ -798,9 +809,9 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         terminal: RepeatUntilTerminal,
         evidence: HeistRepeatUntilEvidence,
-        failure: HeistFailureDetail?,
-        failureReason _: String?
+        failureReason: String?
     ) -> HeistExecutionStepResult {
+        let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
         return heistLoopReceipt(
             path: context.path,
             kind: .repeatUntil,
@@ -809,11 +820,44 @@ extension TheBrains {
                 predicate: step.predicate.description,
                 timeout: step.timeout
             ),
-            evidence: .repeatUntil(evidence),
-            failure: failure,
-            abortedAtChildPath: terminal.abortedAtChildPath,
-            children: terminal.children
+            outcome: repeatUntilReceiptOutcome(
+                terminal: terminal,
+                step: step,
+                evidence: stepEvidence,
+                failureReason: failureReason,
+                children: HeistReceiptChildren(terminal.children)
+            )
         )
+    }
+
+    private func repeatUntilReceiptOutcome(
+        terminal: RepeatUntilTerminal,
+        step: ResolvedRepeatUntilStep,
+        evidence: HeistStepEvidence,
+        failureReason: String?,
+        children: HeistReceiptChildren
+    ) -> HeistReceiptOutcome<HeistStepEvidence> {
+        switch children {
+        case .completed(let completed):
+            guard let failure = repeatUntilFailure(
+                terminal: terminal,
+                step: step,
+                failureReason: failureReason
+            ) else {
+                return .passed(evidence: evidence, children: completed)
+            }
+            return .failed(evidence: evidence, failure: failure, children: completed)
+        case .childAborted(let childAbort):
+            return .childAborted(
+                evidence: evidence,
+                failure: repeatUntilFailure(
+                    terminal: terminal,
+                    step: step,
+                    failureReason: failureReason
+                ) ?? childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
+                children: childAbort
+            )
+        }
     }
 
     private func repeatUntilEvidence(
@@ -918,7 +962,7 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let evidence: HeistRepeatUntilEvidence
         switch outcome {
-        case .failed(let expectation, let childPath):
+        case .failed(expectation: let expectation, childPath: let childPath):
             evidence = HeistRepeatUntilEvidence.failedIteration(
                 predicate: step.predicate,
                 timeout: step.timeout,
@@ -947,6 +991,28 @@ extension TheBrains {
                 lastObservedSummary: observation?.summary
             )
         }
+        let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
+        let childExecution = HeistReceiptChildren(children)
+        let receiptOutcome: HeistReceiptOutcome<HeistStepEvidence>
+        switch childExecution {
+        case .completed(let completed):
+            switch outcome {
+            case .failed(expectation: _, childPath: let childPath):
+                receiptOutcome = .failed(
+                    evidence: stepEvidence,
+                    failure: childFailureDetail(category: .loop, childPath: childPath),
+                    children: completed
+                )
+            case .predicateMet, .continued:
+                receiptOutcome = .passed(evidence: stepEvidence, children: completed)
+            }
+        case .childAborted(let childAbort):
+            receiptOutcome = .childAborted(
+                evidence: stepEvidence,
+                failure: childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath),
+                children: childAbort
+            )
+        }
         return heistLoopIterationReceipt(
             path: frame.path,
             kind: .repeatUntilIteration,
@@ -955,9 +1021,7 @@ extension TheBrains {
                 predicate: step.predicate.description,
                 timeout: step.timeout
             ),
-            evidence: .repeatUntil(evidence),
-            abortedAtChildPath: outcome.abortedAtChildPath,
-            children: children
+            outcome: receiptOutcome
         )
     }
 

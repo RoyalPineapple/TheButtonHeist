@@ -48,11 +48,11 @@ extension TheBurglar {
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
             hierarchy: hierarchy,
-            scrollableContainerPaths: facts.scrollContextContainerPaths
+            scrollableContainerPaths: facts.scroll.contextContainerPaths
         )
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerPaths: facts.scrollContextContainerPaths
+            scrollableContainerPaths: facts.scroll.contextContainerPaths
         )
         let containerNamesByPath = buildContainerNamesByPath(
             hierarchy: hierarchy,
@@ -78,8 +78,7 @@ extension TheBurglar {
                 path: path,
                 facts: facts
             )
-            let observedScrollContentActivationPoint = facts
-                .elementObservedScrollContentActivationPointsByPath[path]
+            let observedScrollContentActivationPoint = facts.activationPoints.element(at: path)
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 scrollMembership: scrollMembership,
@@ -107,7 +106,7 @@ extension TheBurglar {
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            facts.firstResponderPaths.contains(item.path)
+            facts.focus.isFirstResponder(at: item.path)
         }
         if firstResponders.count > 1 {
             logEvents.append(.multipleFirstResponders(firstResponders.map { $0.1 }))
@@ -128,8 +127,8 @@ extension TheBurglar {
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: facts.containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: facts.scrollInventoriesByPath,
+            containerObservedScrollContentActivationPointsByPath: facts.activationPoints.containerByPath,
+            scrollInventoriesByPath: facts.scroll.inventoriesByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
         )
@@ -192,7 +191,7 @@ extension TheBurglar {
         guard let membership else { return nil }
         return Screen.ScrollMembership(
             containerPath: membership.containerPath,
-            index: facts.scrollIndex(
+            index: facts.scroll.index(
                 forElementAt: path,
                 in: membership.containerPath
             )

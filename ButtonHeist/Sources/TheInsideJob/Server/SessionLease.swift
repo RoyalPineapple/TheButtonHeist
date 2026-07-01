@@ -31,23 +31,53 @@ struct SessionLease {
         case noActiveSession
     }
 
-    struct SessionLockDiagnostic: Equatable, Sendable {
-        var baseMessage: String
-        var ownerDriverId: String?
-        var activeConnections: Int
-        var remainingTimeoutSeconds: TimeInterval?
+    enum OwnerDriverIdentity: Equatable, Sendable {
+        case exposed(String)
+        case hidden
+    }
+
+    enum SessionLockDiagnostic: Equatable, Sendable {
+        case sameDriverActive(owner: OwnerDriverIdentity)
+        case activeOwner(owner: OwnerDriverIdentity)
+        case drainingOwner(owner: OwnerDriverIdentity, remainingTimeoutSeconds: TimeInterval)
 
         func payload() -> SessionLockedPayload {
             SessionLockedPayload(message: message, activeConnections: activeConnections)
         }
 
+        private var baseMessage: String {
+            switch self {
+            case .sameDriverActive:
+                return "Session is already active for this driver"
+            case .activeOwner, .drainingOwner:
+                return "Session is locked by another driver"
+            }
+        }
+
+        private var owner: OwnerDriverIdentity {
+            switch self {
+            case .sameDriverActive(let owner), .activeOwner(let owner), .drainingOwner(let owner, _):
+                return owner
+            }
+        }
+
+        private var activeConnections: Int {
+            switch self {
+            case .sameDriverActive, .activeOwner:
+                return 1
+            case .drainingOwner:
+                return 0
+            }
+        }
+
         private var message: String {
             var details = [baseMessage]
-            if let ownerDriverId, !ownerDriverId.isEmpty {
+            if case .exposed(let ownerDriverId) = owner {
                 details.append("owner driver id: \(ownerDriverId)")
             }
             details.append("active connections: \(activeConnections)")
-            if let remainingTimeoutSeconds {
+
+            if case .drainingOwner(_, let remainingTimeoutSeconds) = self {
                 details.append("remaining timeout: \(Int(max(remainingTimeoutSeconds, 0).rounded(.up)))s")
             }
             return details.joined(separator: "; ") + "."
@@ -92,23 +122,18 @@ struct SessionLease {
             return .accepted(.claimedSession)
 
         case .active(let activeId, _) where driverIdentity == activeId:
-            return .rejected(diagnostic(
-                baseMessage: "Session is already active for this driver",
-                ownerDriverId: activeId,
-                activeConnections: 1
-            ))
+            return .rejected(.sameDriverActive(owner: ownerIdentity(from: activeId)))
 
         case .draining(let activeId, _) where driverIdentity == activeId:
             phase = .active(driverId: activeId, clientId: clientId)
             return .accepted(.rejoinedDuringGracePeriod)
 
         case .active(let driverId, _):
-            return .rejected(diagnostic(ownerDriverId: driverId, activeConnections: 1))
+            return .rejected(.activeOwner(owner: ownerIdentity(from: driverId)))
 
         case .draining(let driverId, let releaseDeadline):
-            return .rejected(diagnostic(
-                ownerDriverId: driverId,
-                activeConnections: 0,
+            return .rejected(.drainingOwner(
+                owner: ownerIdentity(from: driverId),
                 remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(Date()))
             ))
         }
@@ -139,23 +164,16 @@ struct SessionLease {
         return releaseDeadline
     }
 
-    private func diagnostic(
-        baseMessage: String = "Session is locked by another driver",
-        ownerDriverId: String,
-        activeConnections: Int,
-        remainingTimeoutSeconds: TimeInterval? = nil
-    ) -> SessionLockDiagnostic {
-        SessionLockDiagnostic(
-            baseMessage: baseMessage,
-            ownerDriverId: exposedDriverId(from: ownerDriverId),
-            activeConnections: activeConnections,
-            remainingTimeoutSeconds: remainingTimeoutSeconds
-        )
+    private func exposedDriverId(from driverIdentity: String) -> String? {
+        guard case .exposed(let driverId) = ownerIdentity(from: driverIdentity) else { return nil }
+        return driverId
     }
 
-    private func exposedDriverId(from driverIdentity: String) -> String? {
+    private func ownerIdentity(from driverIdentity: String) -> OwnerDriverIdentity {
         let prefix = "driver:"
-        guard driverIdentity.hasPrefix(prefix) else { return nil }
-        return String(driverIdentity.dropFirst(prefix.count))
+        guard driverIdentity.hasPrefix(prefix) else { return .hidden }
+        let exposedDriverId = String(driverIdentity.dropFirst(prefix.count))
+        guard !exposedDriverId.isEmpty else { return .hidden }
+        return .exposed(exposedDriverId)
     }
 }

@@ -970,7 +970,7 @@ extension PredicateWaitSnapshot {
 
 struct PredicateObservationEvidence {
     private let snapshot: PredicateObservationSnapshot
-    private let stateMatches: ElementMatchSet
+    private let stateGraph: ElementMatchGraph
     let changeReadiness: PredicateChangeReadiness
     private let transition: PredicateTransitionEvidence?
 
@@ -980,7 +980,7 @@ struct PredicateObservationEvidence {
         transition: PredicateTransitionEvidence?
     ) {
         self.snapshot = snapshot
-        self.stateMatches = ElementMatchSet(interface: snapshot.interface)
+        self.stateGraph = ElementMatchGraph(interface: snapshot.interface)
         self.changeReadiness = changeReadiness
         self.transition = transition
     }
@@ -996,7 +996,7 @@ struct PredicateObservationEvidence {
     func evaluate(_ predicate: AccessibilityPredicate) -> ExpectationResult {
         switch predicate {
         case .state(let state):
-            return state.evaluate(in: stateMatches).expectation(for: predicate)
+            return state.evaluate(in: stateGraph).expectation(for: predicate)
         case .changePredicate, .noChangePredicate:
             switch changeReadiness {
             case .notRequired, .unavailableTrace:
@@ -1012,7 +1012,7 @@ struct PredicateObservationEvidence {
                     return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
                 }
                 return PredicateChangeMatchSet(
-                    currentElements: stateMatches.elements,
+                    currentElements: stateGraph.all.elements,
                     transition: transition
                 ).evaluate(predicate)
             }

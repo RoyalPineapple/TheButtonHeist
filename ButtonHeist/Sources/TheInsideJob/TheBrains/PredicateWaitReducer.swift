@@ -174,7 +174,7 @@ struct PredicateWaitReducer: Sendable, Equatable {
     ) -> String? {
         guard let change = update.change?.destinationChange else { return nil }
         let candidates = update.element.map {
-            ElementMatchSet(elements: elements).matching($0).elements
+            ElementMatchGraph(elements: elements).resolve($0).elements
         } ?? elements
 
         for element in candidates
@@ -185,11 +185,11 @@ struct PredicateWaitReducer: Sendable, Equatable {
     }
 
     private static func isPresent(_ predicate: ElementPredicate, in elements: [HeistElement]) -> Bool {
-        !ElementMatchSet(elements: elements).matching(predicate).isEmpty
+        !ElementMatchGraph(elements: elements).resolve(predicate).isEmpty
     }
 
     private static func presenceEvidence(of predicate: ElementPredicate, in elements: [HeistElement]) -> String? {
-        ElementMatchSet(elements: elements).matching(predicate).elements.first.map(warningEvidence(for:))
+        ElementMatchGraph(elements: elements).resolve(predicate).elements.first.map(warningEvidence(for:))
     }
 
     private static func warningEvidence(for element: HeistElement) -> String {

@@ -332,12 +332,19 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistWaitReceipt(
+        let evidence = waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome)
+        let outcome: HeistReceiptOutcome<HeistWaitEvidence>
+        switch evaluation {
+        case .matched:
+            outcome = .passed(evidence: evidence, children: .empty)
+        case .failed(let failedEvaluation):
+            outcome = .failed(evidence: evidence, failure: failedEvaluation.detail, children: .empty)
+        }
+        return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome),
-            failure: evaluation.failure
+            outcome: outcome
         )
     }
 
@@ -358,17 +365,24 @@ extension TheBrains {
             scope: scope,
             path: "\(path).wait.else_body"
         )
-        let abortedAtChildPath = children.firstFailedStep?.path
+        let evidence = waitEvidencePayload(receipt, outcome: .handledElse)
+        let childExecution = HeistReceiptChildren(children)
+        let outcome: HeistReceiptOutcome<HeistWaitEvidence>
+        switch childExecution {
+        case .completed(let completed):
+            outcome = .passed(evidence: evidence, children: completed)
+        case .childAborted(let childAbort):
+            outcome = .childAborted(
+                evidence: evidence,
+                failure: childFailureDetail(category: .wait, childPath: childAbort.abortedAtChildPath),
+                children: childAbort
+            )
+        }
         return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidencePayload(receipt, outcome: .handledElse),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .wait, childPath: $0)
-            },
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            outcome: outcome
         )
     }
 
@@ -437,8 +451,9 @@ extension TheBrains {
         start: CFAbsoluteTime,
         failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
-        return heistWaitReceipt(
+        return heistFailedReceipt(
             path: path,
+            kind: .wait,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
             failure: failure.detail

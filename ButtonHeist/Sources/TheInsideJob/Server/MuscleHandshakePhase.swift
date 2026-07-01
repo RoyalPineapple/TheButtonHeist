@@ -66,7 +66,9 @@ struct MuscleHandshakePhase {
                 respond: respond
             ))
         }
-        return .handled(MuscleAdmissionEffect.response(.authRequired, respond: respond))
+        return .handled([
+            .sendResponse(.authRequired, requestId: nil, respond: respond),
+        ])
     }
 
     private static func handleAuthenticate(
@@ -99,11 +101,14 @@ struct MuscleHandshakePhase {
         }
 
         if payload.token.isEmpty {
-            return .handled(MuscleAdmissionEffect.response(
-                .error(tokenAdmission.emptyTokenError()),
-                respond: respond,
-                disconnect: clientId
-            ))
+            return .handled([
+                .sendResponse(
+                    .error(tokenAdmission.emptyTokenError()),
+                    requestId: nil,
+                    respond: respond
+                ),
+                .delayedDisconnect(clientId: clientId),
+            ])
         }
 
         return MuscleTokenAuthenticationPhase.authenticate(

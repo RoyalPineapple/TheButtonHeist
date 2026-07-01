@@ -29,7 +29,7 @@ extension HeistElement: ElementPredicateSubject {
 public extension ElementPredicate {
     /// Whether any observed element in the collection satisfies this predicate.
     func anyMatch(in elements: [HeistElement]) -> Bool {
-        !ElementMatchSet(elements: elements).matching(self).isEmpty
+        !ElementMatchGraph(elements: elements).resolve(self).isEmpty
     }
 }
 
@@ -111,30 +111,6 @@ package struct ElementMatchSet: Sendable, Equatable {
         ElementMatchSet(matches + other.matches).orderedByTraversal()
     }
 
-    package func matching(_ predicate: ElementPredicate) -> ElementMatchSet {
-        guard predicate.hasPredicates else { return .empty }
-        guard let firstCheck = predicate.checks.first else { return .empty }
-
-        let firstMatches = matching(firstCheck)
-        return predicate.checks.dropFirst().reduce(firstMatches) { narrowedMatches, check in
-            narrowedMatches.intersection(self.matching(check))
-        }
-    }
-
-    package func matching(_ target: ElementTarget) -> ElementMatchSet {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let predicateMatches = matching(predicate)
-            guard let ordinal else { return predicateMatches }
-            guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
-            return ElementMatchSet([predicateMatches.matches[ordinal]])
-        }
-    }
-
-    private func matching(_ check: ElementPredicateCheck<String>) -> ElementMatchSet {
-        ElementMatchSet(matches.filter { check.matches($0.element) })
-    }
-
     private func orderedByTraversal() -> ElementMatchSet {
         ElementMatchSet(matches.sorted {
             if $0.traversalOrder != $1.traversalOrder {
@@ -142,5 +118,45 @@ package struct ElementMatchSet: Sendable, Equatable {
             }
             return $0.path < $1.path
         })
+    }
+}
+
+package struct ElementMatchGraph: Sendable, Equatable {
+    package let all: ElementMatchSet
+
+    package init(_ all: ElementMatchSet) {
+        self.all = all
+    }
+
+    package init(elements: [HeistElement]) {
+        self.init(ElementMatchSet(elements: elements))
+    }
+
+    package init(interface: Interface) {
+        self.init(ElementMatchSet(interface: interface))
+    }
+
+    package func resolve(_ predicate: ElementPredicate) -> ElementMatchSet {
+        guard predicate.hasPredicates else { return .empty }
+        guard let firstCheck = predicate.checks.first else { return .empty }
+
+        let firstMatches = resolve(firstCheck)
+        return predicate.checks.dropFirst().reduce(firstMatches) { narrowedMatches, check in
+            narrowedMatches.intersection(resolve(check))
+        }
+    }
+
+    package func resolve(_ target: ElementTarget) -> ElementMatchSet {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let predicateMatches = resolve(predicate)
+            guard let ordinal else { return predicateMatches }
+            guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
+            return ElementMatchSet([predicateMatches.matches[ordinal]])
+        }
+    }
+
+    private func resolve(_ check: ElementPredicateCheck<String>) -> ElementMatchSet {
+        ElementMatchSet(all.matches.filter { check.matches($0.element) })
     }
 }

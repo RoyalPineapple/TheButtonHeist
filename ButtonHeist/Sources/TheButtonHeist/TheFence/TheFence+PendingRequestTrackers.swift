@@ -7,7 +7,7 @@ extension TheFence {
 
     // MARK: - Pending Request Tracking
 
-    enum PendingResponseExpectation: Sendable, Equatable {
+    fileprivate enum PendingResponseExpectation: Sendable {
         case action
         case pong
         case interface
@@ -30,55 +30,17 @@ extension TheFence {
         }
     }
 
-    enum PendingResponse: Sendable {
-        case action(ActionResult)
-        case pong(PongPayload)
-        case interface(Interface)
-        case screen(ScreenPayload)
-        case heistExecution(HeistExecutionResult)
-
-        var expectation: PendingResponseExpectation {
-            switch self {
-            case .action:
-                return .action
-            case .pong:
-                return .pong
-            case .interface:
-                return .interface
-            case .screen:
-                return .screen
-            case .heistExecution:
-                return .heistExecution
-            }
-        }
-    }
-
-    fileprivate struct PendingRequest: Sendable {
+    fileprivate struct PendingRequest<Response: Sendable>: Sendable {
         let owner: UUID
-        let callback: @Sendable (Result<PendingResponse, Error>) -> Void
+        let callback: @Sendable (Result<Response, Error>) -> Void
     }
 
     fileprivate enum PendingResponseContinuation: Sendable {
-        case action(PendingRequest)
-        case pong(PendingRequest)
-        case interface(PendingRequest)
-        case screen(PendingRequest)
-        case heistExecution(PendingRequest)
-
-        init(expectation: PendingResponseExpectation, request: PendingRequest) {
-            switch expectation {
-            case .action:
-                self = .action(request)
-            case .pong:
-                self = .pong(request)
-            case .interface:
-                self = .interface(request)
-            case .screen:
-                self = .screen(request)
-            case .heistExecution:
-                self = .heistExecution(request)
-            }
-        }
+        case action(PendingRequest<ActionResult>)
+        case pong(PendingRequest<PongPayload>)
+        case interface(PendingRequest<Interface>)
+        case screen(PendingRequest<ScreenPayload>)
+        case heistExecution(PendingRequest<HeistExecutionResult>)
 
         var expectation: PendingResponseExpectation {
             switch self {
@@ -96,25 +58,32 @@ extension TheFence {
         }
 
         var owner: UUID {
-            request.owner
-        }
-
-        func resumeSuccess(_ response: PendingResponse) {
-            request.callback(.success(response))
+            switch self {
+            case .action(let request):
+                return request.owner
+            case .pong(let request):
+                return request.owner
+            case .interface(let request):
+                return request.owner
+            case .screen(let request):
+                return request.owner
+            case .heistExecution(let request):
+                return request.owner
+            }
         }
 
         func resumeFailure(_ error: Error) {
-            request.callback(.failure(error))
-        }
-
-        private var request: PendingRequest {
             switch self {
-            case .action(let request),
-                 .pong(let request),
-                 .interface(let request),
-                 .screen(let request),
-                 .heistExecution(let request):
-                return request
+            case .action(let request):
+                request.callback(.failure(error))
+            case .pong(let request):
+                request.callback(.failure(error))
+            case .interface(let request):
+                request.callback(.failure(error))
+            case .screen(let request):
+                request.callback(.failure(error))
+            case .heistExecution(let request):
+                request.callback(.failure(error))
             }
         }
     }
@@ -128,16 +97,12 @@ extension TheFence {
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> ActionResult {
-            let response = try await waitForResponse(
+            try await waitForPayload(
                 requestId: requestId,
-                expecting: .action,
                 timeout: timeout,
-                afterRegister: afterRegister
+                afterRegister: afterRegister,
+                makeContinuation: PendingResponseContinuation.action
             )
-            guard case .action(let result) = response else {
-                throw Self.responseTypeMismatchError(expected: .action, actual: response.expectation)
-            }
-            return result
         }
 
         func waitForPong(
@@ -145,16 +110,12 @@ extension TheFence {
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> PongPayload {
-            let response = try await waitForResponse(
+            try await waitForPayload(
                 requestId: requestId,
-                expecting: .pong,
                 timeout: timeout,
-                afterRegister: afterRegister
+                afterRegister: afterRegister,
+                makeContinuation: PendingResponseContinuation.pong
             )
-            guard case .pong(let payload) = response else {
-                throw Self.responseTypeMismatchError(expected: .pong, actual: response.expectation)
-            }
-            return payload
         }
 
         func waitForInterface(
@@ -162,16 +123,12 @@ extension TheFence {
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> Interface {
-            let response = try await waitForResponse(
+            try await waitForPayload(
                 requestId: requestId,
-                expecting: .interface,
                 timeout: timeout,
-                afterRegister: afterRegister
+                afterRegister: afterRegister,
+                makeContinuation: PendingResponseContinuation.interface
             )
-            guard case .interface(let interface) = response else {
-                throw Self.responseTypeMismatchError(expected: .interface, actual: response.expectation)
-            }
-            return interface
         }
 
         func waitForScreen(
@@ -179,16 +136,12 @@ extension TheFence {
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> ScreenPayload {
-            let response = try await waitForResponse(
+            try await waitForPayload(
                 requestId: requestId,
-                expecting: .screen,
                 timeout: timeout,
-                afterRegister: afterRegister
+                afterRegister: afterRegister,
+                makeContinuation: PendingResponseContinuation.screen
             )
-            guard case .screen(let payload) = response else {
-                throw Self.responseTypeMismatchError(expected: .screen, actual: response.expectation)
-            }
-            return payload
         }
 
         func waitForHeistExecution(
@@ -196,24 +149,20 @@ extension TheFence {
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> HeistExecutionResult {
-            let response = try await waitForResponse(
+            try await waitForPayload(
                 requestId: requestId,
-                expecting: .heistExecution,
                 timeout: timeout,
-                afterRegister: afterRegister
+                afterRegister: afterRegister,
+                makeContinuation: PendingResponseContinuation.heistExecution
             )
-            guard case .heistExecution(let result) = response else {
-                throw Self.responseTypeMismatchError(expected: .heistExecution, actual: response.expectation)
-            }
-            return result
         }
 
-        func waitForResponse(
+        private func waitForPayload<Response: Sendable>(
             requestId: String,
-            expecting expectation: PendingResponseExpectation,
             timeout: TimeInterval,
-            afterRegister: (() -> Void)? = nil
-        ) async throws -> PendingResponse {
+            afterRegister: (() -> Void)? = nil,
+            makeContinuation: @escaping @Sendable (PendingRequest<Response>) -> PendingResponseContinuation
+        ) async throws -> Response {
             let owner = UUID()
 
             return try await withTaskCancellationHandler {
@@ -237,7 +186,7 @@ extension TheFence {
                         }
                     }
 
-                    let pendingRequest = PendingRequest(owner: owner) { result in
+                    let pendingRequest = PendingRequest<Response>(owner: owner) { result in
                         let shouldResume = didResume.withLock { flag -> Bool in
                             guard !flag else { return false }
                             flag = true
@@ -248,10 +197,7 @@ extension TheFence {
                             continuation.resume(with: result)
                         }
                     }
-                    pending[requestId] = PendingResponseContinuation(
-                        expectation: expectation,
-                        request: pendingRequest
-                    )
+                    pending[requestId] = makeContinuation(pendingRequest)
                     afterRegister?()
                 }
             } onCancel: {
@@ -267,17 +213,17 @@ extension TheFence {
         func resolveTransientResponse(_ message: ServerMessage, requestId: String) -> Bool {
             switch message {
             case .pong(let payload):
-                resolveResponse(.pong(payload), requestId: requestId)
+                resolvePong(payload, requestId: requestId)
             case .interface(let payload):
-                resolveResponse(.interface(payload), requestId: requestId)
+                resolveInterface(payload, requestId: requestId)
             case .actionResult(let result):
                 if case .heistExecution(let heistResult) = result.payload {
-                    resolveResponse(.heistExecution(heistResult), requestId: requestId)
+                    resolveHeistExecution(heistResult, requestId: requestId)
                 } else {
-                    resolveResponse(.action(result), requestId: requestId)
+                    resolveAction(result, requestId: requestId)
                 }
             case .screen(let payload):
-                resolveResponse(.screen(payload), requestId: requestId)
+                resolveScreen(payload, requestId: requestId)
             case .error(let serverError):
                 resolveTransientFailure(FenceError.serverError(serverError), requestId: requestId)
             default:
@@ -299,7 +245,7 @@ extension TheFence {
             }
         }
 
-        static func responseTypeMismatchError(
+        private static func responseTypeMismatchError(
             expected: PendingResponseExpectation,
             actual: PendingResponseExpectation,
             requestId: String? = nil
@@ -317,17 +263,69 @@ extension TheFence {
             ))
         }
 
-        private func resolveResponse(_ response: PendingResponse, requestId: String) {
+        private func resolveAction(_ result: ActionResult, requestId: String) {
             guard let request = pending.removeValue(forKey: requestId) else { return }
-            guard request.expectation == response.expectation else {
+            guard case .action(let pendingRequest) = request else {
                 request.resumeFailure(Self.responseTypeMismatchError(
                     expected: request.expectation,
-                    actual: response.expectation,
+                    actual: .action,
                     requestId: requestId
                 ))
                 return
             }
-            request.resumeSuccess(response)
+            pendingRequest.callback(.success(result))
+        }
+
+        private func resolvePong(_ payload: PongPayload, requestId: String) {
+            guard let request = pending.removeValue(forKey: requestId) else { return }
+            guard case .pong(let pendingRequest) = request else {
+                request.resumeFailure(Self.responseTypeMismatchError(
+                    expected: request.expectation,
+                    actual: .pong,
+                    requestId: requestId
+                ))
+                return
+            }
+            pendingRequest.callback(.success(payload))
+        }
+
+        private func resolveInterface(_ interface: Interface, requestId: String) {
+            guard let request = pending.removeValue(forKey: requestId) else { return }
+            guard case .interface(let pendingRequest) = request else {
+                request.resumeFailure(Self.responseTypeMismatchError(
+                    expected: request.expectation,
+                    actual: .interface,
+                    requestId: requestId
+                ))
+                return
+            }
+            pendingRequest.callback(.success(interface))
+        }
+
+        private func resolveScreen(_ payload: ScreenPayload, requestId: String) {
+            guard let request = pending.removeValue(forKey: requestId) else { return }
+            guard case .screen(let pendingRequest) = request else {
+                request.resumeFailure(Self.responseTypeMismatchError(
+                    expected: request.expectation,
+                    actual: .screen,
+                    requestId: requestId
+                ))
+                return
+            }
+            pendingRequest.callback(.success(payload))
+        }
+
+        private func resolveHeistExecution(_ result: HeistExecutionResult, requestId: String) {
+            guard let request = pending.removeValue(forKey: requestId) else { return }
+            guard case .heistExecution(let pendingRequest) = request else {
+                request.resumeFailure(Self.responseTypeMismatchError(
+                    expected: request.expectation,
+                    actual: .heistExecution,
+                    requestId: requestId
+                ))
+                return
+            }
+            pendingRequest.callback(.success(result))
         }
 
         private func removePendingRequest(

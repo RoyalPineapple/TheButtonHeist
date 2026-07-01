@@ -195,7 +195,7 @@ final class TheBurglarApplyTests: XCTestCase {
             ]
         )
         let facts = TheBurglar.ScreenBuildFacts(
-            firstResponderPaths: [secondPath]
+            focus: TheBurglar.ScreenBuildFocusFacts(firstResponderPaths: [secondPath])
         )
 
         let screen = TheBurglar.buildScreen(from: result, facts: facts)
@@ -415,17 +415,21 @@ final class TheBurglarApplyTests: XCTestCase {
             ]
         )
         let facts = TheBurglar.ScreenBuildFacts(
-            scrollContextContainerPaths: [scrollPath],
-            scrollElementIndicesByPath: [
-                .init(containerPath: scrollPath, elementPath: childPath): 7,
-            ],
-            scrollInventoriesByPath: [scrollPath: inventory],
-            elementObservedScrollContentActivationPointsByPath: [
-                childPath: observedElementPoint,
-            ],
-            containerObservedScrollContentActivationPointsByPath: [
-                nestedContainerPath: observedContainerPoint,
-            ]
+            scroll: TheBurglar.ScreenBuildScrollFacts(
+                contextContainerPaths: [scrollPath],
+                elementIndicesByPath: [
+                    .init(containerPath: scrollPath, elementPath: childPath): 7,
+                ],
+                inventoriesByPath: [scrollPath: inventory]
+            ),
+            activationPoints: TheBurglar.ScreenBuildScrollContentActivationPoints(
+                elementByPath: [
+                    childPath: observedElementPoint,
+                ],
+                containerByPath: [
+                    nestedContainerPath: observedContainerPoint,
+                ]
+            )
         )
 
         let screen = TheBurglar.buildScreen(from: result, facts: facts)
