@@ -39,3 +39,23 @@ func argumentShapesCompile() async throws {
             .expect(.appeared(.label("Milk")))
     }
 }
+
+@MainActor
+func prebuiltPlanShapeCompiles() async throws {
+    let plan = try HeistPlan("Checkout.pay") {
+        Activate(.label("Pay"))
+            .expect(.appeared(.label("Payment Complete")))
+    }
+
+    _ = try await runHeist(plan)
+}
+
+func scopedSessionShapeCompiles() {
+    withJoinedHeistSession(token: "public-products-import-contract") { session in
+        _ = session.token
+        _ = session.requestedPort
+        _ = session.listeningPort
+        _ = session.allowedScopes
+        _ = session.readyMessage
+    }
+}

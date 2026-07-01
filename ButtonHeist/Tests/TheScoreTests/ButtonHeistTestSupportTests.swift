@@ -96,4 +96,17 @@ import Testing
             )
         }
     }
+
+    @Test func `shared receipt directory fixture finds one gzip artifact recursively`() throws {
+        let receiptName = try withReceiptDirectory(prefix: "receipt-directory-fixture") { directory in
+            let nestedDirectory = directory.appendingPathComponent("checkout-flow", isDirectory: true)
+            try FileManager.default.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+            try Data([0x00]).write(to: nestedDirectory.appendingPathComponent("receipt-passed.json.gz"))
+            try Data([0x00]).write(to: nestedDirectory.appendingPathComponent("notes.txt"))
+
+            return try assertSingleReceiptArtifactURL(in: directory).lastPathComponent
+        }
+
+        #expect(receiptName == "receipt-passed.json.gz")
+    }
 }

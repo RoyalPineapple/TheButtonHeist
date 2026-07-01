@@ -97,6 +97,19 @@ process writes inside its sandbox:
 BUTTONHEIST_RECEIPTS_DIR="process-temporary-directory"
 ```
 
+Some app-hosted XCTest launchers do not propagate runner environment variables
+such as Bazel `--test_env` into the app process that runs TheInsideJob. In those
+targets, either call `setenv("BUTTONHEIST_RECEIPTS_MODE", "failing-and-passing",
+1)` and `setenv("BUTTONHEIST_RECEIPTS_DIR", "process-temporary-directory", 1)`
+inside the test process before executing heists, or use the sync XCTest facade:
+
+```swift
+runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+    Activate(.label("Pay"))
+        .expect(.appeared(.label("Payment Complete")))
+}
+```
+
 CI can then copy the sandboxed files out with:
 
 ```bash

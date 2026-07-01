@@ -232,7 +232,7 @@ public extension Heist {
             if let screenshot = result.failureScreenshotSummary {
                 text += "\n\(screenshot)"
             }
-            if let interfaceDump = result.failureInterfaceDump() {
+            if let interfaceDump = result.failureInterfaceDump(elementLimit: .max) {
                 text += "\n\(interfaceDump)"
             }
             return text

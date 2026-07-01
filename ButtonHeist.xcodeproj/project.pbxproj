@@ -493,6 +493,7 @@
 		CC9E24226AD428055607E838 /* HeistJUnitReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368279598775CC38E084A8F5 /* HeistJUnitReportTests.swift */; };
 		CD2B9EAB96E0F672795E32AC /* HeistPlanSourceCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23F7855082B9E57384EB7C83 /* HeistPlanSourceCompiler.swift */; };
 		CD31A318F123315951A5243C /* DeviceConnectionEventStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30300EF11850AA2835A7ABB7 /* DeviceConnectionEventStream.swift */; };
+		CD937930A4136B2F5001969C /* ButtonHeistNetworkTestClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */; };
 		CDE776C5A28AC8E014AD0DE6 /* InsideJobStartupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D173650692F55CC5D9D0748 /* InsideJobStartupError.swift */; };
 		CE24C75ED12F915BF560DC2B /* HeistPlanSourceControlFlowParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85113D37B71CA7C60F36F035 /* HeistPlanSourceControlFlowParser.swift */; };
 		CEA69A0EA5598AE50635963E /* ThePlansBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18ECA4EE42225148426FBD14 /* ThePlansBoundaryTests.swift */; };
@@ -1558,6 +1559,7 @@
 		F65CA4E2766945A9FDB6FD07 /* ActivationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationPolicyTests.swift; sourceTree = "<group>"; };
 		F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
 		F70806BEB61DC6949980DC78 /* SettleSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettleSessionTests.swift; sourceTree = "<group>"; };
+		F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonHeistNetworkTestClient.swift; sourceTree = "<group>"; };
 		F81D4AD108F70379DBD8DB42 /* TheGetaway+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheGetaway+Status.swift"; sourceTree = "<group>"; };
 		F8744B3E0A411DA0F9E27D6E /* HandoffAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffAdmission.swift; sourceTree = "<group>"; };
 		F91D600828986B3875995CA1 /* HeistPlan+RuntimeValidationPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeValidationPayloads.swift"; sourceTree = "<group>"; };
@@ -2569,6 +2571,7 @@
 			isa = PBXGroup;
 			children = (
 				728093FC7C1BED2EBBFDB9E1 /* AccessibilityElement+Construction.swift */,
+				F79A849F3FBFEE58B4C23663 /* ButtonHeistNetworkTestClient.swift */,
 				9EA4D5F0C1DED9EFC339D4C8 /* InterfaceFixture.swift */,
 				10D79C29B3000357A40270A6 /* ScreenFactory.swift */,
 			);
@@ -3630,6 +3633,7 @@
 				7CC18EFE1CB52BF84DEF8842 /* HeistReceiptTests.swift in Sources */,
 				EA154DA271D4705FE7F9FEC0 /* HeistRuntimeReceiptConstructionSourceTests.swift in Sources */,
 				7EBAC5EBAAE8ABABC130164E /* AccessibilityElement+Construction.swift in Sources */,
+				CD937930A4136B2F5001969C /* ButtonHeistNetworkTestClient.swift in Sources */,
 				3D52B8DE6200921BFAC707AA /* InterfaceFixture.swift in Sources */,
 				E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */,
 				E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */,

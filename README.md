@@ -129,6 +129,24 @@ final class CheckoutHeistTests: XCTestCase {
 }
 ```
 
+For app-hosted XCTest/KIF-style targets that are sensitive to XCTest async
+teardown, keep the test method synchronous and let Button Heist pump the main
+run loop:
+
+```swift
+import ButtonHeistTesting
+import XCTest
+
+final class CheckoutHeistTests: XCTestCase {
+    func testCheckoutCompletes() {
+        runHeistSync("Checkout.pay") {
+            Activate(.label("Pay"))
+                .expect(.appeared(.label("Payment Complete")))
+        }
+    }
+}
+```
+
 ```swift
 import ButtonHeistTesting
 import Testing
@@ -148,6 +166,53 @@ struct CheckoutHeistTests {
 
 `RunHeist(...)` composes inside plans. `runHeist(...)` executes from Swift
 tests. `run_heist` crosses the CLI/MCP tool boundary.
+
+If a test already has a `HeistPlan`, run it through the same testing facade with
+`try await runHeist(plan)` instead of constructing `Heist` directly.
+
+`runHeistSync(..., recordReceipt: .always, to: receiptsURL) { ... }` records
+passing and failing XCTest receipts without relying on inherited environment
+variables. If no URL is supplied, receipts are written under the process
+temporary directory at `buttonheist-receipts/`.
+
+To stop at a screen, open a ButtonHeist session, and let a human or agent
+connect through MCP or the CLI, halt a synchronous XCTest after ordinary app
+navigation:
+
+```swift
+func test_PARACHUTE_driveCheckout() {
+    logIn()
+    navigateToCheckout()
+    joinHeist(token: "probe", port: 1456)
+}
+```
+
+`joinHeist` defaults to simulator loopback only. Pass `allowedScopes:
+ConnectionScope.default` to accept simulator and USB clients, or
+`allowedScopes: ConnectionScope.all` when LAN clients are intentional.
+
+The helper starts a fresh InsideJob server, prints a ready line after the
+listener reports its bound port, then halts test progression while pumping the
+run loop so the client can interact with the live app. Bazel-launched simulators
+may still need external port forwarding from the host; the app process can
+report the bound simulator-side port but cannot create that host bridge itself.
+
+For tests that should keep running while a client connects, scope the same live
+session around the code that needs it:
+
+```swift
+func testCheckoutWithExternalProbe() throws {
+    logIn()
+    navigateToCheckout()
+    withJoinedHeistSession(token: "probe") { session in
+        print(session.readyMessage)
+        runExternalProbe(port: session.listeningPort, token: session.token)
+    }
+}
+```
+
+`withJoinedHeistSession` accepts the same `port` and `allowedScopes` parameters
+as `joinHeist`, then stops the fresh InsideJob server when the closure exits.
 
 The same product capability can live in source control:
 
