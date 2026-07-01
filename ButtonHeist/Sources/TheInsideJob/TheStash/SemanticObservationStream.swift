@@ -60,6 +60,11 @@ struct PostActionSettleObservation {
     let result: Result
 }
 
+private enum FailedSettleAccessibilityNotificationPolicy {
+    case clearPendingEvents
+    case preservePendingEvents
+}
+
 private struct SemanticObservationFulfillmentState {
     typealias EventsByFulfilledScope = [SemanticObservationScope: SettledSemanticObservationEvent]
 
@@ -415,13 +420,13 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
             return nil
         }
 
         guard let screen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordFailedSettleDiagnosticEvidence(nil, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(nil, stash: stash)
             return nil
         }
 
@@ -436,7 +441,7 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        recordFailedSettleDiagnosticEvidence(screen, stash: stash)
+        recordNonActionFailedSettleDiagnosticEvidence(screen, stash: stash)
         return nil
     }
 
@@ -537,13 +542,13 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
+            recordPostActionFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordFailedSettleDiagnosticEvidence(nil, stash: stash)
+            recordPostActionFailedSettleDiagnosticEvidence(nil, stash: stash)
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
@@ -565,7 +570,7 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        recordFailedSettleDiagnosticEvidence(finalScreen, stash: stash)
+        recordPostActionFailedSettleDiagnosticEvidence(finalScreen, stash: stash)
         return PostActionSettleObservation(
             settle: outcome,
             result: stash.latestFailedSettleDiagnosticEvidence.map { .diagnostic($0) } ?? .unavailable
@@ -726,7 +731,7 @@ final class SemanticObservationStream {
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
-            recordFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
             await Task.yield()
             return true
         }
@@ -748,7 +753,7 @@ final class SemanticObservationStream {
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: settle)
-            recordFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
             await Task.yield()
             return true
         }
@@ -759,8 +764,35 @@ final class SemanticObservationStream {
         return true
     }
 
-    private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash) {
-        stash.accessibilityNotifications.clearPendingEvents()
+    private func recordNonActionFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash) {
+        recordFailedSettleDiagnosticEvidence(
+            screen,
+            stash: stash,
+            pendingAccessibilityNotificationPolicy: hasActiveObservationDemand
+                ? .preservePendingEvents
+                : .clearPendingEvents
+        )
+    }
+
+    private func recordPostActionFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash) {
+        recordFailedSettleDiagnosticEvidence(
+            screen,
+            stash: stash,
+            pendingAccessibilityNotificationPolicy: .clearPendingEvents
+        )
+    }
+
+    private func recordFailedSettleDiagnosticEvidence(
+        _ screen: Screen?,
+        stash: TheStash,
+        pendingAccessibilityNotificationPolicy: FailedSettleAccessibilityNotificationPolicy
+    ) {
+        switch pendingAccessibilityNotificationPolicy {
+        case .clearPendingEvents:
+            stash.accessibilityNotifications.clearPendingEvents()
+        case .preservePendingEvents:
+            break
+        }
         stash.recordFailedSettleDiagnosticEvidence(screen)
     }
 

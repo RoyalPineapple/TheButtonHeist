@@ -1034,6 +1034,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(waitExecutionSource.contains("case failed(ErrorKind)"))
     }
 
+    func testPassiveSettleFailureDoesNotOwnPostActionNotificationBuffer() throws {
+        let source = try String(contentsOf: semanticObservationStreamSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private func recordNonActionFailedSettleDiagnosticEvidence"))
+        XCTAssertTrue(source.contains("? .preservePendingEvents"))
+        XCTAssertTrue(source.contains(": .clearPendingEvents"))
+        XCTAssertTrue(source.contains("private func recordPostActionFailedSettleDiagnosticEvidence"))
+        XCTAssertTrue(source.contains("pendingAccessibilityNotificationPolicy: .clearPendingEvents"))
+        XCTAssertFalse(source.contains("private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash)"))
+    }
+
     func testHeistExecutionUsesExplicitStateMachine() throws {
         let source = try String(contentsOf: heistExecutionSourceURL(), encoding: .utf8)
 
@@ -1753,6 +1764,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift")
+    }
+
+    private func semanticObservationStreamSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheStash/SemanticObservationStream.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {
