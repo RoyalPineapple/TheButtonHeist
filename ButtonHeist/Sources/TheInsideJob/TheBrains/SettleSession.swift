@@ -140,8 +140,12 @@ struct SettleLoopReducer {
             return record(observation, elapsedMs: elapsedMs, state: &state)
         case .tripwireSignal(let signal):
             guard signal != state.tripwireBaseline else { return .continuePolling }
-            state.events.append(.tripwireSignalChanged(from: state.tripwireBaseline, to: signal))
+            let previous = state.tripwireBaseline
             state.tripwireBaseline = signal
+            guard signal.requiresSettleBaselineReset(from: previous) else {
+                return .continuePolling
+            }
+            state.events.append(.tripwireSignalChanged(from: previous, to: signal))
             state.stability = .none
             state.currentGenerationLastObservation = nil
             return .continuePolling

@@ -74,13 +74,20 @@ final class SettleSessionTests: XCTestCase {
         cyclesRequired: Int = 3,
         cycleIntervalMs: Int = 1,
         timeoutMs: Int = 200,
-        topVCSequence: [ObjectIdentifier?]? = nil
+        topVCSequence: [ObjectIdentifier?]? = nil,
+        accessibilityNotificationSequence: [UInt64]? = nil
     ) -> SettleSession {
         let scriptBox = ScriptBox(script: script)
         let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
+        let notificationBox = ScriptBox(script: accessibilityNotificationSequence ?? [0])
         return SettleSession(
             parseProvider: { scriptBox.next() },
-            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: topVCBox.next()) },
+            tripwireSignalProvider: {
+                Self.tripwireSignal(
+                    topmostVC: topVCBox.next(),
+                    accessibilityNotificationSequence: notificationBox.next()
+                )
+            },
             sleeper: { _ in /* no real sleep; loop runs at wall-clock pace */ },
             cyclesRequired: cyclesRequired,
             cycleIntervalMs: cycleIntervalMs,
@@ -88,11 +95,15 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
-    private static func tripwireSignal(topmostVC: ObjectIdentifier?) -> TheTripwire.TripwireSignal {
+    private static func tripwireSignal(
+        topmostVC: ObjectIdentifier?,
+        accessibilityNotificationSequence: UInt64 = 0
+    ) -> TheTripwire.TripwireSignal {
         TheTripwire.TripwireSignal(
             topmostVC: topmostVC,
             navigation: .empty,
-            windowStack: .empty
+            windowStack: .empty,
+            accessibilityNotificationSequence: accessibilityNotificationSequence
         )
     }
 
@@ -141,13 +152,20 @@ final class SettleSessionTests: XCTestCase {
         quietWindowMs: Int = 30,
         timeoutMs: Int = 500,
         topVCSequence: [ObjectIdentifier?]? = nil,
+        accessibilityNotificationSequence: [UInt64]? = nil,
         yieldCount: Counter? = nil
     ) -> SemanticQuietSettleSession {
         let scriptBox = ScriptBox(script: script)
         let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
+        let notificationBox = ScriptBox(script: accessibilityNotificationSequence ?? [0])
         return SemanticQuietSettleSession(
             parseProvider: { scriptBox.next() },
-            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: topVCBox.next()) },
+            tripwireSignalProvider: {
+                Self.tripwireSignal(
+                    topmostVC: topVCBox.next(),
+                    accessibilityNotificationSequence: notificationBox.next()
+                )
+            },
             observationYield: {
                 _ = yieldCount?.next()
                 clock.advance(milliseconds: frameMs)
@@ -256,6 +274,31 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertNil(outcome?.finalScreen)
         XCTAssertEqual(outcome?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
         _ = changedObject
+    }
+
+    func testReducerNotificationOnlyTripwireChangeDoesNotResetSettleBaseline() {
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
+        ])
+        let baseline = Self.tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 1)
+        let changed = Self.tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 2)
+        let reducer = SettleLoopReducer()
+        var ledger = SettleObservationLedger()
+        var state = SettleLoopState(
+            policy: .consecutiveCycles(required: 1),
+            tripwireBaseline: baseline
+        )
+
+        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, reducer: reducer, ledger: &ledger, state: &state))
+        XCTAssertContinue(reducer.reduce(.tripwireSignal(changed), state: &state))
+        let decision = reduceObservation(stable, elapsedMs: 1, reducer: reducer, ledger: &ledger, state: &state)
+
+        guard case .settled(let observation, let timeMs) = decision else {
+            return XCTFail("Expected notification-only signal to allow settle, got \(decision)")
+        }
+        XCTAssertEqual(timeMs, 1)
+        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Stable")
+        XCTAssertTrue(state.events.isEmpty)
     }
 
     func testReducerCancellationDecisionProjectsCancelledOutcome() {
@@ -401,6 +444,28 @@ final class SettleSessionTests: XCTestCase {
                 to: Self.tripwireSignal(topmostVC: changedVC)
             ),
         ])
+    }
+
+    func testSemanticQuietSettleNotificationOnlySignalsDoNotStarveParser() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let session = makeQuietSession(
+            script: [stable],
+            clock: clock,
+            quietWindowMs: 30,
+            accessibilityNotificationSequence: [1, 2, 3, 4, 5]
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 0)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertTrue(outcome.events.isEmpty)
     }
 
     func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {

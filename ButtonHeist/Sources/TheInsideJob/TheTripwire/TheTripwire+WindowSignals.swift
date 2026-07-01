@@ -31,6 +31,19 @@ extension TheTripwire {
             self.windowStack = windowStack
             self.accessibilityNotificationSequence = accessibilityNotificationSequence
         }
+
+        /// Whether this signal should reset an AX-tree settle baseline.
+        ///
+        /// Accessibility notifications are intentionally excluded. They are a
+        /// high-quality wake-up signal that should prompt another parse, but
+        /// they are not structural UIKit state. Treating a notification-only
+        /// sequence bump as a reset can starve the settle loop when UIKit posts
+        /// repeated layout/value notifications during a transition.
+        func requiresSettleBaselineReset(from previous: TripwireSignal) -> Bool {
+            topmostVC != previous.topmostVC
+                || navigation != previous.navigation
+                || windowStack != previous.windowStack
+        }
     }
 
     /// Public UIKit navigation state sampled from the topmost controller. This
