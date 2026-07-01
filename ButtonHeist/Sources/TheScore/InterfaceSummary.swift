@@ -87,7 +87,14 @@ private extension InterfaceSummary {
     }
 
     static func screenTitle(from elements: [HeistElement]) -> String? {
-        elements
+        summaryElement(from: elements)?.label
+    }
+
+    static func summaryElement(from elements: [HeistElement]) -> HeistElement? {
+        if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
+            return explicit
+        }
+        return elements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: HeistElement)? in
                 guard element.traits.contains(.header), element.label != nil else { return nil }
@@ -99,6 +106,5 @@ private extension InterfaceSummary {
                 return left.index < right.index
             }?
             .element
-            .label
     }
 }

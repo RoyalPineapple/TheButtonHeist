@@ -130,11 +130,31 @@ import TheScore
     ) -> ScreenSignature {
         ScreenSignature(
             modalMarkers: modalMarkers(in: hierarchy),
-            primaryHeader: elements.first { $0.traits.contains(.header) }?.label,
+            primaryHeader: summaryElement(in: elements)?.label,
             backButton: elements.first(where: isBackButton).map(marker(for:)),
             selectedTab: selectedTabMarker(in: hierarchy),
             rootShape: rootShapeTokens(in: hierarchy)
         )
+    }
+
+    private static func summaryElement(in elements: [AccessibilityElement]) -> AccessibilityElement? {
+        if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
+            return explicit
+        }
+        return elements
+            .enumerated()
+            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
+                guard element.traits.contains(.header), element.label != nil else { return nil }
+                return (index, element)
+            }
+            .min { left, right in
+                let leftFrame = left.element.shape.frame
+                let rightFrame = right.element.shape.frame
+                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
+                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                return left.index < right.index
+            }?
+            .element
     }
 
     private static func hasStableInteractionContext(before: Snapshot, after: Snapshot) -> Bool {

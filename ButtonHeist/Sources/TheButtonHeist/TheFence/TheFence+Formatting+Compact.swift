@@ -37,9 +37,7 @@ extension FenceResponse {
                 limits: profile.limits
             )
             let projection = InterfaceProjection(interface: interface, profile: projectionProfile)
-            var lines: [String] = [projection.screenDescription]
-            lines.append(Self.compactInterface(projection))
-            return lines.joined(separator: "\n")
+            return Self.compactInterface(projection)
         case .action(let command, let result, let expectation):
             return compactActionResult(command: command, result, expectation: expectation, profile: profile)
         case .screenshot(let path, let payload, let options):

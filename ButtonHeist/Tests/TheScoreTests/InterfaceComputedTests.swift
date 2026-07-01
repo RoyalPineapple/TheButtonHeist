@@ -130,6 +130,19 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertEqual(description, "Display")
     }
 
+    func testScreenDescriptionUsesExplicitSummaryElementBeforeHeader() {
+        let elements = [
+            makeElement(label: "Display", traits: [.header], frameY: 72),
+            makeElement(label: "Messages", traits: [.summaryElement], frameY: 240),
+            makeElement(label: "Search", traits: [.searchField], frameY: 120),
+        ]
+        let interface = makeTestInterface(elements: elements, timestamp: Date())
+
+        XCTAssertEqual(InterfaceSummary.screenDescription(for: interface), "Messages — 1 search field")
+        XCTAssertEqual(InterfaceSummary.screenTitle(for: interface), "Messages")
+        XCTAssertEqual(InterfaceSummary.screenId(for: interface), "messages")
+    }
+
     func testScreenDescriptionBackButtonExcluded() {
         let elements = [
             makeElement(label: "Back", traits: [.button, .backButton]),
