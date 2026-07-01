@@ -243,17 +243,17 @@ private enum AccessibilityNotificationPrivateSPI {
     // leading underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants
     // the C source name, so the lookup string intentionally does not include
     // that decoration.
-    private enum SymbolName: String {
+    private enum SPISymbolName: String {
         case addNotificationCallback = "AXAddNotificationCallback"
         case removeNotificationCallback = "AXRemoveNotificationCallback"
         case setUnitTestMode = "_AXSSetInUnitTestMode"
     }
 
-    private static let frameworkInstallNames = [
-        "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility",
-        "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore",
-        "/System/Library/Frameworks/UIKit.framework/UIKit",
-    ]
+    private enum SPIFrameworkPath: String, CaseIterable {
+        case uiAccessibility = "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility"
+        case uiKitCore = "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore"
+        case uiKit = "/System/Library/Frameworks/UIKit.framework/UIKit"
+    }
 
     enum InstallError: Error, CustomStringConvertible {
         case notMainThread
@@ -323,7 +323,7 @@ private enum AccessibilityNotificationPrivateSPI {
     @discardableResult
     static func enableUnitTestModeIfAvailable() -> Bool {
         guard let symbol = resolveSymbol(
-            SymbolName.setUnitTestMode.rawValue,
+            SPISymbolName.setUnitTestMode.rawValue,
             libraryPath: libAccessibilityPath()
         ) else {
             return false
@@ -388,7 +388,8 @@ private enum AccessibilityNotificationPrivateSPI {
             return symbols
         }
 
-        for path in frameworkInstallNames {
+        for frameworkPath in SPIFrameworkPath.allCases {
+            let path = frameworkPath.rawValue
             checkedSources.append(path)
             guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL),
                   let symbols = symbols(in: handle, source: path)
@@ -416,8 +417,8 @@ private enum AccessibilityNotificationPrivateSPI {
         in handle: UnsafeMutableRawPointer,
         source: String
     ) -> ResolvedSymbols? {
-        guard let addSymbol = dlsym(handle, SymbolName.addNotificationCallback.rawValue),
-              let removeSymbol = dlsym(handle, SymbolName.removeNotificationCallback.rawValue)
+        guard let addSymbol = dlsym(handle, SPISymbolName.addNotificationCallback.rawValue),
+              let removeSymbol = dlsym(handle, SPISymbolName.removeNotificationCallback.rawValue)
         else {
             return nil
         }
