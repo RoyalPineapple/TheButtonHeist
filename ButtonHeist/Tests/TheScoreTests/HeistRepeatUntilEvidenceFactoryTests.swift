@@ -139,15 +139,40 @@ import TheScore
             iterationCount: 1,
             expectation: MetExpectationResult(predicate: predicate)
         )
-        let data = try JSONEncoder().encode(evidence)
-        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        var expectation = try #require(object["expectation"] as? [String: Any])
-        expectation["met"] = false
-        object["expectation"] = expectation
-        let invalidData = try JSONSerialization.data(withJSONObject: object)
+        var invalidFixture = RepeatUntilEvidenceFixture(evidence)
+        invalidFixture.expectation = ExpectationResult(
+            met: false,
+            predicate: invalidFixture.expectation.predicate,
+            actual: invalidFixture.expectation.actual
+        )
+        let invalidData = try JSONEncoder().encode(invalidFixture)
 
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(HeistRepeatUntilEvidence.self, from: invalidData)
         }
+    }
+}
+
+private struct RepeatUntilEvidenceFixture: Codable {
+    var outcome: HeistPredicateEvidenceOutcome
+    var predicate: AccessibilityPredicate
+    var timeout: Double
+    var iterationCount: Int
+    var iterationOrdinal: Int?
+    var expectation: ExpectationResult
+    var actionResult: ActionResult?
+    var lastObservedSummary: String?
+    var failureReason: String?
+
+    init(_ evidence: HeistRepeatUntilEvidence) {
+        outcome = evidence.outcome
+        predicate = evidence.predicate
+        timeout = evidence.timeout
+        iterationCount = evidence.iterationCount
+        iterationOrdinal = evidence.iterationOrdinal
+        expectation = evidence.expectation
+        actionResult = evidence.actionResult
+        lastObservedSummary = evidence.lastObservedSummary
+        failureReason = evidence.failureReason
     }
 }

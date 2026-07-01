@@ -2257,7 +2257,7 @@ final class TheFenceHandlerTests: XCTestCase {
             stepKind: .action,
             reportCommandName: "oneFingerTap"
         )
-        XCTAssertEqual(response.compactFormatted(), "heist: 1 top-level steps in 0ms\n  [0] oneFingerTap")
+        assertCompactHeistSummary(response, stepLine: "  [0] oneFingerTap")
     }
 
     @ButtonHeistActor
@@ -2862,7 +2862,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")
         try json.assertPresent("report")
-        XCTAssertEqual(response.compactFormatted(), "heist: 1 top-level steps in 0ms\n  [0] activate")
+        assertCompactHeistSummary(response, stepLine: "  [0] activate")
     }
 
     @ButtonHeistActor
@@ -4043,6 +4043,29 @@ private func stringMatchValue(mode: String, value: String) -> HeistValue {
 
 private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
     .object(fields)
+}
+
+private func assertCompactHeistSummary(
+    _ response: FenceResponse,
+    stepLine: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    let lines = response.compactFormatted().split(separator: "\n").map(String.init)
+    XCTAssertEqual(lines.count, 2, file: file, line: line)
+    XCTAssertTrue(
+        lines.first?.hasPrefix("heist: 1 top-level steps in ") == true,
+        lines.first ?? "<missing>",
+        file: file,
+        line: line
+    )
+    XCTAssertTrue(
+        lines.first?.hasSuffix("ms") == true,
+        lines.first ?? "<missing>",
+        file: file,
+        line: line
+    )
+    XCTAssertEqual(lines.last, stepLine, file: file, line: line)
 }
 
 private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate? {
