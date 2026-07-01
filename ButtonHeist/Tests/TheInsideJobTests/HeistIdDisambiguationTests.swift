@@ -17,9 +17,8 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Anchor window kept alive for the lifetime of a test so the
-    /// `scrollView.convert(_:from:)` calls in `TheBurglar` resolve against
-    /// a deterministic window coordinate space.
+    /// Anchor window kept alive for the lifetime of a test so scroll-content
+    /// coordinate facts resolve against a deterministic window coordinate space.
     private var anchorWindow: UIWindow?
 
     override func setUp() async throws {

@@ -12,39 +12,57 @@ extension TheBurglar {
 
     // MARK: - Build Screen From Parse
 
-    /// Build a Screen value from a ParseResult. Pure: no mutable state. This
-    /// pass assigns heistIds, resolves context, computes container names,
-    /// and detects first responder state.
+    /// Build a Screen value from a ParseResult. UIKit/Objective-C reads are
+    /// extracted into typed facts first; projection then assigns heistIds,
+    /// resolves context, computes container names, and applies live facts.
     static func buildScreen(from result: ParseResult) -> Screen {
         let hierarchy = screenCoordinateHierarchy(from: result)
+        let facts = ScreenBuildFacts.extract(
+            from: result,
+            screenCoordinateHierarchy: hierarchy
+        )
+        let projection = buildScreenProjection(
+            from: result,
+            hierarchy: hierarchy,
+            facts: facts
+        )
+        logScreenBuildEvents(projection.logEvents)
+        return projection.screen
+    }
+
+    /// Pure projection entry used by focused tests with synthetic facts.
+    static func buildScreen(from result: ParseResult, facts: ScreenBuildFacts) -> Screen {
+        buildScreenProjection(
+            from: result,
+            hierarchy: screenCoordinateHierarchy(from: result),
+            facts: facts
+        ).screen
+    }
+
+    private static func buildScreenProjection(
+        from result: ParseResult,
+        hierarchy: [AccessibilityHierarchy],
+        facts: ScreenBuildFacts
+    ) -> ScreenBuildProjection {
         let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
             hierarchy: hierarchy,
-            scrollableContainerViewsByPath: result.scrollViewsByPath
+            scrollableContainerPaths: facts.scrollContextContainerPaths
         )
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerViewsByPath: result.scrollViewsByPath
+            scrollableContainerPaths: facts.scrollContextContainerPaths
         )
         let containerNamesByPath = buildContainerNamesByPath(
             hierarchy: hierarchy,
             identityContext: identityContext
         )
-        let scrollInventoriesByPath = scrollInventories(
-            hierarchy: hierarchy,
-            objectsByPath: result.objectsByPath,
-            scrollViewsByPath: result.scrollViewsByPath
-        )
-        let containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPoints(
-            hierarchy: hierarchy,
-            identityContext: identityContext,
-            scrollViewsByPath: result.scrollViewsByPath
-        )
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = baseHeistIds
 
+        var logEvents: [ScreenBuildLogEvent] = []
         var screenElements: [HeistId: Screen.ScreenElement] = [:]
         screenElements.reserveCapacity(elements.count)
         var heistIdsByPath: [TreePath: HeistId] = [:]
@@ -57,13 +75,11 @@ extension TheBurglar {
             let context = contextsByPath[path]
             let scrollMembership = scrollMembership(
                 context?.scrollMembership,
-                object: result.objectsByPath[path],
-                scrollView: context?.scrollView
+                path: path,
+                facts: facts
             )
-            let observedScrollContentActivationPoint = observedScrollContentActivationPoint(
-                for: parsedElement,
-                in: context?.scrollView
-            )
+            let observedScrollContentActivationPoint = facts
+                .elementObservedScrollContentActivationPointsByPath[path]
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 scrollMembership: scrollMembership,
@@ -71,33 +87,30 @@ extension TheBurglar {
                 element: parsedElement
             )
             if let observedScrollContentActivationPoint, let scrollMembership {
-                let containerPathDescription = scrollMembership.containerPath.indices.map(String.init).joined(separator: ".")
-                let indexDescription = scrollMembership.index.map(String.init) ?? "nil"
-                let point = observedScrollContentActivationPoint.point
-                insideJobLogger.debug(
-                    """
-                    Captured observed scroll-content activation point \
-                    heistId=\(heistId.rawValue, privacy: .public) \
-                    containerPath=\(containerPathDescription, privacy: .public) \
-                    index=\(indexDescription, privacy: .public) \
-                    point=(\(Double(point.x), privacy: .public), \(Double(point.y), privacy: .public))
-                    """
+                logEvents.append(
+                    .capturedObservedScrollContentActivationPoint(
+                        heistId: heistId,
+                        containerPath: scrollMembership.containerPath,
+                        index: scrollMembership.index,
+                        point: observedScrollContentActivationPoint.point
+                    )
                 )
             }
             screenElements[heistId] = entry
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: result.objectsByPath[path],
-                scrollView: context?.scrollView
+                scrollView: context?.scrollMembership?.containerPath.flatMap {
+                    result.scrollViewsByPath[$0]
+                }
             )
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            let object = result.objectsByPath[item.path]
-            return (object as? UIView)?.isFirstResponder == true
+            facts.firstResponderPaths.contains(item.path)
         }
         if firstResponders.count > 1 {
-            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map { $0.1.description }.joined(separator: ", "))")
+            logEvents.append(.multipleFirstResponders(firstResponders.map { $0.1 }))
         }
 
         let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
@@ -106,7 +119,7 @@ extension TheBurglar {
         let containerRefsByPath = result.containerObjectsByPath.mapValues {
             Screen.ContainerRef(object: $0)
         }
-        return Screen(
+        let screen = Screen(
             elements: screenElements,
             hierarchy: hierarchy,
             containerNamesByPath: containerNamesByPath,
@@ -115,10 +128,14 @@ extension TheBurglar {
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath,
+            containerObservedScrollContentActivationPointsByPath: facts.containerObservedScrollContentActivationPointsByPath,
+            scrollInventoriesByPath: facts.scrollInventoriesByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
+        )
+        return ScreenBuildProjection(
+            screen: screen,
+            logEvents: logEvents
         )
     }
 
@@ -169,85 +186,41 @@ extension TheBurglar {
 
     private static func scrollMembership(
         _ membership: Screen.ScrollMembership?,
-        object: NSObject?,
-        scrollView: UIScrollView?
+        path: TreePath,
+        facts: ScreenBuildFacts
     ) -> Screen.ScrollMembership? {
         guard let membership else { return nil }
         return Screen.ScrollMembership(
             containerPath: membership.containerPath,
-            index: scrollIndex(of: object, in: scrollView)
+            index: facts.scrollIndex(
+                forElementAt: path,
+                in: membership.containerPath
+            )
         )
     }
 
-    private static func scrollInventories(
-        hierarchy: [AccessibilityHierarchy],
-        objectsByPath: [TreePath: NSObject],
-        scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [TreePath: ScrollInventory] {
-        Dictionary(
-            uniqueKeysWithValues: scrollViewsByPath.map { path, scrollView in
-                let visibleIndices = hierarchy.compactMapSubtrees { node, childPath -> Int? in
-                    guard childPath != path,
-                          childPath.hasPrefix(path),
-                          case .element = node
-                    else { return nil }
-                    return scrollIndex(of: objectsByPath[childPath], in: scrollView)
-                }
-                return (
-                    path,
-                    ScrollInventory(
-                        totalElementCount: totalElementCount(in: scrollView),
-                        visibleIndices: Array(Set(visibleIndices)).sorted()
-                    )
+    private static func logScreenBuildEvents(_ events: [ScreenBuildLogEvent]) {
+        for event in events {
+            switch event {
+            case .capturedObservedScrollContentActivationPoint(let heistId, let containerPath, let index, let point):
+                let containerPathDescription = containerPath.indices.map(String.init).joined(separator: ".")
+                let indexDescription = index.map(String.init) ?? "nil"
+                insideJobLogger.debug(
+                    """
+                    Captured observed scroll-content activation point \
+                    heistId=\(heistId.rawValue, privacy: .public) \
+                    containerPath=\(containerPathDescription, privacy: .public) \
+                    index=\(indexDescription, privacy: .public) \
+                    point=(\(Double(point.x), privacy: .public), \(Double(point.y), privacy: .public))
+                    """
+                )
+
+            case .multipleFirstResponders(let heistIds):
+                insideJobLogger.warning(
+                    "Multiple first responders detected: \(heistIds.map { $0.description }.joined(separator: ", "))"
                 )
             }
-        )
-    }
-
-    private static func totalElementCount(in scrollView: UIScrollView) -> Int? {
-        let count = scrollView.accessibilityElementCount()
-        guard count != NSNotFound, count >= 0 else { return nil }
-        return count
-    }
-
-    private static func scrollIndex(of object: NSObject?, in scrollView: UIScrollView?) -> Int? {
-        guard let object, let scrollView else { return nil }
-        let index = scrollView.index(ofAccessibilityElement: object)
-        guard index != NSNotFound, index >= 0 else { return nil }
-        return index
-    }
-
-    private static func observedScrollContentActivationPoint(
-        for element: AccessibilityElement,
-        in scrollView: UIScrollView?
-    ) -> Screen.ObservedScrollContentActivationPoint? {
-        guard let scrollView else { return nil }
-        let activationPoint = element.bhResolvedActivationPoint
-        guard activationPoint.x.isFinite, activationPoint.y.isFinite else { return nil }
-        return Screen.ObservedScrollContentActivationPoint(scrollView.convert(activationPoint, from: nil))
-    }
-
-    private static func containerObservedScrollContentActivationPoints(
-        hierarchy: [AccessibilityHierarchy],
-        identityContext: ContainerIdentityContext,
-        scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> [TreePath: Screen.ObservedScrollContentActivationPoint] {
-        Dictionary(
-            uniqueKeysWithValues: hierarchy.compactMapSubtrees { node, path -> (TreePath, Screen.ObservedScrollContentActivationPoint)? in
-                guard case .container(let container, _) = node,
-                      let membership = identityContext.scrollMembershipsByPath[path],
-                      let scrollView = scrollViewsByPath[membership.containerPath]
-                else { return nil }
-                let frame = container.frame.cgRect
-                let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
-                guard activationPoint.x.isFinite, activationPoint.y.isFinite,
-                      let observedPoint = Screen.ObservedScrollContentActivationPoint(
-                          scrollView.convert(activationPoint, from: nil)
-                      )
-                else { return nil }
-                return (path, observedPoint)
-            }
-        )
+        }
     }
 
     // MARK: - Container Name Index
@@ -333,6 +306,21 @@ extension TheBurglar {
     private struct ContainerIdentityPayload: Encodable {
         let path: [Int]
         let subtree: AccessibilityHierarchy
+    }
+
+    private struct ScreenBuildProjection {
+        let screen: Screen
+        let logEvents: [ScreenBuildLogEvent]
+    }
+
+    private enum ScreenBuildLogEvent: Equatable {
+        case capturedObservedScrollContentActivationPoint(
+            heistId: HeistId,
+            containerPath: TreePath,
+            index: Int?,
+            point: CGPoint
+        )
+        case multipleFirstResponders([HeistId])
     }
 
 }
