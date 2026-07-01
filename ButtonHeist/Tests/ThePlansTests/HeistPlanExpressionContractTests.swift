@@ -30,7 +30,11 @@ func `empty refs are rejected at expression boundaries`() throws {
 
     expectDecodingError(StringExpr.self, #"{"ref":"   "}"#, contains: "string reference must not be empty")
     expectDecodingError(ElementTargetExpr.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
-    expectDecodingError(ElementPredicateTemplate.self, #"{"label_ref":"   "}"#, contains: "label_ref must not be empty")
+    expectDecodingError(
+        ElementPredicateTemplate.self,
+        #"{"checks":[{"kind":"label","match":{"ref":"   "}}]}"#,
+        contains: "string reference must not be empty"
+    )
     expectDecodingError(StatePredicateExpr.self, #"{"type": "exists","target_ref":"   "}"#, contains: "target_ref must not be empty")
     expectDecodingError(
         ElementUpdatePredicateExpr.self,

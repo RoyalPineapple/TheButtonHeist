@@ -201,7 +201,14 @@ import Testing
     #expect(throws: DecodingError.self) {
         _ = try JSONDecoder().decode(WaitStep.self, from: Data("""
         {
-          "predicate": { "type": "exists", "element": { "label": "Home" } },
+          "predicate": {
+            "type": "exists",
+            "element": {
+              "checks": [
+                { "kind": "label", "match": "Home" }
+              ]
+            }
+          },
           "timeout": -1
         }
         """.utf8))

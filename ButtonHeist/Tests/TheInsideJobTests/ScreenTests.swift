@@ -202,7 +202,7 @@ final class ScreenTests: XCTestCase {
         let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: before))
         let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after))
 
-        XCTAssertNotEqual(beforeInterfaceHash, afterInterfaceHash)
+        XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
         XCTAssertEqual(before.semanticHash, after.semanticHash)
     }
 

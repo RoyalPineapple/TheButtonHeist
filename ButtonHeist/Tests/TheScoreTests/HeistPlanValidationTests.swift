@@ -63,14 +63,23 @@ private struct InvalidForEachElementStepFixture: Encodable {
 }
 
 private struct InvalidForEachElementPayloadFixture: Encodable {
-    let matching = InvalidForEachElementMatcherFixture(label: "Delete")
+    let matching = EncodedElementPredicateFixture(label: "Delete")
     let limit = 1
     let parameter: String
     let body = [InvalidForEachElementWarnFixture()]
 }
 
-private struct InvalidForEachElementMatcherFixture: Encodable {
-    let label: String
+private struct EncodedElementPredicateFixture: Encodable {
+    let checks: [EncodedElementPredicateCheckFixture]
+
+    init(label: String) {
+        checks = [EncodedElementPredicateCheckFixture(kind: "label", match: label)]
+    }
+}
+
+private struct EncodedElementPredicateCheckFixture: Encodable {
+    let kind: String
+    let match: String
 }
 
 private struct InvalidForEachElementWarnFixture: Encodable {
@@ -114,7 +123,12 @@ func actionStepRejectsExpectationAndWaiverTogether() {
         "payload": {"label": "Save"}
       },
       "expectation": {
-        "predicate": {"type": "exists", "element": {"label": "Done"}},
+        "predicate": {
+          "type": "exists",
+          "element": {
+            "checks": [{ "kind": "label", "match": "Done" }]
+          }
+        },
         "timeout": 1
       },
       "without_expectation": "not needed"

@@ -340,11 +340,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         let actionEvidence = expectation.map {
             HeistActionEvidence.expectation(
                 command: action.command,
-                actionResult: actionResult,
-                expectationActionResult: $0.actionResult,
+                dispatchResult: actionResult,
+                expectationResult: $0.actionResult,
                 expectation: $0.result
             )
-        } ?? .dispatch(command: action.command, actionResult: actionResult)
+        } ?? .dispatch(command: action.command, dispatchResult: actionResult)
         if let failure {
             return .failed(
                 path: path,

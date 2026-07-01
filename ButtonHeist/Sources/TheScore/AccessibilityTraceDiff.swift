@@ -8,14 +8,15 @@ enum AccessibilityTraceDiff {
 
     static func projectDelta(
         between before: AccessibilityTrace.Capture,
-        and after: AccessibilityTrace.Capture
+        and after: AccessibilityTrace.Capture,
+        projection: AccessibilityTrace.DeltaProjection = .semantic
     ) -> AccessibilityTrace.Delta {
         let edge = AccessibilityTrace.CaptureEdge(before: before, after: after)
         let interactionDigest = AccessibilityTrace.InteractionDigest(between: before, and: after)
         let screenChanged = before.context.screenId != after.context.screenId
             || after.transition.screenChangeReason != nil
 
-        if !screenChanged, before.hash == after.hash {
+        if !screenChanged, !projection.includesGeometry, before.hash == after.hash {
             return .noChange(AccessibilityTrace.NoChange(
                 elementCount: after.interface.projectedElements.count,
                 captureEdge: edge,
@@ -28,6 +29,7 @@ enum AccessibilityTraceDiff {
             before.interface,
             after.interface,
             isScreenChange: screenChanged,
+            projection: projection,
             captureEdge: edge,
             interactionDigest: interactionDigest,
             transient: after.transition.transient
@@ -50,6 +52,7 @@ enum AccessibilityTraceDiff {
         _ before: Interface,
         _ after: Interface,
         isScreenChange: Bool,
+        projection: AccessibilityTrace.DeltaProjection,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
         transient: [HeistElement]
@@ -68,7 +71,7 @@ enum AccessibilityTraceDiff {
             ))
         }
 
-        if AccessibilityTrace.Capture.hash(before) == AccessibilityTrace.Capture.hash(after) {
+        if !projection.includesGeometry, AccessibilityTrace.Capture.hash(before) == AccessibilityTrace.Capture.hash(after) {
             return .noChange(AccessibilityTrace.NoChange(
                 elementCount: afterElements.count,
                 captureEdge: captureEdge,
@@ -79,12 +82,14 @@ enum AccessibilityTraceDiff {
 
         let edits = AccessibilityTraceElementDiff.projectElementEdits(
             beforeRecords: beforeRecords,
-            afterRecords: afterRecords
+            afterRecords: afterRecords,
+            projection: projection
         )
         let unpairedEdits = interactionDigest.elementSetChanged
             ? AccessibilityTraceElementDiff.projectElementEditsWithoutMoveSuppression(
                 beforeRecords: beforeRecords,
-                afterRecords: afterRecords
+                afterRecords: afterRecords,
+                projection: projection
             )
             : nil
         return projectElementDelta(

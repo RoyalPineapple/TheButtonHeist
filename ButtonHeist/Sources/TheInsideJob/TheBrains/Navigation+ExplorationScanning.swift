@@ -15,6 +15,12 @@ extension Navigation {
         case omitted(ExplorationOmissionReason)
     }
 
+    private enum ScrollScanOutcome: Equatable {
+        case foundTarget
+        case exhausted
+        case limitHit(ExplorationOmissionReason)
+    }
+
     func scanForHeistId(_ heistId: HeistId) async -> Screen? {
         let startTime = CACurrentMediaTime()
         var exploration = SemanticExploration(
@@ -119,44 +125,97 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> ScanResult {
         let savedVisualOrigin = containerExploration.savedVisualOrigin
+        let goal = scanGoal(target: target, targetHeistId: targetHeistId)
 
-        if shouldSkipFullScanByInventory(containerExploration, target: target, targetHeistId: targetHeistId, exploration: exploration) {
+        if shouldSkipFullScanByInventory(containerExploration, goal: goal, exploration: exploration) {
             return .omitted(.containerScrollLimit)
         }
 
-        for offset in scanOffsets(for: containerExploration) {
-            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.path) {
-                await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
-                return .omitted(reason)
-            }
-            containerExploration.scrollView.setContentOffset(offset, animated: false)
-            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-            absorbExplorationPage(in: &exploration)
+        let forward = await runScrollScan(
+            ScrollScanPlan(container: containerExploration, direction: .forward, goal: goal),
+            exploration: &exploration
+        )
+        switch forward {
+        case .foundTarget:
+            return .foundTarget
+        case .limitHit(let reason):
+            await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
+            return .omitted(reason)
+        case .exhausted:
+            break
+        }
 
-            if targetWasFound(target: target, targetHeistId: targetHeistId, in: exploration.screen) {
-                return .foundTarget
-            }
+        await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
+
+        let backward = await runScrollScan(
+            ScrollScanPlan(container: containerExploration, direction: .back, goal: goal),
+            exploration: &exploration
+        )
+        switch backward {
+        case .foundTarget:
+            return .foundTarget
+        case .limitHit(let reason):
+            await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
+            return .omitted(reason)
+        case .exhausted:
+            break
         }
 
         await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
         return .completed
     }
 
+    private func scanGoal(target: ElementTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
+        if let target {
+            return .findTarget(target)
+        }
+        if let targetHeistId {
+            return .findHeistId(targetHeistId)
+        }
+        return .exhaust
+    }
+
+    private func runScrollScan(
+        _ plan: ScrollScanPlan,
+        exploration: inout SemanticExploration
+    ) async -> ScrollScanOutcome {
+        if scanGoalWasMet(plan.goal, in: exploration.screen) {
+            return .foundTarget
+        }
+
+        for offset in scanOffsets(for: plan.container, direction: plan.direction) {
+            if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
+                return .limitHit(reason)
+            }
+            plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
+            if plan.animated {
+                _ = await tripwire.waitForAllClear(timeout: 0.5)
+            } else {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+            }
+            absorbExplorationPage(in: &exploration)
+
+            if scanGoalWasMet(plan.goal, in: exploration.screen) {
+                return .foundTarget
+            }
+        }
+
+        return .exhausted
+    }
+
     private func shouldSkipFullScanByInventory(
         _ containerExploration: ContainerExploration,
-        target: ElementTarget?,
-        targetHeistId: HeistId?,
+        goal: ScrollScanGoal,
         exploration: SemanticExploration
     ) -> Bool {
-        guard target == nil,
-              targetHeistId == nil,
+        guard goal == .exhaust,
               let totalElementCount = containerExploration.semanticContainer.scrollInventory?.totalElementCount
         else { return false }
         let visibleCount = max(1, containerExploration.semanticContainer.scrollInventory?.visibleIndices.count ?? 1)
         return totalElementCount > visibleCount * exploration.manifest.maxScrollsPerContainer
     }
 
-    private func scanOffsets(for containerExploration: ContainerExploration) -> [CGPoint] {
+    private func scanOffsets(for containerExploration: ContainerExploration, direction: ScrollScanDirection) -> [CGPoint] {
         let scrollView = containerExploration.scrollView
         let current = scrollView.contentOffset
         let bounds = scrollView.bounds
@@ -174,7 +233,8 @@ extension Navigation {
                 minOffset: minOffset,
                 maxOffset: maxOffset,
                 step: step,
-                axis: .vertical
+                axis: .vertical,
+                direction: direction
             )
         }
 
@@ -184,7 +244,8 @@ extension Navigation {
             minOffset: minOffset,
             maxOffset: maxOffset,
             step: step,
-            axis: .horizontal
+            axis: .horizontal,
+            direction: direction
         )
     }
 
@@ -193,30 +254,37 @@ extension Navigation {
         minOffset: CGPoint,
         maxOffset: CGPoint,
         step: CGFloat,
-        axis: ScanAxis
+        axis: ScanAxis,
+        direction: ScrollScanDirection
     ) -> [CGPoint] {
         let currentScalar = axis.scalar(from: current)
         let minScalar = axis.scalar(from: minOffset)
         let maxScalar = axis.scalar(from: maxOffset)
 
-        let forward = strideOffsets(
-            from: currentScalar + step,
-            through: maxScalar,
-            by: step,
-            current: current,
-            axis: axis
-        )
-        let backward = strideOffsets(
-            from: currentScalar - step,
-            through: minScalar,
-            by: -step,
-            current: current,
-            axis: axis
-        )
-        let edgeForward = axis.point(updating: current, scalar: maxScalar)
-        let edgeBackward = axis.point(updating: current, scalar: minScalar)
+        let offsets: [CGPoint]
+        let edge: CGPoint
+        switch direction {
+        case .forward:
+            offsets = strideOffsets(
+                from: currentScalar + step,
+                through: maxScalar,
+                by: step,
+                current: current,
+                axis: axis
+            )
+            edge = axis.point(updating: current, scalar: maxScalar)
+        case .back:
+            offsets = strideOffsets(
+                from: currentScalar - step,
+                through: minScalar,
+                by: -step,
+                current: current,
+                axis: axis
+            )
+            edge = axis.point(updating: current, scalar: minScalar)
+        }
 
-        return dedupedOffsets(forward + [edgeForward] + backward + [edgeBackward])
+        return dedupedOffsets(offsets + [edge])
             .filter { axis.scalar(from: $0) >= minScalar && axis.scalar(from: $0) <= maxScalar }
             .filter { axis.scalar(from: $0) != currentScalar }
     }
@@ -250,22 +318,24 @@ extension Navigation {
         return offsets.filter { seen.insert(CoarseOffset($0)).inserted }
     }
 
-    private func targetWasFound(
-        target: ElementTarget?,
-        targetHeistId: HeistId?,
+    private func scanGoalWasMet(
+        _ goal: ScrollScanGoal,
         in screen: Screen
     ) -> Bool {
-        if let targetHeistId, screen.liveCapture.contains(heistId: targetHeistId) {
+        switch goal {
+        case .exhaust:
+            return false
+        case .findHeistId(let targetHeistId):
+            guard screen.liveCapture.contains(heistId: targetHeistId) else { return false }
             return true
+        case .findTarget(let target):
+            return hasVisibleTerminalExplorationResolution(target, in: screen)
         }
-        if let target {
-            return hasVisibleTerminalExplorationResolution(target)
-        }
-        return false
     }
 
     private func absorbExplorationPage(in exploration: inout SemanticExploration) {
         exploration.absorb(stash.semanticPageForExploration())
+        stash.semanticObservationStream.commitSettledDiscoveryObservation(exploration.screen)
     }
 
     private func restoreContainerPosition(

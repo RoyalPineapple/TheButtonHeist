@@ -119,7 +119,7 @@ package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
     package var dispatchedResults: [ActionResult] {
         nodes.compactMap { node in
             guard node.step.kind == .action else { return nil }
-            return node.step.actionEvidence?.actionResult
+            return node.step.actionEvidence?.dispatchResult
         }
     }
 
@@ -238,9 +238,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
             repeatUntilEvidence: repeatUntilEvidence,
             invocationEvidence: invocationEvidence
         )
-        let reportedActionResult = step.kind == .action
-            ? actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
-            : nil
+        let reportedActionResult = step.kind == .action ? actionEvidence?.reportedResult : nil
 
         path = step.path
         kind = Self.stepName(for: step.kind)
@@ -302,7 +300,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     ) -> ActionResult? {
         switch kind {
         case .action:
-            return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
+            return actionEvidence?.reportedResult
         case .wait:
             return waitEvidence?.actionResult
         case .repeatUntil:
@@ -321,13 +319,18 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
         repeatUntilEvidence: HeistRepeatUntilEvidence?,
         invocationEvidence: HeistInvocationEvidence?
     ) -> ActionResult? {
-        actionResult(
-            kind: kind,
-            actionEvidence: actionEvidence,
-            waitEvidence: waitEvidence,
-            repeatUntilEvidence: repeatUntilEvidence,
-            invocationEvidence: invocationEvidence
-        )
+        switch kind {
+        case .action:
+            return actionEvidence?.traceResult
+        case .wait:
+            return waitEvidence?.actionResult
+        case .repeatUntil:
+            return repeatUntilEvidence?.actionResult
+        case .invoke:
+            return invocationEvidence?.expectationActionResult
+        default:
+            return nil
+        }
     }
 
     private static func expectation(
@@ -339,7 +342,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     ) -> ExpectationResult? {
         switch kind {
         case .action:
-            if actionEvidence?.actionResult?.success == false { return nil }
+            if actionEvidence?.dispatchResult?.success == false { return nil }
             return actionEvidence?.expectation
         case .wait:
             return waitEvidence?.expectation
@@ -536,13 +539,13 @@ public extension HeistExecutionStepResult {
     /// Runtime dispatch evidence for actual action steps.
     var dispatchedActionResult: ActionResult? {
         guard kind == .action else { return nil }
-        return actionEvidence?.actionResult
+        return actionEvidence?.dispatchResult
     }
 
     /// Human/report-facing result for actual action steps.
     var reportedActionResult: ActionResult? {
         guard kind == .action else { return nil }
-        return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
+        return actionEvidence?.reportedResult
     }
 
     /// Expectation to surface for this step. Action dispatch failure suppresses

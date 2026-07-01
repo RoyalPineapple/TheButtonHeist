@@ -60,7 +60,11 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
             "assertions": [
               {
                 "type": "appeared",
-                "element": { "label": "Receipt" }
+                "element": {
+                  "checks": [
+                    { "kind": "label", "match": "Receipt" }
+                  ]
+                }
               }
             ]
           }
@@ -78,13 +82,40 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
 
     let snapshotCase = try JSONDecoder().decode(PredicateCase.self, from: Data("""
     {
-      "predicate": { "type": "exists", "element": { "label": "Receipt" } },
+      "predicate": {
+        "type": "exists",
+        "element": {
+          "checks": [
+            { "kind": "label", "match": "Receipt" }
+          ]
+        }
+      },
       "body": [
         { "type": "warn", "warn": { "message": "ready" } }
       ]
     }
     """.utf8))
     #expect(snapshotCase.predicate == .exists(.label("Receipt")))
+}
+
+@Test
+func `durable element predicate JSON requires canonical checks`() throws {
+    #expect(throws: DecodingError.self) {
+        _ = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
+        {
+          "label": "Receipt"
+        }
+        """.utf8))
+    }
+
+    let predicate = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
+    {
+      "checks": [
+        { "kind": "label", "match": "Receipt" }
+      ]
+    }
+    """.utf8))
+    #expect(predicate == .label("Receipt"))
 }
 
 @Test
@@ -120,8 +151,8 @@ func `model Codable boundaries reject unknown fields`() {
         """.utf8))
     }
 
-    for (name, expectedMessage, decode) in unknownStepPayloadCases() {
-        expectUnknownField(name, contains: expectedMessage, decode: decode)
+    for testCase in unknownStepPayloadCases() {
+        expectUnknownField(testCase.name, contains: testCase.expectedMessage, decode: testCase.decode)
     }
 }
 
@@ -150,14 +181,26 @@ func `element update property checkers reject unknown fields`() {
     }
 }
 
-private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] {
+private struct UnknownFieldCase {
+    var name: String
+    var expectedMessage: String
+    var decode: () throws -> Void
+}
+
+private func unknownStepPayloadCases() -> [UnknownFieldCase] {
+    unknownBasicStepPayloadCases()
+        + unknownCollectionStepPayloadCases()
+        + unknownTerminalStepPayloadCases()
+}
+
+private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
     [
-        ("step wrapper", #"Unknown warn heist step field "unexpected""#, {
+        UnknownFieldCase(name: "step wrapper", expectedMessage: #"Unknown warn heist step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(HeistStep.self, from: Data("""
             { "type": "warn", "warn": { "message": "hello" }, "unexpected": true }
             """.utf8))
         }),
-        ("action step", #"Unknown action step field "unexpected""#, {
+        UnknownFieldCase(name: "action step", expectedMessage: #"Unknown action step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(ActionStep.self, from: Data("""
             {
               "command": { "type": "resignFirstResponder" },
@@ -165,21 +208,35 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             }
             """.utf8))
         }),
-        ("wait step", #"Unknown wait step field "unexpected""#, {
+        UnknownFieldCase(name: "wait step", expectedMessage: #"Unknown wait step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(WaitStep.self, from: Data("""
             {
-              "predicate": { "type" : "exists", "element": { "label": "Home" } },
+              "predicate": {
+                "type" : "exists",
+                "element": {
+                  "checks": [
+                    { "kind": "label", "match": "Home" }
+                  ]
+                }
+              },
               "timeout": 0,
               "unexpected": true
             }
             """.utf8))
         }),
-        ("conditional step", #"Unknown conditional step field "unexpected""#, {
+        UnknownFieldCase(name: "conditional step", expectedMessage: #"Unknown conditional step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(ConditionalStep.self, from: Data("""
             {
               "cases": [
                 {
-                  "predicate": { "type" : "exists", "element": { "label": "Promo" } },
+                  "predicate": {
+                    "type" : "exists",
+                    "element": {
+                      "checks": [
+                        { "kind": "label", "match": "Promo" }
+                      ]
+                    }
+                  },
                   "body": [ { "type": "warn", "warn": { "message": "promo" } } ]
                 }
               ],
@@ -187,19 +244,35 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             }
             """.utf8))
         }),
-        ("predicate case", #"Unknown predicate case field "unexpected""#, {
+        UnknownFieldCase(name: "predicate case", expectedMessage: #"Unknown predicate case field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(PredicateCase.self, from: Data("""
             {
-              "predicate": { "type" : "exists", "element": { "label": "Promo" } },
+              "predicate": {
+                "type" : "exists",
+                "element": {
+                  "checks": [
+                    { "kind": "label", "match": "Promo" }
+                  ]
+                }
+              },
               "body": [ { "type": "warn", "warn": { "message": "promo" } } ],
               "unexpected": true
             }
             """.utf8))
         }),
-        ("for each element step", #"Unknown for_each_element step field "unexpected""#, {
+    ]
+}
+
+private func unknownCollectionStepPayloadCases() -> [UnknownFieldCase] {
+    [
+        UnknownFieldCase(name: "for each element step", expectedMessage: #"Unknown for_each_element step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(ForEachElementStep.self, from: Data("""
             {
-              "matching": { "label": "Delete" },
+              "matching": {
+                "checks": [
+                  { "kind": "label", "match": "Delete" }
+                ]
+              },
               "limit": 1,
               "parameter": "row",
               "body": [ { "type": "warn", "warn": { "message": "row" } } ],
@@ -207,7 +280,7 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             }
             """.utf8))
         }),
-        ("for each string step", #"Unknown for_each_string step field "unexpected""#, {
+        UnknownFieldCase(name: "for each string step", expectedMessage: #"Unknown for_each_string step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(ForEachStringStep.self, from: Data("""
             {
               "values": [ "Milk" ],
@@ -217,27 +290,39 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             }
             """.utf8))
         }),
-        ("repeat until step", #"Unknown repeat_until step field "unexpected""#, {
+        UnknownFieldCase(name: "repeat until step", expectedMessage: #"Unknown repeat_until step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(RepeatUntilStep.self, from: Data("""
             {
-              "predicate": { "type" : "exists", "element": { "label": "Ready" } },
+              "predicate": {
+                "type" : "exists",
+                "element": {
+                  "checks": [
+                    { "kind": "label", "match": "Ready" }
+                  ]
+                }
+              },
               "timeout": 1,
               "body": [ { "type": "warn", "warn": { "message": "retry" } } ],
               "unexpected": true
             }
             """.utf8))
         }),
-        ("warn step", #"Unknown warn step field "unexpected""#, {
+    ]
+}
+
+private func unknownTerminalStepPayloadCases() -> [UnknownFieldCase] {
+    [
+        UnknownFieldCase(name: "warn step", expectedMessage: #"Unknown warn step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(WarnStep.self, from: Data("""
             { "message": "hello", "unexpected": true }
             """.utf8))
         }),
-        ("fail step", #"Unknown fail step field "unexpected""#, {
+        UnknownFieldCase(name: "fail step", expectedMessage: #"Unknown fail step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(FailStep.self, from: Data("""
             { "message": "stop", "unexpected": true }
             """.utf8))
         }),
-        ("invoke step", #"Unknown heist invocation step field "unexpected""#, {
+        UnknownFieldCase(name: "invoke step", expectedMessage: #"Unknown heist invocation step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
             { "path": [ "Search" ], "unexpected": true }
             """.utf8))
@@ -277,7 +362,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 ]
             )),
             .forEachElement(try ForEachElementStep(
-                matching: .element(label: "Delete", traits: [.button]),
+                matching: .element(.label("Delete"), .traits([.button])),
                 limit: 2,
                 parameter: "row",
                 body: [

@@ -42,7 +42,11 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
                 command, family: .session,
                 requestDecoder: TheFence.decodeConnectCommandRequest,
                 requiresConnectionBeforeDispatch: false,
-                parameters: [param(.target, .string), param(.device, .string), param(.token, .string)],
+                parameters: [
+                    FenceParameters.connectionTarget.spec,
+                    FenceParameters.device.spec,
+                    FenceParameters.token.spec,
+                ],
                 projection: .cliAndMCP("Establish or switch the active connection to an app running The Button Heist.")
             )
         case .listTargets:

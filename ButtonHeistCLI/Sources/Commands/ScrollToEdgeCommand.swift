@@ -22,9 +22,9 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
 
     @Option(
         name: .shortAndLong,
-        help: "Edge to scroll to: \(Self.catalogAllowedValuesDescription(for: .edge))"
+        help: "Edge to scroll to: \(Self.catalogAllowedValuesDescription(for: FenceParameters.scrollEdge))"
     )
-    var edge: String = Self.catalogDefaultString(for: .edge)
+    var edge: String = Self.catalogDefaultArgument(for: FenceParameters.scrollEdge)
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -42,14 +42,14 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        guard let scrollEdge = Self.catalogCanonicalStringValue(edge, for: .edge) else {
-            throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
+        guard let scrollEdge = Self.catalogCanonicalValue(edge, for: FenceParameters.scrollEdge) else {
+            throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.scrollEdge))")
         }
 
         let scrollSelection = try selection.scrollSelection()
         return Self.fenceArguments(
             target: scrollSelection.cliTarget,
-            CommandArgumentWriter.value(.edge, scrollEdge),
+            CommandArgumentWriter.value(FenceParameters.scrollEdge, scrollEdge),
             CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
             CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
         )

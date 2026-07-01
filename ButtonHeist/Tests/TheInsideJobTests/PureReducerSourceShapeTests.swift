@@ -150,6 +150,45 @@ import Testing
         )
     }
 
+    @Test func `repeat until terminal receipts use typed terminal results`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistRepeatUntilExecution.swift")
+        let terminalResult = try source.requiredBlock(
+            .enumeration("RepeatUntilTerminalResult"),
+            message:
+            "repeat_until terminal receipt construction should use one typed terminal result"
+        )
+        let receiptFunction = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+func\s+repeatUntilResult\s*\("#),
+            "repeat_until should keep terminal receipt emission in repeatUntilResult"
+        )
+
+        #expect(terminalResult.contents.contains("case predicateMet("))
+        #expect(terminalResult.contents.contains("case timedOut("))
+        #expect(terminalResult.contents.contains("case initialUnavailable("))
+        #expect(terminalResult.contents.contains("case bodyFailed("))
+        #expect(terminalResult.contents.contains("case timeoutHandledByElse("))
+        #expect(terminalResult.contents.contains("case timeoutElseFailed("))
+        #expect(terminalResult.contents.contains("evidence: HeistRepeatUntilEvidence"))
+        #expect(terminalResult.contents.contains("failure: HeistFailureDetail"))
+        #expect(terminalResult.contents.contains("children: [HeistExecutionStepResult]"))
+        #expect(
+            !source.contents.contains("RepeatUntilResultOverride"),
+            "repeat_until receipts should not reintroduce optional result override bags"
+        )
+        #expect(
+            try !source.containsMatch(#"\brepeatUntilResult\s*\([^)]*\boverride\s*:\s*[^)]*[?]"#),
+            "repeatUntilResult should not accept optional override bags"
+        )
+        #expect(
+            !receiptFunction.contents.contains("failureReason"),
+            "repeatUntilResult should emit from RepeatUntilTerminalResult instead of reconstructing failure reason"
+        )
+        #expect(
+            !receiptFunction.contents.contains("repeatUntilEvidence("),
+            "repeatUntilResult should not rebuild evidence outside RepeatUntilTerminalResult"
+        )
+    }
+
     @Test func `post action receipts use explicit observation outcome`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
         let observationOutcome = try source.requiredBlock(

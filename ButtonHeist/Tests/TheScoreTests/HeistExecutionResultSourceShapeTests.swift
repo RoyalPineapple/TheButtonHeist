@@ -65,24 +65,52 @@ import Testing
         let commandfulDispatchSignature = [
             #"\bpublic\s+static\s+func\s+dispatch\s*\("#,
             #"\s*command\s*:\s*HeistActionCommand,\s*"#,
-            #"actionResult\s*:\s*ActionResult,\s*"#,
+            #"dispatchResult\s*:\s*ActionResult,\s*"#,
             #"warning\s*:\s*HeistActionWarning[?]\s*=\s*nil\s*\)"#
         ].joined()
         #expect(try actionEvidence.containsMatch(
             commandfulDispatchSignature
         ))
         #expect(try actionEvidence.containsMatch(
-            #"\bpublic\s+static\s+func\s+dispatch\s*\(\s*actionResult\s*:\s*ActionResult\s*\)"#
+            #"\bpublic\s+static\s+func\s+dispatch\s*\(\s*dispatchResult\s*:\s*ActionResult\s*\)"#
         ))
         #expect(try !actionEvidence.containsMatch(
             #"\bpublic\s+static\s+func\s+dispatch\s*\(\s*command\s*:\s*HeistActionCommand[?]"#
         ))
         #expect(try !actionEvidence.containsMatch(
-            #"\bcase\s+dispatch\s*\(\s*command\s*:\s*HeistActionCommand[?],\s*actionResult\s*:\s*ActionResult,\s*warning\s*:\s*HeistActionWarning[?]\s*\)"#
+            #"\bcase\s+dispatch\s*\(\s*command\s*:\s*HeistActionCommand[?],\s*dispatchResult\s*:\s*ActionResult,\s*warning\s*:\s*HeistActionWarning[?]\s*\)"#
         ))
         #expect(try actionEvidence.containsMatch(#"\bcase\s+dispatch\s*\(\s*Dispatch\s*\)"#))
         #expect(try !actionEvidence.containsMatch(
             #"\bprecondition\s*\(\s*command\s*!=\s*nil[\s\S]*warning\s*==\s*nil"#
         ))
+    }
+
+    @Test func `action evidence exposes typed result meanings`() throws {
+        let source = try repository.requiredFile(relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult.swift")
+        let actionEvidence = try source.requiredBlock(
+            .structure("HeistActionEvidence"),
+            message:
+            "HeistActionEvidence should own the meaning of dispatch, expectation, reported, and trace results"
+        )
+        let resultEvidence = try actionEvidence.requiredBlock(
+            .enumeration("ResultEvidence"),
+            message:
+            "Action evidence consumers should use one typed result evidence model"
+        )
+        let expectationEvidence = try actionEvidence.requiredBlock(
+            .structure("ExpectationResultEvidence"),
+            message:
+            "Expectation action evidence should structurally carry both action dispatch and expectation results"
+        )
+
+        #expect(try resultEvidence.containsMatch(#"\bvar\s+dispatchResult\s*:\s*ActionResult[?]"#))
+        #expect(try resultEvidence.containsMatch(#"\bvar\s+expectationResult\s*:\s*ActionResult[?]"#))
+        #expect(try resultEvidence.containsMatch(#"\bvar\s+reportedResult\s*:\s*ActionResult[?]"#))
+        #expect(try resultEvidence.containsMatch(#"\bvar\s+traceResult\s*:\s*ActionResult[?]"#))
+        #expect(try expectationEvidence.containsMatch(#"\blet\s+dispatchResult\s*:\s*ActionResult\b"#))
+        #expect(try expectationEvidence.containsMatch(#"\blet\s+expectationResult\s*:\s*ActionResult\b"#))
+        #expect(try !expectationEvidence.containsMatch(#"\blet\s+dispatchResult\s*:\s*ActionResult[?]"#))
+        #expect(try !expectationEvidence.containsMatch(#"\blet\s+expectationResult\s*:\s*ActionResult[?]"#))
     }
 }

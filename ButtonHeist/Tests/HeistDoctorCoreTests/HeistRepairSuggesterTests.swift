@@ -720,6 +720,59 @@ private let expectedRepairJSONReportJSON = """
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
     }
 
+    @Test func `doctor repair evidence uses action evidence result meanings`() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Pay"))
+        let before = makeTestInterface(elements: [
+            element(label: "Pay", traits: [.button], actions: [.activate]),
+        ])
+        let dispatchAfter = makeTestInterface(elements: [
+            element(label: "Processing", traits: [.staticText]),
+        ])
+        let expectationAfter = makeTestInterface(elements: [
+            element(label: "Still Processing", traits: [.staticText]),
+        ])
+        let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
+        let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
+        let predicate = AccessibilityPredicate.change(.screen())
+        let failure = HeistFailureDetail(
+            category: .expectation,
+            contract: "action expectation is met",
+            observed: "timed out waiting for checkout",
+            expected: predicate.description
+        )
+        let step = HeistExecutionStepResult.failed(
+            path: "$.body[0]",
+            kind: .action,
+            durationMs: 1,
+            intent: .action(command: "activate", target: target.description),
+            evidence: .action(.expectation(
+                command: .activate(.target(target)),
+                dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
+                expectationResult: ActionResult.failure(
+                    method: .wait,
+                    errorKind: .timeout,
+                    message: "wait timed out",
+                    accessibilityTrace: expectationTrace
+                ),
+                expectation: ExpectationResult(
+                    met: false,
+                    predicate: predicate,
+                    actual: "timed out waiting for checkout"
+                )
+            )),
+            failure: failure
+        )
+
+        let repairEvidence = try HeistDoctor.failedRepairEvidence(from: step)
+
+        #expect(repairEvidence.beforeSnapshot == before)
+        #expect(repairEvidence.afterSnapshot == dispatchAfter)
+        #expect(repairEvidence.result.method == .activate)
+        #expect(repairEvidence.result.errorKind == .timeout)
+        #expect(repairEvidence.result.message == "timed out waiting for checkout")
+        #expect(repairEvidence.result.expectation?.met == false)
+    }
+
     @Test("Doctor returns an error when no safe successor exists")
     func doctorReturnsErrorWhenNoSafeSuccessorExists() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
@@ -1000,7 +1053,7 @@ private let expectedRepairJSONReportJSON = """
         }
         let evidence = HeistStepEvidence.action(.dispatch(
             command: .activate(.target(target)),
-            actionResult: actionResult
+            dispatchResult: actionResult
         ))
         let step = status == .failed
             ? HeistExecutionStepResult.failed(

@@ -74,7 +74,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeScrollRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
-                    param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
+                    FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction],
                 projection: .cliOnly(
@@ -100,7 +100,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
-                    param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
+                    FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction],
                 projection: .cliOnly(
@@ -140,13 +140,9 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeRotorRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
-                    param(.rotor, .string),
-                    param(.rotorIndex, .integer, minimum: 0),
-                    param(
-                        .direction, .string,
-                        enumValues: fenceEnumValues(RotorDirection.self),
-                        defaultValue: .string(RotorDirection.next.rawValue)
-                    ),
+                    FenceParameters.rotorName.spec,
+                    FenceParameters.rotorIndex.spec,
+                    FenceParameters.rotorDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
@@ -160,8 +156,8 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
-                    param(.text, .string, required: true),
-                    param(.replacingExisting, .boolean, defaultValue: .bool(false)),
+                    FenceParameters.text.spec,
+                    FenceParameters.replacingExisting.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
@@ -172,7 +168,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeEditActionRequest,
-                parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
+                parameters: [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Perform an edit action on the current first responder.")
             )
@@ -180,7 +176,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
-                parameters: [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
+                parameters: [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )

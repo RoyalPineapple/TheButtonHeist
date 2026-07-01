@@ -94,7 +94,7 @@ import Testing
         let connectionSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnection.swift"
         )
-        #expect(connectionSource.contains("case received(DeviceReceiveEvent, connection: NWConnection)"))
+        #expect(connectionSource.contains("case received(DeviceReceiveEvent, sessionID: UUID, connection: NWConnection)"))
         #expect(connectionSource.matches(
             of: #"\bcase\s+received\s*\(\s*content\s*:\s*Data\?"#,
             options: [.dotMatchesLineSeparators]

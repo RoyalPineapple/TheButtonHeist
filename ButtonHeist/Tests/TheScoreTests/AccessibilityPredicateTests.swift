@@ -445,7 +445,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let update = try XCTUnwrap(projectElementStateChange(
             old: makeElement(label: "Stepper", actions: [.increment]),
             new: makeElement(label: "Stepper", actions: [.increment, .activate]),
-            includeGeometry: false
+            projection: .semantic
         ))
         let action = makeResult(success: true, delta: .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [update]))))
 
@@ -505,12 +505,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let customUpdate = try XCTUnwrap(projectElementStateChange(
             old: makeElement(label: "Form", customContent: [HeistCustomContent(label: "Help", value: "Optional", isImportant: false)]),
             new: makeElement(label: "Form", customContent: [customContent]),
-            includeGeometry: false
+            projection: .semantic
         ))
         let rotorUpdate = try XCTUnwrap(projectElementStateChange(
             old: makeElement(label: "Article", rotors: [HeistRotor(name: "Links")]),
             new: makeElement(label: "Article", rotors: [HeistRotor(name: "Headings"), HeistRotor(name: "Links")]),
-            includeGeometry: false
+            projection: .semantic
         ))
         let action = makeResult(success: true, delta: .elementsChanged(.init(
             elementCount: 2,

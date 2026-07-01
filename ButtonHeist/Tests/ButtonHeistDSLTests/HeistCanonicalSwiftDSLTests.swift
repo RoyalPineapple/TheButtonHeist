@@ -158,16 +158,16 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         ]
     )
     let rowPredicate = ElementPredicate.element(
-        label: .contains("Result"),
-        identifier: .prefix("row"),
-        value: .suffix("available"),
+        .label(.contains("Result")),
+        .identifier(.prefix("row")),
+        .value(.suffix("available")),
         traits: [.button],
         excludeTraits: [.staticText]
     )
     let readyPredicate = ElementPredicateTemplate.element(
-        label: .contains(.literal("Result")),
-        identifier: .prefix(.literal("row")),
-        value: .suffix(.literal("ready")),
+        .label(.contains(.literal("Result"))),
+        .identifier(.prefix(.literal("row"))),
+        .value(.suffix(.literal("ready"))),
         traits: [.button],
         excludeTraits: [.staticText]
     )

@@ -490,7 +490,7 @@ extension TheBrains {
             path: "\(failedPath).failure.actions[0]",
             durationMs: elapsedMilliseconds(since: start),
             intent: .action(command: command.wireType.rawValue, target: nil),
-            evidence: .dispatch(command: command, actionResult: result),
+            evidence: .dispatch(command: command, dispatchResult: result),
             failure: failureScreenshotDetail(for: result)
         )
     }

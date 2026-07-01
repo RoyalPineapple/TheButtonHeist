@@ -9,8 +9,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let direction = try input.schemaEnum(.direction, as: ScrollDirection.self)
-            ?? Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self)
+        let direction = try input.value(
+            FenceParameters.scrollDirection,
+            defaultFrom: Command.scroll.descriptor
+        )
         return try appInteractionDispatch(
             ViewportDebugCommand.scroll.command,
             .viewportScroll(ScrollTarget(
@@ -40,8 +42,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let edge = try input.schemaEnum(.edge, as: ScrollEdge.self)
-            ?? Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self)
+        let edge = try input.value(
+            FenceParameters.scrollEdge,
+            defaultFrom: Command.scrollToEdge.descriptor
+        )
         return try appInteractionDispatch(
             ViewportDebugCommand.scrollToEdge.command,
             .viewportScrollToEdge(ScrollToEdgeTarget(

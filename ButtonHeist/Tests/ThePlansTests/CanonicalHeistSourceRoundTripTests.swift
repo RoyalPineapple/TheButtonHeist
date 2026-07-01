@@ -12,7 +12,7 @@ struct CanonicalHeistSourceRoundTripTests {
             )),
             .action(try ActionStep(
                 command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
-                expectation: WaitStep(predicate: .exists(.element(label: "Search", value: "milk")), timeout: 2)
+                expectation: WaitStep(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)
             )),
             .action(try ActionStep(
                 command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
@@ -47,7 +47,7 @@ struct CanonicalHeistSourceRoundTripTests {
             .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
             .action(try ActionStep(command: .customAction(
                 name: "Archive",
-                target: .predicate(.element(label: "Message", traits: [.button]))
+                target: .predicate(.element(.label("Message"), .traits([.button])))
             ))),
             .action(try ActionStep(command: .rotor(
                 selection: .named("Headings"),
@@ -178,7 +178,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 ]
             )),
             .forEachElement(try ForEachElementStep(
-                matching: .element(label: "Delete", traits: [.button]),
+                matching: .element(.label("Delete"), .traits([.button])),
                 limit: 2,
                 parameter: "target",
                 body: [

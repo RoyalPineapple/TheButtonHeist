@@ -217,6 +217,50 @@ final class DeviceConnectionTLSTests: XCTestCase {
         assertDeviceConnectionDisconnected(connection)
     }
 
+    @ButtonHeistActor
+    func testStaleReadyCallbackWithWrongSessionIDDoesNotConnectCurrentAttempt() async {
+        let transportConnection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice(), token: "token")
+        connection.connectionState = .connecting(connection: transportConnection)
+        var transportReadyCount = 0
+        connection.onTransportReady = {
+            transportReadyCount += 1
+        }
+
+        connection.handleStateChange(.ready, sessionID: UUID(), connection: transportConnection)
+
+        guard case .connecting = connection.connectionState else {
+            return XCTFail("Expected stale ready callback to leave the connection attempt in progress")
+        }
+        XCTAssertEqual(transportReadyCount, 0)
+
+        connection.handleStateChange(.ready, connection: transportConnection)
+
+        assertDeviceConnectionConnected(connection)
+        XCTAssertEqual(transportReadyCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testStaleReceiveCallbackWithWrongSessionIDDoesNotCloseCurrentSession() async {
+        let (connection, transportConnection) = makeConnectedConnection()
+        var disconnectReason: DisconnectReason?
+        connection.onEvent = { event in
+            if case .disconnected(let reason) = event {
+                disconnectReason = reason
+            }
+        }
+
+        connection.handleReceive(.completed, connection: transportConnection, sessionID: UUID())
+
+        assertDeviceConnectionConnected(connection)
+        XCTAssertNil(disconnectReason)
+
+        connection.handleReceive(.completed, connection: transportConnection)
+
+        XCTAssertEqual(disconnectReason, .serverClosed)
+        assertDeviceConnectionDisconnected(connection)
+    }
+
     // MARK: - Loopback Detection
 
     func testIPv4LoopbackDetected() {

@@ -43,7 +43,7 @@ struct LiveCapture: Equatable {
         dispatchReferences.containerRefsByPath
     }
 
-    var containerContentFramesByPath: [TreePath: CGRect] {
+    var containerContentFramesByPath: [TreePath: ContentRect] {
         snapshot.containerContentFramesByPath
     }
 
@@ -73,7 +73,7 @@ struct LiveCapture: Equatable {
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: CGRect] = [:],
+        containerContentFramesByPath: [TreePath: ContentRect] = [:],
         containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:],
         containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint] = [:],
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
@@ -165,7 +165,7 @@ struct LiveCapture: Equatable {
         elementIndex.containerObject(forPath: path)
     }
 
-    func containerContentFrame(forPath path: TreePath) -> CGRect? {
+    func containerContentFrame(forPath path: TreePath) -> ContentRect? {
         snapshot.containerContentFrame(forPath: path)
     }
 
@@ -206,7 +206,7 @@ struct LiveCapture: Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerNamesByPath: [TreePath: ContainerName]
         let heistIdsByPath: [TreePath: HeistId]
-        let containerContentFramesByPath: [TreePath: CGRect]
+        let containerContentFramesByPath: [TreePath: ContentRect]
         let containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint]
         let scrollInventoriesByPath: [TreePath: ScrollInventory]
@@ -215,7 +215,7 @@ struct LiveCapture: Equatable {
             hierarchy: [AccessibilityHierarchy],
             containerNamesByPath: [TreePath: ContainerName] = [:],
             heistIdsByPath: [TreePath: HeistId] = [:],
-            containerContentFramesByPath: [TreePath: CGRect] = [:],
+            containerContentFramesByPath: [TreePath: ContentRect] = [:],
             containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:],
             containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint] = [:],
             scrollInventoriesByPath: [TreePath: ScrollInventory] = [:]
@@ -248,7 +248,7 @@ struct LiveCapture: Equatable {
             return element
         }
 
-        func containerContentFrame(forPath path: TreePath) -> CGRect? {
+        func containerContentFrame(forPath path: TreePath) -> ContentRect? {
             containerContentFramesByPath[path]
         }
 

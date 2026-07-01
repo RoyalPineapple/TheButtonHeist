@@ -75,7 +75,7 @@ struct Screen: Equatable {
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: CGRect] = [:],
+        containerContentFramesByPath: [TreePath: ContentRect] = [:],
         containerScrollMembershipsByPath: [TreePath: ScrollMembership] = [:],
         containerObservedScrollContentActivationPointsByPath: [TreePath: ObservedScrollContentActivationPoint] = [:],
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
@@ -271,7 +271,7 @@ struct Screen: Equatable {
                         container: item.container,
                         path: item.path,
                         containerName: liveCapture.containerNamesByPath[item.path],
-                        contentFrame: liveCapture.containerContentFrame(forPath: item.path),
+                        contentRect: liveCapture.containerContentFrame(forPath: item.path),
                         scrollMembership: liveCapture.containerScrollMembership(forPath: item.path),
                         observedScrollContentActivationPoint: liveCapture.containerObservedScrollContentActivationPoint(
                             forPath: item.path

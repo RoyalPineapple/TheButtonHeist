@@ -63,9 +63,9 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
 
     @Option(
         name: .shortAndLong,
-        help: "Scroll direction: \(Self.catalogAllowedValuesDescription(for: .direction))"
+        help: "Scroll direction: \(Self.catalogAllowedValuesDescription(for: FenceParameters.scrollDirection))"
     )
-    var direction: String = Self.catalogDefaultString(for: .direction)
+    var direction: String = Self.catalogDefaultArgument(for: FenceParameters.scrollDirection)
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -83,14 +83,14 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        guard let scrollDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
+        guard let scrollDirection = Self.catalogCanonicalValue(direction, for: FenceParameters.scrollDirection) else {
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.scrollDirection))")
         }
 
         let scrollSelection = try selection.scrollSelection()
         return Self.fenceArguments(
             target: scrollSelection.cliTarget,
-            CommandArgumentWriter.value(.direction, scrollDirection),
+            CommandArgumentWriter.value(FenceParameters.scrollDirection, scrollDirection),
             CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
             CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
         )

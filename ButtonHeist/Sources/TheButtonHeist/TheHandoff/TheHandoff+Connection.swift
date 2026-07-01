@@ -15,14 +15,13 @@ extension TheHandoff {
 
     @discardableResult
     func openConnection(to device: DiscoveredDevice) -> UUID {
-        let attemptID = connectionLifecycle.beginConnecting(device: device)
-
-        connection = makeConnection?(device) ?? DeviceConnection(device: device, token: token)
-        connection?.onEvent = { [weak self, attemptID] event in
+        let connection = makeConnection?(device) ?? DeviceConnection(device: device, token: token)
+        let attemptID = connectionLifecycle.beginConnecting(device: device, connection: connection)
+        connection.onEvent = { [weak self, attemptID] event in
             self?.handleConnectionEvent(event, attemptID: attemptID, device: device)
         }
 
-        connection?.connect()
+        connection.connect()
         return attemptID
     }
 
@@ -39,8 +38,7 @@ extension TheHandoff {
     }
 
     func closeConnection() {
-        connection?.disconnect()
-        connection = nil
+        connectionLifecycle.activeConnection?.disconnect()
     }
 
     /// Tear down an in-flight connection attempt after its owner reaches a setup
@@ -48,8 +46,10 @@ extension TheHandoff {
     /// intentionally does not schedule reconnect: there was no usable session
     /// drop, only a failed setup attempt.
     func abortConnectionAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
+        guard connectionLifecycle.activeAttemptID == attemptID else { return }
+        let connection = connectionLifecycle.activeConnection
         guard connectionLifecycle.disconnectAttempt(attemptID, failure: failure) else { return }
-        closeConnection()
+        connection?.disconnect()
     }
 
     func disableAutoReconnect() {
@@ -81,7 +81,7 @@ extension TheHandoff {
     @discardableResult
     func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
         guard case .connected = connectionPhase,
-              let connection else {
+              let connection = connectionLifecycle.activeConnection else {
             return .failed(.notConnected)
         }
         return connection.send(message, requestId: requestId)
@@ -90,7 +90,7 @@ extension TheHandoff {
     @discardableResult
     func tickKeepalive(expectedAttemptID: UUID? = nil) -> Int {
         connectionLifecycle.tickKeepalive(expectedAttemptID: expectedAttemptID) {
-            connection?.send(.ping, requestId: nil)
+            connectionLifecycle.activeConnection?.send(.ping, requestId: nil)
         }
     }
 
@@ -143,7 +143,7 @@ extension TheHandoff {
         case .forward(let message, let requestId):
             onServerMessage?(message, requestId)
         case .connectionFailure(let message):
-            connectionLifecycle.markFailed(.connectionFailed(message))
+            failActiveConnection(.connectionFailed(message))
         case .pong(let payload, let requestId):
             connectionLifecycle.markPongReceived()
             if let requestId {
@@ -164,18 +164,19 @@ extension TheHandoff {
     }
 
     private func failActiveConnection(_ failure: HandoffConnectionError) {
+        let connection = connectionLifecycle.activeConnection
         connectionLifecycle.markFailed(failure)
-        closeConnection()
+        connection?.disconnect()
     }
 
     private func sendAdmissionMessage(_ message: ClientMessage) {
-        guard let connection else {
+        guard let connection = connectionLifecycle.activeConnection else {
             connectionLifecycle.markFailed(.connectionFailed("Cannot send admission message without an active transport"))
             return
         }
         let outcome = connection.send(message, requestId: nil)
         if case .failed(let failure) = outcome {
-            connectionLifecycle.markFailed(.connectionFailed(failure.localizedDescription))
+            failActiveConnection(.connectionFailed(failure.localizedDescription))
         }
     }
 
@@ -189,12 +190,14 @@ extension TheHandoff {
                 connectionLifecycle.leaveReconnectIfActive()
             }
         }
-        closeConnection()
-
         if hadActiveAttempt, let replacementReason {
+            let connection = connectionLifecycle.activeConnection
             connectionLifecycle.markDisconnected(reason: replacementReason)
+            connection?.disconnect()
         } else {
+            let connection = connectionLifecycle.activeConnection
             connectionLifecycle.markDisconnected()
+            connection?.disconnect()
         }
     }
 

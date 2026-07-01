@@ -31,7 +31,7 @@ extension Navigation {
 
         exploration.absorb(stash.refreshLiveCapture())
 
-        if let target, hasVisibleTerminalExplorationResolution(target) {
+        if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen) {
             exploration.manifest.pendingScrollPaths.removeAll()
             return exploration.finish(startTime: startTime)
         }
@@ -55,6 +55,10 @@ extension Navigation {
 
     func hasVisibleTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
         hasTerminalExplorationResolution(target, in: stash.liveVisibleScreen.visibleOnly)
+    }
+
+    func hasVisibleTerminalExplorationResolution(_ target: ElementTarget, in screen: Screen) -> Bool {
+        hasTerminalExplorationResolution(target, in: screen.visibleOnly)
     }
 }
 

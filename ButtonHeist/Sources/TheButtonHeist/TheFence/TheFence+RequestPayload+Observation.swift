@@ -42,7 +42,7 @@ extension TheFence {
 
     private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
-            detail: try arguments.schemaEnum(.detail, as: InterfaceDetail.self) ?? .summary,
+            detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeSelector(arguments),
                 matcher: try interfaceElementMatcher(arguments),
@@ -56,7 +56,15 @@ extension TheFence {
         _ arguments: CommandArgumentEnvelope,
         _ key: FenceParameterKey
     ) throws -> Int? {
-        guard let value = try arguments.schemaInteger(key) else { return nil }
+        let parameter: FenceParameter<Int>
+        if key == .maxScrollsPerContainer {
+            parameter = FenceParameters.maxScrollsPerContainer
+        } else if key == .maxScrollsPerDiscovery {
+            parameter = FenceParameters.maxScrollsPerDiscovery
+        } else {
+            preconditionFailure("Unsupported interface discovery limit parameter \(key.rawValue)")
+        }
+        guard let value = try arguments.value(parameter) else { return nil }
         guard (1...2_000).contains(value) else {
             throw SchemaValidationError(
                 field: arguments.field(key),
@@ -78,8 +86,8 @@ extension TheFence {
     }
 
     private func screenshotDestination(_ arguments: CommandArgumentEnvelope) throws -> ScreenshotDestination {
-        let outputPath = try arguments.schemaString(.output)
-        let inlineData = try arguments.schemaBoolean(.inlineData) ?? false
+        let outputPath = try arguments.value(FenceParameters.output)
+        let inlineData = try arguments.value(FenceParameters.inlineData) ?? false
         switch (inlineData, outputPath) {
         case (true, nil):
             return .inlineData

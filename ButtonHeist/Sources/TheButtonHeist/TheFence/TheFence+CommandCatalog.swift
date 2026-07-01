@@ -170,26 +170,24 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         return first
     }
 
-    public func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
-        parameter(named: key)?.defaultValue
+    public func defaultValue<Value>(for parameter: FenceParameter<Value>) -> Value? {
+        _ = resolvedParameter(for: parameter)
+        return parameter.defaultValue
     }
 
-    public func requiredDefaultString(for key: FenceParameterKey) -> String {
-        guard case .string(let value)? = defaultArgumentValue(for: key) else {
-            preconditionFailure("No string default registered for \(command.rawValue).\(key.rawValue)")
+    public func requiredDefaultValue<Value>(for parameter: FenceParameter<Value>) -> Value {
+        guard let value = defaultValue(for: parameter) else {
+            preconditionFailure("No default registered for \(command.rawValue).\(parameter.key.rawValue)")
         }
         return value
     }
 
-    public func requiredDefaultEnumValue<E>(
-        for key: FenceParameterKey,
-        as type: E.Type
-    ) -> E where E: RawRepresentable, E.RawValue == String {
-        let rawValue = requiredDefaultString(for: key)
-        guard let value = E(rawValue: rawValue) else {
-            preconditionFailure("Invalid default \(rawValue) for \(command.rawValue).\(key.rawValue)")
+    public func allowedRawValues<Value>(for parameter: FenceParameter<Value>) -> [String] {
+        _ = resolvedParameter(for: parameter)
+        guard let values = parameter.allowedRawValues else {
+            preconditionFailure("No enum values registered for \(command.rawValue).\(parameter.key.rawValue)")
         }
-        return value
+        return values
     }
 
     init(
@@ -208,6 +206,14 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         self.parameters = parameters
         self.execution = execution
         self.projection = projection
+    }
+
+    private func resolvedParameter<Value>(for parameter: FenceParameter<Value>) -> FenceParameterSpec {
+        guard let spec = self.parameter(named: parameter.key),
+              spec == parameter.spec else {
+            preconditionFailure("No matching parameter registered for \(command.rawValue).\(parameter.key.rawValue)")
+        }
+        return spec
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {

@@ -138,23 +138,11 @@ extension HeistPlanSourceParser {
                 default:
                     throw error(previous, ".element(...) checks accept .label, .identifier, .value, .traits, and .excludeTraits")
                 }
-            } else if consumeIdentifier("label") != nil {
-                try expectSymbol(":")
-                checks.append(.label(try parseStringMatchFieldValue(field: "label")))
-            } else if consumeIdentifier("identifier") != nil {
-                try expectSymbol(":")
-                checks.append(.identifier(try parseStringMatchFieldValue(field: "identifier")))
-            } else if consumeIdentifier("value") != nil {
-                try expectSymbol(":")
-                checks.append(.value(try parseStringMatchFieldValue(field: "value")))
-            } else if consumeIdentifier("traits") != nil {
-                try expectSymbol(":")
-                checks.append(.traits(try parseTraitArray(role: "traits").heistTraitSet))
-            } else if consumeIdentifier("excludeTraits") != nil {
-                try expectSymbol(":")
-                checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits").heistTraitSet))
             } else {
-                throw error(currentToken, ".element(...) accepts label, identifier, value, traits, and excludeTraits")
+                throw error(
+                    currentToken,
+                    ".element(...) accepts ordered checks like .label(\"Pay\"), .identifier(\"id\"), .traits([.button])"
+                )
             }
             guard consumeSymbol(",") else { break }
         }
@@ -232,6 +220,9 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch<StringExpr> {
+        if lookaheadExactStringMatchCall {
+            throw error(currentToken, "exact \(field) matches use the literal form: .\(field)(\"...\")")
+        }
         if let label = stringMatchModeLabelTokenIfPresent() {
             throw error(label.token, "StringMatch modes use enum-case syntax; use `.\(field)(.\(label.name)(\"...\"))`")
         }
@@ -242,6 +233,9 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
+        if lookaheadExactStringMatchCall {
+            throw error(currentToken, "exact \(field) matches use the literal form: \(field): \"...\"")
+        }
         if let label = stringMatchModeLabelTokenIfPresent() {
             throw error(label.token, "StringMatch modes use enum-case syntax; use `\(field): .\(label.name)(\"...\")`")
         }
@@ -277,8 +271,12 @@ extension HeistPlanSourceParser {
         return false
     }
 
+    var lookaheadExactStringMatchCall: Bool {
+        currentToken.isSymbol(".") && lookaheadIdentifier(in: ["exact"])
+    }
+
     var stringMatchModeNames: Set<String> {
-        Set(StringMatch<StringExpr>.Mode.allCases.map(\.rawValue))
+        Set(StringMatch<StringExpr>.Mode.sourceCallModes.map(\.rawValue))
     }
 
     func stringMatchMode(named name: String) -> StringMatch<StringExpr>.Mode? {
@@ -341,4 +339,10 @@ extension HeistPlanSourceParser {
         return false
     }
 
+}
+
+private extension StringMatch.Mode {
+    static var sourceCallModes: [Self] {
+        [.contains, .prefix, .suffix]
+    }
 }

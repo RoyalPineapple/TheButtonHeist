@@ -383,7 +383,9 @@ enum PredicateObservationDiagnostics {
         return PredicateEvaluation.evaluate(
             predicate,
             currentElements: lastCapture.interface.projectedElements,
-            accumulatedDelta: initialTrace.accumulatedDelta
+            accumulatedDelta: initialTrace.accumulatedDelta(
+                projection: predicate.deltaProjection
+            )
         )
     }
 
@@ -675,12 +677,12 @@ private enum WaitAccumulatedTrace {
         }
     }
 
-    var delta: AccessibilityTrace.AccumulatedDelta? {
+    func delta(projection: AccessibilityTrace.DeltaProjection) -> AccessibilityTrace.AccumulatedDelta? {
         switch self {
         case .unavailable:
             return nil
         case .captures(let evidence):
-            return evidence.trace.accumulatedDelta
+            return evidence.trace.accumulatedDelta(projection: projection)
         case .noChangeAfterBaseline(let evidence):
             return evidence.delta
         }
@@ -695,7 +697,7 @@ private enum WaitAccumulatedTrace {
         }
     }
 
-    mutating func append(_ observation: HeistSemanticObservation) {
+    mutating func append(_ observation: HeistSemanticObservation, projection: AccessibilityTrace.DeltaProjection) {
         guard let capture = observation.accessibilityTrace.captures.last else { return }
         switch self {
         case .unavailable:
@@ -707,7 +709,11 @@ private enum WaitAccumulatedTrace {
                 return
             }
             if last.hash == capture.hash,
-               AccessibilityTrace.Delta.between(last, capture).meaningfulWaitDelta == nil {
+               AccessibilityTrace.Delta.between(
+                   last,
+                   capture,
+                   projection: projection
+               ).meaningfulWaitDelta == nil {
                 self = .noChangeAfterBaseline(WaitNoChangeAfterBaselineEvidence(capture: last))
             } else {
                 evidence.append(capture)
@@ -715,7 +721,11 @@ private enum WaitAccumulatedTrace {
             }
         case .noChangeAfterBaseline(let evidence):
             if evidence.capture.hash == capture.hash,
-               AccessibilityTrace.Delta.between(evidence.capture, capture).meaningfulWaitDelta == nil {
+               AccessibilityTrace.Delta.between(
+                   evidence.capture,
+                   capture,
+                   projection: projection
+               ).meaningfulWaitDelta == nil {
                 return
             }
             var changedEvidence = WaitTraceCaptures(captures: [evidence.capture])
@@ -811,9 +821,11 @@ struct PredicateObservationStreamState {
         predicate: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed = .preserve
     ) -> PredicateObservationStreamReduction {
+        let projection = predicate.deltaProjection
         let advance = changeState.advancing(
             observation,
-            baselineSeed: baselineSeed
+            baselineSeed: baselineSeed,
+            projection: projection
         )
 
         let evidence = PredicateObservationEvidence(
@@ -843,7 +855,8 @@ private enum PredicateChangeObservationState {
 
     func advancing(
         _ observation: HeistSemanticObservation,
-        baselineSeed: PredicateObservationBaselineSeed
+        baselineSeed: PredicateObservationBaselineSeed,
+        projection: AccessibilityTrace.DeltaProjection
     ) -> PredicateChangeObservationAdvance {
         switch self {
         case .observing(var cursor):
@@ -858,18 +871,25 @@ private enum PredicateChangeObservationState {
                     transition: nil
                 )
             case .supplied(let suppliedBaseline):
-                var cursor = PredicateChangeObservationCursor(baseline: suppliedBaseline)
+                var cursor = PredicateChangeObservationCursor(
+                    baseline: suppliedBaseline,
+                    projection: projection
+                )
                 cursor.append(observation)
                 return cursor.advance(observedSequence: observation.event.sequence)
             case .currentObservation:
                 let cursor = PredicateChangeObservationCursor(
-                    baseline: WaitChangeBaseline(event: observation.event)
+                    baseline: WaitChangeBaseline(event: observation.event),
+                    projection: projection
                 )
                 return cursor.advance(observedSequence: observation.event.sequence)
             case .previousObservationIfAvailable:
                 let inferredBaseline = WaitChangeBaseline(previousOf: observation.event)
                     ?? WaitChangeBaseline(event: observation.event)
-                var cursor = PredicateChangeObservationCursor(baseline: inferredBaseline)
+                var cursor = PredicateChangeObservationCursor(
+                    baseline: inferredBaseline,
+                    projection: projection
+                )
                 cursor.append(observation)
                 return cursor.advance(observedSequence: observation.event.sequence)
             }
@@ -879,15 +899,17 @@ private enum PredicateChangeObservationState {
 
 private struct PredicateChangeObservationCursor {
     let baseline: WaitChangeBaseline
+    let projection: AccessibilityTrace.DeltaProjection
     private(set) var accumulatedTrace: WaitAccumulatedTrace
 
-    init(baseline: WaitChangeBaseline) {
+    init(baseline: WaitChangeBaseline, projection: AccessibilityTrace.DeltaProjection) {
         self.baseline = baseline
+        self.projection = projection
         self.accumulatedTrace = WaitAccumulatedTrace(baseline: baseline)
     }
 
     mutating func append(_ observation: HeistSemanticObservation) {
-        accumulatedTrace.append(observation)
+        accumulatedTrace.append(observation, projection: projection)
     }
 
     func advance(observedSequence: SettledObservationSequence) -> PredicateChangeObservationAdvance {
@@ -915,7 +937,8 @@ private struct PredicateChangeObservationCursor {
             readiness: .observedTransition(observedChange),
             transition: PredicateTransitionEvidence(
                 observedChange: observedChange,
-                accumulatedTrace: accumulatedTrace
+                accumulatedTrace: accumulatedTrace,
+                projection: projection
             )
         )
     }
@@ -1051,13 +1074,16 @@ private struct PredicateChangeMatchSet {
 private struct PredicateTransitionEvidence {
     let observedChange: PredicateObservedChange
     private let accumulatedTrace: WaitAccumulatedTrace
+    private let projection: AccessibilityTrace.DeltaProjection
 
     init(
         observedChange: PredicateObservedChange,
-        accumulatedTrace: WaitAccumulatedTrace
+        accumulatedTrace: WaitAccumulatedTrace,
+        projection: AccessibilityTrace.DeltaProjection
     ) {
         self.observedChange = observedChange
         self.accumulatedTrace = accumulatedTrace
+        self.projection = projection
     }
 
     var trace: AccessibilityTrace? {
@@ -1065,7 +1091,7 @@ private struct PredicateTransitionEvidence {
     }
 
     var accumulatedDelta: AccessibilityTrace.AccumulatedDelta? {
-        accumulatedTrace.delta
+        accumulatedTrace.delta(projection: projection)
     }
 }
 

@@ -1,5 +1,6 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
+import ThePlans
 
 struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
@@ -17,7 +18,7 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @Option(name: .long, help: "Edit action: \(Self.catalogAllowedValuesDescription(for: .action))")
+    @Option(name: .long, help: "Edit action: \(Self.catalogAllowedValuesDescription(for: FenceParameters.editAction))")
     var action: String
 
     @OptionGroup var connection: ConnectionOptions
@@ -35,14 +36,14 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(CommandArgumentWriter.value(.action, editAction)),
+            arguments: Self.fenceArguments(CommandArgumentWriter.value(FenceParameters.editAction, editAction)),
             statusMessage: "Sending \(action)..."
         )
     }
 
-    private static func canonicalAction(_ action: String) throws -> String {
-        guard let editAction = Self.catalogCanonicalStringValue(action, for: .action) else {
-            throw ValidationError("Unknown edit action: \(action). Valid: \(Self.catalogAllowedValuesDescription(for: .action))")
+    private static func canonicalAction(_ action: String) throws -> EditAction {
+        guard let editAction = Self.catalogCanonicalValue(action, for: FenceParameters.editAction) else {
+            throw ValidationError("Unknown edit action: \(action). Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.editAction))")
         }
         return editAction
     }

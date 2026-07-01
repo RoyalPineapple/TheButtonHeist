@@ -37,10 +37,61 @@ public extension AccessibilityPredicate {
     /// surface for action results because change predicates need the whole
     /// transition window, not only the first-to-last endpoint projection.
     func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult {
-        evaluate(
+        let accumulatedDelta = deltaProjection == .geometryAware
+            ? evidence.geometryAccumulatedDelta ?? evidence.accumulatedDelta
+            : evidence.accumulatedDelta
+        return evaluate(
             currentGraph: ElementMatchGraph(elements: evidence.currentElements),
-            changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: evidence.accumulatedDelta)
+            changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta)
         )
+    }
+}
+
+package extension AccessibilityPredicate {
+    var deltaProjection: AccessibilityTrace.DeltaProjection {
+        requestsGeometryChangeEvidence ? .geometryAware : .semantic
+    }
+
+    var requestsGeometryChangeEvidence: Bool {
+        switch self {
+        case .state, .noChangePredicate:
+            return false
+        case .changePredicate(let change):
+            return change.requestsGeometryChangeEvidence
+        }
+    }
+}
+
+private extension AccessibilityPredicate.Change {
+    var requestsGeometryChangeEvidence: Bool {
+        switch contract {
+        case .any, .screen:
+            return false
+        case .elements(let assertions):
+            return assertions.contains(where: \.requestsGeometryChangeEvidence)
+        case .all(let scopes):
+            return scopes.elements.contains(where: \.requestsGeometryChangeEvidence)
+        }
+    }
+}
+
+private extension AccessibilityPredicate.ChangeScope {
+    var requestsGeometryChangeEvidence: Bool {
+        switch contract {
+        case .screen:
+            return false
+        case .elements(let assertions):
+            return assertions.contains(where: \.requestsGeometryChangeEvidence)
+        case .all(let scopes):
+            return scopes.elements.contains(where: \.requestsGeometryChangeEvidence)
+        }
+    }
+}
+
+private extension ElementDeltaPredicate {
+    var requestsGeometryChangeEvidence: Bool {
+        guard case .updatedElement(let update) = self else { return false }
+        return update.change?.property.isGeometry == true
     }
 }
 

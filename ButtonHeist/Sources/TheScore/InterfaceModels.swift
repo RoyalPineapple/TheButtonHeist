@@ -1,6 +1,147 @@
 import ThePlans
 import Foundation
+import CoreGraphics
 import AccessibilitySnapshotModel
+
+// MARK: - Typed Geometry Evidence
+
+public struct ScreenRect: Codable, Equatable, Hashable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public init(_ rect: CGRect) {
+        self.init(
+            x: Double(rect.origin.x),
+            y: Double(rect.origin.y),
+            width: Double(rect.size.width),
+            height: Double(rect.size.height)
+        )
+    }
+
+    public var cgRect: CGRect {
+        CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    public var midX: Double {
+        x + width / 2
+    }
+
+    public var midY: Double {
+        y + height / 2
+    }
+}
+
+public struct ContentRect: Codable, Equatable, Hashable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public init(_ rect: CGRect) {
+        self.init(
+            x: Double(rect.origin.x),
+            y: Double(rect.origin.y),
+            width: Double(rect.size.width),
+            height: Double(rect.size.height)
+        )
+    }
+
+    public var cgRect: CGRect {
+        CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    public var origin: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+
+    public var size: CGSize {
+        CGSize(width: width, height: height)
+    }
+}
+
+public struct ScrollContentPoint: Codable, Equatable, Hashable, Sendable {
+    public let x: Double
+    public let y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public init(_ point: CGPoint) {
+        self.init(x: Double(point.x), y: Double(point.y))
+    }
+
+    public var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+}
+
+public struct ActivationPointEvidence: Codable, Equatable, Hashable, Sendable {
+    public enum Source: String, Codable, Sendable {
+        case explicit
+        case defaultCenter
+        case unavailable
+    }
+
+    public let source: Source
+    public let point: ScreenPoint?
+
+    public init(source: Source, point: ScreenPoint?) {
+        precondition(
+            (source == .unavailable) == (point == nil),
+            "Activation point evidence requires a point exactly when the source is available"
+        )
+        self.source = source
+        self.point = point
+    }
+
+    public static func explicit(_ point: ScreenPoint) -> ActivationPointEvidence {
+        ActivationPointEvidence(source: .explicit, point: point)
+    }
+
+    public static func defaultCenter(_ point: ScreenPoint) -> ActivationPointEvidence {
+        ActivationPointEvidence(source: .defaultCenter, point: point)
+    }
+
+    public static let unavailable = ActivationPointEvidence(source: .unavailable, point: nil)
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case point
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let source = try container.decode(Source.self, forKey: .source)
+        let point = try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
+        guard (source == .unavailable) == (point == nil) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .point,
+                in: container,
+                debugDescription: "Activation point evidence requires a point exactly when the source is available"
+            )
+        }
+        self.source = source
+        self.point = point
+    }
+}
 
 public enum ScrollContainerAxis: String, Codable, Sendable {
     case none

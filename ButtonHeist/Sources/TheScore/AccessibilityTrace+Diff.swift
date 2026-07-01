@@ -12,9 +12,10 @@ public extension AccessibilityTrace.Delta {
     /// while delegating the derived diff to `AccessibilityTraceDiff`.
     static func between(
         _ before: AccessibilityTrace.Capture,
-        _ after: AccessibilityTrace.Capture
+        _ after: AccessibilityTrace.Capture,
+        projection: AccessibilityTrace.DeltaProjection = .semantic
     ) -> AccessibilityTrace.Delta {
-        AccessibilityTraceDiff.projectDelta(between: before, and: after)
+        AccessibilityTraceDiff.projectDelta(between: before, and: after, projection: projection)
     }
 }
 

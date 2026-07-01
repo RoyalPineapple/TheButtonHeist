@@ -1,6 +1,6 @@
 import CoreGraphics
 
-public struct ScreenPoint: Codable, Sendable, Equatable, CustomStringConvertible {
+public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case x
         case y

@@ -87,6 +87,17 @@ import TheScore
             lastObservedSummary: "Cart"
         )
         #expect(handledElse.outcome == .handledElse)
+
+        let elseFailed = HeistRepeatUntilEvidence.timeoutElseFailed(
+            predicate: predicate,
+            timeout: 1,
+            iterationCount: 1,
+            expectation: unmet,
+            lastObservedSummary: "Cart",
+            failureReason: "else failed"
+        )
+        #expect(elseFailed.outcome == .failed)
+        #expect(elseFailed.failureReason == "else failed")
     }
 
     @Test func `iteration evidence factories return evidence for typed polarity`() throws {

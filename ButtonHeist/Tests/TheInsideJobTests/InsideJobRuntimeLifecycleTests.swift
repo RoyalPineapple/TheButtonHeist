@@ -27,7 +27,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertNil(harness.job.listeningPort)
         try await harness.job.start()
 
-        assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
+        assertRunning(harness.job, transport: harness.latestTransport(), actualPort: 23456)
         XCTAssertEqual(harness.job.listeningPort, 23456)
         XCTAssertTrue(harness.job.lifecycleObservationIsInstalled)
         XCTAssertEqual(harness.stopCallCount(), 0)
@@ -51,7 +51,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         }
         XCTAssertTrue(currentResources.transport === originalResources.transport)
         XCTAssertEqual(currentResources.actualPort, originalResources.actualPort)
-        assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
+        assertRunning(harness.job, transport: harness.latestTransport(), actualPort: 23456)
         XCTAssertEqual(harness.startCallCount(), 1)
         XCTAssertEqual(harness.stopCallCount(), 0)
 
@@ -114,7 +114,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         resumeStartGate.release()
         await originalAttempt.task.value
 
-        assertRunning(harness.job, transport: harness.transport, actualPort: 23457)
+        assertRunning(harness.job, transport: harness.latestTransport(), actualPort: 23457)
         XCTAssertEqual(harness.startCallCount(), 2)
 
         await harness.job.stop()
@@ -178,27 +178,13 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         line: UInt = #line
     ) -> (
         job: TheInsideJob,
-        transport: ServerTransport,
+        latestTransport: @MainActor () -> ServerTransport,
         startCallCount: @MainActor () -> Int,
         stopCallCount: @MainActor () -> Int
     ) {
         let token = "runtime-lifecycle-test-token"
         let scopes: Set<ConnectionScope> = [.simulator]
-        let transport = ServerTransport(token: token, allowedScopes: scopes)
-        let counters = RuntimeCallCounters()
-
-        transport.startOverride = { requestedPort, bindToLoopback in
-            counters.startCount += 1
-            XCTAssertEqual(requestedPort, 0, file: file, line: line)
-            XCTAssertTrue(bindToLoopback, file: file, line: line)
-            if let startOverride {
-                return try await startOverride(counters.startCount, requestedPort, bindToLoopback)
-            }
-            return actualPort
-        }
-        transport.stopOverride = {
-            counters.stopCount += 1
-        }
+        let harnessState = RuntimeHarnessState()
 
         let job = TheInsideJob(
             token: token,
@@ -206,11 +192,25 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             transportFactory: { runtimeToken, runtimeScopes in
                 XCTAssertEqual(runtimeToken, token, file: file, line: line)
                 XCTAssertEqual(runtimeScopes, scopes, file: file, line: line)
+                let transport = ServerTransport(token: token, allowedScopes: scopes)
+                transport.startOverride = { requestedPort, bindToLoopback in
+                    harnessState.startCount += 1
+                    XCTAssertEqual(requestedPort, 0, file: file, line: line)
+                    XCTAssertTrue(bindToLoopback, file: file, line: line)
+                    if let startOverride {
+                        return try await startOverride(harnessState.startCount, requestedPort, bindToLoopback)
+                    }
+                    return actualPort
+                }
+                transport.stopOverride = {
+                    harnessState.stopCount += 1
+                }
+                harnessState.transports.append(transport)
                 return transport
             }
         )
 
-        return (job, transport, { counters.startCount }, { counters.stopCount })
+        return (job, { harnessState.latestTransport }, { harnessState.startCount }, { harnessState.stopCount })
     }
 
     private func assertRunning(
@@ -287,9 +287,17 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         case resumeFailed
     }
 
-    private final class RuntimeCallCounters {
+    private final class RuntimeHarnessState {
         var startCount = 0
         var stopCount = 0
+        var transports: [ServerTransport] = []
+
+        var latestTransport: ServerTransport {
+            guard let transport = transports.last else {
+                fatalError("Expected runtime harness to have created a transport")
+            }
+            return transport
+        }
     }
 
     @MainActor

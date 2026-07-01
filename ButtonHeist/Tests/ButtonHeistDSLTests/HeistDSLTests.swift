@@ -64,13 +64,13 @@ func actionExpectationAttachesWaitStep() throws {
 func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
     let heist = try HeistPlan {
         Increment(.label("Volume"))
-            .until(.exists(.element(label: "Volume", value: "100")))
+            .until(.exists(.element(.label("Volume"), .value("100"))))
     }
 
     #expect(try heist == HeistPlan(body: [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .exists(.element(label: "Volume", value: "100")),
-            timeout: defaultWaitTimeout,
+            predicate: .exists(.element(.label("Volume"), .value("100"))),
+            timeout: ButtonHeistDSL.defaultWaitTimeout,
             body: [
                 .action(try ActionStep(
                     command: .increment(.predicate(.label("Volume"))),
@@ -648,7 +648,7 @@ func waitForElseBuildsWaitStepWithElseBody() throws {
 func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
     let heist = try HeistPlan("searchFlow") {
         TypeText("milk", into: .label("Search"))
-            .expect(.exists(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
+            .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
 
         Activate(.label("Search"))
             .expect(.change(.screen()), timeout: .seconds(5))
@@ -867,26 +867,26 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 
 @Test
 func runHeistBuildsHeistRunSteps() throws {
-    let stringRun = RunHeist("LibraryScreen.addToCart", "Milk")
+    let stringRun = ButtonHeistDSL.RunHeist("LibraryScreen.addToCart", "Milk")
     #expect(stringRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .string(.literal("Milk")))),
     ])
 
-    let noArgRun = RunHeist("CartScreen.checkout")
+    let noArgRun = ButtonHeistDSL.RunHeist("CartScreen.checkout")
     #expect(noArgRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["CartScreen", "checkout"], argument: .none)),
     ])
 
-    let targetRun = RunHeist("Rows.activate", ElementTarget.label("Row 1"))
+    let targetRun = ButtonHeistDSL.RunHeist("Rows.activate", ElementTarget.label("Row 1"))
     #expect(targetRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .elementTarget(.target(.label("Row 1"))))),
     ])
 
     let expectedSubtotal = WaitStep(
         predicate: .change(.elements(.appearedElement(.label("subtotal")))),
-        timeout: defaultActionExpectationTimeout
+        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
     )
-    let expectedRun = RunHeist("Cart.addItem", "Milk")
+    let expectedRun = ButtonHeistDSL.RunHeist("Cart.addItem", "Milk")
         .expect(.appeared(.label("subtotal")))
     #expect(expectedRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -901,9 +901,9 @@ func runHeistBuildsHeistRunSteps() throws {
             element: .label("subtotal"),
             change: .value(after: .contains("2 items"))
         )))),
-        timeout: defaultActionExpectationTimeout
+        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
     )
-    let updatedRun = RunHeist("Cart.addItem", "Eggs")
+    let updatedRun = ButtonHeistDSL.RunHeist("Cart.addItem", "Eggs")
         .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
     #expect(updatedRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -915,9 +915,9 @@ func runHeistBuildsHeistRunSteps() throws {
 
     let expectedCompletion = WaitStep(
         predicate: .exists(.label("Payment Complete")),
-        timeout: defaultActionExpectationTimeout
+        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
     )
-    let snapshotRun = RunHeist("Checkout.pay")
+    let snapshotRun = ButtonHeistDSL.RunHeist("Checkout.pay")
         .expect(.exists(.label("Payment Complete")))
     #expect(snapshotRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -928,9 +928,9 @@ func runHeistBuildsHeistRunSteps() throws {
 
     let expectedReceipt = WaitStep(
         predicate: .change(.screen(.exists(.label("Receipt")))),
-        timeout: defaultActionExpectationTimeout
+        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
     )
-    let screenRun = RunHeist("Checkout.pay")
+    let screenRun = ButtonHeistDSL.RunHeist("Checkout.pay")
         .expect(.screenChanged(.exists(.label("Receipt"))))
     #expect(screenRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -1010,7 +1010,7 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
         ],
         body: [.invoke(HeistInvocationStep(
             path: ["CartScreen", "checkout"],
-            expectation: WaitStep(predicate: .change(.screen()), timeout: defaultActionExpectationTimeout)
+            expectation: WaitStep(predicate: .change(.screen()), timeout: ButtonHeistDSL.defaultActionExpectationTimeout)
         ))]
     )
     let rendered = try plan.canonicalSwiftDSL()
@@ -1240,7 +1240,7 @@ private func expectInvalidRunHeistName(
     expectedPath: String?,
     expectedMessage: String
 ) throws {
-    let content = RunHeist(name)
+    let content = ButtonHeistDSL.RunHeist(name)
     let contentDiagnostic = try #require(content.heistBuildDiagnostics.first)
     #expect(content.heistBuildDiagnostics.count == 1)
     #expect(contentDiagnostic.code == .dslInvalidInvocationPath)

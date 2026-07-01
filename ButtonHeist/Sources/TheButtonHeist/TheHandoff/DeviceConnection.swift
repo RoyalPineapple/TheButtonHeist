@@ -12,8 +12,8 @@ let deviceConnectionLogger = ButtonHeistLog.logger(.handoff(.connection))
 /// for the same connection — a race the prior per-event Task bridge could
 /// lose during reconnect.
 enum DeviceConnectionEvent: Sendable {
-    case state(NWConnection.State, connection: NWConnection)
-    case received(DeviceReceiveEvent, connection: NWConnection)
+    case state(NWConnection.State, sessionID: UUID, connection: NWConnection)
+    case received(DeviceReceiveEvent, sessionID: UUID, connection: NWConnection)
 }
 
 /// Connection client using Network framework.
@@ -32,7 +32,12 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     }
 
     // Internal for testing (tests use @testable import to set state directly)
-    var connectionState: ConnectionState = .disconnected
+    var connectionState: ConnectionState {
+        get { runtimePhase.connectionState }
+        set {
+            setRuntimePhase(RuntimePhase(connectionState: newValue))
+        }
+    }
     private let device: DiscoveredDevice
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
@@ -49,15 +54,105 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
 
     private let token: HandoffAuthToken?
 
-    /// Single consumer Task driving NW callbacks into the actor in order.
-    /// Replaced on each `connect()`; cancelled in `disconnect()`. The for-await
-    /// loop also exits when the per-connection event continuation is finished.
-    private var eventConsumerTask: Task<Void, Never>?
+    struct RuntimeSession {
+        let id: UUID
+        let connection: NWConnection
+        var receiveBuffer: Data
 
-    /// Continuation tied to the current connection attempt. Yielded to from
-    /// NWConnection's `.global()` callbacks; finished when we tear down.
-    var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
-    private var tlsFailureTracker: TLSFailureTracker?
+        /// Single consumer Task driving NW callbacks into the actor in order.
+        /// Replaced on each `connect()`; cancelled when the owning session exits.
+        var eventConsumerTask: Task<Void, Never>?
+
+        /// Continuation tied to this connection attempt. Yielded to from
+        /// NWConnection's `.global()` callbacks; finished when the session exits.
+        var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
+        var tlsFailureTracker: TLSFailureTracker?
+
+        init(
+            id: UUID = UUID(),
+            connection: NWConnection,
+            receiveBuffer: Data = Data(),
+            eventConsumerTask: Task<Void, Never>? = nil,
+            eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation? = nil,
+            tlsFailureTracker: TLSFailureTracker? = nil
+        ) {
+            self.id = id
+            self.connection = connection
+            self.receiveBuffer = receiveBuffer
+            self.eventConsumerTask = eventConsumerTask
+            self.eventContinuation = eventContinuation
+            self.tlsFailureTracker = tlsFailureTracker
+        }
+
+        var activeConnection: ActiveConnection {
+            ActiveConnection(connection: connection, receiveBuffer: receiveBuffer)
+        }
+
+        func cancelOwnedSidecars() {
+            eventContinuation?.finish()
+            eventConsumerTask?.cancel()
+        }
+    }
+
+    private enum RuntimePhase {
+        case disconnected
+        case connecting(RuntimeSession)
+        case connected(RuntimeSession)
+
+        init(connectionState: ConnectionState) {
+            switch connectionState {
+            case .disconnected:
+                self = .disconnected
+            case .connecting(let connection):
+                self = .connecting(RuntimeSession(connection: connection))
+            case .connected(let active):
+                self = .connected(RuntimeSession(
+                    connection: active.connection,
+                    receiveBuffer: active.receiveBuffer
+                ))
+            }
+        }
+
+        var connectionState: ConnectionState {
+            switch self {
+            case .disconnected:
+                return .disconnected
+            case .connecting(let session):
+                return .connecting(connection: session.connection)
+            case .connected(let session):
+                return .connected(session.activeConnection)
+            }
+        }
+
+        var sessionID: UUID? {
+            switch self {
+            case .disconnected:
+                return nil
+            case .connecting(let session), .connected(let session):
+                return session.id
+            }
+        }
+
+        var connection: NWConnection? {
+            switch self {
+            case .disconnected:
+                return nil
+            case .connecting(let session), .connected(let session):
+                return session.connection
+            }
+        }
+
+        func cancelOwnedSidecars() {
+            switch self {
+            case .disconnected:
+                return
+            case .connecting(let session), .connected(let session):
+                session.cancelOwnedSidecars()
+            }
+        }
+    }
+
+    private var runtimePhase: RuntimePhase = .disconnected
 
     init(device: DiscoveredDevice, token: String? = nil) {
         self.device = device
@@ -68,69 +163,141 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         deviceConnectionLogger.info("Connecting to \(self.device.name)...")
 
         guard let token else {
-            tlsFailureTracker = nil
+            setRuntimePhase(.disconnected)
             deviceConnectionLogger.error("No TLS token available — refusing connection")
             onEvent?(.disconnected(.missingToken))
             return
         }
 
-        tlsFailureTracker = nil
         let parameters = Self.makeTLSParameters(token: token.rawValue)
         deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
+        let sessionID = UUID()
 
         // `connect` is idempotent: any prior consumer Task and event stream
         // are torn down so the new connection's events flow without crosstalk
         // from a previous attempt.
-        eventConsumerTask?.cancel()
-        eventContinuation?.finish()
-
         let eventStream = DeviceConnectionEventStream.makeStream()
-        eventContinuation = eventStream.continuation
 
         conn.stateUpdateHandler = { state in
-            DeviceConnectionEventStream.yield(.state(state, connection: conn), to: eventStream.continuation) { [weak self, weak conn] in
+            DeviceConnectionEventStream.yield(.state(state, sessionID: sessionID, connection: conn), to: eventStream.continuation) { [weak self, weak conn] in
                 guard let conn else { return }
                 Task { @ButtonHeistActor [weak self] in
-                    self?.handleEventStreamOverflow(connection: conn)
+                    self?.handleEventStreamOverflow(connection: conn, sessionID: sessionID)
                 }
             }
         }
 
-        eventConsumerTask = Task { @ButtonHeistActor [weak self] in
+        let eventConsumerTask = Task { @ButtonHeistActor [weak self] in
             for await event in eventStream.events {
                 guard let self else { return }
                 switch event {
-                case .state(let state, let connection):
-                    self.handleStateChange(state, connection: connection)
-                case .received(let receiveEvent, let connection):
-                    self.handleReceive(receiveEvent, connection: connection)
+                case .state(let state, let sessionID, let connection):
+                    self.handleStateChange(state, sessionID: sessionID, connection: connection)
+                case .received(let receiveEvent, let sessionID, let connection):
+                    self.handleReceive(receiveEvent, connection: connection, sessionID: sessionID)
                 }
             }
         }
 
-        connectionState = .connecting(connection: conn)
+        setRuntimePhase(.connecting(RuntimeSession(
+            id: sessionID,
+            connection: conn,
+            eventConsumerTask: eventConsumerTask,
+            eventContinuation: eventStream.continuation,
+            tlsFailureTracker: TLSFailureTracker()
+        )))
         conn.start(queue: .global())
     }
 
     func disconnect() {
-        switch connectionState {
-        case .connecting(let connection):
-            connection.cancel()
-        case .connected(let active):
-            active.connection.cancel()
-        // Already disconnected — connection-state switch, not a wire-message dispatch.
-        // swiftlint:disable:next agent_wire_message_arm_no_op_break
+        let connectionToCancel: NWConnection?
+        switch runtimePhase {
+        case .connecting(let session), .connected(let session):
+            connectionToCancel = session.connection
         case .disconnected:
-            break
+            connectionToCancel = nil
         }
-        connectionState = .disconnected
-        eventContinuation?.finish()
-        eventContinuation = nil
-        eventConsumerTask?.cancel()
-        eventConsumerTask = nil
-        tlsFailureTracker = nil
+        connectionToCancel?.cancel()
+        setRuntimePhase(.disconnected)
+    }
+
+    private func setRuntimePhase(_ nextPhase: RuntimePhase) {
+        let previousPhase = runtimePhase
+        if previousPhase.sessionID != nextPhase.sessionID {
+            previousPhase.cancelOwnedSidecars()
+        }
+        runtimePhase = nextPhase
+    }
+
+    func isCurrentSession(
+        _ sessionID: UUID?,
+        connection suppliedConnection: NWConnection?
+    ) -> Bool {
+        if let sessionID, runtimePhase.sessionID != sessionID {
+            return false
+        }
+        if let suppliedConnection {
+            guard let current = runtimePhase.connection else { return false }
+            if current !== suppliedConnection {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func currentTLSFailureReason(sessionID: UUID?) -> DisconnectReason? {
+        switch runtimePhase {
+        case .connecting(let session) where sessionID == nil || session.id == sessionID:
+            return session.tlsFailureTracker?.currentReason()
+        case .connected(let session) where sessionID == nil || session.id == sessionID:
+            return session.tlsFailureTracker?.currentReason()
+        case .disconnected, .connecting, .connected:
+            return nil
+        }
+    }
+
+    func connectedSession(
+        matching sessionID: UUID?,
+        connection suppliedConnection: NWConnection
+    ) -> RuntimeSession? {
+        guard case .connected(let session) = runtimePhase,
+              session.connection === suppliedConnection,
+              sessionID == nil || session.id == sessionID else {
+            return nil
+        }
+        return session
+    }
+
+    func connectedSession(matching sessionID: UUID) -> RuntimeSession? {
+        guard case .connected(let session) = runtimePhase,
+              session.id == sessionID else {
+            return nil
+        }
+        return session
+    }
+
+    func updateConnectedSession(_ session: RuntimeSession) {
+        guard case .connected(let current) = runtimePhase,
+              current.id == session.id,
+              current.connection === session.connection else {
+            return
+        }
+        setRuntimePhase(.connected(session))
+    }
+
+    func disconnectConnectedSession(_ session: RuntimeSession) {
+        guard case .connected(let current) = runtimePhase,
+              current.id == session.id,
+              current.connection === session.connection else {
+            return
+        }
+        setRuntimePhase(.disconnected)
+    }
+
+    var currentSessionID: UUID? {
+        runtimePhase.sessionID
     }
 
     // MARK: - Private
@@ -138,52 +305,44 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     /// The NWConnection currently owned by this state machine, regardless of
     /// phase. Used to filter stale callbacks from prior connect attempts.
     var currentConnection: NWConnection? {
-        switch connectionState {
-        case .connecting(let connection): return connection
-        case .connected(let active): return active.connection
-        case .disconnected: return nil
-        }
+        runtimePhase.connection
     }
 
     /// Internal for testing: state updates are normally dispatched by the
     /// AsyncStream consumer in `connect()`. Tests inject states directly.
-    func handleStateChange(_ state: NWConnection.State, connection: NWConnection? = nil) {
-        // If a connection was supplied (production path), ignore callbacks
-        // from a prior connect attempt. The consumer Task is recreated on
-        // every connect, so stale callbacks here would only be possible if NW
-        // flushed events for a previously-cancelled connection before the
-        // continuation finished.
-        if let connection, let current = currentConnection, current !== connection {
-            return
-        }
+    func handleStateChange(
+        _ state: NWConnection.State,
+        sessionID: UUID? = nil,
+        connection: NWConnection? = nil
+    ) {
+        guard isCurrentSession(sessionID, connection: connection) else { return }
         switch state {
         case .ready:
-            guard case .connecting(let conn) = connectionState else { return }
+            guard case .connecting(let session) = runtimePhase else { return }
+            if let connection, session.connection !== connection { return }
             deviceConnectionLogger.info("Connected")
-            connectionState = .connected(ActiveConnection(connection: conn))
+            setRuntimePhase(.connected(session))
             onTransportReady?()
             startReceiving()
         case .failed(let error):
             deviceConnectionLogger.error("Connection failed: \(error)")
-            let reason = tlsFailureTracker?.currentReason() ?? .networkError(error)
-            connectionState = .disconnected
-            tlsFailureTracker = nil
+            let reason = currentTLSFailureReason(sessionID: sessionID) ?? .networkError(error)
+            setRuntimePhase(.disconnected)
             onEvent?(.disconnected(reason))
         case .cancelled:
             deviceConnectionLogger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,
-            // protocol/auth rejection) all set connectionState = .disconnected before
+            // protocol/auth rejection) all set the runtime phase to disconnected before
             // the cancel callback reaches the actor, so wasActive is false and we stay
             // silent. A true wasActive means NWConnection cancelled while we still
             // believed we were live — treat that as an unsolicited server-side close.
-            let wasActive = switch connectionState {
+            let wasActive = switch runtimePhase {
             case .connecting, .connected:
                 true
             case .disconnected:
                 false
             }
-            connectionState = .disconnected
-            tlsFailureTracker = nil
+            setRuntimePhase(.disconnected)
             if wasActive {
                 onEvent?(.disconnected(.serverClosed))
             }

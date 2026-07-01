@@ -32,22 +32,6 @@ public extension ElementTarget {
     }
 
     static func element(
-        label: StringMatch<String>? = nil,
-        identifier: StringMatch<String>? = nil,
-        value: StringMatch<String>? = nil,
-        traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
-    ) -> ElementTarget {
-        .predicate(.element(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        ))
-    }
-
-    static func element(
         _ checks: ElementPredicateCheck<String>...,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
@@ -106,22 +90,6 @@ public extension ElementPredicateTemplate {
 
     static func excludeTraits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
         ElementPredicateTemplate(excludeTraits: traits)
-    }
-
-    static func element(
-        label: StringMatch<StringExpr>? = nil,
-        identifier: StringMatch<StringExpr>? = nil,
-        value: StringMatch<StringExpr>? = nil,
-        traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
-    ) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        )
     }
 
     static func element(
@@ -328,22 +296,6 @@ public extension AccessibilityPredicateExpr {
     }
 
     static func element(
-        label: StringMatch<StringExpr>? = nil,
-        identifier: StringMatch<StringExpr>? = nil,
-        value: StringMatch<StringExpr>? = nil,
-        traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
-    ) -> AccessibilityPredicateExpr {
-        .exists(.element(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        ))
-    }
-
-    static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
@@ -436,22 +388,6 @@ public extension StatePredicateExpr {
 
     static func excludeTraits(_ traits: [HeistTrait]) -> StatePredicateExpr {
         .exists(.excludeTraits(traits))
-    }
-
-    static func element(
-        label: StringMatch<StringExpr>? = nil,
-        identifier: StringMatch<StringExpr>? = nil,
-        value: StringMatch<StringExpr>? = nil,
-        traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
-    ) -> StatePredicateExpr {
-        .exists(.element(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        ))
     }
 
     static func element(

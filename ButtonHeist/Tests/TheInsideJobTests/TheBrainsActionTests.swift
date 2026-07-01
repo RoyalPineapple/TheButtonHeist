@@ -853,7 +853,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(screenshotStep.kind, .action)
         XCTAssertEqual(screenshotStep.status, .passed)
         XCTAssertEqual(screenshotStep.actionEvidence?.command, .takeScreenshot)
-        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.actionResult?.payload else {
+        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.dispatchResult?.payload else {
             return XCTFail("Expected screenshot action payload")
         }
         XCTAssertEqual(payload, screenshot)
@@ -1010,7 +1010,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -1051,7 +1051,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "100")),
+                predicate: .exists(.element(.identifier("quantity"), .value("100"))),
                 timeout: 5,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -1096,7 +1096,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
@@ -1144,7 +1144,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
@@ -1176,7 +1176,7 @@ final class TheBrainsActionTests: XCTestCase {
             "child failed at \(failedRetryPath)"
         )
         XCTAssertEqual(failedRetry.status, .failed)
-        XCTAssertEqual(failedRetry.actionEvidence?.actionResult?.errorKind, .actionFailed)
+        XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.errorKind, .actionFailed)
     }
 
     func testHeistRepeatUntilTimeoutWithElseRunsElseBodyWithoutBodyWhenTimeoutIsZero() async throws {
@@ -1194,7 +1194,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 0,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -1212,14 +1212,16 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "repeat_until else failed")
         XCTAssertEqual(incrementCount, 0)
         XCTAssertEqual(step.kind, .repeatUntil)
+        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 0)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
         XCTAssertEqual(step.repeatUntilEvidence?.outcome, .handledElse)
+        XCTAssertNil(step.failure)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedSequenceDoesNotReusePreviousSequence() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(identifier: "quantity", value: "2"))
+        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let matchedState = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
@@ -1284,7 +1286,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistRepeatUntilPostBodyNilTraceWithNewSequenceDoesNotReuseStaleTraceOrSummary() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(identifier: "quantity", value: "2"))
+        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let runtime = repeatUntilReceiptRuntime(
@@ -1346,7 +1348,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 0,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -1366,7 +1368,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(heist.abortedAtPath, elseFailurePath)
         XCTAssertEqual(step.status, .failed)
         XCTAssertEqual(step.abortedAtChildPath, elseFailurePath)
-        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .handledElse)
+        XCTAssertEqual(step.repeatUntilEvidence?.outcome, .failed)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
+        XCTAssertTrue(step.repeatUntilEvidence?.failureReason?.contains("else body failed at \(elseFailurePath)") == true)
+        XCTAssertEqual(step.failure?.observed, "child failed at \(elseFailurePath)")
         XCTAssertEqual(step.children.first?.path, elseFailurePath)
     }
 
@@ -1804,7 +1809,7 @@ final class TheBrainsActionTests: XCTestCase {
         } else {
             XCTFail("Expected action endpoint wait request")
         }
-        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertEqual(step.actionEvidence?.expectationResult?.method, .wait)
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
     }
@@ -2372,9 +2377,9 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
-        XCTAssertTrue(step.actionEvidence?.expectationActionResult?.success == true)
-        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.accessibilityTrace, trace)
+        XCTAssertEqual(step.actionEvidence?.expectationResult?.method, .wait)
+        XCTAssertTrue(step.actionEvidence?.expectationResult?.success == true)
+        XCTAssertEqual(step.actionEvidence?.expectationResult?.accessibilityTrace, trace)
         XCTAssertEqual(step.reportExpectation?.met, true)
         XCTAssertEqual(step.reportExpectation?.actual, "screenChanged")
     }
@@ -2410,7 +2415,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.errorKind, .timeout)
+        XCTAssertEqual(step.actionEvidence?.expectationResult?.errorKind, .timeout)
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertEqual(step.reportExpectation?.actual, "timed out after 0.2s — expectation not met")
     }

@@ -1,55 +1,130 @@
 import Foundation
 
-/// Invariant: connection phase, attempt failure, and result waiters advance together.
+/// Invariant: runtime phase, live connection handle, keepalive, attempt failure,
+/// and result waiters advance together. The public `phase` is a projection of
+/// this runtime owner so disconnected/failed states cannot retain a live handle.
 @ButtonHeistActor
 final class HandoffConnectionLifecycle {
-    private(set) var phase: HandoffConnectionPhase = .disconnected
-    private var attemptFailure: HandoffConnectionError?
+    private struct ConnectingRuntime {
+        let attempt: HandoffConnectionAttempt
+        let connection: any DeviceConnecting
+    }
+
+    private struct ConnectedRuntime {
+        var session: HandoffConnectedSession
+        let connection: any DeviceConnecting
+    }
+
+    private enum RuntimePhase {
+        case disconnected(failure: HandoffConnectionError?)
+        case reconnecting(HandoffReconnectAttempt, failure: HandoffConnectionError?)
+        case connecting(ConnectingRuntime, failure: HandoffConnectionError?)
+        case connected(ConnectedRuntime)
+        case failed(HandoffConnectionError)
+
+        var projectedPhase: HandoffConnectionPhase {
+            switch self {
+            case .disconnected:
+                return .disconnected
+            case .reconnecting(let attempt, _):
+                return .reconnecting(attempt)
+            case .connecting(let runtime, _):
+                return .connecting(runtime.attempt)
+            case .connected(let runtime):
+                return .connected(runtime.session)
+            case .failed(let failure):
+                return .failed(failure)
+            }
+        }
+
+        var activeAttemptID: UUID? {
+            switch self {
+            case .connecting(let runtime, _):
+                return runtime.attempt.id
+            case .connected(let runtime):
+                return runtime.session.attemptID
+            case .disconnected, .reconnecting, .failed:
+                return nil
+            }
+        }
+
+        var activeConnection: (any DeviceConnecting)? {
+            switch self {
+            case .connecting(let runtime, _):
+                return runtime.connection
+            case .connected(let runtime):
+                return runtime.connection
+            case .disconnected, .reconnecting, .failed:
+                return nil
+            }
+        }
+
+        var diagnosticFailure: HandoffConnectionError? {
+            switch self {
+            case .failed(let failure):
+                return failure
+            case .disconnected(let failure),
+                 .reconnecting(_, let failure),
+                 .connecting(_, let failure):
+                return failure
+            case .connected:
+                return nil
+            }
+        }
+
+        var isActive: Bool {
+            switch self {
+            case .connecting, .connected:
+                return true
+            case .disconnected, .reconnecting, .failed:
+                return false
+            }
+        }
+
+        var connectedRuntime: ConnectedRuntime? {
+            if case .connected(let runtime) = self { return runtime }
+            return nil
+        }
+    }
+
+    private var runtimePhase: RuntimePhase = .disconnected(failure: nil)
     private let waiters = ConnectionResultWaiters()
 
     var onPhaseChanged: (@ButtonHeistActor (HandoffConnectionPhase) -> Void)?
 
+    var phase: HandoffConnectionPhase {
+        runtimePhase.projectedPhase
+    }
+
     var activeAttemptID: UUID? {
-        switch phase {
-        case .connecting(let attempt):
-            return attempt.id
-        case .connected(let session):
-            return session.attemptID
-        case .disconnected, .reconnecting, .failed:
-            return nil
-        }
+        runtimePhase.activeAttemptID
+    }
+
+    var activeConnection: (any DeviceConnecting)? {
+        runtimePhase.activeConnection
     }
 
     var isConnected: Bool {
-        if case .connected = phase { return true }
+        if case .connected = runtimePhase { return true }
         return false
     }
 
     var diagnosticFailure: HandoffConnectionError? {
-        switch phase {
-        case .failed(let failure):
-            return failure
-        case .disconnected, .reconnecting:
-            return attemptFailure
-        case .connecting:
-            return attemptFailure
-        case .connected:
-            return nil
-        }
+        runtimePhase.diagnosticFailure
     }
 
     var connectedDevice: DiscoveredDevice? {
-        if case .connected(let session) = phase { return session.device }
+        if case .connected(let runtime) = runtimePhase { return runtime.session.device }
         return nil
     }
 
     var serverInfo: ServerInfo? {
-        if case .connected(let session) = phase { return session.serverInfo }
+        if case .connected(let runtime) = runtimePhase { return runtime.session.serverInfo }
         return nil
     }
 
     var missedPongCount: Int {
-        if case .connected(let session) = phase { return session.missedPongCount }
+        if case .connected(let runtime) = runtimePhase { return runtime.session.missedPongCount }
         return 0
     }
 
@@ -57,10 +132,12 @@ final class HandoffConnectionLifecycle {
         activeAttemptID == attemptID
     }
 
-    func beginConnecting(device: DiscoveredDevice) -> UUID {
+    func beginConnecting(device: DiscoveredDevice, connection: any DeviceConnecting) -> UUID {
         let attempt = HandoffConnectionAttempt(id: UUID(), device: device)
-        attemptFailure = nil
-        setPhase(.connecting(attempt))
+        setRuntimePhase(.connecting(
+            ConnectingRuntime(attempt: attempt, connection: connection),
+            failure: nil
+        ))
         return attempt.id
     }
 
@@ -70,25 +147,26 @@ final class HandoffConnectionLifecycle {
         device: DiscoveredDevice,
         keepaliveTask: Task<Void, Never>
     ) -> Bool {
-        guard case .connecting(let attempt) = phase, attempt.id == attemptID else {
+        guard case .connecting(let runtime, _) = runtimePhase, runtime.attempt.id == attemptID else {
             keepaliveTask.cancel()
             return false
         }
-        attemptFailure = nil
-        setPhase(.connected(HandoffConnectedSession(
-            attemptID: attemptID,
-            device: device,
-            keepaliveTask: keepaliveTask
+        setRuntimePhase(.connected(ConnectedRuntime(
+            session: HandoffConnectedSession(
+                attemptID: attemptID,
+                device: device,
+                keepaliveTask: keepaliveTask
+            ),
+            connection: runtime.connection
         )))
         waiters.resolve(attemptID: attemptID, with: .connected)
         return true
     }
 
     func markFailed(_ failure: HandoffConnectionError) {
-        attemptFailure = failure
         let attemptID = activeAttemptID
-        let wasActive = phase.isActive
-        setPhase(.failed(failure))
+        let wasActive = runtimePhase.isActive
+        setRuntimePhase(.failed(failure))
         if wasActive, let attemptID {
             waiters.resolve(attemptID: attemptID, with: .failed(failure))
         }
@@ -102,30 +180,24 @@ final class HandoffConnectionLifecycle {
         let attemptID = activeAttemptID
         if let expectedAttemptID, attemptID != expectedAttemptID { return false }
 
-        let wasActive = phase.isActive
+        let wasActive = runtimePhase.isActive
         if wasActive {
             if let reason {
                 let failure = HandoffConnectionError.disconnected(reason)
-                attemptFailure = failure
-                setPhase(.disconnected)
+                setRuntimePhase(.disconnected(failure: failure))
                 if let attemptID {
                     waiters.resolve(attemptID: attemptID, with: .failed(failure))
                 }
             } else {
                 let failure = HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)
-                setPhase(.disconnected)
+                setRuntimePhase(.disconnected(failure: nil))
                 if let attemptID {
                     waiters.resolve(attemptID: attemptID, with: .failed(failure))
                 }
             }
         } else {
-            if reason == nil {
-                // No active transition and no new cause: clear any stale attempt cause.
-                // If a cause arrives after the first disconnect, keep the original cause
-                // because it is the one waitForConnectionResult reports on the fast path.
-                attemptFailure = nil
-            }
-            setPhase(.disconnected)
+            let failure = reason == nil ? nil : runtimePhase.diagnosticFailure
+            setRuntimePhase(.disconnected(failure: failure))
         }
         return wasActive
     }
@@ -133,24 +205,35 @@ final class HandoffConnectionLifecycle {
     @discardableResult
     func disconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) -> Bool {
         guard activeAttemptID == attemptID else { return false }
-        attemptFailure = failure
-        setPhase(.disconnected)
+        setRuntimePhase(.disconnected(failure: failure))
         waiters.resolve(attemptID: attemptID, with: .failed(failure))
         return true
     }
 
     func recordAttemptFailure(_ failure: HandoffConnectionError) {
-        attemptFailure = failure
+        switch runtimePhase {
+        case .disconnected:
+            setRuntimePhase(.disconnected(failure: failure))
+        case .reconnecting(let attempt, _):
+            setRuntimePhase(.reconnecting(attempt, failure: failure))
+        case .connecting(let runtime, _):
+            setRuntimePhase(.connecting(runtime, failure: failure))
+        case .connected, .failed:
+            break
+        }
     }
 
     func leaveReconnectIfActive() {
-        if case .reconnecting = phase {
-            setPhase(.disconnected)
+        if case .reconnecting(_, let failure) = runtimePhase {
+            setRuntimePhase(.disconnected(failure: failure))
         }
     }
 
     func markReconnecting(target: HandoffReconnectTarget, runID: UUID) {
-        setPhase(.reconnecting(HandoffReconnectAttempt(runID: runID, target: target)))
+        setRuntimePhase(.reconnecting(
+            HandoffReconnectAttempt(runID: runID, target: target),
+            failure: runtimePhase.diagnosticFailure
+        ))
     }
 
     func recordServerInfo(_ info: ServerInfo) {
@@ -162,25 +245,25 @@ final class HandoffConnectionLifecycle {
     }
 
     private func updateConnectedSession(_ body: (inout HandoffConnectedSession) -> Void) {
-        guard case .connected(var session) = phase else { return }
-        body(&session)
-        phase = .connected(session)
+        guard case .connected(var runtime) = runtimePhase else { return }
+        body(&runtime.session)
+        setRuntimePhase(.connected(runtime))
     }
 
     func waitForConnectionResult(timeout: TimeInterval) async throws {
         let attemptID: UUID
-        switch phase {
+        switch runtimePhase {
         case .connected:
             return
         case .failed(let failure):
             throw failure
-        case .disconnected, .reconnecting:
-            if let failure = attemptFailure {
+        case .disconnected(let failure), .reconnecting(_, let failure):
+            if let failure {
                 throw failure
             }
             throw HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)
-        case .connecting(let attempt):
-            attemptID = attempt.id
+        case .connecting(let runtime, _):
+            attemptID = runtime.attempt.id
         }
 
         let waiterID = UUID()
@@ -212,30 +295,35 @@ final class HandoffConnectionLifecycle {
 
     @discardableResult
     func tickKeepalive(expectedAttemptID: UUID? = nil, sendPing: () -> Void) -> Int {
-        guard case .connected(var session) = phase else { return 0 }
-        if let expectedAttemptID, session.attemptID != expectedAttemptID { return 0 }
+        guard case .connected(var runtime) = runtimePhase else { return 0 }
+        if let expectedAttemptID, runtime.session.attemptID != expectedAttemptID { return 0 }
         sendPing()
-        session.missedPongCount += 1
-        let count = session.missedPongCount
-        phase = .connected(session)
+        runtime.session.missedPongCount += 1
+        let count = runtime.session.missedPongCount
+        setRuntimePhase(.connected(runtime))
         return count
     }
 
-    private func setPhase(_ nextPhase: HandoffConnectionPhase) {
-        let previousPhase = phase
+    private func setRuntimePhase(_ nextPhase: RuntimePhase) {
+        let previousPhase = runtimePhase
         cancelOwnedTasksLeaving(previousPhase, for: nextPhase)
-        phase = nextPhase
-        guard !Self.isSameConnectionPhase(previousPhase, nextPhase) else { return }
-        onPhaseChanged?(nextPhase)
+        runtimePhase = nextPhase
+        let previousProjection = previousPhase.projectedPhase
+        let nextProjection = nextPhase.projectedPhase
+        guard !Self.isSameConnectionPhase(previousProjection, nextProjection) else { return }
+        onPhaseChanged?(nextProjection)
     }
 
     private func cancelOwnedTasksLeaving(
-        _ previousPhase: HandoffConnectionPhase,
-        for nextPhase: HandoffConnectionPhase
+        _ previousPhase: RuntimePhase,
+        for nextPhase: RuntimePhase
     ) {
-        guard case .connected(let session) = previousPhase else { return }
-        if case .connected = nextPhase { return }
-        session.keepaliveTask.cancel()
+        guard let previousConnected = previousPhase.connectedRuntime else { return }
+        if let nextConnected = nextPhase.connectedRuntime,
+           nextConnected.session.attemptID == previousConnected.session.attemptID {
+            return
+        }
+        previousConnected.session.keepaliveTask.cancel()
     }
 
     private static func isSameConnectionPhase(
@@ -258,15 +346,4 @@ final class HandoffConnectionLifecycle {
 
     private static let disconnectedDuringAttemptMessage =
         "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-}
-
-private extension HandoffConnectionPhase {
-    var isActive: Bool {
-        switch self {
-        case .connecting, .connected:
-            return true
-        case .disconnected, .reconnecting, .failed:
-            return false
-        }
-    }
 }

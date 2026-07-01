@@ -46,5 +46,91 @@ final class USBDeviceDiscoveryParsingTests: XCTestCase {
             ),
         ])
     }
+
+    @ButtonHeistActor
+    func testStartIsIdempotentWhilePollSessionIsActive() async {
+        let pollGate = USBDiscoveryPollGate()
+        let discovery = USBDeviceDiscovery(
+            port: 1234,
+            discoverConnectedDevices: { await pollGate.connectedDevices() },
+            findTunnelAddress: { await pollGate.tunnelAddress() }
+        )
+        defer { discovery.stop() }
+        var readyStates: [Bool] = []
+        discovery.onEvent = { event in
+            if case .stateChanged(let isReady) = event {
+                readyStates.append(isReady)
+            }
+        }
+
+        discovery.start()
+        discovery.start()
+        await pollGate.waitForPollRequest()
+        await pollGate.resume(devices: [], tunnelAddress: nil)
+
+        XCTAssertEqual(readyStates, [true])
+    }
+
+    @ButtonHeistActor
+    func testStopIgnoresStalePollResultsFromCancelledSession() async {
+        let pollGate = USBDiscoveryPollGate()
+        let discovery = USBDeviceDiscovery(
+            port: 1234,
+            discoverConnectedDevices: { await pollGate.connectedDevices() },
+            findTunnelAddress: { await pollGate.tunnelAddress() }
+        )
+        let device = USBDeviceDiscovery.ConnectedUSBDevice(
+            name: "Stale Phone",
+            identifier: "00008120-5555555555555555"
+        )
+        var foundDevices: [DiscoveredDevice] = []
+        discovery.onEvent = { event in
+            if case .found(let device) = event {
+                foundDevices.append(device)
+            }
+        }
+
+        discovery.start()
+        await pollGate.waitForPollRequest()
+        discovery.stop()
+        await pollGate.resume(devices: [device], tunnelAddress: "fd12:3456::1")
+        await Task.yield()
+
+        XCTAssertTrue(discovery.discoveredDevices.isEmpty)
+        XCTAssertTrue(foundDevices.isEmpty)
+    }
+}
+
+private actor USBDiscoveryPollGate {
+    private var devicesContinuation: CheckedContinuation<[USBDeviceDiscovery.ConnectedUSBDevice], Never>?
+    private var tunnelContinuation: CheckedContinuation<String?, Never>?
+    private var pollRequestCount = 0
+
+    func connectedDevices() async -> [USBDeviceDiscovery.ConnectedUSBDevice] {
+        pollRequestCount += 1
+        return await withCheckedContinuation { continuation in
+            devicesContinuation = continuation
+        }
+    }
+
+    func tunnelAddress() async -> String? {
+        pollRequestCount += 1
+        return await withCheckedContinuation { continuation in
+            tunnelContinuation = continuation
+        }
+    }
+
+    func waitForPollRequest() async {
+        while pollRequestCount < 2 {
+            await Task.yield()
+        }
+    }
+
+    func resume(devices: [USBDeviceDiscovery.ConnectedUSBDevice], tunnelAddress: String?) {
+        devicesContinuation?.resume(returning: devices)
+        devicesContinuation = nil
+        tunnelContinuation?.resume(returning: tunnelAddress)
+        tunnelContinuation = nil
+    }
 }
 #endif

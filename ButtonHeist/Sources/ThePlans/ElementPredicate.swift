@@ -13,9 +13,8 @@ extension String: StringMatchPayload {
 
 /// Shared representation for predicate string comparison.
 ///
-/// Exact matching is the default and retains the legacy flat JSON form:
-/// `"label": "Pay"` decodes as `.exact("Pay")`. Broader modes use object
-/// form: `"label": {"mode":"contains","value":"Send"}`.
+/// Literal Swift values create exact matches. Public JSON boundaries spell the
+/// selected mode explicitly through their request schema.
 public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
     public enum Mode: String, Codable, CaseIterable, Sendable {
         /// Exact string match. This is the default for string literals.
@@ -375,23 +374,6 @@ public extension ElementPredicate {
         ElementPredicate(excludeTraits: traits)
     }
 
-    /// Match by any combination of fields — the canonical multi-field form.
-    static func element(
-        label: StringMatch<String>? = nil,
-        identifier: StringMatch<String>? = nil,
-        value: StringMatch<String>? = nil,
-        traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
-    ) -> ElementPredicate {
-        ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        )
-    }
-
     /// Match by an ordered list of property checks. Repeating a property means
     /// every check against that property must pass.
     static func element(
@@ -429,31 +411,17 @@ package extension ElementPredicate {
 
 }
 
-// MARK: - Codable (flat wire format)
+// MARK: - Codable
 
 extension ElementPredicate: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case checks
-        case label, identifier, value, traits, excludeTraits
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasChecks = container.contains(.checks)
-        let hasFlatFields = Self.flatCodingKeys.contains { container.contains($0) }
-        if hasChecks, hasFlatFields {
-            throw DecodingError.dataCorruptedError(
-                forKey: .checks,
-                in: container,
-                debugDescription: "element predicate accepts either checks or flat fields, not both"
-            )
-        }
-        if hasChecks {
-            self.init(try container.decode([ElementPredicateCheck<String>].self, forKey: .checks))
-        } else {
-            self.init(try Self.decodeFlatChecks(from: container))
-        }
+        self.init(try container.decodeIfPresent([ElementPredicateCheck<String>].self, forKey: .checks) ?? [])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -461,24 +429,6 @@ extension ElementPredicate: Codable {
         if !checks.isEmpty { try container.encode(checks, forKey: .checks) }
     }
 
-    private static let flatCodingKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
-
-    private static func decodeFlatChecks(
-        from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> [ElementPredicateCheck<String>] {
-        var checks: [ElementPredicateCheck<String>] = []
-        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label).map(ElementPredicateCheck.label)
-        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier)
-            .map(ElementPredicateCheck.identifier)
-        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
-        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
-            checks.append(.traits(traits.heistTraitSet))
-        }
-        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits.heistTraitSet))
-        }
-        return checks
-    }
 }
 
 extension ElementPredicate: CustomStringConvertible {

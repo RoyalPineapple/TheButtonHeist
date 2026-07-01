@@ -295,7 +295,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
             "type": .string("exists"),
             "element": elementTargetValue([
-                "label": stringMatchValue(mode: "contains", value: "Pay"),
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "Pay")),
+                ]),
             ]),
         ]))
 
@@ -306,10 +308,10 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
             "type": .string("exists"),
             "element": elementTargetValue([
-                "label": .array([
-                    stringMatchValue(mode: "prefix", value: "foo"),
-                    stringMatchValue(mode: "contains", value: "bar"),
-                    stringMatchValue(mode: "suffix", value: "baz"),
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "bar")),
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "suffix", value: "baz")),
                 ]),
             ]),
         ]))

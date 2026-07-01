@@ -12,7 +12,7 @@ extension TheFence {
         let predicate = try ExpectationPayload.parseRequiredPredicate(input.value(for: .predicate))
         return waitDispatch(WaitStep(
             predicate: predicate,
-            timeout: min(try input.schemaNumber(.timeout) ?? defaultWaitTimeout, defaultWaitTimeout)
+            timeout: min(try input.value(FenceParameters.timeout) ?? defaultWaitTimeout, defaultWaitTimeout)
         ))
     }
 }

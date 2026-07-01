@@ -6,6 +6,15 @@ import Foundation
 /// Compact description of what changed in the accessibility hierarchy after
 /// an action. Each case carries exactly the data valid for that phase.
 public extension AccessibilityTrace {
+    enum DeltaProjection: Sendable, Equatable {
+        case semantic
+        case geometryAware
+
+        var includesGeometry: Bool {
+            self == .geometryAware
+        }
+    }
+
     /// Capture-level facts that can be trusted without consulting bounded
     /// render projections or element edit pairing.
     struct InteractionDigest: Codable, Sendable, Equatable {
@@ -255,6 +264,10 @@ public extension AccessibilityTrace {
     /// Unlike `endpointDelta`, this can represent screen and element changes
     /// that happened in the same wait window.
     var accumulatedDelta: AccumulatedDelta? {
+        accumulatedDelta(projection: .semantic)
+    }
+
+    func accumulatedDelta(projection: DeltaProjection) -> AccumulatedDelta? {
         guard captures.count >= 2,
               let first = captures.first,
               let last = captures.last
@@ -262,7 +275,8 @@ public extension AccessibilityTrace {
         return AccessibilityTraceAccumulatedDelta.project(
             captures: captures,
             first: first,
-            last: last
+            last: last,
+            projection: projection
         )
     }
 
@@ -425,9 +439,12 @@ private enum AccessibilityTraceAccumulatedDelta {
     static func project(
         captures: [AccessibilityTrace.Capture],
         first: AccessibilityTrace.Capture,
-        last: AccessibilityTrace.Capture
+        last: AccessibilityTrace.Capture,
+        projection: AccessibilityTrace.DeltaProjection
     ) -> AccessibilityTrace.AccumulatedDelta {
-        let allDeltas = zip(captures, captures.dropFirst()).map(AccessibilityTrace.Delta.between)
+        let allDeltas = zip(captures, captures.dropFirst()).map { before, after in
+            AccessibilityTrace.Delta.between(before, after, projection: projection)
+        }
         let transient = allDeltas.flatMap(\.transientElements)
         let captureEdge = AccessibilityTrace.CaptureEdge(before: first, after: last)
         let interactionDigest = AccessibilityTrace.InteractionDigest(between: first, and: last)

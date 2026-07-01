@@ -689,11 +689,12 @@ extension FrameProperty: ElementPropertyValueKind {
     public typealias Value = ElementPropertyFrame
 
     public static func value(in element: HeistElement) -> ElementPropertyFrame? {
-        ElementPropertyFrame(
-            x: Int(element.frameX),
-            y: Int(element.frameY),
-            width: Int(element.frameWidth),
-            height: Int(element.frameHeight)
+        let frame = element.screenFrame
+        return ElementPropertyFrame(
+            x: Int(frame.x),
+            y: Int(frame.y),
+            width: Int(frame.width),
+            height: Int(frame.height)
         )
     }
 
@@ -727,9 +728,10 @@ extension ActivationPointProperty: ElementPropertyValueKind {
     public typealias Value = ElementPropertyPoint
 
     public static func value(in element: HeistElement) -> ElementPropertyPoint? {
-        ElementPropertyPoint(
-            x: Int(element.activationPointX),
-            y: Int(element.activationPointY)
+        guard let point = element.activationPointEvidence.point else { return nil }
+        return ElementPropertyPoint(
+            x: Int(point.x),
+            y: Int(point.y)
         )
     }
 

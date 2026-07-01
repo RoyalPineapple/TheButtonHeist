@@ -100,10 +100,6 @@ final class TheHandoff {
     var makeDiscovery: () -> any DeviceDiscovering = { DeviceDiscovery() }
     var makeConnection: ((DiscoveredDevice) -> any DeviceConnecting)?
 
-    // MARK: - Discovery / Connection Handles
-
-    var connection: (any DeviceConnecting)?
-
     var hasActiveDiscoverySession: Bool {
         discoveryLifecycle.hasDiscoverySession
     }

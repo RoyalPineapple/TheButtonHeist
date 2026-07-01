@@ -4,6 +4,7 @@
 import Darwin
 import Foundation
 import ObjectiveC
+import ThePlans
 import TheInsideJob
 
 /// Prepared in-process heist execution request used by the testing facade.

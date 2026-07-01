@@ -822,7 +822,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     intent: .action(command: "activate", target: "predicate(label=\"Save\")"),
                     evidence: .action(.dispatch(
                         command: command,
-                        actionResult: .failure(
+                        dispatchResult: .failure(
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
@@ -843,10 +843,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps[0].status, .failed)
         XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.wireType, .activate)
         XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.reportTarget, .predicate(ElementPredicate(label: "Save")))
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.actionResult?.method, .activate)
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.actionResult?.errorKind, .elementNotFound)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.method, .activate)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.errorKind, .elementNotFound)
         XCTAssertEqual(
-            decoded.steps[0].actionEvidence?.actionResult?.message,
+            decoded.steps[0].actionEvidence?.dispatchResult?.message,
             "No element matching label \"Save\""
         )
         XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
@@ -889,7 +889,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(step.forEachElementEvidence?.iterationCount, 3)
         XCTAssertNil(step.forEachElementEvidence?.failureReason)
         XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
-        XCTAssertEqual(step.children.first?.children.first?.actionEvidence?.actionResult?.method, .activate)
+        XCTAssertEqual(step.children.first?.children.first?.actionEvidence?.dispatchResult?.method, .activate)
         XCTAssertFalse(step.isFailure)
 
         let payload = try JSONProbe(data: data)
@@ -944,7 +944,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             kind: .action,
             durationMs: 4,
             evidence: .action(.dispatch(
-                actionResult: .failure(
+                dispatchResult: .failure(
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "button disabled",
@@ -997,13 +997,13 @@ final class WireTypeRoundTripTests: XCTestCase {
             decodedStep.caseSelectionEvidence?.selection.outcome,
             HeistCaseSelectionOutcome.matchedCase(index: 0)
         )
-        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.actionResult?.errorKind, .actionFailed)
+        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.dispatchResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
     }
 
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
         let evidence = HeistActionEvidence.dispatch(
-            actionResult: ActionResult.success(method: .activate)
+            dispatchResult: ActionResult.success(method: .activate)
         )
         XCTAssertNil(evidence.command)
         XCTAssertNil(evidence.warning)
@@ -1085,7 +1085,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     kind: .action,
                     durationMs: durationMs,
                     evidence: .action(.dispatch(
-                        actionResult: .success(method: .activate, message: "activated")
+                        dispatchResult: .success(method: .activate, message: "activated")
                     ))
                 ),
             ]

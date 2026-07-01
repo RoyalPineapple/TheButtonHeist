@@ -16,13 +16,13 @@ extension TheBurglar {
     /// is semantic parser evidence; live scroll-view conversion is dispatch
     /// evidence and must not feed generated container names or interface hashes.
     struct ContainerIdentityContext {
-        let contentFramesByPath: [TreePath: CGRect]
+        let contentFramesByPath: [TreePath: ContentRect]
         let scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership]
         let nestedInScrollViewPaths: Set<TreePath>
     }
 
     private struct ContainerIdentityAccumulator {
-        var contentFramesByPath: [TreePath: CGRect] = [:]
+        var contentFramesByPath: [TreePath: ContentRect] = [:]
         var scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:]
         var nestedInScrollViewPaths = Set<TreePath>()
     }
@@ -58,16 +58,16 @@ extension TheBurglar {
         guard case .container(let container, let children) = node else { return }
 
         let frame = container.frame.cgRect
-        let contentFrame: CGRect
+        let contentFrame: ContentRect
         if let parentScrollContext {
-            contentFrame = CGRect(origin: .zero, size: frame.size)
+            contentFrame = ContentRect(CGRect(origin: .zero, size: frame.size))
             accumulator.scrollMembershipsByPath[path] = SemanticScreen.ScrollMembership(
                 containerPath: parentScrollContext.containerPath,
                 index: nil
             )
             accumulator.nestedInScrollViewPaths.insert(path)
         } else {
-            contentFrame = frame
+            contentFrame = ContentRect(frame)
         }
         accumulator.contentFramesByPath[path] = contentFrame
 
@@ -189,9 +189,9 @@ extension TheBurglar {
     /// subtree hash when multiple containers share this prefix in one parse.
     static func containerName(
         for container: AccessibilityContainer,
-        contentFrame: CGRect
+        contentFrame: ContentRect
     ) -> ContainerName {
-        let frameHash = coarseFrameHash(contentFrame)
+        let frameHash = coarseFrameHash(contentFrame.cgRect)
         switch container.type {
         case .scrollable:
             return ContainerName(rawValue: "scrollable_\(frameHash)")

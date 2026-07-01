@@ -21,6 +21,17 @@ symbol	TheScore.symbols.json	s:8TheScore10HeistValueO6doubleyACSdcACmF	swift.enu
 symbol	TheScore.symbols.json	s:8TheScore10HeistValueO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistValue.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore10HeistValueO6objectyACSDySSACGcACmF	swift.enum.case	public	HeistValue.object(_:)	HeistValue.object(_:)	case object([String : HeistValue])
 symbol	TheScore.symbols.json	s:8TheScore10HeistValueO6stringyACSScACmF	swift.enum.case	public	HeistValue.string(_:)	HeistValue.string(_:)	case string(String)
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV	swift.struct	public	ScreenRect	ScreenRect	struct ScreenRect
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV02cgD0So6CGRectVvp	swift.property	public	cgRect	ScreenRect.cgRect	var cgRect: CGRect { get }
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV1x1y5width6heightACSd_S3dtcfc	swift.init	public	init(x:y:width:height:)	ScreenRect.init(x:y:width:height:)	init(x: Double, y: Double, width: Double, height: Double)
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV1xSdvp	swift.property	public	x	ScreenRect.x	let x: Double
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV1ySdvp	swift.property	public	y	ScreenRect.y	let y: Double
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ScreenRect.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV4midXSdvp	swift.property	public	midX	ScreenRect.midX	var midX: Double { get }
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV4midYSdvp	swift.property	public	midY	ScreenRect.midY	var midY: Double { get }
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV5widthSdvp	swift.property	public	width	ScreenRect.width	let width: Double
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectV6heightSdvp	swift.property	public	height	ScreenRect.height	let height: Double
+symbol	TheScore.symbols.json	s:8TheScore10ScreenRectVyACSo6CGRectVcfc	swift.init	public	init(_:)	ScreenRect.init(_:)	init(_ rect: CGRect)
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV	swift.struct	public	ServerInfo	ServerInfo	struct ServerInfo
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV10deviceNameSSvp	swift.property	public	deviceName	ServerInfo.deviceName	let deviceName: String
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV10instanceIdSSvp	swift.property	public	instanceId	ServerInfo.instanceId	let instanceId: String
@@ -36,6 +47,17 @@ symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV4fromACs7Decoder_p_tKcfc	sw
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV7appName16bundleIdentifier06deviceF013systemVersion11screenWidth0L6Height10instanceId0oH013listeningPort13simulatorUDID06vendorH09tlsActiveACSS_S3SS2dS2Ss6UInt16VSSSgARSbtcfc	swift.init	public	init(appName:bundleIdentifier:deviceName:systemVersion:screenWidth:screenHeight:instanceId:instanceIdentifier:listeningPort:simulatorUDID:vendorIdentifier:tlsActive:)	ServerInfo.init(appName:bundleIdentifier:deviceName:systemVersion:screenWidth:screenHeight:instanceId:instanceIdentifier:listeningPort:simulatorUDID:vendorIdentifier:tlsActive:)	init(appName: String, bundleIdentifier: String, deviceName: String, systemVersion: String, screenWidth: Double, screenHeight: Double, instanceId: String, instanceIdentifier: String, listeningPort: UInt16, simulatorUDID: String? = nil, vendorIdentifier: String? = nil, tlsActive: Bool)
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV7appNameSSvp	swift.property	public	appName	ServerInfo.appName	let appName: String
 symbol	TheScore.symbols.json	s:8TheScore10ServerInfoV9tlsActiveSbvp	swift.property	public	tlsActive	ServerInfo.tlsActive	let tlsActive: Bool
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV	swift.struct	public	ContentRect	ContentRect	struct ContentRect
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV02cgD0So6CGRectVvp	swift.property	public	cgRect	ContentRect.cgRect	var cgRect: CGRect { get }
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV1x1y5width6heightACSd_S3dtcfc	swift.init	public	init(x:y:width:height:)	ContentRect.init(x:y:width:height:)	init(x: Double, y: Double, width: Double, height: Double)
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV1xSdvp	swift.property	public	x	ContentRect.x	let x: Double
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV1ySdvp	swift.property	public	y	ContentRect.y	let y: Double
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ContentRect.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV4sizeSo6CGSizeVvp	swift.property	public	size	ContentRect.size	var size: CGSize { get }
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV5widthSdvp	swift.property	public	width	ContentRect.width	let width: Double
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV6heightSdvp	swift.property	public	height	ContentRect.height	let height: Double
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectV6originSo7CGPointVvp	swift.property	public	origin	ContentRect.origin	var origin: CGPoint { get }
+symbol	TheScore.symbols.json	s:8TheScore11ContentRectVyACSo6CGRectVcfc	swift.init	public	init(_:)	ContentRect.init(_:)	init(_ rect: CGRect)
 symbol	TheScore.symbols.json	s:8TheScore11MatcherAtomV	swift.struct	public	MatcherAtom	MatcherAtom	struct MatcherAtom
 symbol	TheScore.symbols.json	s:8TheScore11MatcherAtomV8prioritySivp	swift.property	public	priority	MatcherAtom.priority	let priority: Int
 symbol	TheScore.symbols.json	s:8TheScore11MatcherAtomV9predicate0A5Plans16ElementPredicateVvp	swift.property	public	predicate	MatcherAtom.predicate	let predicate: ElementPredicate
@@ -122,12 +144,14 @@ symbol	TheScore.symbols.json	s:8TheScore12HeistElementV	swift.struct	public	Heis
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV013accessibilityD010annotationAC26AccessibilitySnapshotModel0gD0V_AA09InterfaceD10AnnotationVSgtcfc	swift.init	public	init(accessibilityElement:annotation:)	HeistElement.init(accessibilityElement:annotation:)	init(accessibilityElement element: AccessibilityElement, annotation: InterfaceElementAnnotation? = nil)
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV10frameWidthSdvp	swift.property	public	frameWidth	HeistElement.frameWidth	let frameWidth: Double
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV10identifierSSSgvp	swift.property	public	identifier	HeistElement.identifier	let identifier: String?
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11description5label5value10identifier4hint6traits6frameX0K1Y0K5Width0K6Height16activationPointX0nO1Y25respondsToUserInteraction13customContent6rotors7actionsACSS_SSSgA3TSay0A5Plans0C5TraitOGS5dSgAYSbSayAA0c6CustomU0VGSgSayAA0C5RotorVGSgSayAU0D6ActionOGtcfc	swift.init	public	init(description:label:value:identifier:hint:traits:frameX:frameY:frameWidth:frameHeight:activationPointX:activationPointY:respondsToUserInteraction:customContent:rotors:actions:)	HeistElement.init(description:label:value:identifier:hint:traits:frameX:frameY:frameWidth:frameHeight:activationPointX:activationPointY:respondsToUserInteraction:customContent:rotors:actions:)	init(description: String, label: String?, value: String?, identifier: String?, hint: String? = nil, traits: [HeistTrait] = [], frameX: Double, frameY: Double, frameWidth: Double, frameHeight: Double, activationPointX: Double? = nil, activationPointY: Double? = nil, respondsToUserInteraction: Bool = true, customContent: [HeistCustomContent]? = nil, rotors: [HeistRotor]? = nil, actions: [ElementAction])
+symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11description5label5value10identifier4hint6traits6frameX0K1Y0K5Width0K6Height16activationPointX0nO1Y0nO8Evidence25respondsToUserInteraction13customContent6rotors7actionsACSS_SSSgA3USay0A5Plans0C5TraitOGS5dSgAzA010ActivationoP0VSgSbSayAA0c6CustomV0VGSgSayAA0C5RotorVGSgSayAV0D6ActionOGtcfc	swift.init	public	init(description:label:value:identifier:hint:traits:frameX:frameY:frameWidth:frameHeight:activationPointX:activationPointY:activationPointEvidence:respondsToUserInteraction:customContent:rotors:actions:)	HeistElement.init(description:label:value:identifier:hint:traits:frameX:frameY:frameWidth:frameHeight:activationPointX:activationPointY:activationPointEvidence:respondsToUserInteraction:customContent:rotors:actions:)	init(description: String, label: String?, value: String?, identifier: String?, hint: String? = nil, traits: [HeistTrait] = [], frameX: Double, frameY: Double, frameWidth: Double, frameHeight: Double, activationPointX: Double? = nil, activationPointY: Double? = nil, activationPointEvidence: ActivationPointEvidence? = nil, respondsToUserInteraction: Bool = true, customContent: [HeistCustomContent]? = nil, rotors: [HeistRotor]? = nil, actions: [ElementAction])
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11descriptionSSvp	swift.property	public	description	HeistElement.description	let description: String
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11frameHeightSdvp	swift.property	public	frameHeight	HeistElement.frameHeight	let frameHeight: Double
+symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11screenFrameAA10ScreenRectVvp	swift.property	public	screenFrame	HeistElement.screenFrame	var screenFrame: ScreenRect { get }
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV13customContentSayAA0c6CustomF0VGSgvp	swift.property	public	customContent	HeistElement.customContent	let customContent: [HeistCustomContent]?
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV16activationPointXSdvp	swift.property	public	activationPointX	HeistElement.activationPointX	let activationPointX: Double
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV16activationPointYSdvp	swift.property	public	activationPointY	HeistElement.activationPointY	let activationPointY: Double
+symbol	TheScore.symbols.json	s:8TheScore12HeistElementV23activationPointEvidenceAA010ActivationfG0Vvp	swift.property	public	activationPointEvidence	HeistElement.activationPointEvidence	let activationPointEvidence: ActivationPointEvidence
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV25respondsToUserInteractionSbvp	swift.property	public	respondsToUserInteraction	HeistElement.respondsToUserInteraction	let respondsToUserInteraction: Bool
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistElement.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV4hintSSSgvp	swift.property	public	hint	HeistElement.hint	let hint: String?
@@ -491,6 +515,9 @@ symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV13WindowContextV5in
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV13WindowContextV5levelSdvp	swift.property	public	level	AccessibilityTrace.WindowContext.level	let level: Double
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV13endpointDeltaAC0F0OSgvp	swift.property	public	endpointDelta	AccessibilityTrace.endpointDelta	var endpointDelta: AccessibilityTrace.Delta? { get }
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV13isLinearChainSbvp	swift.property	public	isLinearChain	AccessibilityTrace.isLinearChain	var isLinearChain: Bool { get }
+symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15DeltaProjectionO	swift.enum	public	AccessibilityTrace.DeltaProjection	AccessibilityTrace.DeltaProjection	enum DeltaProjection
+symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15DeltaProjectionO13geometryAwareyA2EmF	swift.enum.case	public	AccessibilityTrace.DeltaProjection.geometryAware	AccessibilityTrace.DeltaProjection.geometryAware	case geometryAware
+symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15DeltaProjectionO8semanticyA2EmF	swift.enum.case	public	AccessibilityTrace.DeltaProjection.semantic	AccessibilityTrace.DeltaProjection.semantic	case semantic
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15ElementsChangedV	swift.struct	public	AccessibilityTrace.ElementsChanged	AccessibilityTrace.ElementsChanged	struct ElementsChanged
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15ElementsChangedV11captureEdgeAC07CaptureH0VSgvp	swift.property	public	captureEdge	AccessibilityTrace.ElementsChanged.captureEdge	let captureEdge: AccessibilityTrace.CaptureEdge?
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV15ElementsChangedV12elementCount5edits11captureEdge17interactionDigest9transientAESi_AA12ElementEditsVAC07CaptureK0VSgAC011InteractionM0VSgSayAA05HeistO0VGtcfc	swift.init	public	init(elementCount:edits:captureEdge:interactionDigest:transient:)	AccessibilityTrace.ElementsChanged.init(elementCount:edits:captureEdge:interactionDigest:transient:)	init(elementCount: Int, edits: ElementEdits, captureEdge: AccessibilityTrace.CaptureEdge? = nil, interactionDigest: AccessibilityTrace.InteractionDigest? = nil, transient: [HeistElement] = [])
@@ -512,6 +539,7 @@ symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16AccumulatedDeltaV
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16AccumulatedDeltaV16isSemanticChangeSbvp	swift.property	public	isSemanticChange	AccessibilityTrace.AccumulatedDelta.isSemanticChange	var isSemanticChange: Bool { get }
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16AccumulatedDeltaV17interactionDigestAC011InteractionH0VSgvp	swift.property	public	interactionDigest	AccessibilityTrace.AccumulatedDelta.interactionDigest	let interactionDigest: AccessibilityTrace.InteractionDigest?
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16AccumulatedDeltaV9transientSayAA12HeistElementVGvp	swift.property	public	transient	AccessibilityTrace.AccumulatedDelta.transient	let transient: [HeistElement]
+symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16accumulatedDelta10projectionAC011AccumulatedF0VSgAC0F10ProjectionO_tF	swift.method	public	accumulatedDelta(projection:)	AccessibilityTrace.accumulatedDelta(projection:)	func accumulatedDelta(projection: AccessibilityTrace.DeltaProjection) -> AccessibilityTrace.AccumulatedDelta?
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16accumulatedDeltaAC011AccumulatedF0VSgvp	swift.property	public	accumulatedDelta	AccessibilityTrace.accumulatedDelta	var accumulatedDelta: AccessibilityTrace.AccumulatedDelta? { get }
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV16endpointScreenIdSSSgvp	swift.property	public	endpointScreenId	AccessibilityTrace.endpointScreenId	var endpointScreenId: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV17InteractionDigestV	swift.struct	public	AccessibilityTrace.InteractionDigest	AccessibilityTrace.InteractionDigest	struct InteractionDigest
@@ -534,7 +562,7 @@ symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO13screenChan
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO15elementsChangedyAeC08ElementsG0VcAEmF	swift.enum.case	public	AccessibilityTrace.Delta.elementsChanged(_:)	AccessibilityTrace.Delta.elementsChanged(_:)	case elementsChanged(AccessibilityTrace.ElementsChanged)
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO4fromAEs7Decoder_p_tKcfc	swift.init	public	init(from:)	AccessibilityTrace.Delta.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	AccessibilityTrace.Delta.encode(to:)	func encode(to encoder: any Encoder) throws
-symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO7betweenyAeC7CaptureV_AHtFZ	swift.type.method	public	between(_:_:)	AccessibilityTrace.Delta.between(_:_:)	static func between(_ before: AccessibilityTrace.Capture, _ after: AccessibilityTrace.Capture) -> AccessibilityTrace.Delta
+symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO7between__10projectionAeC7CaptureV_AiC0E10ProjectionOtFZ	swift.type.method	public	between(_:_:projection:)	AccessibilityTrace.Delta.between(_:_:projection:)	static func between(_ before: AccessibilityTrace.Capture, _ after: AccessibilityTrace.Capture, projection: AccessibilityTrace.DeltaProjection = .semantic) -> AccessibilityTrace.Delta
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5DeltaO8noChangeyAeC02NoG0VcAEmF	swift.enum.case	public	AccessibilityTrace.Delta.noChange(_:)	AccessibilityTrace.Delta.noChange(_:)	case noChange(AccessibilityTrace.NoChange)
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV5firstAcA9InterfaceV_tcfc	swift.init	public	init(first:)	AccessibilityTrace.init(first:)	init(first interface: Interface)
 symbol	TheScore.symbols.json	s:8TheScore18AccessibilityTraceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	AccessibilityTrace.encode(to:)	func encode(to encoder: any Encoder) throws
@@ -608,6 +636,13 @@ symbol	TheScore.symbols.json	s:8TheScore18PredicateCandidateV4tierAA0D4TierOvp	s
 symbol	TheScore.symbols.json	s:8TheScore18PredicateCandidateV5atomsSayAA11MatcherAtomVGvp	swift.property	public	atoms	PredicateCandidate.atoms	let atoms: [MatcherAtom]
 symbol	TheScore.symbols.json	s:8TheScore18PredicateCandidateV9predicate0A5Plans07ElementC0Vvp	swift.property	public	predicate	PredicateCandidate.predicate	let predicate: ElementPredicate
 symbol	TheScore.symbols.json	s:8TheScore18PredicateCandidateV9predicate5atoms4tierAC0A5Plans07ElementC0V_SayAA11MatcherAtomVGAA0D4TierOtcfc	swift.init	public	init(predicate:atoms:tier:)	PredicateCandidate.init(predicate:atoms:tier:)	init(predicate: ElementPredicate, atoms: [MatcherAtom], tier: CandidateTier)
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV	swift.struct	public	ScrollContentPoint	ScrollContentPoint	struct ScrollContentPoint
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV02cgE0So7CGPointVvp	swift.property	public	cgPoint	ScrollContentPoint.cgPoint	var cgPoint: CGPoint { get }
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV1x1yACSd_Sdtcfc	swift.init	public	init(x:y:)	ScrollContentPoint.init(x:y:)	init(x: Double, y: Double)
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV1xSdvp	swift.property	public	x	ScrollContentPoint.x	let x: Double
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV1ySdvp	swift.property	public	y	ScrollContentPoint.y	let y: Double
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ScrollContentPoint.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore18ScrollContentPointVyACSo7CGPointVcfc	swift.init	public	init(_:)	ScrollContentPoint.init(_:)	init(_ point: CGPoint)
 symbol	TheScore.symbols.json	s:8TheScore18buttonHeistVersionSSvp	swift.var	public	buttonHeistVersion	buttonHeistVersion	let buttonHeistVersion: String
 symbol	TheScore.symbols.json	s:8TheScore18isStableIdentifierySbSSF	swift.func	public	isStableIdentifier(_:)	isStableIdentifier(_:)	func isStableIdentifier(_ identifier: String) -> Bool
 symbol	TheScore.symbols.json	s:8TheScore19AccessibilityPolicyO	swift.enum	public	AccessibilityPolicy	AccessibilityPolicy	enum AccessibilityPolicy
@@ -638,17 +673,35 @@ symbol	TheScore.symbols.json	s:8TheScore19AuthenticatePayloadV5tokenSSvp	swift.p
 symbol	TheScore.symbols.json	s:8TheScore19AuthenticatePayloadV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	AuthenticatePayload.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore19AuthenticatePayloadV8driverIdSSSgvp	swift.property	public	driverId	AuthenticatePayload.driverId	let driverId: String?
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV	swift.struct	public	HeistActionEvidence	HeistActionEvidence	struct HeistActionEvidence
-symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV011expectationD6ResultAA0dG0VSgvp	swift.property	public	expectationActionResult	HeistActionEvidence.expectationActionResult	var expectationActionResult: ActionResult? { get }
-symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV11expectation7command12actionResult0fdI0AD7warningAC0A5Plans0cD7CommandO_AA0dI0VAmA011ExpectationI0VAA0cD7WarningVSgtFZ	swift.type.method	public	expectation(command:actionResult:expectationActionResult:expectation:warning:)	HeistActionEvidence.expectation(command:actionResult:expectationActionResult:expectation:warning:)	static func expectation(command: HeistActionCommand, actionResult: ActionResult, expectationActionResult: ActionResult, expectation: ExpectationResult, warning: HeistActionWarning? = nil) -> HeistActionEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV014DispatchResultE0V	swift.struct	public	HeistActionEvidence.DispatchResultEvidence	HeistActionEvidence.DispatchResultEvidence	struct DispatchResultEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV014DispatchResultE0V08dispatchG0AA0dG0Vvp	swift.property	public	dispatchResult	HeistActionEvidence.DispatchResultEvidence.dispatchResult	let dispatchResult: ActionResult
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V	swift.struct	public	HeistActionEvidence.ExpectationResultEvidence	HeistActionEvidence.ExpectationResultEvidence	struct ExpectationResultEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V011expectationG0AA0dG0Vvp	swift.property	public	expectationResult	HeistActionEvidence.ExpectationResultEvidence.expectationResult	let expectationResult: ActionResult
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V08dispatchG0AA0dG0Vvp	swift.property	public	dispatchResult	HeistActionEvidence.ExpectationResultEvidence.dispatchResult	let dispatchResult: ActionResult
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V11expectationAA0fG0Vvp	swift.property	public	expectation	HeistActionEvidence.ExpectationResultEvidence.expectation	let expectation: ExpectationResult
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O	swift.enum	public	HeistActionEvidence.ResultEvidence	HeistActionEvidence.ResultEvidence	enum ResultEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O011expectationF0AA0dF0VSgvp	swift.property	public	expectationResult	HeistActionEvidence.ResultEvidence.expectationResult	var expectationResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O05traceF0AA0dF0VSgvp	swift.property	public	traceResult	HeistActionEvidence.ResultEvidence.traceResult	var traceResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O08dispatchF0AA0dF0VSgvp	swift.property	public	dispatchResult	HeistActionEvidence.ResultEvidence.dispatchResult	var dispatchResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O08reportedF0AA0dF0VSgvp	swift.property	public	reportedResult	HeistActionEvidence.ResultEvidence.reportedResult	var reportedResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O11expectationAA011ExpectationF0VSgvp	swift.property	public	expectation	HeistActionEvidence.ResultEvidence.expectation	var expectation: ExpectationResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O11expectationyAeC011ExpectationfE0VcAEmF	swift.enum.case	public	HeistActionEvidence.ResultEvidence.expectation(_:)	HeistActionEvidence.ResultEvidence.expectation(_:)	case expectation(HeistActionEvidence.ExpectationResultEvidence)
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O24commandResolutionFailureyA2EmF	swift.enum.case	public	HeistActionEvidence.ResultEvidence.commandResolutionFailure	HeistActionEvidence.ResultEvidence.commandResolutionFailure	case commandResolutionFailure
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06ResultE0O8dispatchyAeC08DispatchfE0VcAEmF	swift.enum.case	public	HeistActionEvidence.ResultEvidence.dispatch(_:)	HeistActionEvidence.ResultEvidence.dispatch(_:)	case dispatch(HeistActionEvidence.DispatchResultEvidence)
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV06resultE0AC06ResultE0Ovp	swift.property	public	resultEvidence	HeistActionEvidence.resultEvidence	var resultEvidence: HeistActionEvidence.ResultEvidence { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV11expectation7command14dispatchResult0fI0AD7warningAC0A5Plans0cD7CommandO_AA0dI0VAmA011ExpectationI0VAA0cD7WarningVSgtFZ	swift.type.method	public	expectation(command:dispatchResult:expectationResult:expectation:warning:)	HeistActionEvidence.expectation(command:dispatchResult:expectationResult:expectation:warning:)	static func expectation(command: HeistActionCommand, dispatchResult: ActionResult, expectationResult: ActionResult, expectation: ExpectationResult, warning: HeistActionWarning? = nil) -> HeistActionEvidence
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV11expectationAA17ExpectationResultVSgvp	swift.property	public	expectation	HeistActionEvidence.expectation	var expectation: ExpectationResult? { get }
-symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV12actionResultAA0dG0VSgvp	swift.property	public	actionResult	HeistActionEvidence.actionResult	var actionResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV11traceResultAA0dG0VSgvp	swift.property	public	traceResult	HeistActionEvidence.traceResult	var traceResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV14dispatchResultAA0dG0VSgvp	swift.property	public	dispatchResult	HeistActionEvidence.dispatchResult	var dispatchResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV14reportedResultAA0dG0VSgvp	swift.property	public	reportedResult	HeistActionEvidence.reportedResult	var reportedResult: ActionResult? { get }
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV17expectationResultAA0dG0VSgvp	swift.property	public	expectationResult	HeistActionEvidence.expectationResult	var expectationResult: ActionResult? { get }
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV24commandResolutionFailure0F0AC0A5Plans0cD7CommandO_tFZ	swift.type.method	public	commandResolutionFailure(command:)	HeistActionEvidence.commandResolutionFailure(command:)	static func commandResolutionFailure(command: HeistActionCommand) -> HeistActionEvidence
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistActionEvidence.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistActionEvidence.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV7command0A5Plans0cD7CommandOSgvp	swift.property	public	command	HeistActionEvidence.command	var command: HeistActionCommand? { get }
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV7warningAA0cD7WarningVSgvp	swift.property	public	warning	HeistActionEvidence.warning	var warning: HeistActionWarning? { get }
-symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV8dispatch12actionResultAcA0dH0V_tFZ	swift.type.method	public	dispatch(actionResult:)	HeistActionEvidence.dispatch(actionResult:)	static func dispatch(actionResult: ActionResult) -> HeistActionEvidence
-symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV8dispatch7command12actionResult7warningAC0A5Plans0cD7CommandO_AA0dI0VAA0cD7WarningVSgtFZ	swift.type.method	public	dispatch(command:actionResult:warning:)	HeistActionEvidence.dispatch(command:actionResult:warning:)	static func dispatch(command: HeistActionCommand, actionResult: ActionResult, warning: HeistActionWarning? = nil) -> HeistActionEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV8dispatch0F6ResultAcA0dG0V_tFZ	swift.type.method	public	dispatch(dispatchResult:)	HeistActionEvidence.dispatch(dispatchResult:)	static func dispatch(dispatchResult: ActionResult) -> HeistActionEvidence
+symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV8dispatch7command0F6Result7warningAC0A5Plans0cD7CommandO_AA0dH0VAA0cD7WarningVSgtFZ	swift.type.method	public	dispatch(command:dispatchResult:warning:)	HeistActionEvidence.dispatch(command:dispatchResult:warning:)	static func dispatch(command: HeistActionCommand, dispatchResult: ActionResult, warning: HeistActionWarning? = nil) -> HeistActionEvidence
 symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO	swift.enum	public	ScrollContainerAxis	ScrollContainerAxis	enum ScrollContainerAxis
 symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO10horizontalyA2CmF	swift.enum.case	public	ScrollContainerAxis.horizontal	ScrollContainerAxis.horizontal	case horizontal
 symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO4bothyA2CmF	swift.enum.case	public	ScrollContainerAxis.both	ScrollContainerAxis.both	case both
@@ -864,6 +917,19 @@ symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV4fromACs7Decod
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV7mergingyA2CSgF	swift.method	public	merging(_:)	ActionPerformanceTiming.merging(_:)	func merging(_ other: ActionPerformanceTiming?) -> ActionPerformanceTiming
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV7totalMsSiSgvp	swift.property	public	totalMs	ActionPerformanceTiming.totalMs	let totalMs: Int?
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV8settleMsSiSgvp	swift.property	public	settleMs	ActionPerformanceTiming.settleMs	let settleMs: Int?
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV	swift.struct	public	ActivationPointEvidence	ActivationPointEvidence	struct ActivationPointEvidence
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV11unavailableACvpZ	swift.type.property	public	unavailable	ActivationPointEvidence.unavailable	static let unavailable: ActivationPointEvidence
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV13defaultCenteryAC0A5Plans06ScreenD0VFZ	swift.type.method	public	defaultCenter(_:)	ActivationPointEvidence.defaultCenter(_:)	static func defaultCenter(_ point: ScreenPoint) -> ActivationPointEvidence
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActivationPointEvidence.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV5point0A5Plans06ScreenD0VSgvp	swift.property	public	point	ActivationPointEvidence.point	let point: ScreenPoint?
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6SourceO	swift.enum	public	ActivationPointEvidence.Source	ActivationPointEvidence.Source	enum Source
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6SourceO11unavailableyA2EmF	swift.enum.case	public	ActivationPointEvidence.Source.unavailable	ActivationPointEvidence.Source.unavailable	case unavailable
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6SourceO13defaultCenteryA2EmF	swift.enum.case	public	ActivationPointEvidence.Source.defaultCenter	ActivationPointEvidence.Source.defaultCenter	case defaultCenter
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6SourceO8explicityA2EmF	swift.enum.case	public	ActivationPointEvidence.Source.explicit	ActivationPointEvidence.Source.explicit	case explicit
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6SourceO8rawValueAESgSS_tcfc	swift.init	public	init(rawValue:)	ActivationPointEvidence.Source.init(rawValue:)	init?(rawValue: String)
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6source5pointA2C6SourceO_0A5Plans06ScreenD0VSgtcfc	swift.init	public	init(source:point:)	ActivationPointEvidence.init(source:point:)	init(source: ActivationPointEvidence.Source, point: ScreenPoint?)
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV6sourceAC6SourceOvp	swift.property	public	source	ActivationPointEvidence.source	let source: ActivationPointEvidence.Source
+symbol	TheScore.symbols.json	s:8TheScore23ActivationPointEvidenceV8explicityAC0A5Plans06ScreenD0VFZ	swift.type.method	public	explicit(_:)	ActivationPointEvidence.explicit(_:)	static func explicit(_ point: ScreenPoint) -> ActivationPointEvidence
 symbol	TheScore.symbols.json	s:8TheScore23HeistFailureDiagnosticsO	swift.enum	public	HeistFailureDiagnostics	HeistFailureDiagnostics	enum HeistFailureDiagnostics
 symbol	TheScore.symbols.json	s:8TheScore23HeistFailureDiagnosticsO11elementLine_12displayIndex15includeGeometrySSAA0C7ElementV_SiSgSbtFZ	swift.type.method	public	elementLine(_:displayIndex:includeGeometry:)	HeistFailureDiagnostics.elementLine(_:displayIndex:includeGeometry:)	static func elementLine(_ element: HeistElement, displayIndex: Int? = nil, includeGeometry: Bool = false) -> String
 symbol	TheScore.symbols.json	s:8TheScore23HeistFailureDiagnosticsO12quotedStringyS2SFZ	swift.type.method	public	quotedString(_:)	HeistFailureDiagnostics.quotedString(_:)	static func quotedString(_ value: String) -> String
@@ -972,6 +1038,7 @@ symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV13failureReas
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV14iterationCountSivp	swift.property	public	iterationCount	HeistRepeatUntilEvidence.iterationCount	let iterationCount: Int
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV15failedIteration9predicate7timeout14iterationCount0K7Ordinal11expectation19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdS2iAA22UnmetExpectationResultVSSSgSStFZ	swift.type.method	public	failedIteration(predicate:timeout:iterationCount:iterationOrdinal:expectation:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.failedIteration(predicate:timeout:iterationCount:iterationOrdinal:expectation:lastObservedSummary:failureReason:)	static func failedIteration(predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, iterationOrdinal: Int, expectation: UnmetExpectationResult, lastObservedSummary: String?, failureReason: String) -> HeistRepeatUntilEvidence
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV16iterationOrdinalSiSgvp	swift.property	public	iterationOrdinal	HeistRepeatUntilEvidence.iterationOrdinal	let iterationOrdinal: Int?
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV17timeoutElseFailed9predicate0G014iterationCount11expectation19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdSiAA22UnmetExpectationResultVSSSgSStFZ	swift.type.method	public	timeoutElseFailed(predicate:timeout:iterationCount:expectation:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.timeoutElseFailed(predicate:timeout:iterationCount:expectation:lastObservedSummary:failureReason:)	static func timeoutElseFailed(predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, expectation: UnmetExpectationResult, lastObservedSummary: String?, failureReason: String) -> HeistRepeatUntilEvidence
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV19lastObservedSummarySSSgvp	swift.property	public	lastObservedSummary	HeistRepeatUntilEvidence.lastObservedSummary	let lastObservedSummary: String?
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV20timeoutHandledByElse9predicate0G014iterationCount11expectation19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdSiAA22UnmetExpectationResultVSSSgAPtFZ	swift.type.method	public	timeoutHandledByElse(predicate:timeout:iterationCount:expectation:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.timeoutHandledByElse(predicate:timeout:iterationCount:expectation:lastObservedSummary:failureReason:)	static func timeoutHandledByElse(predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, expectation: UnmetExpectationResult, lastObservedSummary: String?, failureReason: String? = nil) -> HeistRepeatUntilEvidence
 symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV29initialObservationUnavailable9predicate7timeout11expectation19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdAA22UnmetExpectationResultVSSSgSStFZ	swift.type.method	public	initialObservationUnavailable(predicate:timeout:expectation:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.initialObservationUnavailable(predicate:timeout:expectation:lastObservedSummary:failureReason:)	static func initialObservationUnavailable(predicate: AccessibilityPredicate, timeout: Double, expectation: UnmetExpectationResult, lastObservedSummary: String?, failureReason: String) -> HeistRepeatUntilEvidence
@@ -1118,9 +1185,10 @@ symbol	TheScore.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO6failedyA2
 symbol	TheScore.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO6passedyA2CmF	swift.enum.case	public	HeistReceiptRecordingStatus.passed	HeistReceiptRecordingStatus.passed	case passed
 symbol	TheScore.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistReceiptRecordingStatus.init(rawValue:)	init?(rawValue: String)
 symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV	swift.struct	public	PredicateEvaluationEvidence	PredicateEvaluationEvidence	struct PredicateEvaluationEvidence
-symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV15currentElements16accumulatedDeltaACSayAA12HeistElementVG_AA18AccessibilityTraceV011AccumulatedI0VSgtcfc	swift.init	public	init(currentElements:accumulatedDelta:)	PredicateEvaluationEvidence.init(currentElements:accumulatedDelta:)	init(currentElements: [HeistElement], accumulatedDelta: AccessibilityTrace.AccumulatedDelta?)
+symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV15currentElements16accumulatedDelta019geometryAccumulatedI0ACSayAA12HeistElementVG_AA18AccessibilityTraceV0kI0VSgANtcfc	swift.init	public	init(currentElements:accumulatedDelta:geometryAccumulatedDelta:)	PredicateEvaluationEvidence.init(currentElements:accumulatedDelta:geometryAccumulatedDelta:)	init(currentElements: [HeistElement], accumulatedDelta: AccessibilityTrace.AccumulatedDelta?, geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil)
 symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV15currentElementsSayAA12HeistElementVGvp	swift.property	public	currentElements	PredicateEvaluationEvidence.currentElements	let currentElements: [HeistElement]
 symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV16accumulatedDeltaAA18AccessibilityTraceV011AccumulatedG0VSgvp	swift.property	public	accumulatedDelta	PredicateEvaluationEvidence.accumulatedDelta	let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV24geometryAccumulatedDeltaAA18AccessibilityTraceV0gH0VSgvp	swift.property	public	geometryAccumulatedDelta	PredicateEvaluationEvidence.geometryAccumulatedDelta	let geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta?
 symbol	TheScore.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV5traceAcA18AccessibilityTraceV_tcfc	swift.init	public	init(trace:)	PredicateEvaluationEvidence.init(trace:)	init(trace: AccessibilityTrace)
 symbol	TheScore.symbols.json	s:8TheScore27PredicateSelectionElementIdV	swift.struct	public	PredicateSelectionElementId	PredicateSelectionElementId	struct PredicateSelectionElementId
 symbol	TheScore.symbols.json	s:8TheScore27PredicateSelectionElementIdV11descriptionSSvp	swift.property	public	description	PredicateSelectionElementId.description	var description: String { get }
@@ -1379,9 +1447,19 @@ relationship	conformsTo	s:8TheScore10HeistValueO	s:SQ	HeistValue	Swift.Equatable
 relationship	conformsTo	s:8TheScore10HeistValueO	s:Se	HeistValue	Swift.Decodable
 relationship	conformsTo	s:8TheScore10HeistValueO	s:s23CustomStringConvertibleP	HeistValue	Swift.CustomStringConvertible
 relationship	conformsTo	s:8TheScore10HeistValueO	s:s8SendableP	HeistValue	Swift.Sendable
+relationship	conformsTo	s:8TheScore10ScreenRectV	s:SE	ScreenRect	Swift.Encodable
+relationship	conformsTo	s:8TheScore10ScreenRectV	s:SH	ScreenRect	Swift.Hashable
+relationship	conformsTo	s:8TheScore10ScreenRectV	s:SQ	ScreenRect	Swift.Equatable
+relationship	conformsTo	s:8TheScore10ScreenRectV	s:Se	ScreenRect	Swift.Decodable
+relationship	conformsTo	s:8TheScore10ScreenRectV	s:s8SendableP	ScreenRect	Swift.Sendable
 relationship	conformsTo	s:8TheScore10ServerInfoV	s:SE	ServerInfo	Swift.Encodable
 relationship	conformsTo	s:8TheScore10ServerInfoV	s:Se	ServerInfo	Swift.Decodable
 relationship	conformsTo	s:8TheScore10ServerInfoV	s:s8SendableP	ServerInfo	Swift.Sendable
+relationship	conformsTo	s:8TheScore11ContentRectV	s:SE	ContentRect	Swift.Encodable
+relationship	conformsTo	s:8TheScore11ContentRectV	s:SH	ContentRect	Swift.Hashable
+relationship	conformsTo	s:8TheScore11ContentRectV	s:SQ	ContentRect	Swift.Equatable
+relationship	conformsTo	s:8TheScore11ContentRectV	s:Se	ContentRect	Swift.Decodable
+relationship	conformsTo	s:8TheScore11ContentRectV	s:s8SendableP	ContentRect	Swift.Sendable
 relationship	conformsTo	s:8TheScore11MatcherAtomV	s:SQ	MatcherAtom	Swift.Equatable
 relationship	conformsTo	s:8TheScore11MatcherAtomV	s:s8SendableP	MatcherAtom	Swift.Sendable
 relationship	conformsTo	s:8TheScore11PongPayloadV	s:SE	PongPayload	Swift.Encodable
@@ -1571,6 +1649,9 @@ relationship	conformsTo	s:8TheScore18AccessibilityTraceV13WindowContextV	s:SH	Ac
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV13WindowContextV	s:SQ	AccessibilityTrace.WindowContext	Swift.Equatable
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV13WindowContextV	s:Se	AccessibilityTrace.WindowContext	Swift.Decodable
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV13WindowContextV	s:s8SendableP	AccessibilityTrace.WindowContext	Swift.Sendable
+relationship	conformsTo	s:8TheScore18AccessibilityTraceV15DeltaProjectionO	s:SH	AccessibilityTrace.DeltaProjection	Swift.Hashable
+relationship	conformsTo	s:8TheScore18AccessibilityTraceV15DeltaProjectionO	s:SQ	AccessibilityTrace.DeltaProjection	Swift.Equatable
+relationship	conformsTo	s:8TheScore18AccessibilityTraceV15DeltaProjectionO	s:s8SendableP	AccessibilityTrace.DeltaProjection	Swift.Sendable
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV15ElementsChangedV	s:SQ	AccessibilityTrace.ElementsChanged	Swift.Equatable
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV15ElementsChangedV	s:s8SendableP	AccessibilityTrace.ElementsChanged	Swift.Sendable
 relationship	conformsTo	s:8TheScore18AccessibilityTraceV16AccumulatedDeltaV	s:SQ	AccessibilityTrace.AccumulatedDelta	Swift.Equatable
@@ -1617,6 +1698,11 @@ relationship	conformsTo	s:8TheScore18HeistReceiptFormatO	s:SQ	HeistReceiptFormat
 relationship	conformsTo	s:8TheScore18HeistReceiptFormatO	s:s8SendableP	HeistReceiptFormat	Swift.Sendable
 relationship	conformsTo	s:8TheScore18PredicateCandidateV	s:SQ	PredicateCandidate	Swift.Equatable
 relationship	conformsTo	s:8TheScore18PredicateCandidateV	s:s8SendableP	PredicateCandidate	Swift.Sendable
+relationship	conformsTo	s:8TheScore18ScrollContentPointV	s:SE	ScrollContentPoint	Swift.Encodable
+relationship	conformsTo	s:8TheScore18ScrollContentPointV	s:SH	ScrollContentPoint	Swift.Hashable
+relationship	conformsTo	s:8TheScore18ScrollContentPointV	s:SQ	ScrollContentPoint	Swift.Equatable
+relationship	conformsTo	s:8TheScore18ScrollContentPointV	s:Se	ScrollContentPoint	Swift.Decodable
+relationship	conformsTo	s:8TheScore18ScrollContentPointV	s:s8SendableP	ScrollContentPoint	Swift.Sendable
 relationship	conformsTo	s:8TheScore19ActionResultPayloadV	s:SQ	ActionResultPayload	Swift.Equatable
 relationship	conformsTo	s:8TheScore19ActionResultPayloadV	s:s8SendableP	ActionResultPayload	Swift.Sendable
 relationship	conformsTo	s:8TheScore19AuthenticatePayloadV	s:SE	AuthenticatePayload	Swift.Encodable
@@ -1627,6 +1713,12 @@ relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:SE	HeistActionEviden
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:SQ	HeistActionEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:Se	HeistActionEvidence	Swift.Decodable
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:s8SendableP	HeistActionEvidence	Swift.Sendable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV014DispatchResultE0V	s:SQ	HeistActionEvidence.DispatchResultEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV014DispatchResultE0V	s:s8SendableP	HeistActionEvidence.DispatchResultEvidence	Swift.Sendable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V	s:SQ	HeistActionEvidence.ExpectationResultEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV017ExpectationResultE0V	s:s8SendableP	HeistActionEvidence.ExpectationResultEvidence	Swift.Sendable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV06ResultE0O	s:SQ	HeistActionEvidence.ResultEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore19HeistActionEvidenceV06ResultE0O	s:s8SendableP	HeistActionEvidence.ResultEvidence	Swift.Sendable
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SE	ScrollContainerAxis	Swift.Encodable
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SH	ScrollContainerAxis	Swift.Hashable
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SQ	ScrollContainerAxis	Swift.Equatable
@@ -1737,6 +1829,17 @@ relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SE	ActionPerform
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SQ	ActionPerformanceTiming	Swift.Equatable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:Se	ActionPerformanceTiming	Swift.Decodable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:s8SendableP	ActionPerformanceTiming	Swift.Sendable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV	s:SE	ActivationPointEvidence	Swift.Encodable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV	s:SH	ActivationPointEvidence	Swift.Hashable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV	s:SQ	ActivationPointEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV	s:Se	ActivationPointEvidence	Swift.Decodable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV	s:s8SendableP	ActivationPointEvidence	Swift.Sendable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:SE	ActivationPointEvidence.Source	Swift.Encodable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:SH	ActivationPointEvidence.Source	Swift.Hashable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:SQ	ActivationPointEvidence.Source	Swift.Equatable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:SY	ActivationPointEvidence.Source	Swift.RawRepresentable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:Se	ActivationPointEvidence.Source	Swift.Decodable
+relationship	conformsTo	s:8TheScore23ActivationPointEvidenceV6SourceO	s:s8SendableP	ActivationPointEvidence.Source	Swift.Sendable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:SE	HeistInvocationEvidence	Swift.Encodable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:SQ	HeistInvocationEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:Se	HeistInvocationEvidence	Swift.Decodable
