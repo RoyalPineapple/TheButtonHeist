@@ -169,10 +169,16 @@ final class PostActionObservation {
         case nil:
             finalState = observedFinalState
         }
+        let accessibilityNotifications = Self.remapAccessibilityNotifications(
+            settleEvidence.accessibilityNotifications,
+            from: observedFinalState,
+            to: finalState
+        )
         let trace = buildPostActionTrace(
             before: before,
             final: finalState,
-            settleEvidence: settleEvidence
+            settleEvidence: settleEvidence,
+            accessibilityNotifications: accessibilityNotifications
         )
         guard trace.captures.last != nil else { return nil }
         return FinalEvidence(state: finalState, trace: trace)
@@ -375,7 +381,8 @@ final class PostActionObservation {
     private func buildPostActionTrace(
         before: BeforeState,
         final: BeforeState,
-        settleEvidence: SettleEvidence
+        settleEvidence: SettleEvidence,
+        accessibilityNotifications: [AccessibilityNotificationEvidence]
     ) -> AccessibilityTrace {
         let classification = ScreenClassifier.classify(
             before: before.screenSnapshot,
@@ -391,8 +398,82 @@ final class PostActionObservation {
                 final: final,
                 classification: classification
             ),
-            accessibilityNotifications: settleEvidence.accessibilityNotifications
+            accessibilityNotifications: accessibilityNotifications
         )
+    }
+
+    private static func remapAccessibilityNotifications(
+        _ notifications: [AccessibilityNotificationEvidence],
+        from source: BeforeState,
+        to destination: BeforeState
+    ) -> [AccessibilityNotificationEvidence] {
+        notifications.map { notification in
+            AccessibilityNotificationEvidence(
+                sequence: notification.sequence,
+                code: notification.code,
+                name: notification.name,
+                timestamp: notification.timestamp,
+                notificationData: remapAccessibilityNotificationPayload(
+                    notification.notificationData,
+                    from: source,
+                    to: destination
+                ),
+                associatedElement: remapAccessibilityNotificationPayload(
+                    notification.associatedElement,
+                    from: source,
+                    to: destination
+                )
+            )
+        }
+    }
+
+    private static func remapAccessibilityNotificationPayload(
+        _ payload: AccessibilityNotificationPayload,
+        from source: BeforeState,
+        to destination: BeforeState
+    ) -> AccessibilityNotificationPayload {
+        guard case .element(let reference) = payload else {
+            return payload
+        }
+        guard let heistId = heistId(for: reference, in: source),
+              let remappedReference = accessibilityNotificationElementReference(
+                for: heistId,
+                in: destination,
+                resolution: reference.resolution
+              )
+        else {
+            return .unresolvedElement
+        }
+        return .element(remappedReference)
+    }
+
+    private static func heistId(
+        for reference: AccessibilityNotificationElementReference,
+        in state: BeforeState
+    ) -> HeistId? {
+        guard reference.path.indices.count == 1,
+              let index = reference.path.indices.first,
+              index == reference.traversalIndex,
+              state.screen.orderedElements.indices.contains(index)
+        else {
+            return nil
+        }
+        return state.screen.orderedElements[index].heistId
+    }
+
+    private static func accessibilityNotificationElementReference(
+        for heistId: HeistId,
+        in state: BeforeState,
+        resolution: AccessibilityNotificationElementResolution
+    ) -> AccessibilityNotificationElementReference? {
+        for (index, element) in state.screen.orderedElements.enumerated() where element.heistId == heistId {
+            return AccessibilityNotificationElementReference(
+                path: TreePath([index]),
+                traversalIndex: index,
+                resolution: resolution
+            )
+        }
+        return nil
     }
 
     private func makeCaptureContext(

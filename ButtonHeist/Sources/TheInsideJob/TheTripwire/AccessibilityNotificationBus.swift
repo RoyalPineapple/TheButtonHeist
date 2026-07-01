@@ -51,7 +51,7 @@ final class AccessibilityNotificationBus {
             && data.objectIdentifier == element.objectIdentifier
         accessibilityNotificationBusLogger.info(
             """
-            AX notification sequence=\(sequence, privacy: .public) source=axPush \
+            AX notification sequence=\(sequence, privacy: .public) source=axCallback \
             code=\(code, privacy: .public) name=\(name, privacy: .public) \
             dataClass=\(data.className, privacy: .public) \
             associatedElementClass=\(element.className, privacy: .public) \

@@ -415,13 +415,13 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
+            recordFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
             return nil
         }
 
         guard let screen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            stash.recordFailedSettleDiagnosticEvidence(nil)
+            recordFailedSettleDiagnosticEvidence(nil, stash: stash)
             return nil
         }
 
@@ -436,7 +436,7 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        stash.recordFailedSettleDiagnosticEvidence(screen)
+        recordFailedSettleDiagnosticEvidence(screen, stash: stash)
         return nil
     }
 
@@ -518,13 +518,13 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
+            recordFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            stash.recordFailedSettleDiagnosticEvidence(nil)
+            recordFailedSettleDiagnosticEvidence(nil, stash: stash)
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
@@ -539,7 +539,7 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        stash.recordFailedSettleDiagnosticEvidence(finalScreen)
+        recordFailedSettleDiagnosticEvidence(finalScreen, stash: stash)
         return PostActionSettleObservation(
             settle: outcome,
             result: stash.latestFailedSettleDiagnosticEvidence.map { .diagnostic($0) } ?? .unavailable
@@ -698,7 +698,7 @@ final class SemanticObservationStream {
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
-            stash.recordFailedSettleDiagnosticEvidence(settle.finalScreen)
+            recordFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
             await Task.yield()
             return true
         }
@@ -720,7 +720,7 @@ final class SemanticObservationStream {
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: settle)
-            stash.recordFailedSettleDiagnosticEvidence(settle.finalScreen)
+            recordFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
             await Task.yield()
             return true
         }
@@ -729,6 +729,11 @@ final class SemanticObservationStream {
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true
+    }
+
+    private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash) {
+        stash.accessibilityNotifications.clearPendingEvents()
+        stash.recordFailedSettleDiagnosticEvidence(screen)
     }
 
 }

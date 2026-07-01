@@ -29,18 +29,21 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
     case none
     case string(String)
     case element(AccessibilityNotificationElementReference)
+    case unresolvedObject(AccessibilityNotificationObjectPayload)
     case unresolvedElement
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type
         case value
         case element
+        case object
     }
 
     private enum PayloadType: String, Codable {
         case none
         case string
         case element
+        case unresolvedObject
         case unresolvedElement
     }
 
@@ -55,6 +58,8 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
             self = .string(try container.decode(String.self, forKey: .value))
         case .element:
             self = .element(try container.decode(AccessibilityNotificationElementReference.self, forKey: .element))
+        case .unresolvedObject:
+            self = .unresolvedObject(try container.decode(AccessibilityNotificationObjectPayload.self, forKey: .object))
         case .unresolvedElement:
             self = .unresolvedElement
         }
@@ -71,9 +76,22 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
         case .element(let element):
             try container.encode(PayloadType.element, forKey: .type)
             try container.encode(element, forKey: .element)
+        case .unresolvedObject(let object):
+            try container.encode(PayloadType.unresolvedObject, forKey: .type)
+            try container.encode(object, forKey: .object)
         case .unresolvedElement:
             try container.encode(PayloadType.unresolvedElement, forKey: .type)
         }
+    }
+}
+
+public struct AccessibilityNotificationObjectPayload: Codable, Sendable, Equatable, Hashable {
+    public let className: String
+    public let summary: String?
+
+    public init(className: String, summary: String?) {
+        self.className = className
+        self.summary = summary
     }
 }
 

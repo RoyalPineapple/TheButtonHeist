@@ -46,7 +46,17 @@ extension TheStash {
         case .string(let value):
             return .string(value)
         case .object(let ref):
-            if let heistId = currentLiveCapture.heistId(matchingObjectIdentifier: ref.objectIdentifier),
+            guard let object = ref.object as? NSObject else {
+                accessibilityNotificationResolutionLogger.info(
+                    """
+                    AX notification \(field, privacy: .public) unresolved: \
+                    objectIdentity=\(String(describing: ref.objectIdentifier), privacy: .public) \
+                    class=\(ref.className, privacy: .public) weak payload is gone
+                    """
+                )
+                return unresolvedObjectPayload(ref)
+            }
+            if let heistId = currentLiveCapture.heistId(matching: object),
                let elementReference = traceElementReference(for: heistId, in: screen, resolution: .identity) {
                 accessibilityNotificationResolutionLogger.info(
                     """
@@ -56,16 +66,6 @@ extension TheStash {
                     """
                 )
                 return .element(elementReference)
-            }
-            guard let object = ref.object as? NSObject else {
-                accessibilityNotificationResolutionLogger.info(
-                    """
-                    AX notification \(field, privacy: .public) unresolved: \
-                    objectIdentity=\(String(describing: ref.objectIdentifier), privacy: .public) \
-                    class=\(ref.className, privacy: .public) weak payload is gone
-                    """
-                )
-                return .unresolvedElement
             }
             if let parsedElement = burglar.parseObject(object),
                let elementReference = uniqueTraceElementReference(
@@ -88,8 +88,17 @@ extension TheStash {
                 class=\(ref.className, privacy: .public) identity and single-element parse did not match current hierarchy
                 """
             )
-            return .unresolvedElement
+            return unresolvedObjectPayload(ref)
         }
+    }
+
+    private func unresolvedObjectPayload(
+        _ ref: AccessibilityNotificationObjectIdentity
+    ) -> AccessibilityNotificationPayload {
+        .unresolvedObject(AccessibilityNotificationObjectPayload(
+            className: ref.className,
+            summary: ref.summary
+        ))
     }
 
     private func traceElementReference(
