@@ -37,6 +37,30 @@ import Testing
         #expect(decisionType.contents.contains("case failed("))
     }
 
+    @Test func `predicate polling reducer is value typed and effect free`() throws {
+        let reducer = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicatePollingReducer.swift")
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
+        let pollingEngine = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+PredicatePollingEngine\b"#),
+            "PredicateWait.swift should keep PredicatePollingEngine as the async effect interpreter"
+        )
+
+        try expectEffectFreeReducerSource(reducer)
+        try expectType("PredicatePollingReducer", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicatePollingState", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicatePollingEvent", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicatePollingEffect", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicatePollingReduction", in: reducer, conformsTo: ["Sendable", "Equatable"])
+        try expectType("PredicatePollingObservationRequest", in: reducer, conformsTo: ["Sendable", "Equatable"])
+
+        #expect(reducer.contents.contains("case observe("))
+        #expect(reducer.contents.contains("case sleep("))
+        #expect(reducer.contents.contains("case finish("))
+        #expect(pollingEngine.contents.contains("PredicatePollingReducer("))
+        #expect(pollingEngine.contents.contains("CFAbsoluteTimeGetCurrent"))
+        #expect(pollingEngine.contents.contains("Task.cancellableSleep"))
+    }
+
     @Test func `predicate wait orchestration stops owning predicate decisions after reducer lands`() throws {
         _ = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWaitReducer.swift")
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")

@@ -947,52 +947,97 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(source.contains("let failure = waitFailure("))
     }
 
-    func testPredicatePollingStateProbesDiscoveryInitiallyThenUsesVisibleTickCadence() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
-            scope: .discovery,
-            needsInitialProbe: true
+    func testPredicatePollingReducerFinishesVisibleMatch() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(scope: .visible, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleObserved(
+                PredicatePollingVisibleObservation(
+                    sequence: 1,
+                    fingerprint: .known("visible-a"),
+                    matched: true
+                ),
+                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0.01)
+            )
         )
 
-        XCTAssertEqual(state.nextProbe, .discovery)
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-        XCTAssertEqual(state.nextProbe, .discovery)
-
-        state.recordDiscoveryProbe()
-        XCTAssertEqual(state.nextProbe, .visible)
-
-        for _ in 0..<(PredicatePollingCadence.discoveryProbeIntervalVisibleTicks - 1) {
-            state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-            XCTAssertEqual(state.nextProbe, .visible)
-        }
-
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
-        XCTAssertEqual(state.nextProbe, .discovery)
+        XCTAssertEqual(reduction.effect, .finish(.matched))
     }
 
-    func testPredicatePollingStateProbesDiscoveryWhenVisibleChangesWithoutMatch() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
+    func testPredicatePollingReducerFallsBackToDiscoveryWhenVisibleUnavailable() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(
             scope: .discovery,
-            needsInitialProbe: false
+            initialObservedSequence: nil,
+            initialVisibleFingerprint: .known("visible-a")
         )
 
-        XCTAssertEqual(state.nextProbe, .visible)
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: false))
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
 
-        XCTAssertEqual(state.nextProbe, .discovery)
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 1, elapsed: 0.01))
+        )
+
+        XCTAssertEqual(reduction.effect, .observe(.discovery(after: nil, timeout: 1)))
+        XCTAssertEqual(reduction.state.nextProbe, .discovery)
     }
 
-    func testPredicatePollingStateDoesNotProbeDiscoveryWhenVisibleChangeMatches() {
-        var state = PredicatePollingState(
-            initialVisibleFingerprint: .known("visible-a"),
+    func testPredicatePollingReducerProbesDiscoveryWhenVisibleFingerprintChangesWithoutMatch() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(
             scope: .discovery,
-            needsInitialProbe: false
+            initialObservedSequence: 10,
+            initialVisibleFingerprint: .known("visible-a"),
+            discoveryBootstrap: .afterInitialDiscoveryAttempt
         )
 
-        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: true))
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: 10)))
 
-        XCTAssertEqual(state.nextProbe, .visible)
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleObserved(
+                PredicatePollingVisibleObservation(
+                    sequence: 11,
+                    fingerprint: .known("visible-b"),
+                    matched: false
+                ),
+                timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0.01)
+            )
+        )
+        XCTAssertEqual(reduction.effect, .observe(.visibleSettled(after: 11, timeout: 0.1)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0.7, elapsed: 0.02))
+        )
+
+        XCTAssertEqual(reduction.effect, .observe(.discovery(after: 11, timeout: 0.7)))
+    }
+
+    func testPredicatePollingReducerTimeoutZeroCanSkipPolling() {
+        let reducer = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
+        let reduction = reducer.start(scope: .discovery, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .finish(.notPolled))
+    }
+
+    func testPredicatePollingReducerFinishesNoMatchAtTimeout() {
+        let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
+        var reduction = reducer.start(scope: .visible, initialObservedSequence: nil)
+
+        XCTAssertEqual(reduction.effect, .observe(.visibleImmediate(after: nil)))
+
+        reduction = reducer.reduce(
+            reduction.state,
+            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0, elapsed: 1))
+        )
+
+        XCTAssertEqual(reduction.effect, .finish(.timedOut))
     }
 
     func testPredicatePollingEngineKeepsVisibleTicksBetweenDiscoveryProbes() async {

@@ -501,6 +501,7 @@
 		D287A8F3A4290D921EEF1C93 /* HeistPlan+CanonicalSwiftDSL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A10987388FD3906CA44495 /* HeistPlan+CanonicalSwiftDSL.swift */; };
 		D2DD07E8902C0F7FC09419C8 /* TheBrainsPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63CE2190936B721E21C76CE /* TheBrainsPipelineTests.swift */; };
 		D2E277C4F93D3D5E3525D414 /* LiveLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = D85598BEA25CAC157804641F /* LiveLookup.swift */; };
+		D308958E266EC9C0AEB9A118 /* PredicatePollingReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E23F9BE54F69A7EDB0815A /* PredicatePollingReducer.swift */; };
 		D38ADEDF376EF63FBE503FEB /* StatePredicateExpressions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D4147CEAE0E99B79445E6E /* StatePredicateExpressions.swift */; };
 		D3E6896A3C778E7D1F76843E /* TheFence+CommandCatalog+RunHeist.swift in Sources */ = {isa = PBXBuildFile; fileRef = E64F917394730354CCA4DAA9 /* TheFence+CommandCatalog+RunHeist.swift */; };
 		D4DD25AEB8F75449440CABCB /* InterfaceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBFD1ED73E1E76F4C0DFCE1F /* InterfaceTestHelpers.swift */; };
@@ -1008,6 +1009,7 @@
 		232BBCE8647760821CF70FD7 /* HeistCanonicalSwiftDSLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistCanonicalSwiftDSLTests.swift; sourceTree = "<group>"; };
 		23AABE85FC77329552681A4C /* TestSentinelTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSentinelTask.swift; sourceTree = "<group>"; };
 		23F7855082B9E57384EB7C83 /* HeistPlanSourceCompiler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlanSourceCompiler.swift; sourceTree = "<group>"; };
+		24E23F9BE54F69A7EDB0815A /* PredicatePollingReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PredicatePollingReducer.swift; sourceTree = "<group>"; };
 		242FFBB8FB0BFE9DB85C7F1B /* PublicActionResultJSONTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicActionResultJSONTests.swift; sourceTree = "<group>"; };
 		2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticScreen.swift; sourceTree = "<group>"; };
 		24DDDFB2AE713CCECC07A12B /* GestureDirections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureDirections.swift; sourceTree = "<group>"; };
@@ -2123,6 +2125,7 @@
 				EBB8D627D7126F3BF5E30763 /* PostActionObservation.swift */,
 				68BD5C6FDDA4773693F43D96 /* PredicateCaseSelection.swift */,
 				B811477EFD3F882582CCA211 /* PredicateEvaluation.swift */,
+				24E23F9BE54F69A7EDB0815A /* PredicatePollingReducer.swift */,
 				B047179ED19A24CACC65455E /* PredicateWait.swift */,
 				A88C3E3BCC54491F79B775EB /* PredicateWaitReducer.swift */,
 				82F75CD8C56005B03DF567DC /* ScreenClassifier.swift */,
@@ -3171,6 +3174,7 @@
 				40D8D45E7A903C9947FF51D3 /* PostActionObservation.swift in Sources */,
 				BA786D0DABF62FE4CD4AD724 /* PredicateCaseSelection.swift in Sources */,
 				CBDE767DD1F98F0ABADF87A1 /* PredicateEvaluation.swift in Sources */,
+				D308958E266EC9C0AEB9A118 /* PredicatePollingReducer.swift in Sources */,
 				B235A4ED23DC82DAE1D0FE3C /* PredicateWait.swift in Sources */,
 				11BA0E5804946C1CFD4CC7B2 /* PredicateWaitReducer.swift in Sources */,
 				2F94B833740659A02093F762 /* ScreenClassifier.swift in Sources */,
