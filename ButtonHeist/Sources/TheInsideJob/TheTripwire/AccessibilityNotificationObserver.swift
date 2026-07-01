@@ -243,9 +243,11 @@ private enum AccessibilityNotificationPrivateSPI {
     // leading underscore is Mach-O's C-symbol decoration. Darwin `dlsym` wants
     // the C source name, so the lookup string intentionally does not include
     // that decoration.
-    private static let addNotificationCallbackSymbolName = "AXAddNotificationCallback"
-    private static let removeNotificationCallbackSymbolName = "AXRemoveNotificationCallback"
-    private static let setUnitTestModeSymbolName = "_AXSSetInUnitTestMode"
+    private enum SymbolName: String {
+        case addNotificationCallback = "AXAddNotificationCallback"
+        case removeNotificationCallback = "AXRemoveNotificationCallback"
+        case setUnitTestMode = "_AXSSetInUnitTestMode"
+    }
 
     private static let frameworkInstallNames = [
         "/System/Library/PrivateFrameworks/UIAccessibility.framework/UIAccessibility",
@@ -321,7 +323,7 @@ private enum AccessibilityNotificationPrivateSPI {
     @discardableResult
     static func enableUnitTestModeIfAvailable() -> Bool {
         guard let symbol = resolveSymbol(
-            setUnitTestModeSymbolName,
+            SymbolName.setUnitTestMode.rawValue,
             libraryPath: libAccessibilityPath()
         ) else {
             return false
@@ -414,8 +416,8 @@ private enum AccessibilityNotificationPrivateSPI {
         in handle: UnsafeMutableRawPointer,
         source: String
     ) -> ResolvedSymbols? {
-        guard let addSymbol = dlsym(handle, addNotificationCallbackSymbolName),
-              let removeSymbol = dlsym(handle, removeNotificationCallbackSymbolName)
+        guard let addSymbol = dlsym(handle, SymbolName.addNotificationCallback.rawValue),
+              let removeSymbol = dlsym(handle, SymbolName.removeNotificationCallback.rawValue)
         else {
             return nil
         }
