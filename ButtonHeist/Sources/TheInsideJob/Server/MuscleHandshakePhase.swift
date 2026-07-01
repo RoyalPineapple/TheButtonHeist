@@ -58,17 +58,26 @@ struct MuscleHandshakePhase {
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         clientRegistry: inout TheMuscleClientRegistry
     ) -> MuscleAdmissionDecision {
-        guard clientRegistry.markHelloValidated(clientId) != nil else {
+        switch clientRegistry.validateHello(clientId) {
+        case .advanced:
+            return .handled([
+                .sendResponse(.authRequired, requestId: nil, respond: respond),
+            ])
+        case .missingClient:
             return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
                 clientId,
                 message: "Connection is not registered; reconnect before starting the auth handshake.",
                 requestId: envelope.requestId,
                 respond: respond
             ))
+        case .rejected:
+            return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
+                clientId,
+                message: "clientHello is only valid immediately after connection.",
+                requestId: envelope.requestId,
+                respond: respond
+            ))
         }
-        return .handled([
-            .sendResponse(.authRequired, requestId: nil, respond: respond),
-        ])
     }
 
     private static func handleAuthenticate(

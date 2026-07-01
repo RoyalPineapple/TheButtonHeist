@@ -105,11 +105,48 @@ struct LiveCapture: Equatable {
         snapshot: Snapshot,
         dispatchReferences: DispatchReferences = .empty
     ) {
+        do {
+            let table = try LiveElementTable(
+                indexing: snapshot,
+                dispatchReferences: dispatchReferences
+            )
+            self.snapshot = snapshot
+            self.dispatchReferences = DispatchReferences(
+                elementRefs: table.elementRefsByHeistId,
+                containerRefsByPath: dispatchReferences.containerRefsByPath,
+                firstResponderHeistId: dispatchReferences.firstResponderHeistId,
+                scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
+            )
+            elementIndex = LiveElementIndex(
+                validatedTable: table,
+                containerRefsByPath: dispatchReferences.containerRefsByPath,
+                scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
+            )
+        } catch let error as LiveElementTableValidationError {
+            preconditionFailure(error.description)
+        } catch {
+            preconditionFailure("LiveCapture failed to validate live element table: \(error)")
+        }
+    }
+
+    init(
+        snapshot: Snapshot,
+        liveElementTable: LiveElementTable,
+        containerRefsByPath: [TreePath: ContainerRef] = [:],
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
+    ) {
+        let dispatchReferences = DispatchReferences(
+            elementRefs: liveElementTable.elementRefsByHeistId,
+            containerRefsByPath: containerRefsByPath,
+            firstResponderHeistId: liveElementTable.firstResponderHeistId,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        )
         self.snapshot = snapshot
         self.dispatchReferences = dispatchReferences
         elementIndex = LiveElementIndex(
-            snapshot: snapshot,
-            dispatchReferences: dispatchReferences
+            validatedTable: liveElementTable,
+            containerRefsByPath: containerRefsByPath,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
     }
 
@@ -333,45 +370,201 @@ struct LiveCapture: Equatable {
 
     struct LiveElementEntry: Equatable {
         let path: TreePath
-        let heistId: HeistId
-        let element: AccessibilityElement
+        let screenElement: SemanticScreen.Element
         let ref: ElementRef?
+        let isFirstResponder: Bool
+
+        init(
+            path: TreePath,
+            screenElement: SemanticScreen.Element,
+            ref: ElementRef? = nil,
+            isFirstResponder: Bool = false
+        ) {
+            self.path = path
+            self.screenElement = screenElement
+            self.ref = ref
+            self.isFirstResponder = isFirstResponder
+        }
+
+        var heistId: HeistId {
+            screenElement.heistId
+        }
+
+        var element: AccessibilityElement {
+            screenElement.element
+        }
     }
 
     struct LiveElementTable: Equatable {
         let entries: [LiveElementEntry]
 
+        init(entries: [LiveElementEntry]) throws {
+            try Self.validate(entries: entries)
+            self.entries = entries
+        }
+
         init(
             validating snapshot: Snapshot,
             dispatchReferences: DispatchReferences
         ) throws {
+            try self.init(
+                snapshot: snapshot,
+                dispatchReferences: dispatchReferences,
+                validatesBoundaryReferences: true
+            )
+        }
+
+        fileprivate init(
+            indexing snapshot: Snapshot,
+            dispatchReferences: DispatchReferences
+        ) throws {
+            try self.init(
+                snapshot: snapshot,
+                dispatchReferences: dispatchReferences,
+                validatesBoundaryReferences: false
+            )
+        }
+
+        private init(
+            snapshot: Snapshot,
+            dispatchReferences: DispatchReferences,
+            validatesBoundaryReferences: Bool
+        ) throws {
             var entries: [LiveElementEntry] = []
-            var pathsByHeistId: [HeistId: TreePath] = [:]
+            let indexedElements = Dictionary(
+                uniqueKeysWithValues: snapshot.hierarchy.pathIndexedElements.map { ($0.path, $0) }
+            )
+
+            for (path, heistId) in snapshot.heistIdsByPath {
+                guard snapshot.hierarchy.node(at: path) != nil else {
+                    throw LiveElementTableValidationError.heistIdForMissingPath(
+                        heistId: heistId,
+                        path: path
+                    )
+                }
+                guard indexedElements[path] != nil else {
+                    throw LiveElementTableValidationError.heistIdForNonElementPath(
+                        heistId: heistId,
+                        path: path
+                    )
+                }
+            }
 
             for item in snapshot.hierarchy.pathIndexedElements {
                 guard let heistId = snapshot.heistIdsByPath[item.path] else { continue }
-                if let firstPath = pathsByHeistId[heistId] {
-                    throw LiveElementTableValidationError.duplicateHeistId(
-                        heistId: heistId,
-                        firstPath: firstPath,
-                        duplicatePath: item.path
-                    )
-                }
                 entries.append(LiveElementEntry(
                     path: item.path,
-                    heistId: heistId,
-                    element: item.element,
-                    ref: dispatchReferences.elementRefs[heistId]
+                    screenElement: SemanticScreen.Element(
+                        heistId: heistId,
+                        scrollMembership: nil,
+                        element: item.element
+                    ),
+                    ref: dispatchReferences.elementRefs[heistId],
+                    isFirstResponder: dispatchReferences.firstResponderHeistId == heistId
                 ))
-                pathsByHeistId[heistId] = item.path
             }
 
+            try Self.validate(entries: entries)
+            if validatesBoundaryReferences {
+                try Self.validate(
+                    dispatchReferences: dispatchReferences,
+                    snapshot: snapshot,
+                    liveHeistIds: Set(entries.map(\.heistId))
+                )
+            }
             self.entries = entries
+        }
+
+        var firstResponderHeistId: HeistId? {
+            entries.first(where: \.isFirstResponder)?.heistId
+        }
+
+        var elementRefsByHeistId: [HeistId: ElementRef] {
+            Dictionary(
+                uniqueKeysWithValues: entries.compactMap { entry in
+                    entry.ref.map { (entry.heistId, $0) }
+                }
+            )
+        }
+
+        private static func validate(entries: [LiveElementEntry]) throws {
+            var pathsByHeistId: [HeistId: TreePath] = [:]
+            var heistIdsByPath: [TreePath: HeistId] = [:]
+
+            for entry in entries {
+                if let firstPath = pathsByHeistId[entry.heistId] {
+                    throw LiveElementTableValidationError.duplicateHeistId(
+                        heistId: entry.heistId,
+                        firstPath: firstPath,
+                        duplicatePath: entry.path
+                    )
+                }
+                if let firstHeistId = heistIdsByPath[entry.path] {
+                    throw LiveElementTableValidationError.duplicateElementPath(
+                        path: entry.path,
+                        firstHeistId: firstHeistId,
+                        duplicateHeistId: entry.heistId
+                    )
+                }
+                pathsByHeistId[entry.heistId] = entry.path
+                heistIdsByPath[entry.path] = entry.heistId
+            }
+        }
+
+        private static func validate(
+            dispatchReferences: DispatchReferences,
+            snapshot: Snapshot,
+            liveHeistIds: Set<HeistId>
+        ) throws {
+            for heistId in dispatchReferences.elementRefs.keys.sorted() where !liveHeistIds.contains(heistId) {
+                throw LiveElementTableValidationError.strayElementRef(heistId: heistId)
+            }
+
+            if let firstResponderHeistId = dispatchReferences.firstResponderHeistId,
+               !liveHeistIds.contains(firstResponderHeistId) {
+                throw LiveElementTableValidationError.invalidFirstResponderHeistId(
+                    heistId: firstResponderHeistId
+                )
+            }
+
+            for path in dispatchReferences.containerRefsByPath.keys.sorted() {
+                switch snapshot.hierarchy.node(at: path) {
+                case nil:
+                    throw LiveElementTableValidationError.containerRefForMissingPath(path: path)
+                case .element:
+                    throw LiveElementTableValidationError.containerRefForElementPath(path: path)
+                case .container:
+                    break
+                }
+            }
+
+            for path in dispatchReferences.scrollableContainerViewsByPath.keys.sorted() {
+                switch snapshot.hierarchy.node(at: path) {
+                case nil:
+                    throw LiveElementTableValidationError.scrollableViewForMissingPath(path: path)
+                case .element:
+                    throw LiveElementTableValidationError.scrollableViewForElementPath(path: path)
+                case .container(let container, _):
+                    guard container.isScrollable else {
+                        throw LiveElementTableValidationError.scrollableViewForNonScrollablePath(path: path)
+                    }
+                }
+            }
         }
     }
 
     enum LiveElementTableValidationError: Error, Equatable, CustomStringConvertible, LocalizedError {
         case duplicateHeistId(heistId: HeistId, firstPath: TreePath, duplicatePath: TreePath)
+        case duplicateElementPath(path: TreePath, firstHeistId: HeistId, duplicateHeistId: HeistId)
+        case heistIdForMissingPath(heistId: HeistId, path: TreePath)
+        case heistIdForNonElementPath(heistId: HeistId, path: TreePath)
+        case strayElementRef(heistId: HeistId)
+        case invalidFirstResponderHeistId(heistId: HeistId)
+        case containerRefForMissingPath(path: TreePath)
+        case containerRefForElementPath(path: TreePath)
+        case scrollableViewForMissingPath(path: TreePath)
+        case scrollableViewForElementPath(path: TreePath)
+        case scrollableViewForNonScrollablePath(path: TreePath)
 
         var description: String {
             switch self {
@@ -381,6 +574,67 @@ struct LiveCapture: Equatable {
                 at paths \(firstPath.liveCaptureDiagnosticDescription) and \
                 \(duplicatePath.liveCaptureDiagnosticDescription); live HeistIds must be \
                 unique before building lookup indexes.
+                """
+
+            case .duplicateElementPath(let path, let firstHeistId, let duplicateHeistId):
+                return """
+                LiveElementIndex cannot index duplicate live path \
+                \(path.liveCaptureDiagnosticDescription) for HeistIds \
+                "\(firstHeistId.rawValue)" and "\(duplicateHeistId.rawValue)".
+                """
+
+            case .heistIdForMissingPath(let heistId, let path):
+                return """
+                LiveElementIndex cannot attach HeistId "\(heistId.rawValue)" to missing \
+                path \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .heistIdForNonElementPath(let heistId, let path):
+                return """
+                LiveElementIndex cannot attach HeistId "\(heistId.rawValue)" to non-element \
+                path \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .strayElementRef(let heistId):
+                return """
+                LiveElementIndex cannot attach stray element ref for HeistId \
+                "\(heistId.rawValue)"; every live element ref must be backed by a live entry.
+                """
+
+            case .invalidFirstResponderHeistId(let heistId):
+                return """
+                LiveElementIndex cannot attach first responder HeistId "\(heistId.rawValue)"; \
+                first responder state must reference a live element entry.
+                """
+
+            case .containerRefForMissingPath(let path):
+                return """
+                LiveElementIndex cannot attach container ref to missing path \
+                \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .containerRefForElementPath(let path):
+                return """
+                LiveElementIndex cannot attach container ref to element path \
+                \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .scrollableViewForMissingPath(let path):
+                return """
+                LiveElementIndex cannot attach scrollable view ref to missing path \
+                \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .scrollableViewForElementPath(let path):
+                return """
+                LiveElementIndex cannot attach scrollable view ref to element path \
+                \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .scrollableViewForNonScrollablePath(let path):
+                return """
+                LiveElementIndex cannot attach scrollable view ref to non-scrollable container path \
+                \(path.liveCaptureDiagnosticDescription).
                 """
             }
         }
@@ -399,36 +653,17 @@ struct LiveCapture: Equatable {
         private let containerRefsByPath: [TreePath: ContainerRef]
         private let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
 
-        init(
-            snapshot: Snapshot,
-            dispatchReferences: DispatchReferences
-        ) {
-            do {
-                let table = try LiveElementTable(
-                    validating: snapshot,
-                    dispatchReferences: dispatchReferences
-                )
-                self.init(
-                    validatedTable: table,
-                    dispatchReferences: dispatchReferences
-                )
-            } catch let error as LiveElementTableValidationError {
-                preconditionFailure(error.description)
-            } catch {
-                preconditionFailure("LiveElementIndex failed to validate live element table: \(error)")
-            }
-        }
-
-        private init(
+        fileprivate init(
             validatedTable table: LiveElementTable,
-            dispatchReferences: DispatchReferences
+            containerRefsByPath: [TreePath: ContainerRef],
+            scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
         ) {
             let entries = table.entries
             entriesByPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
             pathsByHeistId = Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.path) })
             orderedPaths = entries.map(\.path)
-            containerRefsByPath = dispatchReferences.containerRefsByPath
-            scrollableContainerViewsByPath = dispatchReferences.scrollableContainerViewsByPath
+            self.containerRefsByPath = containerRefsByPath
+            self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
         }
 
         var heistIds: Set<HeistId> {

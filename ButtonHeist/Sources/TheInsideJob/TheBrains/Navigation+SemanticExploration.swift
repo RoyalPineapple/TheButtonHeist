@@ -36,6 +36,12 @@ extension Navigation {
         case findHeistId(HeistId)
     }
 
+    enum ScrollTraversalTerminal: Equatable {
+        case foundTarget(ElementTarget)
+        case foundHeistId(HeistId)
+        case coverageComplete
+    }
+
     struct ScrollScanPlan {
         let container: ContainerExploration
         let direction: ScrollScanDirection

@@ -113,4 +113,63 @@ import Testing
         #expect(try !expectationEvidence.containsMatch(#"\blet\s+dispatchResult\s*:\s*ActionResult[?]"#))
         #expect(try !expectationEvidence.containsMatch(#"\blet\s+expectationResult\s*:\s*ActionResult[?]"#))
     }
+
+    @Test func `report summary actions and warnings reduce one receipt event stream`() throws {
+        let source = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/TheScore/HeistExecutionResult+Report.swift"
+        )
+        try source.requireDeclaration(
+            .type("HeistExecutionEvidenceEvent", conformingTo: ["Sendable", "Equatable"]),
+            message:
+            "Report projection facts should be reduced from one typed receipt event stream"
+        )
+
+        let rollup = try source.requiredBlock(
+            .structure("HeistExecutionEvidenceRollup"),
+            message:
+            "HeistExecutionEvidenceRollup should be the single report reduction boundary"
+        )
+        let summary = try source.requiredBlock(.structure("HeistExecutionEvidenceSummary"))
+        let actions = try source.requiredBlock(.structure("HeistExecutionActionEvidenceRollup"))
+        let warnings = try source.requiredBlock(.structure("HeistExecutionWarningEvidenceRollup"))
+
+        #expect(
+            try source.containsMatch(#"\b(struct|enum)\s+HeistExecutionEvidence(EventBuilder|Event)\b"#),
+            "Report facts should name the event-stream reducer/accumulator that owns summary, action, and warning state."
+        )
+        #expect(
+            try source.containsMatch(#"\bevents\s*\([^)]*rootNodes\s*:\s*\[HeistExecutionEvidenceNode\]"#),
+            "Report summary/actions/warnings should be advanced from HeistExecutionEvidenceEvent values."
+        )
+        #expect(
+            try rollup.containsMatch(#"\bevents\s*:\s*\[HeistExecutionEvidenceEvent\]"#),
+            "HeistExecutionEvidenceRollup should materialize the single report event stream."
+        )
+        #expect(
+            try !rollup.containsMatch(#"\bHeistExecution(Action|Warning)EvidenceRollup\s*\(\s*nodes\s*:"#),
+            "Action and warning rollups should not independently rescan raw receipt nodes."
+        )
+
+        for entry in [
+            ("summary", summary),
+            ("actions", actions),
+            ("warnings", warnings),
+        ] {
+            let rawReceiptNodeScans = try entry.1.lines(
+                matching: #"\b(rollup[.])?nodes\s*[.](compactMap|count|lazy)|\bstep[.]children\b"#
+            )
+            #expect(
+                rawReceiptNodeScans.isEmpty,
+                """
+                Report \(entry.0) should be derived from the report event stream, \
+                not by compactMap/count scans over raw receipt nodes:
+                \(rawReceiptNodeScans.joined(separator: "\n"))
+                """
+            )
+            #expect(
+                try entry.1.containsMatch(#"\bHeistExecutionEvidence(Event|EventBuilder)\b|\bevents\b"#),
+                "Report \(entry.0) should consume the shared report event stream."
+            )
+        }
+    }
 }

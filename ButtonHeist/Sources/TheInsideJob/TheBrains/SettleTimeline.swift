@@ -4,7 +4,7 @@ import UIKit
 
 import AccessibilitySnapshotParser
 
-struct TimelineKey: Hashable {
+struct TimelineKey: Hashable, Sendable {
     let label: String?
     let identifier: String?
     let frameMinX: Int
@@ -72,7 +72,9 @@ extension AccessibilityElement {
     }
 }
 
-struct SettleRecordedObservation {
+// Rationale: settle observations are captured and consumed by the main-actor settle loop.
+// swiftlint:disable:next agent_unchecked_sendable_no_comment
+struct SettleRecordedObservation: Equatable, @unchecked Sendable {
     let screen: Screen
     let fingerprint: Int
     let elementsByKey: [TimelineKey: AccessibilityElement]

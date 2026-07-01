@@ -46,6 +46,82 @@ struct LiveCaptureTests {
         }
     }
 
+    @Test func `rejects stray element refs before indexing`() {
+        let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.element(element, traversalIndex: 0)],
+            heistIdsByPath: [TreePath([0]): "save_button"]
+        )
+        let strayObject = NSObject()
+
+        do {
+            _ = try LiveCapture.LiveElementTable(
+                validating: snapshot,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    elementRefs: [
+                        "missing_button": LiveCapture.ElementRef(
+                            object: strayObject,
+                            scrollView: nil
+                        )
+                    ]
+                )
+            )
+            Issue.record("Expected stray element ref validation to fail")
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            #expect(error == .strayElementRef(heistId: "missing_button"))
+        } catch {
+            Issue.record("Expected LiveElementTableValidationError, got \(error)")
+        }
+    }
+
+    @Test func `rejects first responder id outside live entries before indexing`() {
+        let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.element(element, traversalIndex: 0)],
+            heistIdsByPath: [TreePath([0]): "save_button"]
+        )
+
+        do {
+            _ = try LiveCapture.LiveElementTable(
+                validating: snapshot,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    firstResponderHeistId: "missing_button"
+                )
+            )
+            Issue.record("Expected invalid first responder validation to fail")
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            #expect(error == .invalidFirstResponderHeistId(heistId: "missing_button"))
+        } catch {
+            Issue.record("Expected LiveElementTableValidationError, got \(error)")
+        }
+    }
+
+    @Test func `rejects container refs on element paths before indexing`() {
+        let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let elementPath = TreePath([0])
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.element(element, traversalIndex: 0)],
+            heistIdsByPath: [elementPath: "save_button"]
+        )
+        let containerObject = NSObject()
+
+        do {
+            _ = try LiveCapture.LiveElementTable(
+                validating: snapshot,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    containerRefsByPath: [
+                        elementPath: LiveCapture.ContainerRef(object: containerObject)
+                    ]
+                )
+            )
+            Issue.record("Expected container ref path-kind validation to fail")
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            #expect(error == .containerRefForElementPath(path: elementPath))
+        } catch {
+            Issue.record("Expected LiveElementTableValidationError, got \(error)")
+        }
+    }
+
     @Test func `valid live captures keep lookup behavior`() {
         let save = AccessibilityElement.make(label: "Save", traits: .button)
         let cancel = AccessibilityElement.make(label: "Cancel", traits: .button)

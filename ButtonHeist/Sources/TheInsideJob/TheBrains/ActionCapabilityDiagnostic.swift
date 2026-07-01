@@ -15,7 +15,7 @@ import AccessibilitySnapshotParser
         _ method: ActionMethod,
         element: TheStash.ScreenElement
     ) -> String {
-        "\(adjustableBoundary(method)) failed: observed \(formatElement(element)); "
+        "\(adjustableBoundary(method)) failed: observed \(elementObservation(element)); "
             + "try target an element with trait adjustable before calling \(method.rawValue)."
     }
 
@@ -24,7 +24,7 @@ import AccessibilitySnapshotParser
         element: TheStash.ScreenElement,
         isInflated: Bool
     ) -> String {
-        let observed = formatElement(
+        let observed = elementObservation(
             element,
             includeLiveState: true,
             missingLiveObjectState: isInflated ? "deallocated" : "notInflated"
@@ -36,7 +36,7 @@ import AccessibilitySnapshotParser
         _ method: ActionMethod,
         element: TheStash.ScreenElement
     ) -> String {
-        "\(method.rawValue) failed: observed \(formatElement(element)); "
+        "\(method.rawValue) failed: observed \(elementObservation(element)); "
             + "try retarget an element whose actions include \(method.rawValue)."
     }
 
@@ -47,8 +47,8 @@ import AccessibilitySnapshotParser
         let customActions = availableCustomActions(for: element)
         let suggestion = customActions.isEmpty
             ? "target an element exposing custom actions"
-            : "use one of custom actions \(formatQuotedList(customActions))"
-        return "custom action failed: observed requestedAction=\(quote(requestedAction)) on \(formatElement(element)); "
+            : "use one of custom actions \(stringProfile.renderList(customActions, itemStyle: .quoted))"
+        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction)) on \(elementObservation(element)); "
             + "try \(suggestion)."
     }
 
@@ -59,9 +59,9 @@ import AccessibilitySnapshotParser
         let alternatives = availableCustomActions(for: element).filter { $0 != requestedAction }
         let suggestion = alternatives.isEmpty
             ? "wait for the handler state to permit the requested action"
-            : "use another custom action \(formatQuotedList(alternatives))"
-        return "custom action failed: observed requestedAction=\(quote(requestedAction)) declined by handler on "
-            + "\(formatElement(element)); try \(suggestion)."
+            : "use another custom action \(stringProfile.renderList(alternatives, itemStyle: .quoted))"
+        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction)) declined by handler on "
+            + "\(elementObservation(element)); try \(suggestion)."
     }
 
     // MARK: - Text / Edit Actions
@@ -81,7 +81,7 @@ import AccessibilitySnapshotParser
         stash: TheStash,
         safecracker: TheSafecracker
     ) -> String {
-        "edit action failed: observed action=\(quote(action.rawValue)) "
+        "edit action failed: observed action=\(stringProfile.renderString(action.rawValue)) "
             + "\(formatFocusState(stash: stash, safecracker: safecracker)); "
             + "try focus editable text before \(action.rawValue)."
     }
@@ -112,11 +112,13 @@ import AccessibilitySnapshotParser
         isVisible: Bool
     ) -> String {
         "gesture target unavailable: observed method=\(method.rawValue) phase=targeting "
-            + "\(formatElement(element)) visible=\(isVisible); "
+            + "\(elementObservation(element)) visible=\(isVisible); "
             + "element-derived gesture points require fresh live geometry from element inflation."
     }
 
     // MARK: - Private Helpers
+
+    private static let stringProfile = ElementDiagnosticSummary.RenderProfile.actionCapability
 
     private static func adjustableBoundary(_ method: ActionMethod) -> String {
         switch method {
@@ -127,32 +129,22 @@ import AccessibilitySnapshotParser
         }
     }
 
-    static func formatElement(
+    static func elementObservation(
         _ screenElement: TheStash.ScreenElement,
         liveObject: NSObject? = nil,
         includeLiveState: Bool = false,
         missingLiveObjectState: String = "notInflated"
     ) -> String {
         let element = screenElement.element
-        var parts = [
-            "element",
-        ]
-        if let label = element.label, !label.isEmpty {
-            parts.append("label=\(quote(label))")
-        }
-        if let identifier = element.identifier, !identifier.isEmpty {
-            parts.append("identifier=\(quote(identifier))")
-        }
-        if let value = element.value, !value.isEmpty {
-            parts.append("value=\(quote(value))")
-        }
-        let traits = element.traits.heistTraitNames
-        parts.append("traits=\(formatList(traits))")
-        parts.append("actions=\(formatList(availableActions(for: screenElement, liveObject: liveObject)))")
-        if includeLiveState, liveObject == nil {
-            parts.append("liveObject=\(missingLiveObjectState)")
-        }
-        return parts.joined(separator: " ")
+        let summary = ElementDiagnosticSummary(
+            label: element.label,
+            identifier: element.identifier,
+            value: element.value,
+            traits: element.traits.heistTraits,
+            actions: availableActions(for: screenElement, liveObject: liveObject),
+            liveObjectState: liveObject == nil ? missingLiveObjectState : nil
+        )
+        return summary.rendered(using: .actionCapability(includeLiveState: includeLiveState))
     }
 
     private static func formatFocusState(
@@ -168,9 +160,9 @@ import AccessibilitySnapshotParser
     private static func formatFirstResponder(stash: TheStash) -> String {
         guard let heistId = stash.firstResponderHeistId else { return "none" }
         guard let element = stash.firstResponderScreenElement() else {
-            return "focused element \(quote(heistId.description)) liveObject=unknown"
+            return "focused element \(stringProfile.renderString(heistId.description)) liveObject=unknown"
         }
-        return formatElement(element)
+        return elementObservation(element)
     }
 
     private static func formatPointObservation(
@@ -185,9 +177,9 @@ import AccessibilitySnapshotParser
             "receiver=\(receiver.receiverClass)",
         ]
         if let label = receiver.receiverAxLabel, !label.isEmpty {
-            parts.append("receiverLabel=\(quote(label))")
+            parts.append("receiverLabel=\(stringProfile.renderString(label))")
         } else if let identifier = receiver.receiverAxIdentifier, !identifier.isEmpty {
-            parts.append("receiverIdentifier=\(quote(identifier))")
+            parts.append("receiverIdentifier=\(stringProfile.renderString(identifier))")
         }
         if receiver.interactionDisabledInChain {
             parts.append("userInteractionEnabled=false")
@@ -204,23 +196,26 @@ import AccessibilitySnapshotParser
     private static func availableActions(
         for screenElement: TheStash.ScreenElement,
         liveObject: NSObject? = nil
-    ) -> [String] {
-        var names: [String] = []
+    ) -> [ElementAction] {
+        var actions: [ElementAction] = []
         let element = screenElement.element
         let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: liveObject)
         if isInteractive {
-            names.append(ElementAction.activate.description)
+            actions.append(.activate)
         }
         if isInteractive, element.traits.contains(.adjustable) {
-            names.append(ElementAction.increment.description)
-            names.append(ElementAction.decrement.description)
+            actions.append(.increment)
+            actions.append(.decrement)
         }
-        appendUnique(element.customActions.map { $0.name }.filter { !$0.isEmpty }, to: &names)
+        appendUniqueActions(
+            element.customActions.map { $0.name }.filter { !$0.isEmpty }.map(ElementAction.custom),
+            to: &actions
+        )
         let liveNames = liveObject?.accessibilityCustomActions?
             .map { $0.name }
             .filter { !$0.isEmpty } ?? []
-        appendUnique(liveNames, to: &names)
-        return names
+        appendUniqueActions(liveNames.map(ElementAction.custom), to: &actions)
+        return actions
     }
 
     private static func availableCustomActions(
@@ -253,20 +248,10 @@ import AccessibilitySnapshotParser
         }
     }
 
-    static func formatList(_ values: [String]) -> String {
-        "[\(values.joined(separator: ", "))]"
-    }
-
-    static func formatQuotedList(_ values: [String]) -> String {
-        "[\(values.map(quote).joined(separator: ", "))]"
-    }
-
-    static func quote(_ value: String) -> String {
-        let escaped = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: " ")
-        return "\"\(escaped)\""
+    private static func appendUniqueActions(_ additions: [ElementAction], to actions: inout [ElementAction]) {
+        for action in additions where !actions.contains(where: { $0.description == action.description }) {
+            actions.append(action)
+        }
     }
 
     private static func formatNumber(_ value: CGFloat) -> String {

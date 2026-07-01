@@ -50,7 +50,7 @@ final class Navigation {
         }
         self.elementInflation.revealKnownTarget = { [weak self] heistId in
             guard let self else { return nil }
-            return await self.scanForHeistId(heistId)
+            return await self.scanForHeistId(heistId)?.screen
         }
     }
 
@@ -262,10 +262,10 @@ final class Navigation {
     /// back when they have a real consumer.
     struct ScreenManifest {
         /// Containers that have been fully explored.
-        var exploredScrollPaths = Set<TreePath>()
+        private(set) var exploredScrollPaths = Set<TreePath>()
 
         /// Containers discovered but not yet explored.
-        var pendingScrollPaths = Set<TreePath>()
+        private(set) var pendingScrollPaths = Set<TreePath>()
 
         /// Total scroll attempts during exploration, including edge resets.
         var scrollCount = 0
@@ -277,13 +277,13 @@ final class Navigation {
         var omittedScrollPathReasons: [TreePath: Set<ExplorationOmissionReason>] = [:]
 
         /// Whether the total discovery scroll-attempt cap stopped exploration.
-        var discoveryLimitHit = false
+        private(set) var discoveryLimitHit = false
 
         /// Whether a per-container scroll-attempt cap stopped exploration.
-        var containerLimitHit = false
+        private(set) var containerLimitHit = false
 
         /// Whether the swipeable leading-edge reset hard cap stopped exploration.
-        var leadingEdgeResetLimitHit = false
+        private(set) var leadingEdgeResetLimitHit = false
 
         /// Wall-clock time spent exploring, in seconds.
         var explorationTime: TimeInterval = 0
@@ -337,19 +337,31 @@ final class Navigation {
             omittedScrollPathReasons.removeValue(forKey: containerPath)
         }
 
+        mutating func clearPendingContainers() {
+            pendingScrollPaths.removeAll()
+        }
+
+        mutating func markDiscoveryLimitHit() {
+            discoveryLimitHit = true
+        }
+
         mutating func addPendingContainers(_ containers: [SemanticScreen.Container]) {
             addPendingScrollPaths(containers.map(\.path))
         }
 
         mutating func addPendingScrollPaths(_ paths: [TreePath]) {
-            pendingScrollPaths.formUnion(paths.filter { !exploredScrollPaths.contains($0) })
+            pendingScrollPaths.formUnion(paths.filter {
+                !exploredScrollPaths.contains($0)
+                    && omittedScrollPathReasons[$0] == nil
+            })
         }
 
         mutating func markOmitted(
             _ containerPath: TreePath,
             reason: ExplorationOmissionReason
         ) {
-            pendingScrollPaths.insert(containerPath)
+            pendingScrollPaths.remove(containerPath)
+            exploredScrollPaths.remove(containerPath)
             omittedScrollPathReasons[containerPath, default: []].insert(reason)
             switch reason {
             case .discoveryScrollLimit:

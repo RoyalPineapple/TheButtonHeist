@@ -9,6 +9,8 @@ extension Actions {
 
     // MARK: - Rotor Actions
 
+    private static let rotorStringProfile = ElementDiagnosticSummary.RenderProfile.actionCapability
+
     func executeRotor(
         _ target: RotorTarget
     ) async -> TheSafecracker.InteractionResult {
@@ -95,20 +97,20 @@ extension Actions {
                                 element: element, liveObject: liveObject,
                                 suggestion: "target an element exposing custom rotors")
         case .noSuchRotor(let available):
-            return rotorFailure(observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
-                                + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
+            return rotorFailure(observed: "requestedRotor=\(rotorStringProfile.renderString(rotor ?? "")) "
+                                + "availableRotors=\(rotorStringProfile.renderList(available, itemStyle: .quoted))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
-                                suggestion: "use one of available rotors \(ActionCapabilityDiagnostic.formatQuotedList(available))")
+                                suggestion: "use one of available rotors \(rotorStringProfile.renderList(available, itemStyle: .quoted))")
         case .ambiguousRotor(let available):
-            return rotorFailure(observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
-                                + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
+            return rotorFailure(observed: "ambiguousRotor=\(rotorStringProfile.renderString(rotor ?? "")) "
+                                + "availableRotors=\(rotorStringProfile.renderList(available, itemStyle: .quoted))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
-                observed: "rotor continuation target \(ActionCapabilityDiagnostic.quote(heistId)) is not available",
+                observed: "rotor continuation target \(rotorStringProfile.renderString(heistId)) is not available",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -124,7 +126,7 @@ extension Actions {
                                 suggestion: "use the text range returned by the previous rotor result")
         case .noResult(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned no \(direction.rawValue) result",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned no \(direction.rawValue) result",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -134,7 +136,7 @@ extension Actions {
             )
         case .resultTargetUnavailable(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a result without an accessibility target",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned a result without an accessibility target",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -144,7 +146,7 @@ extension Actions {
             )
         case .resultTargetNotParsed(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a target outside the parsed hierarchy",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned a target outside the parsed hierarchy",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -214,7 +216,7 @@ extension Actions {
     ) -> String {
         var attempted: [String] = []
         if let rotor {
-            attempted.append("rotor=\(ActionCapabilityDiagnostic.quote(rotor))")
+            attempted.append("rotor=\(rotorStringProfile.renderString(rotor))")
         } else {
             attempted.append("rotor")
         }
@@ -225,8 +227,8 @@ extension Actions {
 
         let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element, liveObject: liveObject)
         return "rotor failed: attempted \(attempted.joined(separator: " ")) "
-            + "on \(ActionCapabilityDiagnostic.formatElement(element, liveObject: liveObject)) "
-            + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(availableRotors)); "
+            + "on \(ActionCapabilityDiagnostic.elementObservation(element, liveObject: liveObject)) "
+            + "availableRotors=\(rotorStringProfile.renderList(availableRotors, itemStyle: .quoted)); "
             + "observed \(observed); try \(suggestion)."
     }
 }
