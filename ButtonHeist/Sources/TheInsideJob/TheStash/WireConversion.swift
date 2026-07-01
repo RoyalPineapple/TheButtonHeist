@@ -42,7 +42,7 @@ extension TheStash {
 
     static func convert(_ element: AccessibilityElement) -> HeistElement {
         let frame = element.bhFrame
-        let activationPoint = element.bhResolvedActivationPoint
+        let activationPoint = activationPointEvidence(for: element)
         return HeistElement(
             description: element.description,
             label: element.label,
@@ -54,8 +54,9 @@ extension TheStash {
             frameY: frame.origin.y.sanitizedForJSON,
             frameWidth: frame.size.width.sanitizedForJSON,
             frameHeight: frame.size.height.sanitizedForJSON,
-            activationPointX: activationPoint.x.sanitizedForJSON,
-            activationPointY: activationPoint.y.sanitizedForJSON,
+            activationPointX: activationPoint.point?.x,
+            activationPointY: activationPoint.point?.y,
+            activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: {
                 let valid = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
@@ -69,6 +70,15 @@ extension TheStash {
             }(),
             actions: buildActions(for: element)
         )
+    }
+
+    private static func activationPointEvidence(for element: AccessibilityElement) -> ActivationPointEvidence {
+        let point = element.bhResolvedActivationPoint
+        guard point.x.isFinite, point.y.isFinite else { return .unavailable }
+        let screenPoint = ScreenPoint(x: Double(point.x), y: Double(point.y))
+        return element.usesDefaultActivationPoint
+            ? .defaultCenter(screenPoint)
+            : .explicit(screenPoint)
     }
 
     static func buildActions(for element: AccessibilityElement) -> [ElementAction] {

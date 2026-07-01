@@ -40,6 +40,38 @@ final class ServerTransportTests: XCTestCase {
         XCTAssertEqual(transport.listeningPort, 0)
     }
 
+    @MainActor
+    func testStartAfterStopIsRejectedBecauseTransportIsSingleUse() async throws {
+        let transport = ServerTransport(token: "single-use-token")
+        var startCount = 0
+        var stopCount = 0
+        transport.startOverride = { _, _ in
+            startCount += 1
+            return 49152
+        }
+        transport.stopOverride = {
+            stopCount += 1
+        }
+
+        let port = try await transport.start(port: 0, bindToLoopback: true)
+        await transport.stop()
+
+        XCTAssertEqual(port, 49152)
+        XCTAssertEqual(startCount, 1)
+        XCTAssertEqual(stopCount, 1)
+
+        do {
+            _ = try await transport.start(port: 0, bindToLoopback: true)
+            XCTFail("Expected stopped ServerTransport to reject restart")
+        } catch let error as ServerTransportError {
+            XCTAssertEqual(error, .stopped)
+        } catch {
+            XCTFail("Expected ServerTransportError.stopped, got \(error)")
+        }
+
+        XCTAssertEqual(startCount, 1)
+    }
+
     func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
         let eventStream = TransportEventStream.makeEventStream(
             bufferLimit: ServerTransport.eventStreamBufferLimit

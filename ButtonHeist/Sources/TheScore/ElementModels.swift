@@ -82,6 +82,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
     public let activationPointX: Double
     public let activationPointY: Double
+    public let activationPointEvidence: ActivationPointEvidence
     public let respondsToUserInteraction: Bool
     public let customContent: [HeistCustomContent]?
     public let rotors: [HeistRotor]?
@@ -100,6 +101,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         frameHeight: Double,
         activationPointX: Double? = nil,
         activationPointY: Double? = nil,
+        activationPointEvidence: ActivationPointEvidence? = nil,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
@@ -116,14 +118,40 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
         precondition((activationPointX == nil) == (activationPointY == nil), "activationPointX and activationPointY must be provided together")
-        self.activationPointX = activationPointX ?? frameX + (frameWidth / 2)
-        self.activationPointY = activationPointY ?? frameY + (frameHeight / 2)
+        let fallbackPoint = ScreenPoint(
+            x: sanitizedDouble(activationPointX ?? frameX + (frameWidth / 2)),
+            y: sanitizedDouble(activationPointY ?? frameY + (frameHeight / 2))
+        )
+        let resolvedEvidence: ActivationPointEvidence
+        if let activationPointEvidence {
+            resolvedEvidence = activationPointEvidence
+        } else if let activationPointX, let activationPointY {
+            resolvedEvidence = activationPointX.isFinite && activationPointY.isFinite
+                ? .explicit(ScreenPoint(x: activationPointX, y: activationPointY))
+                : .unavailable
+        } else {
+            resolvedEvidence = .defaultCenter(fallbackPoint)
+        }
+        self.activationPointEvidence = resolvedEvidence
+        self.activationPointX = resolvedEvidence.point?.x ?? fallbackPoint.x
+        self.activationPointY = resolvedEvidence.point?.y ?? fallbackPoint.y
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
         self.actions = actions.canonicalElementActionArray
     }
 
+}
+
+public extension HeistElement {
+    var screenFrame: ScreenRect {
+        ScreenRect(
+            x: frameX,
+            y: frameY,
+            width: frameWidth,
+            height: frameHeight
+        )
+    }
 }
 
 // MARK: - HeistElement Codable
@@ -135,28 +163,51 @@ extension HeistElement {
         case traits
         case frameX, frameY, frameWidth, frameHeight
         case activationPointX, activationPointY
+        case activationPointEvidence
         case respondsToUserInteraction
         case customContent, rotors, actions
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.description = try container.decode(String.self, forKey: .description)
-        self.label = try container.decodeIfPresent(String.self, forKey: .label)
-        self.value = try container.decodeIfPresent(String.self, forKey: .value)
-        self.identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
-        self.hint = try container.decodeIfPresent(String.self, forKey: .hint)
-        self.traits = try container.decode([HeistTrait].self, forKey: .traits)
-        self.frameX = try container.decode(Double.self, forKey: .frameX)
-        self.frameY = try container.decode(Double.self, forKey: .frameY)
-        self.frameWidth = try container.decode(Double.self, forKey: .frameWidth)
-        self.frameHeight = try container.decode(Double.self, forKey: .frameHeight)
-        self.activationPointX = try container.decode(Double.self, forKey: .activationPointX)
-        self.activationPointY = try container.decode(Double.self, forKey: .activationPointY)
-        self.respondsToUserInteraction = try container.decode(Bool.self, forKey: .respondsToUserInteraction)
-        self.customContent = try container.decodeIfPresent([HeistCustomContent].self, forKey: .customContent)
-        self.rotors = try container.decodeIfPresent([HeistRotor].self, forKey: .rotors)
-        self.actions = try container.decode(ElementActionSet.self, forKey: .actions).orderedActions
+        let description = try container.decode(String.self, forKey: .description)
+        let label = try container.decodeIfPresent(String.self, forKey: .label)
+        let value = try container.decodeIfPresent(String.self, forKey: .value)
+        let identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
+        let hint = try container.decodeIfPresent(String.self, forKey: .hint)
+        let traits = try container.decode([HeistTrait].self, forKey: .traits)
+        let frameX = try container.decode(Double.self, forKey: .frameX)
+        let frameY = try container.decode(Double.self, forKey: .frameY)
+        let frameWidth = try container.decode(Double.self, forKey: .frameWidth)
+        let frameHeight = try container.decode(Double.self, forKey: .frameHeight)
+        let activationPointX = try container.decode(Double.self, forKey: .activationPointX)
+        let activationPointY = try container.decode(Double.self, forKey: .activationPointY)
+        let activationPointEvidence = try container.decodeIfPresent(
+            ActivationPointEvidence.self,
+            forKey: .activationPointEvidence
+        ) ?? .explicit(ScreenPoint(
+            x: sanitizedDouble(activationPointX),
+            y: sanitizedDouble(activationPointY)
+        ))
+        self.init(
+            description: description,
+            label: label,
+            value: value,
+            identifier: identifier,
+            hint: hint,
+            traits: traits,
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            activationPointX: activationPointX,
+            activationPointY: activationPointY,
+            activationPointEvidence: activationPointEvidence,
+            respondsToUserInteraction: try container.decode(Bool.self, forKey: .respondsToUserInteraction),
+            customContent: try container.decodeIfPresent([HeistCustomContent].self, forKey: .customContent),
+            rotors: try container.decodeIfPresent([HeistRotor].self, forKey: .rotors),
+            actions: try container.decode(ElementActionSet.self, forKey: .actions).orderedActions
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -173,6 +224,7 @@ extension HeistElement {
         try container.encode(frameHeight, forKey: .frameHeight)
         try container.encode(activationPointX, forKey: .activationPointX)
         try container.encode(activationPointY, forKey: .activationPointY)
+        try container.encode(activationPointEvidence, forKey: .activationPointEvidence)
         try container.encode(respondsToUserInteraction, forKey: .respondsToUserInteraction)
         try container.encodeIfPresent(customContent, forKey: .customContent)
         try container.encodeIfPresent(rotors, forKey: .rotors)
@@ -186,7 +238,7 @@ public extension HeistElement {
         annotation: InterfaceElementAnnotation? = nil
     ) {
         let frame = accessibilityFrame(for: element.shape)
-        let activationPoint = accessibilityActivationPoint(
+        let activationPoint = accessibilityActivationPointEvidence(
             for: element,
             sourceFrame: frame,
             projectedFrame: frame
@@ -204,8 +256,9 @@ public extension HeistElement {
             frameY: sanitizedDouble(frame.origin.y),
             frameWidth: sanitizedDouble(frame.size.width),
             frameHeight: sanitizedDouble(frame.size.height),
-            activationPointX: sanitizedDouble(activationPoint.x),
-            activationPointY: sanitizedDouble(activationPoint.y),
+            activationPointX: activationPoint.point?.x,
+            activationPointY: activationPoint.point?.y,
+            activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
@@ -216,22 +269,29 @@ public extension HeistElement {
     }
 }
 
-private func accessibilityActivationPoint(
+private func accessibilityActivationPointEvidence(
     for element: AccessibilityElement,
     sourceFrame: CGRect,
     projectedFrame: CGRect
-) -> CGPoint {
+) -> ActivationPointEvidence {
     if element.usesDefaultActivationPoint {
-        return CGPoint(x: projectedFrame.midX, y: projectedFrame.midY)
+        let point = CGPoint(x: projectedFrame.midX, y: projectedFrame.midY)
+        guard point.x.isFinite, point.y.isFinite else { return .unavailable }
+        return .defaultCenter(ScreenPoint(x: Double(point.x), y: Double(point.y)))
     }
     let sourceActivationPoint = CGPoint(
         x: CGFloat(element.activationPoint.x),
         y: CGFloat(element.activationPoint.y)
     )
-    return CGPoint(
+    let projectedActivationPoint = CGPoint(
         x: sourceActivationPoint.x + projectedFrame.origin.x - sourceFrame.origin.x,
         y: sourceActivationPoint.y + projectedFrame.origin.y - sourceFrame.origin.y
     )
+    guard projectedActivationPoint.x.isFinite, projectedActivationPoint.y.isFinite else { return .unavailable }
+    return .explicit(ScreenPoint(
+        x: Double(projectedActivationPoint.x),
+        y: Double(projectedActivationPoint.y)
+    ))
 }
 
 private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {
@@ -280,6 +340,10 @@ private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {
 
 private func sanitizedDouble(_ value: CGFloat) -> Double {
     value.isFinite ? Double(value) : 0
+}
+
+private func sanitizedDouble(_ value: Double) -> Double {
+    value.isFinite ? value : 0
 }
 
 /// Rotor metadata attached to a HeistElement.

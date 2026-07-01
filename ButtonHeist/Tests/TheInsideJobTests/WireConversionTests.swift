@@ -181,7 +181,8 @@ final class WireConverterTests: XCTestCase {
         after: [Screen.ScreenElement],
         beforeTree: [TestInterfaceNode]? = nil,
         afterTree: [TestInterfaceNode]? = nil,
-        isScreenChange: Bool
+        isScreenChange: Bool,
+        projection: AccessibilityTrace.DeltaProjection = .semantic
     ) -> AccessibilityTrace.Delta {
         let resolvedAfterTree: [TestInterfaceNode]
         if let afterTree, !afterTree.isEmpty {
@@ -200,7 +201,11 @@ final class WireConverterTests: XCTestCase {
                 ? AccessibilityTrace.Transition(screenChangeReason: "testScreenChange")
                 : .empty
         )
-        return AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
+        return AccessibilityTrace.Delta.between(
+            beforeCapture,
+            afterCapture,
+            projection: projection
+        )
     }
 
     // MARK: - Trait Mapping
@@ -719,7 +724,7 @@ final class WireConverterTests: XCTestCase {
         let after = before + [added]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -738,7 +743,7 @@ final class WireConverterTests: XCTestCase {
         let after = [before[0]]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -753,7 +758,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "slider", value: "75%")]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -769,7 +774,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -784,7 +789,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -802,7 +807,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: false)]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -816,7 +821,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -831,7 +836,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 75, y: 40))]
 
         let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false, projection: .geometryAware
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
@@ -977,7 +982,8 @@ final class WireConverterTests: XCTestCase {
             after: [other, afterElement],
             beforeTree: beforeTree,
             afterTree: afterTree,
-            isScreenChange: false
+            isScreenChange: false,
+            projection: .geometryAware
         )
 
         XCTAssertNotScreenChanged(delta)
@@ -1061,7 +1067,8 @@ final class WireConverterTests: XCTestCase {
             after: [afterElement],
             beforeTree: beforeTree,
             afterTree: afterTree,
-            isScreenChange: false
+            isScreenChange: false,
+            projection: .geometryAware
         )
 
         XCTAssertNotScreenChanged(delta)

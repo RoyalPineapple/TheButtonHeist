@@ -22,19 +22,23 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
 public struct PredicateEvaluationEvidence: Sendable, Equatable {
     public let currentElements: [HeistElement]
     public let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    public let geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta?
 
     public init(
         currentElements: [HeistElement],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
+        geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil
     ) {
         self.currentElements = currentElements
         self.accumulatedDelta = accumulatedDelta
+        self.geometryAccumulatedDelta = geometryAccumulatedDelta
     }
 
     public init(trace: AccessibilityTrace) {
         self.init(
             currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            accumulatedDelta: trace.accumulatedDelta
+            accumulatedDelta: trace.accumulatedDelta,
+            geometryAccumulatedDelta: trace.accumulatedDelta(projection: .geometryAware)
         )
     }
 }

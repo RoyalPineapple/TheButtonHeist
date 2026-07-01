@@ -1,4 +1,4 @@
-#if canImport(UIKit)
+#if canImport(Network)
 import Foundation
 import Network
 import os

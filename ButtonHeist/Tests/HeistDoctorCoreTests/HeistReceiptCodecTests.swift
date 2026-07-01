@@ -208,8 +208,8 @@ import TheScore
                     intent: .action(command: "Activate", target: "target(predicate(label=\"Checkout\"))"),
                     evidence: .action(.expectation(
                         command: .activate(.predicate(.label("Checkout"))),
-                        actionResult: result,
-                        expectationActionResult: ActionResult.success(method: .wait, message: "screenChanged"),
+                        dispatchResult: result,
+                        expectationResult: ActionResult.success(method: .wait, message: "screenChanged"),
                         expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
                     ))
                 ),

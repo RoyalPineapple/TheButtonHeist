@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import TheScore
 
 /// The brains of the operation — plans the play, sequences the crew.
@@ -22,8 +23,79 @@ final class TheBrains {
     let actions: Actions
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
-    var semanticObservationIsActive = false
-    private var changedWaitInProgress = false
+    private var observationDriver = StateDriver(
+        initial: ObservationRuntimePhase.inactive,
+        machine: ObservationRuntimeMachine()
+    )
+
+    var semanticObservationIsActive: Bool {
+        get { observationDriver.state.isObservationActive }
+        set {
+            _ = observationDriver.send(newValue ? .startObservation : .stopObservation)
+        }
+    }
+
+    private enum ObservationRuntimePhase: Equatable, Sendable {
+        case inactive
+        case observing
+        case waitingForChange
+
+        var isObservationActive: Bool {
+            switch self {
+            case .inactive:
+                return false
+            case .observing, .waitingForChange:
+                return true
+            }
+        }
+    }
+
+    private enum ObservationRuntimeEvent: Equatable, Sendable {
+        case startObservation
+        case stopObservation
+        case beginChangedWait
+        case finishChangedWait
+    }
+
+    private enum ObservationRuntimeEffect: Equatable, Sendable {}
+    private enum ObservationRuntimeRejection: Equatable, Sendable {
+        case inactive
+        case changedWaitAlreadyRunning
+    }
+
+    private struct ObservationRuntimeMachine: SimpleStateMachine {
+        func advance(
+            _ state: ObservationRuntimePhase,
+            with event: ObservationRuntimeEvent
+        ) -> StateChange<ObservationRuntimePhase, ObservationRuntimeEffect, ObservationRuntimeRejection> {
+            switch (state, event) {
+            case (.inactive, .startObservation):
+                return .changed(to: .observing)
+            case (.observing, .startObservation),
+                 (.waitingForChange, .startObservation):
+                return .changed(to: state)
+
+            case (.inactive, .stopObservation):
+                return .changed(to: .inactive)
+            case (.observing, .stopObservation),
+                 (.waitingForChange, .stopObservation):
+                return .changed(to: .inactive)
+
+            case (.observing, .beginChangedWait):
+                return .changed(to: .waitingForChange)
+            case (.waitingForChange, .beginChangedWait):
+                return .rejected(.changedWaitAlreadyRunning, stayingIn: state)
+            case (.inactive, .beginChangedWait):
+                return .rejected(.inactive, stayingIn: state)
+
+            case (.waitingForChange, .finishChangedWait):
+                return .changed(to: .observing)
+            case (.inactive, .finishChangedWait),
+                 (.observing, .finishChangedWait):
+                return .changed(to: state)
+            }
+        }
+    }
 
     enum InterfaceObservation {
         case success(Interface)
@@ -144,13 +216,16 @@ final class TheBrains {
     }
 
     func beginChangedWait() -> Bool {
-        guard !changedWaitInProgress else { return false }
-        changedWaitInProgress = true
-        return true
+        switch observationDriver.send(.beginChangedWait) {
+        case .changed:
+            return true
+        case .rejected:
+            return false
+        }
     }
 
     func finishChangedWait() {
-        changedWaitInProgress = false
+        observationDriver.send(.finishChangedWait)
     }
 }
 

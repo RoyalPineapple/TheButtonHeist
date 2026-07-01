@@ -2,6 +2,7 @@
 import XCTest
 
 import ButtonHeistTesting
+import ThePlans
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
@@ -92,8 +93,8 @@ private enum ControlsDemoScreen {
 }
 
 private enum TextInputScreen {
-    private static let nameField = ElementTarget.element(identifier: "textInput.name", traits: [.textEntry])
-    private static let emailField = ElementTarget.element(identifier: "textInput.email", traits: [.textEntry])
+    private static let nameField = ElementTarget.element(.identifier("textInput.name"), traits: [.textEntry])
+    private static let emailField = ElementTarget.element(.identifier("textInput.email"), traits: [.textEntry])
 
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
@@ -150,19 +151,19 @@ private enum TodoScreen {
 
 private enum CalculatorScreen {
     static let addSevenAndFive = HeistDef<Void>("CalculatorScreen.addSevenAndFive") {
-        Activate(.element(label: "all clear", traits: [.button]))
+        Activate(.element(.label("all clear"), .traits([.button])))
             .expect(.exists(.label("0")), timeout: .seconds(1))
 
-        Activate(.element(label: "7", traits: [.button]))
+        Activate(.element(.label("7"), .traits([.button])))
             .expect(.exists(.label("7")), timeout: .seconds(1))
 
-        Activate(.element(label: "+", traits: [.button]))
+        Activate(.element(.label("+"), .traits([.button])))
             .expect(.change(.elements()), timeout: .seconds(1))
 
-        Activate(.element(label: "5", traits: [.button]))
+        Activate(.element(.label("5"), .traits([.button])))
             .expect(.exists(.label("5")), timeout: .seconds(1))
 
-        Activate(.element(label: "equals", traits: [.button]))
+        Activate(.element(.label("equals"), .traits([.button])))
             .expect(.exists(.label("12")), timeout: .seconds(1))
     }
 }
@@ -176,10 +177,10 @@ private enum TogglePickerScreen {
 
 private enum AlertsScreen {
     static let acceptSimpleAlert = HeistDef<Void>("AlertsScreen.acceptSimpleAlert") {
-        Activate(.element(label: "Show Alert", traits: [.button]))
+        Activate(.element(.label("Show Alert"), .traits([.button])))
             .expect(.exists(.label("Alert Title")), timeout: .seconds(2))
 
-        Activate(.element(label: "OK", traits: [.button]))
+        Activate(.element(.label("OK"), .traits([.button])))
             .expect(.missing(.label("Alert Title")), timeout: .seconds(2))
 
         WaitFor(.exists(.label("Last action: Alert: OK")), timeout: .seconds(2))
@@ -196,7 +197,7 @@ private enum AdjustableControlsScreen {
     }
 
     static let driveVolumeToMaximum = HeistDef<Void>("AdjustableControls.driveVolumeToMaximum") {
-        RepeatUntil(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(8)) {
+        RepeatUntil(.exists(.element(.label("Volume"), .value("100"))), timeout: .seconds(8)) {
             Increment(.label("Volume"))
         }.else {
             Fail("volume did not reach 100")
@@ -212,7 +213,7 @@ private enum CustomRotorsScreen {
 }
 
 private enum TouchCanvasScreen {
-    private static let canvas = ElementTarget.element(label: "Touch Canvas", traits: [.allowsDirectInteraction])
+    private static let canvas = ElementTarget.element(.label("Touch Canvas"), .traits([.allowsDirectInteraction]))
 
     static let exerciseMechanicalGestures = HeistDef<Void>("TouchCanvas.exerciseMechanicalGestures") {
         Mechanical.Tap(canvas)
@@ -338,7 +339,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
         let targetRoot = try await runHeist(
             "DogfoodActivatePrimaryButton",
-            argument: .element(label: "Primary Button", traits: [.button])
+            argument: .element(.label("Primary Button"), .traits([.button]))
         ) { target in
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Buttons & Actions")

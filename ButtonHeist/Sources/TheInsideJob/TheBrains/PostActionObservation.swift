@@ -863,7 +863,7 @@ private extension SemanticScreen {
                 container: entry.container,
                 path: remappedPath,
                 containerName: entry.containerName,
-                contentFrame: entry.contentFrame,
+                contentRect: entry.contentFrame,
                 scrollMembership: remap(entry.scrollMembership, using: pathMap),
                 observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
                 scrollInventory: entry.scrollInventory

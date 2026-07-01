@@ -74,10 +74,6 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case checks
-        case label, labelRef = "label_ref"
-        case identifier, identifierRef = "identifier_ref"
-        case value, valueRef = "value_ref"
-        case traits, excludeTraits
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,20 +88,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     init(container: KeyedDecodingContainer<CodingKeys>) throws {
-        let hasChecks = container.contains(.checks)
-        let hasFlatFields = Self.flatCodingKeys.contains { container.contains($0) }
-        if hasChecks, hasFlatFields {
-            throw DecodingError.dataCorruptedError(
-                forKey: .checks,
-                in: container,
-                debugDescription: "element predicate template accepts either checks or flat fields, not both"
-            )
-        }
-        if hasChecks {
-            checks = try container.decode([ElementPredicateCheck<StringExpr>].self, forKey: .checks)
-        } else {
-            checks = try Self.decodeFlatChecks(from: container)
-        }
+        checks = try container.decodeIfPresent([ElementPredicateCheck<StringExpr>].self, forKey: .checks) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -113,51 +96,6 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         if !checks.isEmpty { try container.encode(checks, forKey: .checks) }
     }
 
-    private static let flatCodingKeys: [CodingKeys] = [
-        .label, .labelRef, .identifier, .identifierRef, .value, .valueRef, .traits, .excludeTraits,
-    ]
-
-    private static func decodeFlatChecks(
-        from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> [ElementPredicateCheck<StringExpr>] {
-        var checks: [ElementPredicateCheck<StringExpr>] = []
-        checks += try decodeStringMatchExprs(container, literalKey: .label, refKey: .labelRef)
-            .map(ElementPredicateCheck.label)
-        checks += try decodeStringMatchExprs(container, literalKey: .identifier, refKey: .identifierRef)
-            .map(ElementPredicateCheck.identifier)
-        checks += try decodeStringMatchExprs(container, literalKey: .value, refKey: .valueRef)
-            .map(ElementPredicateCheck.value)
-        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
-            checks.append(.traits(traits.heistTraitSet))
-        }
-        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits.heistTraitSet))
-        }
-        return checks
-    }
-
-    private static func decodeStringMatchExprs(
-        _ container: KeyedDecodingContainer<CodingKeys>,
-        literalKey: CodingKeys,
-        refKey: CodingKeys
-    ) throws -> [StringMatch<StringExpr>] {
-        let literal = try StringMatch<StringExpr>.decodeOneOrMany(from: container, forKey: literalKey)
-        let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: refKey)
-        switch (literal.isEmpty, reference) {
-        case (false, nil):
-            return literal
-        case (true, .some(let reference)):
-            return [.exact(.ref(reference))]
-        case (false, .some):
-            throw DecodingError.dataCorruptedError(
-                forKey: refKey,
-                in: container,
-                debugDescription: "element predicate accepts either \(literalKey.stringValue) or \(refKey.stringValue), not both"
-            )
-        case (true, nil):
-            return []
-        }
-    }
 }
 
 extension ElementPredicateTemplate: CustomStringConvertible {

@@ -4,6 +4,7 @@ import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import ButtonHeistTesting
+@_spi(ButtonHeistInternals) @testable import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @testable import TheInsideJob
@@ -260,7 +261,7 @@ final class HeistReceiptTests: XCTestCase {
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -297,7 +298,7 @@ final class HeistReceiptTests: XCTestCase {
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 0,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
@@ -315,8 +316,10 @@ final class HeistReceiptTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "repeat_until else failed")
         XCTAssertEqual(incrementCount, 0)
+        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
         XCTAssertFalse(evidence.expectation.met)
+        XCTAssertEqual(evidence.outcome, .handledElse)
         XCTAssertNil(evidence.actionResult)
         XCTAssertNil(step.reportActionResult)
         XCTAssertTrue(evidence.failureReason?.contains("timed out") == true)
@@ -401,7 +404,7 @@ final class HeistReceiptTests: XCTestCase {
                     intent: .action(command: "takeScreenshot", target: nil),
                     evidence: .action(.dispatch(
                         command: .takeScreenshot,
-                        actionResult: ActionResult.success(payload: .screenshot(screenshot))
+                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
                     ))
                 ),
             ],

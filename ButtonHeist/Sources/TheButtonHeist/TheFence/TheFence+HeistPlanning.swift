@@ -76,7 +76,7 @@ extension TheFence {
 
     func decodePerformRequest(_ arguments: CommandArgumentEnvelope) throws -> PerformRequest {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.perform.rawValue)
-        let source = try arguments.requiredSchemaString(.step)
+        let source = try arguments.requiredValue(FenceParameters.performStep)
         let plan = try loadInlinePerformStepSource(source)
         let step = try performableStep(in: plan)
         return PerformRequest(plan: plan, step: step)
@@ -142,7 +142,10 @@ extension TheFence {
     }
 
     func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
-        let detail = try arguments.schemaEnum(.detail, as: HeistCatalogDetail.self) ?? .summary
+        let detail = try arguments.value(
+            FenceParameters.heistCatalogDetail,
+            defaultFrom: Command.listHeists.descriptor
+        )
         do {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
@@ -156,7 +159,7 @@ extension TheFence {
     }
 
     func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
-        let requestedName = try arguments.requiredSchemaString(.heist)
+        let requestedName = try arguments.requiredValue(FenceParameters.heistName)
         do {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
@@ -196,8 +199,8 @@ private extension TheFence {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
-        let path = try arguments.schemaString(.path)
-        let inlineDSL = try arguments.schemaString(.plan)
+        let path = try arguments.value(FenceParameters.planPath)
+        let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
         let requestResult = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(
             commandName: commandName,
             fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)

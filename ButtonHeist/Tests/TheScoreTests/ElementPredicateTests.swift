@@ -177,7 +177,13 @@ final class ElementPredicateTests: XCTestCase {
 
     func testDecodeFromJSON() throws {
         let json = """
-        {"label":"Settings","traits":["header","button"],"excludeTraits":["notEnabled"]}
+        {
+          "checks": [
+            { "kind": "label", "match": "Settings" },
+            { "kind": "traits", "values": ["header", "button"] },
+            { "kind": "excludeTraits", "values": ["notEnabled"] }
+          ]
+        }
         """
         let data = Data(json.utf8)
         let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
@@ -309,12 +315,12 @@ final class ElementPredicateTests: XCTestCase {
     func testRepeatedStringMatchesDecodeFromArrayJSON() throws {
         let data = Data(#"""
         {
-          "label": [
-            { "mode": "prefix", "value": "foo" },
-            { "mode": "contains", "value": "bar" },
-            { "mode": "suffix", "value": "baz" }
-          ],
-          "traits": ["button"]
+          "checks": [
+            { "kind": "label", "match": { "mode": "prefix", "value": "foo" } },
+            { "kind": "label", "match": { "mode": "contains", "value": "bar" } },
+            { "kind": "label", "match": { "mode": "suffix", "value": "baz" } },
+            { "kind": "traits", "values": ["button"] }
+          ]
         }
         """#.utf8)
 

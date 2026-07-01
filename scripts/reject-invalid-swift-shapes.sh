@@ -251,6 +251,7 @@ SPI_PUBLIC_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public let arguments: TheFence.CommandArgumentEnvelope'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:@_spi(ButtonHeistTooling) public extension TheFence.Command {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceParameter<Value: Sendable>: Sendable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceParameterSpec: Sendable, Equatable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceParameterKey {'
@@ -260,6 +261,7 @@ SPI_PUBLIC_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceCommandDescriptor {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceParameterSpec {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public enum CLIExposure: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public enum FenceParameters {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence.swift:LINE:    @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {'
 )
 spi_public_matches="$(git_grep '@_spi\([^)]*\)[[:space:]]+public[[:space:]]+' "${EXISTING_SOURCE_PATHS[@]}")"

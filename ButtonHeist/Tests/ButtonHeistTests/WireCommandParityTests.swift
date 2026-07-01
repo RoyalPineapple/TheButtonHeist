@@ -141,19 +141,19 @@ final class WireCommandParityTests: XCTestCase {
 
     func testDescriptorDefaultsOwnCommandDefaultValues() {
         XCTAssertEqual(
-            TheFence.Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self),
+            TheFence.Command.scroll.descriptor.requiredDefaultValue(for: FenceParameters.scrollDirection),
             .down
         )
         XCTAssertEqual(
-            TheFence.Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self),
+            TheFence.Command.scrollToEdge.descriptor.requiredDefaultValue(for: FenceParameters.scrollEdge),
             .top
         )
         XCTAssertEqual(
-            TheFence.Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self),
+            TheFence.Command.rotor.descriptor.requiredDefaultValue(for: FenceParameters.rotorDirection),
             .next
         )
         XCTAssertEqual(
-            TheFence.Command.listHeists.descriptor.requiredDefaultEnumValue(for: .detail, as: HeistCatalogDetail.self),
+            TheFence.Command.listHeists.descriptor.requiredDefaultValue(for: FenceParameters.heistCatalogDetail),
             .summary
         )
     }

@@ -372,6 +372,123 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(payload.edits.isEmpty)
     }
 
+    func testGeometryOnlyMovementKeepsSemanticCaptureStableUnlessGeometryIncluded() throws {
+        let beforeInterface = makeTestInterface(elements: [
+            makeElement(
+                label: "Checkout",
+                traits: [.button],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                activationPointX: 50,
+                activationPointY: 22
+            ),
+        ])
+        let afterInterface = makeTestInterface(elements: [
+            makeElement(
+                label: "Checkout",
+                traits: [.button],
+                frameX: 10,
+                frameY: 20,
+                frameWidth: 100,
+                frameHeight: 44,
+                activationPointX: 60,
+                activationPointY: 42
+            ),
+        ])
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
+        let after = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: before.hash)
+
+        XCTAssertEqual(before.hash, after.hash)
+        guard case .noChange = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected semantic noChange for geometry-only movement")
+        }
+
+        guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(
+            before,
+            after,
+            projection: .geometryAware
+        ) else {
+            return XCTFail("Expected elementsChanged when geometry is included")
+        }
+        let properties = try XCTUnwrap(payload.edits.updated.single?.changes.map(\.property))
+        XCTAssertEqual(properties, [.frame, .activationPoint])
+    }
+
+    func testGeometryOnlyMovementFeedsOnlyGeometryPredicates() {
+        let beforeInterface = makeTestInterface(elements: [
+            makeElement(
+                label: "Checkout",
+                traits: [.button],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                activationPointX: 50,
+                activationPointY: 22
+            ),
+        ])
+        let afterInterface = makeTestInterface(elements: [
+            makeElement(
+                label: "Checkout",
+                traits: [.button],
+                frameX: 10,
+                frameY: 20,
+                frameWidth: 100,
+                frameHeight: 44,
+                activationPointX: 60,
+                activationPointY: 42
+            ),
+        ])
+        let trace = AccessibilityTrace(first: beforeInterface).appending(afterInterface)
+        let evidence = PredicateEvaluationEvidence(trace: trace)
+        let framePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            element: ElementPredicate(label: "Checkout"),
+            change: .frame(ElementPropertyChange<FrameProperty>(
+                after: ElementFrameMatch.exact(x: 10, y: 20, width: 100, height: 44)
+            ))
+        ))))
+        let semanticPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            element: ElementPredicate(label: "Checkout"),
+            change: .value(before: nil, after: "Moved")
+        ))))
+
+        XCTAssertTrue(framePredicate.evaluate(in: evidence).met)
+        XCTAssertFalse(semanticPredicate.evaluate(in: evidence).met)
+    }
+
+    func testActivationPointEvidencePreservesDefaultExplicitAndUnavailable() {
+        let defaultElement = makeAccessibilityElement(
+            activationPoint: AccessibilityPoint(x: 0, y: 0),
+            usesDefaultActivationPoint: true
+        )
+        let explicitElement = makeAccessibilityElement(
+            activationPoint: AccessibilityPoint(x: 12, y: 34),
+            usesDefaultActivationPoint: false
+        )
+        let unavailableElement = makeAccessibilityElement(
+            activationPoint: AccessibilityPoint(x: .nan, y: .infinity),
+            usesDefaultActivationPoint: false
+        )
+
+        let defaultProjection = HeistElement(accessibilityElement: defaultElement)
+        let explicitProjection = HeistElement(accessibilityElement: explicitElement)
+        let unavailableProjection = HeistElement(accessibilityElement: unavailableElement)
+
+        XCTAssertEqual(
+            defaultProjection.activationPointEvidence,
+            .defaultCenter(ScreenPoint(x: 50, y: 22))
+        )
+        XCTAssertEqual(
+            explicitProjection.activationPointEvidence,
+            .explicit(ScreenPoint(x: 12, y: 34))
+        )
+        XCTAssertEqual(unavailableProjection.activationPointEvidence.source, .unavailable)
+        XCTAssertNil(unavailableProjection.activationPointEvidence.point)
+        XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
+    }
+
     func testCaptureScreenContextDiffsAsScreenChanged() {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(
@@ -644,6 +761,29 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             customContent: customContent,
             rotors: rotors,
             actions: actions
+        )
+    }
+
+    private func makeAccessibilityElement(
+        activationPoint: AccessibilityPoint,
+        usesDefaultActivationPoint: Bool
+    ) -> AccessibilityElement {
+        AccessibilityElement(
+            description: "Checkout",
+            label: "Checkout",
+            value: nil,
+            traits: AccessibilityTraits.fromNames([HeistTrait.button.rawValue]),
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44)),
+            activationPoint: activationPoint,
+            usesDefaultActivationPoint: usesDefaultActivationPoint,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
         )
     }
 

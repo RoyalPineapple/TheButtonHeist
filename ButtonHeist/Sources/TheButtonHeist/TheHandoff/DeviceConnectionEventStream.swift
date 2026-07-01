@@ -37,7 +37,11 @@ enum DeviceConnectionEventStream {
 extension DeviceConnection {
     /// Internal for testing and overflow handling from NW callbacks.
     func handleEventStreamOverflow(connection: NWConnection) {
-        guard let current = currentConnection, current === connection else { return }
+        handleEventStreamOverflow(connection: connection, sessionID: nil)
+    }
+
+    func handleEventStreamOverflow(connection: NWConnection, sessionID: UUID?) {
+        guard isCurrentSession(sessionID, connection: connection) else { return }
         deviceConnectionLogger.error("Connection event backlog exceeded \(DeviceConnectionEventStream.bufferLimit), disconnecting")
         disconnect()
         onEvent?(.disconnected(.eventBacklogOverflow(maxEvents: DeviceConnectionEventStream.bufferLimit)))

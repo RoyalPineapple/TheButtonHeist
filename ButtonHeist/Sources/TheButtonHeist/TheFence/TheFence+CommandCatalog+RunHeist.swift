@@ -13,7 +13,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 command, family: .heistRuntime,
                 requestDecoder: TheFence.decodePerformCommandRequest,
                 parameters: [
-                    param(.step, .string, required: true, minLength: 1),
+                    FenceParameters.performStep.spec,
                 ],
                 projection: .mcpOnly(
                     """
@@ -75,12 +75,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeListHeistsCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
-                    param(
-                        .detail,
-                        .string,
-                        enumValues: fenceEnumValues(HeistCatalogDetail.self),
-                        defaultValue: .string(HeistCatalogDetail.summary.rawValue)
-                    ),
+                    FenceParameters.heistCatalogDetail.spec,
                 ] + Self.planSourceParameters,
                 projection: .cliAndMCP(
                     "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
@@ -94,7 +89,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeDescribeHeistCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
-                    param(.heist, .string, required: true),
+                    FenceParameters.heistName.spec,
                 ] + Self.planSourceParameters,
                 projection: .cliAndMCP(
                     "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
@@ -106,8 +101,8 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
 
     private static var planSourceParameters: [FenceParameterSpec] {
         [
-            param(.path, .string),
-            param(.plan, .string),
+            FenceParameters.planPath.spec,
+            FenceParameters.inlinePlan.spec,
         ]
     }
 

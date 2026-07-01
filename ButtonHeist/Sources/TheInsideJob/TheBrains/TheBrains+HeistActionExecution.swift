@@ -256,8 +256,8 @@ extension TheBrains {
                 intent: actionIntent(command),
                 evidence: .expectation(
                     command: command,
-                    actionResult: actionResult,
-                    expectationActionResult: evaluation.receipt.actionResult,
+                    dispatchResult: actionResult,
+                    expectationResult: evaluation.receipt.actionResult,
                     expectation: evaluation.receipt.expectation,
                     warning: actionWarning(command: command, actionResult: actionResult)
                 ),
@@ -479,8 +479,8 @@ extension TheBrains {
             intent: actionIntent(command),
             evidence: .expectation(
                 command: command,
-                actionResult: actionResult,
-                expectationActionResult: expectationActionResult,
+                dispatchResult: actionResult,
+                expectationResult: expectationActionResult,
                 expectation: expectation,
                 warning: actionWarning(command: command, actionResult: actionResult)
             ),
@@ -494,7 +494,7 @@ extension TheBrains {
     ) -> HeistActionEvidence {
         .dispatch(
             command: command,
-            actionResult: actionResult,
+            dispatchResult: actionResult,
             warning: actionWarning(command: command, actionResult: actionResult)
         )
     }

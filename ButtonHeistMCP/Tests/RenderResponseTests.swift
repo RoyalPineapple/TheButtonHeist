@@ -63,7 +63,7 @@ struct RenderResponseTests {
                         ),
                         evidence: .action(.dispatch(
                             command: command,
-                            actionResult: .success(
+                            dispatchResult: .success(
                                 method: .activate,
                                 accessibilityTrace: trace
                             )

@@ -49,10 +49,10 @@ extension HeistDoctor {
         guard let target = step.reportTarget else {
             throw HeistDoctorError.missingTarget(path: step.path)
         }
-        guard let actionResult = actionEvidence.actionResult else {
+        guard let dispatchResult = actionEvidence.dispatchResult else {
             throw HeistDoctorError.missingActionResult(path: step.path)
         }
-        guard let trace = actionResult.accessibilityTrace,
+        guard let trace = dispatchResult.accessibilityTrace,
               let before = trace.captures.first?.interface
         else {
             throw HeistDoctorError.missingTrace(path: step.path)
@@ -68,14 +68,14 @@ extension HeistDoctor {
             beforeSnapshot: before,
             afterDelta: trace.meaningfulEndpointDelta,
             afterSnapshot: trace.captures.last?.interface,
-            actionResult: actionResult,
+            actionResult: dispatchResult,
             actionEvidence: actionEvidence,
             expectation: actionEvidence.expectation
         )
     }
 
     private static func repairErrorKind(_ evidence: HeistActionEvidence) -> ErrorKind? {
-        evidence.actionResult?.errorKind ?? evidence.expectationActionResult?.errorKind
+        evidence.reportedResult?.errorKind
     }
 
     private static func repairMessage(
@@ -83,8 +83,7 @@ extension HeistDoctor {
         evidence: HeistActionEvidence
     ) -> String? {
         step.failure?.observed
-            ?? evidence.actionResult?.message
-            ?? evidence.expectationActionResult?.message
+            ?? evidence.reportedResult?.message
             ?? evidence.expectation?.actual
     }
 }

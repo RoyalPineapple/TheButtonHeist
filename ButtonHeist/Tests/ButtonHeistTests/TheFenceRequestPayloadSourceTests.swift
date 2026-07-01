@@ -213,6 +213,72 @@ import Testing
         }
     }
 
+    @Test func `typed parameters own enum domains defaults and scalar decoding`() throws {
+        let parameterSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift"
+        )
+        #expect(parameterSource.contains("public struct FenceParameter<Value: Sendable>: Sendable"))
+        #expect(parameterSource.contains("public enum FenceParameters"))
+        #expect(parameterSource.contains("FenceParameter<ScrollDirection>.enumValue(.direction, defaultValue: .down)"))
+        #expect(parameterSource.contains("FenceParameter<ScrollEdge>.enumValue(.edge, defaultValue: .top)"))
+        #expect(parameterSource.contains("FenceParameter<RotorDirection>.enumValue(.direction, defaultValue: .next)"))
+
+        let root = repositoryRoot()
+        let enumDefaultFiles = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog+Actions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog+Observation.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog+RunHeist.swift",
+            "ButtonHeistCLI/Sources/Support/CLICommandContract.swift",
+            "ButtonHeistCLI/Sources/Commands/GestureCommands.swift",
+            "ButtonHeistCLI/Sources/Commands/ScrollCommand.swift",
+            "ButtonHeistCLI/Sources/Commands/ScrollToEdgeCommand.swift",
+            "ButtonHeistCLI/Sources/Commands/RotorCommand.swift",
+            "ButtonHeistCLI/Sources/Commands/EditActionCommand.swift",
+            "ButtonHeistCLI/Sources/Commands/HeistDiscoveryCommands.swift",
+        ].map { root.appendingPathComponent($0) }
+        let enumDefaultPattern = [
+            #"defaultValue:\s*[.]string\([^)]*rawValue"#,
+            #"\brequiredDefaultEnumValue\b"#,
+            #"\bcatalogDefaultString\b"#,
+            #"\bcatalogCanonicalStringValue\b"#,
+            #"CommandArgumentWriter[.]value\s*\(\s*[.](direction|edge|detail)"#,
+        ].joined(separator: "|")
+        let enumDefaultMatches = try sourceMatches(in: enumDefaultFiles, root: root, pattern: enumDefaultPattern)
+        #expect(
+            enumDefaultMatches.isEmpty,
+            """
+            Enum domains/defaults and CLI payloads should route through FenceParameter<Value>:
+            \(enumDefaultMatches.sorted().joined(separator: "\n"))
+            """
+        )
+
+        let scalarReaderFiles = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+AccessibilityActions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+Observation.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+RotorActions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+ScrollActions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+Session.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+TextActions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+WaitActions.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ExpectationParsing.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+HeistPlanning.swift",
+        ].map { root.appendingPathComponent($0) }
+        let scalarReaderPattern =
+            #"\b(schemaInteger|requiredSchemaInteger|schemaNonNegativeInteger|schemaString|requiredSchemaString|"#
+            + #"schemaBoolean|schemaNumber|requiredSchemaNumber|schemaEnum|requiredSchemaEnum|"#
+            + #"nonEmptyString|optionalNonEmptyString)\s*\("#
+        let scalarReaderMatches = try sourceMatches(in: scalarReaderFiles, root: root, pattern: scalarReaderPattern)
+        #expect(
+            scalarReaderMatches.isEmpty,
+            """
+            Migrated command payload scalar reads should use FenceParameter<Value> accessors:
+            \(scalarReaderMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
     @Test func `doc reference and projection implementation controls stay out of public SPI`() throws {
         let referenceSource = try sourceFile(
             relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift"
@@ -432,6 +498,10 @@ private let allowedSPIPublicDeclarations: Set<String> = [
         ),
         allowedSPI(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
+            "@_spi(ButtonHeistTooling) public struct FenceParameter<Value: Sendable>: Sendable {"
+        ),
+        allowedSPI(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
             "@_spi(ButtonHeistTooling) public struct FenceParameterSpec: Sendable, Equatable {"
         ),
         allowedSPI(
@@ -441,6 +511,10 @@ private let allowedSPIPublicDeclarations: Set<String> = [
         allowedSPI(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
             "@_spi(ButtonHeistTooling) public extension FenceParameterKey {"
+        ),
+        allowedSPI(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
+            "@_spi(ButtonHeistTooling) public enum FenceParameters {"
         ),
         allowedSPI(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
@@ -482,6 +556,8 @@ private func plainPublicToolingDeclarations(in source: String, relativePath: Str
         "public struct FenceCommandDescriptor",
         "public struct FenceCommandProjection",
         "public enum FenceCommandFamily",
+        "public struct FenceParameter",
+        "public enum FenceParameters",
         "public struct FenceParameterSpec",
         "public struct FenceParameterKey",
         "public enum MCPExposure",

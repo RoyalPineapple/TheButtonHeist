@@ -25,6 +25,36 @@ extension Navigation {
         }
     }
 
+    enum ScrollScanDirection: Equatable {
+        case forward
+        case back
+    }
+
+    enum ScrollScanGoal: Equatable {
+        case exhaust
+        case findTarget(ElementTarget)
+        case findHeistId(HeistId)
+    }
+
+    struct ScrollScanPlan {
+        let container: ContainerExploration
+        let direction: ScrollScanDirection
+        let goal: ScrollScanGoal
+        let animated: Bool
+
+        init(
+            container: ContainerExploration,
+            direction: ScrollScanDirection,
+            goal: ScrollScanGoal,
+            animated: Bool = false
+        ) {
+            self.container = container
+            self.direction = direction
+            self.goal = goal
+            self.animated = animated
+        }
+    }
+
     struct ExploredScreen {
         let screen: Screen
         let manifest: ScreenManifest

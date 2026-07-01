@@ -6,42 +6,50 @@ enum AccessibilityTraceElementDiff {
 
     static func projectElementEdits(
         beforeElements: [HeistElement],
-        afterElements: [HeistElement]
+        afterElements: [HeistElement],
+        projection: AccessibilityTrace.DeltaProjection = .geometryAware
     ) -> ElementEdits {
         projectElementEdits(
             beforeRecords: beforeElements.map(ElementDiffRecord.init),
-            afterRecords: afterElements.map(ElementDiffRecord.init)
+            afterRecords: afterElements.map(ElementDiffRecord.init),
+            projection: projection
         )
     }
 
     static func projectElementEdits(
         beforeRecords: [ElementDiffRecord],
-        afterRecords: [ElementDiffRecord]
+        afterRecords: [ElementDiffRecord],
+        projection: AccessibilityTrace.DeltaProjection = .geometryAware
     ) -> ElementEdits {
         let edits = projectElementEditsWithoutMoveSuppression(
             beforeRecords: beforeRecords,
-            afterRecords: afterRecords
+            afterRecords: afterRecords,
+            projection: projection
         )
         return AccessibilityTraceMoveInference.suppressElementChurnFromFunctionalMoves(
             edits: edits,
             beforeRecords: beforeRecords,
-            afterRecords: afterRecords
+            afterRecords: afterRecords,
+            projection: projection
         )
     }
 
     static func projectElementEditsWithoutMoveSuppression(
         beforeElements: [HeistElement],
-        afterElements: [HeistElement]
+        afterElements: [HeistElement],
+        projection: AccessibilityTrace.DeltaProjection = .geometryAware
     ) -> ElementEdits {
         projectElementEditsWithoutMoveSuppression(
             beforeRecords: beforeElements.map(ElementDiffRecord.init),
-            afterRecords: afterElements.map(ElementDiffRecord.init)
+            afterRecords: afterElements.map(ElementDiffRecord.init),
+            projection: projection
         )
     }
 
     static func projectElementEditsWithoutMoveSuppression(
         beforeRecords: [ElementDiffRecord],
-        afterRecords: [ElementDiffRecord]
+        afterRecords: [ElementDiffRecord],
+        projection: AccessibilityTrace.DeltaProjection = .geometryAware
     ) -> ElementEdits {
         let oldByKey = Dictionary(grouping: beforeRecords, by: \.diffPairingKey)
         let newByKey = Dictionary(grouping: afterRecords, by: \.diffPairingKey)
@@ -56,7 +64,7 @@ enum AccessibilityTraceElementDiff {
             let newEls = newByKey[key] ?? []
             let pairCount = min(oldEls.count, newEls.count)
             updated += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
-                .compactMap { projectElementStateChange(old: $0.element, new: $1.element) }
+                .compactMap { projectElementStateChange(old: $0.element, new: $1.element, projection: projection) }
             removed += oldEls.suffix(from: pairCount).map(\.element)
             added += newEls.suffix(from: pairCount).map(\.element)
         }
@@ -111,13 +119,13 @@ struct ElementDiffRecord: Equatable, Sendable {
 func projectElementStateChange(
     old: HeistElement,
     new: HeistElement,
-    includeGeometry: Bool = true
+    projection: AccessibilityTrace.DeltaProjection = .geometryAware
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []
 
     appendSemanticChanges(old: old, new: new, to: &changes)
 
-    if includeGeometry {
+    if projection.includesGeometry {
         appendGeometryChanges(old: old, new: new, to: &changes)
     }
 

@@ -671,6 +671,21 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRuntimePhaseDropsConnectionHandleWhenDisconnecting() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+
+        XCTAssertNotNil(handoff.connectionLifecycle.activeConnection)
+
+        handoff.disconnect()
+
+        XCTAssertNil(handoff.connectionLifecycle.activeConnection)
+        XCTAssertEqual(mock.disconnectCount, 1)
+        assertDisconnected(handoff.connectionPhase)
+        XCTAssertEqual(handoff.send(.ping, requestId: nil), .failed(.notConnected))
+    }
+
+    @ButtonHeistActor
     func testAutoReconnectDirectEndpointDoesNotRequireDiscovery() async {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0

@@ -57,7 +57,7 @@ extension ElementInflation {
         for observedActivationPoint: Screen.ObservedScrollContentActivationPoint,
         in scrollView: UIScrollView
     ) -> CGPoint {
-        let contentActivationPoint = observedActivationPoint.point
+        let contentActivationPoint = observedActivationPoint.point.cgPoint
         let insets = scrollView.adjustedContentInset
         let visibleWidth = max(1, scrollView.bounds.width - insets.left - insets.right)
         let visibleHeight = max(1, scrollView.bounds.height - insets.top - insets.bottom)

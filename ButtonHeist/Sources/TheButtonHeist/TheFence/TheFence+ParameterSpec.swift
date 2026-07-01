@@ -1,6 +1,43 @@
 import TheScore
 import ThePlans
 
+@_spi(ButtonHeistTooling) public struct FenceParameter<Value: Sendable>: Sendable {
+    public let key: FenceParameterKey
+    public let defaultValue: Value?
+    public let allowedRawValues: [String]?
+
+    let spec: FenceParameterSpec
+    let expectedTypeDescription: String
+    private let decodeValue: @Sendable (HeistValue, String) throws -> Value
+    private let encodeValue: @Sendable (Value) -> HeistValue
+
+    init(
+        key: FenceParameterKey,
+        spec: FenceParameterSpec,
+        expectedTypeDescription: String,
+        defaultValue: Value? = nil,
+        allowedRawValues: [String]? = nil,
+        decodeValue: @escaping @Sendable (HeistValue, String) throws -> Value,
+        encodeValue: @escaping @Sendable (Value) -> HeistValue
+    ) {
+        self.key = key
+        self.spec = spec
+        self.expectedTypeDescription = expectedTypeDescription
+        self.defaultValue = defaultValue
+        self.allowedRawValues = allowedRawValues
+        self.decodeValue = decodeValue
+        self.encodeValue = encodeValue
+    }
+
+    public func heistValue(for value: Value) -> HeistValue {
+        encodeValue(value)
+    }
+
+    func decode(_ value: HeistValue, field: String) throws -> Value {
+        try decodeValue(value, field)
+    }
+}
+
 @_spi(ButtonHeistTooling) public struct FenceParameterSpec: Sendable, Equatable {
 
     public enum ParamType: String, Sendable, Equatable {
@@ -560,8 +597,217 @@ extension TheFence {
     static let x = Self("x"), y = Self("y")
 }
 
+extension FenceParameter where Value == String {
+    static func string(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        defaultValue: String? = nil,
+        minLength: Int? = nil
+    ) -> Self {
+        FenceParameter(
+            key: key,
+            spec: param(
+                key,
+                .string,
+                required: required,
+                defaultValue: defaultValue.map(HeistValue.string),
+                minLength: minLength
+            ),
+            expectedTypeDescription: "string",
+            defaultValue: defaultValue,
+            decodeValue: { value, field in try decodeString(value, field: field) },
+            encodeValue: { .string($0) }
+        )
+    }
+
+    private static func decodeString(_ value: HeistValue, field: String) throws -> String {
+        guard case .string(let string) = value else {
+            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "string")
+        }
+        return string
+    }
+}
+
+extension FenceParameter where Value == Int {
+    static func integer(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        defaultValue: Int? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil
+    ) -> Self {
+        FenceParameter(
+            key: key,
+            spec: param(
+                key,
+                .integer,
+                required: required,
+                defaultValue: defaultValue.map(HeistValue.int),
+                minimum: minimum,
+                maximum: maximum
+            ),
+            expectedTypeDescription: "integer",
+            defaultValue: defaultValue,
+            decodeValue: { value, field in try decodeInteger(value, field: field) },
+            encodeValue: { .int($0) }
+        )
+    }
+
+    private static func decodeInteger(_ value: HeistValue, field: String) throws -> Int {
+        guard let integer = value.integerValue else {
+            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "integer")
+        }
+        return integer
+    }
+}
+
+extension FenceParameter where Value == Double {
+    static func number(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        defaultValue: Double? = nil,
+        maximum: Double? = nil,
+        exclusiveMinimum: Double? = nil
+    ) -> Self {
+        FenceParameter(
+            key: key,
+            spec: param(
+                key,
+                .number,
+                required: required,
+                defaultValue: defaultValue.map(jsonSchemaNumber),
+                maximum: maximum,
+                exclusiveMinimum: exclusiveMinimum
+            ),
+            expectedTypeDescription: "number",
+            defaultValue: defaultValue,
+            decodeValue: { value, field in try decodeNumber(value, field: field) },
+            encodeValue: { jsonSchemaNumber($0) }
+        )
+    }
+
+    private static func decodeNumber(_ value: HeistValue, field: String) throws -> Double {
+        guard let number = value.numberValue else {
+            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "number")
+        }
+        return number
+    }
+}
+
+extension FenceParameter where Value == Bool {
+    static func boolean(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        defaultValue: Bool? = nil
+    ) -> Self {
+        FenceParameter(
+            key: key,
+            spec: param(
+                key,
+                .boolean,
+                required: required,
+                defaultValue: defaultValue.map(HeistValue.bool)
+            ),
+            expectedTypeDescription: "boolean",
+            defaultValue: defaultValue,
+            decodeValue: { value, field in try decodeBoolean(value, field: field) },
+            encodeValue: { .bool($0) }
+        )
+    }
+
+    private static func decodeBoolean(_ value: HeistValue, field: String) throws -> Bool {
+        guard case .bool(let bool) = value else {
+            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "boolean")
+        }
+        return bool
+    }
+}
+
+extension FenceParameter where Value: CaseIterable & RawRepresentable, Value.RawValue == String {
+    static func enumValue(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        defaultValue: Value? = nil
+    ) -> Self {
+        let rawValues = Value.allCases.map(\.rawValue)
+        return FenceParameter(
+            key: key,
+            spec: param(
+                key,
+                .string,
+                required: required,
+                enumValues: rawValues,
+                defaultValue: defaultValue.map { .string($0.rawValue) }
+            ),
+            expectedTypeDescription: SchemaValidationError.expectedEnumValues(rawValues),
+            defaultValue: defaultValue,
+            allowedRawValues: rawValues,
+            decodeValue: { value, field in
+                guard case .string(let rawValue) = value else {
+                    throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "string")
+                }
+                guard let enumValue = Value(rawValue: rawValue) else {
+                    throw SchemaValidationError(
+                        field: field,
+                        observed: "string \"\(rawValue)\"",
+                        expected: SchemaValidationError.expectedEnumValues(rawValues)
+                    )
+                }
+                return enumValue
+            },
+            encodeValue: { .string($0.rawValue) }
+        )
+    }
+}
+
 func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
     type.allCases.map(\.rawValue)
+}
+
+@_spi(ButtonHeistTooling) public enum FenceParameters {
+    public static let actionName = FenceParameter<String>.string(.action)
+    public static let commandName = FenceParameter<String>.string(.command, required: true)
+    public static let connectionTarget = FenceParameter<String>.string(.target)
+    public static let device = FenceParameter<String>.string(.device)
+    public static let editAction = FenceParameter<EditAction>.enumValue(.action, required: true)
+    public static let elementProperty = FenceParameter<ElementProperty>.enumValue(.property)
+    public static let heistCatalogDetail = FenceParameter<HeistCatalogDetail>.enumValue(
+        .detail,
+        defaultValue: .summary
+    )
+    public static let heistName = FenceParameter<String>.string(.heist, required: true)
+    public static let inlineData = FenceParameter<Bool>.boolean(.inlineData)
+    public static let inlinePlan = FenceParameter<String>.string(.plan)
+    public static let interfaceDetail = FenceParameter<InterfaceDetail>.enumValue(.detail)
+    public static let maxScrollsPerContainer = FenceParameter<Int>.integer(
+        .maxScrollsPerContainer,
+        minimum: 1,
+        maximum: 2_000
+    )
+    public static let maxScrollsPerDiscovery = FenceParameter<Int>.integer(
+        .maxScrollsPerDiscovery,
+        minimum: 1,
+        maximum: 2_000
+    )
+    public static let output = FenceParameter<String>.string(.output)
+    public static let pasteboardText = FenceParameter<String>.string(.text, required: true, minLength: 1)
+    public static let performStep = FenceParameter<String>.string(.step, required: true, minLength: 1)
+    public static let planPath = FenceParameter<String>.string(.path)
+    public static let replacingExisting = FenceParameter<Bool>.boolean(.replacingExisting, defaultValue: false)
+    public static let rotorDirection = FenceParameter<RotorDirection>.enumValue(.direction, defaultValue: .next)
+    public static let rotorIndex = FenceParameter<Int>.integer(.rotorIndex, minimum: 0)
+    public static let rotorName = FenceParameter<String>.string(.rotor)
+    public static let scrollDirection = FenceParameter<ScrollDirection>.enumValue(.direction, defaultValue: .down)
+    public static let scrollEdge = FenceParameter<ScrollEdge>.enumValue(.edge, defaultValue: .top)
+    public static let swipeDirection = FenceParameter<SwipeDirection>.enumValue(.direction, required: true)
+    public static let text = FenceParameter<String>.string(.text, required: true)
+    public static let timeout = FenceParameter<Double>.number(
+        .timeout,
+        maximum: defaultWaitTimeout,
+        exclusiveMinimum: 0
+    )
+    public static let token = FenceParameter<String>.string(.token)
+    public static let containerType = FenceParameter<ContainerTypeName>.enumValue(.type)
 }
 
 func param(
@@ -747,7 +993,7 @@ enum FenceParameterBlocks: Sendable {
         .elementDirection,
         properties: [
             gestureElement,
-            param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
+            FenceParameters.swipeDirection.spec,
         ]
     )
 
@@ -772,7 +1018,7 @@ enum FenceParameterBlocks: Sendable {
         .pointDirection,
         properties: [
             objectParam(.start, required: true, properties: screenPoint),
-            param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
+            FenceParameters.swipeDirection.spec,
         ]
     )
 
@@ -811,7 +1057,7 @@ enum FenceParameterBlocks: Sendable {
 
     private static let subtreeContainerProperties: [FenceParameterSpec] = [
         param(.containerName, .string),
-        param(.type, .string, enumValues: fenceEnumValues(ContainerTypeName.self)),
+        FenceParameters.containerType.spec,
         param(.label, .string), param(.value, .string), param(.identifier, .string),
         param(.isModalBoundary, .boolean),
     ]
@@ -856,7 +1102,7 @@ enum FenceParameterBlocks: Sendable {
         objectParam(.element, properties: matcherFields),
         objectParam(.target, properties: inlineElementTargetFields),
         param(.targetRef, .string),
-        param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
+        FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields),
         objectParam(.after, properties: matcherFields),
         arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
@@ -883,7 +1129,7 @@ enum FenceParameterBlocks: Sendable {
         objectParam(.element, properties: matcherFields),
         objectParam(.target, properties: inlineElementTargetFields),
         param(.targetRef, .string),
-        param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
+        FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields),
         objectParam(.after, properties: matcherFields),
         arrayParam(
@@ -906,7 +1152,7 @@ enum FenceParameterBlocks: Sendable {
         properties: accessibilityPredicateProperties
     )
 
-    static let expectationTimeout = param(.timeout, .number, maximum: defaultWaitTimeout, exclusiveMinimum: 0)
+    static let expectationTimeout = FenceParameters.timeout.spec
     static let expectation: [FenceParameterSpec] = [expect, expectationTimeout]
 
     /// Parameters for the unified `wait` command: a predicate plus a timeout.

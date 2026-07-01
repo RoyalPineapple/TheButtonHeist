@@ -126,10 +126,83 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(projection.summary.finalScreenId, summary.finalScreenId)
     }
 
+    func testActionExpectationUsesTypedResultMeaningsAcrossReportFacts() throws {
+        let predicate = AccessibilityPredicate.change(.screen())
+        let dispatchTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2),
+            beforeScreenId: "start",
+            afterScreenId: "dispatch"
+        )
+        let expectationTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 2),
+            after: makeReceiptTestInterface(elementCount: 3),
+            beforeScreenId: "dispatch",
+            afterScreenId: "settled"
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                .failed(
+                    path: "$.body[0]",
+                    kind: .action,
+                    durationMs: 5,
+                    intent: .action(command: "activate", target: "label=Pay"),
+                    evidence: .action(.expectation(
+                        command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                        dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
+                        expectationResult: ActionResult.failure(
+                            method: .wait,
+                            errorKind: .timeout,
+                            message: "timed out waiting for checkout",
+                            accessibilityTrace: expectationTrace
+                        ),
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "timed out waiting for checkout"
+                        )
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .expectation,
+                        contract: "action expectation is met",
+                        observed: "timed out waiting for checkout",
+                        expected: predicate.description
+                    )
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+
+        let node = try XCTUnwrap(result.steps.first)
+        let actionEvidence = try XCTUnwrap(node.actionEvidence)
+        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
+        let projectedNode = try XCTUnwrap(projection.outputNodes.first)
+        guard case .action(let projectedAction)? = projectedNode.evidence else {
+            return XCTFail("Expected projected action evidence")
+        }
+
+        XCTAssertEqual(actionEvidence.dispatchResult?.method, .activate)
+        XCTAssertEqual(actionEvidence.expectationResult?.method, .wait)
+        XCTAssertEqual(actionEvidence.reportedResult?.method, .wait)
+        XCTAssertEqual(actionEvidence.traceResult?.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(node.dispatchedActionResult?.method, .activate)
+        XCTAssertEqual(node.reportedActionResult?.errorKind, .timeout)
+        XCTAssertEqual(node.traceEvidenceResult?.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
+        XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
+        XCTAssertEqual(result.traceResultsInExecutionOrder.map(\.method), [.wait])
+        XCTAssertEqual(HeistExecutionReportSummaryFacts(result: result).finalScreenId, "settled")
+        XCTAssertEqual(projection.summary.finalScreenId, "settled")
+        XCTAssertEqual(projectedNode.actionErrorKind, .timeout)
+        XCTAssertEqual(projectedAction.result?.actionMethod.rawValue, "activate")
+        XCTAssertEqual(projectedAction.expectationResult?.actionMethod.rawValue, "wait")
+    }
+
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))),
-            actionResult: ActionResult.success(method: .activate),
+            dispatchResult: ActionResult.success(method: .activate),
             warning: .activationWeakAffordanceEvidence(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
         )
 
@@ -355,8 +428,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: "activate", target: "label=Pay"),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                        actionResult: ActionResult.success(method: .activate),
-                        expectationActionResult: ActionResult.success(method: .wait, message: "screen did not change"),
+                        dispatchResult: ActionResult.success(method: .activate),
+                        expectationResult: ActionResult.success(method: .wait, message: "screen did not change"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -652,8 +725,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: "activate", target: "label=Pay"),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                        actionResult: ActionResult.success(method: .activate),
-                        expectationActionResult: ActionResult.success(method: .wait, message: "elementsChanged"),
+                        dispatchResult: ActionResult.success(method: .activate),
+                        expectationResult: ActionResult.success(method: .wait, message: "elementsChanged"),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -721,16 +794,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: "takeScreenshot", target: nil),
                     evidence: .action(.dispatch(
                         command: .takeScreenshot,
-                        actionResult: ActionResult.success(payload: .screenshot(screenshot))
+                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
                     ))
                 ),
             ],
             durationMs: 2,
             abortedAtPath: "$.body[0]"
         )
-        let rows = await Task { @ButtonHeistActor in
-            TheFence(configuration: .init()).junitSteps(result: result)
-        }.value
+        let rows = await TheFence(configuration: .init()).junitSteps(result: result)
 
         guard case .failed(let message, let errorKind) = rows.first?.outcome else {
             return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
@@ -1095,16 +1166,16 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             }
             evidence = .expectation(
                 command: command,
-                actionResult: actionResult,
-                expectationActionResult: expectationActionResult,
+                dispatchResult: actionResult,
+                expectationResult: expectationActionResult,
                 expectation: expectation,
                 warning: warning
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
-                .dispatch(command: $0, actionResult: actionResult, warning: warning)
-            } ?? .dispatch(actionResult: actionResult)
+                .dispatch(command: $0, dispatchResult: actionResult, warning: warning)
+            } ?? .dispatch(dispatchResult: actionResult)
         }
 
         let intent = command.map {

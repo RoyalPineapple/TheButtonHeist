@@ -14,9 +14,9 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeGetInterfaceRequest,
                 parameters: FenceParameterBlocks.elementFilter + [
                     FenceParameterBlocks.interfaceSubtree,
-                    param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
-                    param(.maxScrollsPerContainer, .integer, minimum: 1, maximum: 2_000),
-                    param(.maxScrollsPerDiscovery, .integer, minimum: 1, maximum: 2_000),
+                    FenceParameters.interfaceDetail.spec,
+                    FenceParameters.maxScrollsPerContainer.spec,
+                    FenceParameters.maxScrollsPerDiscovery.spec,
                 ],
                 projection: .cliAndMCP(
                     """
@@ -43,7 +43,7 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetScreenRequest,
-                parameters: [param(.output, .string), param(.inlineData, .boolean)],
+                parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec],
                 projection: .cliAndMCP(
                     "Capture a PNG screenshot with visible interface state.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)

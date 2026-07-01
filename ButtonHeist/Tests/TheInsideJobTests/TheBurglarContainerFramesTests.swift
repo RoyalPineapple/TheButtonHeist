@@ -30,7 +30,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: hierarchy,
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])], container.frame.cgRect)
+        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, container.frame.cgRect)
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
     }
 
@@ -56,7 +56,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(result.contentFramesByPath[TreePath([0])], outer.frame.cgRect,
+        XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, outer.frame.cgRect,
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 

@@ -1,5 +1,6 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
+import ThePlans
 
 struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
@@ -35,7 +36,7 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
             entry: nil,
             commandName: Self.cliCommandName
         ).adding(
-            detail ? CommandArgumentWriter.value(.detail, "detailed") : nil
+            detail ? CommandArgumentWriter.value(FenceParameters.heistCatalogDetail, .detailed) : nil
         )
         try await Self.runLocal(
             command: Self.fenceCommand,

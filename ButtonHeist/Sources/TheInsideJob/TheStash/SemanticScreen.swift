@@ -75,9 +75,14 @@ struct SemanticScreen: Sendable, Equatable {
     /// must not be projected into wire `frame` / `activationPoint` fields for
     /// off-viewport elements.
     struct ObservedScrollContentActivationPoint: Sendable, Equatable {
-        let point: CGPoint
+        let point: ScrollContentPoint
 
         init?(_ point: CGPoint) {
+            guard point.x.isFinite, point.y.isFinite else { return nil }
+            self.point = ScrollContentPoint(point)
+        }
+
+        init?(_ point: ScrollContentPoint) {
             guard point.x.isFinite, point.y.isFinite else { return nil }
             self.point = point
         }
@@ -122,7 +127,7 @@ struct SemanticScreen: Sendable, Equatable {
         let container: AccessibilityContainer
         let path: TreePath
         let containerName: ContainerName?
-        let contentFrame: CGRect?
+        let contentFrame: ContentRect?
         let scrollMembership: ScrollMembership?
         let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
         let scrollInventory: ScrollInventory?
@@ -136,10 +141,30 @@ struct SemanticScreen: Sendable, Equatable {
             observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
             scrollInventory: ScrollInventory? = nil
         ) {
+            self.init(
+                container: container,
+                path: path,
+                containerName: containerName,
+                contentRect: contentFrame.map(ContentRect.init),
+                scrollMembership: scrollMembership,
+                observedScrollContentActivationPoint: observedScrollContentActivationPoint,
+                scrollInventory: scrollInventory
+            )
+        }
+
+        init(
+            container: AccessibilityContainer,
+            path: TreePath,
+            containerName: ContainerName?,
+            contentRect: ContentRect?,
+            scrollMembership: ScrollMembership? = nil,
+            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
+            scrollInventory: ScrollInventory? = nil
+        ) {
             self.container = container
             self.path = path
             self.containerName = containerName
-            self.contentFrame = contentFrame
+            self.contentFrame = contentRect
             self.scrollMembership = scrollMembership
             self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
             self.scrollInventory = scrollInventory

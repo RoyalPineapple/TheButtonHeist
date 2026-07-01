@@ -342,25 +342,6 @@ extension TheBrains {
             }
         }
 
-        var status: HeistExecutionStepStatus {
-            switch self {
-            case .predicateMet, .timeoutHandledByElse:
-                return .passed
-            case .timedOut, .initialObservationUnavailable, .bodyFailed, .timeoutElseFailed:
-                return .failed
-            }
-        }
-
-        var abortedAtChildPath: String? {
-            switch self {
-            case .predicateMet, .timedOut, .initialObservationUnavailable, .timeoutHandledByElse:
-                return nil
-            case .bodyFailed(_, _, _, let childPath, _),
-                 .timeoutElseFailed(_, _, _, _, _, let childPath):
-                return childPath
-            }
-        }
-
         static func initialObservationUnavailableExpectation(
             step: ResolvedRepeatUntilStep,
             receipt: HeistWaitReceipt
@@ -371,51 +352,7 @@ extension TheBrains {
             )
         }
 
-        func lastObservedSummary() -> String? {
-            switch self {
-            case .predicateMet(let check, _, _):
-                return check.observation.summary
-            case .timedOut(let observation, _, _, _),
-                 .timeoutHandledByElse(let observation, _, _, _, _),
-                 .timeoutElseFailed(let observation, _, _, _, _, _):
-                return observation?.summary
-            case .bodyFailed(let observation, _, _, _, _):
-                return observation.summary
-            case .initialObservationUnavailable(let receipt):
-                return receipt.observationSummary
-            }
-        }
-
-        func iterationCount() -> Int {
-            switch self {
-            case .predicateMet(_, let iterationCount, _),
-                 .timedOut(_, _, let iterationCount, _),
-                 .timeoutHandledByElse(_, _, let iterationCount, _, _),
-                 .timeoutElseFailed(_, _, let iterationCount, _, _, _):
-                return iterationCount
-            case .bodyFailed(_, _, let iterationIndex, _, _):
-                return iterationIndex + 1
-            case .initialObservationUnavailable:
-                return 0
-            }
-        }
-
-        func failureReason(step: ResolvedRepeatUntilStep) -> String? {
-            switch self {
-            case .predicateMet:
-                return nil
-            case .timedOut(_, let expectation, _, _),
-                 .timeoutHandledByElse(_, let expectation, _, _, _),
-                 .timeoutElseFailed(_, let expectation, _, _, _, _):
-                return RepeatUntilTerminal.timeoutReason(step: step, expectation: expectation)
-            case .initialObservationUnavailable:
-                return "could not observe settled semantic hierarchy before evaluating repeat_until"
-            case .bodyFailed(_, _, let iterationIndex, let childPath, _):
-                return "iteration \(iterationIndex) failed at \(childPath)"
-            }
-        }
-
-        private static func timeoutReason(
+        static func timeoutReason(
             step: ResolvedRepeatUntilStep,
             expectation: UnmetExpectationResult
         ) -> String {
@@ -429,6 +366,222 @@ extension TheBrains {
                 "expected: \(step.predicate.description)",
                 "last result: \(expectation.result.actual ?? "not met")",
             ].joined(separator: "; ")
+        }
+    }
+
+    private enum RepeatUntilTerminalResult {
+        case predicateMet(
+            evidence: HeistRepeatUntilEvidence,
+            children: [HeistExecutionStepResult]
+        )
+        case timedOut(
+            evidence: HeistRepeatUntilEvidence,
+            failure: HeistFailureDetail,
+            children: [HeistExecutionStepResult]
+        )
+        case initialUnavailable(
+            evidence: HeistRepeatUntilEvidence,
+            failure: HeistFailureDetail,
+            children: [HeistExecutionStepResult]
+        )
+        case bodyFailed(
+            evidence: HeistRepeatUntilEvidence,
+            failure: HeistFailureDetail,
+            abortedAtChildPath: String,
+            children: [HeistExecutionStepResult]
+        )
+        case timeoutHandledByElse(
+            evidence: HeistRepeatUntilEvidence,
+            children: [HeistExecutionStepResult]
+        )
+        case timeoutElseFailed(
+            evidence: HeistRepeatUntilEvidence,
+            failure: HeistFailureDetail,
+            abortedAtChildPath: String,
+            children: [HeistExecutionStepResult]
+        )
+
+        init(
+            terminal: RepeatUntilTerminal,
+            step: ResolvedRepeatUntilStep,
+            childFailureDetail: (String) -> HeistFailureDetail
+        ) {
+            switch terminal {
+            case .predicateMet(let check, let iterationCount, _):
+                self = .predicateMet(
+                    evidence: HeistRepeatUntilEvidence.predicateMet(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        iterationCount: iterationCount,
+                        expectation: check.expectation,
+                        lastObservedSummary: check.observation.summary
+                    ),
+                    children: terminal.children
+                )
+            case .timedOut(let observation, let expectation, let iterationCount, _):
+                let failureReason = RepeatUntilTerminal.timeoutReason(step: step, expectation: expectation)
+                self = .timedOut(
+                    evidence: HeistRepeatUntilEvidence.timedOut(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        iterationCount: iterationCount,
+                        expectation: expectation,
+                        lastObservedSummary: observation?.summary,
+                        failureReason: failureReason
+                    ),
+                    failure: Self.failureDetail(
+                        step: step,
+                        observed: failureReason
+                    ),
+                    children: terminal.children
+                )
+            case .initialObservationUnavailable(let receipt):
+                let failureReason = "could not observe settled semantic hierarchy before evaluating repeat_until"
+                self = .initialUnavailable(
+                    evidence: HeistRepeatUntilEvidence.initialObservationUnavailable(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        expectation: RepeatUntilTerminal.initialObservationUnavailableExpectation(
+                            step: step,
+                            receipt: receipt
+                        ),
+                        lastObservedSummary: receipt.observationSummary,
+                        failureReason: failureReason
+                    ),
+                    failure: Self.failureDetail(
+                        step: step,
+                        observed: failureReason
+                    ),
+                    children: terminal.children
+                )
+            case .bodyFailed(let observation, let expectation, let iterationIndex, let childPath, _):
+                let failureReason = "iteration \(iterationIndex) failed at \(childPath)"
+                self = .bodyFailed(
+                    evidence: HeistRepeatUntilEvidence.bodyFailed(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        iterationCount: iterationIndex + 1,
+                        expectation: expectation,
+                        lastObservedSummary: observation.summary,
+                        failureReason: failureReason
+                    ),
+                    failure: Self.failureDetail(
+                        step: step,
+                        observed: failureReason
+                    ),
+                    abortedAtChildPath: childPath,
+                    children: terminal.children
+                )
+            case .timeoutHandledByElse(let observation, let expectation, let iterationCount, _, _):
+                self = .timeoutHandledByElse(
+                    evidence: HeistRepeatUntilEvidence.timeoutHandledByElse(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        iterationCount: iterationCount,
+                        expectation: expectation,
+                        lastObservedSummary: observation?.summary,
+                        failureReason: RepeatUntilTerminal.timeoutReason(step: step, expectation: expectation)
+                    ),
+                    children: terminal.children
+                )
+            case .timeoutElseFailed(let observation, let expectation, let iterationCount, _, _, let childPath):
+                let failureReason = [
+                    RepeatUntilTerminal.timeoutReason(step: step, expectation: expectation),
+                    "else body failed at \(childPath)",
+                ].joined(separator: "; ")
+                self = .timeoutElseFailed(
+                    evidence: HeistRepeatUntilEvidence.timeoutElseFailed(
+                        predicate: step.predicate,
+                        timeout: step.timeout,
+                        iterationCount: iterationCount,
+                        expectation: expectation,
+                        lastObservedSummary: observation?.summary,
+                        failureReason: failureReason
+                    ),
+                    failure: childFailureDetail(childPath),
+                    abortedAtChildPath: childPath,
+                    children: terminal.children
+                )
+            }
+        }
+
+        var evidence: HeistRepeatUntilEvidence {
+            switch self {
+            case .predicateMet(let evidence, _),
+                 .timedOut(let evidence, _, _),
+                 .initialUnavailable(let evidence, _, _),
+                 .bodyFailed(let evidence, _, _, _),
+                 .timeoutHandledByElse(let evidence, _),
+                 .timeoutElseFailed(let evidence, _, _, _):
+                return evidence
+            }
+        }
+
+        var children: [HeistExecutionStepResult] {
+            switch self {
+            case .predicateMet(_, let children),
+                 .timedOut(_, _, let children),
+                 .initialUnavailable(_, _, let children),
+                 .bodyFailed(_, _, _, let children),
+                 .timeoutHandledByElse(_, let children),
+                 .timeoutElseFailed(_, _, _, let children):
+                return children
+            }
+        }
+
+        func stepResult(
+            path: String,
+            durationMs: Int,
+            intent: HeistStepIntent
+        ) -> HeistExecutionStepResult {
+            let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
+            switch self {
+            case .predicateMet,
+                 .timeoutHandledByElse:
+                return .passed(
+                    path: path,
+                    kind: .repeatUntil,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: stepEvidence,
+                    children: children
+                )
+            case .timedOut(_, let failure, _),
+                 .initialUnavailable(_, let failure, _):
+                return .failed(
+                    path: path,
+                    kind: .repeatUntil,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: stepEvidence,
+                    failure: failure,
+                    children: children
+                )
+            case .bodyFailed(_, let failure, let abortedAtChildPath, _),
+                 .timeoutElseFailed(_, let failure, let abortedAtChildPath, _):
+                return .childAborted(
+                    path: path,
+                    kind: .repeatUntil,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: stepEvidence,
+                    failure: failure,
+                    abortedAtChildPath: abortedAtChildPath,
+                    children: children
+                )
+            }
+        }
+
+        private static func failureDetail(
+            step: ResolvedRepeatUntilStep,
+            observed: String
+        ) -> HeistFailureDetail {
+            HeistFailureDetail(
+                category: .loop,
+                contract: "repeat_until predicate is met before timeout",
+                observed: observed,
+                expected: step.predicate.description
+            )
         }
     }
 
@@ -650,10 +803,10 @@ extension TheBrains {
         guard iterationResults.contains(where: { $0.path == failedStep.path }) else { return false }
         guard failedStep.kind == .action,
               failedStep.failure?.category == .action,
-              failedStep.actionEvidence?.actionResult?.success == false else {
+              failedStep.actionEvidence?.dispatchResult?.success == false else {
             return false
         }
-        switch failedStep.actionEvidence?.actionResult?.errorKind {
+        switch failedStep.actionEvidence?.dispatchResult?.errorKind {
         case nil, .some(.actionFailed):
             return true
         case .some(.accessibilityTreeUnavailable),
@@ -790,164 +943,21 @@ extension TheBrains {
                 observed: "repeat_until result requires terminal state"
             )
         }
-        let failureReason = terminal.failureReason(step: step)
-        return repeatUntilResult(
-            context: context,
-            step: step,
+        let terminalResult = RepeatUntilTerminalResult(
             terminal: terminal,
-            evidence: repeatUntilEvidence(
-                terminal: terminal,
-                step: step,
-                failureReason: failureReason
-            ),
-            failureReason: failureReason
+            step: step,
+            childFailureDetail: {
+                childFailureDetail(category: .loop, childPath: $0)
+            }
         )
-    }
-
-    private func repeatUntilResult(
-        context: RepeatUntilExecutionContext,
-        step: ResolvedRepeatUntilStep,
-        terminal: RepeatUntilTerminal,
-        evidence: HeistRepeatUntilEvidence,
-        failureReason: String?
-    ) -> HeistExecutionStepResult {
-        let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
-        return heistLoopReceipt(
+        return terminalResult.stepResult(
             path: context.path,
-            kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: .repeatUntil(
                 predicate: step.predicate.description,
                 timeout: step.timeout
-            ),
-            outcome: repeatUntilReceiptOutcome(
-                terminal: terminal,
-                step: step,
-                evidence: stepEvidence,
-                failureReason: failureReason,
-                children: HeistReceiptChildren(terminal.children)
             )
         )
-    }
-
-    private func repeatUntilReceiptOutcome(
-        terminal: RepeatUntilTerminal,
-        step: ResolvedRepeatUntilStep,
-        evidence: HeistStepEvidence,
-        failureReason: String?,
-        children: HeistReceiptChildren
-    ) -> HeistReceiptOutcome<HeistStepEvidence> {
-        return HeistReceiptOutcome(
-            evidence: evidence,
-            children: children,
-            completedOutcome: HeistReceiptCompletedOutcome(
-                failure: repeatUntilFailure(
-                    terminal: terminal,
-                    step: step,
-                    failureReason: failureReason
-                )
-            ),
-            childFailure: { childAbort in
-                repeatUntilFailure(
-                    terminal: terminal,
-                    step: step,
-                    failureReason: failureReason
-                ) ?? childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
-            }
-        )
-    }
-
-    private func repeatUntilEvidence(
-        terminal: RepeatUntilTerminal,
-        step: ResolvedRepeatUntilStep,
-        failureReason: String?
-    ) -> HeistRepeatUntilEvidence {
-        switch terminal {
-        case .predicateMet(let check, let iterationCount, _):
-            return HeistRepeatUntilEvidence.predicateMet(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                iterationCount: iterationCount,
-                expectation: check.expectation,
-                lastObservedSummary: check.observation.summary
-            )
-        case .timedOut(let observation, let expectation, let iterationCount, _):
-            return HeistRepeatUntilEvidence.timedOut(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                iterationCount: iterationCount,
-                expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: failureReason ?? "repeat_until timed out"
-            )
-        case .initialObservationUnavailable(let receipt):
-            return HeistRepeatUntilEvidence.initialObservationUnavailable(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                expectation: RepeatUntilTerminal.initialObservationUnavailableExpectation(
-                    step: step,
-                    receipt: receipt
-                ),
-                lastObservedSummary: receipt.observationSummary,
-                failureReason: failureReason ?? "could not observe settled semantic hierarchy before evaluating repeat_until"
-            )
-        case .bodyFailed(let observation, let expectation, _, _, _):
-            return HeistRepeatUntilEvidence.bodyFailed(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                iterationCount: terminal.iterationCount(),
-                expectation: expectation,
-                lastObservedSummary: observation.summary,
-                failureReason: failureReason ?? "repeat_until body failed"
-            )
-        case .timeoutHandledByElse(let observation, let expectation, let iterationCount, _, _):
-            return HeistRepeatUntilEvidence.timeoutHandledByElse(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                iterationCount: iterationCount,
-                expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: failureReason
-            )
-        case .timeoutElseFailed(let observation, let expectation, let iterationCount, _, _, _):
-            return HeistRepeatUntilEvidence.timeoutHandledByElse(
-                predicate: step.predicate,
-                timeout: step.timeout,
-                iterationCount: iterationCount,
-                expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: failureReason
-            )
-        }
-    }
-
-    private func repeatUntilFailure(
-        terminal: RepeatUntilTerminal,
-        step: ResolvedRepeatUntilStep,
-        failureReason: String?
-    ) -> HeistFailureDetail? {
-        guard terminal.status == .failed else { return nil }
-        if case .bodyFailed = terminal {
-            return repeatUntilFailureDetail(step: step, failureReason: failureReason)
-        }
-        if let abortedAtChildPath = terminal.abortedAtChildPath {
-            return childFailureDetail(category: .loop, childPath: abortedAtChildPath)
-        }
-        return repeatUntilFailureDetail(step: step, failureReason: failureReason)
-    }
-
-    private func repeatUntilFailureDetail(
-        step: ResolvedRepeatUntilStep,
-        failureReason: String?
-    ) -> HeistFailureDetail? {
-        return failureReason.map {
-            HeistFailureDetail(
-                category: .loop,
-                contract: "repeat_until predicate is met before timeout",
-                observed: $0,
-                expected: step.predicate.description
-            )
-        }
     }
 
     private func repeatUntilIterationResult(

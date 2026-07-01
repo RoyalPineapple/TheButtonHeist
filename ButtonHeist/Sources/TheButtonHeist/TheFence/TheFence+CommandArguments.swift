@@ -543,6 +543,53 @@ extension TheFence.CommandArgumentEnvelope {
         argumentValues[key.rawValue]
     }
 
+    func value<Value>(_ parameter: FenceParameter<Value>) throws -> Value? {
+        guard let value = value(for: parameter.key) else { return nil }
+        return try parameter.decode(value, field: field(parameter.key))
+    }
+
+    func requiredValue<Value>(_ parameter: FenceParameter<Value>) throws -> Value {
+        guard let value = try value(parameter) else {
+            throw SchemaValidationError(
+                field: field(parameter.key),
+                observed: "missing",
+                expected: parameter.expectedTypeDescription
+            )
+        }
+        return value
+    }
+
+    func value<Value>(
+        _ parameter: FenceParameter<Value>,
+        defaultFrom descriptor: FenceCommandDescriptor
+    ) throws -> Value {
+        try value(parameter) ?? descriptor.requiredDefaultValue(for: parameter)
+    }
+
+    func nonNegativeValue(_ parameter: FenceParameter<Int>) throws -> Int? {
+        guard let integer = try value(parameter) else { return nil }
+        guard integer >= 0 else {
+            throw SchemaValidationError(field: field(parameter.key), observed: integer, expected: "integer >= 0")
+        }
+        return integer
+    }
+
+    func nonEmptyValue(_ parameter: FenceParameter<String>) throws -> String {
+        let value = try requiredValue(parameter)
+        if value.isEmpty {
+            throw SchemaValidationError(field: field(parameter.key), observed: "string \"\"", expected: "non-empty string")
+        }
+        return value
+    }
+
+    func optionalNonEmptyValue(_ parameter: FenceParameter<String>) throws -> String? {
+        guard let value = try value(parameter) else { return nil }
+        if value.isEmpty {
+            throw SchemaValidationError(field: field(parameter.key), observed: "string \"\"", expected: "non-empty string")
+        }
+        return value
+    }
+
     func string(_ key: FenceParameterKey) -> String? {
         guard case .string(let value) = value(for: key) else { return nil }
         return value

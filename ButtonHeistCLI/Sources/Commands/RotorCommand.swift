@@ -1,5 +1,6 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
+import ThePlans
 
 struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
@@ -32,9 +33,9 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
 
     @Option(
         name: .shortAndLong,
-        help: "Direction: \(Self.catalogAllowedValuesDescription(for: .direction))"
+        help: "Direction: \(Self.catalogAllowedValuesDescription(for: FenceParameters.rotorDirection))"
     )
-    var direction: String = Self.catalogDefaultString(for: .direction)
+    var direction: String = Self.catalogDefaultArgument(for: FenceParameters.rotorDirection)
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -42,8 +43,8 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         if let rotorIndex, rotorIndex < 0 {
             throw ValidationError("rotor-index must be non-negative")
         }
-        guard let rotorDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
+        guard let rotorDirection = Self.catalogCanonicalValue(direction, for: FenceParameters.rotorDirection) else {
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.rotorDirection))")
         }
 
         try await CLIRunner.run(
@@ -52,7 +53,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             command: Self.fenceCommand,
             arguments: Self.fenceArguments(
                 target: target,
-                CommandArgumentWriter.value(.direction, rotorDirection),
+                CommandArgumentWriter.value(FenceParameters.rotorDirection, rotorDirection),
                 CommandArgumentWriter.optional(.rotor, rotor),
                 CommandArgumentWriter.optional(.rotorIndex, rotorIndex),
                 CommandArgumentWriter.value(.timeout, timeoutOption.timeout)

@@ -614,6 +614,60 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("has no scroll membership"))
     }
 
+    func testInflationUsesFreshVisibleTargetBeforeKnownNoRevealPath() async {
+        let staleKnownTarget = makeElement(label: "Coke", traits: .button)
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(makeElement(label: "Drink", traits: .header), "drink_header")],
+            offViewport: [Screen.OffViewportEntry(staleKnownTarget, heistId: "stale_coke_button")]
+        )
+
+        let visibleFrame = CGRect(x: 40, y: 217, width: 300, height: 96)
+        let visibleTarget = AccessibilityElement.make(
+            label: "Coke",
+            traits: .button,
+            frame: visibleFrame
+        )
+        let visibleObject = NSObject()
+        let visibleScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                visibleTarget,
+                heistId: "current_coke_button",
+                object: visibleObject
+            )
+        ])
+        var discoveryAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in
+            discoveryAttempts += 1
+            self.brains.stash.nextVisibleRefreshScreenForTesting = visibleScreen
+            _ = self.brains.stash.refreshLiveCapture()
+            return nil
+        }
+        var revealAttempts = 0
+        brains.navigation.elementInflation.revealKnownTarget = { _ in
+            revealAttempts += 1
+            return nil
+        }
+        defer {
+            brains.navigation.elementInflation.discoverTarget = nil
+            brains.navigation.elementInflation.revealKnownTarget = nil
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "test inflation"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected visible target inflation, got \(result)")
+        }
+        XCTAssertEqual(discoveryAttempts, 1)
+        XCTAssertEqual(revealAttempts, 0)
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, "current_coke_button")
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, visibleFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, visibleFrame.midY, accuracy: 0.01)
+    }
+
     func testStaleLiveObjectRefreshExhaustsRetryState() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white

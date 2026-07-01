@@ -244,7 +244,7 @@ final class ElementInflationProductTests: XCTestCase {
         guard case .action(let actionEvidence)? = step.evidence else {
             return XCTFail("Expected heist action evidence, got \(String(describing: step.evidence))")
         }
-        let stepResult = try XCTUnwrap(actionEvidence.actionResult)
+        let stepResult = try XCTUnwrap(actionEvidence.dispatchResult)
 
         XCTAssertTrue(single.result.success, single.result.message ?? "single activate failed")
         XCTAssertTrue(heist.result.success, heistFailureDescription(heist.result))
@@ -683,7 +683,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         let innerContainerName = capturedInnerContainer?.containerName ?? TheBurglar.containerName(
             for: innerContainer,
-            contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
+            contentFrame: ContentRect(CGRect(origin: .zero, size: fixture.innerScrollView.frame.size))
         )
         let element = makeElement(
             label: fixture.label,

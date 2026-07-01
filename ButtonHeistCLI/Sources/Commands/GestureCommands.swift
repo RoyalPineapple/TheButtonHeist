@@ -52,22 +52,22 @@ struct CLIGesturePayload: Equatable {
         )
     }
 
-    static func elementDirection(element: ElementTarget, direction: String) -> Self {
+    static func elementDirection(element: ElementTarget, direction: SwipeDirection) -> Self {
         Self(
             key: .elementDirection,
             object: CommandArgumentWriter.object(
                 CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
-                CommandArgumentWriter.value(.direction, direction)
+                CommandArgumentWriter.value(FenceParameters.swipeDirection, direction)
             )
         )
     }
 
-    static func pointDirection(start: CLIPointArgument, direction: String) -> Self {
+    static func pointDirection(start: CLIPointArgument, direction: SwipeDirection) -> Self {
         Self(
             key: .pointDirection,
             object: CommandArgumentWriter.object(
                 CommandArgumentWriter.value(.start, start.value),
-                CommandArgumentWriter.value(.direction, direction)
+                CommandArgumentWriter.value(FenceParameters.swipeDirection, direction)
             )
         )
     }
@@ -242,7 +242,7 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @Option(name: .customLong("to-y"), help: "Absolute end Y coordinate")
     var toY: Double?
 
-    @Option(name: .shortAndLong, help: "Swipe direction: \(Self.catalogAllowedValuesDescription(for: .direction))")
+    @Option(name: .shortAndLong, help: "Swipe direction: \(Self.catalogAllowedValuesDescription(for: FenceParameters.swipeDirection))")
     var direction: String?
 
     @Option(name: .long, help: "Duration in seconds (default 0.15)")
@@ -282,10 +282,10 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             }
         }
 
-        let swipeDirection: String?
+        let swipeDirection: SwipeDirection?
         if let dir = direction {
-            guard let parsedDirection = Self.catalogCanonicalStringValue(dir, for: .direction) else {
-                throw ValidationError("Invalid direction: \(dir). Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
+            guard let parsedDirection = Self.catalogCanonicalValue(dir, for: FenceParameters.swipeDirection) else {
+                throw ValidationError("Invalid direction: \(dir). Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.swipeDirection))")
             }
             swipeDirection = parsedDirection
         } else {

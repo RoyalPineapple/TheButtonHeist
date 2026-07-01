@@ -171,7 +171,10 @@ final class HeistPlanTests: XCTestCase {
           "type": "conditional",
           "conditional": {
             "cases": [{
-              "predicate": {"type": "exists", "element": {"label": "Home"}},
+              "predicate": {
+                "type": "exists",
+                "element": {"checks": [{"kind": "label", "match": "Home"}]}
+              },
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
@@ -191,7 +194,10 @@ final class HeistPlanTests: XCTestCase {
           "wait_for_cases": {
             "timeout": 1,
             "cases": [{
-              "predicate": {"type": "exists", "element": {"label": "Home"}},
+              "predicate": {
+                "type": "exists",
+                "element": {"checks": [{"kind": "label", "match": "Home"}]}
+              },
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
@@ -239,7 +245,10 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "wait",
           "wait": {
-            "predicate": {"type": "exists", "element": {"label": "Home"}},
+            "predicate": {
+              "type": "exists",
+              "element": {"checks": [{"kind": "label", "match": "Home"}]}
+            },
             "timeout": -1
           }
         }
@@ -255,7 +264,10 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "wait",
           "waitForCases": {
-            "predicate": {"type": "exists", "element": {"label": "Home"}},
+            "predicate": {
+              "type": "exists",
+              "element": {"checks": [{"kind": "label", "match": "Home"}]}
+            },
             "timeout": 1
           }
         }
@@ -409,7 +421,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": 0,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -425,7 +437,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": -1,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -443,7 +455,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": 5,
             "parameter": "target"
           }
@@ -460,7 +472,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each",
           "for_each": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": 5,
             "element": {"label": "Cell", "ordinal": 0},
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -478,7 +490,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": 5,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -495,7 +507,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"label": "Cell"},
+            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
             "limit": 5,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}],

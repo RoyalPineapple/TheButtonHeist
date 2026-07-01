@@ -12,24 +12,19 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `runtime parser accepts StringMatch enum cases for all string predicate fields`() throws {
+@Test func `runtime parser accepts broad StringMatch enum cases for all string predicate fields`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    Activate(.label(.exact("Search")))
     Activate(.identifier(.suffix("field")))
-    WaitFor(.exists(.element(label: .prefix("No results"), identifier: .contains("empty_state"), value: .suffix("items"))), timeout: .seconds(2))
+    WaitFor(.exists(.element(.label(.prefix("No results")), .identifier(.contains("empty_state")), .value(.suffix("items")))), timeout: .seconds(2))
     TypeText("milk", into: .value(.prefix("Search")))
     """))
     let expected = try HeistPlan(body: [
-        .action(try ActionStep(command: .activate(.predicate(.label(.exact("Search")))))),
         .action(try ActionStep(command: .activate(.predicate(.identifier(.suffix("field")))))),
-        .wait(WaitStep(
-            predicate: .exists(ElementPredicateTemplate.element(
-                label: .prefix(.literal("No results")),
-                identifier: .contains(.literal("empty_state")),
-                value: .suffix(.literal("items"))
-            )),
-            timeout: 2
-        )),
+        .wait(WaitStep(predicate: .exists(ElementPredicateTemplate.element(
+            .label(.prefix(.literal("No results"))),
+            .identifier(.contains(.literal("empty_state"))),
+            .value(.suffix(.literal("items")))
+        )), timeout: 2)),
         .action(try ActionStep(command: .typeText(
             text: .literal("milk"),
             target: .predicate(.value(.prefix("Search")))
@@ -37,6 +32,22 @@ import Testing
     ])
 
     #expect(plan == expected)
+}
+
+@Test func `runtime parser rejects exact StringMatch source spelling`() {
+    #expect(throws: HeistPlanSourceCompilerError.self) {
+        _ = try HeistPlanSourceCompiler().compile(root("""
+        Activate(.label(.exact("Search")))
+        """))
+    }
+}
+
+@Test func `runtime parser rejects labeled element predicate fields`() {
+    #expect(throws: HeistPlanSourceCompilerError.self) {
+        _ = try HeistPlanSourceCompiler().compile(root("""
+        Activate(.element(label: "Pay", traits: [.button]))
+        """))
+    }
 }
 
 @Test func `inline plan source type text replacement and clear compile`() throws {
@@ -78,14 +89,14 @@ import Testing
 
 @Test func `runtime parser accepts repeated string predicate checks for one field`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    Activate(.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), traits: [.button]))
+    Activate(.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), .traits([.button])))
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.element(
             .label(.prefix(.literal("foo"))),
             .label(.contains(.literal("bar"))),
             .label(.suffix(.literal("baz"))),
-            traits: [.button]
+            .traits([.button])
         ))))),
     ])
 
@@ -587,7 +598,7 @@ import Testing
             RunHeist("Cart.addItem", item)
         }
 
-        ForEach(.matching(.element(label: "Message", traits: [.button])), limit: 2) { message in
+        ForEach(.matching(.element(.label("Message"), .traits([.button]))), limit: 2) { message in
             RunHeist("Messages.archive", message)
         }
     }
@@ -783,11 +794,11 @@ import Testing
 
 @Test func `inline plan source action until compiles to repeat until`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    Increment(.label("Volume")).until(.exists(.element(label: "Volume", value: "100")))
+    Increment(.label("Volume")).until(.exists(.element(.label("Volume"), .value("100"))))
     """))
     let expected = try HeistPlan(body: [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .exists(.element(label: "Volume", value: "100")),
+            predicate: .exists(.element(.label("Volume"), .value("100"))),
             timeout: defaultWaitTimeout,
             body: [
                 .action(try ActionStep(
@@ -996,9 +1007,9 @@ import Testing
         )),
         .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
         .action(try ActionStep(command: .activate(.predicate(.element(
-            label: "Delete",
-            traits: [.button],
-            excludeTraits: [.header]
+            .label("Delete"),
+            .traits([.button]),
+            .excludeTraits([.header])
         ))))),
     ]))
 }
@@ -1103,7 +1114,7 @@ import Testing
             ]
         )),
         .forEachElement(try ForEachElementStep(
-            matching: .element(label: "Delete", traits: [.button]),
+            matching: .element(.label("Delete"), .traits([.button])),
             limit: 2,
             parameter: "rowTarget",
             body: [
@@ -1152,9 +1163,9 @@ import Testing
         .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
     ])
 
-    let traits = try HeistPlanSourceCompiler().compile(root(#"Activate(.element(label: "Pay", traits: [.button]))"#))
+    let traits = try HeistPlanSourceCompiler().compile(root(#"Activate(.element(.label("Pay"), .traits([.button])))"#))
     #expect(traits.body == [
-        .action(try ActionStep(command: .activate(.predicate(.element(label: "Pay", traits: [.button]))))),
+        .action(try ActionStep(command: .activate(.predicate(.element(.label("Pay"), .traits([.button])))))),
     ])
 
     let typeText = try HeistPlanSourceCompiler().compile(root(#"TypeText("milk", into: .label("Search"))"#))
@@ -1177,7 +1188,7 @@ import Testing
 }
 
 @Test func `reported agent grammar mistakes fail with corrections`() throws {
-    let stringTraits = compileError(root(#"Activate(.element(label: "Pay", traits: ["button"]))"#))
+    let stringTraits = compileError(root(#"Activate(.element(.label("Pay"), .traits(["button"])))"#))
     expect(stringTraits, contains: "traits must use enum-style syntax like [.button]")
 
     let actionOrdinal = compileError(root(#"Activate(.label("Pay"), ordinal: 0)"#))
@@ -1443,7 +1454,7 @@ import Testing
             "expected a ButtonHeist expression beginning with '.'"
         ),
         (
-            root(#"Activate(.element(label: StringMatch.contains("Pay")))"#),
+            root(#"Activate(.element(.label(StringMatch.contains("Pay"))))"#),
             "expected a string literal or scoped string reference"
         ),
         (
@@ -1477,7 +1488,7 @@ import Testing
         Decrement(.value("5"))
         Decrement(.target(.value("5"), ordinal: 0))
         Decrement(targetRef)
-        TypeText("milk", into: .element(label: "Search", traits: [.searchField]))
+        TypeText("milk", into: .element(.label("Search"), .traits([.searchField])))
         TypeText("milk", into: .target(.label("Search"), ordinal: 0))
         TypeText("milk", into: targetRef)
         CustomAction("Archive", on: .label("Message"))

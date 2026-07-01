@@ -258,6 +258,14 @@ final class ElementInflation {
         _ treeElement: TheStash.ScreenElement,
         target: ElementTarget
     ) async -> InflationState {
+        if case .success(let visible)? = visibleTargetResolution(target) {
+            return .refreshing(
+                target: target,
+                screenElement: visible,
+                didReveal: false
+            )
+        }
+
         let reveal = await revealSemanticTarget(treeElement)
         if case .failed(let failure) = reveal {
             return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))

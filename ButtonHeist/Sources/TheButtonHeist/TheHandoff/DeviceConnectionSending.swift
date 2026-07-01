@@ -5,7 +5,8 @@ import TheScore
 extension DeviceConnection {
     @discardableResult
     func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
-        guard case .connected(let active) = connectionState else {
+        guard case .connected(let active) = connectionState,
+              let sessionID = currentSessionID else {
             return .failed(.notConnected)
         }
         let envelope = RequestEnvelope(requestId: requestId, message: message)
@@ -24,7 +25,7 @@ extension DeviceConnection {
             if let error {
                 deviceConnectionLogger.error("Send error: \(error)")
                 Task { @ButtonHeistActor [weak self] in
-                    self?.handleSendFailure(error, requestId: requestId, connection: connection)
+                    self?.handleSendFailure(error, requestId: requestId, connection: connection, sessionID: sessionID)
                 }
             }
         })
@@ -32,9 +33,11 @@ extension DeviceConnection {
     }
 
     func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection) {
-        if let current = currentConnection, current !== connection {
-            return
-        }
+        handleSendFailure(error, requestId: requestId, connection: connection, sessionID: nil)
+    }
+
+    func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection, sessionID: UUID?) {
+        guard isCurrentSession(sessionID, connection: connection) else { return }
         onEvent?(.sendFailed(.transportFailed(DeviceTransportFailure(error)), requestId: requestId))
     }
 }

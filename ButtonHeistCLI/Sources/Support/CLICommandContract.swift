@@ -192,6 +192,10 @@ enum CommandArgumentWriter {
         self.value(key, .array(value.map(HeistValue.string)))
     }
 
+    static func value<Value>(_ parameter: FenceParameter<Value>, _ value: Value) -> Field {
+        self.value(parameter.key, parameter.heistValue(for: value))
+    }
+
     static func optional(_ key: FenceParameterKey, _ value: HeistValue?) -> Field? {
         value.map { self.value(key, $0) }
     }
@@ -218,6 +222,10 @@ enum CommandArgumentWriter {
 
     static func optional(_ key: FenceParameterKey, _ value: [String]?) -> Field? {
         value.map { self.value(key, $0) }
+    }
+
+    static func optional<Value>(_ parameter: FenceParameter<Value>, _ value: Value?) -> Field? {
+        value.map { self.value(parameter, $0) }
     }
 }
 
@@ -355,26 +363,25 @@ extension CLICommandContract {
         )
     }
 
-    static func catalogDefaultString(for key: FenceParameterKey) -> String {
-        fenceCommand.descriptor.requiredDefaultString(for: key)
+    static func catalogDefaultValue<Value>(for parameter: FenceParameter<Value>) -> Value {
+        fenceCommand.descriptor.requiredDefaultValue(for: parameter)
     }
 
-    static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {
-        guard let values = fenceCommand.descriptor.parameter(named: key)?.enumValues else {
-            fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
-        }
-        return values
+    static func catalogDefaultArgument<Value>(for parameter: FenceParameter<Value>) -> String
+    where Value: RawRepresentable, Value.RawValue == String {
+        catalogDefaultValue(for: parameter).rawValue
     }
 
-    static func catalogAllowedValuesDescription(for key: FenceParameterKey) -> String {
-        catalogAllowedValues(for: key).joined(separator: ", ")
+    static func catalogAllowedValuesDescription<Value>(for parameter: FenceParameter<Value>) -> String {
+        fenceCommand.descriptor.allowedRawValues(for: parameter).joined(separator: ", ")
     }
 
-    static func catalogCanonicalStringValue(
-        _ value: String,
-        for key: FenceParameterKey
-    ) -> String? {
-        let values = catalogAllowedValues(for: key)
-        return values.contains(value) ? value : nil
+    static func catalogCanonicalValue<Value>(
+        _ rawValue: String,
+        for parameter: FenceParameter<Value>
+    ) -> Value? where Value: RawRepresentable, Value.RawValue == String {
+        let values = fenceCommand.descriptor.allowedRawValues(for: parameter)
+        guard values.contains(rawValue) else { return nil }
+        return Value(rawValue: rawValue)
     }
 }

@@ -1795,7 +1795,7 @@ final class TheFenceHandlerTests: XCTestCase {
             kind: .action,
             durationMs: 5,
             evidence: .action(.dispatch(
-                actionResult: ActionResult.failure(
+                dispatchResult: ActionResult.failure(
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "boom")
@@ -3136,7 +3136,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("exists"),
-                "element": targetValue(label: "Loading"),
+                "element": elementPredicateValue(label: "Loading"),
             ])]
         )
     }
@@ -3147,7 +3147,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("missing"),
-                "element": targetValue(label: "Loading"),
+                "element": elementPredicateValue(label: "Loading"),
             ]), "timeout": .double(5.0)]
         )
     }
@@ -3184,8 +3184,8 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["predicate": .object([
                 "type": .string("all"),
                 "states": .array([
-                    .object(["type": .string("exists"), "element": targetValue(label: "Done")]),
-                    .object(["type": .string("missing"), "element": targetValue(label: "Loading")]),
+                    .object(["type": .string("exists"), "element": elementPredicateValue(label: "Done")]),
+                    .object(["type": .string("missing"), "element": elementPredicateValue(label: "Loading")]),
                 ]),
             ])]
         )
@@ -3199,7 +3199,10 @@ final class TheFenceHandlerTests: XCTestCase {
                 "type": .string("change"),
                 "scopes": .array([.object([
                     "type": .string("screen"),
-                    "assertions": .array([.object(["type": .string("exists"), "element": targetValue(label: "Home")])]),
+                    "assertions": .array([.object([
+                        "type": .string("exists"),
+                        "element": elementPredicateValue(label: "Home"),
+                    ])]),
                 ])]),
             ])]
         )
@@ -3360,7 +3363,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "target": targetValue(identifier: "myElement"),
             "expect": .object([
                 "type": .string("exists"),
-                "element": targetValue(label: "Home"),
+                "element": elementPredicateValue(label: "Home"),
             ]),
         ])
 
@@ -3538,14 +3541,14 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationDiscriminatorElementUpdatedFull() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("change"),
-            "scopes": .array([.object([
-                "type": .string("elements"),
-                "assertions": .array([.object([
-                    "type": .string("updated"),
-                    "element": targetValue(identifier: "slider"),
-                    "before": .string("0"),
-                    "after": .string("50"),
-                    "property": .string("value"),
+                "scopes": .array([.object([
+                    "type": .string("elements"),
+                    "assertions": .array([.object([
+                        "type": .string("updated"),
+                        "element": elementPredicateValue(identifier: "slider"),
+                        "before": .string("0"),
+                        "after": .string("50"),
+                        "property": .string("value"),
                 ])]),
             ])]),
         ]))
@@ -3595,7 +3598,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationDiscriminatorPresentWithElement() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("exists"),
-            "element": targetValue(label: "Cart", identifier: "cart.button"),
+            "element": elementPredicateValue(label: "Cart", identifier: "cart.button"),
         ]))
         XCTAssertEqual(
             result,
@@ -3623,11 +3626,11 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationTypedPayloadPreservesElementTraits() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("missing"),
-            "element": .object([
-                "label": stringMatchValue(mode: "exact", value: "Spinner"),
-                "traits": .array([.string("button")]),
-                "excludeTraits": .array([.string("selected")]),
-            ]),
+            "element": elementPredicateValue(
+                label: "Spinner",
+                traits: ["button"],
+                excludeTraits: ["selected"]
+            ),
         ]))
 
         XCTAssertEqual(
@@ -3641,15 +3644,17 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("exists"),
             "element": .object([
-                "traits": .array([.int(7)]),
+                "checks": .array([
+                    predicateCheckValue(kind: "traits", values: [.int(7)]),
+                ]),
             ]),
         ]))) { error in
             guard let error = error as? SchemaValidationError else {
                 XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertEqual(error.field, "element.traits[0]")
-            XCTAssertEqual(error.expected, "string")
+            XCTAssertEqual(error.field, "element.checks[0].values[0]")
+            XCTAssertEqual(error.expected, "trait name")
         }
     }
 
@@ -3670,7 +3675,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("exists"),
             "element": .object([
-                "label": stringMatchValue(mode: "exact", value: "Done"),
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Done")),
+                ]),
                 "unknown": .string("ignored before"),
             ]),
         ]))) { error in
@@ -4013,6 +4020,32 @@ private func targetValue(
     return elementTargetValue(target)
 }
 
+private func elementPredicateValue(
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [String]? = nil,
+    excludeTraits: [String]? = nil
+) -> HeistValue {
+    var checks: [HeistValue] = []
+    if let label {
+        checks.append(predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: label)))
+    }
+    if let identifier {
+        checks.append(predicateCheckValue(kind: "identifier", match: stringMatchValue(mode: "exact", value: identifier)))
+    }
+    if let value {
+        checks.append(predicateCheckValue(kind: "value", match: stringMatchValue(mode: "exact", value: value)))
+    }
+    if let traits {
+        checks.append(predicateCheckValue(kind: "traits", values: traits.map { .string($0) }))
+    }
+    if let excludeTraits {
+        checks.append(predicateCheckValue(kind: "excludeTraits", values: excludeTraits.map { .string($0) }))
+    }
+    return elementTargetValue(["checks": .array(checks)])
+}
+
 private func stringMatchValue(mode: String, value: String) -> HeistValue {
     .object([
         "mode": .string(mode),
@@ -4022,6 +4055,13 @@ private func stringMatchValue(mode: String, value: String) -> HeistValue {
 
 private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
     .object(fields)
+}
+
+private func predicateCheckValue(kind: String, match: HeistValue? = nil, values: [HeistValue]? = nil) -> HeistValue {
+    var object: [String: HeistValue] = ["kind": .string(kind)]
+    if let match { object["match"] = match }
+    if let values { object["values"] = .array(values) }
+    return .object(object)
 }
 
 private func assertCompactHeistSummary(

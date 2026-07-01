@@ -298,7 +298,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected server error before scope rejection teardown, got \(envelope.message)")
         }
-        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.kind, ErrorKind.general)
         XCTAssertEqual(error.message, "Connection rejected: simulator connections are not allowed by this server.")
         await fulfillment(of: [clientConnected], timeout: 0.2)
     }

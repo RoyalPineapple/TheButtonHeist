@@ -182,7 +182,7 @@ struct DoctorDemoFixture {
             )
         let evidence = HeistStepEvidence.action(.dispatch(
             command: .activate(.target(target)),
-            actionResult: actionResult
+            dispatchResult: actionResult
         ))
         let intent = HeistStepIntent.action(command: "activate", target: target.description)
         let step: HeistExecutionStepResult

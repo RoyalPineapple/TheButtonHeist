@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistTestSupport
 import Testing
 
 @Suite struct ReportProjectionSourceShapeTests {
@@ -62,6 +63,43 @@ import Testing
             "final-screen facts should originate in TheScore summary facts"
         )
     }
+
+    @Test func `action report consumers use typed action result evidence`() throws {
+        let scoreReport = try sourceFile("ButtonHeist/Sources/TheScore/HeistExecutionResult+Report.swift")
+        let projectionSource = try sourceFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/HeistEvidenceProjection.swift"
+        )
+        let doctorSource = try sourceFile("ButtonHeist/Sources/HeistDoctorCore/HeistDoctorEvidence.swift")
+        let actionProjection = try SourceShapeFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/HeistEvidenceProjection.swift",
+            contents: projectionSource
+        ).requiredBlock(
+            .structure("HeistActionEvidenceProjection"),
+            message:
+            "Action evidence projection should use HeistActionEvidence.resultEvidence"
+        )
+
+        #expect(
+            !scoreReport.contains("expectationActionResult ??"),
+            "Report facts should not inline action expectation/result coalescing"
+        )
+        #expect(!scoreReport.contains("actionEvidence?.actionResult"))
+        #expect(!scoreReport.contains("actionEvidence?.expectationActionResult"))
+        #expect(scoreReport.contains("actionEvidence?.dispatchResult"))
+        #expect(scoreReport.contains("actionEvidence?.reportedResult"))
+        #expect(scoreReport.contains("actionEvidence?.traceResult"))
+        #expect(
+            actionProjection.contents.contains("let results = evidence.resultEvidence"),
+            "Projection should read the typed action result evidence model once"
+        )
+        #expect(!actionProjection.contents.contains("evidence.actionResult"))
+        #expect(!actionProjection.contents.contains("evidence.expectationActionResult"))
+        #expect(!doctorSource.contains("expectationActionResult ??"))
+        #expect(!doctorSource.contains("actionEvidence.actionResult"))
+        #expect(!doctorSource.contains("actionEvidence.expectationActionResult"))
+        #expect(doctorSource.contains("evidence.reportedResult"))
+        #expect(doctorSource.contains("actionEvidence.dispatchResult"))
+    }
 }
 
 private func projectionSourceFiles(in directory: URL) throws -> [URL] {
@@ -86,4 +124,11 @@ private func repositoryRoot() -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+}
+
+private func sourceFile(_ relativePath: String) throws -> String {
+    try String(
+        contentsOf: repositoryRoot().appendingPathComponent(relativePath),
+        encoding: .utf8
+    )
 }

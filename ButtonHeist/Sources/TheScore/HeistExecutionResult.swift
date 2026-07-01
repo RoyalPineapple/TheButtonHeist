@@ -605,13 +605,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         _ evidence: HeistActionEvidence,
         codingPath: [CodingKey]
     ) throws {
-        if evidence.actionResult?.success == false {
+        if evidence.dispatchResult?.success == false {
             throw receiptError(
                 "passed action heist execution step must not include failed action evidence",
                 codingPath: codingPath + [CodingKeys.evidence]
             )
         }
-        if evidence.expectationActionResult?.success == false || evidence.expectation?.met == false {
+        if evidence.expectationResult?.success == false || evidence.expectation?.met == false {
             throw receiptError(
                 "passed action heist execution step must not include failed expectation evidence",
                 codingPath: codingPath + [CodingKeys.evidence]
@@ -879,6 +879,96 @@ public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable 
 public struct HeistActionEvidence: Codable, Sendable, Equatable {
     private let storage: Storage
 
+    public struct DispatchResultEvidence: Sendable, Equatable {
+        public let dispatchResult: ActionResult
+    }
+
+    public struct ExpectationResultEvidence: Sendable, Equatable {
+        public let dispatchResult: ActionResult
+        public let expectationResult: ActionResult
+        public let expectation: ExpectationResult
+    }
+
+    public enum ResultEvidence: Sendable, Equatable {
+        case commandResolutionFailure
+        case dispatch(DispatchResultEvidence)
+        case expectation(ExpectationResultEvidence)
+
+        public var dispatchResult: ActionResult? {
+            switch self {
+            case .commandResolutionFailure:
+                return nil
+            case .dispatch(let evidence):
+                return evidence.dispatchResult
+            case .expectation(let evidence):
+                return evidence.dispatchResult
+            }
+        }
+
+        public var expectationResult: ActionResult? {
+            guard case .expectation(let evidence) = self else { return nil }
+            return evidence.expectationResult
+        }
+
+        public var reportedResult: ActionResult? {
+            switch self {
+            case .commandResolutionFailure:
+                return nil
+            case .dispatch(let evidence):
+                return evidence.dispatchResult
+            case .expectation(let evidence):
+                return evidence.expectationResult
+            }
+        }
+
+        public var traceResult: ActionResult? {
+            switch self {
+            case .commandResolutionFailure:
+                return nil
+            case .dispatch(let evidence):
+                return evidence.dispatchResult
+            case .expectation(let evidence):
+                return evidence.expectationResult
+            }
+        }
+
+        public var expectation: ExpectationResult? {
+            guard case .expectation(let evidence) = self else { return nil }
+            return evidence.expectation
+        }
+    }
+
+    public var resultEvidence: ResultEvidence {
+        switch storage {
+        case .commandResolutionFailure:
+            return .commandResolutionFailure
+        case .dispatch(let dispatch):
+            return .dispatch(DispatchResultEvidence(dispatchResult: dispatch.dispatchResult))
+        case .expectation(_, let dispatchResult, let expectationResult, let expectation, _):
+            return .expectation(ExpectationResultEvidence(
+                dispatchResult: dispatchResult,
+                expectationResult: expectationResult,
+                expectation: expectation
+            ))
+        }
+    }
+
+    public var dispatchResult: ActionResult? {
+        resultEvidence.dispatchResult
+    }
+
+    public var reportedResult: ActionResult? {
+        resultEvidence.reportedResult
+    }
+
+    public var traceResult: ActionResult? {
+        resultEvidence.traceResult
+    }
+
+    public var expectationResult: ActionResult? {
+        resultEvidence.expectationResult
+    }
+
     public var command: HeistActionCommand? {
         switch storage {
         case .commandResolutionFailure(let command):
@@ -890,33 +980,8 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         }
     }
 
-    public var actionResult: ActionResult? {
-        switch storage {
-        case .commandResolutionFailure:
-            return nil
-        case .dispatch(let dispatch):
-            return dispatch.actionResult
-        case .expectation(_, let result, _, _, _):
-            return result
-        }
-    }
-
-    public var expectationActionResult: ActionResult? {
-        switch storage {
-        case .commandResolutionFailure, .dispatch:
-            return nil
-        case .expectation(_, _, let result, _, _):
-            return result
-        }
-    }
-
     public var expectation: ExpectationResult? {
-        switch storage {
-        case .commandResolutionFailure, .dispatch:
-            return nil
-        case .expectation(_, _, _, let expectation, _):
-            return expectation
-        }
+        resultEvidence.expectation
     }
 
     public var warning: HeistActionWarning? {
@@ -938,33 +1003,33 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
 
     public static func dispatch(
         command: HeistActionCommand,
-        actionResult: ActionResult,
+        dispatchResult: ActionResult,
         warning: HeistActionWarning? = nil
     ) -> HeistActionEvidence {
         return HeistActionEvidence(storage: .dispatch(.command(
             command: command,
-            actionResult: actionResult,
+            dispatchResult: dispatchResult,
             warning: warning
         )))
     }
 
     public static func dispatch(
-        actionResult: ActionResult
+        dispatchResult: ActionResult
     ) -> HeistActionEvidence {
-        HeistActionEvidence(storage: .dispatch(.commandless(actionResult: actionResult)))
+        HeistActionEvidence(storage: .dispatch(.commandless(dispatchResult: dispatchResult)))
     }
 
     public static func expectation(
         command: HeistActionCommand,
-        actionResult: ActionResult,
-        expectationActionResult: ActionResult,
+        dispatchResult: ActionResult,
+        expectationResult: ActionResult,
         expectation: ExpectationResult,
         warning: HeistActionWarning? = nil
     ) -> HeistActionEvidence {
         HeistActionEvidence(storage: .expectation(
             command: command,
-            actionResult: actionResult,
-            expectationActionResult: expectationActionResult,
+            dispatchResult: dispatchResult,
+            expectationResult: expectationResult,
             expectation: expectation,
             warning: warning
         ))
@@ -979,16 +1044,16 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         case dispatch(Dispatch)
         case expectation(
             command: HeistActionCommand,
-            actionResult: ActionResult,
-            expectationActionResult: ActionResult,
+            dispatchResult: ActionResult,
+            expectationResult: ActionResult,
             expectation: ExpectationResult,
             warning: HeistActionWarning?
         )
     }
 
     private enum Dispatch: Sendable, Equatable {
-        case command(command: HeistActionCommand, actionResult: ActionResult, warning: HeistActionWarning?)
-        case commandless(actionResult: ActionResult)
+        case command(command: HeistActionCommand, dispatchResult: ActionResult, warning: HeistActionWarning?)
+        case commandless(dispatchResult: ActionResult)
 
         var command: HeistActionCommand? {
             switch self {
@@ -999,11 +1064,11 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
             }
         }
 
-        var actionResult: ActionResult {
+        var dispatchResult: ActionResult {
             switch self {
-            case .command(_, let actionResult, _),
-                 .commandless(let actionResult):
-                return actionResult
+            case .command(_, let dispatchResult, _),
+                 .commandless(let dispatchResult):
+                return dispatchResult
             }
         }
 
@@ -1038,16 +1103,16 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         case (.some(let command), .none, .none, .none, .none):
             self = .commandResolutionFailure(command: command)
         case (.some(let command), .some(let actionResult), .none, .none, let warning):
-            self = .dispatch(command: command, actionResult: actionResult, warning: warning)
+            self = .dispatch(command: command, dispatchResult: actionResult, warning: warning)
         case (.none, .some(let actionResult), .none, .none, .none):
-            self = .dispatch(actionResult: actionResult)
+            self = .dispatch(dispatchResult: actionResult)
         case (.none, .some, .none, .none, .some):
             throw Self.evidenceError("heist action warning evidence requires command", codingPath: container.codingPath)
         case (.some(let command), .some(let actionResult), .some(let expectationActionResult), .some(let expectation), let warning):
             self = .expectation(
                 command: command,
-                actionResult: actionResult,
-                expectationActionResult: expectationActionResult,
+                dispatchResult: actionResult,
+                expectationResult: expectationActionResult,
                 expectation: expectation,
                 warning: warning
             )
@@ -1073,8 +1138,8 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(command, forKey: .command)
-        try container.encodeIfPresent(actionResult, forKey: .actionResult)
-        try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
+        try container.encodeIfPresent(dispatchResult, forKey: .actionResult)
+        try container.encodeIfPresent(expectationResult, forKey: .expectationActionResult)
         try container.encodeIfPresent(expectation, forKey: .expectation)
         try container.encodeIfPresent(warning, forKey: .warning)
     }
@@ -1454,6 +1519,27 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
             uncheckedOutcome: .handledElse,
+            predicate: predicate,
+            timeout: timeout,
+            iterationCount: iterationCount,
+            iterationOrdinal: nil,
+            expectation: expectation.result,
+            actionResult: nil,
+            lastObservedSummary: lastObservedSummary,
+            failureReason: failureReason
+        )
+    }
+
+    public static func timeoutElseFailed(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        expectation: UnmetExpectationResult,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence {
+        return HeistRepeatUntilEvidence(
+            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,

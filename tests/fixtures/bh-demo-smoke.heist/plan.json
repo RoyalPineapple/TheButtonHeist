@@ -4,9 +4,17 @@
       "action" : {
         "command" : {
           "payload" : {
-            "label" : "Controls Demo",
-            "traits" : [
-              "button"
+            "checks" : [
+              {
+                "kind" : "label",
+                "match" : "Controls Demo"
+              },
+              {
+                "kind" : "traits",
+                "values" : [
+                  "button"
+                ]
+              }
             ]
           },
           "type" : "activate"
@@ -14,7 +22,12 @@
         "expectation" : {
           "predicate" : {
             "element" : {
-              "label" : "Text Input"
+              "checks" : [
+                {
+                  "kind" : "label",
+                  "match" : "Text Input"
+                }
+              ]
             },
             "type" : "exists"
           },
@@ -27,9 +40,17 @@
       "action" : {
         "command" : {
           "payload" : {
-            "label" : "Display",
-            "traits" : [
-              "button"
+            "checks" : [
+              {
+                "kind" : "label",
+                "match" : "Display"
+              },
+              {
+                "kind" : "traits",
+                "values" : [
+                  "button"
+                ]
+              }
             ]
           },
           "type" : "activate"
@@ -37,7 +58,12 @@
         "expectation" : {
           "predicate" : {
             "element" : {
-              "label" : "Apple Accessibility"
+              "checks" : [
+                {
+                  "kind" : "label",
+                  "match" : "Apple Accessibility"
+                }
+              ]
             },
             "type" : "exists"
           },

@@ -542,15 +542,15 @@ func makeTestHeistActionStep(
         }
         evidence = .expectation(
             command: command,
-            actionResult: result,
-            expectationActionResult: expectationActionResult,
+            dispatchResult: result,
+            expectationResult: expectationActionResult,
             expectation: expectation
         )
     } else {
         precondition(expectationActionResult == nil && expectation == nil)
         evidence = command.map {
-            .dispatch(command: $0, actionResult: result)
-        } ?? .dispatch(actionResult: result)
+            .dispatch(command: $0, dispatchResult: result)
+        } ?? .dispatch(dispatchResult: result)
     }
 
     let receiptEvidence = HeistStepEvidence.action(evidence)

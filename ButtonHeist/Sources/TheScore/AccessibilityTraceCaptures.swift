@@ -86,8 +86,8 @@ public extension AccessibilityTrace {
         public static func hash(interface: Interface, context: Context) -> String {
             let encoder = stableHashEncoder()
             let content = StableCaptureContent(
-                tree: interface.tree,
-                annotations: interface.annotations,
+                tree: interface.tree.map(StableCaptureNode.init),
+                annotations: StableCaptureAnnotations(interface.annotations),
                 context: context
             )
             let data = stableHashData(content, encoder: encoder)
@@ -245,9 +245,113 @@ public extension AccessibilityTrace {
 }
 
 private struct StableCaptureContent: Codable {
-    let tree: [AccessibilityHierarchy]
-    let annotations: InterfaceAnnotations
+    let tree: [StableCaptureNode]
+    let annotations: StableCaptureAnnotations
     let context: AccessibilityTrace.Context
+}
+
+private enum StableCaptureNode: Codable {
+    case element(StableCaptureElement, traversalIndex: Int)
+    case container(StableCaptureContainer, children: [StableCaptureNode])
+
+    init(_ node: AccessibilityHierarchy) {
+        switch node {
+        case .element(let element, let traversalIndex):
+            self = .element(StableCaptureElement(element), traversalIndex: traversalIndex)
+        case .container(let container, let children):
+            self = .container(StableCaptureContainer(container), children: children.map(Self.init))
+        }
+    }
+}
+
+private struct StableCaptureElement: Codable {
+    let description: String
+    let label: String?
+    let value: String?
+    let traits: UInt64
+    let identifier: String?
+    let hint: String?
+    let userInputLabels: [String]?
+    let customActions: [String]
+    let customContent: [StableCaptureCustomContent]
+    let customRotors: [String]
+    let accessibilityLanguage: String?
+    let respondsToUserInteraction: Bool
+
+    init(_ element: AccessibilityElement) {
+        description = element.description
+        label = element.label
+        value = element.value
+        traits = element.traits.rawValue
+        identifier = element.identifier
+        hint = element.hint
+        userInputLabels = element.userInputLabels
+        customActions = element.customActions.map(\.name).filter { !$0.isEmpty }.sorted()
+        customContent = element.customContent
+            .filter { !$0.label.isEmpty || !$0.value.isEmpty }
+            .map(StableCaptureCustomContent.init)
+        customRotors = element.customRotors.map(\.name).filter { !$0.isEmpty }.sorted()
+        accessibilityLanguage = element.accessibilityLanguage
+        respondsToUserInteraction = element.respondsToUserInteraction
+    }
+}
+
+private struct StableCaptureCustomContent: Codable {
+    let label: String
+    let value: String
+    let isImportant: Bool
+
+    init(_ content: AccessibilityElement.CustomContent) {
+        label = content.label
+        value = content.value
+        isImportant = content.isImportant
+    }
+}
+
+private struct StableCaptureContainer: Codable {
+    let type: StableCaptureContainerType
+    let isModalBoundary: Bool
+    let customActions: [String]
+
+    init(_ container: AccessibilityContainer) {
+        type = StableCaptureContainerType(container.type)
+        isModalBoundary = container.isModalBoundary
+        customActions = container.customActions.map(\.name).filter { !$0.isEmpty }.sorted()
+    }
+}
+
+private enum StableCaptureContainerType: Codable {
+    case semanticGroup(label: String?, value: String?, identifier: String?)
+    case list
+    case landmark
+    case dataTable(rowCount: Int, columnCount: Int)
+    case tabBar
+    case scrollable
+
+    init(_ type: AccessibilityContainer.ContainerType) {
+        switch type {
+        case .semanticGroup(let label, let value, let identifier):
+            self = .semanticGroup(label: label, value: value, identifier: identifier)
+        case .list:
+            self = .list
+        case .landmark:
+            self = .landmark
+        case .dataTable(let rowCount, let columnCount):
+            self = .dataTable(rowCount: rowCount, columnCount: columnCount)
+        case .tabBar:
+            self = .tabBar
+        case .scrollable:
+            self = .scrollable
+        }
+    }
+}
+
+private struct StableCaptureAnnotations: Codable {
+    let elements: [InterfaceElementAnnotation]
+
+    init(_ annotations: InterfaceAnnotations) {
+        elements = annotations.elements
+    }
 }
 
 private func normalized(_ value: String?) -> String? {

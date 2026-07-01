@@ -83,7 +83,7 @@ extension TheBurglar {
                         heistId: heistId,
                         containerPath: scrollMembership.containerPath,
                         index: scrollMembership.index,
-                        point: observedScrollContentActivationPoint.point
+                        point: observedScrollContentActivationPoint.point.cgPoint
                     )
                 )
             }
@@ -208,7 +208,7 @@ extension TheBurglar {
         let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerNameCandidate? in
             guard case .container(let container, _) = node else { return nil }
             let contentFrame = identityContext.contentFramesByPath[path]
-                ?? container.frame.cgRect
+                ?? ContentRect(container.frame.cgRect)
             let readableName = containerName(
                 for: container,
                 contentFrame: contentFrame

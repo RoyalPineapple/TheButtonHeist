@@ -18,54 +18,103 @@ private let logger = ButtonHeistLog.logger(.handoff(.usbDiscovery))
 final class USBDeviceDiscovery: DeviceDiscovering {
 
     private let port: UInt16
-    private var pollTask: Task<Void, Never>?
-    private var knownDevices: [DiscoveryDeviceID: DiscoveredDevice] = [:]
+    private let discoverConnectedDevices: @Sendable () async -> [ConnectedUSBDevice]
+    private let findTunnelAddress: @Sendable () async -> String?
+
+    private struct PollSession {
+        let id: UUID
+        let task: Task<Void, Never>
+        var knownDevices: [DiscoveryDeviceID: DiscoveredDevice] = [:]
+    }
+
+    private enum RuntimePhase {
+        case stopped
+        case polling(PollSession)
+
+        var discoveredDevices: [DiscoveredDevice] {
+            switch self {
+            case .stopped:
+                return []
+            case .polling(let session):
+                return Array(session.knownDevices.values)
+            }
+        }
+
+        var activeSessionID: UUID? {
+            switch self {
+            case .stopped:
+                return nil
+            case .polling(let session):
+                return session.id
+            }
+        }
+    }
+
+    private var runtimePhase: RuntimePhase = .stopped
 
     var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
 
     var discoveredDevices: [DiscoveredDevice] {
-        Array(knownDevices.values)
+        runtimePhase.discoveredDevices
     }
 
     /// - Parameter port: The InsideJob port to connect to on the device
-    init(port: UInt16) {
+    init(
+        port: UInt16,
+        discoverConnectedDevices: @escaping @Sendable () async -> [ConnectedUSBDevice] = {
+            await USBDeviceDiscovery.discoverConnectedUSBDevices()
+        },
+        findTunnelAddress: @escaping @Sendable () async -> String? = {
+            await USBDeviceDiscovery.findIPv6Tunnel()
+        }
+    ) {
         self.port = port
+        self.discoverConnectedDevices = discoverConnectedDevices
+        self.findTunnelAddress = findTunnelAddress
     }
 
     func start() {
+        guard case .stopped = runtimePhase else { return }
         logger.info("Starting USB device discovery (port \(self.port))")
-        onEvent?(.stateChanged(isReady: true))
         startPolling()
+        onEvent?(.stateChanged(isReady: true))
     }
 
     func stop() {
-        pollTask?.cancel()
-        pollTask = nil
-        knownDevices.removeAll()
+        guard case .polling(let session) = runtimePhase else { return }
+        session.task.cancel()
+        runtimePhase = .stopped
     }
 
     // MARK: - Private
 
     private func startPolling() {
-        pollTask = Task { [weak self] in
+        let sessionID = UUID()
+        let task = Task { [weak self, sessionID] in
             while !Task.isCancelled {
-                await self?.poll()
+                await self?.poll(sessionID: sessionID)
                 guard await Task<Never, Never>.cancellableSleep(nanoseconds: 3_000_000_000) else { break }
             }
         }
+        runtimePhase = .polling(PollSession(id: sessionID, task: task))
     }
 
-    private func poll() async {
-        async let connectedDevicesTask = Self.discoverConnectedUSBDevices()
-        async let ipv6AddressTask = Self.findIPv6Tunnel()
+    private func poll(sessionID: UUID) async {
+        async let connectedDevicesTask = discoverConnectedDevices()
+        async let ipv6AddressTask = findTunnelAddress()
         let connectedDevices = await connectedDevicesTask
         let ipv6Address = await ipv6AddressTask
+        guard case .polling(var session) = runtimePhase,
+              session.id == sessionID else {
+            return
+        }
 
         guard let ipv6Address else {
-            for (id, device) in knownDevices {
-                knownDevices.removeValue(forKey: id)
+            for (id, device) in session.knownDevices {
+                session.knownDevices.removeValue(forKey: id)
                 onEvent?(.lost(device))
             }
+            runtimePhase = .polling(session)
             return
         }
 
@@ -73,10 +122,11 @@ final class USBDeviceDiscovery: DeviceDiscovering {
             if connectedDevices.count > 1 {
                 logger.warning("Multiple USB devices are connected; CoreDevice tunnel correlation is ambiguous, so USB discovery is disabled")
             }
-            for (id, device) in knownDevices {
-                knownDevices.removeValue(forKey: id)
+            for (id, device) in session.knownDevices {
+                session.knownDevices.removeValue(forKey: id)
                 onEvent?(.lost(device))
             }
+            runtimePhase = .polling(session)
             return
         }
 
@@ -86,7 +136,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
             let deviceID = DiscoveryDeviceID.usbIdentifier(connectedDevice.identifier)
             currentIDs.insert(deviceID)
 
-            if knownDevices[deviceID] == nil {
+            if session.knownDevices[deviceID] == nil {
                 guard let nwPort = NWEndpoint.Port(rawValue: port) else {
                     logger.error("Invalid port number: \(self.port)")
                     return
@@ -102,17 +152,18 @@ final class USBDeviceDiscovery: DeviceDiscovering {
                     displayDeviceName: connectedDevice.name,
                     connectionType: .usb
                 )
-                knownDevices[deviceID] = device
+                session.knownDevices[deviceID] = device
                 logger.info("USB device found: \(connectedDevice.name) at \(ipv6Address):\(self.port)")
                 onEvent?(.found(device))
             }
         }
 
-        for (id, device) in knownDevices where !currentIDs.contains(id) {
-            knownDevices.removeValue(forKey: id)
+        for (id, device) in session.knownDevices where !currentIDs.contains(id) {
+            session.knownDevices.removeValue(forKey: id)
             logger.info("USB device lost: \(device.name)")
             onEvent?(.lost(device))
         }
+        runtimePhase = .polling(session)
     }
 
 }
