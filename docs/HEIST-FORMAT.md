@@ -16,6 +16,11 @@ MAY inspect or control the current live session, but they MUST NOT be stored in 
 `.heist` artifact or represented as durable `HeistPlan` steps.
 
 For the authoring boundary, see [Heist language spec](HEIST-LANGUAGE-SPEC.md).
+The author-to-replay pipeline is drawn in the
+[heist lifecycle diagram](diagrams/heist-lifecycle.md); the step types and
+predicate forms are drawn in the [DSL grammar diagram](diagrams/dsl-grammar.md);
+the test-process entry points that replay plans are drawn in the
+[test entry points diagram](diagrams/test-entry-points.md).
 
 ## File Roles
 

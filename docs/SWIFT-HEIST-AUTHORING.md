@@ -17,7 +17,10 @@ Heist's explicit `ForEach` and `RepeatUntil` primitives, not native Swift
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
 build a `HeistPlan`. Agents SHOULD prefer canonical heist source strings when
-sending compact heists through MCP. Generated `.heist` package directories are
+sending compact heists through MCP. The full author-to-replay pipeline is drawn
+in the [heist lifecycle diagram](diagrams/heist-lifecycle.md); the step types
+and predicate forms in the [DSL grammar diagram](diagrams/dsl-grammar.md); the
+termination guarantees in the [totality diagram](diagrams/totality.md). Generated `.heist` package directories are
 durable artifacts that store `manifest.json` and canonical `plan.json`.
 Standalone `.json` files are generated runtime wire IR for diagnostics and
 tooling; they are not the authoring language. Public MCP tools advertise only
@@ -86,7 +89,9 @@ grouping, comments, local constants, or native Swift calls.
 ## Swift test runner boundary
 
 In app and UI tests, Swift calls the job and The Button Heist describes the job. The
-host-language runner boundary is:
+four entry points — and what the run loop does in each — are drawn in the
+[test entry points diagram](diagrams/test-entry-points.md). The host-language
+runner boundary is:
 
 ```swift
 import ButtonHeistTesting

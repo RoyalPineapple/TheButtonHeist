@@ -25,7 +25,9 @@ Fence-owned command descriptors.
 The raw wire protocol lives one layer lower in TheScore. Wire message
 discriminators such as `requestInterface` and `heistPlan` are transport names,
 not the public CLI/MCP command namespace. Side-effecting public commands lower
-to one-step or composed `HeistPlan`s before crossing the device wire.
+to one-step or composed `HeistPlan`s before crossing the device wire. The full
+module map and the wire boundary are drawn in the
+[crew map diagram](diagrams/crew-map.md).
 
 ## Public Surface Matrix
 
@@ -155,7 +157,10 @@ identity, not coordinates. The Button Heist owns the element inflation loop:
 This applies to activation, adjustable actions, named custom actions, text
 focus, and targeted gestures. If identity, element inflation, or live geometry
 cannot be proven, the command fails with diagnostics instead of acting on stale
-state.
+state. The resolution flowchart is drawn in the
+[element inflation diagram](diagrams/element-inflation.md); the activation
+decision tree is drawn in the
+[activation policy diagram](diagrams/activation-policy.md).
 
 Explicit viewport commands are different: `scroll`, `scroll_to_visible`, and
 `scroll_to_edge` expose viewport state because moving the viewport is the
@@ -204,7 +209,11 @@ diagnostics. Segments are not a second source of truth.
 
 Responses may include compact deltas such as `noChange`, `elementsChanged`, or
 `screenChanged`. Those deltas summarize what changed between trace captures;
-they do not replace the underlying captures.
+they do not replace the underlying captures. The type families behind captures
+and targets — and the internal/wire border they respect — are drawn in the
+[currency types diagram](diagrams/currency-types.md); a single action's
+end-to-end flow is drawn in the
+[action pipeline diagram](diagrams/action-pipeline.md).
 
 ## Interface Rendering Receipt
 

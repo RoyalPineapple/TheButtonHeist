@@ -13,6 +13,7 @@ Platform scope: The Button Heist automates iOS apps. The CLI and MCP server are 
 | [Why in-process](WHY-IN-PROCESS.md) | What running inside the app buys, and how the out-of-process drivers differ |
 | [Scope and limits](SCOPE-AND-LIMITS.md) | What The Button Heist cannot see, what "settled" means, and how to triage findings |
 | [Architecture](ARCHITECTURE.md) | Component boundaries, execution flow, trace semantics, and failure paths |
+| [Diagrams](diagrams/README.md) | Architecture diagrams, one Mermaid file per concern, derived from source |
 
 ## Connect an agent
 
