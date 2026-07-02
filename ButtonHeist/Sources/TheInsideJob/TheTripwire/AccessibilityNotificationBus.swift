@@ -5,6 +5,52 @@ import UIKit
 
 import TheScore
 
+/// `@unchecked Sendable` justification: mutable continuation state is protected
+/// by `lock`; cancellation may resume from a different task than registration.
+private final class AccessibilityNotificationTransitionWaiterContinuation: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private enum State {
+        case pending
+        case registered(CheckedContinuation<AccessibilityNotificationCursor?, Never>)
+        case resumed
+    }
+
+    private let lock = NSLock()
+    private var state = State.pending
+
+    func register(_ continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        switch state {
+        case .pending:
+            state = .registered(continuation)
+            return true
+        case .registered:
+            preconditionFailure("Transition waiter continuation registered twice")
+        case .resumed:
+            return false
+        }
+    }
+
+    func resume(returning cursor: AccessibilityNotificationCursor?) {
+        let continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>?
+        lock.lock()
+        switch state {
+        case .pending:
+            state = .resumed
+            continuation = nil
+        case .registered(let registered):
+            state = .resumed
+            continuation = registered
+        case .resumed:
+            continuation = nil
+        }
+        lock.unlock()
+
+        continuation?.resume(returning: cursor)
+    }
+}
+
 /// `@unchecked Sendable` justification: all mutable state is protected by
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
@@ -18,15 +64,17 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
     private final class TransitionWaiter {
         let afterSequence: UInt64
-        let continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>
-        var timeoutTask: Task<Void, Never>?
+        let continuation: AccessibilityNotificationTransitionWaiterContinuation
+        let timeoutTask: Task<Void, Never>?
 
         init(
             afterSequence: UInt64,
-            continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>
+            continuation: AccessibilityNotificationTransitionWaiterContinuation,
+            timeoutTask: Task<Void, Never>?
         ) {
             self.afterSequence = afterSequence
             self.continuation = continuation
+            self.timeoutTask = timeoutTask
         }
     }
 
@@ -35,7 +83,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
     private var latestSequenceStorage: UInt64 = 0
     private var latestTransitionSequenceStorage: UInt64 = 0
-    private var latestScreenChangedSequenceStorage: UInt64 = 0
+    private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
     private var transitionWaiters: [UInt64: TransitionWaiter] = [:]
@@ -47,11 +95,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return latestSequenceStorage
     }
 
-    /// Sequence of the most recent `screenChanged` notification, or 0.
-    var latestScreenChangedSequence: UInt64 {
+    /// Sequence of the most recent `screenChanged` notification recorded
+    /// inside a heist or action notification scope, or 0.
+    var latestScopedScreenChangedSequence: UInt64 {
         lock.lock()
         defer { lock.unlock() }
-        return latestScreenChangedSequenceStorage
+        return latestScopedScreenChangedSequenceStorage
+    }
+
+    var transitionWaiterCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return transitionWaiters.count
     }
 
     /// Cursor at the most recent transition-completion notification, for use
@@ -73,58 +128,57 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         after cursor: AccessibilityNotificationCursor,
         timeout: TimeInterval
     ) async -> AccessibilityNotificationCursor? {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            if latestTransitionSequenceStorage > cursor.sequence {
-                let latest = latestTransitionSequenceStorage
+        let waiterId = nextTransitionWaiterIdentifier()
+        let continuationBox = AccessibilityNotificationTransitionWaiterContinuation()
+
+        let result: AccessibilityNotificationCursor? = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>) in
+                if Task.isCancelled {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                guard continuationBox.register(continuation) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                lock.lock()
+                if latestTransitionSequenceStorage > cursor.sequence {
+                    let latest = latestTransitionSequenceStorage
+                    lock.unlock()
+                    continuationBox.resume(returning: AccessibilityNotificationCursor(sequence: latest))
+                    return
+                }
+                guard timeout > 0 else {
+                    lock.unlock()
+                    continuationBox.resume(returning: nil)
+                    return
+                }
+
+                let timeoutMilliseconds = Int64(max(1, timeout * 1_000))
+                let timeoutTask = Task { [weak self] in
+                    guard await Task.cancellableSleep(for: .milliseconds(timeoutMilliseconds)) else { return }
+                    self?.completeTransitionWaiter(waiterId, returning: nil)
+                }
+                transitionWaiters[waiterId] = TransitionWaiter(
+                    afterSequence: cursor.sequence,
+                    continuation: continuationBox,
+                    timeoutTask: timeoutTask
+                )
                 lock.unlock()
-                continuation.resume(returning: AccessibilityNotificationCursor(sequence: latest))
-                return
             }
-            guard timeout > 0 else {
-                lock.unlock()
-                continuation.resume(returning: nil)
-                return
-            }
-            nextTransitionWaiterId += 1
-            let waiterId = nextTransitionWaiterId
-            let waiter = TransitionWaiter(afterSequence: cursor.sequence, continuation: continuation)
-            transitionWaiters[waiterId] = waiter
-            lock.unlock()
-
-            let timeoutTask = Task { [weak self] in
-                await Task.cancellableSleep(for: .milliseconds(Int64(max(1, timeout * 1_000))))
-                self?.expireTransitionWaiter(waiterId)
-            }
-            registerTransitionWaiterTimeout(timeoutTask, forWaiter: waiterId)
+        } onCancel: {
+            continuationBox.resume(returning: nil)
         }
-    }
-
-    private func registerTransitionWaiterTimeout(_ timeoutTask: Task<Void, Never>, forWaiter waiterId: UInt64) {
-        lock.lock()
-        guard let waiter = transitionWaiters[waiterId] else {
-            // Resolved between registration and timeout arming — the sleep
-            // is no longer needed.
-            lock.unlock()
-            timeoutTask.cancel()
-            return
-        }
-        waiter.timeoutTask = timeoutTask
-        lock.unlock()
-    }
-
-    private func expireTransitionWaiter(_ waiterId: UInt64) {
-        lock.lock()
-        let waiter = transitionWaiters.removeValue(forKey: waiterId)
-        lock.unlock()
-        waiter?.continuation.resume(returning: nil)
+        completeTransitionWaiter(waiterId, returning: nil)
+        return result
     }
 
     private func recordTransitionEventLocked(code: UInt32, sequence: UInt64) -> [TransitionWaiter] {
         guard Self.transitionCompletionCodes.contains(code) else { return [] }
         latestTransitionSequenceStorage = sequence
-        if code == Self.screenChangedCode {
-            latestScreenChangedSequenceStorage = sequence
+        if code == Self.screenChangedCode, hasActiveNotificationScopeLocked {
+            latestScopedScreenChangedSequenceStorage = sequence
         }
         let resumed = transitionWaiters.values.filter { $0.afterSequence < sequence }
         transitionWaiters = transitionWaiters.filter { $0.value.afterSequence >= sequence }
@@ -135,6 +189,30 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
         return activeHeistScopes > 0 || activeActionWindows > 0
+    }
+
+    private var hasActiveNotificationScopeLocked: Bool {
+        activeHeistScopes > 0 || activeActionWindows > 0
+    }
+
+    private func nextTransitionWaiterIdentifier() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+
+        nextTransitionWaiterId += 1
+        return nextTransitionWaiterId
+    }
+
+    private func completeTransitionWaiter(
+        _ waiterId: UInt64,
+        returning cursor: AccessibilityNotificationCursor?
+    ) {
+        lock.lock()
+        let waiter = transitionWaiters.removeValue(forKey: waiterId)
+        lock.unlock()
+
+        waiter?.timeoutTask?.cancel()
+        waiter?.continuation.resume(returning: cursor)
     }
 
     /// Opens the outer correlation window for a running heist.

@@ -257,9 +257,10 @@ final class SemanticObservationStream {
 
     private var settledSequence: SettledObservationSequence = 0
     private var fulfillmentState = SemanticObservationFulfillmentState()
-    /// Bus sequence of the most recent `screenChanged` at the latest settled
-    /// commit; a later `screenChanged` marks that commit as replaced.
-    private var lastCommittedScreenChangedSequence: UInt64 = 0
+    /// Bus sequence of the most recent scoped `screenChanged` at the latest
+    /// settled commit; a later scoped `screenChanged` marks that commit as
+    /// replaced.
+    private var lastCommittedScopedScreenChangedSequence: UInt64 = 0
     var latestEvent: SettledSemanticObservationEvent? {
         fulfillmentState.latestSourceEvent
     }
@@ -605,23 +606,23 @@ final class SemanticObservationStream {
         fulfillmentState.invalidate()
     }
 
-    /// A `screenChanged` notification recorded after the latest settled
+    /// A scoped `screenChanged` notification recorded after the latest settled
     /// commit means the settled screen has already been replaced — the
-    /// notification is a completion signal, so the invalidation is
-    /// definitive, not speculative. Serve-path reads then wait for a fresh
-    /// cycle instead of returning the stale world.
+    /// notification is a completion signal, so the invalidation is definitive,
+    /// not speculative. Serve-path reads then wait for a fresh cycle instead
+    /// of returning the stale world.
     ///
-    /// Gated on an active notification scope (a running heist or dispatched
-    /// action) so ambient host-app notifications outside command execution
-    /// cannot churn settled state. `layoutChanged` deliberately does not
-    /// invalidate: it also fires for in-place updates and would starve reads
-    /// on chatty screens.
+    /// The notification bus records this as scoped at event time, so ambient
+    /// host-app notifications outside command execution cannot later churn
+    /// settled state. `layoutChanged` deliberately does not invalidate: it
+    /// also fires for in-place updates and would starve reads on chatty
+    /// screens.
     private func invalidateSettledObservationIfScreenChangedSinceCommit() {
         guard let stash,
-              stash.accessibilityNotifications.hasActiveNotificationScope,
               !latestSettledObservationInvalidated,
               latestEvent != nil,
-              stash.accessibilityNotifications.latestScreenChangedSequence > lastCommittedScreenChangedSequence
+              stash.accessibilityNotifications.latestScopedScreenChangedSequence
+              > lastCommittedScopedScreenChangedSequence
         else { return }
         invalidateLatestSettledObservation()
     }
@@ -643,7 +644,7 @@ final class SemanticObservationStream {
         guard let sourceEvent = events[scope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
-        lastCommittedScreenChangedSequence = stash.accessibilityNotifications.latestScreenChangedSequence
+        lastCommittedScopedScreenChangedSequence = stash.accessibilityNotifications.latestScopedScreenChangedSequence
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
         settledWaiters.completeWaiters(with: events)
