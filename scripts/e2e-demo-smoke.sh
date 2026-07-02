@@ -596,7 +596,9 @@ ROOT_AFTER_ROTOR_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | json_expect_ok "root after rotor get_interface"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_root_rotor_row
 
-log "Navigating to Controls Demo semantically from the scrolled root"
+log "Navigating to Controls Demo from the scrolled root"
+CONTROLS_VISIBLE_JSON="$(run_cli_json scroll_to_visible --label "Controls Demo" --traits button --timeout 15)"
+printf '%s' "$CONTROLS_VISIBLE_JSON" | json_expect_ok "scroll Controls Demo into view"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
 printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
 CONTROLS_JSON="$(run_cli_json get_interface)"
