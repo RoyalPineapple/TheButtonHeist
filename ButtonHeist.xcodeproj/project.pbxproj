@@ -618,6 +618,7 @@
 		FB8665DB19E0A3D48B3757E1 /* CanonicalHeistSourceRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC20D5074E584DEBEFD7D09B /* CanonicalHeistSourceRoundTripTests.swift */; };
 		FC14E51D17E26B9044517D8C /* TheGetaway+Broadcast.swift in Sources */ = {isa = PBXBuildFile; fileRef = F530B693309FBB23FD7B2644 /* TheGetaway+Broadcast.swift */; };
 		FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */; };
+		FCB9DCF2789BCD585E4E2C39 /* ButtonHeistSupport.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73575D730834C2041E582F8D /* ButtonHeistSupport.framework */; };
 		FD04BB6938C90A75483E8E95 /* HeistPlanSourceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA0E7022C3AFB4F172F841D /* HeistPlanSourceDiagnostics.swift */; };
 		FD128814F88740831ABB00B3 /* Navigation+SemanticExploration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2068D6DF4FCFBFA2C3BD2469 /* Navigation+SemanticExploration.swift */; };
 		FDF04B8A3FE0D3AF1C778D55 /* AccessibilityTrace+Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87477C809BA38945779ACBF0 /* AccessibilityTrace+Endpoints.swift */; };
@@ -768,6 +769,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 4D55A4986E4C4C94D4077EE0;
 			remoteInfo = ThePlans;
+		};
+		B3086901E43FF04A8374EE55 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 59B854B2DE7B0A4630DF845B;
+			remoteInfo = ButtonHeistSupport;
 		};
 		B4BB6E3A90FC9C91788BC27A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -1687,6 +1695,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FCB9DCF2789BCD585E4E2C39 /* ButtonHeistSupport.framework in Frameworks */,
 				7CF48D906BD4505BC27D934B /* ThePlans.framework in Frameworks */,
 				BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */,
 			);
@@ -2688,6 +2697,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				F1AF129B23F8B3073E721428 /* PBXTargetDependency */,
 				E599656ABBCA5FEA55DAF266 /* PBXTargetDependency */,
 				DE4AF76A7E24F03406F80154 /* PBXTargetDependency */,
 			);
@@ -3961,6 +3971,12 @@
 			name = ThePlans;
 			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
 			targetProxy = A6547A3737B60BB8FB2424D6 /* PBXContainerItemProxy */;
+		};
+		F1AF129B23F8B3073E721428 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ButtonHeistSupport;
+			target = 59B854B2DE7B0A4630DF845B /* ButtonHeistSupport */;
+			targetProxy = B3086901E43FF04A8374EE55 /* PBXContainerItemProxy */;
 		};
 		F3865920A9792F7DC6CF6C66 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

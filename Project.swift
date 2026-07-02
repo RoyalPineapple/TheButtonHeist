@@ -142,6 +142,7 @@ let project = Project(
             sources: ["ButtonHeist/Sources/TheButtonHeist/**"],
 
             dependencies: [
+                .target(name: "ButtonHeistSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ]
