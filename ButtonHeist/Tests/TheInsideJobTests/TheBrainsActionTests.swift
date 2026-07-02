@@ -156,6 +156,9 @@ final class TheBrainsActionTests: XCTestCase {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
         brains.startSemanticObservation()
+        // Keep expected noRevealPath failures fast; grace-window behavior is
+        // covered in TheBrainsScrollTests.
+        brains.navigation.elementInflation.revealPathGraceTimeout = 0.05
     }
 
     override func tearDown() async throws {
