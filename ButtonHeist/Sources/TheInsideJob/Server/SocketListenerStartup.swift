@@ -114,9 +114,14 @@ private extension ListenerAddressFamily {
         case .ipv6:
             return [bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)]
         case .dualStack:
+            if !bindToLoopback {
+                // An all-interface Network listener is already dual-stack; a
+                // second any-address listener on the same port collides.
+                return [.ipv4(.any)]
+            }
             return [
-                bindToLoopback ? .ipv4(.loopback) : .ipv4(.any),
-                bindToLoopback ? .ipv6(.loopback) : .ipv6(.any),
+                .ipv4(.loopback),
+                .ipv6(.loopback),
             ]
         }
     }
