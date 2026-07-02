@@ -8,7 +8,8 @@ The short version: The Button Heist runs inside the app so it can hold the live
 accessibility tree — real `UIAccessibilityElement`s, not serialized copies —
 and act through the same declared activations VoiceOver invokes. No
 out-of-process driver can do either, because iOS does not let one process
-traverse another app's live accessibility tree.
+traverse another app's live accessibility tree. This argument as one picture
+is the [process boundaries diagram](diagrams/process-boundaries.md).
 
 ## The surface under test
 

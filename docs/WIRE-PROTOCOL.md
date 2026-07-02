@@ -117,6 +117,10 @@ sequenceDiagram
 `status` is the only post-hello message allowed before authentication. It
 reports identity and session availability without claiming a driver session.
 
+The client-side view of the same exchange — the `HandoffConnectionPhase` state
+machine and every documented failure edge — is drawn in the
+[connection lifecycle diagram](diagrams/connection-lifecycle.md).
+
 ## Envelopes
 
 Every message is a JSON object terminated by `\n`.
@@ -302,7 +306,8 @@ commands from their semantic fields, not from `heistId`.
 
 Errors use typed `errorKind` on action results when the error belongs to the
 action. Server-level failures use the `error` message with `kind` and
-`message`.
+`message`. Where each receipt field is produced during an action is drawn in
+the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ## Traces and Deltas
 

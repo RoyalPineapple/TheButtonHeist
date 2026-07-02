@@ -11,6 +11,10 @@ rendering, or replay MUST be represented as a validated `HeistPlan`.
 Durable heists MAY be authored through canonical ButtonHeist source, trusted
 local Swift DSL that compiles to a `HeistPlan`, or generated `.heist` artifacts.
 The durable artifact format is described in [Heist format](HEIST-FORMAT.md).
+The authoring surface — step types, passables, target forms, and the
+state/change predicate split — is drawn in the
+[DSL grammar diagram](diagrams/dsl-grammar.md); the termination guarantees are
+drawn in the [totality diagram](diagrams/totality.md).
 
 Runtime wire IR is internal and generated. Raw `version`/`name`/`parameter`/
 `definitions`/`body` JSON MUST NOT be used as the human or agent authoring
@@ -71,6 +75,9 @@ The checked-plan pipeline is:
 4. Admit only a validated `HeistPlan` to storage, catalog discovery, rendering,
    replay, or execution.
 
+The full author-to-replay pipeline, including where admission can reject, is
+drawn in the [heist lifecycle diagram](diagrams/heist-lifecycle.md).
+
 Invalid syntax MUST NOT become a different valid program. In particular,
 invalid dotted paths MUST NOT be repaired by dropping empty components or
 otherwise canonicalizing user input.
@@ -119,7 +126,9 @@ context only; they MUST NOT be promoted into durable selectors.
 Durable selectors describe semantic element identity, not a captured screen
 instance. A selector is durable when it is built from Button Heist element
 predicates that can be re-resolved after storage, packaging, canonical
-rendering, and replay.
+rendering, and replay. How a selector resolves at runtime — exact-or-miss
+matching, ordinals, and diagnostics — is drawn in the
+[element inflation diagram](diagrams/element-inflation.md).
 
 The durable selector forms are:
 

@@ -1,0 +1,61 @@
+# Crew Map
+
+Every module in the workspace and the direction of its dependencies, with the Codable wire boundary drawn explicitly. This diagram answers "which module owns what, and which types are allowed to cross the wire?"
+
+**Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md)
+**Source of truth:** `ButtonHeist/Package.swift`, `ButtonHeistCLI/Package.swift`, `ButtonHeistMCP/Package.swift`
+
+```mermaid
+flowchart TD
+    CLI["ButtonHeistCLI<br/>buttonheist executable"]
+    MCPMOD["ButtonHeistMCP<br/>buttonheist-mcp executable"]
+    TESTING["ButtonHeistTesting<br/>runHeist / joinHeist test facade"]
+    PLANT["ThePlant<br/>ObjC auto-start loader"]
+    BUTTONHEIST["ButtonHeist<br/>TheFence · TheHandoff"]
+    DSL["ButtonHeistDSL<br/>Swift result-builder authoring"]
+    INSIDEJOB["TheInsideJob — #if DEBUG<br/>in-app server and crew"]
+    SUPPORT["ButtonHeistSupport<br/>shared utilities"]
+    AXPARSER["AccessibilitySnapshotParser<br/>accessibility tree walk (fork)"]
+    AXMODEL["AccessibilitySnapshotModel<br/>AccessibilityElement · AccessibilityHierarchy"]
+
+    subgraph wire["Wire layer (Codable)"]
+        THESCORE["TheScore<br/>messages · envelopes · HeistElement"]
+        THEPLANS["ThePlans<br/>HeistPlan IR · predicates · targets"]
+        THESCORE --> THEPLANS
+    end
+
+    CLI --> BUTTONHEIST
+    MCPMOD --> BUTTONHEIST
+    TESTING --> DSL
+    TESTING --> INSIDEJOB
+    PLANT --> INSIDEJOB
+    BUTTONHEIST --> SUPPORT
+    BUTTONHEIST --> THESCORE
+    BUTTONHEIST --> THEPLANS
+    DSL --> THEPLANS
+    INSIDEJOB --> SUPPORT
+    INSIDEJOB --> THESCORE
+    INSIDEJOB --> THEPLANS
+    INSIDEJOB --> AXPARSER
+    AXPARSER --> AXMODEL
+    THESCORE --> AXMODEL
+```
+
+The SwiftPM tool executables are omitted from the picture to keep it narrow; their declared dependencies are: `HeistPlanTool` (`heist-plan`) → `ThePlans` + `ArgumentParser`; `HeistDoctorCore` → `ThePlans`, `TheScore`; `HeistDoctorTool` (`heist-doctor`) → `HeistDoctorCore`, `TheScore`, `ArgumentParser`; `ButtonHeistDocGen` (`buttonheist-docgen`) → `ButtonHeist`, `ArgumentParser`. `ButtonHeistCLI` also depends on `ThePlans` directly, and `ButtonHeist` on `AccessibilitySnapshotModel`.
+
+Crew members inside `TheInsideJob` (directories under `ButtonHeist/Sources/TheInsideJob/`):
+
+| Crew member | Responsibility |
+|---|---|
+| `TheBrains` | Action execution, settle loop, delta computation, predicate evaluation |
+| `TheBurglar` | Accessibility hierarchy parsing and semantic observation capture |
+| `TheGetaway` | Message encoding/decoding and transport routing |
+| `TheSafecracker` | Touch injection and text input dispatch |
+| `TheStash` | Settled semantic world, live capture, target resolution, heistId assignment |
+| `TheTripwire` | UIKit timing signals — animations, layout, window ordering, keyboard state |
+| `Server` | `TheMuscle` admission and sessions, `NWListener`, Bonjour advertisement |
+| `Lifecycle` | App lifecycle coordination and server startup/shutdown |
+
+Host-side crew members live in the `ButtonHeist` library (`ButtonHeist/Sources/TheButtonHeist/`): `TheFence` (command catalog and dispatch for CLI and MCP) and `TheHandoff` (device discovery, TLS connection, version handshake).
+
+Only the wire-layer types (`ThePlans`, `TheScore`) are Codable and cross the network. Everything inside `TheInsideJob` — `Screen`, `SemanticScreen`, `LiveCapture`, `TheStash` state — stays in the app process.

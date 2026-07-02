@@ -36,7 +36,8 @@ other-process surfaces around it.
 ## What "settled" means
 
 Evidence is captured against a settled interface, and "settled" has an exact
-definition:
+definition (drawn as a state machine in the
+[settle loop diagram](diagrams/settle-loop.md)):
 
 - The settle loop re-parses the accessibility tree about every 100 ms and
   computes a content fingerprint over each element's label, identifier, value,
@@ -71,7 +72,9 @@ virtualization, `LazyVStack`, and friends — has no accessibility elements
 until the framework creates them. The Button Heist's scroll exploration can
 realize such content by scrolling, but an element that has never been realized
 is not in the tree and cannot be targeted by a pure tree read. "Offscreen"
-means realized but out of the viewport, not hypothetical.
+means realized but out of the viewport, not hypothetical. The resolution and
+reveal flow is drawn in the
+[element inflation diagram](diagrams/element-inflation.md).
 
 ## Accessibility classes The Button Heist does not catch
 

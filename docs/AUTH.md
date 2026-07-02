@@ -24,7 +24,8 @@ One slug names everything an agent owns. Create a simulator with that name,
 launch the app with the slug as both the token and the instance ID, and connect
 with the same values. `xcrun simctl list devices booted` then reads as a
 dashboard of which agent owns which simulator, and an auth failure names whose
-session you hit instead of leaving you guessing.
+session you hit instead of leaving you guessing. The full topology is drawn in
+the [multi-agent isolation diagram](diagrams/multi-agent-isolation.md).
 
 ```bash
 TASK_SLUG="accra-scroll-detection"
@@ -96,21 +97,9 @@ the TLS connection.
 
 ## Connection Flow
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant TheInsideJob as TheInsideJob (iOS)
-
-    Client->>TheInsideJob: TLS-PSK handshake derived from token
-    TheInsideJob->>Client: serverHello
-    Client->>TheInsideJob: clientHello
-    TheInsideJob->>Client: authRequired
-    Client->>TheInsideJob: authenticate(token)
-    Note right of TheInsideJob: TheMuscle validates token<br/>and claims driver session
-    TheInsideJob->>Client: info
-    Client->>TheInsideJob: requestInterface
-    Note over Client,TheInsideJob: Client is now fully connected
-```
+See the [connection lifecycle diagram](diagrams/connection-lifecycle.md) for
+the full state machine and the handshake sequence — TLS-PSK, hello exchange,
+version gate, `authenticate`, and the distinct auth outcomes.
 
 ### Invalid Token
 
@@ -194,28 +183,17 @@ loopback or USB/direct targets instead of enabling network scope.
 
 ## TLS-PSK Lifecycle
 
-```mermaid
-sequenceDiagram
-    participant Token as Token
-    participant PSK as HKDF-SHA256
-    participant ST as ServerTransport
-    participant DC as DeviceConnection
-    participant NS as NetService (Bonjour)
-
-    Token->>PSK: derive 32-byte PSK
-    PSK->>ST: NWParameters(tls: PSK options)
-    PSK->>DC: NWParameters(tls: PSK options)
-
-    ST->>NS: advertise service
-    Note over NS: TXT record includes<br/>transport = "tls-psk"
-
-    DC->>ST: TLS-PSK handshake
-    Note over DC,ST: same token -> same derived PSK
-    ST-->>DC: Handshake complete
-```
+Both sides derive the same 32-byte pre-shared key from the token via
+HKDF-SHA256 (`ButtonHeistTLSPreSharedKey`); `ServerTransport` and
+`DeviceConnection` feed it to Network.framework as TLS options, and the
+Bonjour TXT record advertises `transport = "tls-psk"`. Same token, same
+derived PSK — the handshake sequence is drawn in the
+[connection lifecycle diagram](diagrams/connection-lifecycle.md).
 
 ## Related Documentation
 
 - [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) — Full message specification
 - [API.md](API.md) — Configuration keys and public API
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Component overview
+- [Connection lifecycle diagram](diagrams/connection-lifecycle.md) — phases and handshake
+- [Multi-agent isolation diagram](diagrams/multi-agent-isolation.md) — per-agent simulator/port/token topology

@@ -340,7 +340,7 @@ Explicit mechanical gestures stay available for maps, canvases, drawing surfaces
 
 | Need | Read |
 |---|---|
-| Understand the contract loop | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
+| Understand the contract loop | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md), [Diagrams](docs/diagrams/README.md) |
 | Compare approaches, know the limits | [Why in-process](docs/WHY-IN-PROCESS.md), [Scope and limits](docs/SCOPE-AND-LIMITS.md) |
 | Connect an agent | [MCP agent guide](docs/MCP-AGENT-GUIDE.md), [ButtonHeistMCP](ButtonHeistMCP/) |
 | Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |

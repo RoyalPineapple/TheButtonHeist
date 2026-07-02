@@ -64,6 +64,12 @@ flowchart LR
     Next --> Before
 ```
 
+What "settled" means — the tripwire, the fingerprint cycles, and the hard
+timeout — is drawn in the [settle loop diagram](diagrams/settle-loop.md). The
+activation decision tree, including the warn-but-proceed path and the
+`ActivationTrace` receipt fields, is drawn in the
+[activation policy diagram](diagrams/activation-policy.md).
+
 ## Receipts
 
 A receipt is plain evidence about what happened. It names the step, the status,

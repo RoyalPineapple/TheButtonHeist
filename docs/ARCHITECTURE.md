@@ -34,7 +34,9 @@ before/after interfaces.
 Agents should start from `get_interface`, then prefer the action result's delta
 over another read. A screen-change delta invalidates prior capture-local
 handles and supplies the new interface evidence. Semantic matchers and
-predicate fields are the public currency for follow-up actions.
+predicate fields are the public currency for follow-up actions. See the
+[currency types diagram](diagrams/currency-types.md) for the type families and
+the internal/wire border.
 
 ### Tripwire Triggers, Settle Decides Stable
 
@@ -47,6 +49,8 @@ When Tripwire triggers, TheBrains parses the accessibility hierarchy and
 `ScreenClassifier` decides whether the settled result is no-change,
 element-change, or screen-change. The settle loop can also report unhealthy
 snapshots rather than pretending an empty post-navigation parse is stable.
+See the [settle loop diagram](diagrams/settle-loop.md) for the state machine
+and its constants.
 
 ### Observation Has One Owner
 
@@ -79,7 +83,9 @@ The pipeline is:
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit mechanical or viewport commands; it
 is not durable identity. If inflation cannot be proven, the command fails with
-diagnostics instead of acting on stale or guessed state.
+diagnostics instead of acting on stale or guessed state. See the
+[element inflation diagram](diagrams/element-inflation.md) for the resolution
+flowchart.
 
 ### State Has One Owner
 
@@ -123,27 +129,19 @@ classification used by action results and waiters.
 
 ## Component Map
 
-```mermaid
-flowchart LR
-    Agent["Agent / CLI"] --> MCP["ButtonHeistMCP<br/>tool adapter"]
-    Agent --> CLI["buttonheist CLI"]
-    MCP --> Fence["TheFence<br/>command contract"]
-    CLI --> Fence
-    Fence --> Handoff["TheHandoff<br/>discovery + TLS client"]
-    Handoff <-->|"scoped direct/discovery TLS"| Inside["TheInsideJob<br/>iOS server"]
-    Inside --> Getaway["TheGetaway<br/>decode, route, encode"]
-    Getaway --> Brains["TheBrains<br/>actions, waits, deltas"]
-    Brains --> Stash["TheStash<br/>current accessibility state"]
-    Brains --> Tripwire["TheTripwire<br/>timing signals"]
-    Brains --> Safecracker["TheSafecracker<br/>touch + text execution"]
-    Stash --> Burglar["TheBurglar<br/>hierarchy parse/apply"]
-```
+The full module/dependency graph — every crew member, its responsibility, and
+the Codable wire boundary — is drawn in the [crew map diagram](diagrams/crew-map.md).
+The [system topology diagram](diagrams/system-topology.md) shows the same
+machine at one altitude higher: host tools, the wire, and the `#if DEBUG`
+in-app server.
 
 ## Execution and Predicate Pipeline
 
 The Button Heist has one source of truth: the accessibility tree, a snapshot of
 that tree, or a diff between snapshots. Targets, searches, waits, expectations,
 and repeat-loop stop conditions all evaluate through the same predicate model.
+For a single action's end-to-end sequence — dispatch, resolution, activation,
+settle, delta, receipt — see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ```mermaid
 flowchart TD
@@ -241,6 +239,9 @@ failure points at the accessibility contract that changed.
 
 ## Reference Docs
 
+- [Diagrams](diagrams/README.md) - architecture diagrams, one file per
+  concern; the [process boundaries diagram](diagrams/process-boundaries.md)
+  draws the in-process vs out-of-process argument.
 - [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) - canonical product
   contract, boundary map, pipeline, and conformance cases.
 - [API Reference](API.md) - public APIs, CLI, MCP tool contract, and command
