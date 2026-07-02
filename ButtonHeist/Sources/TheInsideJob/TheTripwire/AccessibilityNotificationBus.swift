@@ -10,12 +10,33 @@ import TheScore
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
 final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    /// Transition-completion notifications: the app announcing that a screen
-    /// or layout change has finished landing. `screenChanged` (1000) is the
-    /// strong per-screen claim; `layoutChanged` (1001) often precedes it
-    /// during multi-stage transitions and also fires for in-place updates.
-    static let transitionCompletionCodes: Set<UInt32> = [1000, 1001]
-    private static let screenChangedCode: UInt32 = 1000
+    /// Closed notification domain. UIKit spells element-change notifications
+    /// `layoutChanged`; evidence keeps that platform name at the boundary.
+    private enum SupportedNotification: UInt32 {
+        case screenChanged = 1000
+        case elementChanged = 1001
+        case announcement = 1008
+
+        var name: String {
+            switch self {
+            case .screenChanged:
+                return "screenChanged"
+            case .elementChanged:
+                return "layoutChanged"
+            case .announcement:
+                return "announcement"
+            }
+        }
+
+        var wakesTransitionWaiters: Bool {
+            switch self {
+            case .screenChanged, .elementChanged:
+                return true
+            case .announcement:
+                return false
+            }
+        }
+    }
 
     private final class TransitionWaiter {
         let afterSequence: UInt64
@@ -129,10 +150,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return result
     }
 
-    private func recordTransitionEventLocked(code: UInt32, sequence: UInt64) -> [TransitionWaiter] {
-        guard Self.transitionCompletionCodes.contains(code) else { return [] }
+    private func recordTransitionEventLocked(kind: SupportedNotification, sequence: UInt64) -> [TransitionWaiter] {
+        guard kind.wakesTransitionWaiters else { return [] }
         latestTransitionSequenceStorage = sequence
-        if code == Self.screenChangedCode, hasActiveNotificationScopeLocked {
+        if kind == .screenChanged, hasActiveNotificationScopeLocked {
             latestScopedScreenChangedSequenceStorage = sequence
         }
         let resumed = transitionWaiters.values.filter { $0.afterSequence < sequence }
@@ -205,14 +226,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         notificationData data: CapturedAccessibilityNotificationPayload,
         associatedElement element: CapturedAccessibilityNotificationPayload
     ) {
-        let name = Self.name(for: code)
+        guard let kind = SupportedNotification(rawValue: code) else { return }
 
         lock.lock()
         latestSequenceStorage += 1
         let event = PendingAccessibilityNotificationEvent(
             sequence: latestSequenceStorage,
-            code: code,
-            name: name,
+            code: kind.rawValue,
+            name: kind.name,
             timestamp: Date(),
             notificationData: data.pendingPayload,
             associatedElement: element.pendingPayload
@@ -221,7 +242,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         if bufferedEvents.count > maxBufferedEvents {
             bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
         }
-        let resumedWaiters = recordTransitionEventLocked(code: code, sequence: event.sequence)
+        let resumedWaiters = recordTransitionEventLocked(kind: kind, sequence: event.sequence)
         lock.unlock()
 
         let cursor = AccessibilityNotificationCursor(sequence: event.sequence)
@@ -286,23 +307,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
             .replacingOccurrences(of: "\r", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? nil : normalized
-    }
-
-    private static func name(for code: UInt32) -> String {
-        switch code {
-        case 1000:
-            return "screenChanged"
-        case 1001:
-            return "layoutChanged"
-        case 1005:
-            return "valueChanged"
-        case 1008:
-            return "announcement"
-        case 1009:
-            return "pageScrolled"
-        default:
-            return "notification_\(code)"
-        }
     }
 
     fileprivate static func className(for value: AnyObject?) -> String {
