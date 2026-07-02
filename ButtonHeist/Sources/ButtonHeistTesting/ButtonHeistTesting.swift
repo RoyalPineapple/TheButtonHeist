@@ -395,6 +395,7 @@ private func runHeistSyncArgument<Argument: HeistRunArgument, Content: HeistCont
 public func joinHeist(
     token: String,
     port: UInt16 = 0,
+    addressFamily: ListenerAddressFamily = .dualStack,
     allowedScopes: Set<ConnectionScope> = [.simulator],
     file: StaticString = #filePath,
     line: UInt = #line
@@ -402,6 +403,7 @@ public func joinHeist(
     guard let session = startJoinedHeistSession(
         token: token,
         port: port,
+        addressFamily: addressFamily,
         allowedScopes: allowedScopes,
         file: file,
         line: line
@@ -425,6 +427,7 @@ public func joinHeist(
 public func withJoinedHeistSession<Result>(
     token: String,
     port: UInt16 = 0,
+    addressFamily: ListenerAddressFamily = .dualStack,
     allowedScopes: Set<ConnectionScope> = [.simulator],
     file: StaticString = #filePath,
     line: UInt = #line,
@@ -433,6 +436,7 @@ public func withJoinedHeistSession<Result>(
     guard let session = startJoinedHeistSession(
         token: token,
         port: port,
+        addressFamily: addressFamily,
         allowedScopes: allowedScopes,
         file: file,
         line: line
@@ -449,6 +453,7 @@ public func withJoinedHeistSession<Result>(
 func startJoinedHeistSession(
     token: String,
     port: UInt16,
+    addressFamily: ListenerAddressFamily,
     allowedScopes: Set<ConnectionScope>,
     file: StaticString,
     line: UInt
@@ -457,7 +462,8 @@ func startJoinedHeistSession(
         let job = TheInsideJob(
             token: token,
             allowedScopes: allowedScopes,
-            port: port
+            port: port,
+            addressFamily: addressFamily
         )
         try await job.start()
         guard let listeningPort = job.listeningPort else {
@@ -468,6 +474,7 @@ func startJoinedHeistSession(
             token: token,
             requestedPort: port,
             listeningPort: listeningPort,
+            addressFamily: addressFamily,
             allowedScopes: allowedScopes
         )
     }
@@ -657,6 +664,7 @@ public struct JoinedHeistSession: @unchecked Sendable { // swiftlint:disable:thi
     public let token: String
     public let requestedPort: UInt16
     public let listeningPort: UInt16
+    public let addressFamily: ListenerAddressFamily
     public let allowedScopes: Set<ConnectionScope>
 
     @MainActor
@@ -664,9 +672,13 @@ public struct JoinedHeistSession: @unchecked Sendable { // swiftlint:disable:thi
         await job.stop()
     }
 
+    public var endpoint: String {
+        "\(addressFamily.readyEndpointHost):\(listeningPort)"
+    }
+
     public var readyMessage: String {
         var lines = [
-            "ButtonHeist join ready: endpoint=127.0.0.1:\(listeningPort) token=\(token)",
+            "ButtonHeist join ready: endpoint=\(endpoint) token=\(token)",
         ]
         if requestedPort != 0, requestedPort != listeningPort {
             lines.append("ButtonHeist join note: requested port \(requestedPort), bound port \(listeningPort).")
@@ -677,8 +689,19 @@ public struct JoinedHeistSession: @unchecked Sendable { // swiftlint:disable:thi
             let scopes = allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
             lines.append("ButtonHeist join scopes: \(scopes).")
         }
-        lines.append("ButtonHeist join note: Bazel-launched simulators may still require external port forwarding from the host.")
+        lines.append("ButtonHeist join note: If this endpoint is unreachable from the host, your launch system may require port forwarding.")
         return lines.joined(separator: "\n")
+    }
+}
+
+private extension ListenerAddressFamily {
+    var readyEndpointHost: String {
+        switch self {
+        case .ipv4, .dualStack:
+            return "127.0.0.1"
+        case .ipv6:
+            return "[::1]"
+        }
     }
 }
 

@@ -49,6 +49,7 @@ public final class TheInsideJob {
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
+        addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil
     ) {
         switch sharedState {
@@ -61,6 +62,7 @@ public final class TheInsideJob {
                     instanceId: instanceId,
                     allowedScopes: allowedScopes,
                     port: port,
+                    addressFamily: addressFamily,
                     fingerprintsEnabled: fingerprintsEnabled
                 )
             )
@@ -162,6 +164,7 @@ public final class TheInsideJob {
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
+        addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil
     ) {
         self.init(
@@ -169,6 +172,7 @@ public final class TheInsideJob {
             instanceId: instanceId,
             allowedScopes: allowedScopes,
             port: port,
+            addressFamily: addressFamily,
             fingerprintsEnabled: fingerprintsEnabled,
             transportFactory: { ServerTransport(token: $0, allowedScopes: $1) }
         )
@@ -179,6 +183,7 @@ public final class TheInsideJob {
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
+        addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
         transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
@@ -191,6 +196,7 @@ public final class TheInsideJob {
                 instanceId: instanceId,
                 allowedScopes: allowedScopes,
                 port: port,
+                addressFamily: addressFamily,
                 fingerprintsEnabled: fingerprintsEnabled
             ),
             transportFactory: transportFactory

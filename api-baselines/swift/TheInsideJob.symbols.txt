@@ -7,6 +7,11 @@
 # Format: symbol<TAB>graph<TAB>precise-id<TAB>kind<TAB>access<TAB>title<TAB>path<TAB>declaration
 # Format: relationship<TAB>kind<TAB>source-id<TAB>target-id<TAB>source<TAB>target
 
+symbol	TheInsideJob.symbols.json	s:12TheInsideJob21ListenerAddressFamilyO	swift.enum	public	ListenerAddressFamily	ListenerAddressFamily	enum ListenerAddressFamily
+symbol	TheInsideJob.symbols.json	s:12TheInsideJob21ListenerAddressFamilyO4ipv4yA2CmF	swift.enum.case	public	ListenerAddressFamily.ipv4	ListenerAddressFamily.ipv4	case ipv4
+symbol	TheInsideJob.symbols.json	s:12TheInsideJob21ListenerAddressFamilyO4ipv6yA2CmF	swift.enum.case	public	ListenerAddressFamily.ipv6	ListenerAddressFamily.ipv6	case ipv6
+symbol	TheInsideJob.symbols.json	s:12TheInsideJob21ListenerAddressFamilyO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ListenerAddressFamily.init(rawValue:)	init?(rawValue: String)
+symbol	TheInsideJob.symbols.json	s:12TheInsideJob21ListenerAddressFamilyO9dualStackyA2CmF	swift.enum.case	public	ListenerAddressFamily.dualStack	ListenerAddressFamily.dualStack	case dualStack
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV	swift.struct	public	Heist	Heist	struct Heist
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV6result0A5Score0D15ExecutionResultVvp	swift.property	public	result	Heist.result	let result: HeistExecutionResult
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV7FailureV	swift.struct	public	Heist.Failure	Heist.Failure	struct Failure
@@ -28,10 +33,17 @@ symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC	swift.class	public	TheInsid
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC13listeningPorts6UInt16VSgvp	swift.property	public	listeningPort	TheInsideJob.listeningPort	@MainActor var listeningPort: UInt16? { get }
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC4stopyyYaF	swift.method	public	stop()	TheInsideJob.stop()	@MainActor func stop() async
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC5startyyYaKF	swift.method	public	start()	TheInsideJob.start()	@MainActor func start() async throws
-symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC5token10instanceId13allowedScopes4port19fingerprintsEnabledABSSSg_AHShy0A5Score15ConnectionScopeOGSgs6UInt16VSbSgtcfc	swift.init	public	init(token:instanceId:allowedScopes:port:fingerprintsEnabled:)	TheInsideJob.init(token:instanceId:allowedScopes:port:fingerprintsEnabled:)	@MainActor convenience init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0, fingerprintsEnabled: Bool? = nil)
+symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC5token10instanceId13allowedScopes4port13addressFamily19fingerprintsEnabledABSSSg_AIShy0A5Score15ConnectionScopeOGSgs6UInt16VAA015ListenerAddressK0OSbSgtcfc	swift.init	public	init(token:instanceId:allowedScopes:port:addressFamily:fingerprintsEnabled:)	TheInsideJob.init(token:instanceId:allowedScopes:port:addressFamily:fingerprintsEnabled:)	@MainActor convenience init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0, addressFamily: ListenerAddressFamily = .dualStack, fingerprintsEnabled: Bool? = nil)
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC6sharedABvpZ	swift.type.property	public	shared	TheInsideJob.shared	@MainActor static var shared: TheInsideJob { get }
-symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC9configure5token10instanceId13allowedScopes4port19fingerprintsEnabledySSSg_AIShy0A5Score15ConnectionScopeOGSgs6UInt16VSbSgtFZ	swift.type.method	public	configure(token:instanceId:allowedScopes:port:fingerprintsEnabled:)	TheInsideJob.configure(token:instanceId:allowedScopes:port:fingerprintsEnabled:)	@MainActor static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0, fingerprintsEnabled: Bool? = nil)
+symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC9configure5token10instanceId13allowedScopes4port13addressFamily19fingerprintsEnabledySSSg_AJShy0A5Score15ConnectionScopeOGSgs6UInt16VAA015ListenerAddressL0OSbSgtFZ	swift.type.method	public	configure(token:instanceId:allowedScopes:port:addressFamily:fingerprintsEnabled:)	TheInsideJob.configure(token:instanceId:allowedScopes:port:addressFamily:fingerprintsEnabled:)	@MainActor static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0, addressFamily: ListenerAddressFamily = .dualStack, fingerprintsEnabled: Bool? = nil)
 
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:SE	ListenerAddressFamily	Swift.Encodable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:SH	ListenerAddressFamily	Swift.Hashable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:SQ	ListenerAddressFamily	Swift.Equatable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:SY	ListenerAddressFamily	Swift.RawRepresentable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:Se	ListenerAddressFamily	Swift.Decodable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:s12CaseIterableP	ListenerAddressFamily	Swift.CaseIterable
+relationship	conformsTo	s:12TheInsideJob21ListenerAddressFamilyO	s:s8SendableP	ListenerAddressFamily	Swift.Sendable
 relationship	conformsTo	s:12TheInsideJob5HeistV	s:s8SendableP	Heist	Swift.Sendable
 relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:10Foundation14LocalizedErrorP	Heist.Failure	Foundation.LocalizedError
 relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:s23CustomStringConvertibleP	Heist.Failure	Swift.CustomStringConvertible

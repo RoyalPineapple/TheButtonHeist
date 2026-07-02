@@ -30,14 +30,22 @@ final class ButtonHeistNetworkTestClient: @unchecked Sendable { // swiftlint:dis
         self.queue = DispatchQueue(label: queueLabel)
     }
 
-    static func plaintext(port: UInt16) -> ButtonHeistNetworkTestClient {
-        ButtonHeistNetworkTestClient(port: port, parameters: .tcp)
+    static func plaintext(
+        port: UInt16,
+        host: NWEndpoint.Host = .ipv6(.loopback)
+    ) -> ButtonHeistNetworkTestClient {
+        ButtonHeistNetworkTestClient(port: port, parameters: .tcp, host: host)
     }
 
-    static func tls(port: UInt16, token: String) -> ButtonHeistNetworkTestClient {
+    static func tls(
+        port: UInt16,
+        token: String,
+        host: NWEndpoint.Host = .ipv6(.loopback)
+    ) -> ButtonHeistNetworkTestClient {
         ButtonHeistNetworkTestClient(
             port: port,
-            parameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
+            parameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            host: host
         )
     }
 
@@ -148,9 +156,13 @@ final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disabl
     private let token: String
     private let networkClient: ButtonHeistNetworkTestClient
 
-    init(token: String, port: UInt16) {
+    init(
+        token: String,
+        port: UInt16,
+        host: NWEndpoint.Host = .ipv6(.loopback)
+    ) {
         self.token = token
-        self.networkClient = .tls(port: port, token: token)
+        self.networkClient = .tls(port: port, token: token, host: host)
     }
 
     func connect(timeout: TimeInterval = 5.0) async throws {

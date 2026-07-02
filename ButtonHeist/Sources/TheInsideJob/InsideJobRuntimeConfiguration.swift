@@ -12,6 +12,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let preferredPortSource: StartupConfigurationSource
     let allowedScopes: Set<ConnectionScope>
     let allowedScopesSource: StartupConfigurationSource
+    let addressFamily: ListenerAddressFamily
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     let fingerprintsEnabled: Bool
     let fingerprintsEnabledSource: StartupConfigurationSource
@@ -23,6 +24,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         instanceId: String?,
         allowedScopes: Set<ConnectionScope>?,
         port: UInt16,
+        addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil
     ) -> InsideJobRuntimeConfiguration {
         let resolvedToken = resolvedRuntimeToken(
@@ -38,6 +40,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: port == 0 ? .defaultValue : .api,
             allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
             allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
+            addressFamily: addressFamily,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
             fingerprintsEnabled: fingerprintsEnabled ?? startupConfiguration.fingerprintsEnabled.value,
             fingerprintsEnabledSource: fingerprintsEnabled == nil ? startupConfiguration.fingerprintsEnabled.source : .api
@@ -58,6 +61,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: startupConfiguration.preferredPort.source,
             allowedScopes: startupConfiguration.allowedScopes.value,
             allowedScopesSource: startupConfiguration.allowedScopes.source,
+            addressFamily: .dualStack,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
             fingerprintsEnabled: startupConfiguration.fingerprintsEnabled.value,
             fingerprintsEnabledSource: startupConfiguration.fingerprintsEnabled.source
@@ -93,6 +97,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         preferredPortSource: StartupConfigurationSource,
         allowedScopes: Set<ConnectionScope>,
         allowedScopesSource: StartupConfigurationSource,
+        addressFamily: ListenerAddressFamily = .dualStack,
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
         fingerprintsEnabled: Bool = true,
         fingerprintsEnabledSource: StartupConfigurationSource = .defaultValue,
@@ -105,6 +110,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         self.preferredPortSource = preferredPortSource
         self.allowedScopes = allowedScopes
         self.allowedScopesSource = allowedScopesSource
+        self.addressFamily = addressFamily
         self.sessionReleaseTimeout = sessionReleaseTimeout
         self.fingerprintsEnabled = fingerprintsEnabled
         self.fingerprintsEnabledSource = fingerprintsEnabledSource

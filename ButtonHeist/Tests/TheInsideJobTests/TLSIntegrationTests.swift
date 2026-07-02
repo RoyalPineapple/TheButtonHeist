@@ -125,6 +125,8 @@ final class JoinHeistIntegrationTests: XCTestCase {
         ) { session in
             XCTAssertEqual(session.token, token)
             XCTAssertGreaterThan(session.listeningPort, 0)
+            XCTAssertEqual(session.addressFamily, .dualStack)
+            XCTAssertEqual(session.endpoint, "127.0.0.1:\(session.listeningPort)")
             XCTAssertTrue(session.readyMessage.contains("endpoint=127.0.0.1:\(session.listeningPort)"))
             XCTAssertTrue(session.readyMessage.contains("token=\(token)"))
             XCTAssertTrue(session.readyMessage.contains("simulator loopback only"))
@@ -154,7 +156,8 @@ final class JoinHeistIntegrationTests: XCTestCase {
         ) { session in
             let client = ButtonHeistWireTestClient(
                 token: token,
-                port: session.listeningPort
+                port: session.listeningPort,
+                host: .ipv4(.loopback)
             )
             defer { client.cancel() }
 
@@ -175,6 +178,23 @@ final class JoinHeistIntegrationTests: XCTestCase {
                 probe.labels.contains("ButtonHeist Demo"),
                 "Expected joined session to return the live demo app interface, got labels: \(probe.labels)"
             )
+        }
+    }
+
+    func testWithJoinedHeistSessionReportsIPv6EndpointWhenConfigured() throws {
+        let token = "scoped-join-heist-ipv6-\(UUID().uuidString)"
+
+        withJoinedHeistSession(
+            token: token,
+            port: 0,
+            addressFamily: .ipv6,
+            allowedScopes: [.simulator],
+            file: #filePath,
+            line: #line
+        ) { session in
+            XCTAssertEqual(session.addressFamily, .ipv6)
+            XCTAssertEqual(session.endpoint, "[::1]:\(session.listeningPort)")
+            XCTAssertTrue(session.readyMessage.contains("endpoint=[::1]:\(session.listeningPort)"))
         }
     }
 }

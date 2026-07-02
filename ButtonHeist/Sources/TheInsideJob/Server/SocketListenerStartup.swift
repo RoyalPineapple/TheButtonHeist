@@ -7,27 +7,66 @@ import TheScore
 private let listenerLogger = ButtonHeistLog.logger(.handoff(.server))
 
 struct SocketListenerStartup {
-    let listener: NWListener
+    let listeners: [NWListener]
     let port: UInt16
 
     static func start(
         port: UInt16,
         bindToLoopback: Bool,
+        addressFamily: ListenerAddressFamily,
         parameters: NWParameters,
         queue: DispatchQueue,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
     ) async throws -> SocketListenerStartup {
-        let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
-        parameters.requiredLocalEndpoint = .hostPort(
+        let hosts = addressFamily.hosts(bindToLoopback: bindToLoopback)
+        var requestedPort = port
+        var listeners: [NWListener] = []
+
+        do {
+            for host in hosts {
+                let listener = try makeListener(
+                    host: host,
+                    port: requestedPort,
+                    parameters: parameters,
+                    newConnectionHandler: newConnectionHandler
+                )
+                let actualPort = try await startAndWaitForReady(listener, queue: queue)
+                if requestedPort == 0 {
+                    requestedPort = actualPort
+                } else if actualPort != requestedPort {
+                    listener.cancel()
+                    throw SimpleSocketServer.ServerError.failedToBindPort
+                }
+                listeners.append(listener)
+            }
+        } catch {
+            for listener in listeners {
+                listener.cancel()
+            }
+            throw error
+        }
+
+        guard requestedPort != 0 else {
+            throw SimpleSocketServer.ServerError.failedToBindPort
+        }
+
+        return SocketListenerStartup(listeners: listeners, port: requestedPort)
+    }
+
+    private static func makeListener(
+        host: NWEndpoint.Host,
+        port: UInt16,
+        parameters: NWParameters,
+        newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
+    ) throws -> NWListener {
+        let listenerParameters = parameters.copy()
+        listenerParameters.requiredLocalEndpoint = .hostPort(
             host: host,
             port: NWEndpoint.Port(rawValue: port) ?? .any
         )
-
-        let listener = try NWListener(using: parameters)
+        let listener = try NWListener(using: listenerParameters)
         listener.newConnectionHandler = newConnectionHandler
-        let actualPort = try await startAndWaitForReady(listener, queue: queue)
-
-        return SocketListenerStartup(listener: listener, port: actualPort)
+        return listener
     }
 
     private static func startAndWaitForReady(_ listener: NWListener, queue: DispatchQueue) async throws -> UInt16 {
@@ -63,6 +102,22 @@ struct SocketListenerStartup {
                 }
             }
             listener.start(queue: queue)
+        }
+    }
+}
+
+private extension ListenerAddressFamily {
+    func hosts(bindToLoopback: Bool) -> [NWEndpoint.Host] {
+        switch self {
+        case .ipv4:
+            return [bindToLoopback ? .ipv4(.loopback) : .ipv4(.any)]
+        case .ipv6:
+            return [bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)]
+        case .dualStack:
+            return [
+                bindToLoopback ? .ipv4(.loopback) : .ipv4(.any),
+                bindToLoopback ? .ipv6(.loopback) : .ipv6(.any),
+            ]
         }
     }
 }
