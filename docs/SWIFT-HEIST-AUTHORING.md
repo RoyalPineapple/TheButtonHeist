@@ -10,9 +10,10 @@ Treat checked-in Swift files like product code, but keep the boundary explicit:
 Swift may wrap, select, name, organize, and call heists outside the DSL. If a
 behavior must survive `.heist`, catalog discovery, MCP composition, replay, or
 canonical rendering, it MUST lower to a durable `HeistPlan` expressed as
-`HeistDef`, `RunHeist`, `If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions,
-targets, and expectations. Durable loops must use The Button Heist's explicit
-`ForEach` primitive, not native Swift `for`.
+`HeistDef`, `RunHeist`, `If`, `WaitFor`, `RepeatUntil`, `ForEach`, `Warn`,
+`Fail`, actions, targets, and expectations. Durable loops must use The Button
+Heist's explicit `ForEach` and `RepeatUntil` primitives, not native Swift
+`for` or `while`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
 build a `HeistPlan`. Agents SHOULD prefer canonical heist source strings when
@@ -322,10 +323,32 @@ ForEach("Milk", "Eggs") { item in
 }
 ```
 
-Do not use native Swift `for` inside `HeistPlan {}` or any nested DSL body. The
-heist source compiler does not lower native loops because native loops flatten
-at authoring time and lose loop intent. If a loop should survive JSON, write
-`ForEach`.
+`RepeatUntil` is the bounded retry form: the body repeats until the predicate
+holds against settled state or the mandatory timeout elapses, with an optional
+`.else { ... }` body for the timeout path:
+
+```swift
+RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+    Activate(.label("Delete"))
+}
+```
+
+Do not use native Swift `for` inside `HeistPlan {}` or any nested DSL body.
+The two authoring frontends fail differently, and the difference matters:
+
+- In canonical ButtonHeist source, native Swift control flow (`for`, `while`,
+  `if`) is a compile error. The parser rejects it with a diagnostic.
+- In a trusted local Swift file, a native `for` around DSL statements is legal
+  Swift, so it compiles — and flattens silently at authoring time. The result
+  builder sees only the statements each iteration produced, so the plan
+  records the unrolled steps with the resolved strings baked in, and the loop
+  intent is gone.
+
+That flattening is also the general rule for host-Swift computation: whatever
+Swift computes at authoring time is resolved before the plan exists, so a
+`.heist` artifact is a snapshot of the data that generated it. If the data
+changes, regenerate the artifact. If loop intent should survive JSON, write
+`ForEach` or `RepeatUntil`.
 
 Semantic `ForEach` serializes as `for_each_element`. Finite string `ForEach`
 serializes as `for_each_string`. Runtime `ForEach` repeats semantic intent;
@@ -367,9 +390,9 @@ commands or raw wire IR as heist source.
 
 This runtime compiler accepts only ButtonHeist DSL constructs: semantic and
 durable mechanical actions, expectations and expectation waivers, `If`,
-`WaitFor`, `Case`, `Else`, `ForEach`, `RunHeist`, `Warn`, `Fail`, canonical
-`HeistDef` definitions, and the `HeistPlan { ... }` root wrapper emitted by
-canonical rendering. It rejects arbitrary Swift such as imports, variables,
+`WaitFor`, `RepeatUntil`, `Case`, `Else`, `ForEach`, `RunHeist`, `Warn`,
+`Fail`, canonical `HeistDef` definitions, and the `HeistPlan { ... }` root
+wrapper emitted by canonical rendering. It rejects arbitrary Swift such as imports, variables,
 functions, native `if`/`for`/`while`/`switch`, interpolation, custom calls,
 body-local `try`, `await`, package imports, and unbounded loops. Agents should
 send the full canonical source returned by `canonicalSwiftDSL()`. Body-only

@@ -82,6 +82,14 @@ accessibility evidence, repair provenance, trace IDs, target labels, command
 lists, or source metadata. Those belong in `plan.json`, external evidence, or
 future sidecars.
 
+Excluding app identity is a deliberate tradeoff. An artifact describes an
+accessibility dialogue, not an app binary, so the same `.heist` can replay
+against any app that fulfills the contract — including the same product
+rebuilt on a different UI framework. The cost: replaying against the wrong app
+fails as ordinary `elementNotFound` misses, indistinguishable from a broken
+contract in the right app. Callers own pointing an artifact at the app it was
+recorded for; name artifacts and organize directories so that stays obvious.
+
 ## Plan JSON
 
 `plan.json` is the canonical generated `HeistPlan` value. It is storage, wire,
@@ -123,6 +131,25 @@ The root shape is:
 Unknown keys are rejected. There is no app identifier, source metadata, runtime
 ID, capture-local element ID, geometry, or implicit viewport state in the root
 plan contract.
+
+## Compatibility
+
+Three version numbers exist, and they answer different questions:
+
+- **`formatVersion`** and **`planVersion`** (both currently `1`) govern
+  artifacts. The runtime accepts only plan versions it supports and rejects
+  others at load with a diagnostic; it never guesses at an unsupported shape.
+- **`buttonHeistVersion`** governs the live client–server wire. The handshake
+  requires exact equality between CLI/MCP and the embedded app build. It does
+  not participate in artifact validity: a stored `.heist` is not invalidated
+  by product releases that keep `planVersion` stable.
+
+The durable investment is the DSL source. `.heist` packages are generated
+artifacts: when `planVersion` bumps, regenerate them from source rather than
+migrating JSON by hand. Within a `planVersion`, grammar additions add new step
+or predicate shapes without invalidating existing artifacts; the strict
+unknown-key rule constrains what a reader accepts, not what an older artifact
+may contain.
 
 ## Authored shape
 
@@ -178,6 +205,15 @@ HeistPlan("cartFlow") {
             Fail("Checkout unavailable")
         }
     }
+}
+```
+
+`RepeatUntil` is the bounded repetition form, serialized as a `repeat_until`
+step. The timeout is mandatory and is the step's totality bound:
+
+```swift
+RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+    Activate(.label("Delete"))
 }
 ```
 
