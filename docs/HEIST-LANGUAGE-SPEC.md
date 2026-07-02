@@ -49,8 +49,8 @@ runtime path.
 
 `perform(step:)` MUST accept exactly one durable DSL step. It MAY run one action
 statement or one `WaitFor(...)` statement for immediate client interaction. It
-MUST reject `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `ForEach`, multi-step
-source, raw wire IR, direct viewport/debug/session command text, and
+MUST reject `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `ForEach`, `RepeatUntil`,
+multi-step source, raw wire IR, direct viewport/debug/session command text, and
 `WaitFor(...).else { ... }`. Branching or composition belongs behind
 `run_heist`.
 
@@ -167,6 +167,52 @@ plans that depend on non-durable selector identity. Until then, these forms are
 excluded by this specification, and lint, canonicalization, documentation, and
 generated examples MUST NOT present them as durable selector patterns.
 
+## String matching and normalization
+
+Element string predicates (`label`, `identifier`, `value`) match **exact or
+miss**. Exact means case-insensitive equality after typography folding, and
+the same comparison runs on the client and in the app server:
+
+- Typographic characters with an ASCII equivalent fold before comparison:
+  curly single and double quotes fold to `'` and `"`, the hyphen/dash family
+  (including en dash, em dash, and minus sign) folds to `-`, the ellipsis
+  character folds to `...`, and non-breaking or typographic spaces fold to a
+  plain space.
+- Everything else passes through unchanged: emoji, accented characters, and
+  non-Latin scripts are compared as written.
+- Case comparison is locale-aware case-insensitive equality.
+
+There is no substring fallback. When an exact predicate misses, the resolver
+returns structured diagnostics with near-miss suggestions; it never silently
+widens the match. Broad matching is explicit and opt-in: `.contains`,
+`.prefix`, and `.suffix` apply the same normalization and require non-empty
+patterns.
+
+## Timeouts
+
+Every timeout in the language is a `Double` in **seconds**. DSL source SHOULD
+spell timeouts with `.seconds(_:)` or `.milliseconds(_:)`; generated plan JSON
+carries the same value as a bare number of seconds. Timeouts MUST be finite
+and non-negative.
+
+| Site | Default | Notes |
+|------|---------|-------|
+| `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
+| Action `.expect(_, timeout:)` | 1 second | How long an action expectation polls accumulated settled evidence before reporting the expectation unmet. |
+| `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. Runtime validation caps it at 30 seconds. |
+
+Settlement has its own clock, separate from these: the settle loop and its
+5-second default hard timeout are defined in
+[Scope and limits](SCOPE-AND-LIMITS.md).
+
+## Validation bounds
+
+Runtime admission enforces structural bounds so a durable plan stays a bounded
+recording. Current limits: 500 total steps, nesting depth 16, 100 values per
+string `ForEach`, a maximum `limit` of 100 per element `ForEach`, and 250
+definitions per plan. Plans that exceed a bound are rejected at admission with
+a diagnostic, not truncated.
+
 ## Durable DSL examples
 
 Use `HeistPlan` for reusable or multi-step behavior:
@@ -195,6 +241,25 @@ implied final state is already true or becomes true without transition evidence.
 Action `.expect(...)` and `RunHeist(...).expect(...)` remain strict transition
 assertions.
 
+Use `RepeatUntil` for bounded repetition toward a settled outcome. The body
+repeats until the predicate holds against settled state or the mandatory
+timeout elapses; the optional lowercase `.else { ... }` body runs when the
+timeout wins:
+
+```swift
+RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+    Activate(.label("Delete"))
+}
+.else {
+    Fail("Inbox never emptied")
+}
+```
+
+`RepeatUntil` has no default timeout: the timeout is the totality guarantee for
+a predicate only the run can decide, so authors MUST write one. A timeout of
+`0` checks the predicate once and runs no bodies before the else path. Without
+an `.else` body, an elapsed timeout fails the step with the receipt.
+
 Use definitions and composition inside a durable plan:
 
 ```swift
@@ -214,8 +279,8 @@ HeistPlan("cart") {
 ## Authoring rules
 
 Durable heist source MUST use Button Heist DSL constructs: actions, targets,
-expectations, expectation waivers, `WaitFor`, `If`, `Case`, `Else`, `ForEach`,
-`RunHeist`, `HeistDef`, `Warn`, and `Fail`.
+expectations, expectation waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
+`Else`, `ForEach`, `RunHeist`, `HeistDef`, `Warn`, and `Fail`.
 
 Durable heist source MUST NOT depend on viewport position, current pixels,
 runtime IDs, capture-local IDs, generated container names, or session state as

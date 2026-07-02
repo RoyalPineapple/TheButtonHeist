@@ -176,10 +176,25 @@ match. Prefer ordered `checks` when string checks and trait checks belong in one
 predicate chain; use `.traits([...])` for required traits and
 `.excludeTraits([...])` for rejected traits.
 
-Durable flows use semantic selectors and matchers: accessibility identifier,
-label, value, traits, excluded traits, and ordinal as a last-resort
-disambiguator. Minimum matcher utilities can derive portable suggestions from
+Durable flows use semantic selectors and matchers: label, value, traits,
+excluded traits, an accessibility identifier where a stable product identifier
+exists, and ordinal as a last-resort disambiguator. Labels, values, and traits
+carry the contract under test — they are the properties assistive technology
+actually reads. Identifiers are fixture plumbing: legitimate for stable product
+identifiers and test fixtures, but invisible to every accessibility user. An
+element that can only be found by its identifier is an accessibility finding,
+not a targeting success; the fix is better accessibility, not a better
+identifier. Minimum matcher utilities can derive portable suggestions from
 settled captures without depending on transient handles or coordinates.
+
+String selector fields match exact-or-miss: case-insensitive equality after
+typography folding (curly quotes, long dashes, ellipsis, and typographic spaces
+fold to their ASCII equivalents; emoji, accents, and non-Latin scripts pass
+through unchanged). There is no substring fallback — a miss returns structured
+near-miss suggestions through the diagnostic path. Broad matching modes
+(`.contains`, `.prefix`, `.suffix`) are explicit opt-ins with the same
+normalization. See [Heist language spec](HEIST-LANGUAGE-SPEC.md) for the full
+matching contract.
 
 ## Captures, Traces, and Deltas
 

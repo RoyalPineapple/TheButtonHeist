@@ -116,7 +116,11 @@ executable for inspection, but they are not durable heist primitives.
 The product contract is healthy when these cases hold:
 
 - A semantic activation can act on an offscreen accessible target without a
-  caller-authored scroll step.
+  caller-authored scroll step, for content the app has realized in the
+  accessibility tree. Lazily instantiated content (collection view
+  virtualization, lazy stacks) has no elements until it is realized; scroll
+  exploration can realize it, but "offscreen" means realized and out of the
+  viewport, not hypothetical. See [Scope and limits](SCOPE-AND-LIMITS.md).
 - Duplicate labels produce the minimum matcher that disambiguates semantic
   intent.
 - `wait` and action expectations use the same `AccessibilityPredicate`

@@ -56,9 +56,9 @@ WaitFor(.label("Checkout"), timeout: .seconds(5))
 
 `perform(step:)` accepts one durable DSL step only. It rejects program-shaped
 source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`,
-`WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. It also rejects raw
-wire IR and direct viewport/debug/session command text. Use `run_heist(plan:)`
-for durable plans.
+`WaitFor(...).else { ... }`, `ForEach`, `RepeatUntil`, `Warn`, and `Fail`. It
+also rejects raw wire IR and direct viewport/debug/session command text. Use
+`run_heist(plan:)` for durable plans.
 
 **Targets**: element actions share one target grammar:
 

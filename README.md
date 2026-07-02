@@ -265,7 +265,9 @@ Boring in the useful way: receipts say what ran, what changed, and where the mac
 ### 1. Add `TheInsideJob`
 
 Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC
-`+load`; no app setup code is required. Release builds do not start the server.
+`+load`; no app setup code is required. Release builds contain no server: all of
+`TheInsideJob` is compiled under `#if DEBUG`, so the code is absent from release
+binaries, not merely disabled at runtime.
 
 By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`. Interaction fingerprints are enabled by default; disable them with `INSIDEJOB_FINGERPRINTS=false`, `InsideJobFingerprintsEnabled`, or `TheInsideJob.configure(fingerprintsEnabled: false)`.
 
@@ -311,8 +313,8 @@ The CLI exposes the same runtime as terminal commands:
 ```bash
 buttonheist list_devices
 buttonheist get_interface
-buttonheist activate --identifier loginButton
-buttonheist type_text --text "Hello" --identifier nameField
+buttonheist activate --label "Log In"
+buttonheist type_text --text "Hello" --label "Name"
 buttonheist get_screen --output screen.png
 ```
 
@@ -335,11 +337,13 @@ Explicit mechanical gestures stay available for maps, canvases, drawing surfaces
 | Need | Read |
 |---|---|
 | Understand the contract loop | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
+| Compare approaches, know the limits | [Why in-process](docs/WHY-IN-PROCESS.md), [Scope and limits](docs/SCOPE-AND-LIMITS.md) |
 | Connect an agent | [MCP agent guide](docs/MCP-AGENT-GUIDE.md), [ButtonHeistMCP](ButtonHeistMCP/) |
 | Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |
-| Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md), [Examples](examples/README.md) |
+| Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md), [Design rationale](docs/DESIGN-RATIONALE.md), [Examples](examples/README.md) |
+| Run heists in CI | [CI integration](docs/CI.md) |
 | Integrate an app | [API](docs/API.md), [Auth](docs/AUTH.md), [USB connectivity](docs/USB_DEVICE_CONNECTIVITY.md) |
-| See evidence and experiments | [Benchmarks](docs/BENCHMARKS.md), [Heist Doctor](docs/HEIST-DOCTOR.md) |
+| See evidence and experiments | [Heist Doctor](docs/HEIST-DOCTOR.md) |
 
 Generated references live in [docs/reference](docs/reference/).
 

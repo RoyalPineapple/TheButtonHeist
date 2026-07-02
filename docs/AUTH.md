@@ -20,8 +20,11 @@ port, and token to prevent cross-talk. The token doubles as a human-readable
 label scoped to the agent's work item.
 
 **Convention:** simulator name = token = instance ID = `{workspace}-{task-slug}`.
-See `.context/bh-infra/docs/MULTI_AGENT_SIMULATORS.md` if available for the
-full convention, pool architecture, and troubleshooting.
+One slug names everything an agent owns. Create a simulator with that name,
+launch the app with the slug as both the token and the instance ID, and connect
+with the same values. `xcrun simctl list devices booted` then reads as a
+dashboard of which agent owns which simulator, and an auth failure names whose
+session you hit instead of leaving you guessing.
 
 ```bash
 TASK_SLUG="accra-scroll-detection"
