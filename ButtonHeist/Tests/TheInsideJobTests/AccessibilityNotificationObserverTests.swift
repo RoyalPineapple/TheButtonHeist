@@ -63,10 +63,15 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let action = bus.beginActionWindow()
         bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
+            associatedElement: .none
+        )
 
         let claimed = action.finishAndClaimEvents()
 
-        XCTAssertEqual(claimed.map(\.code), [1005])
+        XCTAssertEqual(claimed.map(\.code), [1008])
         XCTAssertEqual(bus.pendingEvents().map(\.code), [])
     }
 
@@ -94,16 +99,34 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(advanced?.sequence, bus.transitionCursor().sequence)
     }
 
-    func testTransitionWaiterIgnoresNonTransitionEventsAndTimesOut() async {
+    func testTransitionWaiterIgnoresAnnouncementsAndUnsupportedEventsAndTimesOut() async {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.transitionCursor()
         bus.record(code: 4002, notificationData: .none, associatedElement: .none)
 
         async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 0.15)
-        bus.record(code: 1025, notificationData: .none, associatedElement: .none)
+        bus.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
+            associatedElement: .none
+        )
 
         let advanced = await wake
         XCTAssertNil(advanced)
+        XCTAssertEqual(bus.pendingEvents().map(\.code), [1008])
+        XCTAssertEqual(bus.transitionCursor(), cursor)
+    }
+
+    func testUnsupportedNotificationsAreDroppedAtBoundary() {
+        let bus = AccessibilityNotificationBus()
+
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.record(code: 1009, notificationData: .none, associatedElement: .none)
+        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
+
+        XCTAssertEqual(bus.latestSequence, 0)
+        XCTAssertEqual(bus.pendingEvents().map(\.code), [])
+        XCTAssertEqual(bus.transitionCursor(), .origin)
     }
 
     func testTransitionWaiterCancellationReturnsPromptlyAndRemovesWaiter() async {
@@ -249,13 +272,18 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
         bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
+            associatedElement: .none
+        )
 
         let claimed = action.finishAndClaimEvents()
 
-        XCTAssertEqual(claimed.map(\.code), [1005])
+        XCTAssertEqual(claimed.map(\.code), [1008])
         XCTAssertEqual(
             bus.pendingEvents().map(\.code),
-            [1005],
+            [1008],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 
