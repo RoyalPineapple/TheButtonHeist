@@ -1,6 +1,6 @@
 import Foundation
-import os
 
+import ButtonHeistSupport
 import TheScore
 
 extension TheFence {
@@ -125,18 +125,21 @@ extension TheFence {
     fileprivate struct PendingRequest: Sendable {
         let owner: UUID
         let expectedKind: PendingResponseKind
-        let callback: @Sendable (Result<PendingResponsePayload, Error>) -> Void
+        let response: OneShotContinuation<Result<PendingResponsePayload, Error>>
+        let timeoutTask: Task<Void, Never>
 
         func resume(_ result: Result<PendingResponsePayload, Error>, requestId: String) {
+            timeoutTask.cancel()
+
             switch result {
             case .success(let payload) where payload.kind != expectedKind:
-                callback(.failure(PendingResponseKind.responseTypeMismatchError(
+                response.resume(returning: .failure(PendingResponseKind.responseTypeMismatchError(
                     expected: expectedKind,
                     actual: payload.kind,
                     requestId: requestId
                 )))
             default:
-                callback(result)
+                response.resume(returning: result)
             }
         }
     }
@@ -219,18 +222,19 @@ extension TheFence {
             let owner = UUID()
 
             return try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { continuation in
+                let result: Result<PendingResponsePayload, Error> = await withCheckedContinuation { continuation in
                     if Task.isCancelled {
-                        continuation.resume(throwing: CancellationError())
+                        continuation.resume(returning: .failure(CancellationError()))
                         return
                     }
 
                     guard pending[requestId] == nil else {
-                        continuation.resume(throwing: PendingRequestError.duplicateRequestId(requestId))
+                        continuation.resume(returning: .failure(PendingRequestError.duplicateRequestId(requestId)))
                         return
                     }
 
-                    let didResume = OSAllocatedUnfairLock(initialState: false)
+                    let response = OneShotContinuation<Result<PendingResponsePayload, Error>>()
+                    precondition(response.register(continuation), "New pending request response was resumed before registration")
 
                     let timeoutTask = Task {
                         guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
@@ -239,19 +243,15 @@ extension TheFence {
                         }
                     }
 
-                    pending[requestId] = PendingRequest(owner: owner, expectedKind: expectation.kind) { result in
-                        let shouldResume = didResume.withLock { flag -> Bool in
-                            guard !flag else { return false }
-                            flag = true
-                            return true
-                        }
-                        if shouldResume {
-                            timeoutTask.cancel()
-                            continuation.resume(with: expectation.decode(result, requestId: requestId))
-                        }
-                    }
+                    pending[requestId] = PendingRequest(
+                        owner: owner,
+                        expectedKind: expectation.kind,
+                        response: response,
+                        timeoutTask: timeoutTask
+                    )
                     afterRegister?()
                 }
+                return try expectation.decode(result, requestId: requestId).get()
             } onCancel: {
                 Task { @ButtonHeistActor [weak self] in
                     if let request = self?.removePendingRequest(requestId: requestId, owner: owner) {

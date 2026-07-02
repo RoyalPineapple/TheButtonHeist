@@ -126,6 +126,7 @@ let package = Package(
         .target(
             name: "ButtonHeist",
             dependencies: [
+                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
