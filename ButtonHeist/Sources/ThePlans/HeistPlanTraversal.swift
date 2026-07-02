@@ -193,7 +193,7 @@ struct HeistPlanTraversal {
         case .action(let action):
             let actionContext = context.child(path: context.path.child(.action))
             visitor.visitAction(action, context: actionContext)
-            if let expectation = action.expectation {
+            if let expectation = action.expectationPolicy.expectedStep {
                 visitor.visitWait(
                     expectation,
                     context: actionContext.child(path: actionContext.path.child(.expectation))

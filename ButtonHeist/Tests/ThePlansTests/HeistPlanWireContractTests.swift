@@ -348,8 +348,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
             .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
@@ -368,8 +367,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("row")),
-                        expectation: WaitStep(predicate: .missing(.ref("row")), timeout: 2)
-                    )),
+                        expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("row")), timeout: 2)))),
                 ]
             )),
             .forEachString(try ForEachStringStep(

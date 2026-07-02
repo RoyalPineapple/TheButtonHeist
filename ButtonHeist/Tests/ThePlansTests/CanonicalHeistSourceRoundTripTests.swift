@@ -8,41 +8,34 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
             .action(try ActionStep(
                 command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
-                expectation: WaitStep(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
             .action(try ActionStep(
                 command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
-                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                     element: .identifier("Search"),
                     change: .value(after: "Bruschetta")
-                )))))
-            )),
+                )))))))),
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Add item"))),
-                expectation: WaitStep(predicate: .change(.elements(.appearedElement(.label("Milk")))))
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.appearedElement(.label("Milk")))))))),
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Remove"))),
-                expectation: WaitStep(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))))
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))))))),
             .action(try ActionStep(
                 command: .typeText(text: .literal("milk"), target: .predicate(.identifier("Search"))),
-                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                     element: .identifier("Search"),
                     change: .value(before: "", after: "milk")
-                )))))
-            )),
+                )))))))),
             .action(try ActionStep(
                 command: .activate(.predicate(.identifier("Favorite"))),
-                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                     element: .identifier("Favorite"),
                     change: .traits(before: .exclude([.selected]), after: .include([.selected]))
-                )))))
-            )),
+                )))))))),
             .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
             .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
             .action(try ActionStep(command: .customAction(
@@ -60,8 +53,7 @@ struct CanonicalHeistSourceRoundTripTests {
             .action(try ActionStep(command: .dismissKeyboard)),
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Optional"))),
-                expectationWaiver: "No durable semantic outcome"
-            )),
+                expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))),
         ]))
     }
 
@@ -184,8 +176,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("target")),
-                        expectation: WaitStep(predicate: .missing(.ref("target")), timeout: 2)
-                    )),
+                        expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 2)))),
                 ]
             )),
             .warn(WarnStep(message: "done")),
@@ -207,8 +198,7 @@ struct CanonicalHeistSourceRoundTripTests {
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectation: WaitStep(predicate: .exists(.label("Added")), timeout: 2)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Added")), timeout: 2)))),
                 .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
             ]
         )

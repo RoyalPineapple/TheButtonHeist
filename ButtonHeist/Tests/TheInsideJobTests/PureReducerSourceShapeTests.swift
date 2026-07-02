@@ -4,8 +4,55 @@ import Testing
 
 @Suite struct PureReducerSourceShapeTests {
     private static let brainsRoot = "ButtonHeist/Sources/TheInsideJob/TheBrains"
+    private static let stashRoot = "ButtonHeist/Sources/TheInsideJob/TheStash"
+    private static let tripwireRoot = "ButtonHeist/Sources/TheInsideJob/TheTripwire"
 
     private let repository = SourceShapeRepository(filePath: #filePath)
+
+    @Test func `async waiter continuations use the shared one shot primitive`() throws {
+        let settledWaiters = try repository.requiredFile(
+            relativePath: "\(Self.stashRoot)/SemanticObservationSettledWaiters.swift"
+        )
+        let observationCycles = try repository.requiredFile(
+            relativePath: "\(Self.stashRoot)/SemanticObservationCycles.swift"
+        )
+        let notificationBus = try repository.requiredFile(
+            relativePath: "\(Self.tripwireRoot)/AccessibilityNotificationBus.swift"
+        )
+        let support = try repository.requiredFile(
+            relativePath: "ButtonHeist/Sources/ButtonHeistSupport/OneShotContinuation.swift"
+        )
+        let migratedSources = SourceShapeFile(
+            relativePath: [
+                settledWaiters.relativePath,
+                observationCycles.relativePath,
+                notificationBus.relativePath,
+            ].joined(separator: ", "),
+            contents: [
+                settledWaiters.contents,
+                observationCycles.contents,
+                notificationBus.contents,
+            ].joined(separator: "\n")
+        )
+
+        #expect(try support.containsMatch(#"\bpackage\s+struct\s+OneShotContinuation\s*<"#))
+        #expect(settledWaiters.contents.contains("OneShotContinuation<SettledSemanticObservationEvent?>"))
+        #expect(observationCycles.contents.contains("OneShotContinuation<Void>"))
+        #expect(notificationBus.contents.contains("OneShotContinuation<AccessibilityNotificationCursor?>"))
+
+        for retiredName in [
+            "SemanticObservationWaiterContinuation",
+            "AccessibilityNotificationTransitionWaiterContinuation",
+        ] {
+            #expect(
+                !migratedSources.contents.contains(retiredName),
+                """
+                Observation and notification waiters should share OneShotContinuation \
+                instead of carrying a domain-specific clone named \(retiredName).
+                """
+            )
+        }
+    }
 
     @Test func `settle loop is a simple state machine with terminal effects`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/SettleSession.swift")

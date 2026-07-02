@@ -356,12 +356,11 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO9longPressyA2E
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC8onStatusySSYbAA0aB5ActorCYccSgvp	swift.property	public	onStatus	TheFence.onStatus	@ButtonHeistActor var onStatus: (@ButtonHeistActor (String) -> Void)? { get set }
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV	swift.struct	public	ActionStep	ActionStep	struct ActionStep
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV11descriptionSSvp	swift.property	public	description	ActionStep.description	var description: String { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV11expectationAA04WaitD0VSgvp	swift.property	public	expectation	ActionStep.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	ActionStep.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV17expectationPolicyAA0c11ExpectationF0Ovp	swift.property	public	expectationPolicy	ActionStep.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	ActionStep.==(_:_:)	static func == (lhs: ActionStep, rhs: ActionStep) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActionStep.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ActionStep.encode(to:)	func encode(to encoder: any Encoder) throws
-symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV7command11expectation0F6Waiver0F21ValidationDiagnosticsAcA05HeistC7CommandO_AA04WaitD0VSgSSSgSayAA0J15BuildDiagnosticVGtKcfc	swift.init	public	init(command:expectation:expectationWaiver:expectationValidationDiagnostics:)	ActionStep.init(command:expectation:expectationWaiver:expectationValidationDiagnostics:)	init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil, expectationValidationDiagnostics: [HeistBuildDiagnostic] = []) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV7command17expectationPolicy0F21ValidationDiagnosticsAcA05HeistC7CommandO_AA0c11ExpectationG0OSayAA0J15BuildDiagnosticVGtKcfc	swift.init	public	init(command:expectationPolicy:expectationValidationDiagnostics:)	ActionStep.init(command:expectationPolicy:expectationValidationDiagnostics:)	init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default, expectationValidationDiagnostics: [HeistBuildDiagnostic] = []) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV7commandAA05HeistC7CommandOvp	swift.property	public	command	ActionStep.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans10DragTargetV	swift.struct	public	DragTarget	DragTarget	struct DragTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans10DragTargetV11descriptionSSvp	swift.property	public	description	DragTarget.description	var description: String { get }
@@ -434,30 +433,26 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans10HeistTraitO9isEditingyA2CmF	swift.e
 symbol	ButtonHeist.symbols.json	s:8ThePlans10HeistTraitO9textEntryyA2CmF	swift.enum.case	public	HeistTrait.textEntry	HeistTrait.textEntry	case textEntry
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO	swift.enum	public	Mechanical	Mechanical	enum Mechanical
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV	swift.struct	public	Mechanical.Tap	Mechanical.Tap	struct Tap
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Mechanical.Tap.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Mechanical.Tap.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	Mechanical.Tap.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV7commandAA18HeistActionCommandOvp	swift.property	public	command	Mechanical.Tap.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapV_2atAeA13ElementTargetO_AA9UnitPointVtcfc	swift.init	public	init(_:at:)	Mechanical.Tap.init(_:at:)	init(_ target: ElementTarget, at point: UnitPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapVyAeA11ScreenPointVcfc	swift.init	public	init(_:)	Mechanical.Tap.init(_:)	init(_ point: ScreenPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO3TapVyAeA13ElementTargetOcfc	swift.init	public	init(_:)	Mechanical.Tap.init(_:)	init(_ target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV	swift.struct	public	Mechanical.Drag	Mechanical.Drag	struct Drag
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Mechanical.Drag.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Mechanical.Drag.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	Mechanical.Drag.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV4from2toAeA11ScreenPointV_AItcfc	swift.init	public	init(from:to:)	Mechanical.Drag.init(from:to:)	init(from start: ScreenPoint, to end: ScreenPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV7commandAA18HeistActionCommandOvp	swift.property	public	command	Mechanical.Drag.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV_2toAeA13ElementTargetO_AA11ScreenPointVtcfc	swift.init	public	init(_:to:)	Mechanical.Drag.init(_:to:)	init(_ target: ElementTarget, to end: ScreenPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO4DragV_4from2toAeA13ElementTargetO_AA9UnitPointVAA06ScreenJ0Vtcfc	swift.init	public	init(_:from:to:)	Mechanical.Drag.init(_:from:to:)	init(_ target: ElementTarget, from start: UnitPoint, to end: ScreenPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV	swift.struct	public	Mechanical.Swipe	Mechanical.Swipe	struct Swipe
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Mechanical.Swipe.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Mechanical.Swipe.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	Mechanical.Swipe.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV4from2toAeA11ScreenPointV_AItcfc	swift.init	public	init(from:to:)	Mechanical.Swipe.init(from:to:)	init(from start: ScreenPoint, to end: ScreenPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV4from_AeA11ScreenPointV_AA0D9DirectionOtcfc	swift.init	public	init(from:_:)	Mechanical.Swipe.init(from:_:)	init(from start: ScreenPoint, _ direction: SwipeDirection)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV7commandAA18HeistActionCommandOvp	swift.property	public	command	Mechanical.Swipe.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeV_4from2toAeA13ElementTargetO_AA9UnitPointVAKtcfc	swift.init	public	init(_:from:to:)	Mechanical.Swipe.init(_:from:to:)	init(_ target: ElementTarget, from start: UnitPoint, to end: UnitPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO5SwipeVyAeA13ElementTargetO_AA0D9DirectionOtcfc	swift.init	public	init(_:_:)	Mechanical.Swipe.init(_:_:)	init(_ target: ElementTarget, _ direction: SwipeDirection)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV	swift.struct	public	Mechanical.LongPress	Mechanical.LongPress	struct LongPress
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Mechanical.LongPress.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Mechanical.LongPress.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV17expectationPolicyAA017ActionExpectationG0Ovp	swift.property	public	expectationPolicy	Mechanical.LongPress.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV7commandAA18HeistActionCommandOvp	swift.property	public	command	Mechanical.LongPress.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV_2at8durationAeA13ElementTargetO_AA9UnitPointVAA15GestureDurationVtcfc	swift.init	public	init(_:at:duration:)	Mechanical.LongPress.init(_:at:duration:)	init(_ target: ElementTarget, at point: UnitPoint, duration: GestureDuration = .longPressDefault)
 symbol	ButtonHeist.symbols.json	s:8ThePlans10MechanicalO9LongPressV_8durationAeA11ScreenPointV_AA15GestureDurationVtcfc	swift.init	public	init(_:duration:)	Mechanical.LongPress.init(_:duration:)	init(_ point: ScreenPoint, duration: GestureDuration = .longPressDefault)
@@ -550,8 +545,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans11SwipeTargetV8durationAA15GestureDur
 symbol	ButtonHeist.symbols.json	s:8ThePlans11SwipeTargetV9selection8durationAcA0C16GestureSelectionO_AA0G8DurationVSgtcfc	swift.init	public	init(selection:duration:)	SwipeTarget.init(selection:duration:)	init(selection: SwipeGestureSelection, duration: GestureDuration? = nil)
 symbol	ButtonHeist.symbols.json	s:8ThePlans11SwipeTargetV9selectionAA0C16GestureSelectionOvp	swift.property	public	selection	SwipeTarget.selection	let selection: SwipeGestureSelection
 symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV	swift.struct	public	CustomAction	CustomAction	struct CustomAction
-symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	CustomAction.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	CustomAction.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV17expectationPolicyAA0d11ExpectationF0Ovp	swift.property	public	expectationPolicy	CustomAction.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV7commandAA05HeistD7CommandOvp	swift.property	public	command	CustomAction.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV_2onACSS_AA13ElementTargetOtcfc	swift.init	public	init(_:on:)	CustomAction.init(_:on:)	init(_ name: String, on target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans12CustomActionV_2onACSS_AA17ElementTargetExprOtcfc	swift.init	public	init(_:on:)	CustomAction.init(_:on:)	init(_ name: String, on target: ElementTargetExpr)
@@ -587,8 +581,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV9directionAA0C9Directi
 symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV9selection9directionAcA0C18ContainerSelectionO_AA0C9DirectionOtcfc	swift.init	public	init(selection:direction:)	ScrollTarget.init(selection:direction:)	init(selection: ScrollContainerSelection = .visibleContainer, direction: ScrollDirection = .down)
 symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV9selectionAA0C18ContainerSelectionOvp	swift.property	public	selection	ScrollTarget.selection	let selection: ScrollContainerSelection
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV	swift.struct	public	ActionContent	ActionContent	struct ActionContent
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	ActionContent.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	ActionContent.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV17expectationPolicyAA0c11ExpectationF0Ovp	swift.property	public	expectationPolicy	ActionContent.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV32expectationValidationDiagnosticsSayAA20HeistBuildDiagnosticVGvp	swift.property	public	expectationValidationDiagnostics	ActionContent.expectationValidationDiagnostics	let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ActionContentV7commandAA05HeistC7CommandOvp	swift.property	public	command	ActionContent.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ContainerNameV	swift.struct	public	ContainerName	ContainerName	struct ContainerName
@@ -748,8 +741,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans13RotorSetMatchVA2A10StringExprORszrl
 symbol	ButtonHeist.symbols.json	s:8ThePlans13RotorSetMatchVAASSRszrlE7excludeyACySSGSaySSGFZ	swift.type.method	public	exclude(_:)	RotorSetMatch.exclude(_:)	static func exclude(_ names: [String]) -> RotorSetMatch<Value>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13RotorSetMatchVAASSRszrlE7includeyACySSGSaySSGFZ	swift.type.method	public	include(_:)	RotorSetMatch.include(_:)	static func include(_ names: [String]) -> RotorSetMatch<Value>
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV	swift.struct	public	SetPasteboard	SetPasteboard	struct SetPasteboard
-symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	SetPasteboard.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	SetPasteboard.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	SetPasteboard.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV7commandAA18HeistActionCommandOvp	swift.property	public	command	SetPasteboard.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardVyACSScfc	swift.init	public	init(_:)	SetPasteboard.init(_:)	init(_ text: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV	swift.struct	public	TraitSetMatch	TraitSetMatch	struct TraitSetMatch
@@ -852,8 +844,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO4leftyA2CmF	swift.en
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO5rightyA2CmF	swift.enum.case	public	SwipeDirection.right	SwipeDirection.right	case right
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	SwipeDirection.init(rawValue:)	init?(rawValue: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV	swift.struct	public	TakeScreenshot	TakeScreenshot	struct TakeScreenshot
-symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	TakeScreenshot.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TakeScreenshot.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	TakeScreenshot.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV7commandAA18HeistActionCommandOvp	swift.property	public	command	TakeScreenshot.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotVACycfc	swift.init	public	init()	TakeScreenshot.init()	init()
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TraitsPropertyO	swift.enum	public	TraitsProperty	TraitsProperty	enum TraitsProperty
@@ -899,8 +890,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV5cases8elseBodyACSa
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV5casesSayAA13PredicateCaseVGvp	swift.property	public	cases	ConditionalStep.cases	let cases: [PredicateCase]
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV8elseBodySayAA05HeistD0OGSgvp	swift.property	public	elseBody	ConditionalStep.elseBody	let elseBody: [HeistStep]?
 symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardV	swift.struct	public	DismissKeyboard	DismissKeyboard	struct DismissKeyboard
-symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	DismissKeyboard.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	DismissKeyboard.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	DismissKeyboard.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardV7commandAA18HeistActionCommandOvp	swift.property	public	command	DismissKeyboard.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans15DismissKeyboardVACycfc	swift.init	public	init()	DismissKeyboard.init()	init()
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ElementPropertyO	swift.enum	public	ElementProperty	ElementProperty	enum ElementProperty
@@ -1026,6 +1016,13 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7failureyACyxq_GSa
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7flatMapyACyqd__q_GAExXEs8SendableRd__lF	swift.method	public	flatMap(_:)	ValidationResult.flatMap(_:)	func flatMap<NewValue>(_ transform: (Value) -> ValidationResult<NewValue, Diagnostic>) -> ValidationResult<NewValue, Diagnostic> where NewValue : Sendable
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7successyACyxq_Gx_Sayq_GtcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.success(_:diagnostics:)	ValidationResult.success(_:diagnostics:)	case success(Value, diagnostics: [Diagnostic])
 symbol	ButtonHeist.symbols.json	s:8ThePlans16immediateTimeoutSdvp	swift.var	public	immediateTimeout	immediateTimeout	let immediateTimeout: Double
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV	swift.struct	public	ActionExpectation	ActionExpectation	struct ActionExpectation
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActionExpectation.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV4stepAA8WaitStepVvp	swift.property	public	step	ActionExpectation.step	let step: WaitStep
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ActionExpectation.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV9predicate7timeoutAcA22AccessibilityPredicateO_Sdtcfc	swift.init	public	init(predicate:timeout:)	ActionExpectation.init(predicate:timeout:)	init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationV9predicate7timeoutAcA26AccessibilityPredicateExprO_Sdtcfc	swift.init	public	init(predicate:timeout:)	ActionExpectation.init(predicate:timeout:)	init(predicate: AccessibilityPredicateExpr, timeout: Double = defaultWaitTimeout)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17ActionExpectationVyAcA8WaitStepVKcfc	swift.init	public	init(_:)	ActionExpectation.init(_:)	init(_ step: WaitStep) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO	swift.enum	public	AnyPropertyChange	AnyPropertyChange	enum AnyPropertyChange
 symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO11descriptionSSvp	swift.property	public	description	AnyPropertyChange.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO13customContent6before5afterAcA06CustomG5MatchVySSGSg_AJtFZ	swift.type.method	public	customContent(before:after:)	AnyPropertyChange.customContent(before:after:)	static func customContent(before: CustomContentMatch<String>? = nil, after: CustomContentMatch<String>? = nil) -> AnyPropertyChange
@@ -1182,8 +1179,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO8wireTypeAA0cdeG
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO9decrementyAcA17ElementTargetExprOcACmF	swift.enum.case	public	HeistActionCommand.decrement(_:)	HeistActionCommand.decrement(_:)	case decrement(ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO9incrementyAcA17ElementTargetExprOcACmF	swift.enum.case	public	HeistActionCommand.increment(_:)	HeistActionCommand.increment(_:)	case increment(ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP	swift.protocol	public	HeistActionContent	HeistActionContent	protocol HeistActionContent : HeistContent
-symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP11expectationAA8WaitStepVSgvp	swift.property	public	expectation	HeistActionContent.expectation	var expectation: WaitStep? { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	HeistActionContent.expectationWaiver	var expectationWaiver: String? { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP17expectationPolicyAA0d11ExpectationG0Ovp	swift.property	public	expectationPolicy	HeistActionContent.expectationPolicy	var expectationPolicy: ActionExpectationPolicy { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP32expectationValidationDiagnosticsSayAA0C15BuildDiagnosticVGvp	swift.property	public	expectationValidationDiagnostics	HeistActionContent.expectationValidationDiagnostics	var expectationValidationDiagnostics: [HeistBuildDiagnostic] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentP7commandAA0cD7CommandOvp	swift.property	public	command	HeistActionContent.command	var command: HeistActionCommand { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionContentPAAE10heistStepsSayAA0C4StepOGvp	swift.property	public	heistSteps	HeistActionContent.heistSteps	var heistSteps: [HeistStep] { get }
@@ -1675,6 +1671,21 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO10buildBlock
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO15buildExpressionySayAA0cD0OGAA4CaseVFZ	swift.type.method	public	buildExpression(_:)	PredicateBranchBuilder.buildExpression(_:)	static func buildExpression(_ expression: Case) -> [PredicateBranch]
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO15buildExpressionySayAA0cD0OGAA4ElseVFZ	swift.type.method	public	buildExpression(_:)	PredicateBranchBuilder.buildExpression(_:)	static func buildExpression(_ expression: Else) -> [PredicateBranch]
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO16buildFinalResultyAA0C8BranchesVSayAA0cD0OGFZ	swift.type.method	public	buildFinalResult(_:)	PredicateBranchBuilder.buildFinalResult(_:)	static func buildFinalResult(_ branches: [PredicateBranch]) -> PredicateBranches
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO	swift.enum	public	ActionExpectationPolicy	ActionExpectationPolicy	enum ActionExpectationPolicy
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO016requiresAuthoredD0Sbvp	swift.property	public	requiresAuthoredExpectation	ActionExpectationPolicy.requiresAuthoredExpectation	var requiresAuthoredExpectation: Bool { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO12expectedStepAA04WaitG0VSgvp	swift.property	public	expectedStep	ActionExpectationPolicy.expectedStep	var expectedStep: WaitStep? { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActionExpectationPolicy.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ActionExpectationPolicy.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO6expectyAcA0cD0VcACmF	swift.enum.case	public	ActionExpectationPolicy.expect(_:)	ActionExpectationPolicy.expect(_:)	case expect(ActionExpectation)
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO6waivedyAcA0cD6WaiverVcACmF	swift.enum.case	public	ActionExpectationPolicy.waived(_:)	ActionExpectationPolicy.waived(_:)	case waived(ActionExpectationWaiver)
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO6waiverAA0cD6WaiverVSgvp	swift.property	public	waiver	ActionExpectationPolicy.waiver	var waiver: ActionExpectationWaiver? { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationPolicyO7defaultyA2CmF	swift.enum.case	public	ActionExpectationPolicy.default	ActionExpectationPolicy.default	case `default`
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverV	swift.struct	public	ActionExpectationWaiver	ActionExpectationWaiver	struct ActionExpectationWaiver
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverV11descriptionSSvp	swift.property	public	description	ActionExpectationWaiver.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActionExpectationWaiver.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ActionExpectationWaiver.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverV6reasonSSvp	swift.property	public	reason	ActionExpectationWaiver.reason	let reason: String
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActionExpectationWaiverVyACSSKcfc	swift.init	public	init(_:)	ActionExpectationWaiver.init(_:)	init(_ reason: String) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO	swift.enum	public	ActivationPointProperty	ActivationPointProperty	enum ActivationPointProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO0A5ScoreE11displayText3forSSAD07ElementeD0V_tFZ	swift.type.method	public	displayText(for:)	ActivationPointProperty.displayText(for:)	static func displayText(for value: ElementPropertyPoint) -> String
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO0A5ScoreE11erasedValueyAD07ElementeH0OAD0ieD0VFZ	swift.type.method	public	erasedValue(_:)	ActivationPointProperty.erasedValue(_:)	static func erasedValue(_ value: ElementPropertyPoint) -> ElementPropertyValue
@@ -1800,8 +1811,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans24HeistBuildSourceLocationV4lineSiSgv
 symbol	ButtonHeist.symbols.json	s:8ThePlans24HeistBuildSourceLocationV6columnSiSgvp	swift.property	public	column	HeistBuildSourceLocation.column	let column: Int?
 symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV	swift.struct	public	RepeatActionUntilContent	RepeatActionUntilContent	struct RepeatActionUntilContent
 symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV10heistStepsSayAA9HeistStepOGvp	swift.property	public	heistSteps	RepeatActionUntilContent.heistSteps	var heistSteps: [HeistStep] { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	RepeatActionUntilContent.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	RepeatActionUntilContent.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV17expectationPolicyAA0d11ExpectationH0Ovp	swift.property	public	expectationPolicy	RepeatActionUntilContent.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV21heistBuildDiagnosticsSayAA05HeistH10DiagnosticVGvp	swift.property	public	heistBuildDiagnostics	RepeatActionUntilContent.heistBuildDiagnostics	var heistBuildDiagnostics: [HeistBuildDiagnostic] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV32expectationValidationDiagnosticsSayAA20HeistBuildDiagnosticVGvp	swift.property	public	expectationValidationDiagnostics	RepeatActionUntilContent.expectationValidationDiagnostics	let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 symbol	ButtonHeist.symbols.json	s:8ThePlans24RepeatActionUntilContentV7commandAA05HeistD7CommandOvp	swift.property	public	command	RepeatActionUntilContent.command	let command: HeistActionCommand
@@ -2031,8 +2041,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans34HeistPlanRejectedPublicSourceFieldO
 symbol	ButtonHeist.symbols.json	s:8ThePlans4CaseV	swift.struct	public	Case	Case	struct Case
 symbol	ButtonHeist.symbols.json	s:8ThePlans4CaseVyAcA18StatePredicateExprO_xyXEtcAA12HeistContentRzlufc	swift.init	public	init(_:_:)	Case.init(_:_:)	init(_ predicate: StatePredicateExpr, @HeistBuilder _ content: () -> some HeistContent)
 symbol	ButtonHeist.symbols.json	s:8ThePlans4EditV	swift.struct	public	Edit	Edit	struct Edit
-symbol	ButtonHeist.symbols.json	s:8ThePlans4EditV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Edit.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans4EditV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Edit.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans4EditV17expectationPolicyAA017ActionExpectationE0Ovp	swift.property	public	expectationPolicy	Edit.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans4EditV7commandAA18HeistActionCommandOvp	swift.property	public	command	Edit.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans4EditVyAcA0C6ActionOcfc	swift.init	public	init(_:)	Edit.init(_:)	init(_ action: EditAction)
 symbol	ButtonHeist.symbols.json	s:8ThePlans4ElseV	swift.struct	public	Else	Else	struct Else
@@ -2046,8 +2055,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans4WarnV10heistStepsSayAA9HeistStepOGvp
 symbol	ButtonHeist.symbols.json	s:8ThePlans4WarnV16heistDefinitionsSayAA9HeistPlanVGvp	swift.property	public	heistDefinitions	Warn.heistDefinitions	let heistDefinitions: [HeistPlan]
 symbol	ButtonHeist.symbols.json	s:8ThePlans4WarnVyACSScfc	swift.init	public	init(_:)	Warn.init(_:)	init(_ message: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV	swift.struct	public	Rotor	Rotor	struct Rotor
-symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Rotor.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Rotor.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV17expectationPolicyAA017ActionExpectationE0Ovp	swift.property	public	expectationPolicy	Rotor.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV7commandAA18HeistActionCommandOvp	swift.property	public	command	Rotor.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV_2on9directionACSS_AA13ElementTargetOAA0C9DirectionOtcfc	swift.init	public	init(_:on:direction:)	Rotor.init(_:on:direction:)	init(_ name: String, on target: ElementTarget, direction: RotorDirection = .next)
 symbol	ButtonHeist.symbols.json	s:8ThePlans5RotorV_2on9directionACSS_AA17ElementTargetExprOAA0C9DirectionOtcfc	swift.init	public	init(_:on:direction:)	Rotor.init(_:on:direction:)	init(_ name: String, on target: ElementTargetExpr, direction: RotorDirection = .next)
@@ -2067,8 +2075,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans7WaitForV4elseyACxyXEAA12HeistContent
 symbol	ButtonHeist.symbols.json	s:8ThePlans7WaitForV_7timeoutAcA22AccessibilityPredicateO_Sdtcfc	swift.init	public	init(_:timeout:)	WaitFor.init(_:timeout:)	init(_ predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout)
 symbol	ButtonHeist.symbols.json	s:8ThePlans7WaitForV_7timeoutAcA26AccessibilityPredicateExprO_Sdtcfc	swift.init	public	init(_:timeout:)	WaitFor.init(_:timeout:)	init(_ predicate: AccessibilityPredicateExpr, timeout: Double = defaultWaitTimeout)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateV	swift.struct	public	Activate	Activate	struct Activate
-symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Activate.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Activate.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateV17expectationPolicyAA017ActionExpectationE0Ovp	swift.property	public	expectationPolicy	Activate.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateV7commandAA18HeistActionCommandOvp	swift.property	public	command	Activate.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateVyAcA13ElementTargetOcfc	swift.init	public	init(_:)	Activate.init(_:)	init(_ target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8ActivateVyAcA17ElementTargetExprOcfc	swift.init	public	init(_:)	Activate.init(_:)	init(_ target: ElementTargetExpr)
@@ -2109,8 +2116,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans8SeverityO5erroryA2CmF	swift.enum.cas
 symbol	ButtonHeist.symbols.json	s:8ThePlans8SeverityO7warningyA2CmF	swift.enum.case	public	Severity.warning	Severity.warning	case warning
 symbol	ButtonHeist.symbols.json	s:8ThePlans8SeverityO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	Severity.init(rawValue:)	init?(rawValue: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV	swift.struct	public	TypeText	TypeText	struct TypeText
-symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	TypeText.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TypeText.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	TypeText.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV7commandAA18HeistActionCommandOvp	swift.property	public	command	TypeText.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingACSS_AA13ElementTargetOSgSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: String, into target: ElementTarget? = nil, replacingExisting: Bool)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingACSS_AA17ElementTargetExprOSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: String, into target: ElementTargetExpr, replacingExisting: Bool)
@@ -2136,14 +2142,12 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV4fromACs7Decoder_p_tKcfc	sw
 symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV7messageACSS_tcfc	swift.init	public	init(message:)	WarnStep.init(message:)	init(message: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV7messageSSvp	swift.property	public	message	WarnStep.message	let message: String
 symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV	swift.struct	public	ClearText	ClearText	struct ClearText
-symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	ClearText.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	ClearText.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV17expectationPolicyAA017ActionExpectationF0Ovp	swift.property	public	expectationPolicy	ClearText.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV7commandAA18HeistActionCommandOvp	swift.property	public	command	ClearText.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextVyAcA13ElementTargetOcfc	swift.init	public	init(_:)	ClearText.init(_:)	init(_ target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextVyAcA17ElementTargetExprOcfc	swift.init	public	init(_:)	ClearText.init(_:)	init(_ target: ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV	swift.struct	public	Decrement	Decrement	struct Decrement
-symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Decrement.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Decrement.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV17expectationPolicyAA017ActionExpectationE0Ovp	swift.property	public	expectationPolicy	Decrement.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV7commandAA18HeistActionCommandOvp	swift.property	public	command	Decrement.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementVyAcA13ElementTargetOcfc	swift.init	public	init(_:)	Decrement.init(_:)	init(_ target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementVyAcA17ElementTargetExprOcfc	swift.init	public	init(_:)	Decrement.init(_:)	init(_ target: ElementTargetExpr)
@@ -2188,8 +2192,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans9HeistStepO6actionyAcA06ActionD0VcACm
 symbol	ButtonHeist.symbols.json	s:8ThePlans9HeistStepO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistStep.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans9HeistStepO6invokeyAcA0c10InvocationD0VcACmF	swift.enum.case	public	HeistStep.invoke(_:)	HeistStep.invoke(_:)	case invoke(HeistInvocationStep)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementV	swift.struct	public	Increment	Increment	struct Increment
-symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Increment.expectation	let expectation: WaitStep?
-symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Increment.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementV17expectationPolicyAA017ActionExpectationE0Ovp	swift.property	public	expectationPolicy	Increment.expectationPolicy	let expectationPolicy: ActionExpectationPolicy
 symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementV7commandAA18HeistActionCommandOvp	swift.property	public	command	Increment.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementVyAcA13ElementTargetOcfc	swift.init	public	init(_:)	Increment.init(_:)	init(_ target: ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9IncrementVyAcA17ElementTargetExprOcfc	swift.init	public	init(_:)	Increment.init(_:)	init(_ target: ElementTargetExpr)
@@ -3963,6 +3966,10 @@ relationship	conformsTo	s:8ThePlans16HeistDescriptionV	s:s8SendableP	HeistDescri
 relationship	conformsTo	s:8ThePlans16ResolvedWaitStepV	s:SQ	ResolvedWaitStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans16ResolvedWaitStepV	s:s8SendableP	ResolvedWaitStep	Swift.Sendable
 relationship	conformsTo	s:8ThePlans16ValidationResultO	s:s8SendableP	ValidationResult	Swift.Sendable
+relationship	conformsTo	s:8ThePlans17ActionExpectationV	s:SE	ActionExpectation	Swift.Encodable
+relationship	conformsTo	s:8ThePlans17ActionExpectationV	s:SQ	ActionExpectation	Swift.Equatable
+relationship	conformsTo	s:8ThePlans17ActionExpectationV	s:Se	ActionExpectation	Swift.Decodable
+relationship	conformsTo	s:8ThePlans17ActionExpectationV	s:s8SendableP	ActionExpectation	Swift.Sendable
 relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:SE	AnyPropertyChange	Swift.Encodable
 relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:SQ	AnyPropertyChange	Swift.Equatable
 relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:Se	AnyPropertyChange	Swift.Decodable
@@ -4238,6 +4245,15 @@ relationship	conformsTo	s:8ThePlans22HeistActionCommandTypeO	s:s12CaseIterableP	
 relationship	conformsTo	s:8ThePlans22HeistActionCommandTypeO	s:s23CustomStringConvertibleP	HeistActionCommandType	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans22HeistActionCommandTypeO	s:s8SendableP	HeistActionCommandType	Swift.Sendable
 relationship	conformsTo	s:8ThePlans22HeistInvocationContentV	s:8ThePlans12HeistContentP	HeistInvocationContent	HeistContent
+relationship	conformsTo	s:8ThePlans23ActionExpectationPolicyO	s:SE	ActionExpectationPolicy	Swift.Encodable
+relationship	conformsTo	s:8ThePlans23ActionExpectationPolicyO	s:SQ	ActionExpectationPolicy	Swift.Equatable
+relationship	conformsTo	s:8ThePlans23ActionExpectationPolicyO	s:Se	ActionExpectationPolicy	Swift.Decodable
+relationship	conformsTo	s:8ThePlans23ActionExpectationPolicyO	s:s8SendableP	ActionExpectationPolicy	Swift.Sendable
+relationship	conformsTo	s:8ThePlans23ActionExpectationWaiverV	s:SE	ActionExpectationWaiver	Swift.Encodable
+relationship	conformsTo	s:8ThePlans23ActionExpectationWaiverV	s:SQ	ActionExpectationWaiver	Swift.Equatable
+relationship	conformsTo	s:8ThePlans23ActionExpectationWaiverV	s:Se	ActionExpectationWaiver	Swift.Decodable
+relationship	conformsTo	s:8ThePlans23ActionExpectationWaiverV	s:s23CustomStringConvertibleP	ActionExpectationWaiver	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans23ActionExpectationWaiverV	s:s8SendableP	ActionExpectationWaiver	Swift.Sendable
 relationship	conformsTo	s:8ThePlans23ActivationPointPropertyO	s:8ThePlans19ElementPropertyKindP	ActivationPointProperty	ElementPropertyKind
 relationship	conformsTo	s:8ThePlans23ActivationPointPropertyO	s:8TheScore24ElementPropertyValueKindP	ActivationPointProperty	ElementPropertyValueKind
 relationship	conformsTo	s:8ThePlans23ActivationPointPropertyO	s:s8SendableP	ActivationPointProperty	Swift.Sendable
@@ -5044,8 +5060,7 @@ relationship	defaultImplementationOf	s:8TheScore28ElementTextPropertyValueKindPA
 relationship	requirementOf	s:8ThePlans12HeistContentP10heistStepsSayAA0C4StepOGvp	s:8ThePlans12HeistContentP	heistSteps	HeistContent
 relationship	requirementOf	s:8ThePlans12HeistContentP16heistDefinitionsSayAA0C4PlanVGvp	s:8ThePlans12HeistContentP	heistDefinitions	HeistContent
 relationship	requirementOf	s:8ThePlans12HeistContentP21heistBuildDiagnosticsSayAA0cF10DiagnosticVGvp	s:8ThePlans12HeistContentP	heistBuildDiagnostics	HeistContent
-relationship	requirementOf	s:8ThePlans18HeistActionContentP11expectationAA8WaitStepVSgvp	s:8ThePlans18HeistActionContentP	expectation	HeistActionContent
-relationship	requirementOf	s:8ThePlans18HeistActionContentP17expectationWaiverSSSgvp	s:8ThePlans18HeistActionContentP	expectationWaiver	HeistActionContent
+relationship	requirementOf	s:8ThePlans18HeistActionContentP17expectationPolicyAA0d11ExpectationG0Ovp	s:8ThePlans18HeistActionContentP	expectationPolicy	HeistActionContent
 relationship	requirementOf	s:8ThePlans18HeistActionContentP32expectationValidationDiagnosticsSayAA0C15BuildDiagnosticVGvp	s:8ThePlans18HeistActionContentP	expectationValidationDiagnostics	HeistActionContent
 relationship	requirementOf	s:8ThePlans18HeistActionContentP7commandAA0cD7CommandOvp	s:8ThePlans18HeistActionContentP	command	HeistActionContent
 relationship	requirementOf	s:8ThePlans18StringMatchPayloadP06stringD14LiteralIsEmptySbSgvp	s:8ThePlans18StringMatchPayloadP	stringMatchLiteralIsEmpty	StringMatchPayload

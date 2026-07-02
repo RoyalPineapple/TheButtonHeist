@@ -1,4 +1,5 @@
 import XCTest
+@testable import ButtonHeistSupport
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class ConnectionResultWaitersTests: XCTestCase {
@@ -62,6 +63,19 @@ final class ConnectionResultWaitersTests: XCTestCase {
         assertConnectionError(await waitTask.value, .disconnected(.serverClosed))
     }
 
+    func testConnectionResultWaitersDoesNotStoreCheckedContinuation() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let packageRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = packageRootURL
+            .appendingPathComponent("Sources/TheButtonHeist/TheHandoff/ConnectionResultWaiters.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertFalse(source.contains("CheckedContinuation"))
+    }
+
     @ButtonHeistActor
     private func makeWaitTask(
         waiters: ConnectionResultWaiters,
@@ -69,13 +83,14 @@ final class ConnectionResultWaitersTests: XCTestCase {
         attemptID: UUID
     ) -> Task<Result<Void, Error>, Never> {
         Task { @ButtonHeistActor in
-            do {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    waiters.register(id: id, attemptID: attemptID, continuation: continuation)
-                }
-                return .success(())
-            } catch {
-                return .failure(error)
+            await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Error>, Never>) in
+                let completion = OneShotContinuation<Result<Void, Error>>()
+                _ = completion.register(continuation)
+                waiters.register(
+                    id: id,
+                    attemptID: attemptID,
+                    completion: completion
+                )
             }
         }
     }

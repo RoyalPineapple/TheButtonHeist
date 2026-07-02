@@ -55,7 +55,7 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
         switch action.command.authoringLintKind {
         case .semantic:
-            if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
+            if action.expectationPolicy.requiresAuthoredExpectation, mode.requiresExpectationFinding {
                 findings.append(missingExpectationFinding(path: context.path))
             }
         case .typeTextWithoutTarget:
@@ -71,7 +71,7 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
                 findings.append(viewportFinding(path: context.path))
             }
         case .ambient:
-            if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
+            if action.expectationPolicy.requiresAuthoredExpectation, mode.requiresExpectationFinding {
                 findings.append(ambientExpectationFinding(path: context.path))
             }
         case .observation:

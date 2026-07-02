@@ -164,7 +164,7 @@ package struct HeistExecutionEvidenceEventBuilder: Sendable, Equatable {
         to events: inout [HeistExecutionEvidenceEvent]
     ) {
         let path = node.step.path
-        if node.step.kind == .action, let dispatchResult = node.step.actionEvidence?.dispatchResult {
+        if let dispatchResult = node.reportFacts.dispatchedActionResult {
             events.append(.dispatchedActionResult(path: path, result: dispatchResult))
         }
         if node.step.kind == .action, let reportedResult = node.reportFacts.actionResult {
@@ -355,6 +355,176 @@ package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
     }
 }
 
+package enum HeistExecutionStepReportDetail: Sendable, Equatable {
+    case action(HeistActionEvidence)
+    case wait(HeistWaitEvidence)
+    case caseSelection(HeistCaseSelectionEvidence)
+    case forEachString(HeistForEachStringEvidence)
+    case forEachElement(HeistForEachElementEvidence)
+    case repeatUntil(HeistRepeatUntilEvidence)
+    case invocation(HeistInvocationEvidence)
+    case warning(HeistExecutionWarning)
+    case none
+
+    package init(kind: HeistExecutionStepKind, evidence: HeistStepEvidence?) {
+        switch (kind, evidence) {
+        case (.action, .some(.action(let evidence))):
+            self = .action(evidence)
+        case (.wait, .some(.wait(let evidence))):
+            self = .wait(evidence)
+        case (.conditional, .some(.caseSelection(let evidence))):
+            self = .caseSelection(evidence)
+        case (.forEachString, .some(.forEachString(let evidence))),
+             (.forEachIteration, .some(.forEachString(let evidence))):
+            self = .forEachString(evidence)
+        case (.forEachElement, .some(.forEachElement(let evidence))),
+             (.forEachIteration, .some(.forEachElement(let evidence))):
+            self = .forEachElement(evidence)
+        case (.repeatUntil, .some(.repeatUntil(let evidence))),
+             (.repeatUntilIteration, .some(.repeatUntil(let evidence))):
+            self = .repeatUntil(evidence)
+        case (.invoke, .some(.invocation(let evidence))):
+            self = .invocation(evidence)
+        case (.warn, .some(.warning(let warning))):
+            self = .warning(warning)
+        default:
+            self = .none
+        }
+    }
+
+    package var commandName: String? {
+        guard case .action(let evidence) = self else { return nil }
+        return evidence.command?.runtimeActionType.rawValue
+    }
+
+    package var target: ElementTarget? {
+        guard case .action(let evidence) = self else { return nil }
+        return evidence.command?.reportTarget
+    }
+
+    package var capabilityName: String? {
+        guard case .invocation(let evidence) = self else { return nil }
+        return evidence.invocation?.capabilityName
+    }
+
+    package var invocationDisplayName: String? {
+        guard case .invocation(let evidence) = self else { return nil }
+        return evidence.invocation?.runHeistSummary
+    }
+
+    package var dispatchedActionResult: ActionResult? {
+        guard case .action(let evidence) = self else { return nil }
+        return evidence.dispatchResult
+    }
+
+    package var actionResult: ActionResult? {
+        switch self {
+        case .action(let evidence):
+            return evidence.reportedResult
+        case .wait(let evidence):
+            return evidence.actionResult
+        case .repeatUntil(let evidence):
+            return evidence.actionResult
+        case .invocation(let evidence):
+            return evidence.expectationActionResult
+        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
+            return nil
+        }
+    }
+
+    package var traceEvidenceResult: ActionResult? {
+        switch self {
+        case .action(let evidence):
+            return evidence.traceResult
+        case .wait(let evidence):
+            return evidence.actionResult
+        case .repeatUntil(let evidence):
+            return evidence.actionResult
+        case .invocation(let evidence):
+            return evidence.expectationActionResult
+        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
+            return nil
+        }
+    }
+
+    package var expectation: ExpectationResult? {
+        switch self {
+        case .action(let evidence):
+            if evidence.dispatchResult?.success == false { return nil }
+            return evidence.expectation
+        case .wait(let evidence):
+            return evidence.expectation
+        case .repeatUntil(let evidence):
+            return evidence.expectation
+        case .invocation(let evidence):
+            return evidence.expectation
+        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
+            return nil
+        }
+    }
+
+    package var actionErrorKind: ErrorKind? {
+        guard case .action(let evidence) = self, evidence.reportedResult?.success == false else {
+            return nil
+        }
+        return evidence.reportedResult?.errorKind
+    }
+
+    package var message: String? {
+        switch self {
+        case .caseSelection(let evidence):
+            switch evidence.selection.outcome {
+            case .matchedCase(let selected):
+                return "matched case \(selected)"
+            case .elseBranch(reason: .timedOut):
+                return "timed out; else ran"
+            case .elseBranch(reason: .noMatch):
+                return "no case matched; else ran"
+            case .timedOut:
+                return "timed out"
+            case .noMatch:
+                return "no case matched"
+            }
+        case .forEachString(let evidence):
+            if let failureReason = evidence.failureReason {
+                return failureReason
+            }
+            if let ordinal = evidence.iterationOrdinal, let value = evidence.value {
+                return "iteration \(ordinal) value \"\(value)\""
+            }
+            return "completed \(evidence.iterationCount) of \(evidence.count) value(s)"
+        case .forEachElement(let evidence):
+            if let failureReason = evidence.failureReason {
+                return failureReason
+            }
+            if let ordinal = evidence.iterationOrdinal, let targetOrdinal = evidence.targetOrdinal {
+                return "iteration \(ordinal) target ordinal \(targetOrdinal)"
+            }
+            return "completed \(evidence.iterationCount) of \(evidence.matchedCount) matched element(s)"
+        case .repeatUntil(let evidence):
+            if let failureReason = evidence.failureReason {
+                return failureReason
+            }
+            if let ordinal = evidence.iterationOrdinal {
+                return "iteration \(ordinal) predicate \(evidence.expectation.met ? "met" : "not met")"
+            }
+            if evidence.expectation.met {
+                return "predicate met after \(evidence.iterationCount) iteration(s)"
+            }
+            return "timed out after \(evidence.iterationCount) iteration(s)"
+        case .invocation(let evidence):
+            if let childFailedPath = evidence.childFailedPath {
+                return "child failed at \(childFailedPath)"
+            }
+            return evidence.name
+        case .warning(let warning):
+            return warning.message
+        case .action, .wait, .none:
+            return nil
+        }
+    }
+}
+
 package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let path: String
     package let kind: String
@@ -369,50 +539,28 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let failureMessage: String?
     package let failureCategory: HeistFailureCategory?
     package let actionErrorKind: ErrorKind?
+    package let dispatchedActionResult: ActionResult?
     package let traceEvidenceResult: ActionResult?
 
     package init(step: HeistExecutionStepResult) {
-        let actionEvidence = step.actionEvidence
-        let waitEvidence = step.waitEvidence
-        let repeatUntilEvidence = step.repeatUntilEvidence
-        let invocationEvidence = step.invocationEvidence
-        let expectation = Self.expectation(
-            kind: step.kind,
-            actionEvidence: actionEvidence,
-            waitEvidence: waitEvidence,
-            repeatUntilEvidence: repeatUntilEvidence,
-            invocationEvidence: invocationEvidence
-        )
-        let commandName = step.kind == .action ? actionEvidence?.command?.runtimeActionType.rawValue : nil
-        let actionResult = Self.actionResult(
-            kind: step.kind,
-            actionEvidence: actionEvidence,
-            waitEvidence: waitEvidence,
-            repeatUntilEvidence: repeatUntilEvidence,
-            invocationEvidence: invocationEvidence
-        )
-        let reportedActionResult = step.kind == .action ? actionEvidence?.reportedResult : nil
+        let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)
+        let commandName = detail.commandName
 
         path = step.path
         kind = Self.stepName(for: step.kind)
-        capabilityName = invocationEvidence?.invocation?.capabilityName
-        displayName = invocationEvidence?.invocation?.runHeistSummary ?? commandName ?? kind
+        capabilityName = detail.capabilityName
+        displayName = detail.invocationDisplayName ?? commandName ?? kind
         self.commandName = commandName
-        target = actionEvidence?.command?.reportTarget
+        target = detail.target
         status = step.status
-        message = Self.message(for: step)
-        self.actionResult = actionResult
-        self.expectation = expectation
+        message = Self.message(for: step, detail: detail)
+        self.actionResult = detail.actionResult
+        self.expectation = detail.expectation
         failureMessage = Self.failureMessage(for: step)
         failureCategory = step.failure?.category
-        actionErrorKind = reportedActionResult?.success == false ? reportedActionResult?.errorKind : nil
-        traceEvidenceResult = Self.traceEvidenceResult(
-            kind: step.kind,
-            actionEvidence: actionEvidence,
-            waitEvidence: waitEvidence,
-            repeatUntilEvidence: repeatUntilEvidence,
-            invocationEvidence: invocationEvidence
-        )
+        actionErrorKind = detail.actionErrorKind
+        dispatchedActionResult = detail.dispatchedActionResult
+        traceEvidenceResult = detail.traceEvidenceResult
     }
 
     private static func stepName(for kind: HeistExecutionStepKind) -> String {
@@ -444,126 +592,12 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
         }
     }
 
-    private static func actionResult(
-        kind: HeistExecutionStepKind,
-        actionEvidence: HeistActionEvidence?,
-        waitEvidence: HeistWaitEvidence?,
-        repeatUntilEvidence: HeistRepeatUntilEvidence?,
-        invocationEvidence: HeistInvocationEvidence?
-    ) -> ActionResult? {
-        switch kind {
-        case .action:
-            return actionEvidence?.reportedResult
-        case .wait:
-            return waitEvidence?.actionResult
-        case .repeatUntil:
-            return repeatUntilEvidence?.actionResult
-        case .invoke:
-            return invocationEvidence?.expectationActionResult
-        default:
-            return nil
-        }
-    }
-
-    private static func traceEvidenceResult(
-        kind: HeistExecutionStepKind,
-        actionEvidence: HeistActionEvidence?,
-        waitEvidence: HeistWaitEvidence?,
-        repeatUntilEvidence: HeistRepeatUntilEvidence?,
-        invocationEvidence: HeistInvocationEvidence?
-    ) -> ActionResult? {
-        switch kind {
-        case .action:
-            return actionEvidence?.traceResult
-        case .wait:
-            return waitEvidence?.actionResult
-        case .repeatUntil:
-            return repeatUntilEvidence?.actionResult
-        case .invoke:
-            return invocationEvidence?.expectationActionResult
-        default:
-            return nil
-        }
-    }
-
-    private static func expectation(
-        kind: HeistExecutionStepKind,
-        actionEvidence: HeistActionEvidence?,
-        waitEvidence: HeistWaitEvidence?,
-        repeatUntilEvidence: HeistRepeatUntilEvidence?,
-        invocationEvidence: HeistInvocationEvidence?
-    ) -> ExpectationResult? {
-        switch kind {
-        case .action:
-            if actionEvidence?.dispatchResult?.success == false { return nil }
-            return actionEvidence?.expectation
-        case .wait:
-            return waitEvidence?.expectation
-        case .repeatUntil:
-            return repeatUntilEvidence?.expectation
-        case .invoke:
-            return invocationEvidence?.expectation
-        default:
-            return nil
-        }
-    }
-
-    private static func message(for step: HeistExecutionStepResult) -> String? {
+    private static func message(for step: HeistExecutionStepResult, detail: HeistExecutionStepReportDetail) -> String? {
         if let failure = step.failure {
             return failure.observed
         }
-        if let warning = step.warningEvidence {
-            return warning.message
-        }
-        if let caseSelection = step.caseSelectionEvidence?.selection {
-            switch caseSelection.outcome {
-            case .matchedCase(let selected):
-                return "matched case \(selected)"
-            case .elseBranch(reason: .timedOut):
-                return "timed out; else ran"
-            case .elseBranch(reason: .noMatch):
-                return "no case matched; else ran"
-            case .timedOut:
-                return "timed out"
-            case .noMatch:
-                return "no case matched"
-            }
-        }
-        if let forEach = step.forEachStringEvidence {
-            if let failureReason = forEach.failureReason {
-                return failureReason
-            }
-            if let ordinal = forEach.iterationOrdinal, let value = forEach.value {
-                return "iteration \(ordinal) value \"\(value)\""
-            }
-            return "completed \(forEach.iterationCount) of \(forEach.count) value(s)"
-        }
-        if let forEach = step.forEachElementEvidence {
-            if let failureReason = forEach.failureReason {
-                return failureReason
-            }
-            if let ordinal = forEach.iterationOrdinal, let targetOrdinal = forEach.targetOrdinal {
-                return "iteration \(ordinal) target ordinal \(targetOrdinal)"
-            }
-            return "completed \(forEach.iterationCount) of \(forEach.matchedCount) matched element(s)"
-        }
-        if let repeatUntil = step.repeatUntilEvidence {
-            if let failureReason = repeatUntil.failureReason {
-                return failureReason
-            }
-            if let ordinal = repeatUntil.iterationOrdinal {
-                return "iteration \(ordinal) predicate \(repeatUntil.expectation.met ? "met" : "not met")"
-            }
-            if repeatUntil.expectation.met {
-                return "predicate met after \(repeatUntil.iterationCount) iteration(s)"
-            }
-            return "timed out after \(repeatUntil.iterationCount) iteration(s)"
-        }
-        if let invocation = step.invocationEvidence {
-            if let childFailedPath = invocation.childFailedPath {
-                return "child failed at \(childFailedPath)"
-            }
-            return invocation.name
+        if let message = detail.message {
+            return message
         }
         switch step.intent {
         case .warn(let message), .fail(let message):
@@ -691,14 +725,13 @@ public extension HeistExecutionStepResult {
 
     /// Runtime dispatch evidence for actual action steps.
     var dispatchedActionResult: ActionResult? {
-        guard kind == .action else { return nil }
-        return actionEvidence?.dispatchResult
+        reportFacts.dispatchedActionResult
     }
 
     /// Human/report-facing result for actual action steps.
     var reportedActionResult: ActionResult? {
         guard kind == .action else { return nil }
-        return actionEvidence?.reportedResult
+        return reportFacts.actionResult
     }
 
     /// Expectation to surface for this step. Action dispatch failure suppresses

@@ -247,8 +247,7 @@ struct HeistCompilerTests {
         #expect(plan.body == [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .change(.screen()), timeout: 1)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
         ])
     }
 
@@ -1246,6 +1245,9 @@ struct HeistCompilerTests {
         let privateSPIPrefix = "ButtonHeist/Sources/TheInsideJob/Support/ButtonHeistPrivateSPI.swift:"
         let objcRuntimePrefix = "ButtonHeist/Sources/TheInsideJob/Support/ObjCRuntime.swift:"
         let notificationBusPrefix = "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift:"
+        let objcBridgeFilePrefixes = [
+            "ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift:",
+        ]
         let allowedAnyObjectLines: Set<String> = [
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceConnecting: AnyObject {",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceDiscovering: AnyObject {",
@@ -1271,6 +1273,9 @@ struct HeistCompilerTests {
             root: root,
             pattern: #"\bAnyObject\b"#
         )
+        .filter { line in
+            !objcBridgeFilePrefixes.contains { line.hasPrefix($0) }
+        }
         .subtracting(allowedAnyObjectLines)
 
         #expect(

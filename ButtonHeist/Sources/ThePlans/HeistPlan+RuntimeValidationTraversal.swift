@@ -285,7 +285,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         environment: HeistExecutionEnvironment
     ) {
         validateCommand(action.command, path: path.child(.command), scope: scope, environment: environment)
-        if let waiver = action.expectationWaiver {
+        if let waiver = action.expectationPolicy.waiver?.reason {
             addString(waiver, path: path.child(.withoutExpectation).description, role: "expectation waiver")
         }
         for diagnostic in action.expectationValidationDiagnostics {

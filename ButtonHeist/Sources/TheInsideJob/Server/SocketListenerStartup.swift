@@ -28,6 +28,7 @@ struct SocketListenerStartup {
                     host: host,
                     port: requestedPort,
                     parameters: parameters,
+                    allowEndpointReuse: hosts.count > 1,
                     newConnectionHandler: newConnectionHandler
                 )
                 let actualPort = try await startAndWaitForReady(listener, queue: queue)
@@ -57,9 +58,11 @@ struct SocketListenerStartup {
         host: NWEndpoint.Host,
         port: UInt16,
         parameters: NWParameters,
+        allowEndpointReuse: Bool,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
     ) throws -> NWListener {
         let listenerParameters = parameters.copy()
+        listenerParameters.allowLocalEndpointReuse = allowEndpointReuse
         listenerParameters.requiredLocalEndpoint = .hostPort(
             host: host,
             port: NWEndpoint.Port(rawValue: port) ?? .any

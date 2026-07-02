@@ -141,7 +141,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         await executeStep(
-            .action(command: step.command, expectation: step.expectation),
+            .action(command: step.command, expectation: step.expectationPolicy.expectedStep),
             index: index,
             path: path,
             start: start,

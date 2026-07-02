@@ -513,20 +513,40 @@ struct PublicHeistReportEvidence: Encodable {
 }
 
 struct PublicHeistActionEvidence: Encodable {
-    let commandName: String?
-    let target: ElementTarget?
-    let result: PublicHeistReportActionResult?
-    let expectationResult: PublicHeistReportActionResult?
-    let expectation: PublicExpectationResult?
-    let warning: HeistActionWarning?
+    private let projection: HeistActionEvidenceProjection
 
     init(projection: HeistActionEvidenceProjection) {
-        self.commandName = projection.commandName
-        self.target = projection.target
-        self.result = projection.result.map { PublicHeistReportActionResult(projection: $0) }
-        self.expectationResult = projection.expectationResult.map { PublicHeistReportActionResult(projection: $0) }
-        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
-        self.warning = projection.warning
+        self.projection = projection
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case commandName
+        case target
+        case result
+        case expectationResult
+        case expectation
+        case warning
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(projection.commandName, forKey: .commandName)
+        try container.encodeIfPresent(projection.target, forKey: .target)
+        switch projection.evidence {
+        case .commandResolutionFailure(let warning):
+            try container.encodeIfPresent(warning, forKey: .warning)
+        case .dispatch(let result, let warning):
+            try container.encode(PublicHeistReportActionResult(projection: result), forKey: .result)
+            try container.encodeIfPresent(warning, forKey: .warning)
+        case .expectation(let dispatchResult, let expectationResult, let expectation, let warning):
+            try container.encode(PublicHeistReportActionResult(projection: dispatchResult), forKey: .result)
+            try container.encode(
+                PublicHeistReportActionResult(projection: expectationResult),
+                forKey: .expectationResult
+            )
+            try container.encode(PublicExpectationResult(projection: expectation), forKey: .expectation)
+            try container.encodeIfPresent(warning, forKey: .warning)
+        }
     }
 }
 

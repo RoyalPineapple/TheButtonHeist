@@ -1,7 +1,8 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import os
+
+import ButtonHeistSupport
 import TheScore
 
 @MainActor
@@ -9,7 +10,7 @@ final class SemanticObservationSettledWaiters {
     private struct Waiter {
         let scope: SemanticObservationScope
         let afterSequence: SettledObservationSequence?
-        let continuation: SemanticObservationWaiterContinuation<SettledSemanticObservationEvent?>
+        let continuation: OneShotContinuation<SettledSemanticObservationEvent?>
         let timeoutTask: Task<Void, Never>?
     }
 
@@ -27,7 +28,7 @@ final class SemanticObservationSettledWaiters {
     ) async -> SettledSemanticObservationEvent? {
         let id = nextID
         nextID += 1
-        let continuationBox = SemanticObservationWaiterContinuation<SettledSemanticObservationEvent?>()
+        let continuationBox = OneShotContinuation<SettledSemanticObservationEvent?>()
 
         let result: SettledSemanticObservationEvent? = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>) in
@@ -85,46 +86,6 @@ final class SemanticObservationSettledWaiters {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
         return timeout
-    }
-}
-
-struct SemanticObservationWaiterContinuation<Value: Sendable> {
-    private enum State {
-        case pending
-        case registered(CheckedContinuation<Value, Never>)
-        case resumed
-    }
-
-    private let lock = OSAllocatedUnfairLock(initialState: State.pending)
-
-    func register(_ continuation: CheckedContinuation<Value, Never>) -> Bool {
-        lock.withLock { state -> Bool in
-            switch state {
-            case .pending:
-                state = .registered(continuation)
-                return true
-            case .registered:
-                preconditionFailure("Semantic observation waiter continuation registered twice")
-            case .resumed:
-                return false
-            }
-        }
-    }
-
-    func resume(returning value: Value) {
-        let continuationToResume = lock.withLock { state -> CheckedContinuation<Value, Never>? in
-            switch state {
-            case .pending:
-                state = .resumed
-                return nil
-            case .registered(let continuation):
-                state = .resumed
-                return continuation
-            case .resumed:
-                return nil
-            }
-        }
-        continuationToResume?.resume(returning: value)
     }
 }
 

@@ -1051,8 +1051,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(request.plan.body, [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .change(.screen()), timeout: 1)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
         ])
     }
 
@@ -1599,8 +1598,7 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
-                    expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                 .wait(WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)),
                 .invoke(HeistInvocationStep(path: ["confirm"])),
             ]
@@ -1699,8 +1697,7 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
-                    expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             ]
         )
         let plan = try HeistPlan(
@@ -3374,7 +3371,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .action(let step)? = mockConn.sent.sentHeistPlan?.body.first else {
             return XCTFail("Expected a single action step, got \(String(describing: mockConn.sent.sentHeistPlan))")
         }
-        XCTAssertEqual(step.expectation?.predicate, .predicate(predicate))
+        XCTAssertEqual(step.expectationPolicy.expectedStep?.predicate, .predicate(predicate))
 
         guard let leaf = response.leafAction else {
             return XCTFail("Expected single-step action response, got \(response)")
@@ -3516,14 +3513,13 @@ final class TheFenceHandlerTests: XCTestCase {
         ))))
         let sourceStep = HeistStep.action(try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal("counter"))))),
-            expectation: WaitStep(predicate: expectation, timeout: 10)
-        ))
+            expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
         let plan = try HeistPlan(body: [sourceStep])
         guard case .action(let action)? = plan.body.first else {
             return XCTFail("Expected action step")
         }
 
-        XCTAssertEqual(action.expectation?.predicate, .predicate(expectation))
+        XCTAssertEqual(action.expectationPolicy.expectedStep?.predicate, .predicate(expectation))
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape

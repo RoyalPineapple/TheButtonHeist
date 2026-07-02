@@ -151,8 +151,7 @@ final class ClientMessageTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.target(saveTarget)),
-                    expectation: WaitStep(predicate: .change(.screen()), timeout: 10)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 10)))),
                 .wait(WaitStep(
                     predicate: .exists(ElementPredicate(label: "Save", traits: [.button])),
                     timeout: 2.5
@@ -176,7 +175,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
-              decodedAction.expectation?.predicate == AccessibilityPredicateExpr.predicate(.change(.screen())) else {
+              decodedAction.expectationPolicy.expectedStep?.predicate == AccessibilityPredicateExpr.predicate(.change(.screen())) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedTarget, ElementTargetExpr.target(saveTarget))
@@ -230,7 +229,7 @@ final class ClientMessageTests: XCTestCase {
               let step = decodedRun.plan.body.first,
               case .action(let action) = step,
               case .typeText(let text, let target, let replacingExisting) = action.command,
-              action.expectation == nil else {
+              action.expectationPolicy.expectedStep == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(text, StringExpr.literal("hello"))
@@ -241,8 +240,7 @@ final class ClientMessageTests: XCTestCase {
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))))),
-            expectation: WaitStep(predicate: .change(.screen()), timeout: 10)
-        )
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 10)))
 
         XCTAssertEqual(
             step.description,

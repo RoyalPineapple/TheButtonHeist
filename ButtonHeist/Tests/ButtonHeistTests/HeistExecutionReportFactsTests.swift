@@ -213,8 +213,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(HeistExecutionReportSummaryFacts(result: result).finalScreenId, "settled")
         XCTAssertEqual(projection.summary.finalScreenId, "settled")
         XCTAssertEqual(projectedNode.actionErrorKind, .timeout)
-        XCTAssertEqual(projectedAction.result?.actionMethod.rawValue, "activate")
-        XCTAssertEqual(projectedAction.expectationResult?.actionMethod.rawValue, "wait")
+        guard case .expectation(let dispatchResult, let expectationResult, _, _) = projectedAction.evidence else {
+            return XCTFail("Expected projected action expectation evidence")
+        }
+        XCTAssertEqual(dispatchResult.actionMethod.rawValue, "activate")
+        XCTAssertEqual(expectationResult.actionMethod.rawValue, "wait")
     }
 
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {

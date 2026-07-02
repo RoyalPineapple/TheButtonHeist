@@ -123,6 +123,7 @@ let package = Package(
         .target(
             name: "ButtonHeist",
             dependencies: [
+                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
@@ -174,7 +175,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: [
-                "ButtonHeistTestSupport", "ButtonHeist", "ThePlans", "TheScore",
+                "ButtonHeistTestSupport", "ButtonHeist", "ButtonHeistSupport", "ThePlans", "TheScore",
             ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

@@ -80,6 +80,14 @@ import Testing
             .structure("HeistExecutionEvidenceEventBuilder"),
             message: "Event construction should stay owned by TheScore"
         )
+        let stepDetail = try scoreReport.requiredBlock(
+            .enumeration("HeistExecutionStepReportDetail"),
+            message: "Step report facts should derive from a typed evidence detail"
+        )
+        let stepFacts = try scoreReport.requiredBlock(
+            .structure("HeistExecutionStepReportFacts"),
+            message: "Step report facts should avoid flattened optional evidence inputs"
+        )
         let summary = try scoreReport.requiredBlock(
             .structure("HeistExecutionEvidenceSummary"),
             message: "Summary facts should reduce typed evidence events"
@@ -124,6 +132,29 @@ import Testing
         #expect(!actions.contents.contains("traceResultsInExecutionOrder\n            .compactMap"))
         #expect(warnings.contents.contains("fileprivate let events: [HeistExecutionEvidenceEvent]"))
         #expect(!warnings.contents.contains("nodes.compactMap"))
+
+        #expect(try stepDetail.containsMatch(#"\bcase\s+action\s*\(\s*HeistActionEvidence\s*\)"#))
+        #expect(try stepDetail.containsMatch(#"\bcase\s+wait\s*\(\s*HeistWaitEvidence\s*\)"#))
+        #expect(try stepDetail.containsMatch(#"\bcase\s+repeatUntil\s*\(\s*HeistRepeatUntilEvidence\s*\)"#))
+        #expect(try stepDetail.containsMatch(#"\bcase\s+invocation\s*\(\s*HeistInvocationEvidence\s*\)"#))
+        #expect(
+            stepFacts.contents.contains("let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)"),
+            "Step facts should build typed report detail once"
+        )
+        #expect(try !stepFacts.containsMatch(#"\blet\s+actionEvidence\s*=\s*step[.]actionEvidence\b"#))
+        #expect(try !stepFacts.containsMatch(#"\blet\s+waitEvidence\s*=\s*step[.]waitEvidence\b"#))
+        #expect(try !stepFacts.containsMatch(#"\blet\s+repeatUntilEvidence\s*=\s*step[.]repeatUntilEvidence\b"#))
+        #expect(try !stepFacts.containsMatch(#"\blet\s+invocationEvidence\s*=\s*step[.]invocationEvidence\b"#))
+        let flattenedEvidenceSignaturePattern = [
+            #"actionEvidence\s*:\s*HeistActionEvidence[?]"#,
+            #"waitEvidence\s*:\s*HeistWaitEvidence[?]"#,
+            #"repeatUntilEvidence\s*:\s*HeistRepeatUntilEvidence[?]"#,
+            #"invocationEvidence\s*:\s*HeistInvocationEvidence[?]"#,
+        ].joined(separator: #"[\s\S]*"#)
+        #expect(try !stepFacts.containsMatch(
+            flattenedEvidenceSignaturePattern,
+            options: [.dotMatchesLineSeparators]
+        ))
     }
 
     @Test func `action report consumers use typed action result evidence`() throws {
@@ -137,8 +168,21 @@ import Testing
             contents: projectionSource
         ).requiredBlock(
             .structure("HeistActionEvidenceProjection"),
-            message:
-            "Action evidence projection should use HeistActionEvidence.resultEvidence"
+            message: "Action evidence projection should own command metadata separately from typed action evidence"
+        )
+        let actionResultProjection = try SourceShapeFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/HeistEvidenceProjection.swift",
+            contents: projectionSource
+        ).requiredBlock(
+            .enumeration("HeistActionResultEvidenceProjection"),
+            message: "Action evidence projection should keep action evidence typed until public JSON encoding"
+        )
+        let publicActionEvidence = try SourceShapeFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
+            contents: try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift")
+        ).requiredBlock(
+            .structure("PublicHeistActionEvidence"),
+            message: "Public action evidence should be the sparse JSON boundary"
         )
 
         #expect(
@@ -147,13 +191,29 @@ import Testing
         )
         #expect(!scoreReport.contains("actionEvidence?.actionResult"))
         #expect(!scoreReport.contains("actionEvidence?.expectationActionResult"))
-        #expect(scoreReport.contains("actionEvidence?.dispatchResult"))
-        #expect(scoreReport.contains("actionEvidence?.reportedResult"))
-        #expect(scoreReport.contains("actionEvidence?.traceResult"))
+        #expect(!scoreReport.contains("actionEvidence?.dispatchResult"))
+        #expect(!scoreReport.contains("actionEvidence?.reportedResult"))
+        #expect(!scoreReport.contains("actionEvidence?.traceResult"))
+        #expect(scoreReport.contains("return evidence.dispatchResult"))
+        #expect(scoreReport.contains("case .action(let evidence):\n            return evidence.reportedResult"))
+        #expect(scoreReport.contains("case .action(let evidence):\n            return evidence.traceResult"))
         #expect(
-            actionProjection.contents.contains("let results = evidence.resultEvidence"),
-            "Projection should read the typed action result evidence model once"
+            actionProjection.contents.contains("let evidence: HeistActionResultEvidenceProjection"),
+            "Projection should store typed action evidence rather than flattened optional DTO fields"
         )
+        #expect(!actionProjection.contents.contains("let result: ActionProjection?"))
+        #expect(!actionProjection.contents.contains("let expectationResult: ActionProjection?"))
+        #expect(!actionProjection.contents.contains("let expectation: ExpectationProjection?"))
+        #expect(!actionProjection.contents.contains("let warning: HeistActionWarning?"))
+        #expect(try actionResultProjection.containsMatch(#"\bcase\s+commandResolutionFailure\s*\("#))
+        #expect(try actionResultProjection.containsMatch(#"\bcase\s+dispatch\s*\("#))
+        #expect(try actionResultProjection.containsMatch(#"\bcase\s+expectation\s*\("#))
+        #expect(try actionResultProjection.containsMatch(#"\bswitch\s+resultEvidence\b"#))
+        #expect(try publicActionEvidence.containsMatch(#"\bswitch\s+projection[.]evidence\b"#))
+        #expect(try publicActionEvidence.containsMatch(#"\bcase\s+result\b"#))
+        #expect(try publicActionEvidence.containsMatch(#"\bcase\s+expectationResult\b"#))
+        #expect(try publicActionEvidence.containsMatch(#"\bcase\s+expectation\b"#))
+        #expect(try publicActionEvidence.containsMatch(#"\bcase\s+warning\b"#))
         #expect(!actionProjection.contents.contains("evidence.actionResult"))
         #expect(!actionProjection.contents.contains("evidence.expectationActionResult"))
         #expect(!doctorSource.contains("expectationActionResult ??"))

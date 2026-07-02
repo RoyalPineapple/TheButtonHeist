@@ -42,28 +42,67 @@ enum HeistReportEvidenceProjection: Sendable {
 struct HeistActionEvidenceProjection: Sendable {
     let commandName: String?
     let target: ElementTarget?
-    let result: ActionProjection?
-    let expectationResult: ActionProjection?
-    let expectation: ExpectationProjection?
-    let warning: HeistActionWarning?
+    let evidence: HeistActionResultEvidenceProjection
 
     init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
-        let results = evidence.resultEvidence
         commandName = evidence.command?.wireType.rawValue
         target = evidence.command?.reportTarget
-        result = results.dispatchResult.map {
-            ActionProjection(
-                actionMethod: evidence.command.map(ActionMethodProjection.heist) ?? .result($0.method),
-                result: $0,
-                profile: profile,
-                includeOmissions: true
+        self.evidence = HeistActionResultEvidenceProjection(
+            resultEvidence: evidence.resultEvidence,
+            command: evidence.command,
+            warning: evidence.warning,
+            profile: profile
+        )
+    }
+}
+
+enum HeistActionResultEvidenceProjection: Sendable {
+    case commandResolutionFailure(warning: HeistActionWarning?)
+    case dispatch(result: ActionProjection, warning: HeistActionWarning?)
+    case expectation(
+        dispatchResult: ActionProjection,
+        expectationResult: ActionProjection,
+        expectation: ExpectationProjection,
+        warning: HeistActionWarning?
+    )
+
+    init(
+        resultEvidence: HeistActionEvidence.ResultEvidence,
+        command: HeistActionCommand?,
+        warning: HeistActionWarning?,
+        profile: ProjectionProfile
+    ) {
+        switch resultEvidence {
+        case .commandResolutionFailure:
+            self = .commandResolutionFailure(warning: warning)
+        case .dispatch(let evidence):
+            self = .dispatch(
+                result: ActionProjection(
+                    actionMethod: command.map(ActionMethodProjection.heist) ?? .result(evidence.dispatchResult.method),
+                    result: evidence.dispatchResult,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                warning: warning
+            )
+        case .expectation(let evidence):
+            self = .expectation(
+                dispatchResult: ActionProjection(
+                    actionMethod: command.map(ActionMethodProjection.heist) ?? .result(evidence.dispatchResult.method),
+                    result: evidence.dispatchResult,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                expectationResult: ActionProjection(
+                    actionMethod: .result(evidence.expectationResult.method),
+                    result: evidence.expectationResult,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                expectation: ExpectationProjection(result: evidence.expectation),
+                warning: warning
             )
         }
-        expectationResult = results.expectationResult.map {
-            ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
-        }
-        expectation = results.expectation.map { ExpectationProjection(result: $0) }
-        warning = evidence.warning
     }
 }
 

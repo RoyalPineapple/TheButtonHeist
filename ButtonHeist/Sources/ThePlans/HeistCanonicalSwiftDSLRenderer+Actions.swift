@@ -7,11 +7,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         var text = try line(render(command: action.command, environment: environment), indent)
-        if let expectation = action.expectation {
+        if let expectation = action.expectationPolicy.expectedStep {
             let predicate = try render(predicate: expectation.predicate, environment: environment)
             text += "\n" + line(".expect(\(predicate)\(renderActionExpectationTimeout(expectation.timeout)))", indent + 1)
         }
-        if let waiver = action.expectationWaiver {
+        if let waiver = action.expectationPolicy.waiver?.reason {
             text += "\n" + line(".withoutExpectation(\(quote(waiver)))", indent + 1)
         }
         return text

@@ -111,8 +111,7 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .change(.screen()), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
     ])
 
     #expect(plan == expected)
@@ -253,36 +252,32 @@ import Testing
                 text: .literal("Bruschetta"),
                 target: .predicate(.identifier("Search"))
             ),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 change: .value(after: "Bruschetta")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     let expectedUnscoped = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 change: .value(after: "3")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     let expectedBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Quantity"),
                 change: .value(before: "2", after: "3")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     let expectedBroadBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 change: .value(before: .prefix("cart:"), after: .contains("items"))
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
 
     #expect(scoped == expectedScoped)
@@ -339,39 +334,34 @@ import Testing
     let expectedAppeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Add"))),
-            expectation: WaitStep(predicate: .change(.elements(.appearedElement(.label("Back")))), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.appearedElement(.label("Back")))), timeout: 1)))),
     ])
     let expectedDisappeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Clear"))),
-            expectation: WaitStep(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))), timeout: 1)))),
     ])
     let expectedUpdatedPropertyOnly = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 change: .value()
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     let expectedUpdatedBeforeAfterOnly = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 change: .value(before: "", after: "milk")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     let expectedUpdatedAllFields = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 change: .value(before: "", after: "milk")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
     #expect(appeared == expectedAppeared)
     #expect(disappeared == expectedDisappeared)
@@ -397,20 +387,18 @@ import Testing
     let expectedAppeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Add Bruschetta"))),
-            expectation: WaitStep(
+            expectationPolicy: .expect(ActionExpectation(
                 predicate: .change(.elements(.appearedElement(.label(.contains("Bruschetta, $9.00"))))),
                 timeout: 1
-            )
-        )),
+            )))),
     ])
     let expectedDisappeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Remove Bruschetta"))),
-            expectation: WaitStep(
+            expectationPolicy: .expect(ActionExpectation(
                 predicate: .change(.elements(.disappearedElement(.identifier("cart-row-bruschetta")))),
                 timeout: 1
-            )
-        )),
+            )))),
     ])
     let expectedUpdated = try HeistPlan(body: [
         .action(try ActionStep(
@@ -418,10 +406,9 @@ import Testing
                 text: .literal("Bruschetta"),
                 target: .predicate(.identifier("Search"))
             ),
-            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 change: .value(after: "Bruschetta")
-            )))), timeout: 1)
-        )),
+            )))), timeout: 1)))),
     ])
 
     #expect(appeared == expectedAppeared)
@@ -452,15 +439,13 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Search"))),
-            expectation: WaitStep(predicate: .exists(.label("Results")), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Results")), timeout: 1)))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
-            expectation: WaitStep(
+            expectationPolicy: .expect(ActionExpectation(
                 predicate: .change(.screen(.exists(.label("Details")))),
                 timeout: 1
-            )
-        )),
+            )))),
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
                 predicate: .exists(.value(.contains("Promo"))),
@@ -484,8 +469,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .missing(.ref("target")), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
             ]
         )),
     ])
@@ -534,8 +518,7 @@ import Testing
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .change(.elements()), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements()), timeout: 1)))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,
@@ -758,8 +741,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectation: WaitStep(predicate: .state(.exists(.label(.ref("item")))), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label(.ref("item")))), timeout: 1)))),
             ]
         )),
     ])
@@ -803,8 +785,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .increment(.predicate(.label("Volume"))),
-                    expectation: WaitStep(predicate: .change(), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .change(), timeout: 1)))),
             ]
         )),
     ])
@@ -846,8 +827,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .state(.missingTarget(.ref("target"))), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.missingTarget(.ref("target"))), timeout: 1)))),
             ]
         )),
     ])
@@ -984,12 +964,10 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
         .action(try ActionStep(
             command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
-            expectation: WaitStep(predicate: .exists(.value("milk")), timeout: 2)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
         .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
         .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"))))),
         .action(try ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
@@ -1003,8 +981,7 @@ import Testing
         .action(try ActionStep(command: .dismissKeyboard)),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Maybe Later"))),
-            expectationWaiver: "intentionally optional"
-        )),
+            expectationPolicy: .waived(try ActionExpectationWaiver("intentionally optional")))),
         .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
         .action(try ActionStep(command: .activate(.predicate(.element(
             .label("Delete"),
@@ -1120,8 +1097,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectation: WaitStep(predicate: .missing(.ref("rowTarget")), timeout: 2)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("rowTarget")), timeout: 2)))),
             ]
         )),
     ]))
@@ -1182,8 +1158,7 @@ import Testing
     #expect(waived.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationWaiver: "reason"
-        )),
+            expectationPolicy: .waived(try ActionExpectationWaiver("reason")))),
     ])
 }
 
@@ -1570,8 +1545,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectation: WaitStep(predicate: .missing(.ref("rowTarget")), timeout: 1)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("rowTarget")), timeout: 1)))),
             ]
         )),
     ])

@@ -37,6 +37,7 @@ EXPECTED_RELATIONSHIP_EDGES = {
     ),
     "ButtonHeist": (
         "product:AccessibilitySnapshotBH/AccessibilitySnapshotModel",
+        "target:ButtonHeistSupport",
         "target:ThePlans",
         "target:TheScore",
     ),

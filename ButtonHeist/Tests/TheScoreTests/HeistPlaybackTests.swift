@@ -326,8 +326,7 @@ final class HeistPlanTests: XCTestCase {
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
-            expectation: WaitStep(predicate: .change(.screen()), timeout: 2)
-        )
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 2)))
 
         XCTAssertEqual(
             step.description,
@@ -355,11 +354,10 @@ final class HeistPlanTests: XCTestCase {
             body: [
                 .action(try ActionStep(
                     command: .activate(target),
-                    expectation: WaitStep(
+                    expectationPolicy: .expect(ActionExpectation(
                         predicate: .state(.missingTarget(target)),
                         timeout: 2
-                    )
-                )),
+                    )))),
                 .warn(WarnStep(message: "activated one")),
             ]
         )
@@ -369,11 +367,10 @@ final class HeistPlanTests: XCTestCase {
             [
                 .action(try ActionStep(
                     command: .activate(target),
-                    expectation: WaitStep(
+                    expectationPolicy: .expect(ActionExpectation(
                         predicate: .state(.missingTarget(target)),
                         timeout: 2
-                    )
-                )),
+                    )))),
                 .warn(WarnStep(message: "activated one")),
             ]
         )
