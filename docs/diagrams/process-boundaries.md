@@ -7,7 +7,7 @@ Button Heist in-process versus the out-of-process drivers. Out-of-process automa
 
 ```mermaid
 flowchart TD
-    subgraph oop["Out-of-process drivers (XCUITest / Appium stack)"]
+    subgraph oop["Out-of-process drivers"]
         direction TB
         TESTPROC["test runner process"]
         IPC["IPC round-trip<br/>per query, per action"]

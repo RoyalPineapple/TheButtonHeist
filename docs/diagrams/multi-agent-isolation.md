@@ -26,9 +26,9 @@ Server-side identity resolution (`InsideJobRuntimeConfiguration`):
 
 ```mermaid
 flowchart LR
-    TOKEN["token"] --> T1["INSIDEJOB_TOKEN env"] --> T2["API-provided"] --> T3["generated UUID v4<br/>logged at startup"]
-    PORT["port"] --> P1["INSIDEJOB_PORT env"] --> P2["API-provided"] --> P3["0 — OS-assigned"]
-    ID["instance id"] --> I1["INSIDEJOB_ID env"] --> I2["API-provided"] --> I3["first 8 chars of session UUID"]
+    TOKEN["token"] --> T1["INSIDEJOB_TOKEN env"] -- "unset" --> T2["API-provided"] -- "unset" --> T3["generated UUID v4<br/>logged at startup"]
+    PORT["port"] --> P1["INSIDEJOB_PORT env"] -- "unset" --> P2["API-provided"] -- "unset" --> P3["0 — OS-assigned"]
+    ID["instance id"] --> I1["INSIDEJOB_ID env"] -- "unset" --> I2["API-provided"] -- "unset" --> I3["first 8 chars of session UUID"]
 ```
 
 Notes:

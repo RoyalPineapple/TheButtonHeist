@@ -17,7 +17,7 @@ flowchart TD
         WARNS["warn(WarnStep)"]
         FAILS["fail(FailStep)"]
         NESTED["heist(HeistPlan)"]
-        INVOKE["invoke(HeistInvocationStep)<br/>RunHeist by name + argument"]
+        INVOKE["invoke(HeistInvocationStep)"]
         ACTION ~~~ COND
         COND ~~~ FES
         FES ~~~ WARNS
@@ -54,12 +54,12 @@ The predicate split:
 
 ```mermaid
 flowchart LR
-    subgraph statep["State predicates — frozen parse"]
+    subgraph statep["State predicates"]
         STATE["AccessibilityPredicate.state(State)<br/>exists · missing · existsTarget ·<br/>missingTarget · all"]
         NOTE1["evaluated against one settled capture —<br/>answers 'is the screen like this now?'"]
         STATE --- NOTE1
     end
-    subgraph changep["Change predicates — delta evidence"]
+    subgraph changep["Change predicates"]
         CHANGE["AccessibilityPredicate.changePredicate(Change)<br/>any · screenScope · elementsScope · allScopes<br/>and noChangePredicate"]
         NOTE2["require before/after settled captures —<br/>answer 'did the action change this?'<br/>never usable as search selectors"]
         CHANGE --- NOTE2
@@ -70,6 +70,7 @@ flowchart LR
 
 Notes:
 
+- `invoke(HeistInvocationStep)` is `RunHeist` by name plus an argument — the passable types are what that argument can be.
 - Targets have exactly one durable form: `ElementTarget.predicate(ElementPredicate, ordinal:)` — a semantic selector with an optional 0-based disambiguating ordinal. There is no coordinate target and no capture-local id target in the durable language (see [element-inflation.md](element-inflation.md)).
 - The state/change split is the headline design rule: a state predicate can gate control flow because it reads one frozen parse; a change predicate classifies an action's delta and therefore only exists attached to an action's expectation. Element deltas are expressed with `ElementUpdatePredicate.updated(_, before:, after:)`.
 - Wire discriminators for the loop steps are snake_case in `plan.json`: `for_each_element`, `for_each_string`, `repeat_until`.

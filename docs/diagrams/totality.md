@@ -9,14 +9,14 @@ Why every heist halts. Termination rests on two independent halves: structural g
 flowchart TD
     HALT["every heist halts"]
 
-    subgraph structural["Structural termination — admission-enforced"]
+    subgraph structural["Structural termination"]
         ACYCLIC["acyclic definition graph:<br/>HeistCallGraph rejects cycles —<br/>'heist runs must not be recursive'"]
         LIMITS["HeistPlanRuntimeSafetyLimits:<br/>maxDefinitions 250 · maxTotalSteps 500 ·<br/>maxNestedStepDepth 16"]
         FOREACH["forEachElement doubly bounded:<br/>initial-observation match count<br/>AND required limit greater than 0"]
         FORSTR["forEachString bounded:<br/>non-empty literal list ·<br/>maxForEachStringValues 100"]
     end
 
-    subgraph watchdog["Watchdog termination — runtime-enforced"]
+    subgraph watchdog["Watchdog termination"]
         WAITT["WaitStep.timeout mandatory<br/>defaultWaitTimeout 30 s · 0 = immediate check"]
         REPEATT["RepeatUntilStep.timeout mandatory<br/>capped by maxRepeatUntilTimeout 30 s"]
         SETTLET["settle hard timeout:<br/>SettleSession.defaultTimeoutMs 5000 —<br/>ends in SettleOutcome.timedOut, never blocks"]
@@ -28,5 +28,7 @@ flowchart TD
 
 Notes:
 
+- Structural bounds are admission-enforced (a violating plan never loads);
+  watchdog bounds are runtime-enforced (a loaded plan cannot wait forever).
 - The two halves are independent: even if every watchdog fired at its maximum, the structural bounds cap the total number of steps a run can attempt; even if a plan is structurally small, no single step can wait unboundedly.
 - The precise invariant underneath: **runtime state can be tested, never named.** A heist cannot bind a discovered element or screen into a variable and branch on it later — passables are `String` / `ElementTarget` / `Void` expressions resolved at use time, and loop domains are fixed by the initial observation or a literal list, so no runtime value can extend a computation the plan didn't already bound.

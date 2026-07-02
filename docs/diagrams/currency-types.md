@@ -7,7 +7,7 @@ The type families that carry UI state through the system, and the hard border be
 
 ```mermaid
 flowchart TD
-    subgraph internal["Internal — never crosses the wire"]
+    subgraph internal["Internal types"]
         WALK["recursiveAccessibilityHierarchy()<br/>parser tree walk"]
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         SCREEN["Screen<br/>semantic: SemanticScreen<br/>liveCapture: LiveCapture"]
@@ -19,7 +19,7 @@ flowchart TD
         STASH --> LIVET
     end
 
-    subgraph wireTypes["Wire — Codable, crosses the network"]
+    subgraph wireTypes["Wire types (Codable)"]
         HE["HeistElement<br/>label · value · traits · frame ·<br/>activationPointEvidence · actions"]
         ET["ElementTarget<br/>.predicate(ElementPredicate, ordinal:)"]
         EP["ElementPredicate<br/>label / identifier / value checks ·<br/>traits · excludeTraits"]

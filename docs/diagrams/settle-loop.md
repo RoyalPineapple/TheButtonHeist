@@ -7,41 +7,41 @@ The tripwire and the settle loop as cooperating mechanisms: TheTripwire watches 
 
 ```mermaid
 stateDiagram-v2
+    direction TB
     state "consecutiveCycles" as cycles
     state "quietWindow" as quiet
     state "settled(timeMs:)" as settled
     state "timedOut(timeMs:)" as timedOut
     state "cancelled(timeMs:)" as cancelled
 
-    [*] --> cycles : action delivered — tripwire baseline captured
-    [*] --> quiet : quiet-window mode (configured wait)
-
-    cycles --> cycles : fingerprint unchanged — quiet +1
-    cycles --> cycles : fingerprint changed — reset
-    cycles --> cycles : tripwireSignal changed — baseline reset
-    cycles --> settled : 3 consecutive quiet cycles (~300 ms floor)
-    quiet --> settled : window elapsed with no change
-
-    cycles --> timedOut : defaultTimeoutMs = 5000 elapsed
-    quiet --> timedOut : defaultTimeoutMs = 5000 elapsed
+    [*] --> cycles : action delivered
+    cycles --> cycles : fingerprint unchanged, quiet +1
+    cycles --> cycles : fingerprint or tripwireSignal changed, reset
+    cycles --> settled : 3 consecutive quiet cycles
+    cycles --> timedOut : defaultTimeoutMs = 5000
     cycles --> cancelled : context cancelled
-    quiet --> cancelled : context cancelled
+
+    [*] --> quiet : quiet-window mode
+    quiet --> settled : window elapsed unchanged
 
     settled --> [*]
     timedOut --> [*]
     cancelled --> [*]
 ```
 
+`quietWindow` shares the same `timedOut` and `cancelled` edges as
+`consecutiveCycles`; they are drawn once to keep the picture readable.
+
 The two clocks:
 
 ```mermaid
 flowchart TD
-    subgraph tripwire["TheTripwire — UIKit signals, never reads the AX tree"]
+    subgraph tripwire["TheTripwire — UIKit signals"]
         PULSE["CADisplayLink pulse<br/>default 10 Hz (BH_TRIPWIRE_PULSE_HZ)"]
         SIGNAL["TripwireSignal<br/>layer scan · VC identity · window stack"]
         PULSE --> SIGNAL
     end
-    subgraph settle["SettleSession — AX-tree fingerprint cycles"]
+    subgraph settle["SettleSession — AX tree"]
         PARSE["parse cycle every<br/>defaultCycleIntervalMs = 100"]
         FP["fingerprint per element:<br/>label · identifier · traits<br/>value + coarse geometry<br/>(masked for updatesFrequently)"]
         PARSE --> FP
