@@ -590,8 +590,8 @@ final class TheStashResolutionTests: XCTestCase {
 
         let action = bagman.accessibilityNotifications.beginActionWindow()
         bagman.accessibilityNotifications.record(
-            code: 1005,
-            notificationData: .none,
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
         )
         let screen = Screen.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
@@ -610,7 +610,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         XCTAssertEqual(
             bagman.accessibilityNotifications.pendingEvents().map(\.code),
-            [1005],
+            [1008],
             "The action window may claim attribution, but the heist owns the stream lifetime."
         )
     }
