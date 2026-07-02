@@ -103,8 +103,7 @@ private func invalidForEachElementJSON(parameter: String) throws -> Data {
 func actionStepExpectationWaiverRoundTrips() throws {
     let step = try ActionStep(
         command: .activate(.predicate(.label("Save"))),
-        expectationWaiver: "No durable semantic outcome"
-    )
+        expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))
 
     let data = try JSONEncoder().encode(step)
     let json = try JSONDecoder().decode(EncodedActionStepContract.self, from: data)
@@ -166,8 +165,7 @@ func `composition quality allows explicit expectation waiver`() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
-            expectationWaiver: "No durable semantic outcome"
-        )),
+            expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))),
     ])
 
     #expect(plan.lint(.compositionQuality).isEmpty)
@@ -180,8 +178,7 @@ func lintFlagsMechanicalCommands() throws {
         .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
-            expectation: WaitStep(predicate: .state(.exists(.label("Done"))), timeout: 1)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label("Done"))), timeout: 1)))),
     ])
 
     let messages = plan.lint(.strictTest).map(\.message)
@@ -1051,8 +1048,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.target(.predicate(.label("Sign In")))),
-            expectation: WaitStep(predicate: .state(.exists(.label("Home"))), timeout: 5)
-        )),
+            expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label("Home"))), timeout: 5)))),
         .wait(WaitStep(predicate: .state(.missing(.label("Loading"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [.warn(WarnStep(message: "home"))]),
@@ -1070,8 +1066,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .state(.missingTarget(.ref("target"))), timeout: 2)
-                )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.missingTarget(.ref("target"))), timeout: 2)))),
             ]
         )),
         .forEachString(try ForEachStringStep(
@@ -1080,11 +1075,10 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             body: [
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.predicate(.label("Add item")))),
-                    expectation: WaitStep(
+                    expectationPolicy: .expect(ActionExpectation(
                         predicate: .state(.exists(ElementPredicateTemplate(label: .exact(.ref("item"))))),
                         timeout: 2
-                    )
-                )),
+                    )))),
             ]
         )),
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),

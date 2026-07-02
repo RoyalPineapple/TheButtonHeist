@@ -338,8 +338,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
-                expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             .wait(WaitStep(predicate: .change(.screen()), timeout: 2)),
         ]
     ).describeHeist(named: "submit")
@@ -393,8 +392,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.predicate(.label("Checkout"))),
-                        expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
-                    )),
+                        expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                     .wait(WaitStep(predicate: .exists(.label("Confirm")), timeout: 1)),
                     .invoke(HeistInvocationStep(path: ["confirm"])),
                 ]

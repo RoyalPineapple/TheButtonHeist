@@ -456,7 +456,7 @@ private extension HeistPlan {
         case .wait(let step):
             return step
         case .action(let step):
-            return step.expectation
+            return step.expectationPolicy.expectedStep
         case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             return nil
         }

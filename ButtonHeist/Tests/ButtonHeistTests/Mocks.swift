@@ -334,7 +334,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         }
         let actionResult = actionResult(for: command, handler: handler)
         let expectation = actionResult.success
-            ? heistExpectation(for: action.expectation, handler: handler)
+            ? heistExpectation(for: action.expectationPolicy.expectedStep, handler: handler)
             : nil
         let failure = mockActionFailure(command: action.command, actionResult: actionResult, expectation: expectation?.result)
         let actionEvidence = expectation.map {

@@ -1,7 +1,6 @@
 public protocol HeistActionContent: HeistContent {
     var command: HeistActionCommand { get }
-    var expectation: WaitStep? { get }
-    var expectationWaiver: String? { get }
+    var expectationPolicy: ActionExpectationPolicy { get }
     var expectationValidationDiagnostics: [HeistBuildDiagnostic] { get }
 }
 
@@ -18,8 +17,7 @@ public extension HeistActionContent {
         guard expectationValidationDiagnostics.isEmpty else { return [] }
         return [makeActionStep(
             command,
-            expectation: expectation,
-            expectationWaiver: expectationWaiver
+            expectationPolicy: expectationPolicy
         )]
     }
 
@@ -28,12 +26,13 @@ public extension HeistActionContent {
         timeout: Double? = nil
     ) -> ActionContent {
         let priorExplicitTimeout = (self as? ActionContent)?.explicitExpectationTimeout
+        let existingExpectation = expectationPolicy.expectedStep
         let timeoutResult = composeExpectationTimeout(
-            existing: expectation,
+            existing: existingExpectation,
             existingExplicit: priorExplicitTimeout,
             nextExplicit: timeout
         )
-        let predicateResult = expectation.map {
+        let predicateResult = existingExpectation.map {
             composeExpectationPredicates(existing: $0.predicate, next: predicate)
         } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
         let validationDiagnostics = expectationValidationDiagnostics
@@ -42,8 +41,7 @@ public extension HeistActionContent {
 
         return ActionContent(
             command: command,
-            expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout),
-            expectationWaiver: nil,
+            expectationPolicy: .expect(ActionExpectation(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)),
             explicitExpectationTimeout: timeoutResult.explicitTimeout,
             expectationValidationDiagnostics: validationDiagnostics.map {
                 $0.withPath(command.wireType.rawValue)
@@ -64,10 +62,15 @@ public extension HeistActionContent {
     }
 
     func withoutExpectation(_ reason: String) -> ActionContent {
-        ActionContent(
+        let waiver: ActionExpectationWaiver
+        do {
+            waiver = try ActionExpectationWaiver(reason)
+        } catch {
+            preconditionFailure("ButtonHeistDSL constructed unsupported expectation waiver: \(error)")
+        }
+        return ActionContent(
             command: command,
-            expectation: nil,
-            expectationWaiver: reason,
+            expectationPolicy: .waived(waiver),
             explicitExpectationTimeout: nil,
             expectationValidationDiagnostics: []
         )
@@ -79,8 +82,7 @@ public extension HeistActionContent {
     ) -> RepeatActionUntilContent {
         RepeatActionUntilContent(
             command: command,
-            expectation: expectation,
-            expectationWaiver: expectationWaiver,
+            expectationPolicy: expectationPolicy,
             expectationValidationDiagnostics: expectationValidationDiagnostics,
             predicate: predicate,
             timeout: timeout
@@ -98,21 +100,18 @@ public extension HeistActionContent {
 
 public struct ActionContent: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     let explicitExpectationTimeout: Double?
 
     init(
         command: HeistActionCommand,
-        expectation: WaitStep? = nil,
-        expectationWaiver: String? = nil,
+        expectationPolicy: ActionExpectationPolicy = .default,
         explicitExpectationTimeout: Double? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
         self.explicitExpectationTimeout = explicitExpectationTimeout
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
@@ -120,18 +119,23 @@ public struct ActionContent: HeistActionContent {
 
 public struct RepeatActionUntilContent: HeistContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     public let predicate: AccessibilityPredicateExpr
     public let timeout: Double
 
     public var heistSteps: [HeistStep] {
         guard heistBuildDiagnostics.isEmpty else { return [] }
-        let progressExpectation = expectation ?? (expectationWaiver == nil ? WaitStep(
-            predicate: .change(),
-            timeout: defaultActionExpectationTimeout
-        ) : nil)
+        let progressPolicy: ActionExpectationPolicy
+        switch expectationPolicy {
+        case .default:
+            progressPolicy = .expect(ActionExpectation(
+                predicate: .change(),
+                timeout: defaultActionExpectationTimeout
+            ))
+        case .expect, .waived:
+            progressPolicy = expectationPolicy
+        }
         do {
             return [
                 .repeatUntil(try RepeatUntilStep(
@@ -140,8 +144,7 @@ public struct RepeatActionUntilContent: HeistContent {
                     body: [
                         makeActionStep(
                             command,
-                            expectation: progressExpectation,
-                            expectationWaiver: expectationWaiver
+                            expectationPolicy: progressPolicy
                         ),
                     ]
                 )),
@@ -165,8 +168,7 @@ public struct RepeatActionUntilContent: HeistContent {
 
 public struct Activate: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ target: ElementTarget) {
         self.init(.target(target))
@@ -174,20 +176,18 @@ public struct Activate: HeistActionContent {
 
     @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
-        self.init(command: .activate(target), expectation: nil)
+        self.init(command: .activate(target))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct Increment: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ target: ElementTarget) {
         self.init(.target(target))
@@ -195,20 +195,18 @@ public struct Increment: HeistActionContent {
 
     @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
-        self.init(command: .increment(target), expectation: nil)
+        self.init(command: .increment(target))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct Decrement: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ target: ElementTarget) {
         self.init(.target(target))
@@ -216,20 +214,18 @@ public struct Decrement: HeistActionContent {
 
     @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
-        self.init(command: .decrement(target), expectation: nil)
+        self.init(command: .decrement(target))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct TypeText: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ text: String, into target: ElementTarget? = nil) {
         self.init(text, into: target, replacingExisting: false)
@@ -284,20 +280,18 @@ public struct TypeText: HeistActionContent {
             text: text,
             target: target,
             replacingExisting: replacingExisting
-        ), expectation: nil)
+        ))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct ClearText: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ target: ElementTarget) {
         self.init(.target(target))
@@ -309,20 +303,18 @@ public struct ClearText: HeistActionContent {
             text: .literal(""),
             target: target,
             replacingExisting: true
-        ), expectation: nil)
+        ))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct CustomAction: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ name: String, on target: ElementTarget) {
         self.init(name, on: .target(target))
@@ -333,17 +325,15 @@ public struct CustomAction: HeistActionContent {
         self.init(command: .customAction(name: name, target: target))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct Rotor: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ name: String, on target: ElementTarget, direction: RotorDirection = .next) {
         self.init(name, on: .target(target), direction: direction)
@@ -354,82 +344,72 @@ public struct Rotor: HeistActionContent {
         self.init(command: .rotor(selection: .named(name), target: target, direction: direction))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct SetPasteboard: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ text: String) {
         self.init(command: .setPasteboard(SetPasteboardTarget(text: text)))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct TakeScreenshot: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init() {
         self.init(command: .takeScreenshot)
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct Edit: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init(_ action: EditAction) {
         self.init(command: .editAction(EditActionTarget(action: action)))
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public struct DismissKeyboard: HeistActionContent {
     public let command: HeistActionCommand
-    public let expectation: WaitStep?
-    public let expectationWaiver: String?
+    public let expectationPolicy: ActionExpectationPolicy
 
     public init() {
         self.init(command: .dismissKeyboard)
     }
 
-    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
         self.command = command
-        self.expectation = expectation
-        self.expectationWaiver = expectationWaiver
+        self.expectationPolicy = expectationPolicy
     }
 }
 
 public enum Mechanical {
     public struct Tap: HeistActionContent {
         public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
+        public let expectationPolicy: ActionExpectationPolicy
 
         @_disfavoredOverload
         public init(_ target: ElementTarget) {
@@ -444,17 +424,15 @@ public enum Mechanical {
             self.init(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
         }
 
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
             self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
+            self.expectationPolicy = expectationPolicy
         }
     }
 
     public struct LongPress: HeistActionContent {
         public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
+        public let expectationPolicy: ActionExpectationPolicy
 
         public init(_ target: ElementTarget, duration: GestureDuration = .longPressDefault) {
             self.init(command: .mechanicalLongPress(LongPressTarget(selection: .element(target), duration: duration)))
@@ -482,17 +460,15 @@ public enum Mechanical {
             )
         }
 
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
             self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
+            self.expectationPolicy = expectationPolicy
         }
     }
 
     public struct Swipe: HeistActionContent {
         public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
+        public let expectationPolicy: ActionExpectationPolicy
 
         public init(_ target: ElementTarget, _ direction: SwipeDirection) {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction))))
@@ -510,17 +486,15 @@ public enum Mechanical {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(start), destination: .direction(direction)))))
         }
 
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
             self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
+            self.expectationPolicy = expectationPolicy
         }
     }
 
     public struct Drag: HeistActionContent {
         public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
+        public let expectationPolicy: ActionExpectationPolicy
 
         public init(_ target: ElementTarget, to end: ScreenPoint) {
             self.init(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
@@ -534,24 +508,21 @@ public enum Mechanical {
             self.init(command: .mechanicalDrag(DragTarget(start: .coordinate(start), end: end)))
         }
 
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
             self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
+            self.expectationPolicy = expectationPolicy
         }
     }
 }
 
 private func makeActionStep(
     _ command: HeistActionCommand,
-    expectation: WaitStep? = nil,
-    expectationWaiver: String? = nil
+    expectationPolicy: ActionExpectationPolicy = .default
 ) -> HeistStep {
     do {
         return .action(try ActionStep(
             command: command,
-            expectation: expectation,
-            expectationWaiver: expectationWaiver
+            expectationPolicy: expectationPolicy
         ))
     } catch {
         preconditionFailure("ButtonHeistDSL constructed unsupported action command: \(command.wireType.rawValue)")

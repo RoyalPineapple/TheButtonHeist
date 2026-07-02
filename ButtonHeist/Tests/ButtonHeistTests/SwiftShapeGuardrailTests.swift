@@ -266,6 +266,28 @@ import Testing
         #expect(!transportSource.contains("responseTypeMismatchError"))
     }
 
+    @Test func `action expectation authoring uses a typed policy instead of optional bags`() throws {
+        let actionStepSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/ThePlans/ActionStep.swift"
+        ).removingCommentsAndStringLiteralContents()
+        #expect(actionStepSource.contains("public struct ActionExpectation"))
+        #expect(actionStepSource.contains("public struct ActionExpectationWaiver"))
+        #expect(actionStepSource.contains("public enum ActionExpectationPolicy"))
+        #expect(actionStepSource.contains("case expect(ActionExpectation)"))
+        #expect(actionStepSource.contains("public let expectationPolicy: ActionExpectationPolicy"))
+        #expect(actionStepSource.matches(of: #"public\s+let\s+expectation\s*:\s*WaitStep[?]"#).isEmpty)
+        #expect(actionStepSource.matches(of: #"public\s+let\s+expectationWaiver\s*:"#).isEmpty)
+        #expect(actionStepSource.matches(of: #"expectationWaiver\s*:\s*String[?]"#).isEmpty)
+
+        let heistActionsSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/ThePlans/HeistActions.swift"
+        ).removingCommentsAndStringLiteralContents()
+        #expect(heistActionsSource.contains("var expectationPolicy: ActionExpectationPolicy { get }"))
+        #expect(heistActionsSource.matches(of: #"var\s+expectation\s*:\s*WaitStep[?]\s*\{\s*get\s*\}"#).isEmpty)
+        #expect(heistActionsSource.matches(of: #"var\s+expectationWaiver\s*:"#).isEmpty)
+        #expect(heistActionsSource.matches(of: #"let\s+expectationWaiver\s*:"#).isEmpty)
+    }
+
     @Test func `public and package production APIs do not expose named tuple surfaces`() throws {
         let root = repositoryRoot()
         let productionFiles = try productionSwiftFiles(root: root)

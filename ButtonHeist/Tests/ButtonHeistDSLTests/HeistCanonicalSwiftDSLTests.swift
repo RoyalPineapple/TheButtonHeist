@@ -143,8 +143,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .typeText(text: .ref("term"), target: .label(.contains("Search"))),
-                expectation: WaitStep(predicate: .exists(.value(.ref("term"))), timeout: 2)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value(.ref("term"))), timeout: 2)))),
         ]
     )
     let pressRowDefinition = try HeistPlan(
@@ -153,8 +152,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.ref("row")),
-                expectation: WaitStep(predicate: .missing(.ref("row")), timeout: 1)
-            )),
+                expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("row")), timeout: 1)))),
         ]
     )
     let rowPredicate = ElementPredicate.element(
@@ -196,8 +194,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
                 body: [
                     .action(try ActionStep(
                         command: .typeText(text: .ref("item"), target: .label(.contains("Search"))),
-                        expectation: WaitStep(predicate: .exists(.label(.ref("item"))), timeout: 2)
-                    )),
+                        expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label(.ref("item"))), timeout: 2)))),
                 ]
             )),
             .forEachElement(try ForEachElementStep(
@@ -609,7 +606,7 @@ private let fullASTJSON = """
           "payload": { "label": "Sign In" }
         },
         "expectation": {
-          "predicate": { "type": "exists", "element": { "label": "Home" } },
+          "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Home" }] } },
           "timeout": 5
         }
       }
@@ -617,7 +614,7 @@ private let fullASTJSON = """
     {
       "type": "wait",
       "wait": {
-        "predicate": { "type": "missing", "element": { "label": "Loading" } },
+        "predicate": { "type": "missing", "element": { "checks": [{ "kind": "label", "match": "Loading" }] } },
         "timeout": 1
       }
     },
@@ -626,7 +623,7 @@ private let fullASTJSON = """
       "conditional": {
         "cases": [
           {
-            "predicate": { "type": "exists", "element": { "label": "Home" } },
+            "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Home" }] } },
             "body": [
               { "type": "warn", "warn": { "message": "home" } }
             ]
@@ -640,7 +637,7 @@ private let fullASTJSON = """
     {
       "type": "wait",
       "wait": {
-        "predicate": { "type": "exists", "element": { "label": "Results" } },
+        "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Results" }] } },
         "timeout": 8,
         "else_body": [
           { "type": "fail", "fail": { "message": "timeout" } }
@@ -654,7 +651,7 @@ private let fullASTJSON = """
     {
       "type": "for_each_element",
       "for_each_element": {
-        "matching": { "label": "Delete" },
+        "matching": { "checks": [{ "kind": "label", "match": "Delete" }] },
         "limit": 20,
         "parameter": "target",
         "body": [
@@ -691,7 +688,7 @@ private let fullASTJSON = """
                 }
               },
               "expectation": {
-                "predicate": { "type": "exists", "element": { "label_ref": "item" } },
+                "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "ref": "item" } }] } },
                 "timeout": 2
               }
             }
@@ -712,7 +709,7 @@ private let invalidElementLoopParameterJSON = """
     {
       "type": "for_each_element",
       "for_each_element": {
-        "matching": { "label": "Delete" },
+        "matching": { "checks": [{ "kind": "label", "match": "Delete" }] },
         "limit": 20,
         "parameter": "target-name",
         "body": [

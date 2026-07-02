@@ -118,8 +118,13 @@ extension TheFence {
             var steps: [HeistStep] = []
             let commands = actions.values
             for (index, command) in commands.enumerated() {
-                let expectation = index == commands.count - 1 ? expectationStep : nil
-                steps.append(.action(try ActionStep(command: command, expectation: expectation)))
+                let expectationPolicy: ActionExpectationPolicy
+                if index == commands.count - 1, let expectationStep {
+                    expectationPolicy = .expect(try ActionExpectation(expectationStep))
+                } else {
+                    expectationPolicy = .default
+                }
+                steps.append(.action(try ActionStep(command: command, expectationPolicy: expectationPolicy)))
             }
             return try HeistPlan(body: steps)
         }
@@ -164,7 +169,7 @@ extension TheFence {
             default:
                 actionBudget = Timeouts.actionSeconds
             }
-            guard let expectation = action.expectation else { return actionBudget }
+            guard let expectation = action.expectationPolicy.expectedStep else { return actionBudget }
             return actionBudget + min(expectation.timeout, defaultWaitTimeout) + config.postActionExpectationTimeoutBuffer
         }
     }

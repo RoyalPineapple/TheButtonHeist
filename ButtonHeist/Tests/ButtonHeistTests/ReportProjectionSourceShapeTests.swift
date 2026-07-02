@@ -194,7 +194,7 @@ import Testing
         #expect(!scoreReport.contains("actionEvidence?.dispatchResult"))
         #expect(!scoreReport.contains("actionEvidence?.reportedResult"))
         #expect(!scoreReport.contains("actionEvidence?.traceResult"))
-        #expect(scoreReport.contains("case .action(let evidence):\n            return evidence.dispatchResult"))
+        #expect(scoreReport.contains("return evidence.dispatchResult"))
         #expect(scoreReport.contains("case .action(let evidence):\n            return evidence.reportedResult"))
         #expect(scoreReport.contains("case .action(let evidence):\n            return evidence.traceResult"))
         #expect(

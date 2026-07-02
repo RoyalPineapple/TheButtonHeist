@@ -594,8 +594,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
-            expectation: WaitStep(predicate: expected, timeout: 1)
-        ))
+            expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
         let casePredicateState = StatePredicateExpr.exists(.label("Home"))
         let casePredicateRuntime = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(cases: [
@@ -637,8 +636,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let action = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
-            expectation: WaitStep(predicate: expected, timeout: 1)
-        ))
+            expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
         let plan = try HeistPlan(body: [
             .warn(WarnStep(message: "starting checkout")),
             action,

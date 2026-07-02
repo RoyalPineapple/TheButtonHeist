@@ -541,7 +541,7 @@ private struct HeistSemanticSurfaceBuilder {
         case .action(let action):
             appendUnique(action.command.wireType, to: &actionCommands)
             collectTargets(from: action.command)
-            if let expectation = action.expectation {
+            if let expectation = action.expectationPolicy.expectedStep {
                 collectExpectation(expectation.predicate)
             }
 

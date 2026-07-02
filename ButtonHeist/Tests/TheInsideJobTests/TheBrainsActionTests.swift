@@ -1797,8 +1797,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
-                expectation: expectation
-            )),
+                expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1833,11 +1832,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.target(target)),
-                expectation: WaitStep(
+                expectationPolicy: .expect(ActionExpectation(
                     predicate: .exists(ElementPredicate(label: "Long List")),
                     timeout: 0.01
-                )
-            )),
+                )))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -2371,8 +2369,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Controls Demo"))))),
-                expectation: expectation
-            )),
+                expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -2409,8 +2406,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
-                expectation: expectation
-            )),
+                expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -2983,11 +2979,10 @@ final class TheBrainsActionTests: XCTestCase {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("target")),
-                        expectation: WaitStep(
+                        expectationPolicy: .expect(ActionExpectation(
                             predicate: .state(.missingTarget(.ref("target"))),
                             timeout: 2
-                        )
-                    )),
+                        )))),
                 ]
             )),
         ])
