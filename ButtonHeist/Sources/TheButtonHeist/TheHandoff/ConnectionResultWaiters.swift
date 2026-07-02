@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 enum HandoffConnectionAttemptResult: Equatable {
     case connected
@@ -10,27 +11,27 @@ enum HandoffConnectionAttemptResult: Equatable {
 final class ConnectionResultWaiters {
     private struct Waiter {
         let attemptID: UUID
-        let continuation: CheckedContinuation<Void, Error>
+        let completion: OneShotContinuation<Result<Void, Error>>
 
         func resolve(with result: HandoffConnectionAttemptResult) {
             switch result {
             case .connected:
-                continuation.resume(returning: ())
+                completion.resume(returning: .success(()))
             case .failed(let failure):
-                continuation.resume(throwing: failure)
+                completion.resume(returning: .failure(failure))
             }
         }
 
         func cancel() {
-            continuation.resume(throwing: CancellationError())
+            completion.resume(returning: .failure(CancellationError()))
         }
     }
 
     private var waiters: [UUID: Waiter] = [:]
 
-    func register(id: UUID, attemptID: UUID, continuation: CheckedContinuation<Void, Error>) {
+    func register(id: UUID, attemptID: UUID, completion: OneShotContinuation<Result<Void, Error>>) {
         assert(waiters[id] == nil, "ConnectionResultWaiters registered duplicate waiter id")
-        waiters[id] = Waiter(attemptID: attemptID, continuation: continuation)
+        waiters[id] = Waiter(attemptID: attemptID, completion: completion)
     }
 
     func cancel(id: UUID) {

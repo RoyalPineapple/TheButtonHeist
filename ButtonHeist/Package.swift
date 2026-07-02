@@ -175,7 +175,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: [
-                "ButtonHeistTestSupport", "ButtonHeist", "ThePlans", "TheScore",
+                "ButtonHeistTestSupport", "ButtonHeist", "ButtonHeistSupport", "ThePlans", "TheScore",
             ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

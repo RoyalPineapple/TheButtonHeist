@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 /// Invariant: runtime phase, live connection handle, keepalive, attempt failure,
 /// and result waiters advance together. The public `phase` is a projection of
@@ -274,23 +275,26 @@ final class HandoffConnectionLifecycle {
         }
         defer { timeoutTask.cancel() }
 
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Error>, Never>) in
+                let completion = OneShotContinuation<Result<Void, Error>>()
+                _ = completion.register(continuation)
                 if Task.isCancelled {
-                    continuation.resume(throwing: CancellationError())
+                    completion.resume(returning: .failure(CancellationError()))
                     return
                 }
                 guard activeAttemptID == attemptID else {
-                    continuation.resume(throwing: HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage))
+                    completion.resume(returning: .failure(HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)))
                     return
                 }
-                waiters.register(id: waiterID, attemptID: attemptID, continuation: continuation)
+                waiters.register(id: waiterID, attemptID: attemptID, completion: completion)
             }
         } onCancel: {
             Task { @ButtonHeistActor [weak self] in
                 self?.waiters.cancel(id: waiterID)
             }
         }
+        try result.get()
     }
 
     @discardableResult
