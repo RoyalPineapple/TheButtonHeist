@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_RECEIPTS_DIR="${BUTTONHEIST_RECEIPTS_DIR:-$REPO_ROOT/.rp1/work/heist-receipts/manual}"
 LAST_PASS_DIR="$DEFAULT_RECEIPTS_DIR"
 NEW_FAIL_DIR="$DEFAULT_RECEIPTS_DIR"
-DOCTOR="${BUTTONHEIST_DOCTOR:-$REPO_ROOT/ButtonHeist/.build/debug/heist-doctor}"
+DOCTOR="${BUTTONHEIST_DOCTOR:-$REPO_ROOT/.build/debug/heist-doctor}"
 FORMAT="${BUTTONHEIST_DOCTOR_FORMAT:-human}"
 STEP_PATH=""
 BUILD_DOCTOR=true
@@ -19,7 +19,7 @@ Usage: scripts/heist-doctor-from-receipts.sh [options]
 Options:
   --last-pass-dir DIR  Root containing passed receipt artifacts.
   --new-fail-dir DIR   Root containing failed receipt artifacts.
-  --doctor PATH        heist-doctor executable. Defaults to ButtonHeist/.build/debug/heist-doctor.
+  --doctor PATH        heist-doctor executable. Defaults to .build/debug/heist-doctor.
   --format FORMAT      Doctor output format: human or json. Defaults to human.
   --step-path PATH     Optional action step path to pass to heist-doctor.
   --no-build           Do not build heist-doctor when the executable is missing.
@@ -99,7 +99,7 @@ if [[ ! -d "$NEW_FAIL_DIR" ]]; then
 fi
 
 if [[ ! -x "$DOCTOR" ]]; then
-    if [[ "$BUILD_DOCTOR" == true && "$DOCTOR" == "$REPO_ROOT/ButtonHeist/.build/debug/heist-doctor" ]]; then
+    if [[ "$BUILD_DOCTOR" == true && "$DOCTOR" == "$REPO_ROOT/.build/debug/heist-doctor" ]]; then
         swift build --package-path "$REPO_ROOT/ButtonHeist" --product heist-doctor >/dev/null
     else
         echo "Error: heist-doctor executable not found: $DOCTOR" >&2

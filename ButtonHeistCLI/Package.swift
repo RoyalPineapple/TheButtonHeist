@@ -10,8 +10,8 @@ let package = Package(
         .executable(name: "buttonheist", targets: ["ButtonHeistCLIExe"])
     ],
     dependencies: [
-        .package(path: "../ButtonHeist"),
-        .package(path: "../submodules/AccessibilitySnapshotBH"),
+        .package(name: "ButtonHeist", path: ".."),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.18.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0"))
     ],
     targets: [

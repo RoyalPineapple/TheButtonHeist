@@ -90,9 +90,6 @@ jobs:
           scripts/validate-release-contract.sh
           echo "Version $TAG_VERSION verified across tag, release contract, and source."
 
-      - name: Verify package manifest drift guard
-        run: scripts/check-package-manifest-drift.sh
-
       - name: Build CLI (universal)
         run: |
           cd ButtonHeistCLI
@@ -117,14 +114,14 @@ jobs:
 
       - name: Build heist-plan compiler artifacts (arm64)
         run: |
-          swift build --package-path ButtonHeist -c release --arch arm64 --product heist-plan \
+          swift build -c release --arch arm64 --product heist-plan \
             -Xswiftc -enable-library-evolution \
             -Xswiftc -emit-module-interface
-          test -x ButtonHeist/.build/arm64-apple-macosx/release/heist-plan
-          test -f ButtonHeist/.build/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule
-          test -f ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface
-          test -f ButtonHeist/.build/arm64-apple-macosx/release/description.json
-          find ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build -name '*.swift.o' -print -quit | grep -q .
+          test -x .build/arm64-apple-macosx/release/heist-plan
+          test -f .build/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule
+          test -f .build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface
+          test -f .build/arm64-apple-macosx/release/description.json
+          find .build/arm64-apple-macosx/release/ThePlans.build -name '*.swift.o' -print -quit | grep -q .
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -195,16 +192,16 @@ jobs:
 
           # CLI + compiler artifacts
           cp ButtonHeistCLI/.build/buttonheist dist/
-          cp ButtonHeist/.build/arm64-apple-macosx/release/heist-plan dist/
+          cp .build/arm64-apple-macosx/release/heist-plan dist/
           mkdir -p dist/ThePlans/arm64-apple-macosx/release/Modules
           cp -R \
-            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build \
+            .build/arm64-apple-macosx/release/ThePlans.build \
             dist/ThePlans/arm64-apple-macosx/release/
           cp \
-            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface \
-            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.private.swiftinterface \
+            .build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface \
+            .build/arm64-apple-macosx/release/ThePlans.build/ThePlans.private.swiftinterface \
             dist/ThePlans/arm64-apple-macosx/release/Modules/
-          cp ButtonHeist/.build/arm64-apple-macosx/release/description.json \
+          cp .build/arm64-apple-macosx/release/description.json \
             dist/ThePlans/arm64-apple-macosx/release/
           tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist heist-plan ThePlans
           rm dist/buttonheist

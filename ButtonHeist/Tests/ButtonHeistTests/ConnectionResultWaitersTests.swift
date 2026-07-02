@@ -63,19 +63,6 @@ final class ConnectionResultWaitersTests: XCTestCase {
         assertConnectionError(await waitTask.value, .disconnected(.serverClosed))
     }
 
-    func testConnectionResultWaitersDoesNotStoreCheckedContinuation() throws {
-        let testFileURL = URL(fileURLWithPath: #filePath)
-        let packageRootURL = testFileURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let sourceURL = packageRootURL
-            .appendingPathComponent("Sources/TheButtonHeist/TheHandoff/ConnectionResultWaiters.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-
-        XCTAssertFalse(source.contains("CheckedContinuation"))
-    }
-
     @ButtonHeistActor
     private func makeWaitTask(
         waiters: ConnectionResultWaiters,

@@ -385,8 +385,8 @@ private struct ThePlansBuildArtifacts {
                 \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
                 (expected Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o, or \
                 ThePlans.framework in an Xcode products directory). \
-                Build them with `swift build --package-path ButtonHeist --product heist-plan` \
-                and point \(environmentOverrideKey) at ButtonHeist/.build/debug.
+                Build them with `swift build --product heist-plan` \
+                and point \(environmentOverrideKey) at .build/debug.
                 """
             )
         }
@@ -441,7 +441,7 @@ private struct ThePlansBuildArtifacts {
             No built ThePlans artifacts found in the installed lib/ThePlans directory or under \
             \(localBuildSummary). \
             Install Button Heist with heist-plan compiler artifacts, build them with \
-            `swift build --package-path ButtonHeist --product heist-plan`, or set \
+            `swift build --product heist-plan`, or set \
             \(environmentOverrideKey) to a directory containing \
             Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o. \
             Xcode test runs can also provide a products directory containing ThePlans.framework.

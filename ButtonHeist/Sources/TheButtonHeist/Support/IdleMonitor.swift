@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 /// Fires a callback after a period of inactivity.
 /// Call `resetTimer()` after each activity event. The timer restarts from zero each time.

@@ -71,24 +71,15 @@ fi
 # Staged-only lint misses pre-existing violations in unmodified files.
 swiftlint lint --strict --quiet
 
-# If Tuist config files are staged, regenerate and verify no drift
-tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift' 'Tuist/ProjectDescriptionHelpers/*.swift')
+# If Tuist config files are staged, regenerate ignored project files as a sanity check.
+tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift')
 if [[ -n "$tuist_files" ]]; then
-    echo "Tuist config changed — regenerating to check for drift..."
+    echo "Tuist config changed — regenerating ignored project files..."
     run_tuist install >/dev/null 2>&1 || true
     if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
-        # PR #328 M3: cleaner failures propagate via `set -e`.
         scripts/clean-generated-projects.sh >/dev/null
-
-        drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
-        if [[ -n "$drift" ]]; then
-            echo "error: tuist generate produced unstaged changes:"
-            echo "$drift"
-            echo "Run scripts/generate-project.sh and stage the result before committing."
-            exit 1
-        fi
     else
         scripts/clean-generated-projects.sh >/dev/null || true
-        echo "warning: tuist generate failed, skipping drift check"
+        echo "warning: tuist generate failed; run scripts/generate-project.sh manually"
     fi
 fi

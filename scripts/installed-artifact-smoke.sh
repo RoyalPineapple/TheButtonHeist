@@ -24,8 +24,6 @@ EXPLICIT_PREFIX=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MCP_REFERENCE_FILE="${BUTTONHEIST_MCP_REFERENCE_FILE:-$REPO_ROOT/docs/reference/mcp-tools.md}"
-
 TMP_DIR=""
 RUN_TMP=""
 PREFIX_CANDIDATES=()
@@ -300,15 +298,12 @@ require_dir() {
 smoke_mcp_tools() {
     local timeout="$1"
     local binary="$2"
-    local reference_file="$3"
-    local home_dir="$4"
-    local storage_dir="$5"
+    local home_dir="$3"
+    local storage_dir="$4"
 
-    python3 - "$timeout" "$binary" "$reference_file" "$home_dir" "$storage_dir" <<'PY'
+    python3 - "$timeout" "$binary" "$home_dir" "$storage_dir" <<'PY'
 import json
 import os
-import pathlib
-import re
 import selectors
 import subprocess
 import sys
@@ -316,9 +311,8 @@ import time
 
 timeout = float(sys.argv[1])
 binary = sys.argv[2]
-reference_file = pathlib.Path(sys.argv[3])
-home_dir = sys.argv[4]
-storage_dir = sys.argv[5]
+home_dir = sys.argv[3]
+storage_dir = sys.argv[4]
 
 
 def fail(message):
@@ -326,29 +320,6 @@ def fail(message):
     raise SystemExit(1)
 
 
-def expected_tool_names():
-    try:
-        text = reference_file.read_text(encoding="utf-8")
-    except OSError as error:
-        fail(f"failed to read generated MCP tool reference {reference_file}: {error}")
-
-    summary_start = text.find("## Summary")
-    details_start = text.find("## Details")
-    if summary_start == -1 or details_start == -1 or details_start <= summary_start:
-        fail(f"generated MCP tool reference has no bounded Summary table: {reference_file}")
-
-    names = []
-    for line in text[summary_start:details_start].splitlines():
-        match = re.match(r"\|\s*`([^`]+)`\s*\|", line)
-        if match:
-            names.append(match.group(1))
-
-    if not names:
-        fail(f"generated MCP tool reference contains no tool names: {reference_file}")
-    return sorted(names)
-
-
-expected = expected_tool_names()
 env = os.environ.copy()
 env.update({
     "HOME": home_dir,
@@ -482,15 +453,15 @@ try:
     if any(name is None for name in observed_names):
         fail(f"tools/list returned a tool without a name: {tools_result}")
     observed = sorted(observed_names)
-    if observed != expected:
-        missing = sorted(set(expected) - set(observed))
-        extra = sorted(set(observed) - set(expected))
-        fail(
-            "tools/list names differ from generated MCP reference "
-            f"{reference_file}\nmissing: {missing}\nextra: {extra}\nobserved: {observed}\nexpected: {expected}"
-        )
+    if not observed:
+        fail("tools/list returned no tools")
+    if len(observed) != len(set(observed)):
+        fail(f"tools/list returned duplicate tool names: {observed}")
+    for tool in tools_result.get("tools", []):
+        if not isinstance(tool.get("inputSchema"), dict):
+            fail(f"tool {tool.get('name')} did not include an input schema: {tool}")
 
-    print(f"buttonheist-mcp listed {len(observed)} generated tools")
+    print(f"buttonheist-mcp listed {len(observed)} descriptor-owned tools")
 finally:
     stop_process()
 PY
@@ -556,7 +527,7 @@ if [[ -n "$EXPECTED_VERSION" && "$version" != "$EXPECTED_VERSION" ]]; then
 fi
 ok "buttonheist --version ($version)"
 
-if output="$(smoke_mcp_tools "$MCP_TIMEOUT" "$BUTTONHEIST_MCP" "$MCP_REFERENCE_FILE" "$SMOKE_HOME" "$RUN_TMP/storage" 2>&1)"; then
+if output="$(smoke_mcp_tools "$MCP_TIMEOUT" "$BUTTONHEIST_MCP" "$SMOKE_HOME" "$RUN_TMP/storage" 2>&1)"; then
     ok "$output"
 else
     status=$?

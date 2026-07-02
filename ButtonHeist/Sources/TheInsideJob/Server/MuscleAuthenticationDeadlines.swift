@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import ButtonHeistSupport
 
 final class MuscleAuthenticationDeadlines {
 

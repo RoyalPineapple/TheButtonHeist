@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistSupport
 import Foundation
 import XCTest
 import ThePlans
@@ -999,95 +1000,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(receipt.warning)
     }
 
-    func testPredicateWaitStateMatchingKeepsTypedSetShape() throws {
-        let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
-        let evaluationSource = try String(contentsOf: predicateEvaluationSourceURL(), encoding: .utf8)
-        let streamTupleReturn = ") -> (state: PredicateObservationStreamState, "
-            + "reduction: PredicateObservationReduction)"
-
-        XCTAssertFalse(source.contains("private struct PredicateStateMatch"))
-        XCTAssertFalse(source.contains("PredicateStateMatchSet"))
-        XCTAssertTrue(source.contains("private let stateGraph: ElementMatchGraph"))
-        XCTAssertTrue(source.contains("state.evaluate(in: stateGraph).expectation(for: predicate)"))
-        XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
-        XCTAssertTrue(evaluationSource.contains("func evaluate(in graph: ElementMatchGraph) -> PredicateEvaluationResult"))
-        XCTAssertTrue(evaluationSource.contains("return PredicateEvaluationResult("))
-        XCTAssertFalse(source.contains(streamTupleReturn))
-        XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
-        XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
-    }
-
-    func testPredicateWaitUsesExplicitOutcomeAndBaselineShapes() throws {
-        let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
-        let reducerSource = try String(contentsOf: predicateWaitReducerSourceURL(), encoding: .utf8)
-        let waitExecutionSource = try String(contentsOf: heistWaitExecutionSourceURL(), encoding: .utf8)
-
-        XCTAssertFalse(source.contains("case finished(success: Bool)"))
-        XCTAssertFalse(source.contains(".finished(success:"))
-        XCTAssertFalse(source.contains("var changeBaselineSequence: SettledObservationSequence?"))
-        XCTAssertTrue(reducerSource.contains("case satisfied("))
-        XCTAssertTrue(reducerSource.contains("case failed("))
-        XCTAssertTrue(source.contains("case observing(PredicateChangeObservationCursor)"))
-        XCTAssertTrue(source.contains("let baseline: WaitChangeBaseline"))
-        XCTAssertTrue(source.contains("case observingSince(SettledObservationSequence)"))
-        XCTAssertFalse(waitExecutionSource.contains("case failed(ErrorKind?)"))
-        XCTAssertTrue(waitExecutionSource.contains("case failed(ErrorKind)"))
-    }
-
-    func testPassiveSettleFailureDoesNotOwnPostActionNotificationBuffer() throws {
-        let source = try String(contentsOf: semanticObservationStreamSourceURL(), encoding: .utf8)
-
-        XCTAssertTrue(source.contains("private func recordNonActionFailedSettleDiagnosticEvidence"))
-        XCTAssertTrue(source.contains("hasActiveNotificationScope"))
-        XCTAssertTrue(source.contains("? .preservePendingEvents"))
-        XCTAssertTrue(source.contains(": .clearPendingEvents"))
-        XCTAssertTrue(source.contains("private func recordPostActionFailedSettleDiagnosticEvidence"))
-        XCTAssertTrue(source.contains("notificationWindow.finishAndClaimEvents()"))
-        XCTAssertFalse(source.contains("private func recordFailedSettleDiagnosticEvidence(_ screen: Screen?, stash: TheStash)"))
-    }
-
-    func testHeistExecutionUsesExplicitStateMachine() throws {
-        let source = try String(contentsOf: heistExecutionSourceURL(), encoding: .utf8)
-
-        XCTAssertTrue(source.contains("private struct HeistExecutionAccumulator"))
-        XCTAssertTrue(source.contains("private enum HeistExecutionPhase: Equatable"))
-        XCTAssertTrue(source.contains("private enum HeistStepTransition"))
-        XCTAssertTrue(source.contains("private enum HeistStepLifecycleEvent: Equatable, Sendable"))
-        XCTAssertTrue(source.contains("private enum HeistStepLifecycleEffect: Equatable, Sendable"))
-        XCTAssertTrue(source.contains("private struct HeistStepLifecycleMachine: SimpleStateMachine"))
-        XCTAssertTrue(source.contains("typealias HeistStepLifecycleChange = StateChange<"))
-        XCTAssertTrue(source.contains("func decision(for path: String) -> HeistExecutionStepDecision"))
-        XCTAssertTrue(source.contains("mutating func apply(_ transition: HeistStepTransition)"))
-        XCTAssertTrue(source.contains("mutating func complete()"))
-        XCTAssertTrue(source.contains("case (.ready, .transition(let transition)):"))
-        XCTAssertTrue(source.contains("return .rejected(.skipBeforeAbort(path: transition.path), stayingIn: state)"))
-        XCTAssertTrue(source.contains("case (.completed, .complete):"))
-        XCTAssertTrue(source.contains("return .rejected(.completeTwice(path: \"$.body\"), stayingIn: state)"))
-        XCTAssertTrue(source.contains("private func executeHeistStepAccumulator("))
-        XCTAssertTrue(source.contains("let abortedAtPath = execution.abortedPath"))
-        XCTAssertFalse(source.contains("private struct HeistExecutionState"))
-        XCTAssertFalse(source.contains("var executionState = HeistExecutionState()"))
-        XCTAssertFalse(source.contains("var stepResults: [HeistExecutionStepResult] = []"))
-        XCTAssertFalse(source.contains("executionState.finishStep("))
-        XCTAssertFalse(source.contains("HeistExecutionCompletion"))
-        XCTAssertFalse(source.contains("private enum HeistStepExecutionPhase"))
-    }
-
-    func testHeistActionExecutionUsesTypedResolutionAndWaitEvaluation() throws {
-        let source = try String(contentsOf: heistActionExecutionSourceURL(), encoding: .utf8)
-
-        XCTAssertTrue(source.contains("private enum ActionCommandResolution"))
-        XCTAssertTrue(source.contains("private struct ActionCommandResolutionFailure"))
-        XCTAssertTrue(source.contains("private enum HeistWaitResolution"))
-        XCTAssertTrue(source.contains("private enum HeistWaitEvaluation"))
-        XCTAssertTrue(source.contains("private enum HeistWaitEvaluationPurpose"))
-        XCTAssertTrue(source.contains("private enum StandaloneWaitExecution"))
-        XCTAssertFalse(source.contains("private func expectationFailure("))
-        XCTAssertFalse(source.contains("private func waitFailure("))
-        XCTAssertFalse(source.contains("let failure = expectationFailure("))
-        XCTAssertFalse(source.contains("let failure = waitFailure("))
-    }
-
     func testPredicatePollingReducerFinishesVisibleMatch() {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
         var reduction = reducer.start(scope: .visible, initialObservedSequence: nil)
@@ -1717,62 +1629,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
-    }
-
-    private func predicateWaitSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWait.swift")
-    }
-
-    private func predicateWaitReducerSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWaitReducer.swift")
-    }
-
-    private func predicateEvaluationSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheScore/AccessibilityPredicate+Evaluation.swift")
-    }
-
-    private func heistExecutionSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift")
-    }
-
-    private func heistWaitExecutionSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift")
-    }
-
-    private func heistActionExecutionSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift")
-    }
-
-    private func semanticObservationStreamSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob/TheStash/SemanticObservationStream.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {

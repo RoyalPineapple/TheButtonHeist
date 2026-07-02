@@ -1,5 +1,4 @@
 import ProjectDescription
-import ProjectDescriptionHelpers
 
 func frameworkScheme(name: String) -> Scheme {
     .scheme(
@@ -157,7 +156,11 @@ let project = Project(
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TestSupport/**"],
-            dependencies: []
+            dependencies: [
+                .target(name: "ThePlans"),
+                .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotModel"),
+            ]
         ),
 
         // MARK: - ButtonHeistSupport Tests
@@ -248,6 +251,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistSupport"),
                 .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ButtonHeistTesting"),
                 .target(name: "TheInsideJob"),

@@ -7,11 +7,10 @@ MCP, and heist execution.
 This README covers build, targeting, and common workflows. It does not maintain
 a hand-written command or parameter catalog.
 
-Generated references:
+Reference surfaces:
 
-- [Command Reference](../docs/reference/commands.md) - canonical commands,
-  CLI exposure, heist execution eligibility, and parameters
-- [MCP Tool Reference](../docs/reference/mcp-tools.md) - MCP adapter tools
+- `buttonheist --help` and `buttonheist <command> --help` - canonical CLI usage
+- MCP `tools/list` schemas from ButtonHeistMCP - MCP adapter tools
 - [API](../docs/API.md) - product invariants and integration context
 
 ## Build
@@ -49,9 +48,8 @@ buttonheist --help
 buttonheist <command> --help
 ```
 
-The checked-in command contract is generated in
-[Command Reference](../docs/reference/commands.md). If this README and the
-generated reference disagree, the generated reference wins.
+The command contract is owned by `TheFence.Command` descriptors. If this README
+and local command help disagree, the descriptor-backed help wins.
 
 ## Workflows
 
@@ -126,5 +124,5 @@ Status messages go to stderr.
 ## See also
 
 - [MCP Server](../ButtonHeistMCP/)
-- [Command Reference](../docs/reference/commands.md)
+- `buttonheist --help`
 - [Project Overview](../README.md)

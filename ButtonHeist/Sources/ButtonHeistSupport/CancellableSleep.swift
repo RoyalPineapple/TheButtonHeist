@@ -1,6 +1,6 @@
 import Foundation
 
-extension Task where Success == Never, Failure == Never {
+package extension Task where Success == Never, Failure == Never {
     /// Sleep for the given duration, returning `false` if the task was cancelled.
     /// Replaces `do { try await Task.sleep(...) } catch { return }` with
     /// `guard await Task.cancellableSleep(for: duration) else { return }`.

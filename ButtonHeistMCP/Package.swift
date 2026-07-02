@@ -10,8 +10,8 @@ let package = Package(
         .executable(name: "buttonheist-mcp", targets: ["ButtonHeistMCP"])
     ],
     dependencies: [
-        .package(path: "../ButtonHeist"),
-        .package(path: "../submodules/AccessibilitySnapshotBH"),
+        .package(name: "ButtonHeist", path: ".."),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.18.0"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", .upToNextMinor(from: "0.12.0"))
     ],
     targets: [

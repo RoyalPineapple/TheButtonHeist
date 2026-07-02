@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 /// Probes discovered devices until it can return the currently reachable subset.
 @ButtonHeistActor

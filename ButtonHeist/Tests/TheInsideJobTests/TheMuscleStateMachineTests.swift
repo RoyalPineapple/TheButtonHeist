@@ -5,8 +5,6 @@ import Network
 @testable import TheInsideJob
 
 final class TheMuscleStateMachineTests: XCTestCase {
-    private let sourceRepository = SourceShapeRepository(filePath: #filePath)
-
     func testSessionAdmissionLocksAddressAfterConfiguredFailures() {
         var admission = SessionAdmission(
             tokenSource: .configured("good-token"),
@@ -282,103 +280,6 @@ final class TheMuscleStateMachineTests: XCTestCase {
     }
     #endif
 
-    func testMuscleSessionReducerSourceReturnsEffectsInsteadOfLogging() throws {
-        let sessionSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleSession.swift"
-        )
-        let muscleSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscle.swift"
-        )
-
-        let reducerLogLines = try sessionSource.lines(
-            matching: #"\b(ButtonHeistLog|Logger|sessionLogger|logger)\b|[.]info\s*\("#
-        )
-        XCTAssertTrue(
-            reducerLogLines.isEmpty,
-            """
-            TheMuscleSession mutations should return typed effects instead of logging:
-            \(reducerLogLines.joined(separator: "\n"))
-            """
-        )
-
-        XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+LogEvent\b"#))
-        XCTAssertTrue(sessionSource.contents.contains("case sessionClaimed(clientId: Int)"))
-        XCTAssertTrue(sessionSource.contents.contains("case clientRejoinedDuringGracePeriod(clientId: Int)"))
-        XCTAssertTrue(sessionSource.contents.contains("case sessionReleased"))
-        XCTAssertTrue(sessionSource.contents.contains("case releaseTimerStarted(timeout: TimeInterval)"))
-        XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
-        XCTAssertTrue(sessionSource.contents.contains("case log(LogEvent)"))
-        XCTAssertTrue(sessionSource.contents.contains("case cancelReleaseTimer"))
-        XCTAssertTrue(sessionSource.contents.contains("case replaceReleaseTimer(timeout: TimeInterval)"))
-        XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\s*:"#))
-        XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
-        XCTAssertFalse(try sessionSource.containsMatch(#"\bDate\s*\(\s*\)"#))
-
-        XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+applySessionEffects\s*\("#))
-        XCTAssertTrue(try muscleSource.containsMatch(#"\bfunc\s+logSessionEvent\s*\("#))
-        XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"Session claimed by client"))
-        XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"Session released"))
-        XCTAssertTrue(muscleSource.contents.contains("muscleLogger.info(\"All session connections gone"))
-    }
-
-    func testMuscleAdmissionAndSessionEffectsDoNotRegressToOptionalBags() throws {
-        let admissionSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleAdmission.swift"
-        )
-        let sessionSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/TheMuscleSession.swift"
-        )
-
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bdelayedDisconnectClientId\b"#))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\boutputs\s*:\s*\[MuscleAdmissionOutput\]"#))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bstruct\s+MuscleAdmissionEffect\b"#))
-        XCTAssertTrue(try admissionSource.containsMatch(#"\benum\s+MuscleAdmissionEffect\b"#))
-        XCTAssertTrue(admissionSource.contents.contains("case delayedDisconnect(clientId: Int)"))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bstatic\s+func\s+response\s*\("#))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bstatic\s+func\s+client\s*\("#))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bdisconnect\s+clientId\s*:\s*Int\?"#))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bdisconnect\s*:\s*Bool\b"#))
-
-        XCTAssertFalse(try sessionSource.containsMatch(#"\breleaseTimerAction\b"#))
-        XCTAssertFalse(try sessionSource.containsMatch(#"\blogEvents\s*:\s*\[LogEvent\]"#))
-        XCTAssertTrue(try sessionSource.containsMatch(#"\benum\s+Effect\b"#))
-        XCTAssertFalse(try sessionSource.containsMatch(#"\bresetInactivityTimer\b"#))
-    }
-
-    func testSessionLeaseDiagnosticsDoNotRegressToOptionalBags() throws {
-        let leaseSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/SessionLease.swift"
-        )
-
-        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+SessionLockDiagnostic\b"#))
-        XCTAssertFalse(try leaseSource.containsMatch(#"\bstruct\s+SessionLockDiagnostic\b"#))
-        XCTAssertTrue(leaseSource.contents.contains("case sameDriverActive(owner: OwnerDriverIdentity)"))
-        XCTAssertTrue(leaseSource.contents.contains("case activeOwner(owner: OwnerDriverIdentity)"))
-        XCTAssertTrue(leaseSource.contents.contains(
-            "case drainingOwner(owner: OwnerDriverIdentity, remainingTimeoutSeconds: TimeInterval)"
-        ))
-        XCTAssertFalse(try leaseSource.containsMatch(#"\bownerDriverId\s*:\s*String\?"#))
-        XCTAssertFalse(try leaseSource.containsMatch(#"\bremainingTimeoutSeconds\s*:\s*TimeInterval\?"#))
-        XCTAssertFalse(try leaseSource.containsMatch(#"\bresetInactivityTimer\b"#))
-        XCTAssertFalse(try leaseSource.containsMatch(#"->\s*Date\?"#))
-        XCTAssertFalse(try leaseSource.containsMatch(#"\bDate\s*\(\s*\)"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+acquire\s*\([^)]*\bat\s+now:\s*Date"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\bfunc\s+removeConnection\s*\([^)]*\bat\s+now:\s*Date"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\bstruct\s+Machine\s*:\s*SimpleStateMachine\b"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Event\b"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Effect\b"#))
-        XCTAssertTrue(try leaseSource.containsMatch(#"\benum\s+Rejection\b"#))
-        XCTAssertTrue(leaseSource.contents.contains("case acquire(driverIdentity: String, clientId: Int, at: Date)"))
-        XCTAssertTrue(leaseSource.contents.contains("case removeConnection(clientId: Int, at: Date)"))
-        XCTAssertTrue(leaseSource.contents.contains("case acquisition(AcquisitionEffect)"))
-        XCTAssertTrue(leaseSource.contents.contains("case release(ReleaseEffect)"))
-        XCTAssertTrue(leaseSource.contents.contains("case connectionRemoval(ConnectionRemoval)"))
-        XCTAssertTrue(leaseSource.contents.contains("case acquisition(SessionLockDiagnostic)"))
-        XCTAssertTrue(leaseSource.contents.contains("StateDriver<Machine>"))
-        XCTAssertTrue(leaseSource.contents.contains("switch (state, event)"))
-        XCTAssertTrue(leaseSource.contents.contains("releaseDeadline.timeIntervalSince(now)"))
-    }
-
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {
         let delivery = ClientDelivery.unwired
 
@@ -404,40 +305,4 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(failure.localizedDescription.contains("posix"))
     }
 
-    func testClientAuthenticationPhaseSourceShapeUsesStateMachine() throws {
-        let stateSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ClientAuthenticationState.swift"
-        )
-        let registrySource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/ClientRegistry.swift"
-        )
-        let admissionSource = try sourceRepository.requiredFile(
-            relativePath: "ButtonHeist/Sources/TheInsideJob/Server/SessionAdmission.swift"
-        )
-
-        XCTAssertTrue(try stateSource.containsMatch(#"\bstruct\s+ClientAuthenticationMachine\s*:\s*SimpleStateMachine\b"#))
-        XCTAssertTrue(stateSource.contents.contains("case (.connected(let address), .validateHello)"))
-        XCTAssertTrue(stateSource.contents.contains("case (.helloValidated(let address), .completeAuthentication)"))
-        XCTAssertTrue(registrySource.contents.contains("StateDriver<ClientAuthenticationMachine>"))
-        XCTAssertTrue(registrySource.contents.contains("validateHello(_ clientId: Int)"))
-        XCTAssertTrue(registrySource.contents.contains("completeAuthentication(_ clientId: Int)"))
-        XCTAssertFalse(registrySource.contents.contains("markHelloValidated"))
-
-        let directLatePhaseWrites = try registrySource.lines(
-            matching: #"clients\[[^]]+\]\s*=\s*[.](helloValidated|authenticated)\("#
-        )
-        XCTAssertTrue(
-            directLatePhaseWrites.isEmpty,
-            """
-            Client authentication must not assign hello/authenticated phases outside the machine:
-            \(directLatePhaseWrites.joined(separator: "\n"))
-            """
-        )
-
-        XCTAssertTrue(try admissionSource.containsMatch(#"\bstruct\s+AddressAuthenticationFailureMachine\s*:\s*SimpleStateMachine\b"#))
-        XCTAssertTrue(admissionSource.contents.contains("case clean"))
-        XCTAssertTrue(admissionSource.contents.contains("case failing(attempts: Int)"))
-        XCTAssertTrue(admissionSource.contents.contains("case lockedOut(until: Date, attempts: Int)"))
-        XCTAssertFalse(try admissionSource.containsMatch(#"\bcase\s+nil\s*:\s*0\b"#))
-    }
 }

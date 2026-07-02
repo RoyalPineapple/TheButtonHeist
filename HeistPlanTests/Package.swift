@@ -7,7 +7,7 @@ let package = Package(
         .macOS(.v14),
     ],
     dependencies: [
-        .package(path: "../ButtonHeist"),
+        .package(name: "ButtonHeist", path: ".."),
     ],
     targets: [
         .testTarget(

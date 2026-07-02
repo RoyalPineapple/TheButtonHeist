@@ -1,4 +1,6 @@
 #if canImport(UIKit)
+import ButtonHeistSupport
+import ButtonHeistTestSupport
 import XCTest
 @testable import AccessibilitySnapshotParser
 @_spi(ButtonHeistInternals) @testable import ThePlans

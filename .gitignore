@@ -5,6 +5,11 @@ DerivedData/
 Derived/
 
 # Tuist-generated artifacts (nested project)
+ButtonHeist.xcodeproj/
+ButtonHeist.xcworkspace/
+TestApp/TestApp.xcodeproj/
+TestApp/TestApp.xcworkspace/
+TestApp/Derived/
 ButtonHeist/ButtonHeist.xcodeproj/
 ButtonHeist/Workspace.xcworkspace/
 ButtonHeist/Derived/

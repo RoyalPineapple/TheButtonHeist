@@ -8,7 +8,6 @@ included:
   - ButtonHeistCLI/Tests
   - ButtonHeistMCP/Sources
   - TestApp/Sources
-  - TestApp/UIKitSources
 
 excluded:
   - TestApp/Derived

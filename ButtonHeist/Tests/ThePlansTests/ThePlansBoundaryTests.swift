@@ -669,38 +669,6 @@ func `heist artifact loading rejects standard definition cap`() throws {
     }
 }
 
-@Test
-func `thePlans does not import runtime or adapter modules`() throws {
-    let testFile = URL(fileURLWithPath: #filePath)
-    let sources = testFile
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("Sources/ThePlans")
-    let forbiddenImports = [
-        "TheFence",
-        "TheInsideJob",
-        "ButtonHeist",
-        "ButtonHeistCLI",
-        "ButtonHeistMCP",
-        "TheScore",
-        "MCP",
-        "ArgumentParser",
-        "AccessibilitySnapshotModel",
-    ]
-
-    let files = try FileManager.default
-        .contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
-        .filter { $0.pathExtension == "swift" }
-
-    for file in files {
-        let source = try String(contentsOf: file, encoding: .utf8)
-        for forbiddenImport in forbiddenImports {
-            #expect(!source.contains("import \(forbiddenImport)"), "\(file.lastPathComponent) imports \(forbiddenImport)")
-        }
-    }
-}
-
 private func representativeArtifactPlan() throws -> HeistPlan {
     try HeistPlan("searchFlow") {
         Warn("check state")

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import Foundation
 import ThePlans
 @testable import TheInsideJob

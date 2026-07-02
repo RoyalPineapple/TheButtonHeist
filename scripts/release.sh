@@ -388,10 +388,6 @@ echo "  ✓ $BUTTONHEIST_FORMULA_TEMPLATE"
 "$SCRIPT_DIR/validate-release-contract.sh"
 echo "  ✓ release contract"
 
-# 4. Regenerate Xcode projects so pbxproj files stay in sync
-echo "  Regenerating Xcode projects..."
-scripts/generate-project.sh
-echo "  ✓ Xcode projects"
 echo ""
 fi
 
@@ -511,15 +507,10 @@ if [[ "$TAG_CURRENT" == true ]]; then
 else
     echo "==> Phase 5: Committing release source"
 
-    # Regenerate right before commit so the pre-commit hook's tuist generate
-    # produces identical output (build artifacts can shift cache state)
-    scripts/generate-project.sh
-
     git add \
         ButtonHeist/Sources/TheScore/Messages.swift \
         "$BUTTONHEIST_RELEASE_VERSION_FILE" \
-        "$BUTTONHEIST_FORMULA_TEMPLATE" \
-        -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
+        "$BUTTONHEIST_FORMULA_TEMPLATE"
 
     git commit -m "Release $NEW_VERSION"
 

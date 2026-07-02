@@ -22,9 +22,8 @@ layer and are documented separately in the wire protocol. `run_heist` executes
 a typed heist plan through the same semantic action/wait runtime used by direct
 commands.
 
-The generated [MCP Tool Reference](../docs/reference/mcp-tools.md) is the
-current tool and schema reference. This README stays at the adapter behavior
-layer.
+The live MCP `tools/list` response is the current tool and schema reference.
+This README stays at the adapter behavior layer.
 
 ## Runtime behavior
 
@@ -44,8 +43,8 @@ layer.
 ## See also
 
 - [MCP Agent Guide](../docs/MCP-AGENT-GUIDE.md) for agent observation, action, wait, and heist-composition patterns
-- [MCP Tool Reference](../docs/reference/mcp-tools.md) for the generated tool surface
-- [Command Reference](../docs/reference/commands.md) for canonical Fence commands
+- MCP `tools/list` for the live tool surface
+- `buttonheist --help` for canonical CLI commands
 - [API Reference](../docs/API.md) for public API context
 - [Project Overview](../README.md) for setup and architecture
 - [CLI Reference](../ButtonHeistCLI/) for direct terminal usage
