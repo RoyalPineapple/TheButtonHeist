@@ -134,6 +134,46 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertTrue(result2, "Second waiter should settle; \(latestPulseDiagnostic())")
     }
 
+    func testCancelledSettleWaiterIsRemoved() async throws {
+        let tripwire = self.tripwire!
+        let windows = tripwire.getTraversableWindows()
+        guard let window = windows.first?.window else {
+            XCTFail("No window available")
+            return
+        }
+
+        let testLayer = CALayer()
+        window.layer.addSublayer(testLayer)
+
+        let animation = CABasicAnimation(keyPath: "position.x")
+        animation.fromValue = 0
+        animation.toValue = 500
+        animation.duration = 10.0
+        animation.repeatCount = .infinity
+        testLayer.add(animation, forKey: "testMovement")
+
+        let settleTask = Task { @MainActor in
+            await tripwire.waitForSettle(timeout: 10.0, requiredQuietFrames: 1_000)
+        }
+
+        for _ in 0..<20 {
+            if tripwire.runningContext?.settleWaiters.isEmpty == false {
+                break
+            }
+            await Task.yield()
+        }
+        XCTAssertEqual(tripwire.runningContext?.settleWaiters.count, 1)
+
+        settleTask.cancel()
+        let settled = await settleTask.value
+
+        XCTAssertFalse(settled, "Cancelled waiter should resolve false")
+        XCTAssertEqual(tripwire.runningContext?.settleWaiters.count, 0)
+
+        testLayer.removeAllAnimations()
+        testLayer.removeFromSuperlayer()
+    }
+
     // MARK: - Pulse produces readings
 
     func testPulseProducesReadingAfterStart() async throws {

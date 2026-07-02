@@ -102,6 +102,7 @@
 		255C98AE6C1E889033C0830F /* MuscleAuthenticatedCommandPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98164E3F21F9651CF43F0BC8 /* MuscleAuthenticatedCommandPhase.swift */; };
 		25BC0E7CB66FD5DE7A6D6D75 /* HeistPlanSourceLexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA56F3562D40E56DF0151102 /* HeistPlanSourceLexer.swift */; };
 		25D42EBCB2437B40ECF559DF /* GestureDuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFCB124743A10386A1AA8AE2 /* GestureDuration.swift */; };
+		26226EF868B2733FC7984F4C /* OneShotContinuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B49299EB807DEDD785C1230 /* OneShotContinuation.swift */; };
 		263457A248A41D10382EA862 /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
 		264BB930E10263AA3FE6938A /* ActivationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4831BAF2630B422BC3BF544E /* ActivationPolicy.swift */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
@@ -190,6 +191,7 @@
 		46E3B9C0792131023EAE4826 /* HeistActionCommand+ClientMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF27F029AA262DCB7BB58C4 /* HeistActionCommand+ClientMessage.swift */; };
 		470D7403EC2F1DFA9C9EB5EE /* HeistExpressionEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ACA519764CB203411ABAA49 /* HeistExpressionEnvironment.swift */; };
 		472DCAA5F3966F5ACEE8D65D /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
+		473A04E6D6BC514B7A9231D0 /* OneShotContinuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B9BB12DF63B968E830A1A33 /* OneShotContinuationTests.swift */; };
 		47556EEB40FCB7D5768C37A1 /* AccessibilityHierarchyFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EB3108DFAB4DF60AB11A4C /* AccessibilityHierarchyFilterTests.swift */; };
 		475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */; };
 		47FE63A0C05E7B0F3653B6C5 /* HeistPlan+RuntimeValidationLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4AF36D5F64363DBB33925B /* HeistPlan+RuntimeValidationLimits.swift */; };
@@ -1174,6 +1176,7 @@
 		49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheHandoff.swift; sourceTree = "<group>"; };
 		49E4AF8938E348B619C62C6D /* AccessibilityArmingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityArmingTests.swift; sourceTree = "<group>"; };
 		4AB3EFDEFBAE926CA6B46E2B /* ElementDiagnosticSummarySourceShapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementDiagnosticSummarySourceShapeTests.swift; sourceTree = "<group>"; };
+		4B49299EB807DEDD785C1230 /* OneShotContinuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneShotContinuation.swift; sourceTree = "<group>"; };
 		4B5E290BD2C51826E098DD9E /* TempDirectoryFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempDirectoryFixture.swift; sourceTree = "<group>"; };
 		4BC89E2BFE30B17274F2A404 /* GetScreenArtifactResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetScreenArtifactResponseTests.swift; sourceTree = "<group>"; };
 		4BD75B6C0E7FA3AC5039F61A /* CancellableSleep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableSleep.swift; sourceTree = "<group>"; };
@@ -1356,6 +1359,7 @@
 		9AE62F1B4134AF0A9FE888EB /* PureReducerSourceShapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PureReducerSourceShapeTests.swift; sourceTree = "<group>"; };
 		9B0AAC0F1FF5A64AAEE376B0 /* TheBrainsObservationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBrainsObservationStateTests.swift; sourceTree = "<group>"; };
 		9B481977E54E74321A6CBA1E /* HeistPlanSourceCompilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlanSourceCompilerTests.swift; sourceTree = "<group>"; };
+		9B9BB12DF63B968E830A1A33 /* OneShotContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneShotContinuationTests.swift; sourceTree = "<group>"; };
 		9BD18BEB6C1300E3033FBE74 /* HeistPlanExpressions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlanExpressions.swift; sourceTree = "<group>"; };
 		9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollToVisibleTests.swift; sourceTree = "<group>"; };
 		9C8A10ADBCDF552C7B0FFB00 /* AccessibilityTraceDeltaRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceDeltaRoundTripTests.swift; sourceTree = "<group>"; };
@@ -1991,6 +1995,7 @@
 		281D0E712597956393C5744B /* ButtonHeistSupport */ = {
 			isa = PBXGroup;
 			children = (
+				4B49299EB807DEDD785C1230 /* OneShotContinuation.swift */,
 				40ABE34E34CCED70A44EA2C2 /* StateMachine.swift */,
 			);
 			path = ButtonHeistSupport;
@@ -2087,6 +2092,7 @@
 		503822FEE1C3BAEF5888BC43 /* ButtonHeistSupportTests */ = {
 			isa = PBXGroup;
 			children = (
+				9B9BB12DF63B968E830A1A33 /* OneShotContinuationTests.swift */,
 				5643860A2284D1ABCDA95D96 /* StateMachineTests.swift */,
 			);
 			path = ButtonHeistSupportTests;
@@ -3133,6 +3139,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				26226EF868B2733FC7984F4C /* OneShotContinuation.swift in Sources */,
 				3C168BE0C0B804C7468F97A1 /* StateMachine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3208,6 +3215,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				473A04E6D6BC514B7A9231D0 /* OneShotContinuationTests.swift in Sources */,
 				865D242A8658240C7484759A /* StateMachineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

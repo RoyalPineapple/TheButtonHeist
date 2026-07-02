@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import UIKit
 
 extension TheTripwire {
@@ -13,6 +14,7 @@ extension TheTripwire {
         let target: PulseTick
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
+        var nextSettleWaiterID = 0
         var settleWaiters: [SettleWaiter] = []
 
         init(link: CADisplayLink, target: PulseTick) {
@@ -33,10 +35,11 @@ extension TheTripwire {
     }
 
     struct SettleWaiter {
+        let id: Int
         var quietFrames: Int
         let requiredQuietFrames: Int
         let deadline: CFAbsoluteTime
-        let continuation: CheckedContinuation<Bool, Never>
+        let continuation: OneShotContinuation<Bool>
     }
 
     // MARK: - Pulse Lifecycle
@@ -56,7 +59,10 @@ extension TheTripwire {
         guard let context = runningContext else { return }
         context.link.invalidate()
 
-        for waiter in context.settleWaiters {
+        let waiters = context.settleWaiters
+        context.settleWaiters.removeAll()
+
+        for waiter in waiters {
             waiter.continuation.resume(returning: false)
         }
 
@@ -79,14 +85,39 @@ extension TheTripwire {
     /// Returns true if settled before timeout, false if timed out.
     func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
         guard let context = runningContext else { return false }
-        return await withCheckedContinuation { continuation in
-            context.settleWaiters.append(SettleWaiter(
-                quietFrames: 0,
-                requiredQuietFrames: requiredQuietFrames,
-                deadline: CFAbsoluteTimeGetCurrent() + timeout,
-                continuation: continuation
-            ))
+        let waiterID = context.nextSettleWaiterID
+        context.nextSettleWaiterID += 1
+        let oneShot = OneShotContinuation<Bool>()
+
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if oneShot.register(continuation) {
+                    context.settleWaiters.append(SettleWaiter(
+                        id: waiterID,
+                        quietFrames: 0,
+                        requiredQuietFrames: requiredQuietFrames,
+                        deadline: CFAbsoluteTimeGetCurrent() + timeout,
+                        continuation: oneShot
+                    ))
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        } onCancel: {
+            oneShot.resume(returning: false)
         }
+        removeSettleWaiter(id: waiterID)
+        return result
+    }
+
+    private func removeSettleWaiter(id: Int) {
+        guard let context = runningContext,
+              let index = context.settleWaiters.firstIndex(where: { $0.id == id })
+        else {
+            return
+        }
+
+        context.settleWaiters.remove(at: index)
     }
 
     /// Wait for the interface to become all clear.
@@ -192,11 +223,11 @@ extension TheTripwire {
         for index in context.settleWaiters.indices.reversed() {
             let waiter = context.settleWaiters[index]
             if waiter.quietFrames >= waiter.requiredQuietFrames {
+                let waiter = context.settleWaiters.remove(at: index)
                 waiter.continuation.resume(returning: true)
-                context.settleWaiters.remove(at: index)
             } else if now >= waiter.deadline {
+                let waiter = context.settleWaiters.remove(at: index)
                 waiter.continuation.resume(returning: false)
-                context.settleWaiters.remove(at: index)
             }
         }
     }
