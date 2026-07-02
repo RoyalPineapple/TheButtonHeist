@@ -22,6 +22,24 @@ final class ElementInflation {
     var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
     var revealKnownTarget: (@MainActor (HeistId) async -> Screen?)?
 
+    /// Bounded window inflation waits for a target whose reveal failed to
+    /// become resolvable before failing `noRevealPath`.
+    ///
+    /// Async-loaded destinations can produce a settled world that knows the
+    /// target before its live scroll geometry is wired, so a reveal failure at
+    /// the dispatch instant is not proof of unreachability — the very next
+    /// settled capture can show the target framed and reachable. The wait is
+    /// keyed off the target resolving, not a fixed retry count, because the
+    /// gating operation is typically I/O (an in-flight content load).
+    /// Field-measured arrivals land within ~500ms of dispatch; the standard
+    /// settle timeout covers them with margin.
+    var revealPathGraceTimeout: TimeInterval = SemanticObservationTiming.defaultTimeout
+
+    /// Re-parse cadence inside the grace window when the app posts no
+    /// transition-completion notifications. Apps that announce transitions
+    /// wake the window immediately; silent apps fall back to this interval.
+    var revealPathSilentReparseInterval: TimeInterval = 0.15
+
     static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
@@ -97,6 +115,12 @@ final class ElementInflation {
         case success(InflatedElementTarget)
         case retry(RetryReason)
         case failure(ElementInflationFailure)
+    }
+
+    private enum RevealPathGraceOutcome {
+        case resolved(TheStash.ScreenElement, didReveal: Bool)
+        case failed(ElementInflationFailure)
+        case timedOut
     }
 
     enum ElementInflationFailureStep: String {
@@ -272,7 +296,22 @@ final class ElementInflation {
             case nil:
                 break
             }
-            return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
+            switch await awaitRevealPathGrace(for: target) {
+            case .resolved(let resolved, let didReveal):
+                return .refreshing(
+                    target: target,
+                    screenElement: resolved,
+                    attempt: attempt,
+                    didReveal: didReveal
+                )
+            case .failed(let graceFailure):
+                return .failed(graceFailure)
+            case .timedOut:
+                return .failed(.noRevealPath(
+                    semanticRevealFailureMessage(failure, entry: treeElement)
+                        + "; no reveal path appeared within \(Int(revealPathGraceTimeout * 1_000))ms"
+                ))
+            }
         }
         return .refreshing(
             target: target,
@@ -287,6 +326,57 @@ final class ElementInflation {
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
         guard stash.refreshCurrentVisibleTree() != nil else { return nil }
         return visibleTargetResolution(target)
+    }
+
+    /// Re-observe until a target whose reveal failed becomes resolvable, or
+    /// the grace window expires.
+    ///
+    /// A reveal failure during a screen transition reads a mid-arrival world:
+    /// the settled union can know the target before the destination finishes
+    /// loading and wires live scroll geometry. The window wakes when the app
+    /// posts a transition-completion notification (screenChanged or
+    /// layoutChanged mean the change has already landed, so the next parse
+    /// should find it); silent apps fall back to a coarse re-parse cadence.
+    /// The target arriving on-viewport resolves visibly, and a fresh known
+    /// entry that gained scroll membership earns one reveal retry.
+    ///
+    /// Every iteration suspends — first on the notification waiter, then on a
+    /// one-frame real-time floor — so the window can never starve the main
+    /// actor, and task cancellation exits promptly.
+    private func awaitRevealPathGrace(for target: ElementTarget) async -> RevealPathGraceOutcome {
+        let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
+        var cursor = stash.accessibilityNotifications.transitionCursor()
+        var didRetryReveal = false
+        while !Task.isCancelled {
+            let remaining = deadline - CFAbsoluteTimeGetCurrent()
+            guard remaining > 0 else { break }
+            if let advanced = await stash.accessibilityNotifications.waitForTransitionEvent(
+                after: cursor,
+                timeout: min(revealPathSilentReparseInterval, remaining)
+            ) {
+                cursor = advanced
+            }
+            await tripwire.yieldRealFrames(1)
+            guard !Task.isCancelled else { break }
+            guard stash.refreshCurrentVisibleTree() != nil else { continue }
+            switch visibleTargetResolution(target) {
+            case .success(let visible)?:
+                return .resolved(visible, didReveal: false)
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                break
+            }
+            guard !didRetryReveal,
+                  case .success(let fresh) = knownSemanticTarget(target),
+                  fresh.scrollMembership != nil
+            else { continue }
+            didRetryReveal = true
+            let retryReveal = await revealSemanticTarget(fresh)
+            if case .failed = retryReveal { continue }
+            return .resolved(fresh, didReveal: retryReveal.didReveal)
+        }
+        return .timedOut
     }
 
     private func stateAfterRefresh(

@@ -1,7 +1,10 @@
 #if canImport(UIKit)
 import UIKit
 import XCTest
+
+@testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class AccessibilityNotificationObserverTests: XCTestCase {
@@ -65,6 +68,110 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(claimed.map(\.code), [1005])
         XCTAssertEqual(bus.pendingEvents().map(\.code), [])
+    }
+
+    // MARK: - Transition Waiter
+
+    func testTransitionWaiterResumesWhenTransitionEventRecorded() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.transitionCursor()
+
+        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 2.0)
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+
+        let advanced = await wake
+        XCTAssertNotNil(advanced)
+        XCTAssertGreaterThan(advanced?.sequence ?? 0, cursor.sequence)
+    }
+
+    func testTransitionWaiterFastPathReturnsPastEventWithoutSuspending() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.transitionCursor()
+        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+
+        let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
+
+        XCTAssertEqual(advanced?.sequence, bus.transitionCursor().sequence)
+    }
+
+    func testTransitionWaiterIgnoresNonTransitionEventsAndTimesOut() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.transitionCursor()
+        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
+
+        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 0.15)
+        bus.record(code: 1025, notificationData: .none, associatedElement: .none)
+
+        let advanced = await wake
+        XCTAssertNil(advanced)
+    }
+
+    func testTransitionCursorAndScreenChangedSequenceTracking() {
+        let bus = AccessibilityNotificationBus()
+        XCTAssertEqual(bus.transitionCursor().sequence, 0)
+        XCTAssertEqual(bus.latestScreenChangedSequence, 0)
+
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        XCTAssertEqual(bus.transitionCursor().sequence, 1)
+        XCTAssertEqual(bus.latestScreenChangedSequence, 0)
+
+        bus.record(code: 1008, notificationData: .none, associatedElement: .none)
+        XCTAssertEqual(bus.transitionCursor().sequence, 1)
+
+        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        XCTAssertEqual(bus.transitionCursor().sequence, 3)
+        XCTAssertEqual(bus.latestScreenChangedSequence, 3)
+    }
+
+    // MARK: - Settled Observation Invalidation
+
+    func testScreenChangedAfterCommitInvalidatesStaleServedObservation() async {
+        let brains = TheBrains(tripwire: TheTripwire())
+        brains.tripwire.startPulse()
+        brains.startSemanticObservation()
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+        }
+
+        let staleScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                AccessibilityElement.make(label: "Overview", traits: .header),
+                heistId: "overview_header"
+            )
+        ])
+        let staleEvent = brains.stash.semanticObservationStream.commitSettledVisibleObservation(staleScreen)
+
+        // The completion notification lands after the commit, inside an
+        // action's attribution window: the settled overview has already been
+        // replaced and must not be served to the next read.
+        let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+        brains.stash.accessibilityNotifications.record(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let freshScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                AccessibilityElement.make(label: "Destination", traits: .header),
+                heistId: "destination_header"
+            )
+        ])
+        brains.stash.nextVisibleRefreshScreenForTesting = freshScreen
+
+        let served = await brains.stash.observeSettledSemanticObservation(
+            scope: .visible,
+            after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
+            timeout: 3.0
+        )
+
+        XCTAssertNotNil(served)
+        XCTAssertGreaterThan(
+            served?.sequence ?? 0,
+            staleEvent.sequence,
+            "A screenChanged recorded after the settled commit must invalidate it, not serve it from cache"
+        )
     }
 
     func testHeistScopeKeepsActionClaimsAppendOnlyUntilScopeEnds() {

@@ -5,18 +5,130 @@ import UIKit
 
 import TheScore
 
-final class AccessibilityNotificationBus {
+/// `@unchecked Sendable` justification: all mutable state is protected by
+/// `lock`; waiter continuations are resumed outside the lock and timeout
+/// tasks reference the bus weakly.
+final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    /// Transition-completion notifications: the app announcing that a screen
+    /// or layout change has finished landing. `screenChanged` (1000) is the
+    /// strong per-screen claim; `layoutChanged` (1001) often precedes it
+    /// during multi-stage transitions and also fires for in-place updates.
+    static let transitionCompletionCodes: Set<UInt32> = [1000, 1001]
+    private static let screenChangedCode: UInt32 = 1000
+
+    private final class TransitionWaiter {
+        let afterSequence: UInt64
+        let continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>
+        var timeoutTask: Task<Void, Never>?
+
+        init(
+            afterSequence: UInt64,
+            continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>
+        ) {
+            self.afterSequence = afterSequence
+            self.continuation = continuation
+        }
+    }
+
     private let maxBufferedEvents = 64
     private let lock = NSLock()
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
     private var latestSequenceStorage: UInt64 = 0
+    private var latestTransitionSequenceStorage: UInt64 = 0
+    private var latestScreenChangedSequenceStorage: UInt64 = 0
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
+    private var transitionWaiters: [UInt64: TransitionWaiter] = [:]
+    private var nextTransitionWaiterId: UInt64 = 0
 
     var latestSequence: UInt64 {
         lock.lock()
         defer { lock.unlock() }
         return latestSequenceStorage
+    }
+
+    /// Sequence of the most recent `screenChanged` notification, or 0.
+    var latestScreenChangedSequence: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestScreenChangedSequenceStorage
+    }
+
+    /// Cursor at the most recent transition-completion notification, for use
+    /// with `waitForTransitionEvent(after:timeout:)`.
+    func transitionCursor() -> AccessibilityNotificationCursor {
+        lock.lock()
+        defer { lock.unlock() }
+        return AccessibilityNotificationCursor(sequence: latestTransitionSequenceStorage)
+    }
+
+    /// Suspend until a transition-completion notification is recorded after
+    /// `cursor`, or the timeout elapses.
+    ///
+    /// Returns the advanced cursor on a hit (collapsing any backlog to the
+    /// latest transition event), or nil on timeout. Presence of a notification
+    /// is signal; absence proves nothing — callers must treat nil as "fall
+    /// back to polling", never as "no change happened".
+    func waitForTransitionEvent(
+        after cursor: AccessibilityNotificationCursor,
+        timeout: TimeInterval
+    ) async -> AccessibilityNotificationCursor? {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if latestTransitionSequenceStorage > cursor.sequence {
+                let latest = latestTransitionSequenceStorage
+                lock.unlock()
+                continuation.resume(returning: AccessibilityNotificationCursor(sequence: latest))
+                return
+            }
+            guard timeout > 0 else {
+                lock.unlock()
+                continuation.resume(returning: nil)
+                return
+            }
+            nextTransitionWaiterId += 1
+            let waiterId = nextTransitionWaiterId
+            let waiter = TransitionWaiter(afterSequence: cursor.sequence, continuation: continuation)
+            transitionWaiters[waiterId] = waiter
+            lock.unlock()
+
+            let timeoutTask = Task { [weak self] in
+                await Task.cancellableSleep(for: .milliseconds(Int64(max(1, timeout * 1_000))))
+                self?.expireTransitionWaiter(waiterId)
+            }
+            registerTransitionWaiterTimeout(timeoutTask, forWaiter: waiterId)
+        }
+    }
+
+    private func registerTransitionWaiterTimeout(_ timeoutTask: Task<Void, Never>, forWaiter waiterId: UInt64) {
+        lock.lock()
+        guard let waiter = transitionWaiters[waiterId] else {
+            // Resolved between registration and timeout arming — the sleep
+            // is no longer needed.
+            lock.unlock()
+            timeoutTask.cancel()
+            return
+        }
+        waiter.timeoutTask = timeoutTask
+        lock.unlock()
+    }
+
+    private func expireTransitionWaiter(_ waiterId: UInt64) {
+        lock.lock()
+        let waiter = transitionWaiters.removeValue(forKey: waiterId)
+        lock.unlock()
+        waiter?.continuation.resume(returning: nil)
+    }
+
+    private func recordTransitionEventLocked(code: UInt32, sequence: UInt64) -> [TransitionWaiter] {
+        guard Self.transitionCompletionCodes.contains(code) else { return [] }
+        latestTransitionSequenceStorage = sequence
+        if code == Self.screenChangedCode {
+            latestScreenChangedSequenceStorage = sequence
+        }
+        let resumed = transitionWaiters.values.filter { $0.afterSequence < sequence }
+        transitionWaiters = transitionWaiters.filter { $0.value.afterSequence >= sequence }
+        return Array(resumed)
     }
 
     var hasActiveNotificationScope: Bool {
@@ -63,8 +175,6 @@ final class AccessibilityNotificationBus {
         let name = Self.name(for: code)
 
         lock.lock()
-        defer { lock.unlock() }
-
         latestSequenceStorage += 1
         let event = PendingAccessibilityNotificationEvent(
             sequence: latestSequenceStorage,
@@ -77,6 +187,14 @@ final class AccessibilityNotificationBus {
         bufferedEvents.append(event)
         if bufferedEvents.count > maxBufferedEvents {
             bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
+        }
+        let resumedWaiters = recordTransitionEventLocked(code: code, sequence: event.sequence)
+        lock.unlock()
+
+        let cursor = AccessibilityNotificationCursor(sequence: event.sequence)
+        for waiter in resumedWaiters {
+            waiter.timeoutTask?.cancel()
+            waiter.continuation.resume(returning: cursor)
         }
     }
 
