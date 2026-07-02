@@ -3,53 +3,8 @@
 import Foundation
 import UIKit
 
+import ButtonHeistSupport
 import TheScore
-
-/// `@unchecked Sendable` justification: mutable continuation state is protected
-/// by `lock`; cancellation may resume from a different task than registration.
-private final class AccessibilityNotificationTransitionWaiterContinuation: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private enum State {
-        case pending
-        case registered(CheckedContinuation<AccessibilityNotificationCursor?, Never>)
-        case resumed
-    }
-
-    private let lock = NSLock()
-    private var state = State.pending
-
-    func register(_ continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        switch state {
-        case .pending:
-            state = .registered(continuation)
-            return true
-        case .registered:
-            preconditionFailure("Transition waiter continuation registered twice")
-        case .resumed:
-            return false
-        }
-    }
-
-    func resume(returning cursor: AccessibilityNotificationCursor?) {
-        let continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>?
-        lock.lock()
-        switch state {
-        case .pending:
-            state = .resumed
-            continuation = nil
-        case .registered(let registered):
-            state = .resumed
-            continuation = registered
-        case .resumed:
-            continuation = nil
-        }
-        lock.unlock()
-
-        continuation?.resume(returning: cursor)
-    }
-}
 
 /// `@unchecked Sendable` justification: all mutable state is protected by
 /// `lock`; waiter continuations are resumed outside the lock and timeout
@@ -64,12 +19,12 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
     private final class TransitionWaiter {
         let afterSequence: UInt64
-        let continuation: AccessibilityNotificationTransitionWaiterContinuation
+        let continuation: OneShotContinuation<AccessibilityNotificationCursor?>
         let timeoutTask: Task<Void, Never>?
 
         init(
             afterSequence: UInt64,
-            continuation: AccessibilityNotificationTransitionWaiterContinuation,
+            continuation: OneShotContinuation<AccessibilityNotificationCursor?>,
             timeoutTask: Task<Void, Never>?
         ) {
             self.afterSequence = afterSequence
@@ -129,7 +84,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         timeout: TimeInterval
     ) async -> AccessibilityNotificationCursor? {
         let waiterId = nextTransitionWaiterIdentifier()
-        let continuationBox = AccessibilityNotificationTransitionWaiterContinuation()
+        let continuationBox = OneShotContinuation<AccessibilityNotificationCursor?>()
 
         let result: AccessibilityNotificationCursor? = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>) in

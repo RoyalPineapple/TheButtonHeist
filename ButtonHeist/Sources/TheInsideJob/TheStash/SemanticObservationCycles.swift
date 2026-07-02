@@ -91,7 +91,7 @@ final class SemanticObservationCycles {
     private struct Waiter {
         let scope: SemanticObservationScope
         let afterCycle: UInt64
-        let continuation: SemanticObservationWaiterContinuation<Void>
+        let continuation: OneShotContinuation<Void>
     }
 
     private var driver = StateDriver(initial: CyclePhase.idle(completed: 0, generation: 0), machine: CycleMachine())
@@ -145,7 +145,7 @@ final class SemanticObservationCycles {
     func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {
         let id = nextWaiterID
         nextWaiterID += 1
-        let continuationBox = SemanticObservationWaiterContinuation<Void>()
+        let continuationBox = OneShotContinuation<Void>()
 
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
