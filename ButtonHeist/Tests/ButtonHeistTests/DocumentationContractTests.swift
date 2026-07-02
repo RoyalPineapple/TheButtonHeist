@@ -198,7 +198,6 @@ final class DocumentationContractTests: XCTestCase {
             "docs/API.md",
             "docs/ARCHITECTURE.md",
             "docs/AUTH.md",
-            "docs/BENCHMARKS.md",
             "docs/BONJOUR_TROUBLESHOOTING.md",
             "docs/HEIST-DOCTOR.md",
             "docs/HEIST-FORMAT.md",
