@@ -743,6 +743,67 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(inflatedTarget.liveTarget.object === arrivedObject)
     }
 
+    func testRevealGraceWindowWakesOnTransitionCompletionNotification() async throws {
+        try XCTSkipUnless(
+            AccessibilityNotificationObserver.shared.isInstalled,
+            "Accessibility notification callback SPI unavailable in this runtime"
+        )
+        let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
+        let staleCoke = makeElement(label: "Coke", traits: .button)
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(overviewVisible, "combo_overview_header")],
+            offViewport: [Screen.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
+        )
+
+        let arrivedFrame = CGRect(
+            x: ElementInflation.interactionComfortZone.midX - 150,
+            y: ElementInflation.interactionComfortZone.midY - 48,
+            width: 300,
+            height: 96
+        )
+        let arrivedCoke = AccessibilityElement.make(
+            label: "Coke",
+            traits: .button,
+            frame: arrivedFrame
+        )
+        let arrivedObject = retainLiveObject(makeButton(label: "Coke", frame: arrivedFrame))
+        let arrivedScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                arrivedCoke,
+                heistId: "current_coke_button",
+                object: arrivedObject
+            )
+        ])
+        brains.navigation.elementInflation.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
+        brains.navigation.elementInflation.revealPathGraceTimeout = 3.0
+        // The silent-fallback cadence cannot fire inside the window, so a
+        // pass requires the posted notification to wake the loop.
+        brains.navigation.elementInflation.revealPathSilentReparseInterval = 10.0
+        defer {
+            brains.navigation.elementInflation.discoverTarget = nil
+            brains.navigation.elementInflation.revealKnownTarget = nil
+        }
+        let asyncLoadArrival = Task { @MainActor in
+            guard await Task.cancellableSleep(for: .milliseconds(250)) else { return }
+            self.brains.stash.nextVisibleRefreshScreenForTesting = arrivedScreen
+            UIAccessibility.post(notification: .layoutChanged, argument: nil)
+        }
+        defer { asyncLoadArrival.cancel() }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "activation dispatch"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected notification-triggered recovery, got \(result)")
+        }
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, "current_coke_button")
+        XCTAssertTrue(inflatedTarget.liveTarget.object === arrivedObject)
+    }
+
     func testRevealGraceWindowStillFailsNoRevealPathWhenTargetNeverArrives() async {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
