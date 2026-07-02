@@ -98,6 +98,38 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(server.listeningPort, port)
     }
 
+    func testDualStackLoopbackAcceptsIPv4AndIPv6Clients() async throws {
+        let connected = expectation(description: "clients connected")
+        connected.expectedFulfillmentCount = 2
+        let callbacks = SocketServerCallbacks(
+            onClientConnected: { _, _ in connected.fulfill() }
+        )
+
+        let port = try await server.startPlaintextForTests(
+            port: 0,
+            bindToLoopback: true,
+            addressFamily: .dualStack,
+            callbacks: callbacks
+        )
+        let ipv4Client = ButtonHeistNetworkTestClient.plaintext(
+            port: port,
+            host: .ipv4(.loopback)
+        )
+        let ipv6Client = ButtonHeistNetworkTestClient.plaintext(
+            port: port,
+            host: .ipv6(.loopback)
+        )
+        defer {
+            ipv4Client.cancel()
+            ipv6Client.cancel()
+        }
+
+        try await ipv4Client.connect()
+        try await ipv6Client.connect()
+
+        await fulfillment(of: [connected], timeout: 5.0)
+    }
+
     func testDoubleStartThrowsAlreadyRunning() async throws {
         _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
 

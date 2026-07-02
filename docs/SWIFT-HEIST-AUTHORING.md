@@ -142,15 +142,18 @@ func test_PARACHUTE_driveCheckout() {
 }
 ```
 
-`joinHeist` defaults to simulator loopback only. Pass `allowedScopes:
-ConnectionScope.default` to accept simulator and USB clients, or
-`allowedScopes: ConnectionScope.all` when LAN clients are intentional.
+`joinHeist` defaults to simulator loopback only with a dual-stack listener, so
+the printed `127.0.0.1:<port>` endpoint is reachable from the host. Pass
+`addressFamily: .ipv6` or `addressFamily: .ipv4` to force one family, pass
+`allowedScopes: ConnectionScope.default` to accept simulator and USB clients,
+or `allowedScopes: ConnectionScope.all` when LAN clients are intentional.
 
 The helper starts a fresh InsideJob server, prints a ready line after the
 listener reports its bound port, then halts test progression while pumping the
-run loop so the client can interact with the live app. Bazel-launched simulators
-may still need external port forwarding from the host; the app process can
-report the bound simulator-side port but cannot create that host bridge itself.
+run loop so the client can interact with the live app. If the printed endpoint
+is unreachable from the host, the launch system may require external port
+forwarding; the app process can report the bound simulator-side port but cannot
+create that host bridge itself.
 
 For tests that should keep running while a client connects, scope the same live
 session around the code that needs it:
@@ -166,8 +169,9 @@ func testCheckoutWithExternalProbe() throws {
 }
 ```
 
-`withJoinedHeistSession` accepts the same `port` and `allowedScopes` parameters
-as `joinHeist`, then stops the fresh InsideJob server when the closure exits.
+`withJoinedHeistSession` accepts the same `port`, `addressFamily`, and
+`allowedScopes` parameters as `joinHeist`, then stops the fresh InsideJob
+server when the closure exits.
 
 Inside a durable plan, `RunHeist("Name", argument)` is the composition step
 that invokes a named reusable heist. It is not a Swift helper call:

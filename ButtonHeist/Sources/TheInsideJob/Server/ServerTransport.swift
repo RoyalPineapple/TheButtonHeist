@@ -178,7 +178,11 @@ final class ServerTransport {
 
     @MainActor
     @discardableResult
-    func start(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
+    func start(
+        port: UInt16 = 0,
+        bindToLoopback: Bool = false,
+        addressFamily: ListenerAddressFamily = .dualStack
+    ) async throws -> UInt16 {
         if case .stopping(let attempt) = lifecycle.state {
             await attempt.task.value
             lifecycle.send(.finishStopping(attempt.id))
@@ -208,6 +212,7 @@ final class ServerTransport {
         let actualPort = try await server.startAsync(
             port: port,
             bindToLoopback: bindToLoopback,
+            addressFamily: addressFamily,
             tlsParameters: params,
             callbacks: callbacks
         )

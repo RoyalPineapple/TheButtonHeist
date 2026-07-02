@@ -23,4 +23,9 @@ struct ServerExposureTests {
         #expect(ServerExposure(allowedScopes: [.simulator]).bindsToLoopbackOnly)
         #expect(!ServerExposure(allowedScopes: ConnectionScope.default).bindsToLoopbackOnly)
     }
+
+    @Test func addressFamilyDefaultsToDualStack() {
+        #expect(ServerExposure(allowedScopes: [.simulator]).addressFamily == .dualStack)
+        #expect(ServerExposure(allowedScopes: [.simulator], addressFamily: .ipv6).addressFamily == .ipv6)
+    }
 }

@@ -238,6 +238,7 @@ final class StartupConfigurationTests: XCTestCase {
             instanceId: "api-id",
             allowedScopes: [.network],
             port: 4242,
+            addressFamily: .ipv4,
             fingerprintsEnabled: false
         )
 
@@ -249,6 +250,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.preferredPortSource, .api)
         XCTAssertEqual(runtimeConfiguration.allowedScopes, [.network])
         XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .api)
+        XCTAssertEqual(runtimeConfiguration.addressFamily, .ipv4)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
         XCTAssertFalse(runtimeConfiguration.fingerprintsEnabled)
         XCTAssertEqual(runtimeConfiguration.fingerprintsEnabledSource, .api)
@@ -280,6 +282,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.preferredPortSource, .defaultValue)
         XCTAssertEqual(runtimeConfiguration.allowedScopes, [.usb])
         XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .infoPlist)
+        XCTAssertEqual(runtimeConfiguration.addressFamily, .dualStack)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
     }
 

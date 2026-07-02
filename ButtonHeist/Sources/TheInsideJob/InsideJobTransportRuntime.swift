@@ -76,11 +76,15 @@ extension TheInsideJob {
         installTransportOverflowHandler(transport)
         await getaway.wireTransport(transport)
 
-        let exposure = ServerExposure(allowedScopes: runtimeConfiguration.allowedScopes)
+        let exposure = ServerExposure(
+            allowedScopes: runtimeConfiguration.allowedScopes,
+            addressFamily: runtimeConfiguration.addressFamily
+        )
         do {
             let actualPort = try await transport.start(
                 port: runtimeConfiguration.preferredPort,
-                bindToLoopback: exposure.bindsToLoopbackOnly
+                bindToLoopback: exposure.bindsToLoopbackOnly,
+                addressFamily: exposure.addressFamily
             )
             let serviceName = advertiseService(on: transport, port: actualPort)
             return InsideJobRuntimeResources(

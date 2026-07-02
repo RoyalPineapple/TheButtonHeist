@@ -14,7 +14,7 @@ actor SimpleSocketServer {
 
     private enum ServerPhase {
         case stopped
-        case listening(listener: NWListener, port: UInt16)
+        case listening(listeners: [NWListener], port: UInt16)
     }
 
     // MARK: - Actor-isolated mutable state
@@ -71,12 +71,14 @@ actor SimpleSocketServer {
     /// - Parameters:
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
+    ///   - addressFamily: Address family or families to bind.
     ///   - tlsParameters: Non-optional TLS parameters. Production startup must not fall back to plaintext.
     ///   - callbacks: Optional callbacks to install before starting
     /// - Returns: Actual port number bound
     func startAsync(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
+        addressFamily: ListenerAddressFamily = .dualStack,
         tlsParameters: NWParameters,
         callbacks: SocketServerCallbacks? = nil
     ) async throws -> UInt16 {
@@ -84,6 +86,7 @@ actor SimpleSocketServer {
         return try await startListening(
             port: port,
             bindToLoopback: bindToLoopback,
+            addressFamily: addressFamily,
             parameters: tlsParameters,
             callbacks: callbacks
         )
@@ -94,11 +97,13 @@ actor SimpleSocketServer {
     func startPlaintextForTests(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
+        addressFamily: ListenerAddressFamily = .dualStack,
         callbacks: SocketServerCallbacks? = nil
     ) async throws -> UInt16 {
         try await startListening(
             port: port,
             bindToLoopback: bindToLoopback,
+            addressFamily: addressFamily,
             parameters: .tcp,
             callbacks: callbacks
         )
@@ -107,6 +112,7 @@ actor SimpleSocketServer {
     private func startListening(
         port: UInt16,
         bindToLoopback: Bool,
+        addressFamily: ListenerAddressFamily,
         parameters: NWParameters,
         callbacks: SocketServerCallbacks?
     ) async throws -> UInt16 {
@@ -118,6 +124,7 @@ actor SimpleSocketServer {
         let listenerStartup = try await SocketListenerStartup.start(
             port: port,
             bindToLoopback: bindToLoopback,
+            addressFamily: addressFamily,
             parameters: parameters,
             queue: queue
         ) { [weak self] connection in
@@ -127,7 +134,7 @@ actor SimpleSocketServer {
             }
         }
 
-        self.serverPhase = .listening(listener: listenerStartup.listener, port: listenerStartup.port)
+        self.serverPhase = .listening(listeners: listenerStartup.listeners, port: listenerStartup.port)
         self._syncListeningPort.withLock { $0 = listenerStartup.port }
 
         return listenerStartup.port
@@ -135,7 +142,7 @@ actor SimpleSocketServer {
 
     /// Stop the server.
     func stop() {
-        guard case .listening(let listener, _) = serverPhase else { return }
+        guard case .listening(let listeners, _) = serverPhase else { return }
 
         let allClients = clientRegistry.drain()
         pendingCallbackTasks.cancelAll()
@@ -143,7 +150,9 @@ actor SimpleSocketServer {
         _syncListeningPort.withLock { $0 = 0 }
 
         clientLifecycle.cancelClientsWithoutNotifying(allClients)
-        listener.cancel()
+        for listener in listeners {
+            listener.cancel()
+        }
         logger.info("Server stopped")
     }
 

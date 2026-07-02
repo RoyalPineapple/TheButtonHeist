@@ -154,7 +154,7 @@ USB connections use the same TLS wire protocol as other transports. See the [Wir
 
 ## Implementation Details
 
-### IPv6 Dual-Stack Server
+### Configurable Address-Family Server
 
 The production `ServerTransport` uses Network framework (`NWListener`) with
 TLS parameters. Plain TCP startup exists only through explicitly named test
@@ -162,12 +162,30 @@ helpers.
 
 ```swift
 let parameters = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
-let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
-parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(rawValue: port)!)
-let listener = try NWListener(using: parameters)
+let hosts: [NWEndpoint.Host] = [
+    bindToLoopback ? .ipv4(.loopback) : .ipv4(.any),
+    bindToLoopback ? .ipv6(.loopback) : .ipv6(.any),
+]
+var requestedPort = port
+var listeners: [NWListener] = []
+for host in hosts {
+    let listenerParameters = parameters.copy()
+    listenerParameters.requiredLocalEndpoint = .hostPort(
+        host: host,
+        port: NWEndpoint.Port(rawValue: requestedPort) ?? .any
+    )
+    let listener = try NWListener(using: listenerParameters)
+    let actualPort = try await startAndWaitForReady(listener)
+    requestedPort = requestedPort == 0 ? actualPort : requestedPort
+    listeners.append(listener)
+}
 ```
 
-Simulator-only scope binds to loopback (`::1`). USB or network scopes bind to all interfaces (`::`) so CoreDevice USB can reach the listener. The bind address is controlled by `ServerExposure`, and connection scope classification still rejects disallowed sources before authentication.
+Simulator-only scope binds to loopback (`127.0.0.1` and `::1` by default).
+USB or network scopes bind to all interfaces for the configured address family
+so CoreDevice USB can reach the listener. The bind address is controlled by
+`ServerExposure`, and connection scope classification still rejects disallowed
+sources before authentication.
 
 This allows:
 - Simulator connections via `127.0.0.1` (loopback)

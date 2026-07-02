@@ -152,8 +152,8 @@ authenticated and unauthenticated connections:
 | Receive buffer | 10 MB | Per-client; exceeded -> disconnect |
 | Auth failure delay | 100 ms | Allows the terminal auth error to arrive before TCP close |
 | TLS listener | Required | Listener startup fails closed without token-derived PSK material |
-| Bind address (simulator-only scope) | `::1` (loopback) | Automatic when `allowedScopes == [.simulator]` |
-| Bind address (USB or network scope) | `::` (all interfaces) | Required for CoreDevice USB; scope filtering rejects disallowed sources before auth |
+| Bind address (simulator-only scope) | `127.0.0.1` and `::1` (loopback) | Automatic when `allowedScopes == [.simulator]` and `addressFamily == .dualStack` |
+| Bind address (USB or network scope) | Configured address family on all interfaces | Required for CoreDevice USB; scope filtering rejects disallowed sources before auth |
 | Bonjour advertisement | Network scope only | Default `simulator,usb` scope is not LAN-visible via Bonjour |
 
 ## Threat Model

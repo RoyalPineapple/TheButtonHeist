@@ -6,7 +6,10 @@ import UIKit
 extension TheInsideJob {
     @discardableResult
     func advertiseService(on transport: ServerTransport, port: UInt16) -> String? {
-        let exposure = ServerExposure(allowedScopes: runtimeConfiguration.allowedScopes)
+        let exposure = ServerExposure(
+            allowedScopes: runtimeConfiguration.allowedScopes,
+            addressFamily: runtimeConfiguration.addressFamily
+        )
         guard exposure.publishesBonjour else {
             insideJobLogger.info("Bonjour advertisement disabled: \(exposure.bonjourDisabledReason ?? "unknown", privacy: .public)")
             return nil
@@ -45,6 +48,7 @@ extension TheInsideJob {
             "sessionId=\(runtimeConfiguration.sessionIdentity.sessionId.uuidString)",
             "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
+            "addressFamily=\(runtimeConfiguration.addressFamily.rawValue)",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
             "fingerprints=\(runtimeConfiguration.fingerprintsEnabled)(\(runtimeConfiguration.fingerprintsEnabledSource.label))",
             "tls=psk",
