@@ -3,7 +3,7 @@
 Every module in the workspace and the direction of its dependencies, with the Codable wire boundary drawn explicitly. This diagram answers "which module owns what, and which types are allowed to cross the wire?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md)
-**Source of truth:** `ButtonHeist/Package.swift`, `ButtonHeistCLI/Package.swift`, `ButtonHeistMCP/Package.swift`
+**Source of truth:** `Package.swift`, `ButtonHeistCLI/Package.swift`, `ButtonHeistMCP/Package.swift`
 
 ```mermaid
 flowchart TD

@@ -100,7 +100,7 @@ fi
 
 if [[ ! -x "$DOCTOR" ]]; then
     if [[ "$BUILD_DOCTOR" == true && "$DOCTOR" == "$REPO_ROOT/.build/debug/heist-doctor" ]]; then
-        swift build --package-path "$REPO_ROOT/ButtonHeist" --product heist-doctor >/dev/null
+        swift build --package-path "$REPO_ROOT" --product heist-doctor >/dev/null
     else
         echo "Error: heist-doctor executable not found: $DOCTOR" >&2
         exit 1
