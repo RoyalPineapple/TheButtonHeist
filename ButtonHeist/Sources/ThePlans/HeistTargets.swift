@@ -23,20 +23,44 @@ public extension ElementTarget {
         .predicate(.value(value))
     }
 
+    static func hint(_ hint: String) -> ElementTarget {
+        .predicate(.hint(hint))
+    }
+
+    static func hint(_ hint: StringMatch<String>) -> ElementTarget {
+        .predicate(.hint(hint))
+    }
+
     static func traits(_ traits: [HeistTrait]) -> ElementTarget {
         .predicate(.traits(traits))
     }
 
-    static func excludeTraits(_ traits: [HeistTrait]) -> ElementTarget {
-        .predicate(.excludeTraits(traits))
+    static func actions(_ actions: [ElementAction]) -> ElementTarget {
+        .predicate(.actions(actions))
+    }
+
+    static func customContent(_ match: CustomContentMatch<String>) -> ElementTarget {
+        .predicate(.customContent(match))
+    }
+
+    static func rotors(_ rotors: [StringMatch<String>]) -> ElementTarget {
+        .predicate(.rotors(rotors))
+    }
+
+    static func exclude(_ check: ElementPredicateCheck<String>) -> ElementTarget {
+        .predicate(.exclude(check))
     }
 
     static func element(
         _ checks: ElementPredicateCheck<String>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> ElementTarget {
-        .predicate(ElementPredicate(checks, traits: traits, excludeTraits: excludeTraits))
+        .predicate(ElementPredicate(
+            checks,
+            traits: traits,
+            actions: actions
+        ))
     }
 
     static func target(_ predicate: ElementPredicate, ordinal: Int) -> ElementTarget {
@@ -84,20 +108,49 @@ public extension ElementPredicateTemplate {
         .value(.literal(value))
     }
 
+    @_disfavoredOverload
+    static func hint(_ hint: StringMatch<StringExpr>) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(hint: hint)
+    }
+
+    static func hint(_ hint: StringExpr) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(hint: StringMatch(hint))
+    }
+
+    static func hint(_ hint: String) -> ElementPredicateTemplate {
+        .hint(.literal(hint))
+    }
+
     static func traits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
         ElementPredicateTemplate(traits: traits)
     }
 
-    static func excludeTraits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(excludeTraits: traits)
+    static func actions(_ actions: [ElementAction]) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(actions: actions)
+    }
+
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(customContent: match)
+    }
+
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(rotors: rotors)
+    }
+
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> ElementPredicateTemplate {
+        ElementPredicateTemplate([.exclude(check)])
     }
 
     static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits)
+        ElementPredicateTemplate(
+            checks,
+            traits: traits,
+            actions: actions
+        )
     }
 }
 
@@ -144,20 +197,50 @@ public extension ElementTargetExpr {
         .predicate(.value(value))
     }
 
+    @_disfavoredOverload
+    static func hint(_ hint: StringMatch<StringExpr>) -> ElementTargetExpr {
+        .predicate(.hint(hint))
+    }
+
+    static func hint(_ hint: StringExpr) -> ElementTargetExpr {
+        .predicate(.hint(StringMatch(hint)))
+    }
+
+    @_disfavoredOverload
+    static func hint(_ hint: String) -> ElementTargetExpr {
+        .predicate(.hint(hint))
+    }
+
     static func traits(_ traits: [HeistTrait]) -> ElementTargetExpr {
         .predicate(.traits(traits))
     }
 
-    static func excludeTraits(_ traits: [HeistTrait]) -> ElementTargetExpr {
-        .predicate(.excludeTraits(traits))
+    static func actions(_ actions: [ElementAction]) -> ElementTargetExpr {
+        .predicate(.actions(actions))
+    }
+
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> ElementTargetExpr {
+        .predicate(.customContent(match))
+    }
+
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> ElementTargetExpr {
+        .predicate(.rotors(rotors))
+    }
+
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> ElementTargetExpr {
+        .predicate(.exclude(check))
     }
 
     static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> ElementTargetExpr {
-        .predicate(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
+        .predicate(ElementPredicateTemplate(
+            checks,
+            traits: traits,
+            actions: actions
+        ))
     }
 
     static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> ElementTargetExpr {
@@ -287,20 +370,49 @@ public extension AccessibilityPredicateExpr {
         .exists(.value(value))
     }
 
+    @_disfavoredOverload
+    static func hint(_ hint: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.hint(hint))
+    }
+
+    static func hint(_ hint: StringExpr) -> AccessibilityPredicateExpr {
+        .exists(.hint(hint))
+    }
+
+    static func hint(_ hint: String) -> AccessibilityPredicateExpr {
+        .exists(.hint(hint))
+    }
+
     static func traits(_ traits: [HeistTrait]) -> AccessibilityPredicateExpr {
         .exists(.traits(traits))
     }
 
-    static func excludeTraits(_ traits: [HeistTrait]) -> AccessibilityPredicateExpr {
-        .exists(.excludeTraits(traits))
+    static func actions(_ actions: [ElementAction]) -> AccessibilityPredicateExpr {
+        .exists(.actions(actions))
+    }
+
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.customContent(match))
+    }
+
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> AccessibilityPredicateExpr {
+        .exists(.rotors(rotors))
+    }
+
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.exclude(check))
     }
 
     static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> AccessibilityPredicateExpr {
-        .exists(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
+        .exists(ElementPredicateTemplate(
+            checks,
+            traits: traits,
+            actions: actions
+        ))
     }
 
     static func appeared(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
@@ -382,20 +494,49 @@ public extension StatePredicateExpr {
         .exists(.value(value))
     }
 
+    @_disfavoredOverload
+    static func hint(_ hint: StringMatch<StringExpr>) -> StatePredicateExpr {
+        .exists(.hint(hint))
+    }
+
+    static func hint(_ hint: StringExpr) -> StatePredicateExpr {
+        .exists(.hint(hint))
+    }
+
+    static func hint(_ hint: String) -> StatePredicateExpr {
+        .exists(.hint(hint))
+    }
+
     static func traits(_ traits: [HeistTrait]) -> StatePredicateExpr {
         .exists(.traits(traits))
     }
 
-    static func excludeTraits(_ traits: [HeistTrait]) -> StatePredicateExpr {
-        .exists(.excludeTraits(traits))
+    static func actions(_ actions: [ElementAction]) -> StatePredicateExpr {
+        .exists(.actions(actions))
+    }
+
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> StatePredicateExpr {
+        .exists(.customContent(match))
+    }
+
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> StatePredicateExpr {
+        .exists(.rotors(rotors))
+    }
+
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> StatePredicateExpr {
+        .exists(.exclude(check))
     }
 
     static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> StatePredicateExpr {
-        .exists(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
+        .exists(ElementPredicateTemplate(
+            checks,
+            traits: traits,
+            actions: actions
+        ))
     }
 }
 

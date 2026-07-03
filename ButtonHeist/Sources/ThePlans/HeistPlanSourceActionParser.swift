@@ -56,7 +56,17 @@ extension HeistPlanSourceParser {
                 return ".identifier(\(renderStringMatchCallArgument(match)))"
             case .value(let match):
                 return ".value(\(renderStringMatchCallArgument(match)))"
-            case .traits, .excludeTraits:
+            case .hint(let match):
+                return ".hint(\(renderStringMatchCallArgument(match)))"
+            case .actions(let actions):
+                return ".actions(\(renderActionArrayCorrection(actions)))"
+            case .customContent(let match):
+                return ".customContent(\(renderCustomContentCorrection(match)))"
+            case .rotors(let matches):
+                return ".rotors(\(renderStringMatchArrayCorrection(matches)))"
+            case .exclude(let check):
+                return ".exclude(\(renderPredicateCheckCorrection(check)))"
+            case .traits:
                 break
             }
         }
@@ -72,15 +82,53 @@ extension HeistPlanSourceParser {
             return ".identifier(\(renderStringMatchCallArgument(match)))"
         case .value(let match):
             return ".value(\(renderStringMatchCallArgument(match)))"
+        case .hint(let match):
+            return ".hint(\(renderStringMatchCallArgument(match)))"
         case .traits(let traits):
             return ".traits(\(renderTraitArrayCorrection(traits)))"
-        case .excludeTraits(let traits):
-            return ".excludeTraits(\(renderTraitArrayCorrection(traits)))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArrayCorrection(actions)))"
+        case .customContent(let match):
+            return ".customContent(\(renderCustomContentCorrection(match)))"
+        case .rotors(let matches):
+            return ".rotors(\(renderStringMatchArrayCorrection(matches)))"
+        case .exclude(let check):
+            return ".exclude(\(renderPredicateCheckCorrection(check)))"
         }
     }
 
     func renderTraitArrayCorrection(_ traits: Set<HeistTrait>) -> String {
         "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
+    }
+
+    func renderActionArrayCorrection(_ actions: Set<ElementAction>) -> String {
+        "[\(actions.canonicalElementActionArray.map(renderActionCorrection).joined(separator: ", "))]"
+    }
+
+    func renderActionCorrection(_ action: ElementAction) -> String {
+        switch action {
+        case .activate:
+            return ".activate"
+        case .increment:
+            return ".increment"
+        case .decrement:
+            return ".decrement"
+        case .custom(let name):
+            return ".custom(\(quote(name)))"
+        }
+    }
+
+    func renderCustomContentCorrection(_ match: CustomContentMatch<StringExpr>) -> String {
+        let fields = [
+            match.label.map { "label: \(renderStringMatchFieldArgument($0))" },
+            match.value.map { "value: \(renderStringMatchFieldArgument($0))" },
+            match.isImportant.map { "isImportant: \($0)" },
+        ].compactMap { $0 }
+        return ".match(\(fields.joined(separator: ", ")))"
+    }
+
+    func renderStringMatchArrayCorrection(_ matches: [StringMatch<StringExpr>]) -> String {
+        "[\(matches.map(renderStringMatchCallArgument).joined(separator: ", "))]"
     }
 
     func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {

@@ -97,6 +97,9 @@ enum HeistValueExpectedType: Sendable, Equatable {
     case elementPredicateCheckObject
     case arrayOfElementPredicateCheckObjects
     case arrayOfTraitNames
+    case elementAction
+    case arrayOfElementActions
+    case customContentMatchObject
 
     var description: String {
         switch self {
@@ -120,6 +123,12 @@ enum HeistValueExpectedType: Sendable, Equatable {
             return "array of element predicate check objects"
         case .arrayOfTraitNames:
             return "array of trait names"
+        case .elementAction:
+            return "element action string or custom action object"
+        case .arrayOfElementActions:
+            return "array of element actions"
+        case .customContentMatchObject:
+            return "custom content match object"
         }
     }
 }
@@ -204,11 +213,33 @@ struct HeistValuePayloadExpectation: Sendable, Equatable {
             [
                 "kind": .string,
                 "match": .stringMatchObject,
-                "values": .arrayOfTraitNames,
+                "values": .array,
+                "check": .elementPredicateCheckObject,
             ],
             prefixed("match", stringMatch.paths),
+            prefixed("check", [
+                "kind": .string,
+                "match": .stringMatchObject,
+                "values": .array,
+            ]),
+            prefixed("check.match", stringMatch.paths),
         ]),
-        arrayItems: ["values": .string]
+        arrayItems: ["values": .elementAction]
+    )
+
+    static let elementAction = HeistValuePayloadExpectation(root: .elementAction)
+
+    static let customContentMatch = HeistValuePayloadExpectation(
+        root: .customContentMatchObject,
+        paths: merged([
+            [
+                "label": .stringMatchObject,
+                "value": .stringMatchObject,
+                "isImportant": .boolean,
+            ],
+            prefixed("label", stringMatch.paths),
+            prefixed("value", stringMatch.paths),
+        ])
     )
 
     static let elementPredicate = HeistValuePayloadExpectation(
@@ -290,12 +321,17 @@ struct HeistValuePayloadExpectation: Sendable, Equatable {
                 "label": .stringMatchObject,
                 "identifier": .stringMatchObject,
                 "value": .stringMatchObject,
+                "hint": .stringMatchObject,
                 "traits": .arrayOfTraitNames,
-                "excludeTraits": .arrayOfTraitNames,
+                "actions": .arrayOfElementActions,
+                "customContent": .customContentMatchObject,
+                "rotors": .array,
             ],
             prefixed("label", stringMatch.paths),
             prefixed("identifier", stringMatch.paths),
             prefixed("value", stringMatch.paths),
+            prefixed("hint", stringMatch.paths),
+            prefixed("customContent", customContentMatch.paths),
             prefixed("checks", elementPredicateCheck.paths),
         ])
     }
@@ -305,7 +341,8 @@ struct HeistValuePayloadExpectation: Sendable, Equatable {
             [
                 "checks": .elementPredicateCheckObject,
                 "traits": .string,
-                "excludeTraits": .string,
+                "actions": .elementAction,
+                "rotors": .stringMatchObject,
             ],
             prefixed("checks", elementPredicateCheck.arrayItems),
         ])
@@ -347,9 +384,21 @@ extension ElementPredicate: HeistValuePayloadExpectationProviding {
     }
 }
 
-extension ElementPredicateCheck: HeistValuePayloadExpectationProviding where Value == String {
+extension ElementPredicateCheck: HeistValuePayloadExpectationProviding where Text == String {
     static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
         .elementPredicateCheck
+    }
+}
+
+extension ElementAction: HeistValuePayloadExpectationProviding {
+    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
+        .elementAction
+    }
+}
+
+extension CustomContentMatch: HeistValuePayloadExpectationProviding where Value == String {
+    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
+        .customContentMatch
     }
 }
 

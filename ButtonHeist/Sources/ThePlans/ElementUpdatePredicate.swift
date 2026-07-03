@@ -268,7 +268,7 @@ extension ElementPointMatch: CustomStringConvertible {
 }
 
 /// Field-level checker for one custom-content item in the element's custom content list.
-public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable where Value: Codable {
+public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashable where Value: Codable {
     public let label: StringMatch<Value>?
     public let value: StringMatch<Value>?
     public let isImportant: Bool?
@@ -289,6 +289,12 @@ public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable
         isImportant: Bool? = nil
     ) -> Self {
         Self(label: label, value: value, isImportant: isImportant)
+    }
+
+    public var hasPredicateLiteral: Bool {
+        label?.hasPredicateLiteral == true
+            || value?.hasPredicateLiteral == true
+            || isImportant != nil
     }
 
     public func map<NewValue: StringMatchPayload>(
@@ -1102,29 +1108,6 @@ private extension ElementPropertyChangeExpr {
             before.map { "before=\($0)" },
             after.map { "after=\($0)" },
         ].compactMap { $0 })
-    }
-}
-
-private extension Set where Element == ElementAction {
-    var canonicalElementActionArray: [ElementAction] {
-        sorted { lhs, rhs in
-            lhs.canonicalSortKey < rhs.canonicalSortKey
-        }
-    }
-}
-
-private extension ElementAction {
-    var canonicalSortKey: String {
-        switch self {
-        case .activate:
-            return "0:activate"
-        case .increment:
-            return "1:increment"
-        case .decrement:
-            return "2:decrement"
-        case .custom(let name):
-            return "3:\(name)"
-        }
     }
 }
 

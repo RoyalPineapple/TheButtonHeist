@@ -616,10 +616,12 @@ final class CLICommandSyncTests: XCTestCase {
     func testCLIBuilderCarriesPredicateTargetAsPublicTargetArgument() throws {
         let expectedTarget = ElementTarget.predicate(
             ElementPredicate(
-                label: "Rotor Host",
-                identifier: "rotor.host",
-                traits: [.selected, .button, .button],
-                excludeTraits: [.notEnabled, .header]
+                [
+                    .label("Rotor Host"),
+                    .identifier("rotor.host"),
+                    .traits([.selected, .button]),
+                    .exclude(.traits([.notEnabled, .header])),
+                ]
             ),
             ordinal: 1
         )
@@ -628,16 +630,33 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(arguments.argumentValues[FenceParameterKey.target.rawValue], .object([
-            "label": .object([
-                "mode": .string("exact"),
-                "value": .string("Rotor Host"),
+            "checks": .array([
+                .object([
+                    "kind": .string("label"),
+                    "match": .object([
+                        "mode": .string("exact"),
+                        "value": .string("Rotor Host"),
+                    ]),
+                ]),
+                .object([
+                    "kind": .string("identifier"),
+                    "match": .object([
+                        "mode": .string("exact"),
+                        "value": .string("rotor.host"),
+                    ]),
+                ]),
+                .object([
+                    "kind": .string("traits"),
+                    "values": .array([.string("button"), .string("selected")]),
+                ]),
+                .object([
+                    "kind": .string("exclude"),
+                    "check": .object([
+                        "kind": .string("traits"),
+                        "values": .array([.string("header"), .string("notEnabled")]),
+                    ]),
+                ]),
             ]),
-            "identifier": .object([
-                "mode": .string("exact"),
-                "value": .string("rotor.host"),
-            ]),
-            "traits": .array([.string("button"), .string("selected")]),
-            "excludeTraits": .array([.string("header"), .string("notEnabled")]),
             "ordinal": .int(1),
         ]))
     }

@@ -99,7 +99,10 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
                 predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
                 predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "bar")),
                 predicateCheckValue(kind: "traits", values: [.string("button")]),
-                predicateCheckValue(kind: "excludeTraits", values: [.string("notEnabled")]),
+                predicateCheckValue(
+                    kind: "exclude",
+                    check: predicateCheckValue(kind: "traits", values: [.string("notEnabled")])
+                ),
             ]),
         ])),
               case .predicate(let matcher, _) = target else {
@@ -110,7 +113,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             .label(.prefix("foo")),
             .label(.contains("bar")),
             .traits([.button]),
-            .excludeTraits([.notEnabled]),
+            .exclude(.traits([.notEnabled])),
         ])
     }
 
@@ -366,17 +369,17 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             "type": .string("exists"),
             "element": elementTargetValue([
                 "checks": .array([
-                    predicateCheckValue(kind: "excludeTraits"),
+                    predicateCheckValue(kind: "exclude"),
                 ]),
             ]),
         ]))) { error in
             let message = schemaMessage(error)
             XCTAssertTrue(
-                message.contains("element.checks[0].values"),
+                message.contains("element.checks[0].check"),
                 "Unexpected error: \(error)"
             )
             XCTAssertTrue(
-                message.contains("expected array of trait names"),
+                message.contains("expected element predicate check object"),
                 "Unexpected error: \(error)"
             )
         }
@@ -448,9 +451,15 @@ private func stringMatchValue(mode: String, value: String) -> HeistValue {
     ])
 }
 
-private func predicateCheckValue(kind: String, match: HeistValue? = nil, values: [HeistValue]? = nil) -> HeistValue {
+private func predicateCheckValue(
+    kind: String,
+    match: HeistValue? = nil,
+    values: [HeistValue]? = nil,
+    check: HeistValue? = nil
+) -> HeistValue {
     var object: [String: HeistValue] = ["kind": .string(kind)]
     if let match { object["match"] = match }
     if let values { object["values"] = .array(values) }
+    if let check { object["check"] = check }
     return .object(object)
 }

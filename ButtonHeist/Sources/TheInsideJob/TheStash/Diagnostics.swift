@@ -118,10 +118,18 @@ extension TheStash {
             return "identifier"
         case .value:
             return "value"
+        case .hint:
+            return "hint"
         case .traits:
             return "traits"
-        case .excludeTraits:
-            return "excludeTraits"
+        case .actions:
+            return "actions"
+        case .customContent:
+            return "customContent"
+        case .rotors:
+            return "rotors"
+        case .exclude(let check):
+            return "exclude(\(checkName(check)))"
         }
     }
 
@@ -133,12 +141,39 @@ extension TheStash {
             return { $0.identifier ?? "(nil)" }
         case .value:
             return { $0.value ?? "(nil)" }
-        case .traits, .excludeTraits:
+        case .hint:
+            return { $0.hint ?? "(nil)" }
+        case .traits:
             return { element in
                 AccessibilityTraits.knownTraits
                     .filter { element.traits.contains($0.trait) }
                     .map { $0.name }.joined(separator: ", ")
             }
+        case .actions:
+            return { element in
+                element.predicateActions.canonicalElementActionArray.map(\.description).joined(separator: ", ")
+            }
+        case .customContent:
+            return { element in
+                element.customContent.compactMap { content -> String? in
+                    switch (content.label.isEmpty, content.value.isEmpty) {
+                    case (false, false):
+                        return "\(content.label): \(content.value)"
+                    case (false, true):
+                        return content.label
+                    case (true, false):
+                        return content.value
+                    case (true, true):
+                        return nil
+                    }
+                }.joined(separator: "; ")
+            }
+        case .rotors:
+            return { element in
+                element.customRotors.map(\.name).filter { !$0.isEmpty }.joined(separator: ", ")
+            }
+        case .exclude(let check):
+            return actualValueReader(for: check)
         }
     }
 
@@ -216,10 +251,18 @@ extension TheStash {
                 return .identifier(.contains(match.value))
             case .value(let match):
                 return .value(.contains(match.value))
+            case .hint(let match):
+                return .hint(.contains(match.value))
             case .traits(let traits):
                 return .traits(traits)
-            case .excludeTraits(let traits):
-                return .excludeTraits(traits)
+            case .actions(let actions):
+                return .actions(actions)
+            case .customContent(let match):
+                return .customContent(match)
+            case .rotors(let matches):
+                return .rotors(matches.map { .contains($0.value) })
+            case .exclude(let check):
+                return .exclude(check)
             }
         })
         return diagnostic == predicate ? nil : diagnostic
@@ -234,6 +277,7 @@ extension TheStash {
             failedPredicate.includesCheck(.label) ? .label : nil,
             failedPredicate.includesCheck(.identifier) ? .identifier : nil,
             failedPredicate.includesCheck(.value) ? .value : nil,
+            failedPredicate.includesCheck(.hint) ? .hint : nil,
         ]
         let observed = ElementDiagnosticSummary(element: element)
             .rendered(using: .selectedFields(fields.compactMap { $0 }))
@@ -249,10 +293,18 @@ extension TheStash {
                 return element.identifier.map { .identifier(.exact($0)) }
             case .value:
                 return element.value.map { .value(.exact($0)) }
+            case .hint:
+                return element.hint.map { .hint(.exact($0)) }
             case .traits(let traits):
                 return .traits(traits)
-            case .excludeTraits(let traits):
-                return .excludeTraits(traits)
+            case .actions(let actions):
+                return .actions(actions)
+            case .customContent(let match):
+                return .customContent(match)
+            case .rotors(let matches):
+                return .rotors(matches)
+            case .exclude(let check):
+                return .exclude(check)
             }
         }).description
     }
@@ -347,15 +399,16 @@ private enum DiagnosticPredicateCheckKind {
     case label
     case identifier
     case value
+    case hint
 }
 
 private extension ElementPredicate {
     func includesCheck(_ kind: DiagnosticPredicateCheckKind) -> Bool {
         checks.contains { check in
             switch (kind, check) {
-            case (.label, .label), (.identifier, .identifier), (.value, .value):
+            case (.label, .label), (.identifier, .identifier), (.value, .value), (.hint, .hint):
                 return true
-            case (.label, _), (.identifier, _), (.value, _):
+            case (.label, _), (.identifier, _), (.value, _), (.hint, _):
                 return false
             }
         }

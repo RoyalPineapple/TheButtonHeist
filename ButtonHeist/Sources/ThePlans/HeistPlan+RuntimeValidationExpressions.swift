@@ -81,8 +81,19 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateString(match, path: "\(checkPath).identifier", role: "element identifier")
             case .value(let match):
                 validateString(match, path: "\(checkPath).value", role: "element value")
-            case .traits, .excludeTraits:
+            case .hint(let match):
+                validateString(match, path: "\(checkPath).hint", role: "element hint")
+            case .traits:
                 break
+            case .actions:
+                break
+            case .customContent(let match):
+                validateString(match.label, path: "\(checkPath).customContent.label", role: "custom content label")
+                validateString(match.value, path: "\(checkPath).customContent.value", role: "custom content value")
+            case .rotors(let matches):
+                validateStrings(matches, path: "\(checkPath).rotors", role: "element rotor")
+            case .exclude(let check):
+                validateElementPredicate(ElementPredicate([check]), path: "\(checkPath).exclude")
             }
         }
     }
@@ -101,8 +112,23 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateString(match, path: "\(checkPath).identifier", scope: scope)
             case .value(let match):
                 validateString(match, path: "\(checkPath).value", scope: scope)
-            case .traits, .excludeTraits:
+            case .hint(let match):
+                validateString(match, path: "\(checkPath).hint", scope: scope)
+            case .traits:
                 break
+            case .actions:
+                break
+            case .customContent(let match):
+                if let label = match.label {
+                    validateString(label, path: "\(checkPath).customContent.label", scope: scope)
+                }
+                if let value = match.value {
+                    validateString(value, path: "\(checkPath).customContent.value", scope: scope)
+                }
+            case .rotors(let matches):
+                validateStrings(matches, path: "\(checkPath).rotors", scope: scope)
+            case .exclude(let check):
+                validateElementPredicate(ElementPredicateTemplate([check]), path: "\(checkPath).exclude", scope: scope)
             }
         }
     }

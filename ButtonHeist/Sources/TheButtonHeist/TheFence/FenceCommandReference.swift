@@ -153,9 +153,12 @@ package enum FenceCommandReference {
                 "Use `exact` for exact matching; broad modes require a non-empty value. " +
                 "Element matcher fields `label`, `identifier`, and `value` may also accept an array of StringMatch objects; " +
                 "every object in the array must match the same property. Prefer `checks` for ordered element predicate chains, " +
-                "including repeated string checks and trait checks. A string check item is " +
-                "`{ \"kind\": \"label|identifier|value\", \"match\": { \"mode\": \"...\", \"value\": \"...\" } }`; " +
-                "a trait check item is `{ \"kind\": \"traits|excludeTraits\", \"values\": [\"button\"] }`. " +
+                "including repeated string, trait, action, custom-content, rotor, and exclude checks. A string check item is " +
+                "`{ \"kind\": \"label|identifier|value|hint\", \"match\": { \"mode\": \"...\", \"value\": \"...\" } }`; " +
+                "a trait/action check item is `{ \"kind\": \"traits|actions\", \"values\": [...] }`; " +
+                "custom actions use `{ \"custom\": \"Sub\" }`; a custom-content check item is " +
+                "`{ \"kind\": \"customContent\", \"match\": { \"label\": StringMatch, \"value\": StringMatch } }`; " +
+                "exclusions wrap another check as `{ \"kind\": \"exclude\", \"check\": { ... } }`. " +
                 "Updated element predicates use full `before` and `after` element matcher objects.",
         ]
     }

@@ -164,8 +164,11 @@ private enum InterfaceElementMatcherField: CaseIterable {
     case label
     case identifier
     case value
+    case hint
     case traits
-    case excludeTraits
+    case actions
+    case customContent
+    case rotors
 
     var key: FenceParameterKey {
         switch self {
@@ -175,10 +178,16 @@ private enum InterfaceElementMatcherField: CaseIterable {
             return .identifier
         case .value:
             return .value
+        case .hint:
+            return .hint
         case .traits:
             return .traits
-        case .excludeTraits:
-            return .excludeTraits
+        case .actions:
+            return .actions
+        case .customContent:
+            return .customContent
+        case .rotors:
+            return .rotors
         }
     }
 
@@ -190,10 +199,16 @@ private enum InterfaceElementMatcherField: CaseIterable {
             return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.identifier)
         case .value:
             return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.value)
+        case .hint:
+            return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.hint)
         case .traits:
             return try traitCheck(in: arguments, makeCheck: ElementPredicateCheck.traits)
-        case .excludeTraits:
-            return try traitCheck(in: arguments, makeCheck: ElementPredicateCheck.excludeTraits)
+        case .actions:
+            return try actionCheck(in: arguments, makeCheck: ElementPredicateCheck.actions)
+        case .customContent:
+            return try customContentCheck(in: arguments, makeCheck: ElementPredicateCheck.customContent)
+        case .rotors:
+            return try rotorCheck(in: arguments, makeCheck: ElementPredicateCheck.rotors)
         }
     }
 
@@ -208,5 +223,34 @@ private enum InterfaceElementMatcherField: CaseIterable {
             return []
         }
         return [makeCheck(traits.heistTraitSet)]
+    }
+
+    private func actionCheck(
+        in arguments: TheFence.CommandArgumentEnvelope,
+        makeCheck: (Set<ElementAction>) -> ElementPredicateCheck<String>
+    ) throws -> [ElementPredicateCheck<String>] {
+        guard let value = arguments.value(for: key) else { return [] }
+        try TheFence.validateElementActionsValue(value, field: arguments.field(key))
+        let actions = try arguments.decodePayload(value, forKey: key, as: [ElementAction].self)
+        return actions.isEmpty ? [] : [makeCheck(Set(actions))]
+    }
+
+    private func customContentCheck(
+        in arguments: TheFence.CommandArgumentEnvelope,
+        makeCheck: (CustomContentMatch<String>) -> ElementPredicateCheck<String>
+    ) throws -> [ElementPredicateCheck<String>] {
+        guard let value = arguments.value(for: key) else { return [] }
+        try TheFence.validateCustomContentMatchObject(value, field: arguments.field(key))
+        return [makeCheck(try arguments.decodePayload(value, forKey: key, as: CustomContentMatch<String>.self))]
+    }
+
+    private func rotorCheck(
+        in arguments: TheFence.CommandArgumentEnvelope,
+        makeCheck: ([StringMatch<String>]) -> ElementPredicateCheck<String>
+    ) throws -> [ElementPredicateCheck<String>] {
+        guard let value = arguments.value(for: key) else { return [] }
+        try TheFence.validateStringMatchArray(value, field: arguments.field(key))
+        let matches = try arguments.decodePayload(value, forKey: key, as: [StringMatch<String>].self)
+        return matches.isEmpty ? [] : [makeCheck(matches)]
     }
 }

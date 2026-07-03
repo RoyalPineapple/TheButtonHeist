@@ -30,16 +30,36 @@ extension HeistPlanSourceParser {
             let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(value: value))
+        case "hint":
+            try expectSymbol("(")
+            let hint = try parseStringMatchCallArgument(field: "hint")
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate(hint: hint))
         case "traits":
             try expectSymbol("(")
             let traits = try parseTraitArray(role: "traits")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(traits: traits))
-        case "excludeTraits":
+        case "actions":
             try expectSymbol("(")
-            let traits = try parseTraitArray(role: "excludeTraits")
+            let actions = try parseActionArray(role: "actions")
             try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(excludeTraits: traits))
+            return .predicate(ElementPredicateTemplate(actions: actions))
+        case "customContent":
+            try expectSymbol("(")
+            let match = try parseCustomContentMatchArgument(role: "customContent")
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate(customContent: match))
+        case "rotors":
+            try expectSymbol("(")
+            let matches = try parseStringMatchArray(role: "rotors")
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate(rotors: matches))
+        case "exclude":
+            try expectSymbol("(")
+            let check = try parseElementPredicateCheck()
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate([.exclude(check)]))
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()
@@ -81,16 +101,36 @@ extension HeistPlanSourceParser {
             let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
             return ElementPredicateTemplate(value: value)
+        case "hint":
+            try expectSymbol("(")
+            let hint = try parseStringMatchCallArgument(field: "hint")
+            try expectSymbol(")")
+            return ElementPredicateTemplate(hint: hint)
         case "traits":
             try expectSymbol("(")
             let traits = try parseTraitArray(role: "traits")
             try expectSymbol(")")
             return ElementPredicateTemplate(traits: traits)
-        case "excludeTraits":
+        case "actions":
             try expectSymbol("(")
-            let traits = try parseTraitArray(role: "excludeTraits")
+            let actions = try parseActionArray(role: "actions")
             try expectSymbol(")")
-            return ElementPredicateTemplate(excludeTraits: traits)
+            return ElementPredicateTemplate(actions: actions)
+        case "customContent":
+            try expectSymbol("(")
+            let match = try parseCustomContentMatchArgument(role: "customContent")
+            try expectSymbol(")")
+            return ElementPredicateTemplate(customContent: match)
+        case "rotors":
+            try expectSymbol("(")
+            let matches = try parseStringMatchArray(role: "rotors")
+            try expectSymbol(")")
+            return ElementPredicateTemplate(rotors: matches)
+        case "exclude":
+            try expectSymbol("(")
+            let check = try parseElementPredicateCheck()
+            try expectSymbol(")")
+            return ElementPredicateTemplate([.exclude(check)])
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()
@@ -113,40 +153,80 @@ extension HeistPlanSourceParser {
         }
         while true {
             if currentToken.isSymbol("."),
-               lookaheadIdentifier(in: Set(["label", "identifier", "value", "traits", "excludeTraits"])) {
-                switch try parseDotCallName(allowedPrefixes: []) {
-                case "label":
-                    try expectSymbol("(")
-                    checks.append(.label(try parseStringMatchCallArgument(field: "label")))
-                    try expectSymbol(")")
-                case "identifier":
-                    try expectSymbol("(")
-                    checks.append(.identifier(try parseStringMatchCallArgument(field: "identifier")))
-                    try expectSymbol(")")
-                case "value":
-                    try expectSymbol("(")
-                    checks.append(.value(try parseStringMatchCallArgument(field: "value")))
-                    try expectSymbol(")")
-                case "traits":
-                    try expectSymbol("(")
-                    checks.append(.traits(try parseTraitArray(role: "traits").heistTraitSet))
-                    try expectSymbol(")")
-                case "excludeTraits":
-                    try expectSymbol("(")
-                    checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits").heistTraitSet))
-                    try expectSymbol(")")
-                default:
-                    throw error(previous, ".element(...) checks accept .label, .identifier, .value, .traits, and .excludeTraits")
-                }
+               lookaheadIdentifier(in: Set([
+                   "label", "identifier", "value", "hint",
+                   "traits",
+                   "actions",
+                   "customContent",
+                   "rotors",
+                   "exclude",
+               ])) {
+                checks.append(try parseElementPredicateCheck())
             } else {
                 throw error(
                     currentToken,
-                    ".element(...) accepts ordered checks like .label(\"Pay\"), .identifier(\"id\"), .traits([.button])"
+                    """
+                    .element(...) accepts ordered checks like .label("Pay"), .identifier("id"), \
+                    .traits([.button]), .actions([.activate]), .exclude(.traits([.notEnabled]))
+                    """
                 )
             }
             guard consumeSymbol(",") else { break }
         }
         return ElementPredicateTemplate(checks)
+    }
+
+    mutating func parseElementPredicateCheck() throws -> ElementPredicateCheck<StringExpr> {
+        let token = currentToken
+        switch try parseDotCallName(allowedPrefixes: []) {
+        case "label":
+            try expectSymbol("(")
+            let match = try parseStringMatchCallArgument(field: "label")
+            try expectSymbol(")")
+            return .label(match)
+        case "identifier":
+            try expectSymbol("(")
+            let match = try parseStringMatchCallArgument(field: "identifier")
+            try expectSymbol(")")
+            return .identifier(match)
+        case "value":
+            try expectSymbol("(")
+            let match = try parseStringMatchCallArgument(field: "value")
+            try expectSymbol(")")
+            return .value(match)
+        case "hint":
+            try expectSymbol("(")
+            let match = try parseStringMatchCallArgument(field: "hint")
+            try expectSymbol(")")
+            return .hint(match)
+        case "traits":
+            try expectSymbol("(")
+            let traits = try parseTraitArray(role: "traits")
+            try expectSymbol(")")
+            return .traits(traits.heistTraitSet)
+        case "actions":
+            try expectSymbol("(")
+            let actions = try parseActionArray(role: "actions")
+            try expectSymbol(")")
+            return .actions(Set(actions))
+        case "customContent":
+            try expectSymbol("(")
+            let match = try parseCustomContentMatchArgument(role: "customContent")
+            try expectSymbol(")")
+            return .customContent(match)
+        case "rotors":
+            try expectSymbol("(")
+            let matches = try parseStringMatchArray(role: "rotors")
+            try expectSymbol(")")
+            return .rotors(matches)
+        case "exclude":
+            try expectSymbol("(")
+            let check = try parseElementPredicateCheck()
+            try expectSymbol(")")
+            return .exclude(check)
+        default:
+            throw error(token, "element predicate checks accept .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors, and .exclude")
+        }
     }
 
     mutating func parseTraitArray(role: String) throws -> [HeistTrait] {
@@ -176,10 +256,18 @@ extension HeistPlanSourceParser {
             return try .identifier(concreteStringMatch(match, role: "identifier"))
         case .value(let match):
             return try .value(concreteStringMatch(match, role: "value"))
+        case .hint(let match):
+            return try .hint(concreteStringMatch(match, role: "hint"))
         case .traits(let traits):
             return .traits(traits)
-        case .excludeTraits(let traits):
-            return .excludeTraits(traits)
+        case .actions(let actions):
+            return .actions(actions)
+        case .customContent(let match):
+            return try .customContent(match.map { try concreteString($0, role: "custom content") })
+        case .rotors(let matches):
+            return try .rotors(matches.map { try concreteStringMatch($0, role: "rotors") })
+        case .exclude(let check):
+            return try .exclude(concreteCheck(check))
         }
     }
 
@@ -337,6 +425,46 @@ extension HeistPlanSourceParser {
             return lookaheadIdentifier(in: ["target"])
         }
         return false
+    }
+
+    mutating func parseCustomContentMatchArgument(role: String) throws -> CustomContentMatch<StringExpr> {
+        if currentToken.isSymbol(".") {
+            return try parseCustomContentMatch(role: role)
+        }
+
+        var label: StringMatch<StringExpr>?
+        var value: StringMatch<StringExpr>?
+        var isImportant: Bool?
+        if !currentToken.isSymbol(")") {
+            while true {
+                if lookaheadLabel("label") {
+                    try expectIdentifier("label")
+                    try expectSymbol(":")
+                    guard label == nil else {
+                        throw error(previous, "\(role) accepts label only once")
+                    }
+                    label = try parseStringMatchFieldValue(field: "\(role) label")
+                } else if lookaheadLabel("value") {
+                    try expectIdentifier("value")
+                    try expectSymbol(":")
+                    guard value == nil else {
+                        throw error(previous, "\(role) accepts value only once")
+                    }
+                    value = try parseStringMatchFieldValue(field: "\(role) value")
+                } else if lookaheadLabel("isImportant") {
+                    try expectIdentifier("isImportant")
+                    try expectSymbol(":")
+                    guard isImportant == nil else {
+                        throw error(previous, "\(role) accepts isImportant only once")
+                    }
+                    isImportant = try parseBoolLiteral()
+                } else {
+                    throw error(currentToken, "\(role) accepts label, value, and isImportant")
+                }
+                guard consumeSymbol(",") else { break }
+            }
+        }
+        return CustomContentMatch(label: label, value: value, isImportant: isImportant)
     }
 
 }

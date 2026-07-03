@@ -475,11 +475,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         ].compactMap { $0 }.joined(separator: ", ")
     }
 
-    private func renderActionArray(_ actions: Set<ElementAction>) -> String {
+    func renderActionArray(_ actions: Set<ElementAction>) -> String {
         "[\(actions.sorted { $0.canonicalSortKey < $1.canonicalSortKey }.map(render(action:)).joined(separator: ", "))]"
     }
 
-    private func render(action: ElementAction) -> String {
+    func render(action: ElementAction) -> String {
         switch action {
         case .activate:
             return ".activate"
@@ -492,29 +492,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    private func renderStringMatchArray(_ matches: [StringMatch<String>]) -> String {
+    func renderStringMatchArray(_ matches: [StringMatch<String>]) -> String {
         "[\(matches.map(renderFieldArgument).joined(separator: ", "))]"
     }
 
-    private func renderStringMatchArray(
+    func renderStringMatchArray(
         _ matches: [StringMatch<StringExpr>],
         environment: RenderEnvironment
     ) throws -> String {
-        try "[\(matches.map { try renderFieldArgument($0, environment: environment) }.joined(separator: ", "))]"
-    }
-}
-
-private extension ElementAction {
-    var canonicalSortKey: String {
-        switch self {
-        case .activate:
-            return "0:activate"
-        case .increment:
-            return "1:increment"
-        case .decrement:
-            return "2:decrement"
-        case .custom(let name):
-            return "3:\(name)"
-        }
+        let rendered = try matches.map { try renderFieldArgument($0, environment: environment) }
+        return "[\(rendered.joined(separator: ", "))]"
     }
 }

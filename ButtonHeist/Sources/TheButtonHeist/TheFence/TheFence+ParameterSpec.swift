@@ -151,12 +151,15 @@ import ThePlans
 }
 
 indirect enum FenceParameterSchema: Sendable, Equatable {
+    case unconstrained
     case scalar(FenceParameterScalarSpec)
     case object(FenceParameterObjectSpec)
     case array(FenceParameterArraySpec)
 
     var type: FenceParameterSpec.ParamType {
         switch self {
+        case .unconstrained:
+            return .object
         case .scalar(let scalar):
             return scalar.kind.type
         case .object:
@@ -168,6 +171,8 @@ indirect enum FenceParameterSchema: Sendable, Equatable {
 
     var jsonSchema: FenceParameterJSONSchema {
         switch self {
+        case .unconstrained:
+            return .unconstrained
         case .scalar(let scalar):
             return scalar.jsonSchema
         case .object(let object):
@@ -332,6 +337,7 @@ struct FenceParameterArrayConstraints: Sendable, Equatable {
 }
 
 indirect enum FenceParameterJSONSchema: Sendable, Equatable {
+    case unconstrained
     case scalar(FenceParameterJSONScalarSchema)
     case object(FenceParameterJSONObjectSchema)
     case array(FenceParameterJSONArraySchema)
@@ -342,6 +348,8 @@ indirect enum FenceParameterJSONSchema: Sendable, Equatable {
 
     private var heistValueProperties: [String: HeistValue] {
         switch self {
+        case .unconstrained:
+            return [:]
         case .scalar(let schema):
             return schema.heistValueProperties
         case .object(let schema):
@@ -553,22 +561,22 @@ extension TheFence {
 }
 
 @_spi(ButtonHeistTooling) public extension FenceParameterKey {
-    static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
+    static let absent = Self("absent"), action = Self("action"), actions = Self("actions"), angle = Self("angle"), app = Self("app")
     static let argument = Self("argument")
     static let after = Self("after")
     static let before = Self("before")
-    static let checks = Self("checks")
+    static let check = Self("check"), checks = Self("checks")
     static let command = Self("command")
     static let container = Self("container")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
-    static let endOffset = Self("endOffset"), excludeTraits = Self("excludeTraits")
+    static let endOffset = Self("endOffset")
     static let elementDirection = Self("elementDirection"), elementToPoint = Self("elementToPoint")
     static let elementUnitPoints = Self("elementUnitPoints")
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
-    static let heist = Self("heist"), identifier = Self("identifier")
-    static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
+    static let heist = Self("heist"), hint = Self("hint"), identifier = Self("identifier")
+    static let inlineData = Self("inlineData"), path = Self("path"), isImportant = Self("isImportant"), isModalBoundary = Self("isModalBoundary")
     static let kind = Self("kind"), label = Self("label"), match = Self("match"), matcher = Self("matcher")
     static let maxScrollsPerContainer = Self("maxScrollsPerContainer")
     static let maxScrollsPerDiscovery = Self("maxScrollsPerDiscovery")
@@ -579,11 +587,11 @@ extension TheFence {
     static let radius = Self("radius")
     static let replacingExisting = Self("replacingExisting")
     static let requestId = Self("requestId")
-    static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
+    static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), rotors = Self("rotors")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
     static let step = Self("step")
-    static let containerName = Self("containerName")
+    static let containerName = Self("containerName"), custom = Self("custom"), customContent = Self("customContent")
     static let unitPoint = Self("unitPoint")
     static let states = Self("states"), scopes = Self("scopes"), assertions = Self("assertions"), body = Self("body")
     static let name = Self("name"), parameter = Self("parameter"), definitions = Self("definitions")
@@ -1195,6 +1203,12 @@ enum FenceParameterBlocks: Sendable {
             return stringMatchParam(key, allowsArray: true)
         case .stringArray:
             return stringArrayParam(key)
+        case .stringMatchArray:
+            return stringMatchArrayParam(key)
+        case .actionArray:
+            return actionArrayParam(key)
+        case .customContentMatch:
+            return customContentMatchParam(key)
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
         }
@@ -1207,13 +1221,37 @@ enum FenceParameterBlocks: Sendable {
                 properties: [
                     param(
                         .kind, .string, required: true,
-                        enumValues: ["label", "identifier", "value", "traits", "excludeTraits"]
+                        enumValues: ElementPredicateCheck<String>.Kind.allCases.map(\.rawValue)
                     ),
                     stringMatchParam(.match),
-                    stringArrayParam(.values),
+                    predicateCheckValuesParam(.values),
+                    objectParam(.check),
                 ],
                 additionalProperties: false
             )
+        )
+    }
+
+    private static func predicateCheckValuesParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        arrayParam(key, items: .unconstrained)
+    }
+
+    private static func actionArrayParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        arrayParam(key, items: .unconstrained)
+    }
+
+    private static func stringMatchArrayParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        arrayParam(key, items: stringMatchParam(.values).schema)
+    }
+
+    private static func customContentMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        objectParam(
+            key,
+            properties: [
+                stringMatchParam(.label),
+                stringMatchParam(.value),
+                param(.isImportant, .boolean),
+            ]
         )
     }
 }

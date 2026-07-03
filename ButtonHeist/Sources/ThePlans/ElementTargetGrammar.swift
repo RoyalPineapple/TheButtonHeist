@@ -33,7 +33,7 @@ public enum ElementTargetGrammarError: Error, Equatable, Sendable {
         case .missingTarget:
             return "ElementTarget requires a predicate"
         case .emptyPredicate:
-            return "ElementTarget predicate requires label, identifier, value, traits, or excludeTraits"
+            return "ElementTarget predicate requires label, identifier, value, hint, traits, actions, customContent, rotors, or checks with exclude"
         case .negativeOrdinal(let ordinal):
             return "ordinal must be non-negative, got \(ordinal)"
         }

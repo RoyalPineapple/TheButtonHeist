@@ -58,10 +58,21 @@ package enum ScoreDescription {
         case .value(let match):
             guard !match.value.isEmpty else { return nil }
             return "value=\(stringMatch(match))"
+        case .hint(let match):
+            guard !match.value.isEmpty else { return nil }
+            return "hint=\(stringMatch(match))"
         case .traits(let traits):
             return listField("traits", traits.isEmpty ? nil : traits.canonicalHeistTraitArray)
-        case .excludeTraits(let traits):
-            return listField("excludeTraits", traits.isEmpty ? nil : traits.canonicalHeistTraitArray)
+        case .actions(let actions):
+            return listField("actions", actions.isEmpty ? nil : actions.canonicalElementActionArray)
+        case .customContent(let match):
+            guard match.hasPredicateLiteral else { return nil }
+            return "customContent=\(match)"
+        case .rotors(let matches):
+            return stringMatchFields("rotors", matches)
+        case .exclude(let check):
+            guard let field = predicateCheckField(check) else { return nil }
+            return "exclude(\(field))"
         }
     }
 

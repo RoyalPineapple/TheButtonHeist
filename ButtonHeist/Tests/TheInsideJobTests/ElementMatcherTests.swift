@@ -25,9 +25,21 @@ final class ElementMatcherTests: XCTestCase {
         value: String? = nil,
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        hint: String? = nil
+        hint: String? = nil,
+        customActions: [AccessibilityElement.CustomAction] = [],
+        customContent: [AccessibilityElement.CustomContent] = [],
+        customRotors: [AccessibilityElement.CustomRotor] = []
     ) -> AccessibilityElement {
-        .make(label: label, value: value, identifier: identifier, hint: hint, traits: traits)
+        .make(
+            label: label,
+            value: value,
+            identifier: identifier,
+            hint: hint,
+            traits: traits,
+            customActions: customActions,
+            customContent: customContent,
+            customRotors: customRotors
+        )
     }
 
     // MARK: - Match Dimensions (one each)
@@ -72,6 +84,29 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(ElementPredicate(label: "Changes").matches(element))
     }
 
+    func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() {
+        let element = element(
+            label: "Coke",
+            identifier: "combo-choice-Coke",
+            traits: .staticText,
+            hint: "Double tap to edit",
+            customActions: [AccessibilityElement.CustomAction(name: "Modify")],
+            customContent: [AccessibilityElement.CustomContent(label: "Slot", value: "Main", isImportant: true)],
+            customRotors: [AccessibilityElement.CustomRotor(name: "Actions")]
+        )
+
+        XCTAssertTrue(ElementPredicate.hint(.contains("edit")).matches(element))
+        XCTAssertTrue(ElementPredicate.actions([.custom("Modify")]).matches(element))
+        XCTAssertTrue(ElementPredicate.exclude(.actions([.custom("Sub")])).matches(element))
+        XCTAssertTrue(ElementPredicate.customContent(.match(label: "Slot", value: "Main")).matches(element))
+        XCTAssertTrue(ElementPredicate.exclude(.customContent(.match(label: "Discount"))).matches(element))
+        XCTAssertTrue(ElementPredicate.rotors(["Actions"]).matches(element))
+        XCTAssertTrue(ElementPredicate.exclude(.rotors(["Headings"])).matches(element))
+        XCTAssertFalse(ElementPredicate.exclude(.actions([.custom("Modify")])).matches(element))
+        XCTAssertFalse(ElementPredicate.customContent(.match(label: "Slot", value: "Side")).matches(element))
+        XCTAssertFalse(ElementPredicate.rotors(["Headings"]).matches(element))
+    }
+
     func testTraitsIncludeExactBitmask() {
         let element = element(traits: [.button, .selected])
         XCTAssertTrue(ElementPredicate(traits: [.button]).matches(element))
@@ -82,7 +117,10 @@ final class ElementMatcherTests: XCTestCase {
     func testTraitsExclude() {
         let enabled = element(label: "Submit", traits: .button)
         let disabled = element(label: "Submit", traits: [.button, .notEnabled])
-        let matcher = ElementPredicate(label: "Submit", excludeTraits: [.notEnabled])
+        let matcher = ElementPredicate.element(
+            .label("Submit"),
+            .exclude(.traits([.notEnabled]))
+        )
         XCTAssertTrue(matcher.matches(enabled))
         XCTAssertFalse(matcher.matches(disabled))
     }

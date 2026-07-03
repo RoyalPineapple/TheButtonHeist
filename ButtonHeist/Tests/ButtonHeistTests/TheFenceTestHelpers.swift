@@ -134,7 +134,6 @@ func semanticTarget(
     identifier: String? = nil,
     value: String? = nil,
     traits: [HeistTrait]? = nil,
-    excludeTraits: [HeistTrait]? = nil,
     ordinal: Int? = nil
 ) -> ElementTarget {
     .predicate(
@@ -142,8 +141,7 @@ func semanticTarget(
             label: label.map(StringMatch.exact),
             identifier: identifier.map(StringMatch.exact),
             value: value.map(StringMatch.exact),
-            traits: traits ?? [],
-            excludeTraits: excludeTraits ?? []
+            traits: traits ?? []
         ),
         ordinal: ordinal
     )
@@ -158,7 +156,6 @@ func targetArgumentValue(
     identifier: String? = nil,
     value: String? = nil,
     traits: [String]? = nil,
-    excludeTraits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
     var target: [String: HeistValue] = [:]
@@ -166,7 +163,6 @@ func targetArgumentValue(
     if let identifier { target["identifier"] = stringMatchArgumentValue(identifier) }
     if let value { target["value"] = stringMatchArgumentValue(value) }
     if let traits { target["traits"] = .array(traits.map { .string($0) }) }
-    if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return .object(target)
 }

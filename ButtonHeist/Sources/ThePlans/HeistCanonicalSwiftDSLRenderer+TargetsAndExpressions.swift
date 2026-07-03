@@ -49,7 +49,17 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".identifier(\(renderCallArgument(match)))"
         case .value(let match):
             return ".value(\(renderCallArgument(match)))"
-        case .traits, .excludeTraits:
+        case .hint(let match):
+            return ".hint(\(renderCallArgument(match)))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
+        case .customContent(let match):
+            return ".customContent(\(render(customContent: match)))"
+        case .rotors(let matches):
+            return ".rotors(\(renderStringMatchArray(matches)))"
+        case .exclude(let check):
+            return ".exclude(\(renderPredicateCheck(check)))"
+        case .traits:
             return nil
         }
     }
@@ -66,7 +76,17 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".identifier(\(try renderCallArgument(match, environment: environment)))"
         case .value(let match):
             return ".value(\(try renderCallArgument(match, environment: environment)))"
-        case .traits, .excludeTraits:
+        case .hint(let match):
+            return ".hint(\(try renderCallArgument(match, environment: environment)))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
+        case .customContent(let match):
+            return try ".customContent(\(render(customContent: match, environment: environment)))"
+        case .rotors(let matches):
+            return try ".rotors(\(renderStringMatchArray(matches, environment: environment)))"
+        case .exclude(let check):
+            return try ".exclude(\(renderPredicateCheck(check, environment: environment)))"
+        case .traits:
             return nil
         }
     }
@@ -92,10 +112,18 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".identifier(\(renderCallArgument(match)))"
         case .value(let match):
             return ".value(\(renderCallArgument(match)))"
+        case .hint(let match):
+            return ".hint(\(renderCallArgument(match)))"
         case .traits(let traits):
             return ".traits(\(renderTraitArray(traits)))"
-        case .excludeTraits(let traits):
-            return ".excludeTraits(\(renderTraitArray(traits)))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
+        case .customContent(let match):
+            return ".customContent(\(render(customContent: match)))"
+        case .rotors(let matches):
+            return ".rotors(\(renderStringMatchArray(matches)))"
+        case .exclude(let check):
+            return ".exclude(\(renderPredicateCheck(check)))"
         }
     }
 
@@ -110,10 +138,18 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".identifier(\(try renderCallArgument(match, environment: environment)))"
         case .value(let match):
             return ".value(\(try renderCallArgument(match, environment: environment)))"
+        case .hint(let match):
+            return ".hint(\(try renderCallArgument(match, environment: environment)))"
         case .traits(let traits):
             return ".traits(\(renderTraitArray(traits)))"
-        case .excludeTraits(let traits):
-            return ".excludeTraits(\(renderTraitArray(traits)))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
+        case .customContent(let match):
+            return try ".customContent(\(render(customContent: match, environment: environment)))"
+        case .rotors(let matches):
+            return try ".rotors(\(renderStringMatchArray(matches, environment: environment)))"
+        case .exclude(let check):
+            return try ".exclude(\(renderPredicateCheck(check, environment: environment)))"
         }
     }
 

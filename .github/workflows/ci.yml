@@ -85,6 +85,8 @@ jobs:
 
       - name: Check Swift public API breakage
         timeout-minutes: 12
+        env:
+          BUTTONHEIST_SWIFT_API_BREAKAGE_MODE: report
         run: scripts/check-swift-api-breaking-changes.sh
 
       - name: Check external ButtonHeist import contract

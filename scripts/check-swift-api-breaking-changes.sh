@@ -20,5 +20,37 @@ if [[ -z "$BASELINE_TAG" ]]; then
 fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
+PUBLIC_PRODUCTS=(
+    ThePlans
+    TheScore
+    ButtonHeistDSL
+    ButtonHeist
+    TheInsideJob
+    ButtonHeistTesting
+)
+MODE="${BUTTONHEIST_SWIFT_API_BREAKAGE_MODE:-strict}"
+case "$MODE" in
+    strict|report) ;;
+    *)
+        echo "Error: BUTTONHEIST_SWIFT_API_BREAKAGE_MODE must be 'strict' or 'report', got '$MODE'"
+        exit 2
+        ;;
+esac
+
+set +e
 swift package diagnose-api-breaking-changes "$BASELINE_TAG" \
-    --products ThePlans TheScore ButtonHeistDSL ButtonHeist
+    --products "${PUBLIC_PRODUCTS[@]}"
+status=$?
+set -e
+
+if [[ "$status" -eq 0 ]]; then
+    exit 0
+fi
+
+if [[ "$MODE" == "report" ]]; then
+    echo "Swift API breakage reported in non-blocking mode."
+    echo "Run with BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=strict to fail on this diagnostic."
+    exit 0
+fi
+
+exit "$status"

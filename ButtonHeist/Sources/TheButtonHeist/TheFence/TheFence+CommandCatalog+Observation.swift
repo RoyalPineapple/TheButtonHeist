@@ -28,9 +28,12 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
                     objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`,
                     or an array of those objects when one property needs multiple checks.
-                    Prefer `checks` when order matters or traits belong in the same predicate
-                    chain; each item is `{ "kind": "label|identifier|value|traits|excludeTraits",
-                    "match": StringMatch }` or `{ "kind": "traits|excludeTraits", "values": [...] }`.
+                    Prefer `checks` when order matters, traits/actions belong in the same
+                    predicate chain, or a check should be excluded; each item is
+                    `{ "kind": "label|identifier|value|hint|customContent", "match": ... }`,
+                    `{ "kind": "traits|actions|rotors", "values": [...] }`, or
+                    `{ "kind": "exclude", "check": { ... } }`.
+                    Custom actions use `{ "custom": "Sub" }`.
                     `containerName` is for inspection and viewport/debug commands only; it is
                     not a semantic target or durable heist selector.
                     `maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned

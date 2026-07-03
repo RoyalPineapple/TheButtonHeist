@@ -2145,8 +2145,11 @@ final class TheStashResolutionTests: XCTestCase {
                 expectedIds: ["done_button"]
             ),
             MatchCase(
-                name: "excludeTraits",
-                predicate: ElementPredicate(label: "Delete", excludeTraits: [.notEnabled]),
+                name: "exclude traits",
+                predicate: ElementPredicate.element(
+                    .label("Delete"),
+                    .exclude(.traits([.notEnabled]))
+                ),
                 expectedIds: ["delete_first"]
             ),
             MatchCase(
@@ -2155,8 +2158,8 @@ final class TheStashResolutionTests: XCTestCase {
                     .label(.exact("Done")),
                     .identifier(.exact("done_button")),
                     .value(.exact("Complete")),
-                    traits: [.button, .selected],
-                    excludeTraits: [.notEnabled]
+                    .exclude(.traits([.notEnabled])),
+                    traits: [.button, .selected]
                 ),
                 expectedIds: ["done_button"]
             ),

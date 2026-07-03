@@ -7,6 +7,7 @@ extension HeistElement: ElementPredicateSubject {
     package var predicateLabel: String? { label }
     package var predicateIdentifier: String? { identifier }
     package var predicateValue: String? { value }
+    package var predicateHint: String? { hint }
 
     package func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool {
         for trait in required where !Self.knownTraits.contains(trait) { return false }
@@ -14,10 +15,19 @@ extension HeistElement: ElementPredicateSubject {
         return required.allSatisfy { traitSet.contains($0) }
     }
 
-    package func violatesExcludedTraits(_ excluded: Set<HeistTrait>) -> Bool {
-        for trait in excluded where !Self.knownTraits.contains(trait) { return true }
-        let traitSet = Set(traits)
-        return excluded.contains { traitSet.contains($0) }
+    package func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool {
+        required.isSubset(of: Set(actions))
+    }
+
+    package func containsCustomContent(matching match: CustomContentMatch<String>) -> Bool {
+        CustomContentProperty.matches(match, value: customContent)
+    }
+
+    package func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool {
+        let names = rotors?.map(\.name) ?? []
+        return required.allSatisfy { match in
+            names.contains { match.matches($0) }
+        }
     }
 
     /// Match this wire element against an `ElementPredicate`.

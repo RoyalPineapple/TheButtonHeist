@@ -8,7 +8,7 @@ How an `ElementTarget` becomes a live, actionable element: predicate resolution 
 ```mermaid
 flowchart TD
     TARGET["ElementTarget<br/>.predicate(ElementPredicate, ordinal:)"] --> SCOPE["resolveTarget against<br/>settledSemanticScreen — the settled world"]
-    SCOPE --> MATCH["evaluate checks: label · identifier · value<br/>(exact / contains / prefix / suffix,<br/>case-insensitive, typography-folded)<br/>traits · excludeTraits"]
+    SCOPE --> MATCH["evaluate ordered checks: label · identifier · value · hint<br/>(exact / contains / prefix / suffix,<br/>case-insensitive, typography-folded)<br/>traits · actions · customContent · rotors · exclude(check)"]
 
     MATCH -- "0 matches" --> NOTFOUND[".notFound(TargetNotFoundFacts)<br/>reason .noMatches<br/>+ known elements in scope as suggestions"]
     MATCH -- "1 match, no ordinal" --> RESOLVED[".resolved(ScreenElement)"]

@@ -278,7 +278,7 @@ Activate(.element(
     .label(.contains("bar")),
     .label(.suffix("baz")),
     .traits([.button]),
-    .excludeTraits([.notEnabled])
+    .exclude(.traits([.notEnabled]))
 ))
 ```
 
