@@ -39,17 +39,34 @@ enum HeistRepairSuggestionRenderer {
         request: HeistRepairRequest,
         tiedBestCount: Int
     ) -> HeistRepairSuggestion? {
+        guard case .suggested(let suggestion) = validateSuggestion(
+            for: candidate,
+            analysis: analysis,
+            request: request,
+            tiedBestCount: tiedBestCount
+        ) else {
+            return nil
+        }
+        return suggestion
+    }
+
+    static func validateSuggestion(
+        for candidate: ScoredCandidate,
+        analysis: HeistEligibleRepairAnalysis,
+        request: HeistRepairRequest,
+        tiedBestCount: Int
+    ) -> RepairSuggestionValidation {
         let currentScreen = analysis.currentScreen
         let selectionContext = currentScreen.selectionContext()
         guard let selection = minimumUniquePredicate(for: candidate.element.id, in: selectionContext),
               case .resolved(let validation, _) = currentScreen.resolve(selection.target),
               validation.id == candidate.element.id
         else {
-            return nil
+            return .rejected(.noUniqueDurableMatcher)
         }
 
         if analysis.actionFamily.isKnown, !analysis.actionFamily.isSupported(by: candidate.element.element) {
-            return nil
+            return .rejected(.unsupportedActionFamily)
         }
 
         var reasons = baseReasons(
@@ -80,7 +97,7 @@ enum HeistRepairSuggestionRenderer {
             caveats.append(.currentFailureFullAfterSnapshotFallback)
         }
 
-        return HeistRepairSuggestion(
+        return .suggested(HeistRepairSuggestion(
             stepPath: request.currentFailure.stepPath,
             failureKind: analysis.failureKind,
             oldTarget: request.lastSuccess.target,
@@ -96,7 +113,7 @@ enum HeistRepairSuggestionRenderer {
             ),
             reasons: reasons,
             caveats: caveats
-        )
+        ))
     }
 
     private static func baseReasons(
@@ -206,6 +223,11 @@ enum HeistRepairSuggestionRenderer {
         }
         return .low
     }
+}
+
+enum RepairSuggestionValidation: Sendable, Equatable {
+    case suggested(HeistRepairSuggestion)
+    case rejected(RepairCandidateRejectionReason)
 }
 
 extension HeistRepairIneligibility {

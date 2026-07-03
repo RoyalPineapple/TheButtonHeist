@@ -163,6 +163,24 @@ The doctor uses that evidence to prove old intent before it looks for a
 successor. If the old target did not resolve exactly once in the last passing
 receipt, there is no safe target repair.
 
+## Diagnosis Pipeline
+
+The repair engine now exposes the suggestion flow as a typed diagnosis:
+
+```text
+evidence eligibility -> candidate ranking -> candidate validation -> suggestion or refusal
+```
+
+`HeistRepairSuggester.diagnosis(for:)` accepts already-extracted repair
+evidence. `HeistDoctor.diagnosis(lastPass:newFail:stepPath:)` runs the same
+pipeline from receipt pairs. Both return `HeistRepairDiagnosis`, which records
+validated suggestions, ranked candidate diagnostics, and typed refusal facts.
+
+The existing `suggestions` APIs remain suggestion-only wrappers over that
+diagnosis. If valid receipts produce no safe repair, `HeistDoctor.suggestions`
+still throws `noSafeSuggestion`; use `HeistDoctor.diagnosis` when callers need to
+inspect why the pipeline refused.
+
 The artifact boundary stays deliberately boring for now:
 
 ```text

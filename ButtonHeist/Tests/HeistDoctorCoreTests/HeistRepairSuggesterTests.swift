@@ -295,6 +295,65 @@ private let expectedRepairJSONReportJSON = """
         #expect(suggestion.reasons.contains(.scoring(.siblingRowContextPreserved)))
     }
 
+    @Test func `diagnosis exposes validated suggestion pipeline`() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = passedEvidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+                ("Bread", "Archive"),
+            ])
+        )
+        let current = failedEvidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+                ("Bread", "Archive"),
+            ])
+        )
+
+        let diagnosis = HeistRepairSuggester.diagnosis(for: request(last, current))
+        let suggestion = try #require(diagnosis.suggestions.first)
+        let candidate = try #require(diagnosis.candidates.first)
+
+        #expect(diagnosis.status == .suggested)
+        #expect(diagnosis.refusal == nil)
+        #expect(diagnosis.failureKind == .missingTarget)
+        #expect(diagnosis.currentMatchCount == 0)
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
+        #expect(candidate.source == .semanticContinuityScan)
+        #expect(candidate.validationStatus == .suggested)
+        #expect(candidate.suggestedTarget == suggestion.newTarget)
+        #expect(candidate.confidence == suggestion.confidence)
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)) == diagnosis.suggestions)
+    }
+
+    @Test func `diagnosis exposes typed candidate ranking refusal`() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = passedEvidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ])
+        )
+        let current = failedEvidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ])
+        )
+
+        let diagnosis = HeistRepairSuggester.diagnosis(for: request(last, current))
+        let refusal = try #require(diagnosis.refusal)
+
+        #expect(diagnosis.status == .refused)
+        #expect(diagnosis.suggestions.isEmpty)
+        #expect(diagnosis.failureKind == .missingTarget)
+        #expect(refusal.stage == .candidateRanking)
+        #expect(refusal.reason == .noCandidateMetScoreThreshold)
+        #expect(refusal.message == HeistRepairSuggester.noSuggestionReason(for: request(last, current)))
+    }
+
     @Test("Missing target chooses renamed duplicate by neighbor context")
     func missingTargetChoosesRenamedDuplicateByNeighborContext() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
@@ -801,6 +860,38 @@ private let expectedRepairJSONReportJSON = """
 
         #expect(reason.contains("old target is missing"))
         #expect(reason.contains("semantic continuity"))
+    }
+
+    @Test func `doctor diagnosis returns typed refusal for valid receipt pair`() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let lastPass = receipt(
+            path: "$.body[0]",
+            status: .passed,
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ]),
+            after: nil,
+            actionSucceeded: true
+        )
+        let newFail = receipt(
+            path: "$.body[0]",
+            status: .failed,
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ]),
+            after: nil,
+            actionSucceeded: false
+        )
+
+        let diagnosis = try HeistDoctor.diagnosis(lastPass: lastPass, newFail: newFail)
+        let refusal = try #require(diagnosis.refusal)
+
+        #expect(diagnosis.status == .refused)
+        #expect(refusal.stage == .candidateRanking)
+        #expect(refusal.reason == .noCandidateMetScoreThreshold)
+        #expect(refusal.message.contains("old target is missing"))
     }
 
     @Test("Doctor returns an error when no target repair is needed")
