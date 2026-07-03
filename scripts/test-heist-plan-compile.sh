@@ -6,12 +6,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-HEIST_PLAN_TOOL="${HEIST_PLAN_TOOL:-$REPO_ROOT/ButtonHeist/.build/debug/heist-plan}"
+HEIST_PLAN_TOOL="${HEIST_PLAN_TOOL:-$REPO_ROOT/.build/debug/heist-plan}"
 if [[ ! -x "$HEIST_PLAN_TOOL" ]]; then
     echo "Error: heist-plan executable not found at $HEIST_PLAN_TOOL" >&2
     exit 1
 fi
-HEIST_THEPLANS_BUILD_DIR="${HEIST_THEPLANS_BUILD_DIR:-$REPO_ROOT/ButtonHeist/.build/debug}"
+HEIST_THEPLANS_BUILD_DIR="${HEIST_THEPLANS_BUILD_DIR:-$REPO_ROOT/.build/debug}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/heist-plan-compile.XXXXXX")"
 cleanup() {
@@ -74,7 +74,7 @@ INSTALLED_TOOL="$INSTALLED_PREFIX/bin/heist-plan"
 INSTALLED_OUTPUT="$TMP_DIR/installed.heist"
 INTERFACE_BUILD_DIR="$TMP_DIR/interface-build"
 INTERFACE_ARTIFACT_DIR="$INTERFACE_BUILD_DIR/arm64-apple-macosx/release"
-swift build --package-path ButtonHeist -c release --arch arm64 --target ThePlans \
+swift build -c release --arch arm64 --target ThePlans \
     -Xswiftc -enable-library-evolution \
     -Xswiftc -emit-module-interface \
     --scratch-path "$INTERFACE_BUILD_DIR"
@@ -114,7 +114,7 @@ if [[ "$STATUS" -eq 0 ]]; then
     echo "Error: compile unexpectedly succeeded with a missing build directory" >&2
     exit 1
 fi
-for fragment in "searched:" "HEIST_THEPLANS_BUILD_DIR" "swift build --package-path ButtonHeist --product heist-plan"; do
+for fragment in "searched:" "HEIST_THEPLANS_BUILD_DIR" "swift build --product heist-plan"; do
     if [[ "$DIAGNOSTIC" != *"$fragment"* ]]; then
         echo "Error: missing-artifact diagnostic did not mention '$fragment'" >&2
         echo "--- diagnostic ---" >&2

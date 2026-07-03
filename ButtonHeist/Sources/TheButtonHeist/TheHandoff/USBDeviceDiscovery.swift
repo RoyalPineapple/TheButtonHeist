@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import ButtonHeistSupport
 import Network
 import os.log
 

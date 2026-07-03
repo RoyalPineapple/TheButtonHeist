@@ -2,6 +2,7 @@
 // Integration tests for performWaitFor — the settle-event polling loop that waits
 // for an element to appear or disappear. Requires the BH Demo test host
 // since wait_for polls the semantic accessibility tree via TheStash.
+import ButtonHeistSupport
 import XCTest
 import ThePlans
 @testable import AccessibilitySnapshotParser

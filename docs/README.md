@@ -21,14 +21,14 @@ Platform scope: The Button Heist automates iOS apps. The CLI and MCP server are 
 |----------|------------|
 | [MCP agent guide](MCP-AGENT-GUIDE.md) | How agents should observe, act, wait, and compose heists |
 | [MCP server README](../ButtonHeistMCP/) | Adapter behavior, runtime behavior, and environment variables |
-| [MCP tool reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
+| Live MCP schemas | Call MCP `tools/list`; tool names and input schemas are projected from TheFence descriptors |
 
 ## Use the terminal
 
 | Document | Use it for |
 |----------|------------|
 | [CLI README](../ButtonHeistCLI/) | Terminal workflows, device targeting, output, and JSON-lines mode |
-| [Command reference](reference/commands.md) | Generated Fence command names, CLI exposure, and parameters |
+| CLI help | Run `buttonheist --help` or `buttonheist <command> --help`; command names and parameters are descriptor-owned |
 
 ## Author heists
 

@@ -1,10 +1,10 @@
-# Test Applications
+# Test Application
 
-Two sample iOS apps that serve as integration targets for ButtonHeist. They exercise every gesture type, control variant, and accessibility pattern that TheInsideJob supports.
+A sample iOS app that serves as the integration target for ButtonHeist. It exercises every gesture type, control variant, and accessibility pattern that TheInsideJob supports.
 
-Both apps embed TheInsideJob — it auto-starts when the app launches, no code changes needed.
+The app embeds TheInsideJob — it auto-starts when the app launches, no code changes needed.
 
-## SwiftUI Test App — "A11y SwiftUI"
+## BH Demo
 
 - **Bundle ID**: `com.buttonheist.testapp`
 - **Scheme**: `BH Demo`
@@ -19,6 +19,10 @@ Both apps embed TheInsideJob — it auto-starts when the app launches, no code c
 | **Calculator** | Button grids, rapid tapping, chained operations |
 | **Touch Canvas** | Multi-touch drawing — tests `draw_path` and `draw_bezier` gestures |
 | **Settings** | Segmented pickers, toggles, text fields, dynamic type |
+| **UIKit Form** | Text fields, UISwitch, UISegmentedControl, submit/cancel buttons |
+| **UIKit Table View** | 3-section grouped table with disclosure indicators and selection |
+| **UIKit Collection View** | 3-column grid of accessibility category items |
+| **Research** | Accessibility SPI harness, trait probes, and diagnostic tools |
 
 ### Controls Demo Sub-screens
 
@@ -32,20 +36,9 @@ Both apps embed TheInsideJob — it auto-starts when the app launches, no code c
 | Disclosure & Grouping | DisclosureGroup, LabeledContent |
 | Display | Image, Label, Link, header Text |
 
-All controls use `buttonheist.*` accessibility identifiers for reliable targeting.
-
-## UIKit Test App — "A11y UIKit"
-
-- **Bundle ID**: `com.buttonheist.uikittestapp`
-- **Scheme**: `UIKitTestApp`
-
-### Screens
-
-| Screen | What It Tests |
-|--------|---------------|
-| **Form** | Text fields, UISwitch, UISegmentedControl, submit/cancel buttons |
-| **Table View** | 3-section grouped table with disclosure indicators and selection |
-| **Collection View** | 3-column grid of accessibility category items |
+Controls should be findable through their natural accessibility labels, values,
+traits, hints, and actions. Research harness screens may use identifiers when
+they are testing accessibility tree mechanics directly.
 
 ## Building and Running
 

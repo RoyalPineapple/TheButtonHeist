@@ -1,34 +1,9 @@
 import Foundation
-import XCTest
 import AccessibilitySnapshotModel
 import ThePlans
 @testable import TheScore
 
-func assertRoundTrip<T: Codable & Equatable>(
-    _ value: T,
-    as type: T.Type = T.self,
-    encoder: JSONEncoder = JSONEncoder(),
-    decoder: JSONDecoder = JSONDecoder(),
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws -> T {
-    let data = try encoder.encode(value)
-    let decoded = try decoder.decode(type, from: data)
-    XCTAssertEqual(decoded, value, file: file, line: line)
-    return decoded
-}
-
-func assertDecodeFailure<T: Decodable>(
-    _ type: T.Type,
-    json: String,
-    decoder: JSONDecoder = JSONDecoder(),
-    file: StaticString = #filePath,
-    line: UInt = #line
-) {
-    XCTAssertThrowsError(try decoder.decode(type, from: Data(json.utf8)), file: file, line: line)
-}
-
-func makeTestScreenPayload(
+package func makeTestScreenPayload(
     pngData: String = "",
     width: Double = 393,
     height: Double = 852,
@@ -44,7 +19,7 @@ func makeTestScreenPayload(
     )
 }
 
-func makeTestHeistElement(
+package func makeTestHeistElement(
     label: String = "Element",
     value: String? = nil,
     identifier: String? = nil,
@@ -71,7 +46,7 @@ func makeTestHeistElement(
     )
 }
 
-func makeTestActionResult(
+package func makeTestActionResult(
     succeeded: Bool = true,
     method: ActionMethod = .activate,
     message: String? = nil,
@@ -138,7 +113,7 @@ func makeTestActionResult(
     )
 }
 
-func makeTestHeistActionStep(
+package func makeTestHeistActionStep(
     path: String = "$.body[0]",
     command: HeistActionCommand? = nil,
     result: ActionResult = makeTestActionResult(),
@@ -169,7 +144,7 @@ func makeTestHeistActionStep(
     )
 }
 
-func makeTestHeistExecutionResult(
+package func makeTestHeistExecutionResult(
     steps: [HeistExecutionStepResult] = [makeTestHeistActionStep()],
     durationMs: Int = 1,
     abortedAtPath: String? = nil
@@ -181,7 +156,7 @@ func makeTestHeistExecutionResult(
     )
 }
 
-extension AccessibilityTrace {
+package extension AccessibilityTrace {
     static func projectingForTests(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
         TestActionResultTrace.projecting(delta)
     }

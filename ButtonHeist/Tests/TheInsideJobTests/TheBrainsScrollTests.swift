@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistSupport
 import XCTest
 import ThePlans
 import UIKit

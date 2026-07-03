@@ -96,6 +96,33 @@ struct RootView: View {
                         AlbumFlowView()
                     }
                 }
+
+                Section("UIKit") {
+                    NavigationLink("UIKit Form") {
+                        UIKitFormDemoView()
+                    }
+                    NavigationLink("UIKit Table") {
+                        UIKitTableDemoView()
+                    }
+                    NavigationLink("UIKit Collection") {
+                        UIKitCollectionDemoView()
+                    }
+                }
+
+                Section("Research") {
+                    NavigationLink("Scroll SPI Harness") {
+                        ScrollSPIHarnessView()
+                    }
+                    NavigationLink("Obscuring Harness") {
+                        PresentationObscuringHarnessView()
+                    }
+                    NavigationLink("Trait Probe") {
+                        TraitProbeView()
+                    }
+                    NavigationLink("Trait Validation") {
+                        TraitValidationView()
+                    }
+                }
             }
             .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)

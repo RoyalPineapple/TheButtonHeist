@@ -58,29 +58,6 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertFalse(TheFence.Command.scroll.usesPayloadCheckedHeistPrimitive)
     }
 
-    func testDescriptorDoesNotExposeBehaviorCapabilityFlags() throws {
-        let catalogSource = try String(
-            contentsOf: packageRoot()
-                .appendingPathComponent("Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift")
-        )
-        for removedFlag in [
-            "isNormalRecordable",
-            "recordsHeistStep",
-            "isDurableHeistPrimitive",
-            "isObservation",
-            "isViewportDebug",
-            "isSemanticAction",
-            "isSpatialAction",
-            "FenceCommandCapabilities",
-            "RecordableCommand",
-            "AppInteractionCommand",
-            "HeistPrimitiveCommand",
-            "PayloadCheckedHeistPrimitiveCommand",
-        ] {
-            XCTAssertFalse(catalogSource.contains(removedFlag), removedFlag)
-        }
-    }
-
     func testGeneratedCommandReferenceDisplaysFamilyGrouping() {
         let reference = FenceCommandReference.commandMarkdown()
 
@@ -89,34 +66,6 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(reference.contains("| `scroll` | `viewportDebug` |"), reference)
         XCTAssertFalse(reference.contains("Recordable"), reference)
         XCTAssertFalse(reference.contains("Durable"), reference)
-    }
-
-    func testCommittedCommandReferenceDocsMatchDescriptorProjection() throws {
-        try assertReferenceDocInSync(
-            relativePath: "docs/reference/commands.md",
-            generated: FenceCommandReference.commandMarkdown()
-        )
-        try assertReferenceDocInSync(
-            relativePath: "docs/reference/mcp-tools.md",
-            generated: FenceCommandReference.mcpMarkdown()
-        )
-    }
-
-    private func assertReferenceDocInSync(
-        relativePath: String,
-        generated: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws {
-        let url = repositoryRoot().appendingPathComponent(relativePath)
-        let committed = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertEqual(
-            committed,
-            generated,
-            "\(relativePath) is stale. Regenerate with scripts/render-command-reference.sh.",
-            file: file,
-            line: line
-        )
     }
 
     func testRunHeistDescriptorDoesNotAdvertiseRawJSONIRFields() {
@@ -366,17 +315,6 @@ final class WireCommandParityTests: XCTestCase {
     private func encodedWireType(for message: ClientMessage) throws -> ClientWireMessageType {
         let data = try JSONEncoder().encode(message)
         return try JSONDecoder().decode(EncodedClientType.self, from: data).type
-    }
-
-    private func packageRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func repositoryRoot() -> URL {
-        packageRoot().deletingLastPathComponent()
     }
 
     private func heistStepValue(type: String, payload: [String: HeistValue]) -> HeistValue {

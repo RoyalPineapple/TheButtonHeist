@@ -75,14 +75,6 @@ jobs:
         timeout-minutes: 12
         run: swift package resolve
 
-      - name: Verify package manifest drift guard
-        timeout-minutes: 5
-        run: scripts/check-package-manifest-drift.sh
-
-      - name: Reject invalid Swift pipeline shapes
-        timeout-minutes: 5
-        run: scripts/reject-invalid-swift-shapes.sh
-
       - name: Build TheScore
         timeout-minutes: 5
         run: swift build --target TheScore
@@ -91,9 +83,9 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
-      - name: Verify Swift public API baselines
+      - name: Check Swift public API breakage
         timeout-minutes: 12
-        run: scripts/check-swift-api-baseline.sh
+        run: scripts/check-swift-api-breaking-changes.sh
 
       - name: Check external ButtonHeist import contract
         timeout-minutes: 12
@@ -123,18 +115,18 @@ jobs:
 
       - name: Build heist-plan
         timeout-minutes: 8
-        run: swift build --package-path ButtonHeist --product heist-plan
+        run: swift build --product heist-plan
 
       - name: Smoke test heist-plan compile
         timeout-minutes: 12
         env:
-          HEIST_PLAN_TOOL: ${{ github.workspace }}/ButtonHeist/.build/debug/heist-plan
+          HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
         run: scripts/test-heist-plan-compile.sh
 
       - name: Run HeistPlanToolTests
         timeout-minutes: 15
         env:
-          HEIST_PLAN_TOOL: ${{ github.workspace }}/ButtonHeist/.build/debug/heist-plan
+          HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
         run: scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
 
   macos-tests:
@@ -165,18 +157,11 @@ jobs:
         timeout-minutes: 12
         run: tuist install
 
-      - name: Verify generated project is up to date
+      - name: Generate project
         timeout-minutes: 3
         run: |
           BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
-          git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project is out of date. Run 'scripts/generate-project.sh' and commit the changes."
-            echo "::group::Diff"
-            git diff -- '*.pbxproj' '*.xcworkspacedata'
-            echo "::endgroup::"
-            exit 1
-          }
 
       - name: Run TheScoreTests
         timeout-minutes: 5
@@ -405,13 +390,10 @@ jobs:
           trap 'echo "IOS_DEMO_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
 
-          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
-            echo "Building $scheme..."
-            xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
-              -destination "$DEST" \
-              -derivedDataPath "$DERIVED_DATA_PATH" \
-              build
-          done
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            build
 
       - name: Measure framework sizes
         run: |

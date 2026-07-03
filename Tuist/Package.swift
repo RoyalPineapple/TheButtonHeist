@@ -3,7 +3,6 @@ import PackageDescription
 
 #if TUIST
 import ProjectDescription
-import ProjectDescriptionHelpers
 
 let packageSettings = PackageSettings(
     productTypes: [
@@ -19,6 +18,6 @@ let package = Package(
     name: "Dependencies",
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
-        .package(path: "../submodules/AccessibilitySnapshotBH"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.18.0"),
     ]
 )

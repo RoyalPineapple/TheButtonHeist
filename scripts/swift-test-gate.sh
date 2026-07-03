@@ -22,9 +22,13 @@ swift test --package-path "$PACKAGE_PATH" "$@" 2>&1 | tee "$OUTPUT"
 STATUS=${PIPESTATUS[0]}
 set -e
 
-if ! grep -Eq 'Executed [1-9][0-9]* tests|Test run with [1-9][0-9]* tests' "$OUTPUT"; then
+if [[ "$STATUS" -ne 0 ]]; then
+    exit "$STATUS"
+fi
+
+if ! grep -Eq 'Executed [1-9][0-9]* tests|Test run with [1-9][0-9]* tests|Test ".+" passed after' "$OUTPUT"; then
     echo "Error: swift test discovered zero tests for $PACKAGE_PATH" >&2
     exit 1
 fi
 
-exit "$STATUS"
+exit 0

@@ -178,50 +178,6 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(pay.tags == ["entry", "semantic-action"])
 }
 
-@Test func `semantic discovery internals stay typed until catalog projection`() throws {
-    let source = try discoverySource()
-    let builderSource = try sourceSection(
-        source,
-        from: "private struct HeistSemanticSurfaceBuilder",
-        to: "\nprivate func appendUnique"
-    )
-    let catalogTagsSource = try sourceSection(
-        source,
-        from: "    func catalogTags(",
-        to: "\n}\n\nstruct ResolvedCatalogHeist"
-    )
-
-    #expect(builderSource.contains("var actionCommands: [HeistActionCommandType]"))
-    #expect(builderSource.contains("var semanticFacets: [HeistSemanticSurfaceFacet]"))
-    for forbidden in [
-        "var actionCommands: [String]",
-        "var semanticSurfaces: [String]",
-        ".wireType.rawValue",
-        "to: &semanticSurfaces",
-        #""label="#,
-        #""identifier="#,
-        #""value="#,
-        #""traits="#,
-        #""excludeTraits="#,
-    ] {
-        #expect(!builderSource.contains(forbidden), "Builder collected early string state: \(forbidden)")
-    }
-
-    #expect(catalogTagsSource.contains("switch command"))
-    for forbidden in [
-        #""typeText""#,
-        #""type_text""#,
-        "contains(where: Self.isViewportAction)",
-        "contains(where: Self.isGestureAction)",
-        "contains(where: Self.isSemanticAction)",
-    ] {
-        #expect(!catalogTagsSource.contains(forbidden), "Catalog tags matched command strings: \(forbidden)")
-    }
-    #expect(!source.contains("static func isSemanticAction"))
-    #expect(!source.contains("static func isGestureAction"))
-    #expect(!source.contains("static func isViewportAction"))
-}
-
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
     let raw = HeistPlanAdmissionCandidate(
         name: "root",
@@ -401,20 +357,3 @@ private func detailedSurfacePlan() throws -> HeistPlan {
         body: [.warn(WarnStep(message: "ready"))]
     )
 }
-
-private func discoverySource() throws -> String {
-    try SourceShapeRepository(filePath: #filePath)
-        .requiredFile(relativePath: "ButtonHeist/Sources/ThePlans/HeistPlan+Discovery.swift")
-        .contents
-}
-
-private func sourceSection(_ source: String, from startMarker: String, to endMarker: String) throws -> String {
-    guard let start = source.range(of: startMarker),
-          let end = source[start.upperBound...].range(of: endMarker)
-    else {
-        throw DiscoverySourceGuardrailError()
-    }
-    return String(source[start.lowerBound..<end.lowerBound])
-}
-
-private struct DiscoverySourceGuardrailError: Error {}

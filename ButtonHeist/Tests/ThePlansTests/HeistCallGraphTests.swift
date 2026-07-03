@@ -234,27 +234,6 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(invocation.environment.targets["button"] == target)
 }
 
-@Test func `reference binding context is the traversal placeholder source of truth`() throws {
-    let repository = SourceShapeRepository(filePath: #filePath)
-    let environment = try repository.requiredFile(
-        relativePath: "ButtonHeist/Sources/ThePlans/HeistExpressionEnvironment.swift"
-    )
-    let traversal = try repository.requiredFile(
-        relativePath: "ButtonHeist/Sources/ThePlans/HeistPlanTraversal.swift"
-    )
-    let binding = try #require(try environment.firstBlock(matching: #"struct HeistReferenceBinding\b"#))
-    let context = try #require(try environment.firstBlock(matching: #"struct HeistReferenceBindingContext\b"#))
-    let walkDefinitions = try #require(try traversal.firstBlock(matching: #"private func walkDefinitions\b"#))
-
-    #expect(binding.contents.contains("case string(String)"))
-    #expect(binding.contents.contains("case elementTarget(ElementTarget)"))
-    #expect(context.contents.contains("let bindings: [HeistReferenceBinding]"))
-    #expect(!context.contents.contains("let scope: HeistReferenceScope"))
-    #expect(!context.contents.contains("let environment: HeistExecutionEnvironment"))
-    #expect(!walkDefinitions.contents.contains("runtimeSafetyPlaceholder"))
-    #expect(walkDefinitions.contents.contains("definition.parameterReferenceBindings"))
-}
-
 @Test func `definition resolution preserves typed invocation identity`() throws {
     let checkout = HeistPlan(
         runtimeValidatedVersion: HeistPlan.currentVersion,

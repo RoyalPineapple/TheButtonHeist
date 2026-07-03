@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import ButtonHeistSupport
 
 @MainActor
 final class SafecrackerKeyboardInput {

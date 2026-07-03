@@ -83,7 +83,7 @@ let package = Package(
         .executable(name: "DoctorDemoFixture", targets: ["DoctorDemoFixture"]),
     ],
     dependencies: [
-        .package(path: "$REPO_ROOT/ButtonHeist"),
+        .package(name: "ButtonHeist", path: "$REPO_ROOT"),
         .package(path: "$REPO_ROOT/submodules/AccessibilitySnapshotBH"),
     ],
     targets: [

@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "accessibilitysnapshotbh",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RoyalPineapple/AccessibilitySnapshotBH",
+      "state" : {
+        "revision" : "4fc62e98159e9a1e435e45065f66425c10ff6e93",
+        "version" : "0.18.0"
+      }
+    },
+    {
       "identity" : "ios-snapshot-test-case",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/uber/ios-snapshot-test-case.git",

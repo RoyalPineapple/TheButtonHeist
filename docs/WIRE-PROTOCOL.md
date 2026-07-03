@@ -3,10 +3,10 @@
 This document describes the raw TheScore transport between clients and the iOS
 host. It is not the CLI, MCP, or heist command catalog.
 
-Use generated references for product command surfaces:
+Use live adapter surfaces for product command catalogs:
 
-- [Command Reference](reference/commands.md)
-- [MCP Tool Reference](reference/mcp-tools.md)
+- CLI commands: run `buttonheist --help` or `buttonheist <command> --help`.
+- MCP tools: call MCP `tools/list` and read each tool's input schema.
 
 ## Versioning
 

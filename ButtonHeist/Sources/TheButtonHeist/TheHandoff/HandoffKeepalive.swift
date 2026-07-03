@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 struct HandoffKeepalive {
     let interval: Duration = .seconds(5)

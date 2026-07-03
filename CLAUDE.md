@@ -19,7 +19,7 @@ If you believe the README needs substantive changes, say so and explain why — 
 
 ## Tuist Project Generation
 
-This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are checked into git, so you don't need to run `tuist generate` after a fresh clone.
+This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are local artifacts and are not checked into git.
 
 ### Project structure
 
@@ -27,10 +27,9 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 |------|---------|
 | `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
 | `Project.swift` | Root project: TheScore, TheInsideJob, ButtonHeist frameworks + tests |
-| `TestApp/Project.swift` | Demo apps: BH Demo (SwiftUI) and UIKitTestApp (UIKit) |
+| `TestApp/Project.swift` | The `BH Demo` test app |
 | `Tuist.swift` | Tuist configuration (default) |
 | `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
-| `Tuist/ProjectDescriptionHelpers/` | Reusable helpers for framework/app target templates |
 
 ### When to regenerate
 
@@ -40,11 +39,11 @@ Re-run the canonical generate script after changing any `Project.swift`, `Worksp
 ./scripts/generate-project.sh
 ```
 
-The script wraps `tuist install && tuist generate --no-open` and then runs `scripts/clean-pbxproj.py` over every generated `project.pbxproj` to strip known dirty patterns: hardcoded `SRCROOT = /Users/...`, duplicate `$(inherited)` entries, and duplicate header / framework / runpath search path entries. The pre-commit hook runs the same cleaner so anything that slips through gets surfaced before a commit lands.
+The script wraps `tuist install && tuist generate --no-open` and then runs `scripts/clean-pbxproj.py` over every generated `project.pbxproj` to strip known dirty patterns: hardcoded `SRCROOT = /Users/...`, duplicate `$(inherited)` entries, and duplicate header / framework / runpath search path entries. The generated projects stay ignored.
 
-Calling `tuist generate` directly still works for quick iteration, but prefer the wrapper before committing — otherwise you risk pushing the noise above.
+Calling `tuist generate` directly still works for quick iteration, but prefer the wrapper before local Xcode builds.
 
-**Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
+**Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate locally. Do not commit generated project or workspace files.
 
 **Never commit hardcoded absolute paths in `.xcodeproj` files.** Xcode resolves `SRCROOT` automatically from the `.xcodeproj` location — never set it explicitly in build settings. Hardcoded paths like `SRCROOT = /Users/...` break builds for every other developer and CI. The cleaner strips these automatically; if you see one survive, investigate the Tuist configuration.
 
@@ -79,37 +78,27 @@ tuist install
 3. Reference it in the relevant target with `.external(name: "PackageName")`
 4. Run `tuist generate`
 
-### Adding a new target
-
-Use the helpers in `Tuist/ProjectDescriptionHelpers/Project+Templates.swift`:
-- `.framework(name:destinations:dependencies:)` for multi-platform frameworks (iOS 17.0 + macOS 14.0)
-- `.app(name:destinations:deploymentTargets:sources:resources:dependencies:)` for apps
-
-Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
-
 ### App targets
 
-Three apps in `TestApp/Project.swift`, all embedding TheInsideJob and TheScore:
+One app in `TestApp/Project.swift`, embedding TheInsideJob and TheScore:
 
 | App | Bundle ID | Sources | Purpose |
 |-----|-----------|---------|---------|
-| **BH Demo** | `com.buttonheist.testapp` | `TestApp/Sources/` | SwiftUI demo screens for agents and benchmarking. Keep clean — no research or diagnostic UI. |
-| **BH UIKit Demo** (UIKitTestApp) | `com.buttonheist.uikittestapp` | `TestApp/UIKitSources/` | UIKit variant of the demo app. |
-| **BH Research** (ResearchApp) | `com.buttonheist.research` | `TestApp/ResearchSources/` | Accessibility SPI harness, trait probes, and diagnostic tools. Not for production use. |
+| **BH Demo** | `com.buttonheist.testapp` | `TestApp/Sources/` | SwiftUI demo, UIKit harnesses, and research screens for agents and benchmarking. |
 
 All include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
 
 When adding new screens:
 - **Demo screens** (controls, scroll tests, standard UI patterns) go in `TestApp/Sources/` and are wired into `RootView.swift`
-- **Research screens** (SPI experiments, trait probing, runtime inspection) go in `TestApp/ResearchSources/` and are wired into `ResearchApp.swift`
+- **Research screens** (SPI experiments, trait probing, runtime inspection) also go in `TestApp/Sources/` and are exposed from `RootView.swift`
 
 ## No `accessibilityIdentifier` in Demo Screens
 
 `accessibilityIdentifier` is an escape hatch, not a feature. It helps developers write UI tests, but it does nothing for accessibility users — VoiceOver never reads it, Switch Control never sees it, and it actively harms Button Heist's mission. The whole point is to navigate apps through the real accessibility user space: labels, values, traits, hints, and actions. If an element can only be found by identifier, that element is invisible to a real user and the heist should fail.
 
-**Do not add `accessibilityIdentifier` to demo app screens** (`TestApp/Sources/`, `TestApp/UIKitSources/`). Instead, make every element findable by its natural accessibility properties — the same properties a VoiceOver user relies on. This is the bar: if the agent can't find it, a blind user can't either, and the fix is better accessibility, not an identifier.
+**Do not add `accessibilityIdentifier` to demo app screens** (`TestApp/Sources/`). Instead, make every element findable by its natural accessibility properties — the same properties a VoiceOver user relies on. This is the bar: if the agent can't find it, a blind user can't either, and the fix is better accessibility, not an identifier.
 
-Research screens (`TestApp/ResearchSources/`) are exempt — they probe the accessibility tree at the SPI level and use identifiers functionally to locate specific test fixtures.
+Research harness screens are exempt when they probe the accessibility tree at the SPI level and use identifiers functionally to locate specific test fixtures.
 
 ## Simulator Quick Start
 
@@ -208,11 +197,10 @@ xcrun simctl delete "$SIM_UDID"
 
 Before pushing any commit, verify the following:
 
-### 1. Regenerate Xcode Projects
-- **Always run `tuist generate` before pushing** to ensure the committed `.pbxproj` files match what Tuist produces. CI runs `tuist generate` and diffs — stale project files from local generates (duplicate build settings, hardcoded paths) will fail the check.
+### 1. Generate Xcode Projects
+- **Run the project generator before local Xcode builds** so ignored `.xcodeproj` and `.xcworkspace` files exist and match the Tuist configuration.
   ```bash
-  tuist generate --no-open
-  git add -- '*.pbxproj' '*.xcworkspacedata'
+  ./scripts/generate-project.sh
   ```
 
 ### 2. Build Verification

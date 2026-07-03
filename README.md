@@ -343,13 +343,13 @@ Explicit mechanical gestures stay available for maps, canvases, drawing surfaces
 | Understand the contract loop | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md), [Diagrams](docs/diagrams/README.md) |
 | Compare approaches, know the limits | [Why in-process](docs/WHY-IN-PROCESS.md), [Scope and limits](docs/SCOPE-AND-LIMITS.md) |
 | Connect an agent | [MCP agent guide](docs/MCP-AGENT-GUIDE.md), [ButtonHeistMCP](ButtonHeistMCP/) |
-| Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |
+| Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), `buttonheist --help`, `buttonheist <command> --help` |
 | Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md), [Design rationale](docs/DESIGN-RATIONALE.md), [Examples](examples/README.md) |
 | Run heists in CI | [CI integration](docs/CI.md) |
 | Integrate an app | [API](docs/API.md), [Auth](docs/AUTH.md), [USB connectivity](docs/USB_DEVICE_CONNECTIVITY.md) |
 | See evidence and experiments | [Heist Doctor](docs/HEIST-DOCTOR.md) |
 
-Generated references live in [docs/reference](docs/reference/).
+Command names, help, and MCP schemas are projected from the Fence command descriptors at runtime.
 
 ## Troubleshooting
 
@@ -393,7 +393,7 @@ buttonheist get_interface
 
 ```bash
 git submodule update --init --recursive
-tuist generate
+./scripts/generate-project.sh
 open ButtonHeist.xcworkspace
 ```
 

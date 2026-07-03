@@ -108,8 +108,8 @@ To validate authored Swift heists without running them, compile in a build
 step:
 
 ```bash
-swift build --package-path ButtonHeist --product heist-plan
-HEIST_THEPLANS_BUILD_DIR=ButtonHeist/.build/debug \
+swift build --product heist-plan
+HEIST_THEPLANS_BUILD_DIR=.build/debug \
   heist-plan compile Heists/Checkout.swift --entry makeCheckoutHeist --output Checkout.heist
 ```
 

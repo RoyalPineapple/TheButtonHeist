@@ -428,8 +428,8 @@ module. Resolution runs in this order:
    CI uses for SwiftPM command-line compilation:
 
    ```bash
-   swift build --package-path ButtonHeist --product heist-plan
-   HEIST_THEPLANS_BUILD_DIR=ButtonHeist/.build/debug \
+   swift build --product heist-plan
+   HEIST_THEPLANS_BUILD_DIR=.build/debug \
      heist-plan compile Flow.swift --entry makeHeist --output Flow.heist
    ```
 
@@ -459,7 +459,7 @@ module. Resolution runs in this order:
 The compiler never builds `ThePlans` from source on demand. If no built
 artifacts are found, compilation fails with a diagnostic that lists every path
 that was searched and tells you to install The Button Heist with compiler artifacts,
-run `swift build --package-path ButtonHeist --product heist-plan`, or set
+run `swift build --product heist-plan`, or set
 `HEIST_THEPLANS_BUILD_DIR`. In Xcode/Tuist tests, the diagnostic also lists
 candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
 which resolution branch was taken.

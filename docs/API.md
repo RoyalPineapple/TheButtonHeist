@@ -3,14 +3,12 @@
 This page documents the public integration contracts and invariants around
 The Button Heist. It is not a command or parameter catalog.
 
-Generated references are the source of truth for executable surface area:
+Descriptor-owned surfaces are the source of truth for executable behavior:
 
 - [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) - canonical product
   contract, boundary map, and conformance cases
-- [Command Reference](reference/commands.md) - canonical `TheFence.Command`
-  names, CLI exposure, heist execution eligibility, and parameters
-- [MCP Tool Reference](reference/mcp-tools.md) - MCP adapter tools projected
-  from the Fence command contract
+- `buttonheist --help` and `buttonheist <command> --help` - canonical CLI usage
+- MCP `tools/list` - MCP adapter tools and input schemas projected from the Fence command contract
 - [Wire Protocol](WIRE-PROTOCOL.md) - transport envelopes, handshake,
   authentication, and wire-only examples
 - [Heist Format](HEIST-FORMAT.md) - generated heist artifact and plan IR format
@@ -33,57 +31,35 @@ module map and the wire boundary are drawn in the
 
 | Surface | Public status | Entry points | Contract source | Compatibility policy |
 |---------|---------------|--------------|-----------------|----------------------|
-| SwiftPM products and modules | Public integration surface | `ButtonHeistTesting`, `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, `api-baselines/swift/*.symbols.txt`, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
-| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor`, `buttonheist-docgen` | [Heist Doctor](HEIST-DOCTOR.md), generated references | Suggestion-only receipt analysis and repo reference generation. Not installed by Homebrew and not a major-version stability contract. |
+| SwiftPM products and modules | Public integration surface | `ButtonHeistTesting`, `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
+| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only receipt analysis. Not installed by Homebrew and not a major-version stability contract. |
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
-| CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
-| JSON-lines input | Public CLI session surface | `buttonheist json_lines` | Generated [Command Reference](reference/commands.md) and `TheFence.Command` descriptors | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
-| MCP tools | Public agent tool surface | `buttonheist-mcp` tools | Generated [MCP Tool Reference](reference/mcp-tools.md) | Tool names and schemas are descriptor-owned. `perform` is MCP-only and accepts one durable DSL instruction; `run_heist` accepts durable source `plan` or generated `.heist` `path`. |
+| CLI commands | Public command surface | `buttonheist <command>` | `TheFence.Command` descriptors and `buttonheist --help` | Command names, CLI exposure, and parameters are descriptor-owned. |
+| JSON-lines input | Public CLI session surface | `buttonheist json_lines` | `TheFence.Command` descriptors and command help | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
+| MCP tools | Public agent tool surface | `buttonheist-mcp` tools | MCP `tools/list` schemas projected from `TheFence.Command` descriptors | Tool names and schemas are descriptor-owned. `perform` is MCP-only and accepts one durable DSL instruction; `run_heist` accepts durable source `plan` or generated `.heist` `path`. |
 | `.heist` artifact format | Public generated artifact | `<name>.heist/manifest.json` and `plan.json` | [Heist Format](HEIST-FORMAT.md) | Generated package artifact. Do not hand-author it; regenerate artifacts when the plan or manifest contract changes. |
 | Plan DSL/source | Public authoring source | Swift DSL files, canonical ButtonHeist source strings, `heist-plan compile`, `run_heist --plan`, MCP `run_heist(plan:)` | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) and [Heist Format](HEIST-FORMAT.md) | Source must compile to canonical `HeistPlan` IR. MCP and JSON-lines should pass source or paths, not raw IR fields. |
 | Config and environment keys | Public runtime configuration | `.buttonheist.json`, `~/.config/buttonheist/config.json`, `BUTTONHEIST_*`, `INSIDEJOB_*` | This document, [Authentication](AUTH.md), and command help | Explicit flags and target config win over environment values where command-specific precedence applies. Unknown keys must fail or be ignored only as documented. |
 | Wire compatibility policy | Public transport contract | TheScore newline-delimited TLS JSON | [Wire Protocol](WIRE-PROTOCOL.md) | Exact product-version lockstep. Client and server `buttonHeistVersion` must match exactly; mismatch returns `protocolMismatch` and closes the connection. |
 
-## Swift API Baselines
+## Swift API Breakage
 
-CI checks compiler-exported public symbol snapshots for `ThePlans`,
-`TheScore`, `ButtonHeistDSL`, `ButtonHeist`, `TheInsideJob`, and
-`ButtonHeistTesting` with:
-
-```bash
-scripts/check-swift-api-baseline.sh
-```
-
-The snapshots live in `api-baselines/swift/`. `ThePlans`, `TheScore`,
-`ButtonHeistDSL`, and `ButtonHeist` are extracted from the macOS SwiftPM build.
-`TheInsideJob` is extracted separately from an iOS simulator DEBUG SwiftPM build
-because its public module is UIKit/DEBUG-gated. `ButtonHeistTesting` is also
-extracted from that iOS simulator DEBUG build. `ButtonHeistDSL`,
-`ButtonHeist`, and `ButtonHeistTesting` are extracted with their public
-re-exported modules included, so removing a re-export or changing a re-exported
-symbol changes the product snapshot. The external import fixtures compile
-consumers from outside the repository to prove the documented macOS products
-and iOS DEBUG public imports work in SwiftPM.
-
-For an intentional public Swift API change, update snapshots with:
+CI checks public Swift API compatibility against the latest `v*` release tag
+reachable from `origin/main` with:
 
 ```bash
-scripts/check-swift-api-baseline.sh --update
+scripts/check-swift-api-breaking-changes.sh
 ```
 
-Review the generated diff before committing. Do not hand-edit snapshot files;
-the checked-in text is generated from Swift symbol graphs so CI can distinguish
-intentional contract changes from accidental public API drift.
-
-The baseline lane is pinned to the same Xcode and Swift toolchain used by CI.
-GitHub Actions selects that toolchain before running the check. Locally, set
-`DEVELOPER_DIR` to the matching developer directory before checking or
-updating. The script fails fast with the expected Swift version and an example
-command when a different toolchain is active.
+The script fetches tags and `origin/main`, resolves the newest merged release
+tag, and runs SwiftPM's native API breakage diagnostic:
 
 ```bash
-DEVELOPER_DIR=/Applications/<CI_XCODE>.app/Contents/Developer scripts/check-swift-api-baseline.sh --update
+swift package diagnose-api-breaking-changes "$BASELINE_TAG"
 ```
+
+Set `BUTTONHEIST_SWIFT_API_BASELINE_TAG` to compare against a specific release
+tag locally.
 
 ## TheInsideJob
 
@@ -288,10 +264,9 @@ heist execution. It owns command parsing, schema validation, connection
 coordination through TheHandoff, typed responses, heist planning, expectations,
 receipts, and replay integration.
 
-Use the generated [Command Reference](reference/commands.md) for command names
-and parameters. After command descriptor or schema changes, regenerate it with
-`swift run --package-path ButtonHeist buttonheist-docgen --output-dir docs/reference`;
-use `--check` to validate committed references without writing.
+Use `buttonheist --help`, `buttonheist <command> --help`, and MCP
+`tools/list` for command names, parameters, and MCP input schemas. Those
+surfaces are projected from the Fence command descriptors.
 
 ### Command Invariants
 
@@ -347,9 +322,8 @@ when the file is discovered from a default config path.
 
 **Binary**: `buttonheist-mcp`
 
-ButtonHeistMCP exposes MCP tools projected from `TheFence.Command`. The
-generated [MCP Tool Reference](reference/mcp-tools.md) is the source of truth
-for tools and schemas.
+ButtonHeistMCP exposes MCP tools projected from `TheFence.Command`. The live
+MCP `tools/list` response is the source of truth for tools and schemas.
 
 Runtime behavior:
 
@@ -376,9 +350,8 @@ Environment variables:
 
 **Binary**: `buttonheist`
 
-The CLI is an adapter over TheFence. Run `buttonheist --help` for local usage
-text and use the generated [Command Reference](reference/commands.md) for the
-checked-in command contract.
+The CLI is an adapter over TheFence. Run `buttonheist --help` and
+`buttonheist <command> --help` for descriptor-backed local usage text.
 
 Common environment variables:
 
@@ -448,5 +421,5 @@ struct MyApp: App {
 }
 ```
 
-For command details, continue to the generated
-[Command Reference](reference/commands.md).
+For command details, use `buttonheist --help`, `buttonheist <command> --help`,
+and MCP `tools/list`.
