@@ -1,13 +1,13 @@
 {
-  "originHash" : "3c6f677fed048cb6974c0acfcd792ae5aec6dc933dc2eaa15bd0c6598883c285",
+  "originHash" : "a8df390877dfe1ad5fa6e0366d33d96f5fd6b93f6f2f37d18efebc720474c6a2",
   "pins" : [
     {
       "identity" : "accessibilitysnapshotbh",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RoyalPineapple/AccessibilitySnapshotBH",
       "state" : {
-        "revision" : "4fc62e98159e9a1e435e45065f66425c10ff6e93",
-        "version" : "0.18.0"
+        "revision" : "196bcd43114d78b96a667c1747141990b4a6f8f7",
+        "version" : "0.19.0"
       }
     },
     {
