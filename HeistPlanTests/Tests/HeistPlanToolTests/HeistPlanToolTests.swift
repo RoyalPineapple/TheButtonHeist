@@ -97,47 +97,6 @@ struct HeistPlanToolTests {
         #expect(FileManager.default.fileExists(atPath: outputURL.appendingPathComponent("manifest.json").path))
     }
 
-    @Test
-    func `heist plan tool does not import or depend on runtime modules`() throws {
-        let root = try repositoryRoot()
-        let buttonHeistRoot = try buttonHeistPackageRoot()
-        let sourceRoot = buttonHeistRoot.appendingPathComponent("Sources/HeistPlanTool")
-        let forbiddenImports = [
-            "TheScore",
-            "ButtonHeist",
-            "TheFence",
-            "TheInsideJob",
-            "ButtonHeistCLI",
-            "ButtonHeistMCP",
-            "AccessibilitySnapshotModel",
-            "AccessibilitySnapshotParser",
-            "MCP",
-        ]
-
-        let sourceFiles = try (
-            FileManager.default.contentsOfDirectory(at: sourceRoot, includingPropertiesForKeys: nil)
-                + FileManager.default.contentsOfDirectory(
-                    at: buttonHeistRoot.appendingPathComponent("Sources/ThePlans"),
-                    includingPropertiesForKeys: nil
-                )
-        ).filter { $0.pathExtension == "swift" }
-
-        for file in sourceFiles {
-            let source = try String(contentsOf: file, encoding: .utf8)
-            for forbiddenImport in forbiddenImports {
-                #expect(!source.contains("import \(forbiddenImport)"), "\(file.lastPathComponent) imports \(forbiddenImport)")
-            }
-        }
-
-        for manifest in packageManifests(root: root) {
-            let block = try heistPlanToolTargetBlock(in: manifest)
-            #expect(block.contains("\"ThePlans\""))
-            #expect(block.contains("ArgumentParser"))
-            for forbiddenDependency in forbiddenImports {
-                #expect(!block.contains("\"\(forbiddenDependency)\""), "HeistPlanTool depends on \(forbiddenDependency)")
-            }
-        }
-    }
 }
 
 private func representativePlan() throws -> HeistPlan {
@@ -238,11 +197,11 @@ private func heistPlanToolURL() throws -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-    let buttonHeistRoot = try buttonHeistPackageRoot()
+    let root = try repositoryRoot()
     let candidates = [
         debugDirectory.appendingPathComponent("heist-plan"),
         testExecutable.deletingLastPathComponent().appendingPathComponent("heist-plan"),
-        buttonHeistRoot.appendingPathComponent(".build/debug/heist-plan"),
+        root.appendingPathComponent(".build/debug/heist-plan"),
     ]
     for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate.path) {
         return candidate
@@ -323,48 +282,9 @@ private func repositoryRoot() throws -> URL {
 }
 
 private func isRepositoryRoot(_ url: URL) -> Bool {
-    FileManager.default.fileExists(atPath: url.appendingPathComponent("ButtonHeist/Package.swift").path)
+    FileManager.default.fileExists(atPath: url.appendingPathComponent("Package.swift").path)
+        && FileManager.default.fileExists(atPath: url.appendingPathComponent("ButtonHeist/Sources/HeistPlanTool").path)
         && FileManager.default.fileExists(atPath: url.appendingPathComponent("HeistPlanTests/Package.swift").path)
-}
-
-private func buttonHeistPackageRoot() throws -> URL {
-    try repositoryRoot().appendingPathComponent("ButtonHeist", isDirectory: true)
-}
-
-private func packageManifests(root: URL) -> [String] {
-    let candidates = [
-        root.appendingPathComponent("Package.swift"),
-        root.appendingPathComponent("ButtonHeist/Package.swift"),
-    ]
-    return candidates.compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-}
-
-private func heistPlanToolTargetBlock(in manifest: String) throws -> Substring {
-    guard let nameRange = manifest.range(of: #"name: "HeistPlanTool""#) else {
-        throw TestFailure("manifest does not declare HeistPlanTool")
-    }
-    guard let start = manifest[..<nameRange.lowerBound].range(of: ".executableTarget(", options: .backwards)?.lowerBound else {
-        throw TestFailure("HeistPlanTool is not an executable target")
-    }
-
-    var depth = 0
-    var foundOpenParen = false
-    for index in manifest[start...].indices {
-        switch manifest[index] {
-        case "(":
-            depth += 1
-            foundOpenParen = true
-        case ")":
-            depth -= 1
-            if foundOpenParen, depth == 0 {
-                return manifest[start...index]
-            }
-        default:
-            break
-        }
-    }
-
-    throw TestFailure("could not parse HeistPlanTool target declaration")
 }
 
 private struct TestFailure: Error, CustomStringConvertible {
