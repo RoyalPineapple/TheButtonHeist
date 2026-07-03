@@ -65,6 +65,7 @@ let package = Package(
         .target(
             name: "HeistDoctorCore",
             dependencies: [
+                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
             ],

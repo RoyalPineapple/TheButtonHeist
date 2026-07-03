@@ -2,22 +2,31 @@ import Foundation
 import TheScore
 
 public enum HeistDoctor {
-    public static func suggestions(
+    public static func diagnosis(
         lastPass: HeistExecutionResult,
         newFail: HeistExecutionResult,
         stepPath requestedStepPath: String? = nil
-    ) throws -> [HeistRepairSuggestion] {
+    ) throws -> HeistRepairDiagnosis {
         let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
         let lastStep = try selectedLastSuccess(in: lastPass, matching: currentStep.path)
         let request = HeistRepairRequest(
             lastSuccess: try passedRepairEvidence(from: lastStep),
             currentFailure: try failedRepairEvidence(from: currentStep)
         )
-        let suggestions = HeistRepairSuggester.suggestions(for: request)
+        return HeistRepairSuggester.diagnosis(for: request)
+    }
+
+    public static func suggestions(
+        lastPass: HeistExecutionResult,
+        newFail: HeistExecutionResult,
+        stepPath requestedStepPath: String? = nil
+    ) throws -> [HeistRepairSuggestion] {
+        let diagnosis = try diagnosis(lastPass: lastPass, newFail: newFail, stepPath: requestedStepPath)
+        let suggestions = diagnosis.suggestions
         guard !suggestions.isEmpty else {
             throw HeistDoctorError.noSafeSuggestion(
-                path: currentStep.path,
-                reason: HeistRepairSuggester.noSuggestionReason(for: request)
+                path: diagnosis.stepPath,
+                reason: diagnosis.refusal?.message ?? "repair suggestion was not refused"
             )
         }
         return suggestions

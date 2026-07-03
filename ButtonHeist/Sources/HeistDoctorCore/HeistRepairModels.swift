@@ -248,6 +248,58 @@ public enum RepairConfidence: String, Codable, Sendable, Equatable {
     case low
 }
 
+public enum HeistRepairPipelineStage: String, Codable, Sendable, Equatable {
+    case evidenceEligibility
+    case candidateRanking
+    case candidateValidation
+}
+
+public enum HeistRepairDiagnosisStatus: String, Codable, Sendable, Equatable {
+    case suggested
+    case refused
+}
+
+public enum HeistRepairRefusalReason: String, Codable, Sendable, Equatable {
+    case differentStepPaths
+    case incompatibleHeistFingerprints
+    case oldTargetDidNotResolveExactlyOnce
+    case oldTargetStillResolvesAndSupportsRequestedAction
+    case noCandidateMetScoreThreshold
+    case noCandidateValidated
+}
+
+public struct HeistRepairRefusal: Codable, Sendable, Equatable {
+    public let stage: HeistRepairPipelineStage
+    public let reason: HeistRepairRefusalReason
+    public let message: String
+
+    public init(
+        stage: HeistRepairPipelineStage,
+        reason: HeistRepairRefusalReason,
+        message: String
+    ) {
+        self.stage = stage
+        self.reason = reason
+        self.message = message
+    }
+}
+
+public enum RepairCandidateSource: String, Codable, Sendable, Hashable {
+    case semanticContinuityScan
+    case currentAmbiguousMatch
+}
+
+public enum RepairCandidateValidationStatus: String, Codable, Sendable, Equatable {
+    case notEvaluated
+    case suggested
+    case rejected
+}
+
+public enum RepairCandidateRejectionReason: String, Codable, Sendable, Equatable {
+    case noUniqueDurableMatcher
+    case unsupportedActionFamily
+}
+
 public struct ElementSummary: Codable, Sendable, Equatable {
     public let description: String
     public let label: String?
@@ -282,6 +334,112 @@ public struct ElementSummary: Codable, Sendable, Equatable {
         self.rotors = rotors
         self.siblingText = siblingText
         self.headerText = headerText
+    }
+}
+
+public struct HeistRepairCandidateDiagnosis: Codable, Sendable, Equatable {
+    public let source: RepairCandidateSource
+    public let resolvedElement: ElementSummary
+    public let score: Int
+    public let reasons: [RepairScoringReason]
+    public let caveats: [RepairCaveat]
+    public let validationStatus: RepairCandidateValidationStatus
+    public let suggestedTarget: ElementTarget?
+    public let confidence: RepairConfidence?
+    public let rejectionReason: RepairCandidateRejectionReason?
+
+    public init(
+        source: RepairCandidateSource,
+        resolvedElement: ElementSummary,
+        score: Int,
+        reasons: [RepairScoringReason],
+        caveats: [RepairCaveat] = [],
+        validationStatus: RepairCandidateValidationStatus,
+        suggestedTarget: ElementTarget? = nil,
+        confidence: RepairConfidence? = nil,
+        rejectionReason: RepairCandidateRejectionReason? = nil
+    ) {
+        self.source = source
+        self.resolvedElement = resolvedElement
+        self.score = score
+        self.reasons = unique(reasons)
+        self.caveats = unique(caveats)
+        self.validationStatus = validationStatus
+        self.suggestedTarget = suggestedTarget
+        self.confidence = confidence
+        self.rejectionReason = rejectionReason
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case resolvedElement
+        case score
+        case reasons
+        case caveats
+        case validationStatus
+        case suggestedTarget
+        case confidence
+        case rejectionReason
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        source = try container.decode(RepairCandidateSource.self, forKey: .source)
+        resolvedElement = try container.decode(ElementSummary.self, forKey: .resolvedElement)
+        score = try container.decode(Int.self, forKey: .score)
+        reasons = try container.decodeRenderedScoringReasons(forKey: .reasons)
+        caveats = try container.decodeRenderedCaveats(forKey: .caveats)
+        validationStatus = try container.decode(RepairCandidateValidationStatus.self, forKey: .validationStatus)
+        suggestedTarget = try container.decodeIfPresent(ElementTarget.self, forKey: .suggestedTarget)
+        confidence = try container.decodeIfPresent(RepairConfidence.self, forKey: .confidence)
+        rejectionReason = try container.decodeIfPresent(RepairCandidateRejectionReason.self, forKey: .rejectionReason)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(source, forKey: .source)
+        try container.encode(resolvedElement, forKey: .resolvedElement)
+        try container.encode(score, forKey: .score)
+        try container.encode(reasons.map(\.prose), forKey: .reasons)
+        try container.encode(caveats.map(\.prose), forKey: .caveats)
+        try container.encode(validationStatus, forKey: .validationStatus)
+        try container.encodeIfPresent(suggestedTarget, forKey: .suggestedTarget)
+        try container.encodeIfPresent(confidence, forKey: .confidence)
+        try container.encodeIfPresent(rejectionReason, forKey: .rejectionReason)
+    }
+}
+
+public struct HeistRepairDiagnosis: Codable, Sendable, Equatable {
+    public let status: HeistRepairDiagnosisStatus
+    public let stepPath: String
+    public let failureKind: HeistRepairFailureKind?
+    public let oldTarget: ElementTarget
+    public let oldResolvedElement: ElementSummary?
+    public let currentMatchCount: Int?
+    public let candidates: [HeistRepairCandidateDiagnosis]
+    public let suggestions: [HeistRepairSuggestion]
+    public let refusal: HeistRepairRefusal?
+
+    public init(
+        status: HeistRepairDiagnosisStatus,
+        stepPath: String,
+        failureKind: HeistRepairFailureKind?,
+        oldTarget: ElementTarget,
+        oldResolvedElement: ElementSummary? = nil,
+        currentMatchCount: Int? = nil,
+        candidates: [HeistRepairCandidateDiagnosis] = [],
+        suggestions: [HeistRepairSuggestion] = [],
+        refusal: HeistRepairRefusal? = nil
+    ) {
+        self.status = status
+        self.stepPath = stepPath
+        self.failureKind = failureKind
+        self.oldTarget = oldTarget
+        self.oldResolvedElement = oldResolvedElement
+        self.currentMatchCount = currentMatchCount
+        self.candidates = candidates
+        self.suggestions = suggestions
+        self.refusal = refusal
     }
 }
 
@@ -358,6 +516,19 @@ public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
 }
 
 private extension KeyedDecodingContainer {
+    func decodeRenderedScoringReasons(forKey key: Key) throws -> [RepairScoringReason] {
+        try decode([String].self, forKey: key).map { prose in
+            guard let reason = RepairScoringReason(prose: prose) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: self,
+                    debugDescription: "Unknown heist repair scoring reason: \(prose)"
+                )
+            }
+            return reason
+        }
+    }
+
     func decodeRenderedReasons(forKey key: Key) throws -> [RepairSuggestionReason] {
         try decode([String].self, forKey: key).map { prose in
             guard let reason = RepairSuggestionReason(prose: prose) else {
