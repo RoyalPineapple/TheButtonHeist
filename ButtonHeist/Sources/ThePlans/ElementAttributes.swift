@@ -65,6 +65,29 @@ extension ElementAction: Codable {
     }
 }
 
+package extension Set where Element == ElementAction {
+    var canonicalElementActionArray: [ElementAction] {
+        sorted { lhs, rhs in
+            lhs.canonicalSortKey < rhs.canonicalSortKey
+        }
+    }
+}
+
+package extension ElementAction {
+    var canonicalSortKey: String {
+        switch self {
+        case .activate:
+            return "0:activate"
+        case .increment:
+            return "1:increment"
+        case .decrement:
+            return "2:decrement"
+        case .custom(let name):
+            return "3:\(name)"
+        }
+    }
+}
+
 // MARK: - Heist Trait
 
 /// Named accessibility traits ButtonHeist exposes publicly.

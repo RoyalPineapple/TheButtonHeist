@@ -14,23 +14,32 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         identifier: StringMatch<StringExpr>? = nil,
         value: StringMatch<StringExpr>? = nil,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        hint: StringMatch<StringExpr>? = nil,
+        actions: [ElementAction] = [],
+        customContent: CustomContentMatch<StringExpr>? = nil,
+        rotors: [StringMatch<StringExpr>] = []
     ) {
         self.init(Self.checks(
             label: label,
             identifier: identifier,
             value: value,
             traits: traits,
-            excludeTraits: excludeTraits
+            hint: hint,
+            actions: actions,
+            customContent: customContent,
+            rotors: rotors
         ))
     }
 
     public init(
         _ checks: [ElementPredicateCheck<StringExpr>],
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) {
-        self.init(checks + Self.traitChecks(traits: traits, excludeTraits: excludeTraits))
+        self.init(checks + Self.setChecks(
+            traits: traits,
+            actions: actions
+        ))
     }
 
     public init(_ predicate: ElementPredicate) {
@@ -50,25 +59,34 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         identifier: StringMatch<StringExpr>?,
         value: StringMatch<StringExpr>?,
         traits: [HeistTrait],
-        excludeTraits: [HeistTrait]
+        hint: StringMatch<StringExpr>?,
+        actions: [ElementAction],
+        customContent: CustomContentMatch<StringExpr>?,
+        rotors: [StringMatch<StringExpr>]
     ) -> [ElementPredicateCheck<StringExpr>] {
         var checks: [ElementPredicateCheck<StringExpr>] = []
         if let label { checks.append(.label(label)) }
         if let identifier { checks.append(.identifier(identifier)) }
         if let value { checks.append(.value(value)) }
-        checks += traitChecks(traits: traits, excludeTraits: excludeTraits)
+        if let hint { checks.append(.hint(hint)) }
+        if let customContent { checks.append(.customContent(customContent)) }
+        if !rotors.isEmpty { checks.append(.rotors(rotors)) }
+        checks += setChecks(
+            traits: traits,
+            actions: actions
+        )
         return checks
     }
 
-    private static func traitChecks(
+    private static func setChecks(
         traits: [HeistTrait],
-        excludeTraits: [HeistTrait]
+        actions: [ElementAction]
     ) -> [ElementPredicateCheck<StringExpr>] {
         var checks: [ElementPredicateCheck<StringExpr>] = []
         let traits = traits.heistTraitSet
-        let excludeTraits = excludeTraits.heistTraitSet
         if !traits.isEmpty { checks.append(.traits(traits)) }
-        if !excludeTraits.isEmpty { checks.append(.excludeTraits(excludeTraits)) }
+        let actions = Set(actions)
+        if !actions.isEmpty { checks.append(.actions(actions)) }
         return checks
     }
 
@@ -114,17 +132,27 @@ extension ElementPredicateTemplate: CustomStringConvertible {
         case .value(let match):
             guard match.hasPredicateLiteral else { return nil }
             return "value=\(match)"
+        case .hint(let match):
+            guard match.hasPredicateLiteral else { return nil }
+            return "hint=\(match)"
         case .traits(let traits):
             let traits = traits.canonicalHeistTraitArray
             return ScoreDescription.listField("traits", traits.isEmpty ? nil : traits)
-        case .excludeTraits(let traits):
-            let traits = traits.canonicalHeistTraitArray
-            return ScoreDescription.listField("excludeTraits", traits.isEmpty ? nil : traits)
+        case .actions(let actions):
+            return ScoreDescription.listField("actions", actions.isEmpty ? nil : actions.canonicalElementActionArray)
+        case .customContent(let match):
+            guard match.hasPredicateLiteral else { return nil }
+            return "customContent=\(match)"
+        case .rotors(let matches):
+            return matches.isEmpty ? nil : "rotors=[\(matches.map(\.description).joined(separator: ", "))]"
+        case .exclude(let check):
+            guard let field = checkField(check) else { return nil }
+            return "exclude(\(field))"
         }
     }
 }
 
-private extension ElementPredicateCheck where Value == StringExpr {
+private extension ElementPredicateCheck where Text == StringExpr {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicateCheck<String> {
         switch self {
         case .label(let match):
@@ -133,10 +161,18 @@ private extension ElementPredicateCheck where Value == StringExpr {
             return try .identifier(match.resolve(in: environment))
         case .value(let match):
             return try .value(match.resolve(in: environment))
+        case .hint(let match):
+            return try .hint(match.resolve(in: environment))
         case .traits(let traits):
             return .traits(traits)
-        case .excludeTraits(let traits):
-            return .excludeTraits(traits)
+        case .actions(let actions):
+            return .actions(actions)
+        case .customContent(let match):
+            return try .customContent(match.map { try $0.resolve(in: environment) })
+        case .rotors(let matches):
+            return try .rotors(matches.map { try $0.resolve(in: environment) })
+        case .exclude(let check):
+            return try .exclude(check.resolve(in: environment))
         }
     }
 }

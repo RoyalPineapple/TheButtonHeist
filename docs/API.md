@@ -59,7 +59,11 @@ swift package diagnose-api-breaking-changes "$BASELINE_TAG"
 ```
 
 Set `BUTTONHEIST_SWIFT_API_BASELINE_TAG` to compare against a specific release
-tag locally.
+tag locally. The script is strict by default. Pull-request CI runs it with
+`BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report`, so intentional source-shape
+tightening still prints the SwiftPM diff without forcing compatibility aliases
+back into the package. Release readiness keeps strict mode unless explicitly
+overridden.
 
 ## TheInsideJob
 
@@ -148,18 +152,19 @@ dispatch as public side-effecting commands.
 
 `heistId` is a current-capture annotation. It can appear in interface captures
 and diagnostics to correlate current tree entries. Public action targets use
-`ElementTarget` predicate checks: label, identifier, value, traits, excluded
-traits, and optional ordinal. `heistId` is not a replay selector and it is not
-geometry authority.
+`ElementTarget` predicate checks: label, identifier, value, hint, traits,
+actions, custom content, rotors, recursive exclusion, and optional ordinal.
+`heistId` is not a replay selector and it is not geometry authority.
 The string fields may be a single StringMatch or an array of StringMatch values
 when one property needs multiple checks; every entry for that property must
 match. Prefer ordered `checks` when string checks and trait checks belong in one
 predicate chain; use `.traits([...])` for required traits and
-`.excludeTraits([...])` for rejected traits.
+`.exclude(.traits([...]))` for rejected traits.
 
 Durable flows use semantic selectors and matchers: label, value, traits,
-excluded traits, an accessibility identifier where a stable product identifier
-exists, and ordinal as a last-resort disambiguator. Labels, values, and traits
+actions, custom content, rotors, recursive exclusion, an accessibility
+identifier where a stable product identifier exists, and ordinal as a
+last-resort disambiguator. Labels, values, and traits
 carry the contract under test — they are the properties assistive technology
 actually reads. Identifiers are fixture plumbing: legitimate for stable product
 identifiers and test fixtures, but invisible to every accessibility user. An

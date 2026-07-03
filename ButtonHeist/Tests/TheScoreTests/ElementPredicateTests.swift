@@ -6,8 +6,8 @@ final class ElementPredicateTests: XCTestCase {
 
     func testHasPredicatesIgnoresEmptyTraitArrays() {
         XCTAssertFalse(ElementPredicate(traits: []).hasPredicates)
-        XCTAssertFalse(ElementPredicate(excludeTraits: []).hasPredicates)
-        XCTAssertFalse(ElementPredicate(traits: [], excludeTraits: []).hasPredicates)
+        XCTAssertFalse(ElementPredicate.exclude(.traits([])).hasPredicates)
+        XCTAssertFalse(ElementPredicate.element(.exclude(.traits([])), traits: []).hasPredicates)
         XCTAssertTrue(ElementPredicate(label: "Save", traits: []).hasPredicates)
     }
 
@@ -18,17 +18,17 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testElementPredicateDescriptionComposesFields() {
-        let predicate = ElementPredicate(
-            label: #"Save "Now""#,
-            identifier: "primary.save",
-            value: "Ready",
-            traits: [.button, .selected],
-            excludeTraits: [.notEnabled]
+        let predicate = ElementPredicate.element(
+            .label(#"Save "Now""#),
+            .identifier("primary.save"),
+            .value("Ready"),
+            .exclude(.traits([.notEnabled])),
+            traits: [.button, .selected]
         )
 
         XCTAssertEqual(
             predicate.description,
-            #"predicate(label="Save \"Now\"" identifier="primary.save" value="Ready" traits=[button, selected] excludeTraits=[notEnabled])"#
+            #"predicate(label="Save \"Now\"" identifier="primary.save" value="Ready" exclude(traits=[notEnabled]) traits=[button, selected])"#
         )
     }
 
@@ -44,15 +44,16 @@ final class ElementPredicateTests: XCTestCase {
     func testElementPredicateTraitEncodingUsesCanonicalArrays() throws {
         let predicate = ElementPredicate.element(
             .traits([.selected, .button, .button]),
-            .excludeTraits([.notEnabled, .header, .notEnabled])
+            .exclude(.traits([.notEnabled, .header, .notEnabled]))
         )
 
         let encoded = try JSONEncoder().encode(predicate)
         let wire = try JSONDecoder().decode(EncodedPredicateWire.self, from: encoded)
 
-        XCTAssertEqual(wire.checks.map(\.kind), ["traits", "excludeTraits"])
+        XCTAssertEqual(wire.checks.map(\.kind), ["traits", "exclude"])
         XCTAssertEqual(wire.checks[0].values, ["button", "selected"])
-        XCTAssertEqual(wire.checks[1].values, ["header", "notEnabled"])
+        XCTAssertEqual(wire.checks[1].check?.kind, "traits")
+        XCTAssertEqual(wire.checks[1].check?.values, ["header", "notEnabled"])
         XCTAssertEqual(try JSONDecoder().decode(ElementPredicate.self, from: encoded), predicate)
     }
 
@@ -166,9 +167,12 @@ final class ElementPredicateTests: XCTestCase {
     // MARK: - Codable Round-Trip
 
     func testEncodeDecodeAllFields() throws {
-        let predicate = ElementPredicate(
-            label: "Save", identifier: "saveBtn",
-            value: "active", traits: [.button], excludeTraits: [.notEnabled]
+        let predicate = ElementPredicate.element(
+            .label("Save"),
+            .identifier("saveBtn"),
+            .value("active"),
+            .exclude(.traits([.notEnabled])),
+            traits: [.button]
         )
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(ElementPredicate.self, from: data)
@@ -181,7 +185,7 @@ final class ElementPredicateTests: XCTestCase {
           "checks": [
             { "kind": "label", "match": "Settings" },
             { "kind": "traits", "values": ["header", "button"] },
-            { "kind": "excludeTraits", "values": ["notEnabled"] }
+            { "kind": "exclude", "check": { "kind": "traits", "values": ["notEnabled"] } }
           ]
         }
         """
@@ -190,7 +194,7 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertEqual(predicate.checks, [
             .label(.exact("Settings")),
             .traits([.header, .button]),
-            .excludeTraits([.notEnabled]),
+            .exclude(.traits([.notEnabled])),
         ])
     }
 
@@ -288,6 +292,39 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertTrue(element.matches(ElementPredicate(value: .suffix("results"))))
         XCTAssertFalse(element.matches(ElementPredicate(label: "results")))
         XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
+    }
+
+    func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() {
+        let element = HeistElement(
+            description: "Combo row",
+            label: "Coke",
+            value: nil,
+            identifier: "combo-choice-Coke",
+            hint: "Double tap to edit",
+            traits: [.staticText],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            customContent: [
+                HeistCustomContent(label: "Slot", value: "Main", isImportant: true)
+            ],
+            rotors: [
+                HeistRotor(name: "Actions")
+            ],
+            actions: [.activate, .custom("Modify")]
+        )
+
+        XCTAssertTrue(element.matches(ElementPredicate.hint(.contains("edit"))))
+        XCTAssertTrue(element.matches(ElementPredicate.actions([.custom("Modify")])))
+        XCTAssertTrue(element.matches(ElementPredicate.exclude(.actions([.custom("Sub")]))))
+        XCTAssertTrue(element.matches(ElementPredicate.customContent(.match(label: "Slot", value: "Main"))))
+        XCTAssertTrue(element.matches(ElementPredicate.exclude(.customContent(.match(label: "Discount")))))
+        XCTAssertTrue(element.matches(ElementPredicate.rotors(["Actions"])))
+        XCTAssertTrue(element.matches(ElementPredicate.exclude(.rotors(["Headings"]))))
+        XCTAssertFalse(element.matches(ElementPredicate.exclude(.actions([.custom("Modify")]))))
+        XCTAssertFalse(element.matches(ElementPredicate.customContent(.match(label: "Slot", value: "Side"))))
+        XCTAssertFalse(element.matches(ElementPredicate.rotors(["Headings"])))
     }
 
     func testMultipleStringMatchesForSamePropertyMustAllMatch() {
@@ -420,10 +457,10 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertFalse(element.matches(ElementPredicate(traits: [.button, .selected])))
     }
 
-    func testExcludeTraitsStillWork() {
+    func testExcludePredicateWorksForTraits() {
         let enabled = HeistElement.stub(label: "Submit", traits: [.button])
         let disabled = HeistElement.stub(label: "Submit", traits: [.button, .notEnabled])
-        let predicate = ElementPredicate(label: "Submit", excludeTraits: [.notEnabled])
+        let predicate = ElementPredicate([.label("Submit"), .exclude(.traits([.notEnabled]))])
         XCTAssertTrue(enabled.matches(predicate))
         XCTAssertFalse(disabled.matches(predicate))
     }
@@ -475,9 +512,10 @@ private struct EncodedPredicateWire: Decodable {
     let checks: [EncodedPredicateCheckWire]
 }
 
-private struct EncodedPredicateCheckWire: Decodable {
+private final class EncodedPredicateCheckWire: Decodable {
     let kind: String
     let values: [String]?
+    let check: EncodedPredicateCheckWire?
 }
 
 private struct EncodedTraitSetMatchWire: Decodable {

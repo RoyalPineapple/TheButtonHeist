@@ -17,27 +17,29 @@ struct ElementTargetOptions: ParsableArguments {
     var traits: [String] = []
 
     @Option(name: .customLong("exclude-traits"), parsing: .upToNextOption, help: "Excluded traits (none may be present)")
-    var excludeTraits: [String] = []
+    var excludedTraits: [String] = []
 
     @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
     var ordinal: Int?
 
     func parsedMatcher() throws -> ElementPredicate? {
         let hasFields = identifier != nil || label != nil || value != nil
-            || !traits.isEmpty || !excludeTraits.isEmpty
+            || !traits.isEmpty || !excludedTraits.isEmpty
         guard hasFields else { return nil }
-        return ElementPredicate(
-            label: label.map { .exact($0) },
-            identifier: identifier.map { .exact($0) },
-            value: value.map { .exact($0) },
-            traits: try parseTraits(traits, label: "trait"),
-            excludeTraits: try parseTraits(excludeTraits, label: "excludeTrait")
-        )
+        var checks: [ElementPredicateCheck<String>] = []
+        if let label { checks.append(.label(.exact(label))) }
+        if let identifier { checks.append(.identifier(.exact(identifier))) }
+        if let value { checks.append(.value(.exact(value))) }
+        let requiredTraits = Set(try parseTraits(traits, label: "trait"))
+        if !requiredTraits.isEmpty { checks.append(.traits(requiredTraits)) }
+        let excludedTraits = Set(try parseTraits(excludedTraits, label: "excluded trait"))
+        if !excludedTraits.isEmpty { checks.append(.exclude(.traits(excludedTraits))) }
+        return ElementPredicate(checks)
     }
 
     func requireTarget() throws -> ElementTarget {
         guard let elementTarget = try parsedTarget() else {
-            throw ValidationError("Must specify --identifier, -l, -v, or --traits")
+            throw ValidationError("Must specify --identifier, -l, -v, --traits, or --exclude-traits")
         }
         return elementTarget
     }

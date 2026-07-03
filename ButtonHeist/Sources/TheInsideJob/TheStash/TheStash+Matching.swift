@@ -62,6 +62,7 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
     package var predicateLabel: String? { label }
     package var predicateIdentifier: String? { identifier }
     package var predicateValue: String? { value }
+    package var predicateHint: String? { hint }
 
     /// True when every required trait resolves to a known parser bitmask and is
     /// present on this element. Unknown trait names must cause a miss —
@@ -74,13 +75,34 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
         return traits.contains(mask)
     }
 
-    /// True when any excluded trait is present (or names an unknown trait — an
-    /// unknown exclusion can never be proven absent, so it rejects the subject).
-    package func violatesExcludedTraits(_ excluded: Set<HeistTrait>) -> Bool {
-        let excludedNames = excluded.map(\.rawValue)
-        for name in excludedNames where !Self.knownTraitNames.contains(name) { return true }
-        let mask = AccessibilityTraits.fromNames(excludedNames)
-        return !traits.isDisjoint(with: mask)
+    package func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool {
+        required.isSubset(of: predicateActions)
+    }
+
+    package func containsCustomContent(matching match: CustomContentMatch<String>) -> Bool {
+        customContent.contains { match.matches($0) }
+    }
+
+    package func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool {
+        let names = customRotors.map(\.name).filter { !$0.isEmpty }
+        return required.allSatisfy { match in
+            names.contains { match.matches($0) }
+        }
+    }
+
+    package var predicateActions: Set<ElementAction> {
+        let isInteractive = respondsToUserInteraction
+            || !traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
+            || !customActions.isEmpty
+        let activate: [ElementAction] = isInteractive ? [.activate] : []
+        let adjustable: [ElementAction] = (isInteractive && traits.contains(.adjustable))
+            ? [.increment, .decrement]
+            : []
+        let custom = customActions
+            .map(\.name)
+            .filter { !$0.isEmpty }
+            .map(ElementAction.custom)
+        return Set(activate + adjustable + custom)
     }
 }
 
@@ -121,6 +143,20 @@ extension TheStash {
 private extension Screen.ScreenElement {
     func matches(_ predicate: ElementPredicate) -> Bool {
         predicate.matches(element)
+    }
+}
+
+private extension CustomContentMatch where Value == String {
+    func matches(_ content: AccessibilityElement.CustomContent) -> Bool {
+        label.matches(content.label)
+            && value.matches(content.value)
+            && (isImportant.map { $0 == content.isImportant } ?? true)
+    }
+}
+
+private extension Optional where Wrapped == StringMatch<String> {
+    func matches(_ text: String) -> Bool {
+        map { $0.matches(text) } ?? true
     }
 }
 

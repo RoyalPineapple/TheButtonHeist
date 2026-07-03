@@ -3622,16 +3622,25 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationTypedPayloadPreservesElementTraits() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("missing"),
-            "element": elementPredicateValue(
-                label: "Spinner",
-                traits: ["button"],
-                excludeTraits: ["selected"]
-            ),
+            "element": elementTargetValue([
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Spinner")),
+                    predicateCheckValue(kind: "traits", values: [.string("button")]),
+                    predicateCheckValue(
+                        kind: "exclude",
+                        check: predicateCheckValue(kind: "traits", values: [.string("selected")])
+                    ),
+                ]),
+            ]),
         ]))
 
         XCTAssertEqual(
             result,
-            .missing(ElementPredicate(label: "Spinner", traits: [.button], excludeTraits: [.selected]))
+            .missing(ElementPredicate([
+                .label("Spinner"),
+                .traits([.button]),
+                .exclude(.traits([.selected])),
+            ]))
         )
     }
 
@@ -4003,7 +4012,6 @@ private func targetValue(
     identifier: String? = nil,
     value: String? = nil,
     traits: [String]? = nil,
-    excludeTraits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
     var target: [String: HeistValue] = [:]
@@ -4011,7 +4019,6 @@ private func targetValue(
     if let identifier { target["identifier"] = stringMatchValue(mode: "exact", value: identifier) }
     if let value { target["value"] = stringMatchValue(mode: "exact", value: value) }
     if let traits { target["traits"] = .array(traits.map { .string($0) }) }
-    if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return elementTargetValue(target)
 }
@@ -4020,8 +4027,7 @@ private func elementPredicateValue(
     label: String? = nil,
     identifier: String? = nil,
     value: String? = nil,
-    traits: [String]? = nil,
-    excludeTraits: [String]? = nil
+    traits: [String]? = nil
 ) -> HeistValue {
     var checks: [HeistValue] = []
     if let label {
@@ -4035,9 +4041,6 @@ private func elementPredicateValue(
     }
     if let traits {
         checks.append(predicateCheckValue(kind: "traits", values: traits.map { .string($0) }))
-    }
-    if let excludeTraits {
-        checks.append(predicateCheckValue(kind: "excludeTraits", values: excludeTraits.map { .string($0) }))
     }
     return elementTargetValue(["checks": .array(checks)])
 }
@@ -4053,10 +4056,16 @@ private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
     .object(fields)
 }
 
-private func predicateCheckValue(kind: String, match: HeistValue? = nil, values: [HeistValue]? = nil) -> HeistValue {
+private func predicateCheckValue(
+    kind: String,
+    match: HeistValue? = nil,
+    values: [HeistValue]? = nil,
+    check: HeistValue? = nil
+) -> HeistValue {
     var object: [String: HeistValue] = ["kind": .string(kind)]
     if let match { object["match"] = match }
     if let values { object["values"] = .array(values) }
+    if let check { object["check"] = check }
     return .object(object)
 }
 

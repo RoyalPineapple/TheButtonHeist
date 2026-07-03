@@ -83,9 +83,10 @@ expectation is a contract, and an open-ended negation — "the value is anything
 except 5" — is a green light over an undefined state: it passes for wrong
 reasons as easily as right ones. Where a negative matters, the grammar gives
 it a positive form: `.missing(...)` asserts absence from the settled tree, and
-trait exclusion (`.excludeTraits([.selected])`) asserts "a button that is not
-selected." Where a meaningful state is not yet expressible as a trait, the
-right move is to expose it as one — fix the interface, not the grammar.
+trait exclusion (`.exclude(.traits([.selected]))`) asserts "a button that is
+not selected." Where a meaningful state is not yet expressible as a typed
+check, the right move is to expose it as one — fix the interface, not the
+grammar.
 
 ## The test for additions
 

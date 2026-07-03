@@ -11,8 +11,7 @@ import Foundation
 /// automatic substring fallback. On miss, the resolver returns structured
 /// suggestions.
 public enum ElementTarget: Sendable, Equatable, Hashable {
-    /// Element predicate: ordered checks over label, identifier, value, traits,
-    /// and excluded traits.
+    /// Element predicate: ordered checks over semantic accessibility fields.
     /// `ordinal` is a 0-based selection index into the list of matches
     /// after semantic narrowing. When nil, requires a unique match and reports
     /// ambiguity on 2+ hits. When set, selects the Nth narrowed match.
@@ -27,6 +26,9 @@ public extension ElementTarget {
         case string
         case stringMatch
         case stringArray
+        case stringMatchArray
+        case actionArray
+        case customContentMatch
         case nonNegativeInteger
     }
 
@@ -67,10 +69,16 @@ public extension ElementTarget {
         switch key {
         case .checks:
             return SchemaField(name: key.stringValue, kind: .predicateChecks)
-        case .label, .identifier, .value:
+        case .label, .identifier, .value, .hint:
             return SchemaField(name: key.stringValue, kind: .stringMatch)
-        case .traits, .excludeTraits:
+        case .traits:
             return SchemaField(name: key.stringValue, kind: .stringArray)
+        case .actions:
+            return SchemaField(name: key.stringValue, kind: .actionArray)
+        case .customContent:
+            return SchemaField(name: key.stringValue, kind: .customContentMatch)
+        case .rotors:
+            return SchemaField(name: key.stringValue, kind: .stringMatchArray)
         case .ordinal:
             return SchemaField(name: key.stringValue, kind: .nonNegativeInteger)
         }
@@ -94,12 +102,23 @@ extension ElementTarget: CustomStringConvertible {
 extension ElementTarget: Codable {
     public enum CodingKeys: String, CodingKey {
         case checks
-        case label, identifier, value, traits, excludeTraits
+        case label, identifier, value, hint
+        case traits
+        case actions
+        case customContent
+        case rotors
         case ordinal
 
         /// The predicate keys whose presence in a parent container indicates an
         /// `ElementTarget` is flattened at that level.
-        static let predicateKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
+        static let predicateKeys: [CodingKeys] = [
+            .label, .identifier, .value,
+            .hint,
+            .traits,
+            .actions,
+            .customContent,
+            .rotors,
+        ]
         static let orderedPredicateKeys: [CodingKeys] = [.checks] + predicateKeys
         static let allInlineKeys: [CodingKeys] = orderedPredicateKeys + [.ordinal]
     }
@@ -190,11 +209,18 @@ extension ElementTarget: Codable {
         checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier)
             .map(ElementPredicateCheck.identifier)
         checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .hint).map(ElementPredicateCheck.hint)
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
             checks.append(.traits(traits.heistTraitSet))
         }
-        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits.heistTraitSet))
+        if let actions = try container.decodeIfPresent([ElementAction].self, forKey: .actions), !actions.isEmpty {
+            checks.append(.actions(Set(actions)))
+        }
+        if let match = try container.decodeIfPresent(CustomContentMatch<String>.self, forKey: .customContent) {
+            checks.append(.customContent(match))
+        }
+        if let rotors = try container.decodeIfPresent([StringMatch<String>].self, forKey: .rotors), !rotors.isEmpty {
+            checks.append(.rotors(rotors))
         }
         return checks
     }

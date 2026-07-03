@@ -24,6 +24,14 @@ final class ElementActionRequestContractTests: XCTestCase {
                 assertStringMatchObjectSchema(spec, file: #filePath, line: #line)
             case .stringArray:
                 XCTAssertEqual(spec.type, .stringArray)
+            case .stringMatchArray:
+                XCTAssertEqual(spec.type, .array)
+                assertArraySchema(spec, file: #filePath, line: #line)
+            case .actionArray:
+                XCTAssertEqual(spec.type, .array)
+                assertArraySchema(spec, file: #filePath, line: #line)
+            case .customContentMatch:
+                XCTAssertEqual(spec.type, .object)
             case .nonNegativeInteger:
                 XCTAssertEqual(spec.type, .integer)
                 XCTAssertEqual(projectedJSONSchemaProperty("minimum", in: spec), .int(0))
@@ -203,8 +211,12 @@ private func assertPredicateChecksSchema(
             .string("label"),
             .string("identifier"),
             .string("value"),
+            .string("hint"),
             .string("traits"),
-            .string("excludeTraits"),
+            .string("actions"),
+            .string("customContent"),
+            .string("rotors"),
+            .string("exclude"),
         ]),
     ]), file: file, line: line)
 
@@ -215,4 +227,18 @@ private func assertPredicateChecksSchema(
         return XCTFail("Expected values string array schema", file: file, line: line)
     }
     XCTAssertEqual(values["type"], .string("array"), file: file, line: line)
+    guard case .object? = properties["check"] else {
+        return XCTFail("Expected nested check object schema", file: file, line: line)
+    }
+}
+
+private func assertArraySchema(
+    _ spec: FenceParameterSpec,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .object(let schema) = spec.jsonSchema.heistValue else {
+        return XCTFail("Expected array schema", file: file, line: line)
+    }
+    XCTAssertEqual(schema["type"], .string("array"), file: file, line: line)
 }

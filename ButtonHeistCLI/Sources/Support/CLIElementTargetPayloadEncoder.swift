@@ -14,51 +14,102 @@ enum CLIElementTargetPayloadEncoder {
     }
 
     private static func object(_ predicate: ElementPredicate) -> CLIRequestObject {
-        var object = CLIRequestObject()
-        for check in predicate.checks {
-            append(check, to: &object)
-        }
-        return object
+        guard !predicate.checks.isEmpty else { return CLIRequestObject() }
+        return CommandArgumentWriter.object(
+            CommandArgumentWriter.value(.checks, .array(predicate.checks.map(checkValue)))
+        )
     }
 
-    private static func append(
-        _ check: ElementPredicateCheck<String>,
-        to object: inout CLIRequestObject
-    ) {
+    private static func checkValue(_ check: ElementPredicateCheck<String>) -> HeistValue {
         switch check {
         case .label(let match):
-            object.appendOneOrMany(stringMatchValue(match), for: .label)
+            return checkObject(kind: "label", match: stringMatchValue(match))
         case .identifier(let match):
-            object.appendOneOrMany(stringMatchValue(match), for: .identifier)
+            return checkObject(kind: "identifier", match: stringMatchValue(match))
         case .value(let match):
-            object.appendOneOrMany(stringMatchValue(match), for: .value)
+            return checkObject(kind: "value", match: stringMatchValue(match))
+        case .hint(let match):
+            return checkObject(kind: "hint", match: stringMatchValue(match))
         case .traits(let traits):
-            appendTraits(traits, to: .traits, in: &object)
-        case .excludeTraits(let traits):
-            appendTraits(traits, to: .excludeTraits, in: &object)
+            return checkObject(kind: "traits", values: traitValues(traits))
+        case .actions(let actions):
+            return checkObject(kind: "actions", values: actionValues(actions))
+        case .customContent(let match):
+            return checkObject(kind: "customContent", match: customContentMatchValue(match))
+        case .rotors(let matches):
+            return checkObject(kind: "rotors", values: matches.map(stringMatchValue))
+        case .exclude(let check):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "exclude"),
+                CommandArgumentWriter.value(.check, checkValue(check))
+            ).heistValue
         }
     }
 
-    private static func appendTraits(
-        _ traits: Set<HeistTrait>,
-        to key: FenceParameterKey,
-        in object: inout CLIRequestObject
-    ) {
-        guard !traits.isEmpty else { return }
-        var values: [HeistValue]
-        if case .array(let existing)? = object[key] {
-            values = existing
-        } else {
-            values = []
-        }
-        values.append(contentsOf: traits.sorted { $0.rawValue < $1.rawValue }.map { .string($0.rawValue) })
-        object[key] = .array(values)
+    private static func checkObject(
+        kind: String,
+        match: HeistValue? = nil,
+        values: [HeistValue]? = nil
+    ) -> HeistValue {
+        CommandArgumentWriter.object(
+            CommandArgumentWriter.value(.kind, kind),
+            CommandArgumentWriter.optional(.match, match),
+            CommandArgumentWriter.optional(.values, values.map(HeistValue.array))
+        ).heistValue
     }
 
     private static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
         CommandArgumentWriter.object(
             CommandArgumentWriter.value(.mode, match.mode.rawValue),
             CommandArgumentWriter.value(.value, match.value)
+        ).heistValue
+    }
+
+    private static func traitValues(_ traits: Set<HeistTrait>) -> [HeistValue] {
+        traits
+            .sorted { $0.rawValue < $1.rawValue }
+            .map { .string($0.rawValue) }
+    }
+
+    private static func actionValues(_ actions: Set<ElementAction>) -> [HeistValue] {
+        actions
+            .sorted { actionSortKey($0) < actionSortKey($1) }
+            .map(actionValue)
+    }
+
+    private static func actionValue(_ action: ElementAction) -> HeistValue {
+        switch action {
+        case .activate:
+            return .string("activate")
+        case .increment:
+            return .string("increment")
+        case .decrement:
+            return .string("decrement")
+        case .custom(let name):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.custom, name)
+            ).heistValue
+        }
+    }
+
+    private static func actionSortKey(_ action: ElementAction) -> String {
+        switch action {
+        case .activate:
+            return "0:activate"
+        case .increment:
+            return "1:increment"
+        case .decrement:
+            return "2:decrement"
+        case .custom(let name):
+            return "3:\(name)"
+        }
+    }
+
+    private static func customContentMatchValue(_ match: CustomContentMatch<String>) -> HeistValue {
+        CommandArgumentWriter.object(
+            CommandArgumentWriter.optional(.label, match.label.map(stringMatchValue)),
+            CommandArgumentWriter.optional(.value, match.value.map(stringMatchValue)),
+            CommandArgumentWriter.optional(.isImportant, match.isImportant)
         ).heistValue
     }
 }

@@ -22,7 +22,7 @@ flowchart TD
     subgraph wireTypes["Wire types (Codable)"]
         HE["HeistElement<br/>label · value · traits · frame ·<br/>activationPointEvidence · actions"]
         ET["ElementTarget<br/>.predicate(ElementPredicate, ordinal:)"]
-        EP["ElementPredicate<br/>label / identifier / value checks ·<br/>traits · excludeTraits"]
+        EP["ElementPredicate<br/>ordered checks:<br/>label / identifier / value / hint ·<br/>traits / actions / customContent / rotors · exclude(check)"]
         HE ~~~ ET
         ET --> EP
     end

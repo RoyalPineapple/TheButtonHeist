@@ -26,10 +26,12 @@ final class ElementTargetOptionsTests: XCTestCase {
             try command.element.parsedTarget(),
             .predicate(
                 ElementPredicate(
-                    label: "Save",
-                    identifier: "saveButton",
-                    traits: [.button],
-                    excludeTraits: [.notEnabled]
+                    [
+                        .label("Save"),
+                        .identifier("saveButton"),
+                        .traits([.button]),
+                        .exclude(.traits([.notEnabled])),
+                    ]
                 ),
                 ordinal: 1
             )
@@ -47,19 +49,33 @@ final class ElementTargetOptionsTests: XCTestCase {
         }
 
         XCTAssertEqual(object.heistValue, .object(semanticObject))
-        XCTAssertEqual(object[.label], .object([
-            "mode": .string("exact"),
-            "value": .string("Save"),
+        XCTAssertEqual(object[.checks], .array([
+            .object([
+                "kind": .string("label"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("Save"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("identifier"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("saveButton"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("value"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("1"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("traits"),
+                "values": .array([.string("button")]),
+            ]),
         ]))
-        XCTAssertEqual(object[.identifier], .object([
-            "mode": .string("exact"),
-            "value": .string("saveButton"),
-        ]))
-        XCTAssertEqual(object[.value], .object([
-            "mode": .string("exact"),
-            "value": .string("1"),
-        ]))
-        XCTAssertEqual(object[.traits], .array([.string("button")]))
     }
 
     func testCLIRequestObjectsAccumulateRepeatedTypedKeysBeforeWireRendering() {

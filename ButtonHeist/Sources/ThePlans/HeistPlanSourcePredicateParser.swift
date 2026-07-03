@@ -37,7 +37,9 @@ extension HeistPlanSourceParser {
             return .state(try parseExistsMissingState(name: name))
         case "all":
             return .state(try parseAllState())
-        case "label", "identifier", "value", "traits", "excludeTraits", "element":
+        case "label", "identifier", "value", "hint", "traits",
+             "actions", "customContent", "rotors", "exclude",
+             "element":
             return .exists(try parseElementPredicateTemplate(named: name))
         case "appeared":
             return .changePredicate(.elementsScope([try parseAppearedElementDeltaPredicateExpr()]))
@@ -113,7 +115,9 @@ extension HeistPlanSourceParser {
             return try parseExistsMissingState(name: name)
         case "all":
             return try parseAllState()
-        case "label", "identifier", "value", "traits", "excludeTraits", "element":
+        case "label", "identifier", "value", "hint", "traits",
+             "actions", "customContent", "rotors", "exclude",
+             "element":
             return .exists(try parseElementPredicateTemplate(named: name))
         default:
             throw error(previous, "unsupported state predicate '.\(name)'")

@@ -159,15 +159,15 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         .label(.contains("Result")),
         .identifier(.prefix("row")),
         .value(.suffix("available")),
-        traits: [.button],
-        excludeTraits: [.staticText]
+        .exclude(.traits([.staticText])),
+        traits: [.button]
     )
     let readyPredicate = ElementPredicateTemplate.element(
         .label(.contains(.literal("Result"))),
         .identifier(.prefix(.literal("row"))),
         .value(.suffix(.literal("ready"))),
-        traits: [.button],
-        excludeTraits: [.staticText]
+        .exclude(.traits([.staticText])),
+        traits: [.button]
     )
     let plan = try HeistPlan(
         name: "RootSearch",
@@ -231,7 +231,7 @@ private let rootStringCanonicalSwiftDSL = """
 
         WaitFor(.label(query), timeout: .seconds(1))
 
-        If(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .traits([.button]), .excludeTraits([.staticText]))) {
+        If(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .exclude(.traits([.staticText])), .traits([.button]))) {
             Warn("ready")
         }
         .else {
@@ -243,7 +243,7 @@ private let rootStringCanonicalSwiftDSL = """
                 .expect(.label(item), timeout: .seconds(2))
         }
 
-        ForEach(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("available")), .traits([.button]), .excludeTraits([.staticText])), limit: 3) { target in
+        ForEach(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("available")), .exclude(.traits([.staticText])), .traits([.button])), limit: 3) { target in
             RunHeist("Rows.pressRow", target)
         }
     }

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - String Matching
 
-public protocol StringMatchPayload: Sendable, Equatable, Hashable {
+public protocol StringMatchPayload: Codable, Sendable, Equatable, Hashable {
     /// Literal emptiness when it is knowable without resolving runtime refs.
     var stringMatchLiteralIsEmpty: Bool? { get }
 }
@@ -221,25 +221,39 @@ public extension StringMatch where Value: Codable {
     }
 }
 
-public enum ElementPredicateCheck<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
-    case label(StringMatch<Value>)
-    case identifier(StringMatch<Value>)
-    case value(StringMatch<Value>)
+public enum ElementPredicateCheck<Text: StringMatchPayload>: Sendable, Equatable, Hashable {
+    case label(StringMatch<Text>)
+    case identifier(StringMatch<Text>)
+    case value(StringMatch<Text>)
     case traits(Set<HeistTrait>)
-    case excludeTraits(Set<HeistTrait>)
+    case hint(StringMatch<Text>)
+    case actions(Set<ElementAction>)
+    case customContent(CustomContentMatch<Text>)
+    case rotors([StringMatch<Text>])
+    indirect case exclude(ElementPredicateCheck<Text>)
 
     public var hasPredicateLiteral: Bool {
         switch self {
         case .label(let match), .identifier(let match), .value(let match):
             return match.hasPredicateLiteral
-        case .traits(let traits), .excludeTraits(let traits):
+        case .traits(let traits):
             return !traits.isEmpty
+        case .hint(let match):
+            return match.hasPredicateLiteral
+        case .actions(let actions):
+            return !actions.isEmpty
+        case .customContent(let match):
+            return match.hasPredicateLiteral
+        case .rotors(let matches):
+            return matches.contains { $0.hasPredicateLiteral }
+        case .exclude(let check):
+            return check.hasPredicateLiteral
         }
     }
 
-    public func map<NewValue: StringMatchPayload>(
-        _ transform: (Value) throws -> NewValue
-    ) rethrows -> ElementPredicateCheck<NewValue> {
+    public func map<NewText: StringMatchPayload>(
+        _ transform: (Text) throws -> NewText
+    ) rethrows -> ElementPredicateCheck<NewText> {
         switch self {
         case .label(let match):
             return try .label(match.map(transform))
@@ -249,8 +263,16 @@ public enum ElementPredicateCheck<Value: StringMatchPayload>: Sendable, Equatabl
             return try .value(match.map(transform))
         case .traits(let traits):
             return .traits(traits)
-        case .excludeTraits(let traits):
-            return .excludeTraits(traits)
+        case .hint(let match):
+            return try .hint(match.map(transform))
+        case .actions(let actions):
+            return .actions(actions)
+        case .customContent(let match):
+            return try .customContent(match.map(transform))
+        case .rotors(let matches):
+            return try .rotors(matches.map { try $0.map(transform) })
+        case .exclude(let check):
+            return try .exclude(check.map(transform))
         }
     }
 }
@@ -275,23 +297,32 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
         identifier: StringMatch<String>? = nil,
         value: StringMatch<String>? = nil,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        hint: StringMatch<String>? = nil,
+        actions: [ElementAction] = [],
+        customContent: CustomContentMatch<String>? = nil,
+        rotors: [StringMatch<String>] = []
     ) {
         self.init(Self.checks(
             label: label,
             identifier: identifier,
             value: value,
             traits: traits,
-            excludeTraits: excludeTraits
+            hint: hint,
+            actions: actions,
+            customContent: customContent,
+            rotors: rotors
         ))
     }
 
     public init(
         _ checks: [ElementPredicateCheck<String>],
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) {
-        self.init(checks + Self.traitChecks(traits: traits, excludeTraits: excludeTraits))
+        self.init(checks + Self.setChecks(
+            traits: traits,
+            actions: actions
+        ))
     }
 
     /// Whether any predicate is set. Empty string and empty trait collection
@@ -308,25 +339,34 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
         identifier: StringMatch<String>?,
         value: StringMatch<String>?,
         traits: [HeistTrait],
-        excludeTraits: [HeistTrait]
+        hint: StringMatch<String>?,
+        actions: [ElementAction],
+        customContent: CustomContentMatch<String>?,
+        rotors: [StringMatch<String>]
     ) -> [ElementPredicateCheck<String>] {
         var checks: [ElementPredicateCheck<String>] = []
         if let label { checks.append(.label(label)) }
         if let identifier { checks.append(.identifier(identifier)) }
         if let value { checks.append(.value(value)) }
-        checks += traitChecks(traits: traits, excludeTraits: excludeTraits)
+        if let hint { checks.append(.hint(hint)) }
+        if let customContent { checks.append(.customContent(customContent)) }
+        if !rotors.isEmpty { checks.append(.rotors(rotors)) }
+        checks += setChecks(
+            traits: traits,
+            actions: actions
+        )
         return checks
     }
 
-    private static func traitChecks(
+    private static func setChecks(
         traits: [HeistTrait],
-        excludeTraits: [HeistTrait]
+        actions: [ElementAction]
     ) -> [ElementPredicateCheck<String>] {
         var checks: [ElementPredicateCheck<String>] = []
         let traits = traits.heistTraitSet
-        let excludeTraits = excludeTraits.heistTraitSet
         if !traits.isEmpty { checks.append(.traits(traits)) }
-        if !excludeTraits.isEmpty { checks.append(.excludeTraits(excludeTraits)) }
+        let actions = Set(actions)
+        if !actions.isEmpty { checks.append(.actions(actions)) }
         return checks
     }
 }
@@ -364,14 +404,39 @@ public extension ElementPredicate {
         ElementPredicate(value: value)
     }
 
+    /// Match by hint alone.
+    static func hint(_ hint: String) -> ElementPredicate {
+        ElementPredicate(hint: StringMatch(hint))
+    }
+
+    /// Match by hint alone.
+    static func hint(_ hint: StringMatch<String>) -> ElementPredicate {
+        ElementPredicate(hint: hint)
+    }
+
     /// Match elements that include every listed trait.
     static func traits(_ traits: [HeistTrait]) -> ElementPredicate {
         ElementPredicate(traits: traits)
     }
 
-    /// Match elements that include none of the listed traits.
-    static func excludeTraits(_ traits: [HeistTrait]) -> ElementPredicate {
-        ElementPredicate(excludeTraits: traits)
+    /// Match elements that include every listed action.
+    static func actions(_ actions: [ElementAction]) -> ElementPredicate {
+        ElementPredicate(actions: actions)
+    }
+
+    /// Match elements that include at least one custom-content item satisfying the checker.
+    static func customContent(_ match: CustomContentMatch<String>) -> ElementPredicate {
+        ElementPredicate(customContent: match)
+    }
+
+    /// Match elements that include every listed rotor name.
+    static func rotors(_ rotors: [StringMatch<String>]) -> ElementPredicate {
+        ElementPredicate(rotors: rotors)
+    }
+
+    /// Exclude elements that satisfy a single predicate check.
+    static func exclude(_ check: ElementPredicateCheck<String>) -> ElementPredicate {
+        ElementPredicate([.exclude(check)])
     }
 
     /// Match by an ordered list of property checks. Repeating a property means
@@ -379,9 +444,13 @@ public extension ElementPredicate {
     static func element(
         _ checks: ElementPredicateCheck<String>...,
         traits: [HeistTrait] = [],
-        excludeTraits: [HeistTrait] = []
+        actions: [ElementAction] = []
     ) -> ElementPredicate {
-        ElementPredicate(checks, traits: traits, excludeTraits: excludeTraits)
+        ElementPredicate(
+            checks,
+            traits: traits,
+            actions: actions
+        )
     }
 }
 
@@ -395,11 +464,15 @@ package protocol ElementPredicateSubject {
     var predicateLabel: String? { get }
     var predicateIdentifier: String? { get }
     var predicateValue: String? { get }
+    var predicateHint: String? { get }
     /// True when every required trait is present (and known) on the subject.
     func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool
-    /// True when any excluded trait is present (or unknown) on the subject —
-    /// i.e. the subject should be rejected.
-    func violatesExcludedTraits(_ excluded: Set<HeistTrait>) -> Bool
+    /// True when every required action is present on the subject.
+    func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool
+    /// True when the subject has at least one custom-content item satisfying the checker.
+    func containsCustomContent(matching match: CustomContentMatch<String>) -> Bool
+    /// True when every required rotor match is present on the subject.
+    func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool
 }
 
 package extension ElementPredicate {
@@ -437,13 +510,15 @@ extension ElementPredicate: CustomStringConvertible {
     }
 }
 
-extension ElementPredicateCheck: Codable where Value: Codable {
+extension ElementPredicateCheck: Codable where Text: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind, match, values
+        case kind, match, values, check
     }
 
     package enum Kind: String, Codable, CaseIterable {
-        case label, identifier, value, traits, excludeTraits
+        case label, identifier, value, hint
+        case traits, actions, customContent, rotors
+        case exclude
     }
 
     public init(from decoder: Decoder) throws {
@@ -452,19 +527,40 @@ extension ElementPredicateCheck: Codable where Value: Codable {
         switch try container.decode(Kind.self, forKey: .kind) {
         case .label:
             try Self.rejectIrrelevantField(.values, in: container, forKind: .label)
-            self = .label(try container.decode(StringMatch<Value>.self, forKey: .match))
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .label)
+            self = .label(try container.decode(StringMatch<Text>.self, forKey: .match))
         case .identifier:
             try Self.rejectIrrelevantField(.values, in: container, forKind: .identifier)
-            self = .identifier(try container.decode(StringMatch<Value>.self, forKey: .match))
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .identifier)
+            self = .identifier(try container.decode(StringMatch<Text>.self, forKey: .match))
         case .value:
             try Self.rejectIrrelevantField(.values, in: container, forKind: .value)
-            self = .value(try container.decode(StringMatch<Value>.self, forKey: .match))
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .value)
+            self = .value(try container.decode(StringMatch<Text>.self, forKey: .match))
+        case .hint:
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .hint)
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .hint)
+            self = .hint(try container.decode(StringMatch<Text>.self, forKey: .match))
         case .traits:
             try Self.rejectIrrelevantField(.match, in: container, forKind: .traits)
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .traits)
             self = .traits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
-        case .excludeTraits:
-            try Self.rejectIrrelevantField(.match, in: container, forKind: .excludeTraits)
-            self = .excludeTraits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
+        case .actions:
+            try Self.rejectIrrelevantField(.match, in: container, forKind: .actions)
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .actions)
+            self = .actions(Set(try container.decode([ElementAction].self, forKey: .values)))
+        case .customContent:
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .customContent)
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .customContent)
+            self = .customContent(try container.decode(CustomContentMatch<Text>.self, forKey: .match))
+        case .rotors:
+            try Self.rejectIrrelevantField(.match, in: container, forKind: .rotors)
+            try Self.rejectIrrelevantField(.check, in: container, forKind: .rotors)
+            self = .rotors(try container.decode([StringMatch<Text>].self, forKey: .values))
+        case .exclude:
+            try Self.rejectIrrelevantField(.match, in: container, forKind: .exclude)
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .exclude)
+            self = .exclude(try container.decode(ElementPredicateCheck<Text>.self, forKey: .check))
         }
     }
 
@@ -493,17 +589,29 @@ extension ElementPredicateCheck: Codable where Value: Codable {
         case .value(let match):
             try container.encode(Kind.value, forKey: .kind)
             try container.encode(match, forKey: .match)
+        case .hint(let match):
+            try container.encode(Kind.hint, forKey: .kind)
+            try container.encode(match, forKey: .match)
         case .traits(let traits):
             try container.encode(Kind.traits, forKey: .kind)
             try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
-        case .excludeTraits(let traits):
-            try container.encode(Kind.excludeTraits, forKey: .kind)
-            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
+        case .actions(let actions):
+            try container.encode(Kind.actions, forKey: .kind)
+            try container.encode(actions.canonicalElementActionArray, forKey: .values)
+        case .customContent(let match):
+            try container.encode(Kind.customContent, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .rotors(let matches):
+            try container.encode(Kind.rotors, forKey: .kind)
+            try container.encode(matches, forKey: .values)
+        case .exclude(let check):
+            try container.encode(Kind.exclude, forKey: .kind)
+            try container.encode(check, forKey: .check)
         }
     }
 }
 
-package extension ElementPredicateCheck where Value == String {
+package extension ElementPredicateCheck where Text == String {
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         switch self {
         case .label(let match):
@@ -515,10 +623,19 @@ package extension ElementPredicateCheck where Value == String {
         case .value(let match):
             guard let candidate = subject.predicateValue else { return false }
             return match.matches(candidate)
+        case .hint(let match):
+            guard let candidate = subject.predicateHint else { return false }
+            return match.matches(candidate)
         case .traits(let traits):
             return traits.isEmpty || subject.satisfiesRequiredTraits(traits)
-        case .excludeTraits(let traits):
-            return traits.isEmpty || !subject.violatesExcludedTraits(traits)
+        case .actions(let actions):
+            return actions.isEmpty || subject.satisfiesRequiredActions(actions)
+        case .customContent(let match):
+            return !match.hasPredicateLiteral || subject.containsCustomContent(matching: match)
+        case .rotors(let matches):
+            return matches.isEmpty || subject.satisfiesRequiredRotors(matches)
+        case .exclude(let check):
+            return !check.hasPredicateLiteral || !check.matches(subject)
         }
     }
 }

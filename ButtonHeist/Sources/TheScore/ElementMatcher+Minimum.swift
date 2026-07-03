@@ -303,7 +303,7 @@ public enum MinimumPredicateSelector {
         case .trait(let trait):
             return ElementPredicate([.traits([trait])])
         case .excludedTrait(let trait):
-            return ElementPredicate([.excludeTraits([trait])])
+            return ElementPredicate([.exclude(.traits([trait]))])
         }
     }
 

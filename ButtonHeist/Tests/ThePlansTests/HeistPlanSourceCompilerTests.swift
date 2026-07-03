@@ -986,7 +986,7 @@ import Testing
         .action(try ActionStep(command: .activate(.predicate(.element(
             .label("Delete"),
             .traits([.button]),
-            .excludeTraits([.header])
+            .exclude(.traits([.header]))
         ))))),
     ]))
 }
@@ -1476,6 +1476,30 @@ import Testing
     """
 
     _ = try HeistPlanSourceCompiler().compile(source)
+}
+
+@Test func `element semantic surfaces parse and render canonically`() throws {
+    let source = root(#"""
+    WaitFor(.exists(.element(
+        .label("Coke"),
+        .hint(.contains("edit")),
+        .actions([.custom("Modify")]),
+        .exclude(.actions([.custom("Sub")])),
+        .customContent(label: "Slot", value: "Main"),
+        .rotors(["Actions"]),
+        .exclude(.rotors(["Headings"]))
+    )), timeout: .seconds(2))
+    """#)
+
+    let plan = try HeistPlanSourceCompiler().compile(source)
+    let canonical = try plan.canonicalSwiftDSL()
+
+    #expect(canonical.contains(#".hint(.contains("edit"))"#))
+    #expect(canonical.contains(#".actions([.custom("Modify")])"#))
+    #expect(canonical.contains(#".exclude(.actions([.custom("Sub")]))"#))
+    #expect(canonical.contains(#".customContent(.match(label: "Slot", value: "Main"))"#))
+    #expect(canonical.contains(#".rotors(["Actions"])"#))
+    #expect(canonical.contains(#".exclude(.rotors(["Headings"]))"#))
 }
 
 @Test func `parser scopes aliases through nested bodies`() throws {

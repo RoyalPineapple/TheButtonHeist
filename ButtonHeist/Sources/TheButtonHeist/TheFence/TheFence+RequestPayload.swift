@@ -206,9 +206,12 @@ extension FenceCommandDescriptor {
         value: HeistValue,
         field: String
     ) throws {
+        guard schema != .unconstrained else { return }
         try validateType(schema.type, value: value, field: field)
 
         switch schema {
+        case .unconstrained:
+            return
         case .scalar(let scalar):
             try validateEnum(scalar, value: value, field: field)
             try validateScalarBounds(scalar, value: value, field: field)
