@@ -406,7 +406,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     kind: .heist,
                     durationMs: 5,
                     intent: .heist(name: "Wrapper"),
-                    evidence: .invocation(HeistInvocationEvidence(
+                    evidence: .invocation(.heist(
                         name: "heist Wrapper",
                         childFailedPath: "$.body[0].heist.body[0]"
                     )),
@@ -660,8 +660,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     kind: .invoke,
                     durationMs: 5,
                     intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
-                    evidence: .invocation(HeistInvocationEvidence(
-                        invocation: invocation,
+                    evidence: .invocation(.invocation(
+                        invocation,
                         name: "LibraryScreen.addToCart",
                         argument: "Milk",
                         childFailedPath: child.path
@@ -739,6 +739,59 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertTrue(message.contains("phase: request"), message)
         XCTAssertTrue(message.contains("retryable: false"), message)
         XCTAssertEqual(errorKind, .action(.elementNotFound))
+    }
+
+    func testJUnitWrapperFailureDerivesFromReceiptStatusWhenMessageSuppressed() async {
+        let childPath = "$.body[0].heist.body[0]"
+        let child = actionStep(
+            path: childPath,
+            actionResult: ActionResult.failure(
+                method: .activate,
+                errorKind: .actionFailed,
+                message: "Save failed"
+            ),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "action dispatch succeeds",
+                observed: "Save failed"
+            )
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                .childAborted(
+                    path: "$.body[0]",
+                    kind: .heist,
+                    durationMs: 5,
+                    intent: .heist(name: "Wrapper"),
+                    evidence: .invocation(.heist(
+                        name: "heist Wrapper",
+                        childFailedPath: childPath
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "child execution completes without failure",
+                        observed: "child failed at \(childPath)"
+                    ),
+                    abortedAtChildPath: childPath,
+                    children: [child]
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: childPath
+        )
+        let wrapper = result.outputReceiptNodes[0]
+        XCTAssertEqual(wrapper.reportStatus, .failed)
+        XCTAssertNil(wrapper.reportFailureMessage)
+
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).junitSteps(result: result)
+        }.value
+
+        guard case .failed(let message, let errorKind) = rows.first?.outcome else {
+            return XCTFail("Expected wrapper JUnit row to fail, got \(String(describing: rows.first?.outcome))")
+        }
+        XCTAssertTrue(message.hasPrefix("child failed at \(childPath)"), message)
+        XCTAssertEqual(errorKind, .commandError)
     }
 
     func testJUnitExpectationFailureUsesExpectationReceiptFact() async {
@@ -1120,7 +1173,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 kind: .heist,
                 durationMs: 7,
                 intent: .heist(name: "Nested"),
-                evidence: .invocation(HeistInvocationEvidence(name: "Nested"))
+                evidence: .invocation(.heist(name: "Nested"))
             ),
             expectedKey: "invocation",
             assertEvidence: { evidence in
@@ -1144,18 +1197,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 kind: .invoke,
                 durationMs: 8,
                 intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
-                evidence: .invocation(HeistInvocationEvidence(
-                    invocation: invocation,
+                evidence: .invocation(.invocation(
+                    invocation,
                     name: "LibraryScreen.addToCart",
                     argument: "Milk",
-                    expectationActionResult: ActionResult.success(method: .wait),
-                    expectation: expectation,
-                    expectationEvidence: HeistWaitEvidence(
-                        outcome: .matched,
+                    expectation: .init(
                         actionResult: ActionResult.success(method: .wait),
                         expectation: expectation,
-                        baselineSummary: "before addToCart",
-                        finalSummary: "Ready"
+                        waitEvidence: HeistWaitEvidence(
+                            outcome: .matched,
+                            actionResult: ActionResult.success(method: .wait),
+                            expectation: expectation,
+                            baselineSummary: "before addToCart",
+                            finalSummary: "Ready"
+                        )
                     )
                 ))
             ),

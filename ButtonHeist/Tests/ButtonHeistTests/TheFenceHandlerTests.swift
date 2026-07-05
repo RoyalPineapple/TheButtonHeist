@@ -1809,7 +1809,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .heist,
                     durationMs: 5,
-                    evidence: .invocation(HeistInvocationEvidence(
+                    evidence: .invocation(.heist(
                         name: "heist",
                         childFailedPath: childPath
                     )),

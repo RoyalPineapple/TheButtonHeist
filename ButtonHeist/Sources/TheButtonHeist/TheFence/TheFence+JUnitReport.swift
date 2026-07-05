@@ -53,14 +53,18 @@ extension TheFence {
         for step: HeistReportNodeProjection,
         projection: HeistReportProjection
     ) -> HeistJUnitReport.Outcome {
-        if let message = step.failureMessage {
+        if step.status == .failed {
+            let message = step.failureMessage ?? step.failure?.detail.observed ?? step.message ?? "heist failed"
             let failure = step.failure?.diagnosticFailure
             let enriched = step.path == projection.failedStepPath
                 ? junitFailureMessage(message, projection: projection, failure: failure)
                 : junitFailureMessage(message, failure: failure)
             return .failed(message: enriched, errorKind: junitErrorKind(for: step))
         }
-        return step.status == .skipped ? .skipped : .passed
+        if step.status == .skipped {
+            return .skipped
+        }
+        return .passed
     }
 
     private static func junitFailureMessage(
