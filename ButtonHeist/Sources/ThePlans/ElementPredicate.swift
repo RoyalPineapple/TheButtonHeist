@@ -25,12 +25,15 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
         case prefix
         /// Explicit suffix match.
         case suffix
+        /// Match an empty string.
+        case isEmpty
     }
 
     case exact(Value)
     case contains(Value)
     case prefix(Value)
     case suffix(Value)
+    case isEmpty
 
     public init(_ value: Value) {
         self = .exact(value)
@@ -46,6 +49,8 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
             self = .prefix(value)
         case .suffix:
             self = .suffix(value)
+        case .isEmpty:
+            self = .isEmpty
         }
     }
 
@@ -59,13 +64,24 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
             return .prefix
         case .suffix:
             return .suffix
+        case .isEmpty:
+            return .isEmpty
         }
     }
 
     public var value: Value {
+        guard let value = valueIfPresent else {
+            preconditionFailure("isEmpty string match has no value")
+        }
+        return value
+    }
+
+    public var valueIfPresent: Value? {
         switch self {
         case .exact(let value), .contains(let value), .prefix(let value), .suffix(let value):
             return value
+        case .isEmpty:
+            return nil
         }
     }
 
@@ -74,17 +90,25 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
     }
 
     public var hasInvalidEmptyBroadLiteral: Bool {
-        mode != .exact && value.stringMatchLiteralIsEmpty == true
+        switch self {
+        case .contains(let value), .prefix(let value), .suffix(let value):
+            return value.stringMatchLiteralIsEmpty == true
+        case .exact, .isEmpty:
+            return false
+        }
     }
 
     public var hasPredicateLiteral: Bool {
-        value.stringMatchLiteralIsEmpty != true
+        valueIfPresent?.stringMatchLiteralIsEmpty != true
     }
 
     public func map<NewValue: StringMatchPayload>(
         _ transform: (Value) throws -> NewValue
     ) rethrows -> StringMatch<NewValue> {
-        try StringMatch<NewValue>(
+        if case .isEmpty = self {
+            return .isEmpty
+        }
+        return try StringMatch<NewValue>(
             mode: StringMatch<NewValue>.Mode(rawValue: self.mode.rawValue) ?? .exact,
             value: transform(value)
         )
@@ -136,6 +160,17 @@ extension StringMatch: Codable where Value: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let mode = try container.decode(Mode.self, forKey: .mode)
+        if mode == .isEmpty {
+            if container.contains(.value) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .value,
+                    in: container,
+                    debugDescription: "isEmpty string match must not include value"
+                )
+            }
+            self = .isEmpty
+            return
+        }
         let value = try container.decode(Value.self, forKey: .value)
         self = StringMatch(mode: mode, value: value)
         if hasInvalidEmptyBroadLiteral {
@@ -148,6 +183,12 @@ extension StringMatch: Codable where Value: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        if case .isEmpty = self {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(mode, forKey: .mode)
+            return
+        }
+
         if case .exact(let value) = self {
             var container = encoder.singleValueContainer()
             try container.encode(value)
@@ -171,22 +212,37 @@ extension StringMatch: CustomStringConvertible {
             return "prefix(\(value))"
         case .suffix(let value):
             return "suffix(\(value))"
+        case .isEmpty:
+            return "isEmpty"
         }
     }
 }
 
 public extension StringMatch where Value == String {
+    func matches(optional candidate: String?) -> Bool {
+        if case .isEmpty = self {
+            return (candidate ?? "").isEmpty
+        }
+        guard let candidate else { return false }
+        return matches(candidate)
+    }
+
     func matches(_ candidate: String) -> Bool {
-        guard !value.isEmpty else { return false }
         switch self {
         case .exact(let pattern):
+            guard !pattern.isEmpty else { return false }
             return ElementPredicate.stringEquals(candidate, pattern)
         case .contains(let pattern):
+            guard !pattern.isEmpty else { return false }
             return ElementPredicate.stringContains(candidate, pattern)
         case .prefix(let pattern):
+            guard !pattern.isEmpty else { return false }
             return ElementPredicate.stringHasPrefix(candidate, pattern)
         case .suffix(let pattern):
+            guard !pattern.isEmpty else { return false }
             return ElementPredicate.stringHasSuffix(candidate, pattern)
+        case .isEmpty:
+            return candidate.isEmpty
         }
     }
 
@@ -615,17 +671,13 @@ package extension ElementPredicateCheck where Text == String {
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         switch self {
         case .label(let match):
-            guard let candidate = subject.predicateLabel else { return false }
-            return match.matches(candidate)
+            return match.matches(optional: subject.predicateLabel)
         case .identifier(let match):
-            guard let candidate = subject.predicateIdentifier else { return false }
-            return match.matches(candidate)
+            return match.matches(optional: subject.predicateIdentifier)
         case .value(let match):
-            guard let candidate = subject.predicateValue else { return false }
-            return match.matches(candidate)
+            return match.matches(optional: subject.predicateValue)
         case .hint(let match):
-            guard let candidate = subject.predicateHint else { return false }
-            return match.matches(candidate)
+            return match.matches(optional: subject.predicateHint)
         case .traits(let traits):
             return traits.isEmpty || subject.satisfiesRequiredTraits(traits)
         case .actions(let actions):

@@ -10,7 +10,7 @@ extension TheFence {
                 throw SchemaValidationError(
                     field: "\(field).\(key)",
                     observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value, or array of StringMatch objects"
+                    expected: "StringMatch object with mode and optional value, or array of StringMatch objects"
                 )
             }
         }
@@ -74,13 +74,13 @@ extension TheFence {
             try rejectFieldIfPresent("values", in: object, field: "\(field).values", expected: "not present for \(checkKind.rawValue) checks")
             try rejectFieldIfPresent("check", in: object, field: "\(field).check", expected: "not present for \(checkKind.rawValue) checks")
             guard let match = object["match"] else {
-                throw SchemaValidationError(field: "\(field).match", observed: "missing", expected: "StringMatch object with mode and value")
+                throw SchemaValidationError(field: "\(field).match", observed: "missing", expected: "StringMatch object with mode and optional value")
             }
             guard isStrictStringMatchObject(match) else {
                 throw SchemaValidationError(
                     field: "\(field).match",
                     observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
+                    expected: "StringMatch object with mode and optional value"
                 )
             }
         case .traits:
@@ -246,7 +246,7 @@ extension TheFence {
                 throw SchemaValidationError(
                     field: "\(field).\(key)",
                     observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
+                    expected: "StringMatch object with mode and optional value"
                 )
             }
         }
@@ -275,7 +275,7 @@ extension TheFence {
                 throw SchemaValidationError(
                     field: "\(field)[\(index)]",
                     observed: item.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
+                    expected: "StringMatch object with mode and optional value"
                 )
             }
         }

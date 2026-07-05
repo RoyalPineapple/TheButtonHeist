@@ -294,6 +294,25 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
     }
 
+    func testIsEmptyStringMatchMatchesNilAndEmptyStrings() {
+        let valuedElement = HeistElement(
+            description: "Delete",
+            label: "Delete",
+            value: "Discount",
+            identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.activate]
+        )
+
+        XCTAssertTrue(HeistElement.stub(label: "").matches(ElementPredicate(label: .isEmpty)))
+        XCTAssertFalse(HeistElement.stub(label: "Save").matches(ElementPredicate(label: .isEmpty)))
+        XCTAssertTrue(HeistElement.stub().matches(ElementPredicate(label: .isEmpty)))
+        XCTAssertTrue(ElementPredicate(label: .isEmpty).hasPredicates)
+        XCTAssertTrue(valuedElement.matches(ElementPredicate.exclude(.value(.isEmpty))))
+        XCTAssertFalse(HeistElement.stub(label: "Delete").matches(ElementPredicate.exclude(.value(.isEmpty))))
+    }
+
     func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() {
         let element = HeistElement(
             description: "Combo row",

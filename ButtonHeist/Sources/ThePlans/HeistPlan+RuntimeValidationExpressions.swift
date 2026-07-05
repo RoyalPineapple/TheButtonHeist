@@ -50,7 +50,9 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        validateString(match.value, path: path, scope: scope)
+        if let value = match.valueIfPresent {
+            validateString(value, path: path, scope: scope)
+        }
         if match.hasInvalidEmptyBroadLiteral {
             fail(
                 path: path,
@@ -201,7 +203,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validateString(_ match: StringMatch<String>?, path: String, role: String) {
         guard let match else { return }
-        addString(match.value, path: path, role: role)
+        addString(match.valueIfPresent, path: path, role: role)
         if match.hasInvalidEmptyBroadLiteral {
             fail(
                 path: path,

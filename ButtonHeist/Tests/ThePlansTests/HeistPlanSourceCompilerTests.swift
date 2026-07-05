@@ -12,10 +12,13 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `runtime parser accepts broad StringMatch enum cases for all string predicate fields`() throws {
+@Test func `runtime parser accepts explicit StringMatch enum cases for all string predicate fields`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.identifier(.suffix("field")))
-    WaitFor(.exists(.element(.label(.prefix("No results")), .identifier(.contains("empty_state")), .value(.suffix("items")))), timeout: .seconds(2))
+    WaitFor(
+        .exists(.element(.label(.prefix("No results")), .identifier(.contains("empty_state")), .value(.suffix("items")), .hint(.isEmpty))),
+        timeout: .seconds(2)
+    )
     TypeText("milk", into: .value(.prefix("Search")))
     """))
     let expected = try HeistPlan(body: [
@@ -23,7 +26,8 @@ import Testing
         .wait(WaitStep(predicate: .exists(ElementPredicateTemplate.element(
             .label(.prefix(.literal("No results"))),
             .identifier(.contains(.literal("empty_state"))),
-            .value(.suffix(.literal("items")))
+            .value(.suffix(.literal("items"))),
+            .hint(.isEmpty)
         )), timeout: 2)),
         .action(try ActionStep(command: .typeText(
             text: .literal("milk"),

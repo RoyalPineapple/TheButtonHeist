@@ -26,7 +26,7 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     `.identifier("pay_button")`, `.value("Milk")`, `.element(.label("Pay"),
                     .traits([.button]))`, or `.target(..., ordinal: n)` for duplicates.
                     Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
-                    objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`,
+                    objects like `{ "mode": "exact|contains|prefix|suffix|isEmpty", "value": "..." }`,
                     or an array of those objects when one property needs multiple checks.
                     Prefer `checks` when order matters, traits/actions belong in the same
                     predicate chain, or a check should be excluded; each item is

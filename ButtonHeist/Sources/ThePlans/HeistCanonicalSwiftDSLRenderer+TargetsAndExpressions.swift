@@ -167,6 +167,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".prefix(\(quote(value)))"
         case .suffix(let value):
             return ".suffix(\(quote(value)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 
@@ -180,6 +182,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".prefix(\(quote(value)))"
         case .suffix(let value):
             return ".suffix(\(quote(value)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 
@@ -196,6 +200,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".prefix(\(try render(string: value, environment: environment)))"
         case .suffix(let value):
             return ".suffix(\(try render(string: value, environment: environment)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 
@@ -212,6 +218,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".prefix(\(try render(string: value, environment: environment)))"
         case .suffix(let value):
             return ".suffix(\(try render(string: value, environment: environment)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 

@@ -141,6 +141,8 @@ extension HeistPlanSourceParser {
             return ".prefix(\(renderStringCorrection(string)))"
         case .suffix(let string):
             return ".suffix(\(renderStringCorrection(string)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 
@@ -154,6 +156,8 @@ extension HeistPlanSourceParser {
             return ".prefix(\(renderStringCorrection(string)))"
         case .suffix(let string):
             return ".suffix(\(renderStringCorrection(string)))"
+        case .isEmpty:
+            return ".isEmpty"
         }
     }
 

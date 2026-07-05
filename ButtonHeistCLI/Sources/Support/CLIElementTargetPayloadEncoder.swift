@@ -61,7 +61,7 @@ enum CLIElementTargetPayloadEncoder {
     private static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
         CommandArgumentWriter.object(
             CommandArgumentWriter.value(.mode, match.mode.rawValue),
-            CommandArgumentWriter.value(.value, match.value)
+            CommandArgumentWriter.optional(.value, match.valueIfPresent)
         ).heistValue
     }
 

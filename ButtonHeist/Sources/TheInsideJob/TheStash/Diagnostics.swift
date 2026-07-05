@@ -246,13 +246,13 @@ extension TheStash {
         let diagnostic = ElementPredicate(predicate.checks.map { check in
             switch check {
             case .label(let match):
-                return .label(.contains(match.value))
+                return .label(diagnosticContainsMatch(from: match))
             case .identifier(let match):
-                return .identifier(.contains(match.value))
+                return .identifier(diagnosticContainsMatch(from: match))
             case .value(let match):
-                return .value(.contains(match.value))
+                return .value(diagnosticContainsMatch(from: match))
             case .hint(let match):
-                return .hint(.contains(match.value))
+                return .hint(diagnosticContainsMatch(from: match))
             case .traits(let traits):
                 return .traits(traits)
             case .actions(let actions):
@@ -260,12 +260,17 @@ extension TheStash {
             case .customContent(let match):
                 return .customContent(match)
             case .rotors(let matches):
-                return .rotors(matches.map { .contains($0.value) })
+                return .rotors(matches.map(diagnosticContainsMatch))
             case .exclude(let check):
                 return .exclude(check)
             }
         })
         return diagnostic == predicate ? nil : diagnostic
+    }
+
+    private static func diagnosticContainsMatch(from match: StringMatch<String>) -> StringMatch<String> {
+        guard let value = match.valueIfPresent, !value.isEmpty else { return match }
+        return .contains(value)
     }
 
     private static func failureInterfaceSuggestionValue(

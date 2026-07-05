@@ -14,6 +14,15 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         XCTAssertEqual(match, .contains("Pay"))
     }
 
+    func testCommandArgumentEnvelopeDecodesIsEmptyStringMatchPayload() throws {
+        let envelope = TheFence.CommandArgumentEnvelope(values: [
+            FenceParameterKey.label.rawValue: stringMatchIsEmptyValue(),
+        ])
+
+        let match = try XCTUnwrap(try envelope.schemaStringMatch(.label))
+        XCTAssertEqual(match, .isEmpty)
+    }
+
     @ButtonHeistActor
     func testElementTargetAcceptsContainsStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
@@ -24,6 +33,18 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
 
         XCTAssertEqual(matcher.checks, [.label(.contains("Pay"))])
+    }
+
+    @ButtonHeistActor
+    func testElementTargetAcceptsIsEmptyStringMatchObject() async throws {
+        guard let target = try decodedElementTarget(target: elementTargetValue([
+            "value": stringMatchIsEmptyValue(),
+        ])),
+              case .predicate(let matcher, _) = target else {
+            return XCTFail("Expected .matcher")
+        }
+
+        XCTAssertEqual(matcher.checks, [.value(.isEmpty)])
     }
 
     @ButtonHeistActor
@@ -123,7 +144,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             "label": .string("Pay"),
         ]))) { error in
             XCTAssertTrue(
-                String(describing: error).contains("StringMatch object with mode and value"),
+                String(describing: error).contains("StringMatch object with mode and optional value"),
                 "Unexpected error: \(error)"
             )
         }
@@ -224,7 +245,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         ])
         assertError(
             missingStringMatch,
-            contains: "schema validation failed for checks[0].match: observed missing; expected StringMatch object with mode and value"
+            contains: "schema validation failed for checks[0].match: observed missing; expected StringMatch object with mode and optional value"
         )
 
         let traitWithMatch = try await fence.execute(command: .getInterface, values: [
@@ -250,7 +271,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             return XCTFail("Expected error response")
         }
         let message = failure.message
-        XCTAssertTrue(message.contains("expected StringMatch object with mode and value"), message)
+        XCTAssertTrue(message.contains("expected StringMatch object with mode and optional value"), message)
     }
 
     @ButtonHeistActor
@@ -291,7 +312,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
         let message = failure.message
         XCTAssertTrue(message.contains("subtree.element.label"), message)
-        XCTAssertTrue(message.contains("expected StringMatch object with mode and value"), message)
+        XCTAssertTrue(message.contains("expected StringMatch object with mode and optional value"), message)
     }
 
     func testPredicateAcceptsStringMatchObjectInElementField() throws {
@@ -407,7 +428,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
                 "Unexpected error: \(error)"
             )
             XCTAssertTrue(
-                String(describing: error).contains("StringMatch object with mode and value"),
+                String(describing: error).contains("StringMatch object with mode and optional value"),
                 "Unexpected error: \(error)"
             )
         }
@@ -448,6 +469,12 @@ private func stringMatchValue(mode: String, value: String) -> HeistValue {
     .object([
         "mode": .string(mode),
         "value": .string(value),
+    ])
+}
+
+private func stringMatchIsEmptyValue() -> HeistValue {
+    .object([
+        "mode": .string("isEmpty"),
     ])
 }
 

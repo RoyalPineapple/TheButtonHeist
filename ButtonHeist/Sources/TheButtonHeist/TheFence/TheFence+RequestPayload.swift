@@ -487,7 +487,7 @@ private extension FenceParameterSpec.ParamType {
         case .stringArray:
             return "array of strings"
         case .stringMatch:
-            return "StringMatch object with mode and value"
+            return "StringMatch object with mode and optional value"
         case .object:
             return "object"
         case .array:

@@ -246,7 +246,7 @@ private func assertStringMatchSchema(_ schema: Value, path: String) {
     let object = schema.objectValue
     #expect(object?["type"] == .string("object"), "\(path) must advertise object-form StringMatch")
     #expect(object?["additionalProperties"] == .bool(false), "\(path) must close object-form StringMatch fields")
-    #expect(object?["required"] == .array([.string("mode"), .string("value")]), "\(path) must require mode and value in object form")
+    #expect(object?["required"] == .array([.string("mode")]), "\(path) must require mode in object form")
     #expect(object?["description"]?.stringValue?.contains("mode exact") == true, "\(path) should describe exact matching through object-form StringMatch")
     #expect(
         object?["properties"]?.objectValue?["mode"] == .object([
@@ -256,6 +256,7 @@ private func assertStringMatchSchema(_ schema: Value, path: String) {
                 .string("contains"),
                 .string("prefix"),
                 .string("suffix"),
+                .string("isEmpty"),
             ]),
         ]),
         "\(path).properties.mode must enumerate StringMatch modes"

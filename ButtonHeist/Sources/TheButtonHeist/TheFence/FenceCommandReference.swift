@@ -149,8 +149,8 @@ package enum FenceCommandReference {
             "## StringMatch",
             "",
             "`stringMatch` fields such as `label`, `identifier`, and `value` accept object form " +
-                "`{ \"mode\": \"exact|contains|prefix|suffix\", \"value\": \"...\" }`. " +
-                "Use `exact` for exact matching; broad modes require a non-empty value. " +
+                "`{ \"mode\": \"exact|contains|prefix|suffix|isEmpty\", \"value\": \"...\" }`. " +
+                "Use `exact` for exact matching; `isEmpty` omits `value`; broad modes require a non-empty value. " +
                 "Element matcher fields `label`, `identifier`, and `value` may also accept an array of StringMatch objects; " +
                 "every object in the array must match the same property. Prefer `checks` for ordered element predicate chains, " +
                 "including repeated string, trait, action, custom-content, rotor, and exclude checks. A string check item is " +
