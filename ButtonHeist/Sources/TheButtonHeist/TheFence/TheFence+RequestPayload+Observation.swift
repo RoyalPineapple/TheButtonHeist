@@ -12,6 +12,7 @@ extension TheFence {
 
     struct ScreenRequest {
         let destination: ScreenshotDestination
+        let mode: ScreenCaptureMode
         let requestId: String
     }
 
@@ -81,6 +82,7 @@ extension TheFence {
     ) throws -> ScreenRequest {
         return ScreenRequest(
             destination: try screenshotDestination(arguments),
+            mode: try arguments.value(FenceParameters.screenMode) ?? .raw,
             requestId: requestId
         )
     }

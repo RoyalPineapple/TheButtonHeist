@@ -1,7 +1,7 @@
 import ButtonHeistTestSupport
 import XCTest
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 final class ClientMessageTests: XCTestCase {
 
@@ -296,11 +296,42 @@ final class ClientMessageTests: XCTestCase {
     func testRequestScreenshotEncodeDecode() throws {
         let message = ClientMessage.requestScreen
         let data = try JSONEncoder().encode(message)
+        let object = try JSONProbe(data: data)
+        XCTAssertEqual(try object.string("type"), "requestScreen")
+        try object.assertMissing("payload")
+
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .requestScreen = decoded {
         } else {
             XCTFail("Expected requestScreen, got \(decoded)")
+        }
+    }
+
+    func testRequestAccessibilityScreenshotEncodeDecode() throws {
+        let envelope = RequestEnvelope(
+            requestId: "screen-1",
+            message: .requestScreen,
+            requestScreenPayload: ScreenRequestPayload(mode: .accessibility)
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let object = try JSONProbe(data: data)
+        XCTAssertEqual(try object.string("type"), "requestScreen")
+        XCTAssertEqual(try object.object("payload").string("mode"), "accessibility")
+
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+        if case .requestScreen = decoded.message {
+            XCTAssertEqual(decoded.explicitScreenRequestPayload?.mode, .accessibility)
+        } else {
+            XCTFail("Expected requestScreen, got \(decoded.message)")
+        }
+    }
+
+    func testRequestScreenshotRejectsUnknownPayloadField() throws {
+        let data = Data(#"{"type":"requestScreen","payload":{"mode":"raw","stale":true}}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("stale"), "\(error)")
         }
     }
 

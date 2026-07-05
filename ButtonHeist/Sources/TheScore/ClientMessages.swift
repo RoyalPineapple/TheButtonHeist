@@ -13,6 +13,7 @@ public struct RequestEnvelope: Codable, Sendable {
     public let buttonHeistVersion: String
     public let requestId: String?
     public let message: ClientMessage
+    let requestScreenPayload: ScreenRequestPayload?
 
     public init(
         buttonHeistVersion: String = TheScore.buttonHeistVersion,
@@ -22,6 +23,23 @@ public struct RequestEnvelope: Codable, Sendable {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
+        requestScreenPayload = nil
+    }
+
+    @_spi(ButtonHeistInternals) public init(
+        buttonHeistVersion: String = TheScore.buttonHeistVersion,
+        requestId: String? = nil,
+        message: ClientMessage,
+        requestScreenPayload: ScreenRequestPayload?
+    ) {
+        self.buttonHeistVersion = buttonHeistVersion
+        self.requestId = requestId
+        self.message = message
+        self.requestScreenPayload = requestScreenPayload
+    }
+
+    @_spi(ButtonHeistInternals) public var explicitScreenRequestPayload: ScreenRequestPayload? {
+        requestScreenPayload
     }
 
     /// Decode a request envelope from JSON data. Returns nil on decode failure.

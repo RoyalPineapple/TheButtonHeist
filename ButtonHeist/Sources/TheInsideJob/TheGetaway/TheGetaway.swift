@@ -3,7 +3,7 @@
 import UIKit
 
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 /// The getaway driver — runs comms between the wire and the crew.
 ///
@@ -80,7 +80,11 @@ final class TheGetaway {
             let result = brains.executePasteboardRead()
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
-            await handleScreen(requestId: requestId, respond: respond)
+            await handleScreen(
+                mode: envelope.explicitScreenRequestPayload?.mode ?? .raw,
+                requestId: requestId,
+                respond: respond
+            )
         case .runtimeAction(let command):
             let actionResult = await executeDirectRuntimeAction(command)
             await recordAndRespond(
@@ -193,10 +197,14 @@ final class TheGetaway {
 
     // MARK: - Screen Capture
 
-    func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
+    func handleScreen(
+        mode: ScreenCaptureMode = .raw,
+        requestId: String? = nil,
+        respond: @escaping (Data) -> Void
+    ) async {
         insideJobLogger.debug("Screen requested")
 
-        switch await brains.captureScreenPayload() {
+        switch await brains.captureScreenPayload(mode: mode) {
         case .success(let payload):
             sendMessage(.screen(payload), requestId: requestId, respond: respond)
             insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")

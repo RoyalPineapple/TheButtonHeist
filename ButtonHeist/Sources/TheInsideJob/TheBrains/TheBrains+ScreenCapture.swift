@@ -9,6 +9,7 @@ extension TheBrains {
         case inactiveRuntime
         case accessibilityTreeUnavailable
         case appWindowUnavailable
+        case accessibilitySnapshotRenderingFailed
         case pngEncodingFailed
 
         var message: String {
@@ -19,6 +20,8 @@ extension TheBrains {
                 return "Could not access accessibility tree"
             case .appWindowUnavailable:
                 return "Could not access app window"
+            case .accessibilitySnapshotRenderingFailed:
+                return "Failed to render accessibility snapshot"
             case .pngEncodingFailed:
                 return "Failed to encode screen as PNG"
             }
@@ -30,7 +33,7 @@ extension TheBrains {
         case failure(ScreenCaptureFailure)
     }
 
-    func captureScreenPayload() async -> ScreenCaptureGatewayResult {
+    func captureScreenPayload(mode: ScreenCaptureMode = .raw) async -> ScreenCaptureGatewayResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
@@ -40,6 +43,17 @@ extension TheBrains {
 
         guard let screenCapture = stash.captureScreen() else {
             return .failure(.appWindowUnavailable)
+        }
+
+        if mode == .accessibility {
+            guard let payload = renderAccessibilitySnapshotPayload(
+                image: screenCapture.image,
+                bounds: screenCapture.bounds,
+                interface: observation.interface
+            ) else {
+                return .failure(.accessibilitySnapshotRenderingFailed)
+            }
+            return .success(payload)
         }
 
         guard let pngData = screenCapture.image.pngData() else {
@@ -54,10 +68,10 @@ extension TheBrains {
         ))
     }
 
-    func executeTakeScreenshot() async -> ActionResult {
+    func executeTakeScreenshot(mode: ScreenCaptureMode = .raw) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
         var builder = ActionResultBuilder()
-        switch await captureScreenPayload() {
+        switch await captureScreenPayload(mode: mode) {
         case .success(let payload):
             builder.message = "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"
             builder.timing = ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))

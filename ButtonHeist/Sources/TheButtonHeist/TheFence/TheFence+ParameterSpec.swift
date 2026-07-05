@@ -645,6 +645,7 @@ func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawR
     public static let performStep = FenceParameter<String>.string(.step, required: true, minLength: 1)
     public static let planPath = FenceParameter<String>.string(.path)
     public static let replacingExisting = FenceParameter<Bool>.boolean(.replacingExisting, defaultValue: false)
+    public static let screenMode = FenceParameter<ScreenCaptureMode>.enumValue(.mode, defaultValue: .raw)
     public static let rotorDirection = FenceParameter<RotorDirection>.enumValue(.direction, defaultValue: .next)
     public static let rotorIndex = FenceParameter<Int>.integer(.rotorIndex, minimum: 0)
     public static let rotorName = FenceParameter<String>.string(.rotor)

@@ -52,6 +52,9 @@ struct ScreenshotDestinationInput: ParsableArguments {
     @Flag(name: .long, help: "Write raw PNG bytes to stdout")
     var inline = false
 
+    @Flag(name: .long, help: "Render accessibility markers and legend instead of the raw screenshot")
+    var accessibility = false
+
     mutating func validate() throws {
         _ = try argumentFields()
     }
@@ -59,9 +62,15 @@ struct ScreenshotDestinationInput: ParsableArguments {
     func argumentFields() throws -> [CommandArgumentWriter.Field] {
         switch (inline, output) {
         case (true, nil):
-            return [CommandArgumentWriter.value(.inlineData, true)]
+            return [
+                CommandArgumentWriter.value(.inlineData, true),
+                CommandArgumentWriter.optional(.mode, accessibility ? ScreenCaptureMode.accessibility.rawValue : nil),
+            ].compactMap { $0 }
         case (false, let output):
-            return [CommandArgumentWriter.optional(.output, output)].compactMap { $0 }
+            return [
+                CommandArgumentWriter.optional(.output, output),
+                CommandArgumentWriter.optional(.mode, accessibility ? ScreenCaptureMode.accessibility.rawValue : nil),
+            ].compactMap { $0 }
         case (true, .some):
             throw ValidationError("--inline cannot be used with --output")
         }

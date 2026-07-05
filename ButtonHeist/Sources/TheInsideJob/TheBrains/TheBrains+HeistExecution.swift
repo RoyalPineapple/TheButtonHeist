@@ -181,6 +181,31 @@ extension TheBrains {
         case captureFailureScreenshot(failedPath: String)
     }
 
+    private enum FailureEvidenceLevel {
+        case hierarchy
+        case screenshot
+        case accessibilitySnapshot
+
+        static var current: FailureEvidenceLevel {
+            switch ProcessInfo.processInfo.environment["BUTTONHEIST_FAILURE_EVIDENCE"]?.lowercased() {
+            case "hierarchy":
+                return .hierarchy
+            case "hierarchy+accessibilitysnapshot", "accessibility", "accessibilitysnapshot":
+                return .accessibilitySnapshot
+            default:
+                return .screenshot
+            }
+        }
+
+        var captureMode: ScreenCaptureMode? {
+            switch self {
+            case .hierarchy: nil
+            case .screenshot: .raw
+            case .accessibilitySnapshot: .accessibility
+            }
+        }
+    }
+
     private enum HeistExecutionTerminal: Equatable, Sendable {
         case passed
         case failed(abortedPath: String, effects: [HeistExecutionEffect])
@@ -444,9 +469,11 @@ extension TheBrains {
         for effect in execution.terminalEffects {
             switch effect {
             case .captureFailureScreenshot(let failedPath):
+                guard let mode = FailureEvidenceLevel.current.captureMode else { continue }
                 guard let failureScreenshotStep = await failureScreenshotStep(
                     runtime: runtime,
-                    failedPath: failedPath
+                    failedPath: failedPath,
+                    mode: mode
                 ) else { continue }
                 stepResults.append(failureScreenshotStep)
             }
@@ -480,10 +507,13 @@ extension TheBrains {
 
     private func failureScreenshotStep(
         runtime: HeistExecutionRuntime,
-        failedPath: String
+        failedPath: String,
+        mode: ScreenCaptureMode
     ) async -> HeistExecutionStepResult? {
         let start = CFAbsoluteTimeGetCurrent()
-        let result = await runtime.execute(.takeScreenshot)
+        let result = mode == .raw
+            ? await runtime.execute(.takeScreenshot)
+            : await executeTakeScreenshot(mode: mode)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
         return heistActionReceipt(

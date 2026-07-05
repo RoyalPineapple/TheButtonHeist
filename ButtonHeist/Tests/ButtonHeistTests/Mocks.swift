@@ -143,6 +143,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var onTransportReady: (@ButtonHeistActor () -> Void)?
     var sent: [(ClientMessage, String?)] = []
+    var sentRequestScreenPayloads: [ScreenRequestPayload?] = []
     var connectCount = 0
     var disconnectCount = 0
     var emitTransportReadyOnConnect = false
@@ -178,8 +179,20 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     @discardableResult
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
+        send(message, requestId: requestId, requestScreenPayload: nil)
+    }
+
+    @discardableResult
+    func send(
+        _ message: ClientMessage,
+        requestId: String?,
+        requestScreenPayload: ScreenRequestPayload?
+    ) -> DeviceSendOutcome {
         guard sendOutcome == .enqueued else { return sendOutcome }
         sent.append((message, requestId))
+        if case .requestScreen = message {
+            sentRequestScreenPayloads.append(requestScreenPayload)
+        }
         if let asyncSendFailure {
             Task { @ButtonHeistActor [self] in
                 self.onEvent?(.sendFailed(asyncSendFailure, requestId: requestId))

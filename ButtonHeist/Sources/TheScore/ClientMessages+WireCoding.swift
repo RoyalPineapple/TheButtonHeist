@@ -27,6 +27,9 @@ extension RequestEnvelope {
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
+        requestScreenPayload = type == .requestScreen
+            ? try payloadDecoder.map { try ScreenRequestPayload(from: $0) }
+            : nil
         message = try decodeClientMessage(from: payloadDecoder, type: type)
     }
 
@@ -36,7 +39,10 @@ extension RequestEnvelope {
         try container.encodeIfPresent(requestId, forKey: .requestId)
         let wire = clientMessageWireRepresentation(message)
         try container.encode(wire.type, forKey: .type)
-        if let payload = wire.payload {
+        if let requestScreenPayload, case .requestScreen = message {
+            try ClientMessageWirePayload.requestScreen(requestScreenPayload)
+                .encode(to: container.superEncoder(forKey: .payload))
+        } else if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
         }
     }
@@ -135,7 +141,9 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
         try noPayload()
         return .getPasteboard
     case .requestScreen:
-        try noPayload()
+        if let payloadDecoder {
+            _ = try ScreenRequestPayload(from: payloadDecoder)
+        }
         return .requestScreen
     case .runtimeAction:
         return .runtimeAction(try HeistActionCommand(from: try payload()))
@@ -148,6 +156,7 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
 
 private enum ClientMessageWirePayload {
     case requestInterface(InterfaceQuery)
+    case requestScreen(ScreenRequestPayload)
     case runtimeAction(HeistActionCommand)
     case authenticate(AuthenticatePayload)
     case heistPlan(HeistPlanRun)
@@ -155,6 +164,8 @@ private enum ClientMessageWirePayload {
     func encode(to encoder: Encoder) throws {
         switch self {
         case .requestInterface(let payload):
+            try payload.encode(to: encoder)
+        case .requestScreen(let payload):
             try payload.encode(to: encoder)
         case .runtimeAction(let payload):
             try payload.encode(to: encoder)
