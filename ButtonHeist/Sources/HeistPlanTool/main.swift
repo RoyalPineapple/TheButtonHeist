@@ -66,13 +66,13 @@ struct Canonicalize: ParsableCommand {
 
     @Option(
         name: .long,
-        help: "Path to write a generated .heist package. Without --output, prints internal plan.json to stdout for debugging."
+        help: "Path to write a generated .heist package."
     )
-    var output: String?
+    var output: String
 
     func run() throws {
         let plan = try HeistPlanIO.readValidatedPlan(from: plan)
-        try HeistPlanIO.writeCanonicalJSON(for: plan, to: output)
+        try HeistPlanIO.writeCanonicalHeistPackage(for: plan, to: output)
     }
 }
 
@@ -85,7 +85,7 @@ struct Compile: AsyncParsableCommand {
     @Argument(help: "Path to a Swift source file that imports ThePlans.")
     var source: String
 
-    @Option(name: .long, help: "Entry symbol returning or containing a HeistPlan.")
+    @Option(name: .long, help: "Zero-argument throwing function returning a HeistPlan.")
     var entry: String = "heist"
 
     @Option(name: .long, help: "Path to write a generated .heist package.")
@@ -109,7 +109,7 @@ struct Compile: AsyncParsableCommand {
         case .failure(let diagnostics):
             throw ValidationError(formatBuildDiagnostics(diagnostics))
         }
-        try HeistPlanIO.writeCanonicalJSON(for: plan, to: output)
+        try HeistPlanIO.writeCanonicalHeistPackage(for: plan, to: output)
     }
 }
 
@@ -129,26 +129,17 @@ enum HeistPlanIO {
         }
     }
 
-    static func canonicalJSONData(for plan: HeistPlan) throws -> Data {
-        try plan.canonicalHeistJSONData()
-    }
-
-    static func writeCanonicalJSON(for plan: HeistPlan, to path: String?) throws {
-        if let path {
-            let url = URL(fileURLWithPath: path)
-            guard url.pathExtension.lowercased() == "heist" else {
-                throw ValidationError(
-                    "heist-plan output must be a generated .heist package; raw .json HeistPlan IR is internal artifact content."
-                )
-            }
-            do {
-                try HeistArtifactCodec.writePlan(plan, to: url)
-            } catch let error as HeistArtifactCodecError {
-                throw ValidationError(error.description)
-            }
-        } else {
-            let output = try canonicalJSONData(for: plan) + Data([0x0A])
-            HeistPlanToolOutput.writeData(output)
+    static func writeCanonicalHeistPackage(for plan: HeistPlan, to path: String) throws {
+        let url = URL(fileURLWithPath: path)
+        guard url.pathExtension.lowercased() == "heist" else {
+            throw ValidationError(
+                "heist-plan output must be a generated .heist package; raw .json HeistPlan IR is internal artifact content."
+            )
+        }
+        do {
+            try HeistArtifactCodec.writePlan(plan, to: url)
+        } catch let error as HeistArtifactCodecError {
+            throw ValidationError(error.description)
         }
     }
 

@@ -59,11 +59,11 @@ swift package diagnose-api-breaking-changes "$BASELINE_TAG"
 ```
 
 Set `BUTTONHEIST_SWIFT_API_BASELINE_TAG` to compare against a specific release
-tag locally. The script is strict by default. Pull-request CI runs it with
-`BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report`, so intentional source-shape
-tightening still prints the SwiftPM diff without forcing compatibility aliases
-back into the package. Release readiness keeps strict mode unless explicitly
-overridden.
+tag locally. The script is strict by default. Intentional source-shape
+tightening must be declared as exact SwiftPM breakage lines in the script; any
+extra public break still fails CI without forcing compatibility aliases back
+into the package. `BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report` is available for
+local investigation only.
 
 ## TheInsideJob
 

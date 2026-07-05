@@ -644,25 +644,13 @@ private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgu
 }
 // swiftlint:enable identifier_name
 
-public struct ElementMatches: Sendable, Equatable {
-    public let predicate: ElementPredicate
-
-    public init(predicate: ElementPredicate) {
-        self.predicate = predicate
-    }
-
-    public static func matching(_ predicate: ElementPredicate) -> ElementMatches {
-        ElementMatches(predicate: predicate)
-    }
-}
-
 public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
-    public init(
-        _ values: [String],
+    private init(
+        values: [String],
         parameter: HeistReferenceName = "item",
         @HeistBuilder content: (StringExpr) throws -> Content
     ) {
@@ -695,11 +683,11 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         parameter: HeistReferenceName = "item",
         @HeistBuilder content: (StringExpr) throws -> Content
     ) {
-        self.init([first] + rest, parameter: parameter, content: content)
+        self.init(values: [first] + rest, parameter: parameter, content: content)
     }
 
     public init(
-        _ matches: ElementMatches,
+        _ predicate: ElementPredicate,
         limit: Int = 20,
         parameter: HeistReferenceName = "target",
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
@@ -710,7 +698,7 @@ public struct ForEach<Content: HeistContent>: HeistContent {
             let target = try ElementTargetExpr(ref: reference)
             let content = try content(target)
             let step = try ForEachElementStep(
-                matching: matches.predicate,
+                matching: predicate,
                 limit: limit,
                 parameter: reference,
                 body: content.heistSteps
@@ -726,15 +714,6 @@ public struct ForEach<Content: HeistContent>: HeistContent {
                 message: "ForEach element loop is invalid: \(String(describing: error))"
             )]
         }
-    }
-
-    public init(
-        _ predicate: ElementPredicate,
-        limit: Int = 20,
-        parameter: HeistReferenceName = "target",
-        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-    ) {
-        self.init(.matching(predicate), limit: limit, parameter: parameter, content)
     }
 }
 

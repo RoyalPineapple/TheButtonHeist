@@ -3874,18 +3874,12 @@ final class TheBrainsActionTests: XCTestCase {
         in screen: Screen
     ) throws -> ElementTarget {
         let screenElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
-        let context = PredicateSelectionContext(
-            elements: screen.orderedElements.map {
-                PredicateSelectionContext.Element(
-                    id: $0.heistId.predicateSelectionElementId,
-                    element: TheStash.WireConversion.convert($0.element)
-                )
-            },
-            screenId: screen.id,
-            semanticHash: screen.semanticHash,
-            scope: .visible
-        )
-        return try XCTUnwrap(minimumUniquePredicate(for: screenElement.heistId.predicateSelectionElementId, in: context)).target
+        let elements = screen.orderedElements.map {
+            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+        }
+        return try XCTUnwrap(
+            minimumUniquePredicate(for: screenElement.heistId.predicateSelectionElementId, in: elements)
+        ).target
     }
 
     private func XCTAssertDiagnostic(

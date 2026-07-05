@@ -24,20 +24,44 @@ PUBLIC_PRODUCTS=(
     ThePlans
     TheScore
     ButtonHeistDSL
-    ButtonHeist
     TheInsideJob
     ButtonHeistTesting
+    ButtonHeist
 )
 INTENTIONAL_BREAKAGES=(
-    "enumelement StringMatch.Mode.isEmpty has been added as a new enum case"
-    "enumelement StringMatch.isEmpty has been added as a new enum case"
-    "constructor AccessibilityTrace.AccumulatedDelta.init(elementCount:captureEdge:screenChanged:elementsChanged:interactionDigest:transient:) has been removed"
-    "constructor AccessibilityTrace.AccumulatedDelta.init(elementCount:captureEdge:screenChanged:elementsChanged:transient:) has been removed"
-    "var HeistExecutionEvidenceNode.preorder has been removed"
-    "struct HeistExecutionEvidenceEventBuilder has been removed"
-    "constructor HeistExecutionEvidenceSummary.init(rollup:) has been removed"
-    "constructor HeistInvocationEvidence.init(invocation:name:argument:childFailedPath:expectationActionResult:expectation:expectationEvidence:) has been removed"
+    "struct ElementMatches has been removed"
+    "constructor ForEach.init(_:parameter:content:) has been removed"
+    "constructor ForEach.init(_:limit:parameter:_:) has been removed"
+    "struct HeistExecutionReportSummaryFacts has been removed"
+    "constructor HeistReceiptRecordingMode.init(environmentValue:) has return type change from TheScore.HeistReceiptRecordingMode to TheScore.HeistReceiptRecordingMode?"
+    "var HeistActionEvidence.ResultEvidence.dispatchResult has been removed"
+    "var HeistActionEvidence.ResultEvidence.expectationResult has been removed"
+    "var HeistActionEvidence.ResultEvidence.reportedResult has been removed"
+    "var HeistActionEvidence.ResultEvidence.traceResult has been removed"
+    "var HeistActionEvidence.ResultEvidence.expectation has been removed"
+    "typealias ElementMatches has been removed"
+    "struct FailureCode has removed conformance to RawRepresentable"
+    "enumelement KnownFailureCode.tlsCertificateMismatch has been removed"
+    "enumelement KnownFailureCode.tlsMissingFingerprint has been removed"
+    "constructor FailureCode.init(boundaryRawValue:) has been removed"
+    "constructor FailureCode.init(rawValue:) has been removed"
+    "typealias FailureCode.RawValue has been removed"
+    "var TheFence.CommandArgumentEnvelope.argumentValues has been removed"
 )
+
+PACKAGE_PUBLIC_PRODUCTS=()
+while IFS= read -r product; do
+    PACKAGE_PUBLIC_PRODUCTS+=("$product")
+done < <(grep -E '^[[:space:]]*[.]library[(]name:[[:space:]]*"[^"]+"' Package.swift \
+    | sed -E 's/.*name:[[:space:]]*"([^"]+)".*/\1/')
+
+if [[ "${PUBLIC_PRODUCTS[*]}" != "${PACKAGE_PUBLIC_PRODUCTS[*]}" ]]; then
+    echo "Error: Swift API check products do not match Package.swift library products."
+    echo "Configured: ${PUBLIC_PRODUCTS[*]}"
+    echo "Package.swift: ${PACKAGE_PUBLIC_PRODUCTS[*]}"
+    exit 2
+fi
+
 MODE="${BUTTONHEIST_SWIFT_API_BREAKAGE_MODE:-strict}"
 case "$MODE" in
     strict|report) ;;

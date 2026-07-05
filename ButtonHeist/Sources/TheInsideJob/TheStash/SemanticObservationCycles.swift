@@ -95,8 +95,7 @@ final class SemanticObservationCycles {
     }
 
     private var driver = StateDriver(initial: CyclePhase.idle(completed: 0, generation: 0), machine: CycleMachine())
-    private var nextWaiterID: UInt64 = 0
-    private var waiters: [UInt64: Waiter] = [:]
+    private var waiters = WaiterStore<Waiter>()
 
     private var phase: CyclePhase {
         driver.state
@@ -143,8 +142,7 @@ final class SemanticObservationCycles {
     }
 
     func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {
-        let id = nextWaiterID
-        nextWaiterID += 1
+        let id = waiters.reserveID()
         let continuationBox = OneShotContinuation<Void>()
 
         await withTaskCancellationHandler {
@@ -158,11 +156,11 @@ final class SemanticObservationCycles {
                     return
                 }
 
-                waiters[id] = Waiter(
+                waiters.insert(Waiter(
                     scope: scope,
                     afterCycle: cycle,
                     continuation: continuationBox
-                )
+                ), id: id)
             }
         } onCancel: {
             continuationBox.resume(returning: ())
@@ -171,21 +169,22 @@ final class SemanticObservationCycles {
     }
 
     func completeAllWaiters() {
-        for id in Array(waiters.keys) {
-            completeWaiter(id)
+        for waiter in waiters.removeAll() {
+            waiter.continuation.resume(returning: ())
         }
     }
 
     private func completeWaiters(scope: SemanticObservationScope) {
-        for (id, waiter) in waiters {
-            guard scope.canFulfill(waiter.scope) else { continue }
-            guard phase.baseline > waiter.afterCycle else { continue }
-            completeWaiter(id)
+        let completed = waiters.removeAll { waiter in
+            scope.canFulfill(waiter.scope) && phase.baseline > waiter.afterCycle
+        }
+        for waiter in completed {
+            waiter.continuation.resume(returning: ())
         }
     }
 
     private func completeWaiter(_ id: UInt64) {
-        guard let waiter = waiters.removeValue(forKey: id) else { return }
+        guard let waiter = waiters.remove(id: id) else { return }
         waiter.continuation.resume(returning: ())
     }
 }

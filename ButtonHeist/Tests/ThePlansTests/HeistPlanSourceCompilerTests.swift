@@ -543,7 +543,7 @@ import Testing
 
         Warn("Receipt appeared")
 
-        ForEach(["Milk", "Bread"]) { item in
+        ForEach("Milk", "Bread") { item in
             RunHeist("Cart.addItem", item)
         }
     }
@@ -616,11 +616,11 @@ import Testing
             Warn("Pay missing")
         }
 
-        ForEach(["Milk", "Bread"]) { item in
+        ForEach("Milk", "Bread") { item in
             RunHeist("Cart.addItem", item)
         }
 
-        ForEach(.matching(.element(.label("Message"), .traits([.button]))), limit: 2) { message in
+        ForEach(.element(.label("Message"), .traits([.button])), limit: 2) { message in
             RunHeist("Messages.archive", message)
         }
     }
@@ -769,7 +769,7 @@ import Testing
 
 @Test func `inline plan source ForEach string compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    ForEach(["a", "b"]) { item in
+    ForEach("a", "b") { item in
         Activate(.label(item)).expect(.exists(.label(item)))
     }
     """))
@@ -852,9 +852,9 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `inline plan source ForEach matching compiles`() throws {
+@Test func `inline plan source ForEach element predicate compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    ForEach(.matching(.label("Row")), limit: 2) { target in
+    ForEach(.label("Row"), limit: 2) { target in
         Activate(target).expect(.missing(target))
     }
     """))
@@ -872,6 +872,22 @@ import Testing
     ])
 
     #expect(plan == expected)
+}
+
+@Test func `inline plan source rejects old ForEach compatibility spellings`() {
+    let arrayDiagnostic = compileError(root("""
+    ForEach(["a"]) { item in
+        TypeText(item)
+    }
+    """))
+    expect(arrayDiagnostic, contains: #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
+
+    let matchingDiagnostic = compileError(root("""
+    ForEach(.matching(.label("Row")), limit: 2) { target in
+        Activate(target)
+    }
+    """))
+    expect(matchingDiagnostic, contains: #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
 }
 
 @Test func `inline plan source RunHeist syntax validates through normal runtime pipeline`() throws {
@@ -953,7 +969,7 @@ import Testing
 
 @Test func `canonical ForEach string compiles without body try`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    ForEach(["a"]) { item in
+    ForEach("a") { item in
         TypeText(item)
     }
     """))
@@ -1267,7 +1283,7 @@ import Testing
     expect(emptyRunHeistPathComponent, contains: "heist invocation path component at index 1 must not be empty")
 
     let bodyTry = compileError(root("""
-    try ForEach(["Milk"]) { item in
+    try ForEach("Milk") { item in
         Activate(.label(item))
     }
     """))
@@ -1556,11 +1572,11 @@ import Testing
             TypeText(rootAlias)
         }
 
-        ForEach(["inner"]) { loopItem in
+        ForEach("inner") { loopItem in
             TypeText(loopItem, into: .label(rootAlias))
         }
 
-        ForEach(.matching(.label("Message")), limit: 1) { rowTarget in
+        ForEach(.label("Message"), limit: 1) { rowTarget in
             Activate(rowTarget).expect(.missing(rowTarget))
         }
     }
@@ -1618,7 +1634,7 @@ import Testing
     let cases: [(source: String, diagnostic: String)] = [
         (
             root("""
-            ForEach(["Milk"]) { item in
+            ForEach("Milk") { item in
                 TypeText(item)
             }
             TypeText(item)
@@ -1627,7 +1643,7 @@ import Testing
         ),
         (
             root("""
-            ForEach(.matching(.label("Row")), limit: 1) { row in
+            ForEach(.label("Row"), limit: 1) { row in
                 Activate(row).expect(.missing(row))
             }
             Activate(row)
@@ -1656,15 +1672,15 @@ import Testing
     let source = """
     HeistPlan("NestedLoops", parameter: "screen") { screen in
         If(.exists(.label(screen))) {
-            ForEach(["Milk", "Eggs"]) { item in
-                ForEach(["Small"]) { size in
+            ForEach("Milk", "Eggs") { item in
+                ForEach("Small") { size in
                     TypeText(size, into: .label(item))
                 }
             }
         }
 
-        ForEach(["Message"]) { rowName in
-            ForEach(.matching(.label("Message")), limit: 1) { rowTarget in
+        ForEach("Message") { rowName in
+            ForEach(.label("Message"), limit: 1) { rowTarget in
                 Activate(rowTarget).expect(.exists(rowTarget))
                 TypeText(rowName, into: .label("Search"))
             }

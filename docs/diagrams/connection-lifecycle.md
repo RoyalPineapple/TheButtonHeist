@@ -26,7 +26,7 @@ stateDiagram-v2
     failed --> [*]
 ```
 
-`DisconnectReason` carries the documented failure edges: `networkError`, `bufferOverflow`, `eventBacklogOverflow`, `serverClosed`, `authFailed`, `sessionLocked`, `protocolMismatch`, `localDisconnect`, `certificateMismatch`, `missingFingerprint`, `missingToken`.
+`DisconnectReason` carries the documented failure edges: `networkError`, `bufferOverflow`, `eventBacklogOverflow`, `serverClosed`, `authFailed`, `sessionLocked`, `protocolMismatch`, `localDisconnect`, `missingToken`.
 
 ## Handshake inside `connecting`
 

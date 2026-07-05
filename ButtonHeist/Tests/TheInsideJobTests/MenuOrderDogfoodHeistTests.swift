@@ -71,24 +71,25 @@ private enum MenuScreen {
 }
 
 private enum DemoOrder {
+    static let greekSaladLabel = greekSalad.accessibilityLabel
+    static let eggplantParmesanLabel = eggplantParmesan.accessibilityLabel
     static let itemLabels = items.map(\.accessibilityLabel)
 
     static let confirmPaymentLabel = "Confirm Payment \u{2014} \(total.dogfoodUSDFormatted)"
 
-    private static let items = [
-        DemoMenuItem(
-            emoji: "\u{1F957}",
-            name: "Greek Salad",
-            price: Decimal(950) / Decimal(100),
-            detail: "Tomato, cucumber, olives, and feta"
-        ),
-        DemoMenuItem(
-            emoji: "\u{1F346}",
-            name: "Eggplant Parmesan",
-            price: Decimal(1500) / Decimal(100),
-            detail: "Breaded eggplant with marinara and cheese"
-        ),
-    ]
+    private static let greekSalad = DemoMenuItem(
+        emoji: "\u{1F957}",
+        name: "Greek Salad",
+        price: Decimal(950) / Decimal(100),
+        detail: "Tomato, cucumber, olives, and feta"
+    )
+    private static let eggplantParmesan = DemoMenuItem(
+        emoji: "\u{1F346}",
+        name: "Eggplant Parmesan",
+        price: Decimal(1500) / Decimal(100),
+        detail: "Breaded eggplant with marinara and cheese"
+    )
+    private static let items = [greekSalad, eggplantParmesan]
 
     private static let subtotal = items.reduce(Decimal.zero) { $0 + $1.price }
     private static let total = subtotal + subtotal * (Decimal(8) / Decimal(100))
@@ -112,7 +113,7 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
         let heist = try await runHeist("MenuOrderDogfood_orderTwoItems") {
             try DemoHome.openMenu()
 
-            ForEach(DemoOrder.itemLabels) { item in
+            ForEach(DemoOrder.greekSaladLabel, DemoOrder.eggplantParmesanLabel) { item in
                 try MenuScreen.addItem(item)
             }
 

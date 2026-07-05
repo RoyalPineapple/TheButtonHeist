@@ -163,7 +163,7 @@ public final class TheFence {
         case .directAction(let request):
             return try await handleDirectActionRequest(request)
         case .handler(let handler):
-            return try await handler(self, parsed)
+            return try await handler(self)
         }
     }
 

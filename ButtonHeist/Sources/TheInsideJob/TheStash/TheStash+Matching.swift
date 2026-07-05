@@ -54,7 +54,7 @@ extension Array where Element == AccessibilityHierarchy {
 
 // MARK: - AccessibilityElement Predicate Conformance
 
-extension AccessibilityElement: ThePlans.ElementPredicateSubject {
+extension AccessibilityElement: PredicateSelectionSubject {
 
     /// Known trait name strings — references the parser's authoritative set directly.
     private static let knownTraitNames = AccessibilityTraits.knownTraitNames
@@ -104,6 +104,15 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
             .map(ElementAction.custom)
         return Set(activate + adjustable + custom)
     }
+
+    package var predicateMatcherFacts: [AccessibilityMatcherFact] {
+        AccessibilityPolicy.matcherFacts(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits.heistTraits
+        )
+    }
 }
 
 // MARK: - TheStash Match Pipeline
@@ -143,6 +152,30 @@ extension TheStash {
 private extension Screen.ScreenElement {
     func matches(_ predicate: ElementPredicate) -> Bool {
         predicate.matches(element)
+    }
+}
+
+struct AccessibilityElementPairingKey: Hashable {
+    let text: String
+    let identityTraits: Set<HeistTrait>
+
+    init(_ element: AccessibilityElement) {
+        text = [element.identifier, element.label]
+            .compactMap { value in
+                (value?.isEmpty == false) ? value : nil
+            }
+            .first ?? element.description
+        identityTraits = Set(element.traits.heistTraits.filter {
+            !AccessibilityPolicy.transientTraits.contains($0)
+        })
+    }
+}
+
+extension Sequence where Element == AccessibilityElement {
+    func sharesElementPairing<Other: Sequence>(with other: Other) -> Bool where Other.Element == AccessibilityElement {
+        let keys = Set(map(AccessibilityElementPairingKey.init))
+        guard !keys.isEmpty else { return false }
+        return other.contains { keys.contains(AccessibilityElementPairingKey($0)) }
     }
 }
 

@@ -21,11 +21,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
     // MARK: - DisconnectReason
 
-    func testCertificateMismatchDisconnectReason() {
-        let reason = DisconnectReason.certificateMismatch
-        XCTAssertTrue(reason.errorDescription?.contains("Legacy TLS certificate fingerprint") ?? false)
-    }
-
     func testAllDisconnectReasonsHaveDescriptions() {
         let reasons: [DisconnectReason] = [
             .networkError(NSError(domain: "test", code: 1)),
@@ -36,8 +31,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .sessionLocked("locked"),
             .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
             .localDisconnect,
-            .certificateMismatch,
-            .missingFingerprint,
             .missingToken,
         ]
 
@@ -60,8 +53,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
                 .protocolMismatch, .protocolNegotiation, false
             ),
             (.localDisconnect, .clientLocalDisconnect, .client, false),
-            (.certificateMismatch, .tlsCertificateMismatch, .tls, false),
-            (.missingFingerprint, .tlsMissingFingerprint, .tls, false),
             (.missingToken, .tlsMissingToken, .tls, false),
         ]
 
@@ -77,23 +68,11 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     func testDisconnectReasonConnectionFailureMessagePreservesCause() {
-        let message = DisconnectReason.missingFingerprint.connectionFailureMessage
+        let message = DisconnectReason.missingToken.connectionFailureMessage
 
         XCTAssertTrue(message.contains("connection failed in tls"))
-        XCTAssertTrue(message.contains("observed Legacy TLS certificate fingerprint is unavailable"))
-        XCTAssertTrue(message.contains("Current clients use token-derived TLS PSK"))
-    }
-
-    func testLegacyCertificateDiagnosticsIdentifyLegacyTransport() {
-        let reasons: [DisconnectReason] = [.certificateMismatch, .missingFingerprint]
-
-        for reason in reasons {
-            XCTAssertTrue(reason.errorDescription?.contains("Legacy TLS certificate fingerprint") ?? false)
-            XCTAssertEqual(
-                reason.hint,
-                "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
-            )
-        }
+        XCTAssertTrue(message.contains("observed No token available for TLS pre-shared-key authentication"))
+        XCTAssertTrue(message.contains("Set BUTTONHEIST_TOKEN"))
     }
 
     func testExplicitTokenAuthFailureHintDoesNotSuggestUIApproval() {
@@ -126,12 +105,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
         let connection = DeviceConnection(device: makeDummyDevice(), token: "token")
         XCTAssertNotNil(connection)
         XCTAssertEqual(HandoffAuthToken("token")?.rawValue, "token")
-    }
-
-    @ButtonHeistActor
-    func testDeviceConnectionWithoutFingerprint() async {
-        let connection = DeviceConnection(device: makeDummyDevice())
-        XCTAssertNotNil(connection)
     }
 
     @ButtonHeistActor

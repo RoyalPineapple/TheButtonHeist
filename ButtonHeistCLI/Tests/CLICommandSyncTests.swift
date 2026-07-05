@@ -14,40 +14,6 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testCommandSourcesUseCentralArgumentWriterForRequestConstruction() throws {
-        let commandsURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources", isDirectory: true)
-            .appendingPathComponent("Commands", isDirectory: true)
-        let commandFiles = try FileManager.default.contentsOfDirectory(
-            at: commandsURL,
-            includingPropertiesForKeys: nil
-        )
-        .filter { $0.pathExtension == "swift" }
-        XCTAssertFalse(commandFiles.isEmpty, "Expected CLI command source files")
-
-        let disallowedPatterns = [
-            ("mutable CLIRequestParameters", #"var\s+\w+\s*=\s*CLIRequestParameters\(\)"#),
-            ("manual request mutation", #"\.\s*set\s*\("#),
-            ("raw CLIRequestObject dictionary literal", #"CLIRequestObject\s*\(\s*\["#),
-        ]
-        for fileURL in commandFiles {
-            let source = try String(contentsOf: fileURL)
-            let sourceForShapeScan = try source.sourceCodeForShapeScanning()
-            for (description, pattern) in disallowedPatterns {
-                let regex = try NSRegularExpression(pattern: pattern)
-                let range = NSRange(sourceForShapeScan.startIndex..<sourceForShapeScan.endIndex, in: sourceForShapeScan)
-                guard let match = regex.firstMatch(in: sourceForShapeScan, range: range),
-                      let matchRange = Range(match.range, in: sourceForShapeScan) else {
-                    continue
-                }
-                let snippet = sourceForShapeScan[matchRange].replacingOccurrences(of: "\n", with: "\\n")
-                XCTFail("\(fileURL.lastPathComponent) contains \(description): \(snippet)")
-            }
-        }
-    }
-
     func testJSONLinesHelpShowsCurrentUserCommands() {
         let help = TheFence.Command.cliJSONLinesHelp
 
@@ -348,7 +314,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .string("request-1"))
-        XCTAssertNil(parsed.arguments.argumentValues["id"])
+        XCTAssertNil(parsed.argument(FenceParameterKey(rawValue: "id")!))
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
@@ -630,7 +596,7 @@ final class CLICommandSyncTests: XCTestCase {
             target: expectedTarget
         )
 
-        XCTAssertEqual(arguments.argumentValues[FenceParameterKey.target.rawValue], .object([
+        XCTAssertEqual(arguments.value(for: .target), .object([
             "checks": .array([
                 .object([
                     "kind": .string("label"),
@@ -730,51 +696,8 @@ final class CLICommandSyncTests: XCTestCase {
     }
 }
 
-private final class TemporaryCLIDirectory {
-    let url: URL
-
-    init() throws {
-        url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-cli-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    }
-
-    deinit {
-        try? FileManager.default.removeItem(at: url)
-    }
-}
-
 private extension CLIParsedRequest {
     func argument(_ key: FenceParameterKey) -> HeistValue? {
-        arguments.argumentValues[key.rawValue]
-    }
-}
-
-private extension String {
-    func sourceCodeForShapeScanning() throws -> String {
-        var source = self
-        for pattern in [
-            ##"(#*)"""[\s\S]*?"""\1"##,
-            ##"(#*)"(?:\\.|[^"\\])*"\1"##,
-            #"/\*[\s\S]*?\*/"#,
-            #"//[^\n]*"#,
-        ] {
-            let regex = try NSRegularExpression(pattern: pattern)
-            source = source.replacingMatchesWithShapePreservingWhitespace(regex)
-        }
-        return source
-    }
-
-    private func replacingMatchesWithShapePreservingWhitespace(_ regex: NSRegularExpression) -> String {
-        var result = self
-        let range = NSRange(result.startIndex..<result.endIndex, in: result)
-        for match in regex.matches(in: result, range: range).reversed() {
-            guard let matchRange = Range(match.range, in: result) else { continue }
-            let replacement = String(result[matchRange].map { character -> Character in
-                character == "\n" ? "\n" : " "
-            })
-            result.replaceSubrange(matchRange, with: replacement)
-        }
-        return result
+        arguments.value(for: key)
     }
 }

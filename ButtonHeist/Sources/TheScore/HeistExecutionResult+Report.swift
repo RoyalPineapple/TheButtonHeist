@@ -298,32 +298,6 @@ package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
     }
 }
 
-package struct HeistExecutionReportSummaryFacts: Sendable, Equatable {
-    package let executedTopLevelStepCount: Int
-    package let executedNodeCount: Int
-    package let outputReceiptNodeCount: Int
-    package let abortedAtPath: String?
-    package let durationMs: Int
-    package let expectationsChecked: Int
-    package let expectationsMet: Int
-    package let finalScreenId: String?
-
-    package init(result: HeistExecutionResult) {
-        self.init(summary: HeistExecutionEvidenceRollup(result: result).summary)
-    }
-
-    package init(summary: HeistExecutionEvidenceSummary) {
-        executedTopLevelStepCount = summary.executedTopLevelStepCount
-        executedNodeCount = summary.executedNodeCount
-        outputReceiptNodeCount = summary.outputReceiptNodeCount
-        abortedAtPath = summary.abortedAtPath
-        durationMs = summary.durationMs
-        expectationsChecked = summary.expectationsChecked
-        expectationsMet = summary.expectationsMet
-        finalScreenId = summary.finalScreenId
-    }
-}
-
 package enum HeistExecutionStepReportDetail: Sendable, Equatable {
     case action(HeistActionEvidence)
     case wait(HeistWaitEvidence)

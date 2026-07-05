@@ -244,6 +244,31 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(worldStore.element(heistId: "bottom_row"))
     }
 
+    func testWorldStoreVisibleCommitKeepsDiscoveryMemoryWhenVisibleIdentityPairsWithNewId() {
+        var worldStore = WorldStore()
+        let previousVisible = element(label: "Counter", value: "1", traits: .button)
+        let discoveryOnly = element(label: "Details", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(previousVisible, "counter_old")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    discoveryOnly,
+                    heistId: "details",
+                    scrollContainerPath: TreePath([0])
+                ),
+            ]
+        )
+        worldStore.commitDiscovery(discovery)
+
+        let currentVisible = element(label: "Counter", value: "2", traits: .button)
+        let result = worldStore.commitVisible(Screen.makeForTests(elements: [(currentVisible, "counter_new")]))
+
+        XCTAssertEqual(result.settledScreen.visibleIds, ["counter_new"])
+        XCTAssertEqual(result.settledScreen.knownIds, ["counter_new", "details"])
+        XCTAssertNil(worldStore.element(heistId: "counter_old"))
+        XCTAssertEqual(worldStore.element(heistId: "details")?.element.label, "Details")
+    }
+
     func testVisibleExplorationBaselineDropsStaleDiscoveryEntriesSharingContainerName() {
         let visibleWord = element(label: "Words", traits: .staticText)
         let staleHomeButton = element(label: "Auto-Settle Fixtures", traits: .button)
@@ -618,6 +643,32 @@ final class TheStashResolutionTests: XCTestCase {
         )
 
         XCTAssertEqual(bagman.accessibilityNotifications.claimPendingEvents().count, 0)
+    }
+
+    func testCleanPostActionSettleRequiresActionWindowToClaimAccessibilityNotifications() async {
+        let screen = Screen.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        bagman.accessibilityNotifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
+            associatedElement: .none
+        )
+        let outcome = SettleSession.Outcome(
+            outcome: .settled(timeMs: 1),
+            events: [],
+            finalScreen: screen,
+            elementsByKey: [:]
+        )
+
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: outcome
+        )
+
+        guard case .committed(let event) = result.result else {
+            return XCTFail("Expected clean settle to commit")
+        }
+        XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
+        XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().map(\.code), [1008])
     }
 
     func testPostActionFailedSettlePreservesPendingAccessibilityNotificationsDuringHeistScope() async {
@@ -1332,19 +1383,14 @@ final class TheStashResolutionTests: XCTestCase {
         let sourceScreenElement = try XCTUnwrap(sourceScreen.orderedElements.first {
             $0.element.identifier == "quantity_stepper"
         })
-        let sourceContext = PredicateSelectionContext(
-            elements: sourceScreen.orderedElements.map {
-                PredicateSelectionContext.Element(
-                    id: $0.heistId.predicateSelectionElementId,
-                    element: TheStash.WireConversion.convert($0.element)
-                )
-            },
-            screenId: sourceScreen.id,
-            semanticHash: sourceScreen.semanticHash,
-            scope: .visible
-        )
+        let sourceElements = sourceScreen.orderedElements.map {
+            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+        }
         let executableTarget = try XCTUnwrap(
-            minimumUniquePredicate(for: sourceScreenElement.heistId.predicateSelectionElementId, in: sourceContext)
+            minimumUniquePredicate(
+                for: sourceScreenElement.heistId.predicateSelectionElementId,
+                in: sourceElements
+            )
         ).target
 
         guard case .predicate(let matcher, let ordinal) = executableTarget else {

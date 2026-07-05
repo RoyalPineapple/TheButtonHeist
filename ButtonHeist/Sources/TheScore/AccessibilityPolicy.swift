@@ -174,28 +174,42 @@ public enum AccessibilityPolicy {
         }
     }
 
-    public static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
+    package static func matcherFacts(
+        label: String?,
+        identifier: String?,
+        value: String?,
+        traits: [HeistTrait]
+    ) -> [AccessibilityMatcherFact] {
         var facts: [AccessibilityMatcherFact] = []
-        if let identifier = nonEmpty(element.identifier) {
+        if let identifier = nonEmpty(identifier) {
             facts.append(.identifier(identifier))
         }
-        if let label = nonEmpty(element.label) {
+        if let label = nonEmpty(label) {
             facts.append(.label(label))
         }
-        for trait in orderedMatcherTraits(element.traits) {
+        for trait in orderedMatcherTraits(traits) {
             facts.append(.trait(trait))
         }
-        if let value = nonEmpty(element.value) {
+        if let value = nonEmpty(value) {
             facts.append(.value(value))
         }
 
         if !facts.isEmpty {
-            let presentTraits = Set(element.traits)
+            let presentTraits = Set(traits)
             for trait in orderedMatcherStateTraits where !presentTraits.contains(trait) {
                 facts.append(.excludedTrait(trait))
             }
         }
         return facts
+    }
+
+    public static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
+        matcherFacts(
+            label: element.label,
+            identifier: element.identifier,
+            value: element.value,
+            traits: element.traits
+        )
     }
 
     public static func matcherIdentityFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {

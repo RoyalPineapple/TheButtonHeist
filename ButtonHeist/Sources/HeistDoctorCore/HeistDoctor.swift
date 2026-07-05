@@ -22,14 +22,15 @@ public enum HeistDoctor {
         stepPath requestedStepPath: String? = nil
     ) throws -> [HeistRepairSuggestion] {
         let diagnosis = try diagnosis(lastPass: lastPass, newFail: newFail, stepPath: requestedStepPath)
-        let suggestions = diagnosis.suggestions
-        guard !suggestions.isEmpty else {
+        switch diagnosis {
+        case .suggested(let diagnosis):
+            return diagnosis.suggestions
+        case .refused(let diagnosis):
             throw HeistDoctorError.noSafeSuggestion(
                 path: diagnosis.stepPath,
-                reason: diagnosis.refusal?.message ?? "repair suggestion was not refused"
+                reason: diagnosis.refusal.message
             )
         }
-        return suggestions
     }
 
     private static func selectedCurrentFailure(

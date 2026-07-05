@@ -5,8 +5,8 @@ import Foundation
 /// Kept separate from FenceError because DisconnectReason is a value type
 /// used by `ConnectionEvent.disconnected`, not a thrown error. It carries
 /// transport-level detail (bufferOverflow, eventBacklogOverflow,
-/// serverClosed, networkError, protocolMismatch, localDisconnect, missingToken,
-/// and legacy certificate failures) that callers never need to catch. FenceError
+/// serverClosed, networkError, protocolMismatch, localDisconnect, missingToken)
+/// that callers never need to catch. FenceError
 /// is the single thrown error type for all of TheFence, TheHandoff, and
 /// DeviceResolver.
 enum DisconnectReason: Error, LocalizedError {
@@ -18,10 +18,6 @@ enum DisconnectReason: Error, LocalizedError {
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
-    // Legacy certificate-pinning failures are retained for old diagnostics only.
-    // Current clients authenticate with token-derived TLS PSK.
-    case certificateMismatch
-    case missingFingerprint
     case missingToken
 
     static func buttonHeistVersionMismatch(serverVersion: String, clientVersion: String) -> DisconnectReason {
@@ -114,20 +110,6 @@ enum DisconnectReason: Error, LocalizedError {
                 cause: "Disconnected by client",
                 code: .clientLocalDisconnect
             )
-        case .certificateMismatch:
-            return HandoffFailureDiagnostic(
-                operation: .transport,
-                target: nil,
-                cause: "Legacy TLS certificate fingerprint does not match expected value",
-                code: .tlsCertificateMismatch
-            )
-        case .missingFingerprint:
-            return HandoffFailureDiagnostic(
-                operation: .transport,
-                target: nil,
-                cause: "Legacy TLS certificate fingerprint is unavailable for this device",
-                code: .tlsMissingFingerprint
-            )
         case .missingToken:
             return HandoffFailureDiagnostic(
                 operation: .transport,
@@ -155,8 +137,6 @@ extension DisconnectReason: Equatable {
         case (.bufferOverflow, .bufferOverflow),
              (.serverClosed, .serverClosed),
              (.localDisconnect, .localDisconnect),
-             (.certificateMismatch, .certificateMismatch),
-             (.missingFingerprint, .missingFingerprint),
              (.missingToken, .missingToken):
             return true
         case (.eventBacklogOverflow(let lhsMaxEvents), .eventBacklogOverflow(let rhsMaxEvents)):

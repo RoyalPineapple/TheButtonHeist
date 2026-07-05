@@ -67,9 +67,8 @@ extension TheFence.CommandArgumentEnvelope {
 
     func decodeElementTargetPayload() throws -> ElementTarget {
         try requireObjectStringMatchFields()
-        let value = HeistValue.object(argumentValues)
         return try TheFence.HeistValuePayloadDecoder.decode(
-            value,
+            objectValue,
             field: argumentFieldPrefix ?? "target",
             as: ElementTarget.self
         )
@@ -77,7 +76,7 @@ extension TheFence.CommandArgumentEnvelope {
 
     private func requireObjectStringMatchFields() throws {
         try TheFence.validateElementPredicatePayloadStringMatches(
-            .object(argumentValues),
+            objectValue,
             field: argumentFieldPrefix ?? "target"
         )
     }

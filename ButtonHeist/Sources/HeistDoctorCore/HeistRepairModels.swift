@@ -61,42 +61,6 @@ public struct HeistRepairActionIdentity: Codable, Sendable, Equatable {
     }
 }
 
-public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
-    public let heistFingerprint: String?
-    public let stepPath: String
-    public let actionIdentity: HeistRepairActionIdentity
-    public let target: ElementTarget
-    /// Parsed Interface hierarchy captured before the action. This is the
-    /// durable world-model snapshot repair uses to rerun predicates and recover
-    /// local semantic context around the original target; it is not raw AX data.
-    public let beforeSnapshot: Interface
-    /// Compact parsed-world-model transition evidence captured after the action.
-    public let afterDelta: AccessibilityTrace.Delta?
-    /// Parsed Interface fallback when a compact transition delta is unavailable.
-    public let afterSnapshot: Interface?
-    public let result: HeistStepRepairResult
-
-    public init(
-        heistFingerprint: String? = nil,
-        stepPath: String,
-        actionIdentity: HeistRepairActionIdentity,
-        target: ElementTarget,
-        beforeSnapshot: Interface,
-        afterDelta: AccessibilityTrace.Delta? = nil,
-        afterSnapshot: Interface? = nil,
-        result: HeistStepRepairResult
-    ) {
-        self.heistFingerprint = heistFingerprint
-        self.stepPath = stepPath
-        self.actionIdentity = actionIdentity
-        self.target = target
-        self.beforeSnapshot = beforeSnapshot
-        self.afterDelta = afterDelta
-        self.afterSnapshot = afterSnapshot
-        self.result = result
-    }
-}
-
 public struct RepairPassEvidence: Codable, Sendable, Equatable {
     public let method: ActionMethod?
     public let expectation: ExpectationResult?
@@ -126,36 +90,6 @@ public struct RepairFailureEvidence: Codable, Sendable, Equatable {
         self.errorKind = errorKind
         self.message = message
         self.expectation = expectation
-    }
-}
-
-public enum HeistStepRepairResult: Codable, Sendable, Equatable {
-    case passed(RepairPassEvidence)
-    case failed(RepairFailureEvidence)
-
-    public init(actionResult: ActionResult, expectation: ExpectationResult? = nil) {
-        if actionResult.success {
-            self = .passed(RepairPassEvidence(
-                method: actionResult.method,
-                expectation: expectation
-            ))
-        } else {
-            self = .failed(RepairFailureEvidence(
-                method: actionResult.method,
-                errorKind: actionResult.errorKind,
-                message: actionResult.message,
-                expectation: expectation
-            ))
-        }
-    }
-
-    public var expectation: ExpectationResult? {
-        switch self {
-        case .passed(let evidence):
-            return evidence.expectation
-        case .failed(let evidence):
-            return evidence.expectation
-        }
     }
 }
 
@@ -254,11 +188,6 @@ public enum HeistRepairPipelineStage: String, Codable, Sendable, Equatable {
     case candidateValidation
 }
 
-public enum HeistRepairDiagnosisStatus: String, Codable, Sendable, Equatable {
-    case suggested
-    case refused
-}
-
 public enum HeistRepairRefusalReason: String, Codable, Sendable, Equatable {
     case differentStepPaths
     case incompatibleHeistFingerprints
@@ -287,12 +216,6 @@ public struct HeistRepairRefusal: Codable, Sendable, Equatable {
 public enum RepairCandidateSource: String, Codable, Sendable, Hashable {
     case semanticContinuityScan
     case currentAmbiguousMatch
-}
-
-public enum RepairCandidateValidationStatus: String, Codable, Sendable, Equatable {
-    case notEvaluated
-    case suggested
-    case rejected
 }
 
 public enum RepairCandidateRejectionReason: String, Codable, Sendable, Equatable {
@@ -337,16 +260,19 @@ public struct ElementSummary: Codable, Sendable, Equatable {
     }
 }
 
+public enum RepairCandidateValidation: Codable, Sendable, Equatable {
+    case notEvaluated
+    case suggested(target: ElementTarget, confidence: RepairConfidence)
+    case rejected(reason: RepairCandidateRejectionReason)
+}
+
 public struct HeistRepairCandidateDiagnosis: Codable, Sendable, Equatable {
     public let source: RepairCandidateSource
     public let resolvedElement: ElementSummary
     public let score: Int
     public let reasons: [RepairScoringReason]
     public let caveats: [RepairCaveat]
-    public let validationStatus: RepairCandidateValidationStatus
-    public let suggestedTarget: ElementTarget?
-    public let confidence: RepairConfidence?
-    public let rejectionReason: RepairCandidateRejectionReason?
+    public let validation: RepairCandidateValidation
 
     public init(
         source: RepairCandidateSource,
@@ -354,84 +280,40 @@ public struct HeistRepairCandidateDiagnosis: Codable, Sendable, Equatable {
         score: Int,
         reasons: [RepairScoringReason],
         caveats: [RepairCaveat] = [],
-        validationStatus: RepairCandidateValidationStatus,
-        suggestedTarget: ElementTarget? = nil,
-        confidence: RepairConfidence? = nil,
-        rejectionReason: RepairCandidateRejectionReason? = nil
+        validation: RepairCandidateValidation
     ) {
         self.source = source
         self.resolvedElement = resolvedElement
         self.score = score
         self.reasons = unique(reasons)
         self.caveats = unique(caveats)
-        self.validationStatus = validationStatus
-        self.suggestedTarget = suggestedTarget
-        self.confidence = confidence
-        self.rejectionReason = rejectionReason
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case source
-        case resolvedElement
-        case score
-        case reasons
-        case caveats
-        case validationStatus
-        case suggestedTarget
-        case confidence
-        case rejectionReason
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        source = try container.decode(RepairCandidateSource.self, forKey: .source)
-        resolvedElement = try container.decode(ElementSummary.self, forKey: .resolvedElement)
-        score = try container.decode(Int.self, forKey: .score)
-        reasons = try container.decodeRenderedScoringReasons(forKey: .reasons)
-        caveats = try container.decodeRenderedCaveats(forKey: .caveats)
-        validationStatus = try container.decode(RepairCandidateValidationStatus.self, forKey: .validationStatus)
-        suggestedTarget = try container.decodeIfPresent(ElementTarget.self, forKey: .suggestedTarget)
-        confidence = try container.decodeIfPresent(RepairConfidence.self, forKey: .confidence)
-        rejectionReason = try container.decodeIfPresent(RepairCandidateRejectionReason.self, forKey: .rejectionReason)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(source, forKey: .source)
-        try container.encode(resolvedElement, forKey: .resolvedElement)
-        try container.encode(score, forKey: .score)
-        try container.encode(reasons.map(\.prose), forKey: .reasons)
-        try container.encode(caveats.map(\.prose), forKey: .caveats)
-        try container.encode(validationStatus, forKey: .validationStatus)
-        try container.encodeIfPresent(suggestedTarget, forKey: .suggestedTarget)
-        try container.encodeIfPresent(confidence, forKey: .confidence)
-        try container.encodeIfPresent(rejectionReason, forKey: .rejectionReason)
+        self.validation = validation
     }
 }
 
-public struct HeistRepairDiagnosis: Codable, Sendable, Equatable {
-    public let status: HeistRepairDiagnosisStatus
+public enum HeistRepairDiagnosis: Codable, Sendable, Equatable {
+    case suggested(HeistRepairSuggestedDiagnosis)
+    case refused(HeistRepairRefusedDiagnosis)
+}
+
+public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {
     public let stepPath: String
-    public let failureKind: HeistRepairFailureKind?
+    public let failureKind: HeistRepairFailureKind
     public let oldTarget: ElementTarget
-    public let oldResolvedElement: ElementSummary?
-    public let currentMatchCount: Int?
+    public let oldResolvedElement: ElementSummary
+    public let currentMatchCount: Int
     public let candidates: [HeistRepairCandidateDiagnosis]
     public let suggestions: [HeistRepairSuggestion]
-    public let refusal: HeistRepairRefusal?
 
     public init(
-        status: HeistRepairDiagnosisStatus,
         stepPath: String,
-        failureKind: HeistRepairFailureKind?,
+        failureKind: HeistRepairFailureKind,
         oldTarget: ElementTarget,
-        oldResolvedElement: ElementSummary? = nil,
-        currentMatchCount: Int? = nil,
-        candidates: [HeistRepairCandidateDiagnosis] = [],
-        suggestions: [HeistRepairSuggestion] = [],
-        refusal: HeistRepairRefusal? = nil
+        oldResolvedElement: ElementSummary,
+        currentMatchCount: Int,
+        candidates: [HeistRepairCandidateDiagnosis],
+        suggestions: [HeistRepairSuggestion]
     ) {
-        self.status = status
         self.stepPath = stepPath
         self.failureKind = failureKind
         self.oldTarget = oldTarget
@@ -439,6 +321,48 @@ public struct HeistRepairDiagnosis: Codable, Sendable, Equatable {
         self.currentMatchCount = currentMatchCount
         self.candidates = candidates
         self.suggestions = suggestions
+    }
+}
+
+public enum HeistRepairRefusalContext: Codable, Sendable, Equatable {
+    case evidenceEligibility
+    case eligible(HeistRepairEligibleRefusalContext)
+}
+
+public struct HeistRepairEligibleRefusalContext: Codable, Sendable, Equatable {
+    public let failureKind: HeistRepairFailureKind
+    public let oldResolvedElement: ElementSummary
+    public let currentMatchCount: Int
+    public let candidates: [HeistRepairCandidateDiagnosis]
+
+    public init(
+        failureKind: HeistRepairFailureKind,
+        oldResolvedElement: ElementSummary,
+        currentMatchCount: Int,
+        candidates: [HeistRepairCandidateDiagnosis]
+    ) {
+        self.failureKind = failureKind
+        self.oldResolvedElement = oldResolvedElement
+        self.currentMatchCount = currentMatchCount
+        self.candidates = candidates
+    }
+}
+
+public struct HeistRepairRefusedDiagnosis: Codable, Sendable, Equatable {
+    public let stepPath: String
+    public let oldTarget: ElementTarget
+    public let context: HeistRepairRefusalContext
+    public let refusal: HeistRepairRefusal
+
+    public init(
+        stepPath: String,
+        oldTarget: ElementTarget,
+        context: HeistRepairRefusalContext,
+        refusal: HeistRepairRefusal
+    ) {
+        self.stepPath = stepPath
+        self.oldTarget = oldTarget
+        self.context = context
         self.refusal = refusal
     }
 }
@@ -476,82 +400,4 @@ public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
         self.caveats = unique(caveats)
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case stepPath
-        case failureKind
-        case oldTarget
-        case oldResolvedElement
-        case newTarget
-        case newResolvedElement
-        case confidence
-        case reasons
-        case caveats
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        stepPath = try container.decode(String.self, forKey: .stepPath)
-        failureKind = try container.decode(HeistRepairFailureKind.self, forKey: .failureKind)
-        oldTarget = try container.decode(ElementTarget.self, forKey: .oldTarget)
-        oldResolvedElement = try container.decode(ElementSummary.self, forKey: .oldResolvedElement)
-        newTarget = try container.decode(ElementTarget.self, forKey: .newTarget)
-        newResolvedElement = try container.decode(ElementSummary.self, forKey: .newResolvedElement)
-        confidence = try container.decode(RepairConfidence.self, forKey: .confidence)
-        reasons = try container.decodeRenderedReasons(forKey: .reasons)
-        caveats = try container.decodeRenderedCaveats(forKey: .caveats)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(stepPath, forKey: .stepPath)
-        try container.encode(failureKind, forKey: .failureKind)
-        try container.encode(oldTarget, forKey: .oldTarget)
-        try container.encode(oldResolvedElement, forKey: .oldResolvedElement)
-        try container.encode(newTarget, forKey: .newTarget)
-        try container.encode(newResolvedElement, forKey: .newResolvedElement)
-        try container.encode(confidence, forKey: .confidence)
-        try container.encode(reasons.map(\.prose), forKey: .reasons)
-        try container.encode(caveats.map(\.prose), forKey: .caveats)
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func decodeRenderedScoringReasons(forKey key: Key) throws -> [RepairScoringReason] {
-        try decode([String].self, forKey: key).map { prose in
-            guard let reason = RepairScoringReason(prose: prose) else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: key,
-                    in: self,
-                    debugDescription: "Unknown heist repair scoring reason: \(prose)"
-                )
-            }
-            return reason
-        }
-    }
-
-    func decodeRenderedReasons(forKey key: Key) throws -> [RepairSuggestionReason] {
-        try decode([String].self, forKey: key).map { prose in
-            guard let reason = RepairSuggestionReason(prose: prose) else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: key,
-                    in: self,
-                    debugDescription: "Unknown heist repair reason: \(prose)"
-                )
-            }
-            return reason
-        }
-    }
-
-    func decodeRenderedCaveats(forKey key: Key) throws -> [RepairCaveat] {
-        try decode([String].self, forKey: key).map { prose in
-            guard let caveat = RepairCaveat(prose: prose) else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: key,
-                    in: self,
-                    debugDescription: "Unknown heist repair caveat: \(prose)"
-                )
-            }
-            return caveat
-        }
-    }
 }

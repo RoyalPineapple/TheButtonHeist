@@ -95,8 +95,8 @@ struct HeistDoctorCommand: ParsableCommand {
             lines.append("new target: \(suggestion.newTarget)")
             lines.append("old element: \(elementSummaryLine(suggestion.oldResolvedElement))")
             lines.append("new element: \(elementSummaryLine(suggestion.newResolvedElement))")
-            appendSection("reasons", suggestion.reasons.map(\.prose), to: &lines)
-            appendSection("caveats", suggestion.caveats.map(\.prose), to: &lines)
+            appendSection("reasons", suggestion.reasons.map(\.reportText), to: &lines)
+            appendSection("caveats", suggestion.caveats.map(\.reportText), to: &lines)
         }
         return lines.joined(separator: "\n")
     }

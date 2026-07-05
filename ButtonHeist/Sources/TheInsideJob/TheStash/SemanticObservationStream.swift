@@ -573,8 +573,7 @@ final class SemanticObservationStream {
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
-            let pendingAccessibilityNotifications = notificationWindow?.finishAndClaimEvents()
-                ?? stash.accessibilityNotifications.claimPendingEvents()
+            let pendingAccessibilityNotifications = notificationWindow?.finishAndClaimEvents() ?? []
             let event: SettledSemanticObservationEvent
             switch commitScope {
             case .visible:

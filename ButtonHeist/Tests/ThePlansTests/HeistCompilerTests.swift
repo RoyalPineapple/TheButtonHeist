@@ -46,7 +46,7 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `compileFile compiles default heist value source`() async throws {
+    func `compileFile rejects default heist value source`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(
             named: "Value.swift",
@@ -59,10 +59,10 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let text = diagnostics.map(\.description).joined(separator: "\n")
 
-        #expect(plan.name == "ValuePlan")
-        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+        #expect(text.contains("cannot call value of non-function type"))
     }
 
     @Test
@@ -98,8 +98,10 @@ struct HeistCompilerTests {
 
             FileHandle.standardOutput.write(Data("not-json".utf8))
 
-            let heist = try HeistPlan("BadOutput") {
-                Warn("ok")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("BadOutput") {
+                    Warn("ok")
+                }
             }
             """
         )
@@ -121,8 +123,10 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("Validated") {
-                Warn("ok")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("Validated") {
+                    Warn("ok")
+                }
             }
             """
         )
@@ -149,7 +153,9 @@ struct HeistCompilerTests {
                 }
             }
 
-            let heist = try StoreFlows.checkout()
+            func heist() throws -> HeistPlan {
+                try StoreFlows.checkout()
+            }
             """
         )
 
@@ -176,8 +182,10 @@ struct HeistCompilerTests {
 
             let rawTemplate = #"HeistPlan { if true { Warn("not real DSL") } }"#
 
-            let heist = try HeistPlan("WrapperStrings") {
-                Warn("ok")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("WrapperStrings") {
+                    Warn("ok")
+                }
             }
             """#
         )
@@ -212,7 +220,9 @@ struct HeistCompilerTests {
                 }
             }
 
-            let heist = try makeHeist()
+            func heist() throws -> HeistPlan {
+                try makeHeist()
+            }
             """
         )
 
@@ -233,9 +243,11 @@ struct HeistCompilerTests {
 
             func payLabel() -> String { "Pay" }
 
-            let heist = try HeistPlan("TrustedFrontend") {
-                Activate(.label(payLabel()))
-                    .expect(.change(.screen()))
+            func heist() throws -> HeistPlan {
+                try HeistPlan("TrustedFrontend") {
+                    Activate(.label(payLabel()))
+                        .expect(.change(.screen()))
+                }
             }
             """
         )
@@ -259,9 +271,11 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan(name: "RawBody", body: [
-                .warn(WarnStep(message: "raw")),
-            ])
+            func heist() throws -> HeistPlan {
+                try HeistPlan(name: "RawBody", body: [
+                    .warn(WarnStep(message: "raw")),
+                ])
+            }
             """
         )
 
@@ -304,9 +318,11 @@ struct HeistCompilerTests {
             import ThePlans
 
             let shouldPay = true
-            let heist = try HeistPlan("NativeIf") {
-                if shouldPay {
-                    Activate(.label("Pay"))
+            func heist() throws -> HeistPlan {
+                try HeistPlan("NativeIf") {
+                    if shouldPay {
+                        Activate(.label("Pay"))
+                    }
                 }
             }
             """
@@ -326,14 +342,16 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("NativeIfInDefinition") {
-                HeistDef<Void>("Helper") {
-                    if Bool.random() {
-                        Warn("raw")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("NativeIfInDefinition") {
+                    HeistDef<Void>("Helper") {
+                        if Bool.random() {
+                            Warn("raw")
+                        }
                     }
-                }
 
-                RunHeist("Helper")
+                    RunHeist("Helper")
+                }
             }
             """
         )
@@ -352,14 +370,16 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("SnapshotConditional") {
-                If(.exists(.label("Ready"))) {
-                    Warn("ready")
-                }
+            func heist() throws -> HeistPlan {
+                try HeistPlan("SnapshotConditional") {
+                    If(.exists(.label("Ready"))) {
+                        Warn("ready")
+                    }
 
-                If {
-                    Case(.missing(.label("Loading"))) {
-                        Warn("loaded")
+                    If {
+                        Case(.missing(.label("Loading"))) {
+                            Warn("loaded")
+                        }
                     }
                 }
             }
@@ -370,9 +390,11 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("TransitionIf") {
-                If(.updated(.value("Ready"))) {
-                    Warn("ready")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("TransitionIf") {
+                    If(.updated(.value("Ready"))) {
+                        Warn("ready")
+                    }
                 }
             }
             """
@@ -382,10 +404,12 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("TransitionCase") {
-                If {
-                    Case(.appeared(.label("Ready"))) {
-                        Warn("ready")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("TransitionCase") {
+                    If {
+                        Case(.appeared(.label("Ready"))) {
+                            Warn("ready")
+                        }
                     }
                 }
             }
@@ -412,16 +436,18 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("PredicateComposition") {
-                WaitFor(.all(
-                    .exists(.label("Receipt")),
-                    .missing(.label("Loading"))
-                ))
+            func heist() throws -> HeistPlan {
+                try HeistPlan("PredicateComposition") {
+                    WaitFor(.all(
+                        .exists(.label("Receipt")),
+                        .missing(.label("Loading"))
+                    ))
 
-                WaitFor(.change(.all(
-                    .screenChanged(.exists(.label("Receipt"))),
-                    .updated(.value("3"))
-                )))
+                    WaitFor(.change(.all(
+                        .screenChanged(.exists(.label("Receipt"))),
+                        .updated(.value("3"))
+                    )))
+                }
             }
             """
         )
@@ -430,8 +456,10 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("EmptyAll") {
-                WaitFor(.all())
+            func heist() throws -> HeistPlan {
+                try HeistPlan("EmptyAll") {
+                    WaitFor(.all())
+                }
             }
             """
         )
@@ -440,8 +468,10 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("RawEmptyAll") {
-                WaitFor(.state(.all([])))
+            func heist() throws -> HeistPlan {
+                try HeistPlan("RawEmptyAll") {
+                    WaitFor(.state(.all([])))
+                }
             }
             """
         )
@@ -450,8 +480,10 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan("NestedAny") {
-                WaitFor(.changePredicate(.all(.any)))
+            func heist() throws -> HeistPlan {
+                try HeistPlan("NestedAny") {
+                    WaitFor(.changePredicate(.all(.any)))
+                }
             }
             """
         )
@@ -529,8 +561,10 @@ struct HeistCompilerTests {
             """
             import ThePlans
 
-            let heist = try HeistPlan {
-                Warn("anonymous")
+            func heist() throws -> HeistPlan {
+                try HeistPlan {
+                    Warn("anonymous")
+                }
             }
             """
         )
@@ -624,8 +658,10 @@ private final class CompilerTemporaryDirectory {
             """
             import ThePlans
 
-            let heist = try HeistPlan("\(name)") {
-                Warn("ok")
+            func heist() throws -> HeistPlan {
+                try HeistPlan("\(name)") {
+                    Warn("ok")
+                }
             }
             """
         )

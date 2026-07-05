@@ -558,6 +558,27 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
+    func testFixedCadenceSettleIgnoresNilParsesUntilAStableScreenArrives() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let session = makeSession(
+            script: [nil, nil, stable, stable, stable],
+            cyclesRequired: 2,
+            timeoutMs: 100
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected fixed-cadence settle after nil parses, got \(outcome.outcome)")
+        }
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
     func testSettlesAfterCyclesRequiredStableCycles() async {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
         let stable = makeParseResult([element])

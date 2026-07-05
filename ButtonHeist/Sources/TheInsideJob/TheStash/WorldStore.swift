@@ -128,16 +128,9 @@ struct WorldStore {
     private func visibleRefreshPairsWithSettledVisibleElements(_ visibleRefresh: Screen) -> Bool {
         let previous = settledVisibleIds
             .compactMap { semanticWorld.elements[$0]?.element }
-            .map(TheStash.WireConversion.convert)
         let current = visibleRefresh.visibleIds
             .compactMap { visibleRefresh.semantic.elements[$0]?.element }
-            .map(TheStash.WireConversion.convert)
-        guard !previous.isEmpty, !current.isEmpty else { return false }
-
-        let edits = ElementEdits.between(beforeElements: previous, afterElements: current)
-        return !edits.updated.isEmpty
-            || edits.removed.count < previous.count
-            || edits.added.count < current.count
+        return previous.sharesElementPairing(with: current)
     }
 
     struct CommitResult {

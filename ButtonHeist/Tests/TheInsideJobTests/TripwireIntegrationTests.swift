@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 // Integration tests for TheTripwire that depend on wall-clock timing (CADisplayLink).
 // These require a live UIWindowScene test host and real time passing.
+import ButtonHeistSupport
 import XCTest
 @testable import TheInsideJob
 

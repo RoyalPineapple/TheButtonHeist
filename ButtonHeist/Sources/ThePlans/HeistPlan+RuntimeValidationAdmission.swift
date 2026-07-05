@@ -1,13 +1,5 @@
 import Foundation
 
-struct HeistRuntimeSafetyTraversalDraft: Sendable, Equatable {
-    let plan: HeistPlan
-
-    init(candidate: HeistPlanAdmissionCandidate) {
-        plan = candidate.runtimeSafetyTraversalDraftPlan()
-    }
-}
-
 // Admission owns the externally submitted plan shape. Decoding this type proves
 // only that source/artifact JSON can be loaded as plan IR; runtime safety is the
 // separate executable-plan boundary.
@@ -83,16 +75,13 @@ package struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
         try container.encode(body, forKey: .body)
     }
 
-    func runtimeSafetyTraversalDraftPlan() -> HeistPlan {
-        // This is the one remaining bridge into HeistPlan-shaped traversal. The
-        // draft must stay inside source parsing or runtime safety validation and
-        // must not be returned before HeistPlanRuntimeSafetyValidator accepts it.
+    func runtimeSafetyPlan() -> HeistPlan {
         HeistPlan(
             runtimeValidatedVersion: version,
             name: name,
             parameter: parameter,
-            definitions: definitions.map { $0.runtimeSafetyTraversalDraftPlan() },
-            body: body.map(\.runtimeSafetyTraversalDraftStep)
+            definitions: definitions.map { $0.runtimeSafetyPlan() },
+            body: body.map(\.runtimeSafetyStep)
         )
     }
 }
@@ -155,7 +144,7 @@ package enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
         }
     }
 
-    var runtimeSafetyTraversalDraftStep: HeistStep {
+    var runtimeSafetyStep: HeistStep {
         switch self {
         case .action(let step):
             return .action(step)
@@ -174,7 +163,7 @@ package enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
         case .fail(let step):
             return .fail(step)
         case .heist(let plan):
-            return .heist(plan.runtimeSafetyTraversalDraftPlan())
+            return .heist(plan.runtimeSafetyPlan())
         case .invoke(let step):
             return .invoke(step)
         }

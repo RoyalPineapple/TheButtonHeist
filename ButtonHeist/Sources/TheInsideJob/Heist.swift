@@ -142,31 +142,6 @@ public struct Heist: Sendable {
         )
     }
 
-    @MainActor
-    public init<Content: HeistContent>(
-        _ values: [String],
-        parameter: HeistReferenceName = "item",
-        @HeistBuilder _ content: (StringExpr) throws -> Content
-    ) async throws {
-        let plan = try HeistPlan {
-            ForEach(values, parameter: parameter, content: content)
-        }
-        self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
-    }
-
-    @MainActor
-    init<Content: HeistContent>(
-        _ values: [String],
-        parameter: HeistReferenceName = "item",
-        runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (StringExpr) throws -> Content
-    ) async throws {
-        let plan = try HeistPlan {
-            ForEach(values, parameter: parameter, content: content)
-        }
-        self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
-    }
-
     private static func plan<Content: HeistContent>(
         parameter: HeistParameter,
         @HeistBuilder _ content: () throws -> Content

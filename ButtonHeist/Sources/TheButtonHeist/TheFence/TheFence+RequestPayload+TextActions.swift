@@ -9,7 +9,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        DecodedRequestDispatch { fence, _ in
+        DecodedRequestDispatch { fence in
             try await fence.handleGetPasteboard()
         }
     }

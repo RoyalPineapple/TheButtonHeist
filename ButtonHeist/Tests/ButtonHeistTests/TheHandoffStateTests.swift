@@ -547,7 +547,7 @@ final class TheHandoffStateTests: XCTestCase {
             connectionCount += 1
             let connection = MockConnection()
             connection.connectEventsOverride = [
-                .disconnected(.missingFingerprint),
+                .disconnected(.missingToken),
             ]
             return connection
         }
@@ -1522,14 +1522,14 @@ final class TheHandoffStateTests: XCTestCase {
         }
         await Task.yield()
 
-        mock.onEvent?(.disconnected(.missingFingerprint))
+        mock.onEvent?(.disconnected(.missingToken))
 
         for waitTask in [firstWaitTask, secondWaitTask] {
             do {
                 try await waitTask.value
                 XCTFail("Expected disconnect failure")
             } catch let error as HandoffConnectionError {
-                XCTAssertEqual(error, .disconnected(.missingFingerprint))
+                XCTAssertEqual(error, .disconnected(.missingToken))
             } catch {
                 XCTFail("Unexpected error: \(error)")
             }
@@ -1645,7 +1645,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = [
-            .disconnected(.missingFingerprint),
+            .disconnected(.missingToken),
         ]
         handoff.makeConnection = { _ in mock }
 
@@ -1658,9 +1658,9 @@ final class TheHandoffStateTests: XCTestCase {
             guard case .disconnected(let reason) = error else {
                 return XCTFail("Expected .disconnected, got \(error)")
             }
-            XCTAssertEqual(reason, .missingFingerprint)
-            XCTAssertEqual(error.diagnostic.details.code.knownCode, .tlsMissingFingerprint)
-            XCTAssertEqual(error.failureCode, KnownFailureCode.tlsMissingFingerprint.rawValue)
+            XCTAssertEqual(reason, .missingToken)
+            XCTAssertEqual(error.diagnostic.details.code.knownCode, .tlsMissingToken)
+            XCTAssertEqual(error.failureCode, KnownFailureCode.tlsMissingToken.rawValue)
             XCTAssertEqual(error.phase, .tls)
             XCTAssertFalse(error.retryable)
         } catch {

@@ -227,25 +227,6 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(capture.plan?.parameter, .elementTarget(name: "input"))
     }
 
-    func testArrayInitializerLowersToForEachString() async throws {
-        let job = TheInsideJob(token: "in-app-heist-array-test")
-        let capture = RuntimeCapture(job: job)
-
-        let heist = try await Heist(["milk", "eggs"], runtime: capture.runtime) { _ in
-            Warn("item")
-        }
-
-        let step = try XCTUnwrap(heist.result.steps.first)
-        XCTAssertEqual(step.kind, .forEachString)
-        XCTAssertEqual(step.forEachStringEvidence?.count, 2)
-        XCTAssertEqual(step.forEachStringEvidence?.iterationCount, 2)
-        XCTAssertEqual(capture.plan?.parameter, HeistParameter.none)
-        guard case .forEachString(let forEach)? = capture.plan?.body.first else {
-            return XCTFail("Expected array initializer to build a ForEachString root step")
-        }
-        XCTAssertEqual(forEach.values, ["milk", "eggs"])
-    }
-
     func testRepeatUntilSuccessReceiptDoesNotSynthesizeWaitActionResult() async throws {
         let job = TheInsideJob(token: "in-app-repeat-until-success-receipt-test")
         let waitScript = ReceiptWaitScript(states: [

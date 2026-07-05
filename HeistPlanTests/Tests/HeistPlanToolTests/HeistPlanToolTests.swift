@@ -97,6 +97,19 @@ struct HeistPlanToolTests {
         #expect(FileManager.default.fileExists(atPath: outputURL.appendingPathComponent("manifest.json").path))
     }
 
+    @Test
+    func `canonicalize requires output and does not print plan JSON`() throws {
+        let temp = try TemporaryDirectory()
+        let inputURL = temp.url.appendingPathComponent("input.heist")
+        try HeistArtifactCodec.writePlan(representativePlan(), to: inputURL)
+
+        let result = try runHeistPlan(["canonicalize", inputURL.path])
+
+        #expect(result.exitCode != 0)
+        #expect(result.stdout.isEmpty)
+        #expect(result.stderr.contains("Missing expected argument '--output"))
+    }
+
 }
 
 private func representativePlan() throws -> HeistPlan {

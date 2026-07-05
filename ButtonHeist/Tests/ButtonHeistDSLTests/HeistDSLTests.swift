@@ -182,7 +182,7 @@ func predicateContextsInferExistsFromElementPredicates() throws {
 }
 
 @Test
-func forEachInfersStringValuesAndElementMatches() throws {
+func forEachInfersStringValuesAndElementPredicates() throws {
     let heist = try HeistPlan {
         ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Search"))
@@ -481,7 +481,7 @@ func invalidForEachInsideHeistDefFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach string loop is invalid") {
         _ = try HeistPlan {
             HeistDef<Void>("Broken") {
-                ForEach(["Milk"], parameter: "bad name") { _ in
+                ForEach("Milk", parameter: "bad name") { _ in
                     Warn("never")
                 }
 
@@ -499,7 +499,7 @@ func invalidForEachInsideIfCaseFailsPlanBuild() {
         _ = try HeistPlan {
             If {
                 Case(.exists(.label("Ready"))) {
-                    ForEach(["Milk"], parameter: "bad name") { _ in
+                    ForEach("Milk", parameter: "bad name") { _ in
                         Warn("never")
                     }
 
@@ -520,7 +520,7 @@ func invalidForEachInsideWaitForElseFailsPlanBuild() {
         _ = try HeistPlan {
             WaitFor(.exists(.label("Ready")), timeout: .seconds(1))
                 .else {
-                    ForEach(.matching(.label("Row")), parameter: "bad name") { target in
+                    ForEach(.label("Row"), parameter: "bad name") { target in
                         Activate(target)
                     }
 
@@ -540,7 +540,7 @@ func invalidForEachInsideElseFailsPlanBuild() {
                 }
 
                 Else {
-                    ForEach(["Milk"], parameter: "bad name") { _ in
+                    ForEach("Milk", parameter: "bad name") { _ in
                         Warn("never")
                     }
 
@@ -559,7 +559,7 @@ func invalidForEachInsideNestedBranchBodyFailsPlanBuild() {
                 Case(.exists(.label("Outer"))) {
                     If {
                         Case(.exists(.label("Inner"))) {
-                            ForEach(["Milk"], parameter: "bad name") { _ in
+                            ForEach("Milk", parameter: "bad name") { _ in
                                 Warn("never")
                             }
 
@@ -1014,11 +1014,11 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
     }
 
     let heist = try HeistPlan {
-        ForEach(["Milk", "Bread"]) { item in
+        ForEach("Milk", "Bread") { item in
             try LibraryScreen.addToCart(item)
         }
 
-        ForEach(.matching(.label("Delete")), limit: 20) { target in
+        ForEach(.label("Delete"), limit: 20) { target in
             try CartScreen.deleteItem(target)
         }
     }
@@ -1051,7 +1051,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
 @Test
 func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try HeistPlan {
-        ForEach(["Milk", "Eggs"]) { item in
+        ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
                 .expect(.exists(.label(item)), timeout: .seconds(2))
         }
@@ -1125,7 +1125,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try HeistPlan {
-        ForEach(.matching(matching), limit: 20) { element in
+        ForEach(matching, limit: 20) { element in
             Activate(element)
                 .expect(.missing(element), timeout: .seconds(2))
         }
@@ -1154,7 +1154,7 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     let heist = try HeistPlan {
         try loginFlow(email: "alex@example.com", password: "secret")
 
-        ForEach(["Milk", "Eggs"]) { item in
+        ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
                 .expect(.exists(.label(item)), timeout: .seconds(2))
         }

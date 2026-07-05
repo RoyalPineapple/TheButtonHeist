@@ -11,19 +11,13 @@ public enum HeistReceiptRecordingMode: String, Sendable, Equatable {
     case failingAndPassing = "failing-and-passing"
     case all
 
-    public init(environmentValue: String?) {
-        switch environmentValue?.lowercased() {
-        case "off", "false", "0", "no":
-            self = .off
-        case "all", "always":
-            self = .all
-        case "passing-and-failing", "failing-and-passing":
-            self = .failingAndPassing
-        case "failures", "failure", "failing", "failed", nil:
+    public init?(environmentValue: String?) {
+        guard let environmentValue = environmentValue?.nilIfBlank else {
             self = .failures
-        default:
-            self = .failures
+            return
         }
+        guard let mode = Self(rawValue: environmentValue) else { return nil }
+        self = mode
     }
 
     func shouldRecord(_ status: HeistReceiptRecordingStatus) -> Bool {
@@ -58,10 +52,10 @@ public struct HeistReceiptRecordingConfiguration: Sendable, Equatable {
         guard let directory = EnvironmentKey.buttonheistReceiptsDir.value?.nilIfBlank else {
             return nil
         }
-        return HeistReceiptRecordingConfiguration(
-            rootDirectory: rootDirectory(for: directory),
-            mode: HeistReceiptRecordingMode(environmentValue: EnvironmentKey.buttonheistReceiptsMode.value)
-        )
+        guard let mode = HeistReceiptRecordingMode(environmentValue: EnvironmentKey.buttonheistReceiptsMode.value) else {
+            return nil
+        }
+        return HeistReceiptRecordingConfiguration(rootDirectory: rootDirectory(for: directory), mode: mode)
     }
 
     private static func rootDirectory(for value: String) -> URL {
