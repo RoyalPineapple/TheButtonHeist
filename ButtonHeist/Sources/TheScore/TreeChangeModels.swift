@@ -191,8 +191,7 @@ public extension ElementTextPropertyValueKind {
     }
 
     static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(value)
+        checker.matches(optional: value)
     }
 
     static func erasedValue(_ value: String) -> ElementPropertyValue {

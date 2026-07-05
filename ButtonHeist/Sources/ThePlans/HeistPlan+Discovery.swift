@@ -474,19 +474,20 @@ private struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
 
 private struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
     let mode: StringMatch<String>.Mode
-    let value: HeistSemanticStringValue
+    let value: HeistSemanticStringValue?
 
     init(_ match: StringMatch<String>) {
         self.mode = match.mode
-        self.value = .literal(match.value)
+        self.value = match.valueIfPresent.map(HeistSemanticStringValue.literal)
     }
 
     init(_ match: StringMatch<StringExpr>) {
         self.mode = StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact
-        self.value = HeistSemanticStringValue(match.value)
+        self.value = match.valueIfPresent.map(HeistSemanticStringValue.init)
     }
 
     var catalogValue: String {
+        guard let value else { return mode.rawValue }
         guard mode != .exact else { return value.catalogValue }
         return "\(mode.rawValue)(\(value.catalogValue))"
     }

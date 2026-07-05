@@ -275,10 +275,7 @@ extension HeistPlanSourceParser {
         _ match: StringMatch<StringExpr>,
         role: String
     ) throws -> StringMatch<String> {
-        StringMatch<String>(
-            mode: StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact,
-            value: try concreteString(match.value, role: role)
-        )
+        try match.map { try concreteString($0, role: role) }
     }
 
     mutating func concreteStringMatch(
@@ -286,10 +283,7 @@ extension HeistPlanSourceParser {
         role: String
     ) throws -> StringMatch<String>? {
         guard let match else { return nil }
-        return StringMatch<String>(
-            mode: StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact,
-            value: try concreteString(match.value, role: role)
-        )
+        return try match.map { try concreteString($0, role: role) }
     }
 
     func concreteString(_ string: StringExpr, role: String) throws -> String {
@@ -338,6 +332,9 @@ extension HeistPlanSourceParser {
         let name = try parseDotCallName(allowedPrefixes: [])
         guard let mode = stringMatchMode(named: name) else {
             throw error(token, "unsupported string match '.\(name)'")
+        }
+        if mode == .isEmpty {
+            return .isEmpty
         }
         try expectSymbol("(")
         let value = try parseStringExpr()
@@ -471,6 +468,6 @@ extension HeistPlanSourceParser {
 
 private extension StringMatch.Mode {
     static var sourceCallModes: [Self] {
-        [.contains, .prefix, .suffix]
+        [.contains, .prefix, .suffix, .isEmpty]
     }
 }

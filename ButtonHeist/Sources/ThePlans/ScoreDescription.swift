@@ -21,13 +21,13 @@ package enum ScoreDescription {
     }
 
     package static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
-        guard let value, !value.value.isEmpty else { return nil }
+        guard let value, value.hasPredicateLiteral else { return nil }
         return "\(name)=\(stringMatch(value))"
     }
 
     package static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String? {
         let fields = values.compactMap { value -> String? in
-            guard !value.value.isEmpty else { return nil }
+            guard value.hasPredicateLiteral else { return nil }
             return "\(name)=\(stringMatch(value))"
         }
         guard !fields.isEmpty else { return nil }
@@ -44,22 +44,24 @@ package enum ScoreDescription {
             return "prefix(\(quoted(string)))"
         case .suffix(let string):
             return "suffix(\(quoted(string)))"
+        case .isEmpty:
+            return "isEmpty"
         }
     }
 
     package static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String? {
         switch check {
         case .label(let match):
-            guard !match.value.isEmpty else { return nil }
+            guard match.hasPredicateLiteral else { return nil }
             return "label=\(stringMatch(match))"
         case .identifier(let match):
-            guard !match.value.isEmpty else { return nil }
+            guard match.hasPredicateLiteral else { return nil }
             return "identifier=\(stringMatch(match))"
         case .value(let match):
-            guard !match.value.isEmpty else { return nil }
+            guard match.hasPredicateLiteral else { return nil }
             return "value=\(stringMatch(match))"
         case .hint(let match):
-            guard !match.value.isEmpty else { return nil }
+            guard match.hasPredicateLiteral else { return nil }
             return "hint=\(stringMatch(match))"
         case .traits(let traits):
             return listField("traits", traits.isEmpty ? nil : traits.canonicalHeistTraitArray)

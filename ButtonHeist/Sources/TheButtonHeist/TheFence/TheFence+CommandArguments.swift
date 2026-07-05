@@ -116,7 +116,7 @@ enum HeistValueExpectedType: Sendable, Equatable {
         case .array:
             return "array"
         case .stringMatchObject:
-            return "StringMatch object with mode and value"
+            return "StringMatch object with mode and optional value"
         case .elementPredicateCheckObject:
             return "element predicate check object"
         case .arrayOfElementPredicateCheckObjects:
@@ -693,7 +693,7 @@ extension TheFence.CommandArgumentEnvelope {
             throw SchemaValidationError(
                 field: field(key),
                 observed: value.schemaObservedDescription,
-                expected: "StringMatch object with mode and value"
+                expected: "StringMatch object with mode and optional value"
             )
         }
 
@@ -712,7 +712,7 @@ extension TheFence.CommandArgumentEnvelope {
                     throw SchemaValidationError(
                         field: "\(field(key))[\(index)]",
                         observed: value.schemaObservedDescription,
-                        expected: "StringMatch object with mode and value"
+                        expected: "StringMatch object with mode and optional value"
                     )
                 }
             }
@@ -721,7 +721,7 @@ extension TheFence.CommandArgumentEnvelope {
             throw SchemaValidationError(
                 field: field(key),
                 observed: value.schemaObservedDescription,
-                expected: "StringMatch object with mode and value, or array of StringMatch objects"
+                expected: "StringMatch object with mode and optional value, or array of StringMatch objects"
             )
         }
     }

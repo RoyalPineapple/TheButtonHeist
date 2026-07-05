@@ -3614,7 +3614,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 return XCTFail("Expected SchemaValidationError, got \(error)")
             }
             XCTAssertEqual(error.field, "target.label")
-            XCTAssertEqual(error.expected, "StringMatch object with mode and value, or array of StringMatch objects")
+            XCTAssertEqual(error.expected, "StringMatch object with mode and optional value, or array of StringMatch objects")
         }
     }
 

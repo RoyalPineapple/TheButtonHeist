@@ -399,7 +399,7 @@ indirect enum FenceParameterJSONSchema: Sendable, Equatable {
                 FenceParameterJSONSchemaProperty(
                     key: .value,
                     schema: .scalar(.string),
-                    required: true
+                    required: false
                 ),
             ],
             additionalProperties: false,
@@ -1178,8 +1178,8 @@ enum FenceParameterBlocks: Sendable {
 
     private static func stringMatchParam(_ key: FenceParameterKey, allowsArray: Bool = false) -> FenceParameterSpec {
         let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
-        let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
-            "Use mode exact for exact matching. Broad modes require a non-empty value." +
+        let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and optional value. " +
+            "Use mode exact for exact matching. Broad modes require a non-empty value; isEmpty must omit value." +
             (allowsArray
                 ? " Element matcher fields also accept an array of StringMatch objects; every object must match."
                 : "")

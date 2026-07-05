@@ -29,7 +29,7 @@ public extension TheFence.Command {
 
         StringMatch:
           label, identifier, and value matcher fields accept
-          {"mode":"exact|contains|prefix|suffix","value":"..."}. Broad modes require a non-empty value.
+          {"mode":"exact|contains|prefix|suffix|isEmpty","value":"..."}. isEmpty omits value; broad modes require a non-empty value.
           Use checks for ordered matcher chains, including traits:
           {"checks":[{"kind":"label","match":{"mode":"prefix","value":"foo"}},{"kind":"traits","values":["button"]}]}
         """

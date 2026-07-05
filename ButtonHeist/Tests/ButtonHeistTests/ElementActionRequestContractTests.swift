@@ -168,7 +168,7 @@ private func assertStringMatchObjectSchema(
 
     XCTAssertEqual(schema["type"], .string("object"), file: file, line: line)
     XCTAssertEqual(schema["additionalProperties"], .bool(false), file: file, line: line)
-    XCTAssertEqual(schema["required"], .array([.string("mode"), .string("value")]), file: file, line: line)
+    XCTAssertEqual(schema["required"], .array([.string("mode")]), file: file, line: line)
 
     guard case .object(let properties)? = schema["properties"] else {
         return XCTFail("Expected StringMatch properties", file: file, line: line)
@@ -180,6 +180,7 @@ private func assertStringMatchObjectSchema(
             .string("contains"),
             .string("prefix"),
             .string("suffix"),
+            .string("isEmpty"),
         ]),
     ]), file: file, line: line)
     XCTAssertEqual(properties["value"], .object(["type": .string("string")]), file: file, line: line)
