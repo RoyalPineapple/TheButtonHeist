@@ -139,7 +139,7 @@ func makeRunHeistRequest<Content: HeistContent>(
     @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
 ) throws -> HeistRunRequest {
     let plan = try makeRunHeistPlan(name, targetParameter: parameter, content: content)
-    HeistRunRequest(
+    return HeistRunRequest(
         plan: plan,
         argument: .elementTarget(.target(try input.resolve(in: .empty)))
     )
