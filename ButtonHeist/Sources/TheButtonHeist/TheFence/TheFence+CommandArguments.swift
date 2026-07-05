@@ -462,7 +462,7 @@ extension TheFence {
             )
         }
 
-        private static func decode<T: Decodable>(
+        static func decode<T: Decodable>(
             _ value: HeistValue,
             field rootField: String,
             as type: T.Type,
