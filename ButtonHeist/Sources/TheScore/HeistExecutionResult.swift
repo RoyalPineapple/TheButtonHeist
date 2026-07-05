@@ -1334,15 +1334,90 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
-    public let outcome: HeistPredicateEvidenceOutcome
     public let predicate: AccessibilityPredicate
     public let timeout: Double
     public let iterationCount: Int
-    public let iterationOrdinal: Int?
-    public let expectation: ExpectationResult
-    public let actionResult: ActionResult?
     public let lastObservedSummary: String?
-    public let failureReason: String?
+    private let storage: Storage
+
+    private enum Storage: Sendable, Equatable {
+        case matched(
+            iterationOrdinal: Int?,
+            expectation: MetExpectationResult,
+            actionResult: ActionResult?
+        )
+        case continued(
+            iterationOrdinal: Int,
+            expectation: UnmetExpectationResult,
+            actionResult: ActionResult?
+        )
+        case handledElse(
+            expectation: UnmetExpectationResult,
+            failureReason: String?
+        )
+        case failed(
+            iterationOrdinal: Int?,
+            expectation: UnmetExpectationResult,
+            failureReason: String
+        )
+    }
+
+    public var outcome: HeistPredicateEvidenceOutcome {
+        switch storage {
+        case .matched:
+            return .matched
+        case .continued:
+            return .continued
+        case .handledElse:
+            return .handledElse
+        case .failed:
+            return .failed
+        }
+    }
+
+    public var iterationOrdinal: Int? {
+        switch storage {
+        case .matched(let iterationOrdinal, _, _),
+             .failed(let iterationOrdinal, _, _):
+            return iterationOrdinal
+        case .continued(let iterationOrdinal, _, _):
+            return iterationOrdinal
+        case .handledElse:
+            return nil
+        }
+    }
+
+    public var expectation: ExpectationResult {
+        switch storage {
+        case .matched(_, let expectation, _):
+            return expectation.result
+        case .continued(_, let expectation, _),
+             .handledElse(let expectation, _),
+             .failed(_, let expectation, _):
+            return expectation.result
+        }
+    }
+
+    public var actionResult: ActionResult? {
+        switch storage {
+        case .matched(_, _, let actionResult),
+             .continued(_, _, let actionResult):
+            return actionResult
+        case .handledElse, .failed:
+            return nil
+        }
+    }
+
+    public var failureReason: String? {
+        switch storage {
+        case .handledElse(_, let failureReason):
+            return failureReason
+        case .failed(_, _, let failureReason):
+            return failureReason
+        case .matched, .continued:
+            return nil
+        }
+    }
 
     @available(*, unavailable, message: "Use outcome-specific HeistRepeatUntilEvidence factories.")
     public init(
@@ -1360,25 +1435,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     private init(
-        uncheckedOutcome outcome: HeistPredicateEvidenceOutcome,
         predicate: AccessibilityPredicate,
         timeout: Double,
-        iterationCount: Int,
-        iterationOrdinal: Int?,
-        expectation: ExpectationResult,
-        actionResult: ActionResult?,
+        iterationCount: Int = 0,
         lastObservedSummary: String?,
-        failureReason: String?
+        storage: Storage
     ) {
-        self.outcome = outcome
         self.predicate = predicate
         self.timeout = timeout
         self.iterationCount = iterationCount
-        self.iterationOrdinal = iterationOrdinal
-        self.expectation = expectation
-        self.actionResult = actionResult
         self.lastObservedSummary = lastObservedSummary
-        self.failureReason = failureReason
+        self.storage = storage
     }
 
     public static func predicateMet(
@@ -1391,15 +1458,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .matched,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: iterationOrdinal,
-            expectation: expectation.result,
-            actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
-            failureReason: nil
+            storage: .matched(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
         )
     }
 
@@ -1413,15 +1480,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .continued,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: iterationOrdinal,
-            expectation: expectation.result,
-            actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
-            failureReason: nil
+            storage: .continued(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
         )
     }
 
@@ -1434,15 +1501,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: nil,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .failed(
+                iterationOrdinal: nil,
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1455,15 +1522,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: nil,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .failed(
+                iterationOrdinal: nil,
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1475,15 +1542,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: 0,
-            iterationOrdinal: nil,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .failed(
+                iterationOrdinal: nil,
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1497,15 +1564,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: iterationOrdinal,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .failed(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1518,15 +1585,14 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String? = nil
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .handledElse,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: nil,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .handledElse(
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1539,15 +1605,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         return HeistRepeatUntilEvidence(
-            uncheckedOutcome: .failed,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: nil,
-            expectation: expectation.result,
-            actionResult: nil,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: .failed(
+                iterationOrdinal: nil,
+                expectation: expectation,
+                failureReason: failureReason
+            )
         )
     }
 
@@ -1575,23 +1641,20 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
         let lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
         let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
-        try Self.validate(
+        let storage = try Self.storage(
             outcome: outcome,
             iterationOrdinal: iterationOrdinal,
             expectation: expectation,
+            actionResult: actionResult,
             failureReason: failureReason,
             codingPath: container.codingPath
         )
         self.init(
-            uncheckedOutcome: outcome,
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
-            iterationOrdinal: iterationOrdinal,
-            expectation: expectation,
-            actionResult: actionResult,
             lastObservedSummary: lastObservedSummary,
-            failureReason: failureReason
+            storage: storage
         )
     }
 
@@ -1608,42 +1671,52 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         try container.encodeIfPresent(failureReason, forKey: .failureReason)
     }
 
-    private static func validate(
+    private static func storage(
         outcome: HeistPredicateEvidenceOutcome,
         iterationOrdinal: Int?,
         expectation: ExpectationResult,
+        actionResult: ActionResult?,
         failureReason: String?,
         codingPath: [CodingKey]
-    ) throws {
-        switch outcome {
-        case .matched:
-            guard expectation.met, failureReason == nil else {
+    ) throws -> Storage {
+        switch (outcome, PredicateExpectationCheck(expectation)) {
+        case (.matched, .met(let expectation)) where failureReason == nil:
+            return .matched(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
+        case (.continued, .unmet(let expectation)) where failureReason == nil:
+            guard let iterationOrdinal else {
                 throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.outcome],
-                    debugDescription: "matched repeat_until evidence requires a met expectation and no failure reason"
+                    codingPath: codingPath + [CodingKeys.iterationOrdinal],
+                    debugDescription: "continued repeat_until evidence requires iterationOrdinal"
                 ))
             }
-        case .continued:
-            guard !expectation.met, iterationOrdinal != nil, failureReason == nil else {
+            return .continued(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
+        case (.handledElse, .unmet(let expectation)) where iterationOrdinal == nil && actionResult == nil:
+            return .handledElse(expectation: expectation, failureReason: failureReason)
+        case (.failed, .unmet(let expectation)) where actionResult == nil:
+            guard let failureReason else {
                 throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.outcome],
-                    debugDescription: "continued repeat_until evidence requires an unmet iteration expectation and no failure reason"
+                    codingPath: codingPath + [CodingKeys.failureReason],
+                    debugDescription: "failed repeat_until evidence requires failureReason"
                 ))
             }
-        case .handledElse:
-            guard !expectation.met else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.outcome],
-                    debugDescription: "handled_else repeat_until evidence requires an unmet expectation"
-                ))
-            }
-        case .failed:
-            guard !expectation.met, failureReason != nil else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: codingPath + [CodingKeys.outcome],
-                    debugDescription: "failed repeat_until evidence requires an unmet expectation and failure reason"
-                ))
-            }
+            return .failed(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                failureReason: failureReason
+            )
+        default:
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath + [CodingKeys.outcome],
+                debugDescription: "repeat_until evidence outcome does not match its required fields"
+            ))
         }
     }
 }

@@ -29,8 +29,8 @@ enum RepairCandidateScorer {
         return ScoredCandidate(
             element: candidate,
             score: score.value,
-            reasons: unique(score.reasons),
-            caveats: unique(score.caveats),
+            reasons: score.reasons,
+            caveats: score.caveats,
             continuitySignals: score.continuitySignals
         )
     }
@@ -159,11 +159,10 @@ enum RepairCandidateScorer {
         context: CandidateScoringContext,
         into score: inout CandidateScore
     ) {
-        let identityText = normalizedIdentityText(element)
-        if !context.afterEvidence.isDisjoint(with: identityText) {
+        if context.afterEvidence.matchesIdentityText(of: element) {
             score.add(5, reason: .afterDiffEvidenceMatchesElement, signal: .afterEvidence)
         }
-        if !context.expectationEvidence.isDisjoint(with: identityText) {
+        if context.expectationEvidence.matchesIdentityText(of: element) {
             score.add(
                 5,
                 reason: .expectationEvidenceMatchesElement,
@@ -206,13 +205,39 @@ struct CandidateScoringContext: Sendable, Equatable {
     let oldStableTraits: Set<HeistTrait>
     let oldSiblingText: Set<String>
     let oldHeaderText: Set<String>
-    let afterEvidence: Set<String>
-    let expectationEvidence: Set<String>
+    let afterEvidence: RepairSemanticEvidence
+    let expectationEvidence: RepairSemanticEvidence
     let compatibleCandidateCount: Int
     let currentElementCount: Int
     let preferredCandidates: Set<PredicateSelectionElementId>
     let failureKind: HeistRepairFailureKind
     let actionFamily: RepairActionFamily
+}
+
+struct RepairSemanticEvidence: Sendable, Equatable {
+    private let values: Set<String>
+
+    init(_ values: [String]) {
+        self.values = normalizedSet(values)
+    }
+
+    private init(normalized values: Set<String>) {
+        self.values = values
+    }
+
+    func union(_ other: Self) -> Self {
+        Self(normalized: values.union(other.values))
+    }
+
+    func matchesIdentityText(of element: HeistElement) -> Bool {
+        let identityText = normalizedSet([
+            stableIdentifier(element.identifier),
+            element.label,
+            element.value,
+            element.hint,
+        ].compactMap { $0 })
+        return !values.isDisjoint(with: identityText)
+    }
 }
 
 private struct CandidateScore: Sendable, Equatable {
@@ -227,7 +252,7 @@ private struct CandidateScore: Sendable, Equatable {
         signal: CandidateContinuitySignal? = nil
     ) {
         value += points
-        if let reason {
+        if let reason, !reasons.contains(reason) {
             reasons.append(reason)
         }
         if let signal {
@@ -290,10 +315,6 @@ private func hasStrongContinuity(_ signals: Set<CandidateContinuitySignal>) -> B
         || signals.contains(.neighborContext)
         || signals.contains(.afterEvidence)
         || signals.contains(.expectationEvidence)
-}
-
-private func normalizedIdentityText(_ element: HeistElement) -> Set<String> {
-    normalizedSet([stableIdentifier(element.identifier), element.label, element.value, element.hint].compactMap { $0 })
 }
 
 private func containsNormalizedTokenPhrase(_ value: String, _ possiblePhrase: String) -> Bool {

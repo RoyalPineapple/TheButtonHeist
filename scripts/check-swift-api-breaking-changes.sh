@@ -31,6 +31,11 @@ PUBLIC_PRODUCTS=(
 INTENTIONAL_BREAKAGES=(
     "enumelement StringMatch.Mode.isEmpty has been added as a new enum case"
     "enumelement StringMatch.isEmpty has been added as a new enum case"
+    "constructor AccessibilityTrace.AccumulatedDelta.init(elementCount:captureEdge:screenChanged:elementsChanged:interactionDigest:transient:) has been removed"
+    "constructor AccessibilityTrace.AccumulatedDelta.init(elementCount:captureEdge:screenChanged:elementsChanged:transient:) has been removed"
+    "var HeistExecutionEvidenceNode.preorder has been removed"
+    "struct HeistExecutionEvidenceEventBuilder has been removed"
+    "constructor HeistExecutionEvidenceSummary.init(rollup:) has been removed"
     "constructor HeistInvocationEvidence.init(invocation:name:argument:childFailedPath:expectationActionResult:expectation:expectationEvidence:) has been removed"
 )
 MODE="${BUTTONHEIST_SWIFT_API_BREAKAGE_MODE:-strict}"

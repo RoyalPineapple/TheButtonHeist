@@ -17,10 +17,10 @@ enum RepairCandidateGenerator {
             oldStableTraits: stableTraits(old),
             oldSiblingText: normalizedSet(oldResolved.siblingText),
             oldHeaderText: normalizedSet(oldResolved.headerText),
-            afterEvidence: deltaEvidenceStrings(lastSuccess.afterDelta)
-                .union(deltaEvidenceStrings(currentFailure.afterDelta)),
-            expectationEvidence: expectationEvidenceStrings(lastSuccess.result.expectation)
-                .union(expectationEvidenceStrings(currentFailure.result.expectation)),
+            afterEvidence: deltaEvidenceText(lastSuccess.afterDelta)
+                .union(deltaEvidenceText(currentFailure.afterDelta)),
+            expectationEvidence: expectationEvidenceText(lastSuccess.result.expectation)
+                .union(expectationEvidenceText(currentFailure.result.expectation)),
             compatibleCandidateCount: currentScreen.elements
                 .filter { !actionFamily.isKnown || actionFamily.isSupported(by: $0.element) }
                 .count,
@@ -35,14 +35,16 @@ enum RepairCandidateGenerator {
     }
 }
 
-private func deltaEvidenceStrings(_ delta: AccessibilityTrace.Delta?) -> Set<String> {
-    guard let delta else { return [] }
+private func deltaEvidenceText(_ delta: AccessibilityTrace.Delta?) -> RepairSemanticEvidence {
+    guard let delta else { return RepairSemanticEvidence([]) }
     switch delta {
     case .noChange(let payload):
-        return normalizedSet(payload.transient.flatMap(identityStrings))
+        return RepairSemanticEvidence(payload.transient.flatMap(identityStrings))
     case .screenChanged(let payload):
-        return normalizedSet(payload.newInterface.projectedElements.flatMap(identityStrings))
-            .union(normalizedSet(payload.transient.flatMap(identityStrings)))
+        return RepairSemanticEvidence(
+            payload.newInterface.projectedElements.flatMap(identityStrings) +
+                payload.transient.flatMap(identityStrings)
+        )
     case .elementsChanged(let payload):
         var strings = payload.edits.added.flatMap(identityStrings)
         strings.append(contentsOf: payload.edits.removed.flatMap(identityStrings))
@@ -51,12 +53,12 @@ private func deltaEvidenceStrings(_ delta: AccessibilityTrace.Delta?) -> Set<Str
                 update.changes.flatMap { [$0.oldDisplayText, $0.newDisplayText].compactMap { $0 } }
         })
         strings.append(contentsOf: payload.transient.flatMap(identityStrings))
-        return normalizedSet(strings)
+        return RepairSemanticEvidence(strings)
     }
 }
 
-private func expectationEvidenceStrings(_ expectation: ExpectationResult?) -> Set<String> {
-    normalizedSet([expectation?.actual].compactMap { $0 })
+private func expectationEvidenceText(_ expectation: ExpectationResult?) -> RepairSemanticEvidence {
+    RepairSemanticEvidence([expectation?.actual].compactMap { $0 })
 }
 
 private func identityStrings(_ element: HeistElement) -> [String] {

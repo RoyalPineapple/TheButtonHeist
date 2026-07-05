@@ -116,13 +116,10 @@ struct InterfaceProjection: Sendable {
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
         elementCount = projectedElementRecords.count
 
-        let stats = InterfaceProjectionStats(observedElementCount: elementCount)
-        let totalNodeBudget = InterfaceNodeBudgetTracker(budget: profile.limits.totalNodeBudget)
+        var accumulator = InterfaceProjectionAccumulator(totalNodeBudget: profile.limits.totalNodeBudget)
         let context = InterfaceProjectionContext(
             detail: profile.interfaceDetail,
             visibleElementBudget: profile.limits.visibleElementBudget,
-            totalNodeBudget: totalNodeBudget,
-            stats: stats,
             elementsByPath: Dictionary(uniqueKeysWithValues: projectedElementRecords.map { ($0.path, $0.element) }),
             containerAnnotations: interface.annotations.containerByPath
         )
@@ -135,20 +132,22 @@ struct InterfaceProjection: Sendable {
                     path: TreePath([index])
                 ),
                 context: context,
+                accumulator: &accumulator,
                 counter: &counter,
                 remainingElements: &remainingElements
             )
         }
-        rendering = stats.rendering(
+        rendering = accumulator.rendering(
+            observedElementCount: elementCount,
             visibleElementBudget: profile.limits.visibleElementBudget,
-            totalNodeBudget: profile.limits.totalNodeBudget,
-            totalNodeBudgetHit: totalNodeBudget.wasLimited
+            totalNodeBudget: profile.limits.totalNodeBudget
         )
     }
 
     private static func project(
         _ request: InterfaceNodeProjectionRequest,
         context: InterfaceProjectionContext,
+        accumulator: inout InterfaceProjectionAccumulator,
         counter: inout Int,
         remainingElements: inout Int?
     ) -> InterfaceNodeProjection? {
@@ -159,11 +158,11 @@ struct InterfaceProjection: Sendable {
             if let remaining = remainingElements {
                 guard remaining > 0 else { return nil }
             }
-            guard context.totalNodeBudget.consumeNode() else { return nil }
+            guard accumulator.consumeNode() else { return nil }
             if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
-            context.stats.recordRenderedElement()
+            accumulator.recordRenderedElement()
             guard let projected = context.elementsByPath[request.path] else {
                 preconditionFailure("InterfaceProjection missing projected element at path \(request.path.indices)")
             }
@@ -175,7 +174,7 @@ struct InterfaceProjection: Sendable {
                 counter += observedElementCount
                 return nil
             }
-            guard context.totalNodeBudget.consumeNode() else {
+            guard accumulator.consumeNode() else {
                 counter += observedElementCount
                 return nil
             }
@@ -193,10 +192,11 @@ struct InterfaceProjection: Sendable {
                     remainingElementBudget: scrollPolicy.childRemainingElementBudget
                 ),
                 context: context,
+                accumulator: &accumulator,
                 counter: &counter
             )
             remainingElements = scrollPolicy.parentRemainingElementBudget(after: childResult)
-            let truncation = scrollPolicy.truncation(after: childResult, stats: context.stats)
+            let truncation = scrollPolicy.truncation(after: childResult, accumulator: &accumulator)
 
             return .container(InterfaceContainerProjection(
                 container: container,
@@ -212,6 +212,7 @@ struct InterfaceProjection: Sendable {
     private static func projectChildren(
         _ request: InterfaceChildrenProjectionRequest,
         context: InterfaceProjectionContext,
+        accumulator: inout InterfaceProjectionAccumulator,
         counter: inout Int
     ) -> InterfaceChildrenProjectionResult {
         var remainingElementBudget = request.remainingElementBudget
@@ -222,6 +223,7 @@ struct InterfaceProjection: Sendable {
                     path: request.parentPath.appending(index)
                 ),
                 context: context,
+                accumulator: &accumulator,
                 counter: &counter,
                 remainingElements: &remainingElementBudget
             )
@@ -236,8 +238,6 @@ struct InterfaceProjection: Sendable {
 private struct InterfaceProjectionContext {
     let detail: InterfaceDetail
     let visibleElementBudget: Int
-    let totalNodeBudget: InterfaceNodeBudgetTracker
-    let stats: InterfaceProjectionStats
     let elementsByPath: [TreePath: HeistElement]
     let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
 }
@@ -289,7 +289,7 @@ private struct ScrollSubtreeProjectionPolicy {
 
     func truncation(
         after result: InterfaceChildrenProjectionResult,
-        stats: InterfaceProjectionStats
+        accumulator: inout InterfaceProjectionAccumulator
     ) -> InterfaceSubtreeTruncationProjection? {
         guard isActive else { return nil }
 
@@ -298,7 +298,7 @@ private struct ScrollSubtreeProjectionPolicy {
         let scrollBudgetHit = (result.remainingElementBudget ?? 0) <= 0
         guard scrollBudgetHit, omittedElementCount > 0 else { return nil }
 
-        stats.recordTruncatedScrollContainer()
+        accumulator.recordTruncatedScrollContainer()
         return InterfaceSubtreeTruncationProjection(
             reason: .scrollSubtreeElementBudget,
             observedElementCount: observedElementCount,
@@ -322,30 +322,40 @@ private struct ScrollSubtreeProjectionPolicy {
     }
 }
 
-private final class InterfaceProjectionStats {
-    let observedElementCount: Int
+private struct InterfaceProjectionAccumulator {
     private(set) var renderedElementCount = 0
     private(set) var truncatedScrollContainerCount = 0
+    private(set) var remainingNodeBudget: Int
+    private(set) var nodeLimitHit = false
 
-    init(observedElementCount: Int) {
-        self.observedElementCount = observedElementCount
+    init(totalNodeBudget: Int) {
+        remainingNodeBudget = max(0, totalNodeBudget)
     }
 
-    func recordRenderedElement() {
+    mutating func recordRenderedElement() {
         renderedElementCount += 1
     }
 
-    func recordTruncatedScrollContainer() {
+    mutating func recordTruncatedScrollContainer() {
         truncatedScrollContainerCount += 1
     }
 
+    mutating func consumeNode() -> Bool {
+        guard remainingNodeBudget > 0 else {
+            nodeLimitHit = true
+            return false
+        }
+        remainingNodeBudget -= 1
+        return true
+    }
+
     func rendering(
+        observedElementCount: Int,
         visibleElementBudget: Int,
-        totalNodeBudget: Int,
-        totalNodeBudgetHit: Bool
+        totalNodeBudget: Int
     ) -> InterfaceRenderingProjection {
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-        guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 || totalNodeBudgetHit else {
+        guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 || nodeLimitHit else {
             return InterfaceRenderingProjection(
                 state: .full,
                 reason: nil,
@@ -359,33 +369,12 @@ private final class InterfaceProjectionStats {
 
         return InterfaceRenderingProjection(
             state: .truncated,
-            reason: totalNodeBudgetHit ? .totalNodeBudget : .scrollSubtreeElementBudget,
+            reason: nodeLimitHit ? .totalNodeBudget : .scrollSubtreeElementBudget,
             observedElementCount: observedElementCount,
             renderedElementCount: renderedElementCount,
             omittedElementCount: omittedElementCount,
             visibleElementBudget: truncatedScrollContainerCount > 0 ? max(0, visibleElementBudget) : nil,
-            totalNodeBudget: totalNodeBudgetHit ? max(0, totalNodeBudget) : nil
+            totalNodeBudget: nodeLimitHit ? max(0, totalNodeBudget) : nil
         )
-    }
-}
-
-private final class InterfaceNodeBudgetTracker {
-    let budget: Int
-    private(set) var remaining: Int
-    private(set) var wasLimited = false
-
-    init(budget: Int) {
-        let boundedBudget = max(0, budget)
-        self.budget = boundedBudget
-        remaining = boundedBudget
-    }
-
-    func consumeNode() -> Bool {
-        guard remaining > 0 else {
-            wasLimited = true
-            return false
-        }
-        remaining -= 1
-        return true
     }
 }
