@@ -9,7 +9,8 @@ enum SemanticObservationEventFactory {
         observation: SettledSemanticObservation,
         previous: SettledSemanticObservationEvent?,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
+        notificationIdentityScreen: Screen? = nil
     ) -> SettledSemanticObservationEvent {
         let previousCapture = previous?.trace.captures.last
         let currentCapture = semanticTraceCapture(
@@ -17,7 +18,8 @@ enum SemanticObservationEventFactory {
             sequence: previousCapture == nil ? 1 : 2,
             parentHash: previousCapture?.hash,
             stash: stash,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications
+            pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+            notificationIdentityScreen: notificationIdentityScreen
         )
         let trace = if let previousCapture {
             AccessibilityTrace(captures: [previousCapture, currentCapture])
@@ -40,7 +42,8 @@ enum SemanticObservationEventFactory {
         sequence: Int,
         parentHash: String?,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent]
+        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
+        notificationIdentityScreen: Screen?
     ) -> AccessibilityTrace.Capture {
         let screen = switch observation.scope {
         case .visible:
@@ -51,7 +54,8 @@ enum SemanticObservationEventFactory {
         let interface = stash.semanticInterfaceWithHash(for: screen).interface
         let accessibilityNotifications = stash.resolveAccessibilityNotificationEvidence(
             pendingAccessibilityNotifications,
-            in: screen
+            identityScreen: notificationIdentityScreen ?? screen,
+            referenceScreen: screen
         )
         let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(

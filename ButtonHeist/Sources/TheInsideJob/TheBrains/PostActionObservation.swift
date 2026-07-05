@@ -60,7 +60,7 @@ final class PostActionObservation {
             switch result {
             case .committed(let event):
                 return event.trace.captures.last?.transition.accessibilityNotifications ?? []
-            case .unavailable:
+            case .observedUnsettled, .unavailable:
                 return []
             }
         }
@@ -74,7 +74,7 @@ final class PostActionObservation {
     enum ObservationOutcome {
         case cancelled(cancelMs: Int)
         case parseFailed
-        case settled(FinalEvidence)
+        case observed(FinalEvidence)
     }
 
     init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
@@ -144,6 +144,12 @@ final class PostActionObservation {
         switch settleEvidence.result {
         case .committed(let visibleEvent):
             observedFinalState = captureFinalSemanticState(after: visibleEvent)
+        case .observedUnsettled(let screen):
+            observedFinalState = captureSemanticState(
+                from: screen,
+                tripwireSignal: tripwire.tripwireSignal(),
+                settledObservationSequence: nil
+            )
         case .unavailable:
             return nil
         }
@@ -177,7 +183,7 @@ final class PostActionObservation {
             return .parseFailed
         }
 
-        return .settled(finalEvidence)
+        return .observed(finalEvidence)
     }
 
     func captureSemanticState(
@@ -636,7 +642,7 @@ private enum PostActionReceiptState {
                 activationTrace: context.actionOutcome.activationTrace
             ))
 
-        case .settled(let finalEvidence):
+        case .observed(let finalEvidence):
             let evidence = PostActionReceiptEvidence(
                 method: context.method,
                 message: context.message,

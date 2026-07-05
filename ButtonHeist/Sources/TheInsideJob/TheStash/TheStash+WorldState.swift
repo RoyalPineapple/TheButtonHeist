@@ -99,6 +99,20 @@ extension TheStash {
         refreshLiveCapture()
     }
 
+    /// Consume a synthetic visible refresh as the post-action commit value.
+    /// Production has no queued value here; tests use this to model the fresh
+    /// visible tree that appears after a transitional settle observation.
+    func consumeQueuedVisibleRefreshForPostActionCommit() -> Screen? {
+        guard let visibleTree = nextVisibleRefreshScreenForTesting else { return nil }
+        guard visibleTree.semanticHash != settledSemanticScreen.semanticHash else {
+            nextVisibleRefreshScreenForTesting = nil
+            return nil
+        }
+        nextVisibleRefreshScreenForTesting = nil
+        recordParsedObservedEvidence(from: visibleTree)
+        return visibleTree
+    }
+
     /// Produce one page observation for scroll exploration. Exploration owns a
     /// local semantic union until it finishes; the observation stream commits
     /// only the final explored screen as settled discovery world.
@@ -108,7 +122,11 @@ extension TheStash {
 
     @discardableResult
     func commitSettledVisibleWorld(_ screen: Screen) -> Screen {
-        commitSettledWorld(worldStore.commitVisible(screen))
+        if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
+           queuedVisibleRefresh.semanticHash != screen.semanticHash {
+            nextVisibleRefreshScreenForTesting = nil
+        }
+        return commitSettledWorld(worldStore.commitVisible(screen))
     }
 
     @discardableResult

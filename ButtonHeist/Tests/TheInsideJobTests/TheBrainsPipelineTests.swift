@@ -563,6 +563,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             .init(abacus, heistId: "abacus_major"),
             .init(back, heistId: "back_button"),
         ])
+        let cleanSettledScreen = Screen.makeForTests([
+            .init(section, heistId: "section_a_header"),
+            .init(acid, heistId: "a_acid"),
+            .init(abacus, heistId: "abacus_major"),
+            .init(back, heistId: "back_button"),
+        ])
+        brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
         brains.stash.accessibilityNotifications.record(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload(acidObject),
@@ -580,7 +587,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
         )
         guard case .element(let reference) = notification.notificationData else {
-            return XCTFail("Expected notification data to resolve to final trace element")
+            return XCTFail("Expected notification data to resolve to final trace element, got \(notification.notificationData)")
         }
         XCTAssertEqual(reference.path, TreePath([1]))
         XCTAssertEqual(reference.traversalIndex, 1)
@@ -679,7 +686,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(labels.contains("ButtonHeist Demo"))
     }
 
-    func testActionResultWithDeltaSettleTimeoutKeepsDiagnosticEvidenceOutOfFinalTrace() async {
+    func testActionResultWithDeltaSettleTimeoutUsesObservedFinalEvidenceWithoutPublishingTruth() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
@@ -693,8 +700,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .timedOut(timeMs: 250))
         )
 
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.message, "Could not parse post-action accessibility tree")
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertNil(result.message)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 250)
         XCTAssertEqual(
@@ -709,8 +716,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
         XCTAssertEqual(brains.stash.settledSemanticScreen.orderedElements.first?.element.label, "Save")
         XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
-        XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
-        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Save")
+        XCTAssertEqual(result.accessibilityTrace?.captures.count, 2)
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
     }
 
     func testActionBaselineDoesNotPromoteDiagnosticOnlyEvidence() {

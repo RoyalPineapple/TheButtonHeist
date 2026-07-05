@@ -475,6 +475,10 @@ final class ElementInflation {
         case nil:
             break
         }
+        if case .failure(let failure) = knownSemanticTarget(target),
+           failure.failedStep == .ambiguous {
+            return .failure(failure)
+        }
         if let screen = await discoverTarget?(target) {
             stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
             switch visibleTargetResolution(target, in: screen) {
