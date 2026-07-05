@@ -18,42 +18,26 @@ extension TheFence {
 
     typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
-    struct NonEmptyHeistActionCommands {
-        let first: HeistActionCommand
-        private let additional: [HeistActionCommand]
-
-        init(_ first: HeistActionCommand, additional: [HeistActionCommand] = []) {
-            self.first = first
-            self.additional = additional
-        }
-
-        var count: Int {
-            1 + additional.count
-        }
-
-        var values: [HeistActionCommand] {
-            [first] + additional
-        }
-    }
-
     struct DurableHeistActionCommands {
-        let first: HeistActionCommand
-        private let additional: [HeistActionCommand]
+        private let actions: NonEmptyArray<HeistActionCommand>
 
-        init?(_ actions: NonEmptyHeistActionCommands) {
-            guard actions.values.allSatisfy({ $0.durableHeistActionFailure == nil }) else {
+        init?(_ actions: NonEmptyArray<HeistActionCommand>) {
+            guard actions.allSatisfy({ $0.durableHeistActionFailure == nil }) else {
                 return nil
             }
-            self.first = actions.first
-            self.additional = Array(actions.values.dropFirst())
+            self.actions = actions
+        }
+
+        var first: HeistActionCommand {
+            actions.first
         }
 
         var count: Int {
-            1 + additional.count
+            actions.count
         }
 
         var values: [HeistActionCommand] {
-            [first] + additional
+            actions.elements
         }
     }
 
@@ -120,7 +104,7 @@ extension TheFence {
         expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
-        let actions = NonEmptyHeistActionCommands(firstCommand, additional: additionalCommands)
+        let actions = NonEmptyArray(firstCommand, rest: additionalCommands)
         if let durableActions = DurableHeistActionCommands(actions) {
             return .singleStepHeist(.actions(durableActions, expectation: expectationPayload))
         }
