@@ -10,7 +10,7 @@ struct ButtonHeistDSLImportContract {
             TypeText("milk", into: .element(.label("Search"), .traits([.searchField])))
                 .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
 
-            ForEach(.matching(.element(.label("Delete"), .traits([.button]))), limit: 2) { target in
+            ForEach(.element(.label("Delete"), .traits([.button])), limit: 2) { target in
                 Activate(target)
             }
 

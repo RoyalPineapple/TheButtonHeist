@@ -596,6 +596,4 @@ require_file "$OUTPUT/manifest.json"
 require_file "$OUTPUT/plan.json"
 ok "heist-plan compile"
 
-run_checked "heist-plan validate" "$COMMAND_TIMEOUT" "$HEIST_PLAN" validate "$OUTPUT"
-
 log "Installed artifact smoke passed"

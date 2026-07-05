@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -6,13 +7,7 @@ extension TheFence {
         guard case .object(let object) = value else { return }
         for key in ["label", "identifier", "value", "hint"] {
             guard let match = object[key] else { continue }
-            guard isStrictStringMatchObjectOrArray(match) else {
-                throw SchemaValidationError(
-                    field: "\(field).\(key)",
-                    observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and optional value, or array of StringMatch objects"
-                )
-            }
+            try validateStringMatchObjectOrArray(match, field: "\(field).\(key)")
         }
         for key in ["customContent"] {
             guard let match = object[key] else { continue }
@@ -76,13 +71,7 @@ extension TheFence {
             guard let match = object["match"] else {
                 throw SchemaValidationError(field: "\(field).match", observed: "missing", expected: "StringMatch object with mode and optional value")
             }
-            guard isStrictStringMatchObject(match) else {
-                throw SchemaValidationError(
-                    field: "\(field).match",
-                    observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and optional value"
-                )
-            }
+            try validateStringMatchObject(match, field: "\(field).match")
         case .traits:
             try rejectFieldIfPresent("match", in: object, field: "\(field).match", expected: "not present for traits checks")
             try rejectFieldIfPresent("check", in: object, field: "\(field).check", expected: "not present for traits checks")
@@ -242,13 +231,7 @@ extension TheFence {
         }
         for key in ["label", "value"] {
             guard let match = object[key] else { continue }
-            guard isStrictStringMatchObject(match) else {
-                throw SchemaValidationError(
-                    field: "\(field).\(key)",
-                    observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and optional value"
-                )
-            }
+            try validateStringMatchObject(match, field: "\(field).\(key)")
         }
         if let isImportant = object["isImportant"],
            case .bool = isImportant {
@@ -271,29 +254,68 @@ extension TheFence {
             )
         }
         for (index, item) in values.enumerated() {
-            guard isStrictStringMatchObject(item) else {
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)]",
-                    observed: item.schemaObservedDescription,
-                    expected: "StringMatch object with mode and optional value"
+            try validateStringMatchObject(item, field: "\(field)[\(index)]")
+        }
+    }
+
+    private nonisolated static func validateStringMatchObjectOrArray(_ value: HeistValue, field: String) throws {
+        switch value {
+        case .object:
+            try validateStringMatchObject(value, field: field)
+        case .array(let values):
+            for (index, item) in values.enumerated() {
+                try validateStringMatchObject(item, field: "\(field)[\(index)]")
+            }
+        default:
+            throw SchemaValidationError(
+                field: field,
+                observed: value.schemaObservedDescription,
+                expected: "StringMatch object with mode and optional value, or array of StringMatch objects"
+            )
+        }
+    }
+
+    private nonisolated static func validateStringMatchObject(_ value: HeistValue, field: String) throws {
+        guard case .object = value else {
+            throw SchemaValidationError(
+                field: field,
+                observed: value.schemaObservedDescription,
+                expected: "StringMatch object with mode and optional value"
+            )
+        }
+        _ = try HeistValuePayloadDecoder.decode(value, field: field, as: StrictStringMatchPayload.self)
+    }
+}
+
+private struct StrictStringMatchPayload: Decodable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case mode, value
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "StringMatch")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let mode = try container.decode(StringMatch<String>.Mode.self, forKey: .mode)
+        switch mode {
+        case .isEmpty:
+            if container.contains(.value) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .value,
+                    in: container,
+                    debugDescription: "isEmpty string match must not include value"
+                )
+            }
+        case .exact:
+            _ = try container.decode(String.self, forKey: .value)
+        case .contains, .prefix, .suffix:
+            let value = try container.decode(String.self, forKey: .value)
+            if value.isEmpty {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .value,
+                    in: container,
+                    debugDescription: "\(mode.rawValue) string match value must not be empty"
                 )
             }
         }
-    }
-
-    nonisolated static func isStrictStringMatchObjectOrArray(_ value: HeistValue) -> Bool {
-        switch value {
-        case .object:
-            return true
-        case .array(let values):
-            return values.allSatisfy(isStrictStringMatchObject)
-        default:
-            return false
-        }
-    }
-
-    nonisolated static func isStrictStringMatchObject(_ value: HeistValue) -> Bool {
-        if case .object = value { return true }
-        return false
     }
 }

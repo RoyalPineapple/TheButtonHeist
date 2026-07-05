@@ -16,7 +16,7 @@ extension TheFence {
         let command: String
     }
 
-    typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
+    typealias ParsedRequestHandler = @ButtonHeistActor (TheFence) async throws -> FenceResponse
 
     struct DurableHeistActionCommands {
         private let actions: NonEmptyArray<HeistActionCommand>
@@ -64,20 +64,17 @@ extension TheFence {
     struct ParsedRequest {
         let command: Command
         let requestId: String
-        let arguments: CommandArgumentEnvelope
         let dispatch: DecodedRequestDispatch
         let expectationPayload: ExpectationPayload
 
         init(
             command: Command,
             requestId: String,
-            arguments: CommandArgumentEnvelope,
             dispatch: DecodedRequestDispatch,
             expectationPayload: ExpectationPayload
         ) {
             self.command = command
             self.requestId = requestId
-            self.arguments = arguments
             self.dispatch = dispatch
             self.expectationPayload = expectationPayload
         }
@@ -139,7 +136,6 @@ extension TheFence {
         return ParsedRequest(
             command: command,
             requestId: requestId,
-            arguments: arguments,
             dispatch: dispatch,
             expectationPayload: expectationPayload
         )
@@ -164,10 +160,10 @@ extension TheFence {
 extension FenceCommandDescriptor {
     func validatePublicRequestArguments(_ arguments: TheFence.CommandArgumentEnvelope) throws {
         for parameter in parameters {
-            guard let value = arguments.argumentValues[parameter.key] else { continue }
+            guard let value = arguments.value(forRawKey: parameter.key) else { continue }
             try validate(parameter, value: value, field: parameter.key)
         }
-        for parameter in parameters where arguments.argumentValues[parameter.key] == nil {
+        for parameter in parameters where arguments.value(forRawKey: parameter.key) == nil {
             try validate(parameter, value: nil, field: parameter.key)
         }
     }

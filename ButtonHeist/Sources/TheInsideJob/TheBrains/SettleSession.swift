@@ -490,67 +490,17 @@ where State == SettleLoopMachine.State,
     /// the signal itself as a screen-change classification.
     func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
-        let deadline = start + Double(timeoutMs) / 1000
-        var observations = SettleObservationLedger()
-        var driver = StateDriver(
+        return await SettleLoopRunner(
+            parseProvider: parseProvider,
+            tripwireSignalProvider: tripwireSignalProvider,
+            observationYield: { try await sleeper(cycleNs) },
+            clock: { CFAbsoluteTimeGetCurrent() },
+            timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(
                 consecutiveCyclesRequired: cyclesRequired,
                 tripwireBaseline: baselineTripwireSignal
-            ),
-            machine: SettleLoopMachine()
-        )
-
-        // Seed the baseline fingerprint synchronously so the first
-        // post-sleep parse can already count as stable cycle 1. Without
-        // this seed, a static screen pays cyclesRequired+1 cycles.
-        if let initial = parseProvider() {
-            let transition = driver.send(
-                .observation(observations.record(initial), elapsedMs: Self.elapsedMs(since: start)),
             )
-            if let outcome = Self.outcome(for: transition) {
-                return outcome
-            }
-        }
-
-        while CFAbsoluteTimeGetCurrent() < deadline {
-            do {
-                try await sleeper(cycleNs)
-            } catch is CancellationError {
-                let transition = driver.send(
-                    .yieldFailed(.cancellation, elapsedMs: Self.elapsedMs(since: start))
-                )
-                return Self.outcome(for: transition)!
-            } catch {
-                let transition = driver.send(
-                    .yieldFailed(.error, elapsedMs: Self.elapsedMs(since: start))
-                )
-                return Self.outcome(for: transition)!
-            }
-
-            let eventCount = driver.state.events.count
-            let tripwireTransition = driver.send(.tripwireSignal(tripwireSignalProvider()))
-            if let outcome = Self.outcome(for: tripwireTransition) {
-                return outcome
-            }
-            if driver.state.events.count > eventCount {
-                continue
-            }
-
-            guard let parse = parseProvider() else { continue }
-            let observationTransition = driver.send(
-                .observation(observations.record(parse), elapsedMs: Self.elapsedMs(since: start))
-            )
-            if let outcome = Self.outcome(for: observationTransition) {
-                return outcome
-            }
-        }
-
-        let transition = driver.send(.timeout(elapsedMs: Self.elapsedMs(since: start)))
-        return Self.outcome(for: transition)!
-    }
-
-    private static func elapsedMs(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        ).run(start: start)
     }
 
     static func outcome(for transition: SettleLoopTransition) -> Outcome? {
@@ -599,6 +549,78 @@ where State == SettleLoopMachine.State,
         final: [AccessibilityElement]
     ) -> [AccessibilityElement] {
         SettleTimeline.transientElements(seenByKey: seenByKey, baseline: baseline, final: final)
+    }
+}
+
+private struct SettleLoopRunner {
+    typealias ObservationYield = @MainActor () async throws -> Void
+    typealias Clock = @MainActor () -> CFAbsoluteTime
+
+    let parseProvider: SettleSession.ParseProvider
+    let tripwireSignalProvider: SettleSession.TripwireSignalProvider
+    let observationYield: ObservationYield
+    let clock: Clock
+    let timeoutMs: Int
+    let initial: SettleLoopMachine.State
+
+    @MainActor
+    func run(start: CFAbsoluteTime) async -> SettleSession.Outcome {
+        let deadline = start + Double(timeoutMs) / 1_000
+        var observations = SettleObservationLedger()
+        var driver = StateDriver(
+            initial: initial,
+            machine: SettleLoopMachine()
+        )
+
+        if let initial = parseProvider() {
+            let transition = driver.send(
+                .observation(observations.record(initial), elapsedMs: elapsedMs(since: start)),
+            )
+            if let outcome = SettleSession.outcome(for: transition) {
+                return outcome
+            }
+        }
+
+        while clock() < deadline {
+            do {
+                try await observationYield()
+            } catch is CancellationError {
+                let transition = driver.send(
+                    .yieldFailed(.cancellation, elapsedMs: elapsedMs(since: start))
+                )
+                return SettleSession.outcome(for: transition)!
+            } catch {
+                let transition = driver.send(
+                    .yieldFailed(.error, elapsedMs: elapsedMs(since: start))
+                )
+                return SettleSession.outcome(for: transition)!
+            }
+
+            let eventCount = driver.state.events.count
+            let tripwireTransition = driver.send(.tripwireSignal(tripwireSignalProvider()))
+            if let outcome = SettleSession.outcome(for: tripwireTransition) {
+                return outcome
+            }
+            if driver.state.events.count > eventCount {
+                continue
+            }
+
+            guard let parse = parseProvider() else { continue }
+            let observationTransition = driver.send(
+                .observation(observations.record(parse), elapsedMs: elapsedMs(since: start))
+            )
+            if let outcome = SettleSession.outcome(for: observationTransition) {
+                return outcome
+            }
+        }
+
+        let transition = driver.send(.timeout(elapsedMs: elapsedMs(since: start)))
+        return SettleSession.outcome(for: transition)!
+    }
+
+    @MainActor
+    private func elapsedMs(since start: CFAbsoluteTime) -> Int {
+        max(0, Int((clock() - start) * 1_000))
     }
 }
 
@@ -657,60 +679,17 @@ where State == SettleLoopMachine.State,
         start: CFAbsoluteTime,
         baselineTripwireSignal: TheTripwire.TripwireSignal
     ) async -> SettleSession.Outcome {
-        let deadline = start + Double(timeoutMs) / 1_000
-        var observations = SettleObservationLedger()
-        var driver = StateDriver(
+        await SettleLoopRunner(
+            parseProvider: parseProvider,
+            tripwireSignalProvider: tripwireSignalProvider,
+            observationYield: observationYield,
+            clock: clock,
+            timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(
                 quietWindowMilliseconds: quietWindowMs,
                 tripwireBaseline: baselineTripwireSignal
-            ),
-            machine: SettleLoopMachine()
-        )
-
-        func elapsedMs() -> Int {
-            max(0, Int((clock() - start) * 1_000))
-        }
-
-        if let initial = parseProvider() {
-            let transition = driver.send(
-                .observation(observations.record(initial), elapsedMs: elapsedMs()),
             )
-            if let outcome = SettleSession.outcome(for: transition) {
-                return outcome
-            }
-        }
-
-        while clock() < deadline {
-            do {
-                try await observationYield()
-            } catch is CancellationError {
-                let transition = driver.send(.yieldFailed(.cancellation, elapsedMs: elapsedMs()))
-                return SettleSession.outcome(for: transition)!
-            } catch {
-                let transition = driver.send(.yieldFailed(.error, elapsedMs: elapsedMs()))
-                return SettleSession.outcome(for: transition)!
-            }
-
-            let eventCount = driver.state.events.count
-            let tripwireTransition = driver.send(.tripwireSignal(tripwireSignalProvider()))
-            if let outcome = SettleSession.outcome(for: tripwireTransition) {
-                return outcome
-            }
-            if driver.state.events.count > eventCount {
-                continue
-            }
-
-            guard let parse = parseProvider() else { continue }
-            let observationTransition = driver.send(
-                .observation(observations.record(parse), elapsedMs: elapsedMs())
-            )
-            if let outcome = SettleSession.outcome(for: observationTransition) {
-                return outcome
-            }
-        }
-
-        let transition = driver.send(.timeout(elapsedMs: elapsedMs()))
-        return SettleSession.outcome(for: transition)!
+        ).run(start: start)
     }
 }
 

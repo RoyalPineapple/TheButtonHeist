@@ -94,6 +94,24 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testElementTargetRejectsUnknownStringMatchField() async {
+        XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
+            "label": .object([
+                "mode": .string("exact"),
+                "value": .string("Pay"),
+                "caseSensitive": .bool(true),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "target.label.caseSensitive")
+            XCTAssertEqual(error.observed, "boolean true")
+            XCTAssertTrue(error.expected.contains("Unknown StringMatch field"), error.expected)
+        }
+    }
+
+    @ButtonHeistActor
     func testElementTargetAcceptsStringMatchArrayForRepeatedField() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
             "label": .array([

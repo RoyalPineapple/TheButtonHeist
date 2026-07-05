@@ -66,7 +66,6 @@ public typealias Else = ThePlans.Else
 public typealias Warn = ThePlans.Warn
 public typealias Fail = ThePlans.Fail
 public typealias ForEach = ThePlans.ForEach
-public typealias ElementMatches = ThePlans.ElementMatches
 public typealias HeistDef = ThePlans.HeistDef
 public typealias HeistInvocationContent = ThePlans.HeistInvocationContent
 public typealias HeistDefinitionPath = ThePlans.HeistDefinitionPath

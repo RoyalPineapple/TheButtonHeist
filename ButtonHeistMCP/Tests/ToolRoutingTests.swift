@@ -13,7 +13,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.connect.rawValue, ["target": .string("demo")])
 
         #expect(operation.command == .connect)
-        #expect(operation.arguments.argumentValues["target"] == .string("demo"))
+        #expect(operation.arguments.value(for: .target) == .string("demo"))
     }
 
     @Test("perform routes one DSL step opaquely")
@@ -26,7 +26,7 @@ struct ToolRoutingTests {
         )
 
         #expect(operation.command == .perform)
-        #expect(operation.arguments.argumentValues["step"] == .string(#"Activate(.label("Pay")).expect(.change(.screen()))"#))
+        #expect(operation.arguments.value(for: .step) == .string(#"Activate(.label("Pay")).expect(.change(.screen()))"#))
     }
 
     @Test("granular action tools are not MCP tools")
@@ -89,7 +89,7 @@ struct ToolRoutingTests {
         )
 
         #expect(operation.command == .runHeist)
-        #expect(operation.arguments.argumentValues["plan"] == .string("HeistPlan { Activate(.label(\"Pay\")) }"))
+        #expect(operation.arguments.value(for: .plan) == .string("HeistPlan { Activate(.label(\"Pay\")) }"))
     }
 
     @Test("run_heist tool schema exposes plan source")
@@ -115,7 +115,7 @@ struct ToolRoutingTests {
         )
 
         #expect(operation.command == .runHeist)
-        #expect(operation.arguments.argumentValues["argument"] == .object([
+        #expect(operation.arguments.value(for: .argument) == .object([
             "type": .string("string"),
             "value": .string("milk"),
         ]))
@@ -220,11 +220,11 @@ struct ToolRoutingTests {
         )
 
         #expect(list.command == .listHeists)
-        #expect(list.arguments.argumentValues["detail"] == .string("detailed"))
-        #expect(list.arguments.argumentValues["path"] == .string("Flow.heist"))
+        #expect(list.arguments.value(for: .detail) == .string("detailed"))
+        #expect(list.arguments.value(for: .path) == .string("Flow.heist"))
         #expect(describe.command == .describeHeist)
-        #expect(describe.arguments.argumentValues["heist"] == .string("Cart.checkout"))
-        #expect(describe.arguments.argumentValues["path"] == .string("Flow.heist"))
+        #expect(describe.arguments.value(for: .heist) == .string("Cart.checkout"))
+        #expect(describe.arguments.value(for: .path) == .string("Flow.heist"))
     }
 
     @Test("core router accepts a prebuilt command argument envelope")
@@ -241,7 +241,7 @@ struct ToolRoutingTests {
             return
         }
         #expect(operation.command == .connect)
-        #expect(operation.arguments.argumentValues["target"] == .string("demo"))
+        #expect(operation.arguments.value(for: .target) == .string("demo"))
     }
 
     private func routeToolRequest(

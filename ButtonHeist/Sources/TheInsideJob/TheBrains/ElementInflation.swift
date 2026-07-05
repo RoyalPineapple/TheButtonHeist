@@ -76,6 +76,50 @@ final class ElementInflation {
         case known(TheStash.ScreenElement)
     }
 
+    private enum RetryReason: String, CustomStringConvertible, Sendable, Equatable {
+        case objectDeallocated
+        case staleTarget
+        case activationPointOffscreen
+
+        var description: String {
+            rawValue
+        }
+
+        var failureDescription: String {
+            switch self {
+            case .objectDeallocated:
+                return "the live object was deallocated"
+            case .staleTarget:
+                return "the live target no longer matched"
+            case .activationPointOffscreen:
+                return "the activation point stayed off-screen"
+            }
+        }
+    }
+
+    private enum ResolutionPass: Sendable, Equatable {
+        case initial
+        case afterRetry(attempt: Int, reason: RetryReason)
+
+        var attempt: Int {
+            switch self {
+            case .initial:
+                return 0
+            case .afterRetry(let attempt, _):
+                return attempt
+            }
+        }
+
+        var allowsKnownFallback: Bool {
+            switch self {
+            case .initial, .afterRetry(_, .objectDeallocated):
+                return true
+            case .afterRetry(_, .staleTarget), .afterRetry(_, .activationPointOffscreen):
+                return false
+            }
+        }
+    }
+
     private enum InflationState: CustomStringConvertible {
         case resolving(ResolutionPass)
         case revealing(treeElement: TheStash.ScreenElement, attempt: Int)
@@ -109,9 +153,6 @@ final class ElementInflation {
             }
         }
     }
-
-    private typealias RetryReason = ElementInflationRetryReason
-    private typealias ResolutionPass = ElementInflationResolutionPass
 
     private enum FreshElementTargetResolution {
         case success(InflatedElementTarget)
@@ -193,7 +234,6 @@ final class ElementInflation {
         stash.refreshCurrentVisibleTree()
         var state: InflationState = .resolving(.initial)
         let maxAttempts = 2
-        let reducer = ElementInflationReducer(maxAttempts: maxAttempts)
 
         while true {
             switch state {
@@ -244,21 +284,16 @@ final class ElementInflation {
                 )
 
             case .retrying(let failedAttempt, let reason):
-                switch reducer.reduce(
-                    .retrying(failedAttempt: failedAttempt, reason: reason),
-                    event: .retryReady
-                ) {
-                case .resolving(let pass):
-                    await tripwire.yieldRealFrames(1)
-                    stash.refreshCurrentVisibleTree()
-                    transition(&state, to: .resolving(pass))
-                case .retryExhausted(let reason):
+                let nextAttempt = failedAttempt + 1
+                if nextAttempt >= maxAttempts {
                     transition(
                         &state,
                         to: .failed(retryExhaustedFailure(reason: reason, maxAttempts: maxAttempts))
                     )
-                case .retrying:
-                    transition(&state, to: .retrying(failedAttempt: failedAttempt, reason: reason))
+                } else {
+                    await tripwire.yieldRealFrames(1)
+                    stash.refreshCurrentVisibleTree()
+                    transition(&state, to: .resolving(.afterRetry(attempt: nextAttempt, reason: reason)))
                 }
 
             case .inflated(let result):

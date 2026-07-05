@@ -222,7 +222,7 @@ import Testing
           "type": "performCustomAction",
           "payload": {
             "actionName": "",
-            "label": "Message"
+            "target": { "label": "Message" }
           }
         }
         """.utf8))
@@ -251,6 +251,42 @@ import Testing
             CustomAction("", on: .label("Message"))
         }
     }
+}
+
+@Test func `action command payloads reject old nested and inline target aliases`() throws {
+    expectDataCorrupted("activate nested target alias", contains: #"Unknown heist action command payload field "target""#) {
+        _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
+        {
+          "type": "activate",
+          "payload": {
+            "target": { "label": "Pay" }
+          }
+        }
+        """.utf8))
+    }
+
+    expectDataCorrupted("typeText inline target alias", contains: #"Unknown heist action command payload field "label""#) {
+        _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
+        {
+          "type": "typeText",
+          "payload": {
+            "text": "milk",
+            "label": "Search"
+          }
+        }
+        """.utf8))
+    }
+
+    let referenced = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
+    {
+      "type": "typeText",
+      "payload": {
+        "text_ref": "item",
+        "target_ref": "field"
+      }
+    }
+    """.utf8))
+    #expect(referenced == .typeText(text: .ref("item"), target: .ref("field")))
 }
 
 private struct EncodedCommandType: Decodable {

@@ -1,6 +1,6 @@
 import ThePlans
 
-extension HeistElement: ElementPredicateSubject {
+extension HeistElement: PredicateSelectionSubject {
     /// Known trait values. Used to reject unknown traits in predicate queries.
     private static let knownTraits = Set(HeistTrait.allCases)
 
@@ -28,6 +28,10 @@ extension HeistElement: ElementPredicateSubject {
         return required.allSatisfy { match in
             names.contains { match.matches($0) }
         }
+    }
+
+    package var predicateMatcherFacts: [AccessibilityMatcherFact] {
+        AccessibilityPolicy.matcherFacts(for: self)
     }
 
     /// Match this wire element against an `ElementPredicate`.

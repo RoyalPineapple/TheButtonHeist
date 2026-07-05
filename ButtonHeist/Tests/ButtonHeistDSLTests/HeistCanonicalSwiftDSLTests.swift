@@ -110,7 +110,9 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
     let source = """
     import ThePlans
 
-    let heist = try \(rendered)
+    func heist() throws -> HeistPlan {
+        try \(rendered)
+    }
     """
     let compiled = try await compileCanonicalHeist(source)
     #expect(try compiled.canonicalSwiftDSL() == rendered)
@@ -128,7 +130,9 @@ func rootStringPlanRendersDefinitionsRunHeistLoopsRefsAndBroadMatches() async th
     let source = """
     import ThePlans
 
-    let heist = try \(rendered)
+    func heist() throws -> HeistPlan {
+        try \(rendered)
+    }
     """
     let compiled = try await compileCanonicalHeist(source)
     let compiledCanonical = try compiled.canonicalSwiftDSL()

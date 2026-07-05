@@ -893,49 +893,6 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
         case commandResolutionFailure
         case dispatch(DispatchResultEvidence)
         case expectation(ExpectationResultEvidence)
-
-        public var dispatchResult: ActionResult? {
-            switch self {
-            case .commandResolutionFailure:
-                return nil
-            case .dispatch(let evidence):
-                return evidence.dispatchResult
-            case .expectation(let evidence):
-                return evidence.dispatchResult
-            }
-        }
-
-        public var expectationResult: ActionResult? {
-            guard case .expectation(let evidence) = self else { return nil }
-            return evidence.expectationResult
-        }
-
-        public var reportedResult: ActionResult? {
-            switch self {
-            case .commandResolutionFailure:
-                return nil
-            case .dispatch(let evidence):
-                return evidence.dispatchResult
-            case .expectation(let evidence):
-                return evidence.expectationResult
-            }
-        }
-
-        public var traceResult: ActionResult? {
-            switch self {
-            case .commandResolutionFailure:
-                return nil
-            case .dispatch(let evidence):
-                return evidence.dispatchResult
-            case .expectation(let evidence):
-                return evidence.expectationResult
-            }
-        }
-
-        public var expectation: ExpectationResult? {
-            guard case .expectation(let evidence) = self else { return nil }
-            return evidence.expectation
-        }
     }
 
     public var resultEvidence: ResultEvidence {
@@ -954,19 +911,34 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     public var dispatchResult: ActionResult? {
-        resultEvidence.dispatchResult
+        switch resultEvidence {
+        case .commandResolutionFailure:
+            return nil
+        case .dispatch(let evidence):
+            return evidence.dispatchResult
+        case .expectation(let evidence):
+            return evidence.dispatchResult
+        }
     }
 
     public var reportedResult: ActionResult? {
-        resultEvidence.reportedResult
+        switch resultEvidence {
+        case .commandResolutionFailure:
+            return nil
+        case .dispatch(let evidence):
+            return evidence.dispatchResult
+        case .expectation(let evidence):
+            return evidence.expectationResult
+        }
     }
 
     public var traceResult: ActionResult? {
-        resultEvidence.traceResult
+        reportedResult
     }
 
     public var expectationResult: ActionResult? {
-        resultEvidence.expectationResult
+        guard case .expectation(let evidence) = resultEvidence else { return nil }
+        return evidence.expectationResult
     }
 
     public var command: HeistActionCommand? {
@@ -981,7 +953,8 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     public var expectation: ExpectationResult? {
-        resultEvidence.expectation
+        guard case .expectation(let evidence) = resultEvidence else { return nil }
+        return evidence.expectation
     }
 
     public var warning: HeistActionWarning? {
@@ -1417,21 +1390,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         case .matched, .continued:
             return nil
         }
-    }
-
-    @available(*, unavailable, message: "Use outcome-specific HeistRepeatUntilEvidence factories.")
-    public init(
-        outcome: HeistPredicateEvidenceOutcome,
-        predicate: AccessibilityPredicate,
-        timeout: Double,
-        iterationCount: Int,
-        iterationOrdinal: Int? = nil,
-        expectation: ExpectationResult,
-        actionResult: ActionResult? = nil,
-        lastObservedSummary: String? = nil,
-        failureReason: String? = nil
-    ) {
-        preconditionFailure("Use outcome-specific HeistRepeatUntilEvidence factories.")
     }
 
     private init(

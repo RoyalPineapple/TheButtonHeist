@@ -93,8 +93,8 @@ private enum ControlsDemoScreen {
 }
 
 private enum TextInputScreen {
-    private static let nameField = ElementTarget.element(.identifier("textInput.name"), traits: [.textEntry])
-    private static let emailField = ElementTarget.element(.identifier("textInput.email"), traits: [.textEntry])
+    private static let nameField = ElementTarget.element(.value("Name"), traits: [.textEntry])
+    private static let emailField = ElementTarget.element(.value("Email"), traits: [.textEntry])
 
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
@@ -288,7 +288,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let heist = try await runHeist("DogfoodControlsAndPresentationFlows") {
             try DogfoodHome.openScreen("Controls Demo")
 
-            ForEach(["Buttons & Actions", "Display"]) { screen in
+            ForEach("Buttons & Actions", "Display") { screen in
                 try ControlsDemoScreen.openScreen(screen)
                 try DogfoodNavigation.backTo("Controls Demo")
             }
@@ -391,10 +391,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
             Warn("wait case matched Controls Demo")
 
-            ForEach(
-                ElementMatches.matching(ElementPredicate(label: "Text Input", traits: [.button])),
-                limit: 1
-            ) { target in
+            ForEach(ElementPredicate(label: "Text Input", traits: [.button]), limit: 1) { target in
                 WaitFor(.exists(target), timeout: .seconds(1))
             }
 
@@ -499,10 +496,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Buy groceries, High priority")
 
-            ForEach(
-                ElementMatches.matching(activeFixBug),
-                limit: 1
-            ) { target in
+            ForEach(activeFixBug, limit: 1) { target in
                 WaitFor(.exists(target), timeout: .seconds(1))
             }
 

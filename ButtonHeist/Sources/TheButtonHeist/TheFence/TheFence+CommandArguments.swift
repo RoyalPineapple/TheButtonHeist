@@ -7,24 +7,40 @@ extension TheFence {
 
     /// Typed command arguments after external routing has selected a command.
     @_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope: Sendable {
-        @_spi(ButtonHeistTooling) public let argumentValues: [String: HeistValue]
+        let values: [String: HeistValue]
         let argumentFieldPrefix: String?
 
         @_spi(ButtonHeistTooling) public init(
             values: [String: HeistValue],
             fieldPrefix: String? = nil
         ) {
-            self.argumentValues = values
+            self.values = values
             argumentFieldPrefix = fieldPrefix
         }
 
+        @_spi(ButtonHeistTooling) public func contains(_ key: FenceParameterKey) -> Bool {
+            values[key.rawValue] != nil
+        }
+
+        @_spi(ButtonHeistTooling) public func value(for key: FenceParameterKey) -> HeistValue? {
+            values[key.rawValue]
+        }
+
         func dropping(_ key: FenceParameterKey) -> CommandArgumentEnvelope {
-            var values = argumentValues
-            values.removeValue(forKey: key.rawValue)
+            var copy = values
+            copy.removeValue(forKey: key.rawValue)
             return CommandArgumentEnvelope(
-                values: values,
+                values: copy,
                 fieldPrefix: argumentFieldPrefix
             )
+        }
+
+        var objectValue: HeistValue {
+            .object(values)
+        }
+
+        var keySet: Set<String> {
+            Set(values.keys)
         }
     }
 }
@@ -215,20 +231,16 @@ extension TheFence {
 /// field-qualified diagnostics expected by the current command contract.
 extension TheFence.CommandArgumentEnvelope {
     var keys: Dictionary<String, HeistValue>.Keys {
-        argumentValues.keys
-    }
-
-    func contains(_ key: FenceParameterKey) -> Bool {
-        argumentValues[key.rawValue] != nil
-    }
-
-    func value(for key: FenceParameterKey) -> HeistValue? {
-        argumentValues[key.rawValue]
+        values.keys
     }
 
     func value<Value>(_ parameter: FenceParameter<Value>) throws -> Value? {
         guard let value = value(for: parameter.key) else { return nil }
         return try parameter.decode(value, field: field(parameter.key))
+    }
+
+    func value(forRawKey key: String) -> HeistValue? {
+        values[key]
     }
 
     func requiredValue<Value>(_ parameter: FenceParameter<Value>) throws -> Value {
@@ -279,11 +291,11 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func observedDescription(for key: FenceParameterKey) -> String? {
-        argumentValues[key.rawValue]?.schemaObservedDescription
+        values[key.rawValue]?.schemaObservedDescription
     }
 
     func observedDescription(forUnknownKey key: String) -> String? {
-        argumentValues[key]?.schemaObservedDescription
+        values[key]?.schemaObservedDescription
     }
 
     var observedDescription: String {
@@ -412,7 +424,7 @@ extension TheFence.CommandArgumentEnvelope {
         guard let unknownKey = unknownKeys.first else { return }
         throw SchemaValidationError(
             field: field(forUnknownKey: unknownKey),
-            observed: argumentValues[unknownKey]?.schemaObservedDescription ?? "missing",
+            observed: values[unknownKey]?.schemaObservedDescription ?? "missing",
             expected: expected
         )
     }

@@ -58,17 +58,15 @@ enum RepairDiagnosisPipeline {
             )
         }
 
-        return HeistRepairDiagnosis(
-            status: .suggested,
+        return .suggested(HeistRepairSuggestedDiagnosis(
             stepPath: request.currentFailure.stepPath,
             failureKind: eligibleAnalysis.failureKind,
             oldTarget: request.lastSuccess.target,
             oldResolvedElement: eligibleAnalysis.oldResolved.summary,
             currentMatchCount: eligibleAnalysis.currentResolution.matchCount,
             candidates: candidates,
-            suggestions: suggestions,
-            refusal: nil
-        )
+            suggestions: suggestions
+        ))
     }
 
     private static func candidateDiagnoses(
@@ -85,40 +83,22 @@ enum RepairDiagnosisPipeline {
                 score: candidate.score,
                 reasons: candidate.reasons,
                 caveats: candidate.caveats,
-                validationStatus: validationStatus(for: evaluation),
-                suggestedTarget: suggestedTarget(from: evaluation),
-                confidence: confidence(from: evaluation),
-                rejectionReason: rejectionReason(from: evaluation)
+                validation: validation(for: evaluation)
             )
         }
     }
 
-    private static func validationStatus(
+    private static func validation(
         for evaluation: RepairSuggestionValidation?
-    ) -> RepairCandidateValidationStatus {
+    ) -> RepairCandidateValidation {
         switch evaluation {
-        case .suggested:
-            return .suggested
-        case .rejected:
-            return .rejected
+        case .suggested(let suggestion):
+            return .suggested(target: suggestion.newTarget, confidence: suggestion.confidence)
+        case .rejected(let reason):
+            return .rejected(reason: reason)
         case nil:
             return .notEvaluated
         }
-    }
-
-    private static func suggestedTarget(from evaluation: RepairSuggestionValidation?) -> ElementTarget? {
-        guard case .suggested(let suggestion) = evaluation else { return nil }
-        return suggestion.newTarget
-    }
-
-    private static func confidence(from evaluation: RepairSuggestionValidation?) -> RepairConfidence? {
-        guard case .suggested(let suggestion) = evaluation else { return nil }
-        return suggestion.confidence
-    }
-
-    private static func rejectionReason(from evaluation: RepairSuggestionValidation?) -> RepairCandidateRejectionReason? {
-        guard case .rejected(let reason) = evaluation else { return nil }
-        return reason
     }
 
     private static func refusedDiagnosis(
@@ -127,13 +107,12 @@ enum RepairDiagnosisPipeline {
         message: String,
         stage: HeistRepairPipelineStage
     ) -> HeistRepairDiagnosis {
-        HeistRepairDiagnosis(
-            status: .refused,
+        .refused(HeistRepairRefusedDiagnosis(
             stepPath: request.currentFailure.stepPath,
-            failureKind: nil,
             oldTarget: request.lastSuccess.target,
+            context: .evidenceEligibility,
             refusal: HeistRepairRefusal(stage: stage, reason: reason, message: message)
-        )
+        ))
     }
 
     private static func refusedDiagnosis(
@@ -144,16 +123,17 @@ enum RepairDiagnosisPipeline {
         message: String,
         stage: HeistRepairPipelineStage
     ) -> HeistRepairDiagnosis {
-        HeistRepairDiagnosis(
-            status: .refused,
+        .refused(HeistRepairRefusedDiagnosis(
             stepPath: request.currentFailure.stepPath,
-            failureKind: analysis.failureKind,
             oldTarget: request.lastSuccess.target,
-            oldResolvedElement: analysis.oldResolved.summary,
-            currentMatchCount: analysis.currentResolution.matchCount,
-            candidates: candidates,
+            context: .eligible(HeistRepairEligibleRefusalContext(
+                failureKind: analysis.failureKind,
+                oldResolvedElement: analysis.oldResolved.summary,
+                currentMatchCount: analysis.currentResolution.matchCount,
+                candidates: candidates
+            )),
             refusal: HeistRepairRefusal(stage: stage, reason: reason, message: message)
-        )
+        ))
     }
 
 }

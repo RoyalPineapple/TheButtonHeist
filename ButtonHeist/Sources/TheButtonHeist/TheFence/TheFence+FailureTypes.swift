@@ -60,8 +60,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
     case authFailed = "auth.failed"
     case sessionLocked = "session.locked"
     case protocolMismatch = "protocol.mismatch"
-    case tlsCertificateMismatch = "tls.certificate_mismatch"
-    case tlsMissingFingerprint = "tls.missing_fingerprint"
     case tlsMissingToken = "tls.missing_token"
     case clientLocalDisconnect = "client.local_disconnect"
     case clientUnknown = "client.unknown"
@@ -94,8 +92,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
              .transportEventBacklogOverflow,
              .transportServerClosed,
              .protocolMismatch,
-             .tlsCertificateMismatch,
-             .tlsMissingFingerprint,
              .tlsMissingToken:
             return .connection
         case .authFailed:
@@ -148,9 +144,7 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
             return .session
         case .protocolMismatch:
             return .protocolNegotiation
-        case .tlsCertificateMismatch,
-             .tlsMissingFingerprint,
-             .tlsMissingToken:
+        case .tlsMissingToken:
             return .tls
         case .clientLocalDisconnect,
              .clientUnknown,
@@ -186,8 +180,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
              .transportBufferOverflow,
              .authFailed,
              .protocolMismatch,
-             .tlsCertificateMismatch,
-             .tlsMissingFingerprint,
              .tlsMissingToken,
              .clientLocalDisconnect,
              .clientUnknown,
@@ -244,9 +236,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
         case .protocolMismatch:
             return "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
-        case .tlsCertificateMismatch,
-             .tlsMissingFingerprint:
-            return "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
         case .tlsMissingToken:
             return "Set BUTTONHEIST_TOKEN, pass --token, or configure a target token."
         case .clientLocalDisconnect,
@@ -266,7 +255,7 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
 
 /// Public failure code value that preserves raw JSON strings at boundaries while
 /// exposing typed metadata for codes known to this client.
-public struct FailureCode: RawRepresentable, Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
+public struct FailureCode: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
     public let rawValue: String
 
     public var knownCode: KnownFailureCode? {
@@ -297,20 +286,13 @@ public struct FailureCode: RawRepresentable, Codable, Sendable, Equatable, Hasha
         self.rawValue = knownCode.rawValue
     }
 
-    /// Explicit boundary initializer for raw public JSON/API values outside the known taxonomy.
-    public init(boundaryRawValue rawValue: String) {
+    init(decodingRawValue rawValue: String) {
         self.rawValue = rawValue
-    }
-
-    /// RawRepresentable/Codable compatibility. Prefer `init(_:)` for known codes
-    /// and `init(boundaryRawValue:)` at raw JSON/API boundaries.
-    public init(rawValue: String) {
-        self.init(boundaryRawValue: rawValue)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(boundaryRawValue: try container.decode(String.self))
+        self.init(decodingRawValue: try container.decode(String.self))
     }
 
     public func encode(to encoder: Encoder) throws {

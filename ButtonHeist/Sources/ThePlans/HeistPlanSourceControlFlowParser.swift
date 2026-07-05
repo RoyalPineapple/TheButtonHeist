@@ -37,14 +37,7 @@ extension HeistPlanSourceParser {
     mutating func parseForEach() throws -> HeistStep {
         try expectSymbol("(")
         if consumeSymbol("[") {
-            let values = try parseStringArrayTail()
-            try expectSymbol(")")
-            let closure = try parseClosureParameterBlock(binding: .string)
-            return .forEachString(try ForEachStringStep(
-                values: values,
-                parameter: closure.referenceName,
-                body: closure.body
-            ))
+            throw error(previous, #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
         }
         if case .string = currentToken.kind {
             var values: [String] = []
@@ -59,7 +52,7 @@ extension HeistPlanSourceParser {
                 body: closure.body
             ))
         }
-        let matching = try parseElementMatches()
+        let matching = try parseElementLoopPredicate()
         var limit = 20
         while consumeSymbol(",") {
             if consumeIdentifier("limit") != nil {
@@ -95,16 +88,13 @@ extension HeistPlanSourceParser {
         ))
     }
 
-    mutating func parseElementMatches() throws -> ElementPredicate {
+    mutating func parseElementLoopPredicate() throws -> ElementPredicate {
         try expectSymbol(".")
         let name = try parseIdentifier()
-        if name != "matching" {
-            return try concretePredicate(from: parseElementPredicateTemplate(named: name))
+        if name == "matching" {
+            throw error(previous, #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
         }
-        try expectSymbol("(")
-        let predicate = try parseElementPredicate()
-        try expectSymbol(")")
-        return predicate
+        return try concretePredicate(from: parseElementPredicateTemplate(named: name))
     }
 
     mutating func parseRunHeist() throws -> HeistStep {
@@ -237,7 +227,7 @@ extension HeistPlanSourceParser {
     mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return body.steps.map(\.runtimeSafetyTraversalDraftStep)
+        return body.steps.map(\.runtimeSafetyStep)
     }
 
     mutating func parseLowercaseElseChainIfPresent(chainContext: String) throws -> [HeistStep]? {
@@ -263,18 +253,8 @@ extension HeistPlanSourceParser {
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         return ParsedClosureParameterBlock(
             referenceName: referenceName,
-            body: body.steps.map(\.runtimeSafetyTraversalDraftStep)
+            body: body.steps.map(\.runtimeSafetyStep)
         )
-    }
-
-    mutating func parseStringArrayTail() throws -> [String] {
-        var values: [String] = []
-        if consumeSymbol("]") { return values }
-        repeat {
-            values.append(try parseStringLiteral())
-        } while consumeSymbol(",")
-        try expectSymbol("]")
-        return values
     }
 
 }

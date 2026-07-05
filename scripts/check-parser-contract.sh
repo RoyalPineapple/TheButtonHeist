@@ -23,6 +23,7 @@ tracked_files_referencing_parser() {
 
     while IFS= read -r file; do
         [[ -n "$file" ]] || continue
+        [[ -f "$file" ]] || continue
         if grep -Fq "$PARSER_REPO_URL" "$file" || grep -Fqi "$PARSER_IDENTITY" "$file"; then
             printf '%s\n' "$file"
         fi

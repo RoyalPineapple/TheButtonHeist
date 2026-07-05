@@ -228,7 +228,6 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
     let target: ElementTargetExpr
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case target
         case targetRef = "target_ref"
     }
 
@@ -237,22 +236,19 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
+        try rejectUnknownInlineTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasNestedTarget = container.contains(.target)
         let hasTargetRef = container.contains(.targetRef)
         let inlineTarget = try ElementTargetExpr.decodeInlineIfPresent(from: decoder)
-        let intentCount = [hasNestedTarget, hasTargetRef, inlineTarget != nil].filter { $0 }.count
+        let intentCount = [hasTargetRef, inlineTarget != nil].filter { $0 }.count
         guard intentCount == 1 else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
-                debugDescription: "target payload requires exactly one of target, target_ref, or inline target fields"
+                debugDescription: "target payload requires exactly one of target_ref or inline target fields"
             ))
         }
         if let inlineTarget {
             target = inlineTarget
-        } else if hasNestedTarget {
-            target = try container.decode(ElementTargetExpr.self, forKey: .target)
         } else {
             target = .ref(try HeistReferenceName.decode(from: container, forKey: .targetRef))
         }
@@ -287,7 +283,7 @@ private struct CustomActionExprPayload: Codable, Sendable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedActionName = try container.decode(String.self, forKey: .actionName)
         do {
@@ -300,7 +296,7 @@ private struct CustomActionExprPayload: Codable, Sendable, Equatable {
             )
         }
         actionName = decodedActionName
-        target = try TargetExprPayload.decodeTarget(from: decoder, container: container, nestedKey: .target, refKey: .targetRef)
+        target = try TargetExprPayload.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -330,7 +326,7 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
@@ -354,7 +350,7 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
             .automatic
         }
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
-        target = try TargetExprPayload.decodeTarget(from: decoder, container: container, nestedKey: .target, refKey: .targetRef)
+        target = try TargetExprPayload.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -392,7 +388,7 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         replacingExisting = try container.decodeIfPresent(Bool.self, forKey: .replacingExisting) ?? false
         let literal = try container.decodeIfPresent(String.self, forKey: .text)
@@ -422,7 +418,7 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
                 debugDescription: "type_text requires text or text_ref"
             )
         }
-        target = try TargetExprPayload.decodeOptionalTarget(from: decoder, container: container, nestedKey: .target, refKey: .targetRef)
+        target = try TargetExprPayload.decodeOptionalNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -443,14 +439,12 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
 }
 
 private extension TargetExprPayload {
-    static func decodeTarget<K: CodingKey>(
-        from decoder: Decoder,
+    static func decodeNestedTarget<K: CodingKey>(
         container: KeyedDecodingContainer<K>,
         nestedKey: K,
         refKey: K
     ) throws -> ElementTargetExpr {
-        guard let target = try decodeOptionalTarget(
-            from: decoder,
+        guard let target = try decodeOptionalNestedTarget(
             container: container,
             nestedKey: nestedKey,
             refKey: refKey
@@ -463,24 +457,19 @@ private extension TargetExprPayload {
         return target
     }
 
-    static func decodeOptionalTarget<K: CodingKey>(
-        from decoder: Decoder,
+    static func decodeOptionalNestedTarget<K: CodingKey>(
         container: KeyedDecodingContainer<K>,
         nestedKey: K,
         refKey: K
     ) throws -> ElementTargetExpr? {
         let hasNestedTarget = container.contains(nestedKey)
         let hasTargetRef = container.contains(refKey)
-        let inlineTarget = try ElementTargetExpr.decodeInlineIfPresent(from: decoder)
-        let intentCount = [hasNestedTarget, hasTargetRef, inlineTarget != nil].filter { $0 }.count
+        let intentCount = [hasNestedTarget, hasTargetRef].filter { $0 }.count
         guard intentCount <= 1 else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
-                debugDescription: "target payload accepts only one of target, target_ref, or inline target fields"
+                debugDescription: "target payload accepts only one of target or target_ref"
             ))
-        }
-        if let inlineTarget {
-            return inlineTarget
         }
         if hasNestedTarget {
             return try container.decode(ElementTargetExpr.self, forKey: nestedKey)
@@ -508,7 +497,7 @@ private extension TargetExprPayload {
     }
 }
 
-private func rejectUnknownTargetExprPayloadKeys(
+private func rejectUnknownInlineTargetExprPayloadKeys(
     from decoder: Decoder,
     commandFields: [String]
 ) throws {

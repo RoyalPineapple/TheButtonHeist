@@ -50,11 +50,16 @@ import Testing
 
     @Test func `environment process temporary directory resolves under process temp`() throws {
         let previousDirectory = EnvironmentKey.buttonheistReceiptsDir.value
+        let previousMode = EnvironmentKey.buttonheistReceiptsMode.value
         setEnvironment(
             EnvironmentKey.buttonheistReceiptsDir.rawValue,
             HeistReceiptRecordingConfiguration.processTemporaryDirectoryValue
         )
-        defer { setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory) }
+        setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, nil)
+        defer {
+            setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory)
+            setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, previousMode)
+        }
 
         let configuration = try #require(HeistReceiptRecordingConfiguration.environment)
         let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL.path
@@ -62,6 +67,35 @@ import Testing
 
         #expect(rootDirectory.hasPrefix(temporaryDirectory))
         #expect(configuration.rootDirectory.lastPathComponent == "buttonheist-receipts")
+    }
+
+    @Test func `receipt mode parser accepts only canonical spellings`() {
+        #expect(HeistReceiptRecordingMode(environmentValue: nil) == .failures)
+        #expect(HeistReceiptRecordingMode(environmentValue: "off") == .off)
+        #expect(HeistReceiptRecordingMode(environmentValue: "failures") == .failures)
+        #expect(HeistReceiptRecordingMode(environmentValue: "failing-and-passing") == .failingAndPassing)
+        #expect(HeistReceiptRecordingMode(environmentValue: "all") == .all)
+
+        #expect(HeistReceiptRecordingMode(environmentValue: "passing" + "-and-failing") == nil)
+        #expect(HeistReceiptRecordingMode(environmentValue: "failed") == nil)
+        #expect(HeistReceiptRecordingMode(environmentValue: "always") == nil)
+        #expect(HeistReceiptRecordingMode(environmentValue: "ALL") == nil)
+    }
+
+    @Test func `environment rejects unknown receipt mode`() {
+        let previousDirectory = EnvironmentKey.buttonheistReceiptsDir.value
+        let previousMode = EnvironmentKey.buttonheistReceiptsMode.value
+        setEnvironment(
+            EnvironmentKey.buttonheistReceiptsDir.rawValue,
+            HeistReceiptRecordingConfiguration.processTemporaryDirectoryValue
+        )
+        setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, "failed")
+        defer {
+            setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory)
+            setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, previousMode)
+        }
+
+        #expect(HeistReceiptRecordingConfiguration.environment == nil)
     }
 
     private func samplePlan() throws -> HeistPlan {

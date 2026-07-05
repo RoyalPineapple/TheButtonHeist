@@ -134,7 +134,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             durationMs: 12
         )
 
-        let summary = HeistExecutionReportSummaryFacts(result: result)
+        let summary = result.evidenceRollup.summary
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
 
         XCTAssertTrue(result.evidenceRollup.events.contains { event in
@@ -211,7 +211,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
         XCTAssertEqual(result.traceResultsInExecutionOrder.map(\.method), [.wait])
-        XCTAssertEqual(HeistExecutionReportSummaryFacts(result: result).finalScreenId, "settled")
+        XCTAssertEqual(result.evidenceRollup.summary.finalScreenId, "settled")
         XCTAssertEqual(projection.summary.finalScreenId, "settled")
         XCTAssertEqual(projectedNode.actionErrorKind, .timeout)
         guard case .expectation(let dispatchResult, let expectationResult, _, _) = projectedAction.evidence else {
@@ -291,7 +291,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             abortedAtPath: "$.body[0]"
         )
 
-        let summary = HeistExecutionReportSummaryFacts(result: result)
+        let summary = result.evidenceRollup.summary
         let report = result.steps[0].reportFacts
 
         XCTAssertEqual(summary.executedTopLevelStepCount, 1)

@@ -20,15 +20,15 @@ final class ConnectionPhaseTests: XCTestCase {
             HandoffConnectionError.disconnected(.sessionLocked("bad token"))
         )
         XCTAssertEqual(
-            HandoffConnectionError.disconnected(.missingFingerprint),
-            HandoffConnectionError.disconnected(.missingFingerprint)
+            HandoffConnectionError.disconnected(.missingToken),
+            HandoffConnectionError.disconnected(.missingToken)
         )
     }
 
     func testConnectionErrorTaxonomy() {
         let cases: [(HandoffConnectionError, KnownFailureCode, FailurePhase, Bool)] = [
             (.connectionFailed("refused"), .connectionFailed, .transport, true),
-            (.disconnected(.missingFingerprint), .tlsMissingFingerprint, .tls, false),
+            (.disconnected(.missingToken), .tlsMissingToken, .tls, false),
             (.disconnected(.serverClosed), .transportServerClosed, .transport, true),
             (.disconnected(.authFailed("bad token")), .authFailed, .authentication, false),
             (.disconnected(.sessionLocked("busy")), .sessionLocked, .session, true),

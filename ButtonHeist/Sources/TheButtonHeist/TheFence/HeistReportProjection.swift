@@ -24,7 +24,7 @@ struct HeistReportSummaryProjection: Sendable {
     let expectations: HeistExpectationsProjection?
     let finalScreenId: String?
 
-    init(summary: HeistExecutionReportSummaryFacts) {
+    init(summary: HeistExecutionEvidenceSummary) {
         executedTopLevelStepCount = summary.executedTopLevelStepCount
         executedNodeCount = summary.executedNodeCount
         outputReceiptNodeCount = summary.outputReceiptNodeCount
@@ -77,7 +77,7 @@ struct HeistReportProjection: Sendable {
         profile: ProjectionProfile
     ) {
         let rollup = result.evidenceRollup
-        let reportSummary = HeistExecutionReportSummaryFacts(summary: rollup.summary)
+        let reportSummary = rollup.summary
         status = reportSummary.abortedAtPath == nil ? .ok : .partial
         nodes = rollup.rootNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
         outputNodes = rollup.outputNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }

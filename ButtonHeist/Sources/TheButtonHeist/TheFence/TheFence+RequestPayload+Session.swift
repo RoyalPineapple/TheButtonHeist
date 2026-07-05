@@ -14,7 +14,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
+        DecodedRequestDispatch { fence in try await fence.handlePing() }
     }
 
     static func decodeListDevicesRequest(
@@ -23,7 +23,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
+        DecodedRequestDispatch { fence in try await fence.handleListDevices() }
     }
 
     static func decodeGetSessionStateRequest(
@@ -32,7 +32,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
+        DecodedRequestDispatch { fence in .sessionState(payload: fence.currentSessionState()) }
     }
 
     static func decodeListTargetsRequest(
@@ -41,7 +41,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
+        DecodedRequestDispatch { fence in fence.handleListTargets() }
     }
 
     static func decodeRunHeistCommandRequest(
@@ -51,7 +51,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.decodeRunHeistRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleRunHeist(request) }
+        return DecodedRequestDispatch { dispatchFence in try await dispatchFence.handleRunHeist(request) }
     }
 
     static func decodePerformCommandRequest(
@@ -61,7 +61,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.decodePerformRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handlePerform(request) }
+        return DecodedRequestDispatch { dispatchFence in try await dispatchFence.handlePerform(request) }
     }
 
     static func decodeListHeistsCommandRequest(
@@ -71,7 +71,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.decodeListHeistsRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in dispatchFence.handleListHeists(request) }
+        return DecodedRequestDispatch { dispatchFence in dispatchFence.handleListHeists(request) }
     }
 
     static func decodeDescribeHeistCommandRequest(
@@ -81,7 +81,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.decodeDescribeHeistRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in dispatchFence.handleDescribeHeist(request) }
+        return DecodedRequestDispatch { dispatchFence in dispatchFence.handleDescribeHeist(request) }
     }
 
     static func decodeConnectCommandRequest(
@@ -91,7 +91,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.decodeConnectRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleConnect(request) }
+        return DecodedRequestDispatch { dispatchFence in try await dispatchFence.handleConnect(request) }
     }
 
     private func decodeConnectRequest(_ arguments: CommandArgumentEnvelope) throws -> ConnectRequest {

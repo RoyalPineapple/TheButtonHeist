@@ -10,12 +10,10 @@ struct TextInputDemo: View {
         Form {
             Section("Text Input") {
                 TextField("Name", text: $name)
-                    .accessibilityIdentifier("textInput.name")
 
                 TextField("Email", text: $email)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)
-                    .accessibilityIdentifier("textInput.email")
 
                 SecureField("Password", text: $password)
                     .textContentType(.password)

@@ -33,7 +33,7 @@ extension TheFence {
         validate: (T) throws -> Void
     ) throws -> T {
         let target = try HeistValuePayloadDecoder.decode(
-            .object(request.argumentValues),
+            request.objectValue,
             field: "gesture",
             as: type,
             includesRootInField: false

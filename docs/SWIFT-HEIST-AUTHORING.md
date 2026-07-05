@@ -52,16 +52,18 @@ Reusable heist helpers that should survive JSON must be written as heist
 definitions, not arbitrary Swift functions:
 
 ```swift
-let heist = try HeistPlan("purchaseFlow") {
-    HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
-        Activate(.label(item))
+func heist() throws -> HeistPlan {
+    try HeistPlan("purchaseFlow") {
+        HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
 
-        Activate(.label("Add to Cart"))
-            .expect(.exists(.label("Cart")))
+            Activate(.label("Add to Cart"))
+                .expect(.exists(.label("Cart")))
+        }
+
+        RunHeist("LibraryScreen.addToCart", "Milk")
+        RunHeist("LibraryScreen.addToCart", "Bread")
     }
-
-    RunHeist("LibraryScreen.addToCart", "Milk")
-    RunHeist("LibraryScreen.addToCart", "Bread")
 }
 ```
 
@@ -378,11 +380,14 @@ only in the authoring tools:
   the ordinary `run_heist` path — identical to passing a durable `.heist`
   package or canonical ButtonHeist `HeistPlan` source.
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
-  and persists a `.heist` package (or `.json` IR) without running it.
+  and persists a `.heist` package without running it.
 
 The runtime never compiles arbitrary Swift. Local `.swift` files remain authoring
 tool inputs only: compile them with the CLI or `heist-plan`, then run the
 resulting plan or artifact.
+
+`--entry` names a zero-argument throwing function returning `HeistPlan`, such as
+`func makeHeist() throws -> HeistPlan`.
 
 For MCP, `run_heist` accepts durable ButtonHeist source via the `plan` field.
 The top-level source MUST parse to a `HeistPlan`. That string is not sent to

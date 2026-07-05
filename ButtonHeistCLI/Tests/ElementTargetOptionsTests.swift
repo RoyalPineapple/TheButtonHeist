@@ -44,7 +44,7 @@ final class ElementTargetOptionsTests: XCTestCase {
         )
         let object = TapSubcommand.elementObject(target)
         let semanticArguments = CLIRequestBuilder.arguments(target: target)
-        guard case .object(let semanticObject)? = semanticArguments.argumentValues[FenceParameterKey.target.rawValue] else {
+        guard case .object(let semanticObject)? = semanticArguments.value(for: .target) else {
             return XCTFail("Expected semantic target object")
         }
 

@@ -31,10 +31,10 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validate(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
-        let draft = HeistRuntimeSafetyTraversalDraft(candidate: raw)
-        let failures = failures(in: draft.plan)
+        let plan = raw.runtimeSafetyPlan()
+        let failures = failures(in: plan)
         guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
-        return draft.plan
+        return plan
     }
 
     mutating func failures(in plan: HeistPlan) -> [HeistPlanRuntimeSafetyFailure] {

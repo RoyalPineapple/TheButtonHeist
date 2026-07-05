@@ -109,8 +109,16 @@ private let expectedRepairJSONReportJSON = """
         ]
       },
       "reasons" : [
-        "Old target resolved to one element in the last successful before snapshot.",
-        "Suggested matcher resolves exactly one element in the new before snapshot."
+        {
+          "oldTargetResolvedInLastSuccessfulSnapshot" : {
+
+          }
+        },
+        {
+          "suggestedMatcherResolvesExactlyOneElement" : {
+
+          }
+        }
       ],
       "stepPath" : "$.body[0]"
     }
@@ -312,19 +320,19 @@ private let expectedRepairJSONReportJSON = """
             ])
         )
 
-        let diagnosis = HeistRepairSuggester.diagnosis(for: request(last, current))
+        let result = HeistRepairSuggester.diagnosis(for: request(last, current))
+        guard case .suggested(let diagnosis) = result else {
+            Issue.record("Expected suggested diagnosis")
+            return
+        }
         let suggestion = try #require(diagnosis.suggestions.first)
         let candidate = try #require(diagnosis.candidates.first)
 
-        #expect(diagnosis.status == .suggested)
-        #expect(diagnosis.refusal == nil)
         #expect(diagnosis.failureKind == .missingTarget)
         #expect(diagnosis.currentMatchCount == 0)
         #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
         #expect(candidate.source == .semanticContinuityScan)
-        #expect(candidate.validationStatus == .suggested)
-        #expect(candidate.suggestedTarget == suggestion.newTarget)
-        #expect(candidate.confidence == suggestion.confidence)
+        #expect(candidate.validation == .suggested(target: suggestion.newTarget, confidence: suggestion.confidence))
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)) == diagnosis.suggestions)
         #expect(HeistRepairSuggester.noSuggestionReason(for: request(last, current)) == nil)
     }
@@ -344,12 +352,19 @@ private let expectedRepairJSONReportJSON = """
             ])
         )
 
-        let diagnosis = HeistRepairSuggester.diagnosis(for: request(last, current))
-        let refusal = try #require(diagnosis.refusal)
+        let result = HeistRepairSuggester.diagnosis(for: request(last, current))
+        guard case .refused(let diagnosis) = result else {
+            Issue.record("Expected refused diagnosis")
+            return
+        }
+        guard case .eligible(let context) = diagnosis.context else {
+            Issue.record("Expected eligible refusal context")
+            return
+        }
+        let refusal = diagnosis.refusal
 
-        #expect(diagnosis.status == .refused)
-        #expect(diagnosis.suggestions.isEmpty)
-        #expect(diagnosis.failureKind == .missingTarget)
+        #expect(context.candidates.isEmpty)
+        #expect(context.failureKind == .missingTarget)
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
         #expect(refusal.message == HeistRepairSuggester.noSuggestionReason(for: request(last, current)))
@@ -886,10 +901,13 @@ private let expectedRepairJSONReportJSON = """
             actionSucceeded: false
         )
 
-        let diagnosis = try HeistDoctor.diagnosis(lastPass: lastPass, newFail: newFail)
-        let refusal = try #require(diagnosis.refusal)
+        let result = try HeistDoctor.diagnosis(lastPass: lastPass, newFail: newFail)
+        guard case .refused(let diagnosis) = result else {
+            Issue.record("Expected refused diagnosis")
+            return
+        }
+        let refusal = diagnosis.refusal
 
-        #expect(diagnosis.status == .refused)
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
         #expect(refusal.message.contains("old target is missing"))

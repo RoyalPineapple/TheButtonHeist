@@ -56,7 +56,7 @@ final class TheFenceHandlerTests: XCTestCase {
         Warn("start")
         Activate(.label("Pay"))
 
-        ForEach(["Milk", "Bread"]) { item in
+        ForEach("Milk", "Bread") { item in
             RunHeist("Cart.addItem", item)
         }
     }
@@ -172,18 +172,6 @@ final class TheFenceHandlerTests: XCTestCase {
             .protocolNegotiation,
             retryable: false,
             hint: "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
-        ),
-        .tlsCertificateMismatch: .init(
-            .connection,
-            .tls,
-            retryable: false,
-            hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
-        ),
-        .tlsMissingFingerprint: .init(
-            .connection,
-            .tls,
-            retryable: false,
-            hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
         ),
         .tlsMissingToken: .init(.connection, .tls, retryable: false, hint: "Set BUTTONHEIST_TOKEN, pass --token, or configure a target token."),
         .clientLocalDisconnect: .init(.client, .client, retryable: false, hint: nil),
@@ -607,9 +595,10 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    func testCustomFailureCodeUsesExplicitBoundaryValueAndPhaseFallback() {
+    func testCustomFailureCodeDecodesAtBoundaryAndUsesPhaseFallback() throws {
+        let code = try JSONDecoder().decode(FailureCode.self, from: Data(#""plugin.custom_failure""#.utf8))
         let details = FailureDetails(
-            code: FailureCode(boundaryRawValue: "plugin.custom_failure"),
+            code: code,
             phase: .server,
             retryable: false,
             hint: nil
@@ -881,8 +870,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let parsed = TheFence.ParsedRequest(
             command: .listTargets,
             requestId: "public-failure-test",
-            arguments: TheFence.CommandArgumentEnvelope(values: [:]),
-            dispatch: TheFence.DecodedRequestDispatch(handler: { _, _ in
+            dispatch: TheFence.DecodedRequestDispatch(handler: { _ in
                 throw validationError
             }),
             expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
@@ -1026,7 +1014,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
         }
 
-        var arguments = try Self.inlineArguments(for: try HeistPlan(body: [.warn(WarnStep(message: "x"))])).argumentValues
+        var arguments = try Self.inlineArguments(for: try HeistPlan(body: [.warn(WarnStep(message: "x"))])).values
         arguments["plan"] = .string("HeistPlan { Activate(.label(\"Pay\")) }")
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: arguments)
@@ -1170,7 +1158,7 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             """,
             """
-            ForEach(["Milk"]) { item in
+            ForEach("Milk") { item in
                 TypeText(item)
             }
             """,
@@ -1325,7 +1313,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 target: .target(.predicate(.label("Search")))
             )))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
             "type": .string("string"),
             "value": .string("milk"),
@@ -1348,7 +1336,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 target: .target(.predicate(.label("Search")))
             )))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
             "type": .string("string"),
             "values": .array([.string("milk"), .string("eggs")]),
@@ -1369,7 +1357,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .elementTarget(name: "row"),
             body: [.action(try ActionStep(command: .activate(.ref("row"))))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
             "type": .string("element_target"),
             "target": targetValue(label: "Row 1"),
@@ -1389,7 +1377,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .elementTarget(name: "row"),
             body: [.action(try ActionStep(command: .activate(.ref("row"))))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
             "type": .string("element_target"),
             "target": .object([
@@ -1608,7 +1596,7 @@ final class TheFenceHandlerTests: XCTestCase {
             definitions: [definition],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["detail"] = .string("detailed")
 
         let response = try await fence.execute(
@@ -1672,7 +1660,7 @@ final class TheFenceHandlerTests: XCTestCase {
             name: "shop",
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["detail"] = .string("full")
 
         let response = try await fence.execute(
@@ -1705,7 +1693,7 @@ final class TheFenceHandlerTests: XCTestCase {
             definitions: [definition],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["heist"] = .string("checkout")
 
         let response = try await fence.execute(
@@ -1767,7 +1755,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).values
         arguments["heist"] = .string("checkout")
 
         let response = try await fence.execute(

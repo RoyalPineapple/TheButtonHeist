@@ -27,7 +27,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.makeGetInterfaceRequest(arguments)
-        return DecodedRequestDispatch { fence, _ in try await fence.handleGetInterface(request) }
+        return DecodedRequestDispatch { fence in try await fence.handleGetInterface(request) }
     }
 
     static func decodeGetScreenRequest(
@@ -37,7 +37,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let request = try fence.makeScreenRequest(arguments, requestId: requestId)
-        return DecodedRequestDispatch { fence, _ in try await fence.handleGetScreen(request) }
+        return DecodedRequestDispatch { fence in try await fence.handleGetScreen(request) }
     }
 
     private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {

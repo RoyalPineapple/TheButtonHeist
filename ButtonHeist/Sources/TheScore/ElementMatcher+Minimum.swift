@@ -51,6 +51,10 @@ private extension MatcherAtom {
     }
 }
 
+package protocol PredicateSelectionSubject: ElementPredicateSubject {
+    var predicateMatcherFacts: [AccessibilityMatcherFact] { get }
+}
+
 public struct PredicateCandidate: Sendable, Equatable {
     public let predicate: ElementPredicate
     public let atoms: [MatcherAtom]
@@ -204,8 +208,19 @@ public func minimumUniquePredicate(
     MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: context)
 }
 
+package func minimumUniquePredicate<Subject: PredicateSelectionSubject>(
+    for contextElementId: PredicateSelectionElementId,
+    in elements: [(id: PredicateSelectionElementId, element: Subject)]
+) -> MinimumPredicateSelection? {
+    MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: elements)
+}
+
 public enum MinimumPredicateSelector {
     public static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
+        predicateCandidates(forSubject: element)
+    }
+
+    package static func predicateCandidates(forSubject element: some PredicateSelectionSubject) -> [PredicateCandidate] {
         let atoms = matcherAtoms(for: element)
         guard !atoms.isEmpty else { return [] }
 
@@ -232,16 +247,26 @@ public enum MinimumPredicateSelector {
         for contextElementId: PredicateSelectionElementId,
         in context: PredicateSelectionContext
     ) -> MinimumPredicateSelection? {
-        guard let targetElement = context.elements.first(where: { $0.id == contextElementId }) else {
+        minimumUniquePredicate(
+            for: contextElementId,
+            in: context.elements.map { (id: $0.id, element: $0.element) }
+        )
+    }
+
+    package static func minimumUniquePredicate<Subject: PredicateSelectionSubject>(
+        for contextElementId: PredicateSelectionElementId,
+        in elements: [(id: PredicateSelectionElementId, element: Subject)]
+    ) -> MinimumPredicateSelection? {
+        guard let targetElement = elements.first(where: { $0.id == contextElementId }) else {
             return nil
         }
 
-        let candidates = predicateCandidates(for: targetElement.element)
+        let candidates = predicateCandidates(forSubject: targetElement.element)
         var bestAmbiguousCandidate: PredicateCandidate?
         var bestAmbiguousRank: PredicateCandidate.OrdinalBaseRank?
 
         for candidate in candidates {
-            let matches = context.elements.filter { $0.element.matches(candidate.predicate) }
+            let matches = elements.filter { candidate.predicate.matches($0.element) }
             guard matches.contains(where: { $0.id == contextElementId }) else { continue }
             if matches.count == 1 {
                 return MinimumPredicateSelection(
@@ -258,7 +283,7 @@ public enum MinimumPredicateSelector {
         }
 
         guard let strongestSemanticCandidate = bestAmbiguousCandidate else { return nil }
-        let matches = context.elements.filter { $0.element.matches(strongestSemanticCandidate.predicate) }
+        let matches = elements.filter { strongestSemanticCandidate.predicate.matches($0.element) }
         guard let ordinal = matches.firstIndex(where: { $0.id == contextElementId }) else { return nil }
 
         let ordinalCandidate = PredicateCandidate(
@@ -273,8 +298,8 @@ public enum MinimumPredicateSelector {
         )
     }
 
-    private static func matcherAtoms(for element: HeistElement) -> [MatcherAtom] {
-        let facts = AccessibilityPolicy.matcherFacts(for: element)
+    private static func matcherAtoms(for element: some PredicateSelectionSubject) -> [MatcherAtom] {
+        let facts = element.predicateMatcherFacts
         var atoms: [MatcherAtom] = []
         atoms.reserveCapacity(facts.count)
 

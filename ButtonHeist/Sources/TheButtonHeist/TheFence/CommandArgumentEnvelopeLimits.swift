@@ -29,7 +29,7 @@ enum CommandArgumentEnvelopeLimits {
         maxObjectKeys: Int
     ) throws {
         try PublicJSONValuePreflight.validateObject(
-            arguments.argumentValues,
+            arguments.values,
             policy: PublicJSONInputPolicy(
                 maxBytes: maxBytes,
                 maxNestingDepth: maxDepth,

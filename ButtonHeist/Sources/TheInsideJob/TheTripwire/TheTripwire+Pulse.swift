@@ -14,8 +14,7 @@ extension TheTripwire {
         let target: PulseTick
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
-        var nextSettleWaiterID = 0
-        var settleWaiters: [SettleWaiter] = []
+        var settleWaiters = WaiterStore<SettleWaiter>()
 
         init(link: CADisplayLink, target: PulseTick) {
             self.link = link
@@ -35,7 +34,6 @@ extension TheTripwire {
     }
 
     struct SettleWaiter {
-        let id: Int
         var quietFrames: Int
         let requiredQuietFrames: Int
         let deadline: CFAbsoluteTime
@@ -59,8 +57,7 @@ extension TheTripwire {
         guard let context = runningContext else { return }
         context.link.invalidate()
 
-        let waiters = context.settleWaiters
-        context.settleWaiters.removeAll()
+        let waiters = context.settleWaiters.removeAll()
 
         for waiter in waiters {
             waiter.continuation.resume(returning: false)
@@ -85,20 +82,18 @@ extension TheTripwire {
     /// Returns true if settled before timeout, false if timed out.
     func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
         guard let context = runningContext else { return false }
-        let waiterID = context.nextSettleWaiterID
-        context.nextSettleWaiterID += 1
+        let waiterID = context.settleWaiters.reserveID()
         let oneShot = OneShotContinuation<Bool>()
 
         let result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 if oneShot.register(continuation) {
-                    context.settleWaiters.append(SettleWaiter(
-                        id: waiterID,
+                    context.settleWaiters.insert(SettleWaiter(
                         quietFrames: 0,
                         requiredQuietFrames: requiredQuietFrames,
                         deadline: CFAbsoluteTimeGetCurrent() + timeout,
                         continuation: oneShot
-                    ))
+                    ), id: waiterID)
                 } else {
                     continuation.resume(returning: false)
                 }
@@ -110,14 +105,8 @@ extension TheTripwire {
         return result
     }
 
-    private func removeSettleWaiter(id: Int) {
-        guard let context = runningContext,
-              let index = context.settleWaiters.firstIndex(where: { $0.id == id })
-        else {
-            return
-        }
-
-        context.settleWaiters.remove(at: index)
+    private func removeSettleWaiter(id: UInt64) {
+        _ = runningContext?.settleWaiters.remove(id: id)
     }
 
     /// Wait for the interface to become all clear.
@@ -213,23 +202,19 @@ extension TheTripwire {
     }
 
     private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {
-        for index in context.settleWaiters.indices {
+        context.settleWaiters.updateAll { waiter in
             if isQuiet {
-                context.settleWaiters[index].quietFrames += 1
+                waiter.quietFrames += 1
             } else {
-                context.settleWaiters[index].quietFrames = 0
+                waiter.quietFrames = 0
             }
         }
 
-        for index in context.settleWaiters.indices.reversed() {
-            let waiter = context.settleWaiters[index]
-            if waiter.quietFrames >= waiter.requiredQuietFrames {
-                let waiter = context.settleWaiters.remove(at: index)
-                waiter.continuation.resume(returning: true)
-            } else if now >= waiter.deadline {
-                let waiter = context.settleWaiters.remove(at: index)
-                waiter.continuation.resume(returning: false)
-            }
+        let completed = context.settleWaiters.removeAll {
+            $0.quietFrames >= $0.requiredQuietFrames || now >= $0.deadline
+        }
+        for waiter in completed {
+            waiter.continuation.resume(returning: waiter.quietFrames >= waiter.requiredQuietFrames)
         }
     }
 

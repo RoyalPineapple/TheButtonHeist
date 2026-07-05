@@ -570,6 +570,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             .init(back, heistId: "back_button"),
         ])
         brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
+        let notificationWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        defer { notificationWindow.cancel() }
         brains.stash.accessibilityNotifications.record(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload(acidObject),
@@ -580,7 +582,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
+            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen),
+            notificationWindow: notificationWindow
         )
 
         let notification = try XCTUnwrap(
@@ -609,6 +612,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let finalScreen = Screen.makeForTests([
             .init(saved, heistId: "saved", object: notifiedObject),
         ])
+        let notificationWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        defer { notificationWindow.cancel() }
         brains.stash.accessibilityNotifications.record(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload(notifiedObject),
@@ -623,7 +628,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: finalScreen)
+            settleOutcome: settledOutcome(finalScreen: finalScreen),
+            notificationWindow: notificationWindow
         )
 
         let notification = try XCTUnwrap(

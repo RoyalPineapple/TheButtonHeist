@@ -79,34 +79,18 @@ struct HeistSwiftFileCompiler: Sendable {
         let moduleCache = Self.sharedModuleCacheDirectory
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
-        var compileDiagnostics: [String] = []
-        for resolution in HeistSwiftFileEntryResolution.allCases {
-            let compileDirectory = try writeCompileDirectory(
-                at: tempURL,
-                source: source,
-                entry: entry,
-                resolution: resolution
-            )
+        let compileDirectory = try writeCompileDirectory(
+            at: tempURL,
+            source: source,
+            entry: entry
+        )
 
-            do {
-                return try compile(
-                    source: source,
-                    compileDirectory: compileDirectory,
-                    buildDirectory: buildDirectory,
-                    moduleCache: moduleCache,
-                    artifacts: artifacts
-                )
-            } catch let error as HeistSwiftFileCompilerError {
-                guard case .compileFailed(_, let diagnostics) = error else {
-                    throw error
-                }
-                compileDiagnostics.append(diagnostics)
-            }
-        }
-
-        throw HeistSwiftFileCompilerError.compileFailed(
-            source.path,
-            compileDiagnostics.joined(separator: "\n")
+        return try compile(
+            source: source,
+            compileDirectory: compileDirectory,
+            buildDirectory: buildDirectory,
+            moduleCache: moduleCache,
+            artifacts: artifacts
         )
     }
 
@@ -162,8 +146,7 @@ struct HeistSwiftFileCompiler: Sendable {
     private func writeCompileDirectory(
         at tempURL: URL,
         source: URL,
-        entry: HeistSwiftFileEntrySymbol,
-        resolution: HeistSwiftFileEntryResolution
+        entry: HeistSwiftFileEntrySymbol
     ) throws -> URL {
         let sourcesURL = tempURL
             .appendingPathComponent("Sources", isDirectory: true)
@@ -178,7 +161,7 @@ struct HeistSwiftFileCompiler: Sendable {
         import Foundation
         import ThePlans
 
-        let plan: HeistPlan = \(resolution.planExpression(for: entry))
+        let plan: HeistPlan = try \(entry.name)()
         FileHandle.standardOutput.write(try plan.canonicalHeistJSONData())
         """
         try wrapper.write(
@@ -264,20 +247,6 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
             return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
         case .runtimeSafetyFailed(let diagnostics):
             return "compiled Swift heist failed runtime safety: \(diagnostics)"
-        }
-    }
-}
-
-private enum HeistSwiftFileEntryResolution: CaseIterable {
-    case value
-    case function
-
-    func planExpression(for entry: HeistSwiftFileEntrySymbol) -> String {
-        switch self {
-        case .value:
-            return entry.name
-        case .function:
-            return "try \(entry.name)()"
         }
     }
 }

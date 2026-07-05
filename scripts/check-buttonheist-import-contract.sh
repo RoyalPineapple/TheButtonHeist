@@ -75,6 +75,7 @@ cleanup() {
     rm -rf "$SCRATCH_PATH"
     rm -rf "$SWIFT_CACHE_PATH"
     rm -f "$FIXTURE_DIR/Package.resolved"
+    rm -f "$DSL_FIXTURE_DIR/Package.resolved"
     rm -f "$PUBLIC_PRODUCTS_FIXTURE_DIR/Package.resolved"
     rm -f "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Package.resolved"
 }

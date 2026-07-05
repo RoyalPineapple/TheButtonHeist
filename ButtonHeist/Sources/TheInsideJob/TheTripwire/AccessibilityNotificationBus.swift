@@ -38,20 +38,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         }
     }
 
-    private final class TransitionWaiter {
+    private struct TransitionWaiter {
         let afterSequence: UInt64
         let continuation: OneShotContinuation<AccessibilityNotificationCursor?>
         let timeoutTask: Task<Void, Never>?
-
-        init(
-            afterSequence: UInt64,
-            continuation: OneShotContinuation<AccessibilityNotificationCursor?>,
-            timeoutTask: Task<Void, Never>?
-        ) {
-            self.afterSequence = afterSequence
-            self.continuation = continuation
-            self.timeoutTask = timeoutTask
-        }
     }
 
     private let maxBufferedEvents = 64
@@ -62,8 +52,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
-    private var transitionWaiters: [UInt64: TransitionWaiter] = [:]
-    private var nextTransitionWaiterId: UInt64 = 0
+    private var transitionWaiters = WaiterStore<TransitionWaiter>()
 
     var latestSequence: UInt64 {
         lock.lock()
@@ -104,7 +93,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         after cursor: AccessibilityNotificationCursor,
         timeout: TimeInterval
     ) async -> AccessibilityNotificationCursor? {
-        let waiterId = nextTransitionWaiterIdentifier()
+        let waiterId = reserveTransitionWaiterIdentifier()
         let continuationBox = OneShotContinuation<AccessibilityNotificationCursor?>()
 
         let result: AccessibilityNotificationCursor? = await withTaskCancellationHandler {
@@ -132,15 +121,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
                 }
 
                 let timeoutMilliseconds = Int64(max(1, timeout * 1_000))
-                let timeoutTask = Task { [weak self] in
-                    guard await Task.cancellableSleep(for: .milliseconds(timeoutMilliseconds)) else { return }
+                let timeoutTask = waiterTimeout(after: .milliseconds(timeoutMilliseconds)) { [weak self] in
                     self?.completeTransitionWaiter(waiterId, returning: nil)
                 }
-                transitionWaiters[waiterId] = TransitionWaiter(
+                transitionWaiters.insert(TransitionWaiter(
                     afterSequence: cursor.sequence,
                     continuation: continuationBox,
                     timeoutTask: timeoutTask
-                )
+                ), id: waiterId)
                 lock.unlock()
             }
         } onCancel: {
@@ -156,9 +144,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         if kind == .screenChanged, hasActiveNotificationScopeLocked {
             latestScopedScreenChangedSequenceStorage = sequence
         }
-        let resumed = transitionWaiters.values.filter { $0.afterSequence < sequence }
-        transitionWaiters = transitionWaiters.filter { $0.value.afterSequence >= sequence }
-        return Array(resumed)
+        return transitionWaiters.removeAll { $0.afterSequence < sequence }
     }
 
     var hasActiveNotificationScope: Bool {
@@ -171,12 +157,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         activeHeistScopes > 0 || activeActionWindows > 0
     }
 
-    private func nextTransitionWaiterIdentifier() -> UInt64 {
+    private func reserveTransitionWaiterIdentifier() -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
 
-        nextTransitionWaiterId += 1
-        return nextTransitionWaiterId
+        return transitionWaiters.reserveID()
     }
 
     private func completeTransitionWaiter(
@@ -184,7 +169,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         returning cursor: AccessibilityNotificationCursor?
     ) {
         lock.lock()
-        let waiter = transitionWaiters.removeValue(forKey: waiterId)
+        let waiter = transitionWaiters.remove(id: waiterId)
         lock.unlock()
 
         waiter?.timeoutTask?.cancel()

@@ -1,4 +1,4 @@
-public enum RepairScoringReason: Codable, Sendable, Hashable {
+public enum RepairScoringReason: String, Codable, Sendable, Hashable {
     case oldTargetIsCurrentMatch
     case identifierUnchanged
     case labelUnchanged
@@ -32,7 +32,7 @@ public enum RepairSuggestionReason: Codable, Sendable, Hashable {
     case currentFailureExpectationUnmet
 }
 
-public enum RepairCaveat: Codable, Sendable, Hashable {
+public enum RepairCaveat: String, Codable, Sendable, Hashable {
     case candidateDoesNotExposeSameActionFamily
     case ordinalDisambiguation
     case tiedBestCandidates
@@ -40,7 +40,7 @@ public enum RepairCaveat: Codable, Sendable, Hashable {
     case currentFailureFullAfterSnapshotFallback
 }
 
-public enum RepairEvidenceSource: Codable, Sendable, Hashable {
+public enum RepairEvidenceSource: String, Codable, Sendable, Hashable {
     case lastSuccess
     case currentFailure
 }
@@ -55,7 +55,7 @@ public enum RepairAfterDiffObservation: Codable, Sendable, Hashable {
 }
 
 extension RepairSuggestionReason {
-    package var prose: String {
+    package var reportText: String {
         switch self {
         case .oldTargetResolvedInLastSuccessfulSnapshot:
             return "Old target resolved to one element in the last successful before snapshot."
@@ -74,9 +74,9 @@ extension RepairSuggestionReason {
         case .ambiguousTargetSuccessorSelected:
             return "Best successor was selected from the ambiguous current matches."
         case .scoring(let reason):
-            return reason.prose
+            return reason.reportText
         case .afterDiff(let source, let observation):
-            return "\(source.afterDiffPrefix) \(observation.prose)."
+            return "\(source.afterDiffPrefix) \(observation.reportText)."
         case .lastSuccessfulExpectationMet:
             return "Last successful result met its expectation."
         case .currentFailureExpectationUnmet:
@@ -86,7 +86,7 @@ extension RepairSuggestionReason {
 }
 
 extension RepairScoringReason {
-    var prose: String {
+    var reportText: String {
         switch self {
         case .oldTargetIsCurrentMatch:
             return "Old target is one of the current matches."
@@ -125,7 +125,7 @@ extension RepairScoringReason {
 }
 
 extension RepairCaveat {
-    package var prose: String {
+    package var reportText: String {
         switch self {
         case .candidateDoesNotExposeSameActionFamily:
             return "Candidate does not expose the same action family."
@@ -153,7 +153,7 @@ extension RepairEvidenceSource {
 }
 
 extension RepairAfterDiffObservation {
-    var prose: String {
+    var reportText: String {
         switch self {
         case .noSemanticChange:
             return "observed no semantic change"
