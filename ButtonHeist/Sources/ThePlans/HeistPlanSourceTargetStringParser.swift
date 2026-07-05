@@ -38,11 +38,13 @@ extension HeistPlanSourceParser {
         case "traits":
             try expectSymbol("(")
             let traits = try parseTraitArray(role: "traits")
+            try rejectEmptyPredicateCollection(traits, role: "traits")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(traits: traits))
         case "actions":
             try expectSymbol("(")
             let actions = try parseActionArray(role: "actions")
+            try rejectEmptyPredicateCollection(actions, role: "actions")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(actions: actions))
         case "customContent":
@@ -53,6 +55,7 @@ extension HeistPlanSourceParser {
         case "rotors":
             try expectSymbol("(")
             let matches = try parseStringMatchArray(role: "rotors")
+            try rejectEmptyPredicateCollection(matches, role: "rotors")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(rotors: matches))
         case "exclude":
@@ -71,7 +74,10 @@ extension HeistPlanSourceParser {
             try expectSymbol(",")
             try expectIdentifier("ordinal")
             try expectSymbol(":")
-            let ordinal = try parseInteger()
+            let ordinal = try parseSignedInteger()
+            guard ordinal >= 0 else {
+                throw error(previous, ElementTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription)
+            }
             try expectSymbol(")")
             return .predicate(predicate, ordinal: ordinal)
         default:
@@ -109,11 +115,13 @@ extension HeistPlanSourceParser {
         case "traits":
             try expectSymbol("(")
             let traits = try parseTraitArray(role: "traits")
+            try rejectEmptyPredicateCollection(traits, role: "traits")
             try expectSymbol(")")
             return ElementPredicateTemplate(traits: traits)
         case "actions":
             try expectSymbol("(")
             let actions = try parseActionArray(role: "actions")
+            try rejectEmptyPredicateCollection(actions, role: "actions")
             try expectSymbol(")")
             return ElementPredicateTemplate(actions: actions)
         case "customContent":
@@ -124,6 +132,7 @@ extension HeistPlanSourceParser {
         case "rotors":
             try expectSymbol("(")
             let matches = try parseStringMatchArray(role: "rotors")
+            try rejectEmptyPredicateCollection(matches, role: "rotors")
             try expectSymbol(")")
             return ElementPredicateTemplate(rotors: matches)
         case "exclude":
@@ -149,7 +158,7 @@ extension HeistPlanSourceParser {
     mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
         var checks: [ElementPredicateCheck<StringExpr>] = []
         if currentToken.isSymbol(")") {
-            return ElementPredicateTemplate()
+            throw error(currentToken, ".element(...) requires at least one non-empty predicate check")
         }
         while true {
             if currentToken.isSymbol("."),
@@ -202,11 +211,13 @@ extension HeistPlanSourceParser {
         case "traits":
             try expectSymbol("(")
             let traits = try parseTraitArray(role: "traits")
+            try rejectEmptyPredicateCollection(traits, role: "traits")
             try expectSymbol(")")
             return .traits(traits.heistTraitSet)
         case "actions":
             try expectSymbol("(")
             let actions = try parseActionArray(role: "actions")
+            try rejectEmptyPredicateCollection(actions, role: "actions")
             try expectSymbol(")")
             return .actions(Set(actions))
         case "customContent":
@@ -217,6 +228,7 @@ extension HeistPlanSourceParser {
         case "rotors":
             try expectSymbol("(")
             let matches = try parseStringMatchArray(role: "rotors")
+            try rejectEmptyPredicateCollection(matches, role: "rotors")
             try expectSymbol(")")
             return .rotors(matches)
         case "exclude":
@@ -242,6 +254,11 @@ extension HeistPlanSourceParser {
             try expectSymbol("]")
         }
         return traits
+    }
+
+    func rejectEmptyPredicateCollection<C: Collection>(_ values: C, role: String) throws {
+        guard values.isEmpty else { return }
+        throw error(previous, "\(role) predicate payload must not be empty")
     }
 
     mutating func concretePredicate(from template: ElementPredicateTemplate) throws -> ElementPredicate {
@@ -275,7 +292,11 @@ extension HeistPlanSourceParser {
         _ match: StringMatch<StringExpr>,
         role: String
     ) throws -> StringMatch<String> {
-        try match.map { try concreteString($0, role: role) }
+        let result = try match.map { try concreteString($0, role: role) }
+        if result.valueIfPresent?.isEmpty == true {
+            throw error(currentToken, "\(role) match value must not be empty")
+        }
+        return result
     }
 
     mutating func concreteStringMatch(
@@ -283,7 +304,11 @@ extension HeistPlanSourceParser {
         role: String
     ) throws -> StringMatch<String>? {
         guard let match else { return nil }
-        return try match.map { try concreteString($0, role: role) }
+        let result = try match.map { try concreteString($0, role: role) }
+        if result.valueIfPresent?.isEmpty == true {
+            throw error(currentToken, "\(role) match value must not be empty")
+        }
+        return result
     }
 
     func concreteString(_ string: StringExpr, role: String) throws -> String {
@@ -311,7 +336,7 @@ extension HeistPlanSourceParser {
         if startsStringMatchDotCall {
             return try parseStringMatchDotCall(field: field)
         }
-        return StringMatch(try parseStringExpr())
+        return try validatedStringMatch(.exact, value: try parseStringExpr(), field: field, token: previous)
     }
 
     mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
@@ -324,7 +349,7 @@ extension HeistPlanSourceParser {
         if startsStringMatchDotCall {
             return try parseStringMatchDotCall(field: field)
         }
-        return StringMatch(try parseStringExpr())
+        return try validatedStringMatch(.exact, value: try parseStringExpr(), field: field, token: previous)
     }
 
     mutating func parseStringMatchDotCall(field: String) throws -> StringMatch<StringExpr> {
@@ -375,8 +400,8 @@ extension HeistPlanSourceParser {
         token: HeistPlanSourceToken
     ) throws -> StringMatch<StringExpr> {
         let match = StringMatch(mode: mode, value: value)
-        if match.hasInvalidEmptyBroadLiteral {
-            throw error(token, "\(field) \(mode.rawValue) match value must not be empty")
+        if match.value.stringMatchLiteralIsEmpty == true {
+            throw error(token, "\(field) match value must not be empty")
         }
         return match
     }

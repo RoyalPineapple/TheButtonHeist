@@ -9,7 +9,8 @@ extension HeistPlanRuntimeSafetyValidator {
         switch target {
         case .target(let target):
             validateElementTarget(target, path: path)
-        case .predicate(let predicate, _):
+        case .predicate(let predicate, let ordinal):
+            validateOrdinal(ordinal, path: "\(path).ordinal")
             validateElementPredicate(predicate, path: path, scope: scope)
         case .ref(let reference):
             validateReference(reference, path: path, role: "target_ref")
@@ -65,17 +66,37 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validateElementTarget(_ target: ElementTarget, path: String) {
         switch target {
-        case .predicate(let predicate, _):
+        case .predicate(let predicate, let ordinal):
+            validateOrdinal(ordinal, path: "\(path).ordinal")
             validateElementPredicate(predicate, path: path)
         }
+    }
+
+    mutating func validateOrdinal(_ ordinal: Int?, path: String) {
+        guard let ordinal, ordinal < 0 else { return }
+        fail(
+            path: path,
+            contract: "ordinal must be non-negative",
+            observed: "\(ordinal)",
+            correction: "Use an ordinal of 0 or greater."
+        )
     }
 
     mutating func validateElementPredicate(
         _ predicate: ElementPredicate,
         path: String
     ) {
+        if let description = predicate.invalidEmptyPayloadDescription {
+            fail(
+                path: path,
+                contract: "element predicate must not be empty",
+                observed: description,
+                correction: "Use a non-empty label, identifier, value, hint, traits, actions, customContent, rotors, or exclude check."
+            )
+        }
         for (index, check) in predicate.checks.enumerated() {
             let checkPath = "\(path).checks[\(index)]"
+            validateElementPredicateCheck(check, path: checkPath)
             switch check {
             case .label(let match):
                 validateString(match, path: "\(checkPath).label", role: "element label")
@@ -105,8 +126,17 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
+        if let description = predicate.invalidEmptyPayloadDescription {
+            fail(
+                path: path,
+                contract: "element predicate must not be empty",
+                observed: description,
+                correction: "Use a non-empty label, identifier, value, hint, traits, actions, customContent, rotors, or exclude check."
+            )
+        }
         for (index, check) in predicate.checks.enumerated() {
             let checkPath = "\(path).checks[\(index)]"
+            validateElementPredicateCheck(check, path: checkPath)
             switch check {
             case .label(let match):
                 validateString(match, path: "\(checkPath).label", scope: scope)
@@ -133,6 +163,19 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateElementPredicate(ElementPredicateTemplate([check]), path: "\(checkPath).exclude", scope: scope)
             }
         }
+    }
+
+    mutating func validateElementPredicateCheck<Text>(
+        _ check: ElementPredicateCheck<Text>,
+        path: String
+    ) {
+        guard let description = check.invalidEmptyPayloadDescription else { return }
+        fail(
+            path: path,
+            contract: "element predicate check payload must not be empty",
+            observed: description,
+            correction: "Use non-empty matcher values and non-empty trait/action/rotor collections."
+        )
     }
 
     mutating func validateParameter(_ parameter: String, path: String, role: String) {

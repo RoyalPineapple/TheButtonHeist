@@ -54,6 +54,41 @@ import Testing
     }
 }
 
+@Test func `runtime parser rejects empty element predicates and matcher payloads`() {
+    let cases = [
+        ("Activate(.element())", ".element(...) requires at least one non-empty predicate check"),
+        (#"Activate(.label(""))"#, "label match value must not be empty"),
+        ("Activate(.traits([]))", "traits predicate payload must not be empty"),
+        ("Activate(.actions([]))", "actions predicate payload must not be empty"),
+        ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
+        ("Activate(.customContent(.match()))", "customContent match must include label, value, or isImportant"),
+    ]
+
+    for (source, expected) in cases {
+        expect(compileError(root(source)), contains: expected)
+    }
+}
+
+@Test func `runtime parser requires canonical dotted enum cases`() throws {
+    _ = try HeistPlanSourceCompiler().compile(root("""
+    Activate(.traits([.button]))
+    Edit(.paste)
+    Rotor("Headings", on: .label("Article"), direction: .previous)
+    Mechanical.Swipe(.label("List"), .down)
+    """))
+
+    let cases = [
+        ("Activate(.traits([button]))", "accessibility trait must use canonical dotted enum-case syntax"),
+        ("Edit(paste)", "edit action must use canonical dotted enum-case syntax"),
+        (#"Rotor("Headings", on: .label("Article"), direction: previous)"#, "rotor direction must use canonical dotted enum-case syntax"),
+        (#"Mechanical.Swipe(.label("List"), down)"#, "swipe direction must use canonical dotted enum-case syntax"),
+    ]
+
+    for (source, expected) in cases {
+        expect(compileError(root(source)), contains: expected)
+    }
+}
+
 @Test func `inline plan source type text replacement and clear compile`() throws {
     let replacement = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("b", into: .identifier("Field"), replacingExisting: true)

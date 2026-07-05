@@ -409,15 +409,23 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
 @Test
 func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
     let targets: [(String, ElementTarget)] = [
+        ("label exact", .label("")),
         ("label contains", .label(.contains(""))),
         ("label prefix", .label(.prefix(""))),
         ("label suffix", .label(.suffix(""))),
+        ("identifier exact", .identifier("")),
         ("identifier contains", .identifier(.contains(""))),
         ("identifier prefix", .identifier(.prefix(""))),
         ("identifier suffix", .identifier(.suffix(""))),
+        ("value exact", .value("")),
         ("value contains", .value(.contains(""))),
         ("value prefix", .value(.prefix(""))),
         ("value suffix", .value(.suffix(""))),
+        ("hint exact", .hint("")),
+        ("traits empty", .traits([])),
+        ("actions empty", .actions([])),
+        ("custom content empty", .customContent(CustomContentMatch())),
+        ("rotors empty", .rotors([])),
     ]
 
     for (label, target) in targets {
@@ -428,10 +436,43 @@ func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
         let failures = runtimeSafetyFailures(for: raw)
 
         #expect(
-            failures.contains { $0.contract.contains("string match value must not be empty") },
+            failures.contains { $0.contract.contains("element predicate") },
             "\(label): \(failures)"
         )
     }
+}
+
+@Test
+func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
+    let concreteRaw = HeistPlanAdmissionCandidate(body: [
+        .action(try ActionStep(command: .activate(.target(.predicate(.label("Save"), ordinal: -1))))),
+    ])
+    let expressionRaw = HeistPlanAdmissionCandidate(body: [
+        .action(try ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
+    ])
+
+    for raw in [concreteRaw, expressionRaw] {
+        let failures = runtimeSafetyFailures(for: raw)
+
+        #expect(failures.contains {
+            $0.contract == "ordinal must be non-negative"
+                && $0.observed == "-1"
+        }, "\(failures)")
+    }
+}
+
+@Test
+func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .wait(WaitStep(predicate: .exists(ElementPredicate()))),
+    ])
+
+    let failures = runtimeSafetyFailures(for: raw)
+
+    #expect(failures.contains {
+        $0.contract == "element predicate must not be empty"
+            && $0.observed.contains("ElementTarget predicate requires")
+    }, "\(failures)")
 }
 
 @Test

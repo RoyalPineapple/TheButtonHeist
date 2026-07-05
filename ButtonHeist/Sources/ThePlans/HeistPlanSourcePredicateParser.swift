@@ -629,7 +629,11 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return CustomContentMatch(label: label, value: value, isImportant: isImportant)
+        let match = CustomContentMatch(label: label, value: value, isImportant: isImportant)
+        guard match.hasPredicateLiteral else {
+            throw error(previous, "\(role) match must include label, value, or isImportant")
+        }
+        return match
     }
 
     mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch<StringExpr> {

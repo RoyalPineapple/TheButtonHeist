@@ -83,11 +83,14 @@ extension HeistPlanSourceParser {
         return reference
     }
 
-    mutating func parseEnumCase<T: RawRepresentable>(
+    mutating func parseEnumCase<T: RawRepresentable & CaseIterable>(
         _ type: T.Type,
         role: String
-    ) throws -> T where T.RawValue == String {
-        if consumeSymbol(".") {}
+    ) throws -> T where T.RawValue == String, T.AllCases: Collection {
+        guard consumeSymbol(".") else {
+            let example = T.allCases.first.map { ".\($0.rawValue)" } ?? ".case"
+            throw error(currentToken, "\(role) must use canonical dotted enum-case syntax like \(example)")
+        }
         let token = currentToken
         let name = try parseIdentifier()
         guard let value = T(rawValue: name) else {

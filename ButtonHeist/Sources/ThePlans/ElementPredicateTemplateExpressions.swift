@@ -50,8 +50,19 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         checks.contains { $0.hasPredicateLiteral }
     }
 
+    public var invalidEmptyPayloadDescription: String? {
+        if let description = checks.firstNonNil({ $0.invalidEmptyPayloadDescription }) {
+            return description
+        }
+        return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription
+    }
+
     public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
-        ElementPredicate(try checks.map { try $0.resolve(in: environment) })
+        let predicate = ElementPredicate(try checks.map { try $0.resolve(in: environment) })
+        if let description = predicate.invalidEmptyPayloadDescription {
+            throw HeistExpressionError.invalidResolvedPredicate(description)
+        }
+        return predicate
     }
 
     private static func checks(
@@ -97,16 +108,22 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate template")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        try self.init(container: container)
+        try self.init(container: container, requiresNonEmpty: true)
     }
 
     static func decodeAllowingAdditionalKeys(from decoder: Decoder) throws -> ElementPredicateTemplate {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        return try ElementPredicateTemplate(container: container)
+        return try ElementPredicateTemplate(container: container, requiresNonEmpty: container.contains(.checks))
     }
 
-    init(container: KeyedDecodingContainer<CodingKeys>) throws {
+    init(container: KeyedDecodingContainer<CodingKeys>, requiresNonEmpty: Bool) throws {
         checks = try container.decodeIfPresent([ElementPredicateCheck<StringExpr>].self, forKey: .checks) ?? []
+        if requiresNonEmpty, let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath + [CodingKeys.checks],
+                debugDescription: description
+            ))
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
