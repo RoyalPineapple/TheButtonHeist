@@ -49,6 +49,31 @@ final class TripwireIntegrationTests: XCTestCase {
         testLayer.removeFromSuperlayer()
     }
 
+    func testWaitForAllClearIgnoresOpacityOnlyAnimation() async {
+        let windows = tripwire.getTraversableWindows()
+        guard let window = windows.first?.window else {
+            XCTFail("No window available")
+            return
+        }
+
+        let testLayer = CALayer()
+        testLayer.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+        window.layer.addSublayer(testLayer)
+        defer {
+            testLayer.removeAllAnimations()
+            testLayer.removeFromSuperlayer()
+        }
+
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 1.0
+        animation.toValue = 0.1
+        animation.duration = 10.0
+        animation.repeatCount = .infinity
+        testLayer.add(animation, forKey: "testOpacityOnly")
+
+        await assertAllClear("Opacity-only layer animation should not block geometry settle", timeout: 0.5)
+    }
+
     func testWaitForAllClearSettlesAfterShortAnimation() async {
         let windows = tripwire.getTraversableWindows()
         guard let window = windows.first?.window else {
@@ -211,11 +236,12 @@ final class TripwireIntegrationTests: XCTestCase {
             return
         }
 
-        let baseline = tripwire.scanLayers().fingerprint
-
         let testLayer = CALayer()
         testLayer.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
         window.layer.addSublayer(testLayer)
+        CATransaction.flush()
+
+        let baseline = tripwire.scanLayers().fingerprint
 
         let animation = CABasicAnimation(keyPath: "position.x")
         animation.fromValue = 0
@@ -279,8 +305,9 @@ final class TripwireIntegrationTests: XCTestCase {
     private func fingerprintDescription(
         _ fingerprint: TheTripwire.PresentationFingerprint
     ) -> String {
-        "layers=\(fingerprint.layerCount) x=\(fingerprint.positionXSum) "
-            + "y=\(fingerprint.positionYSum) opacity=\(fingerprint.opacitySum)"
+        "layers=\(fingerprint.layerCount) minX=\(fingerprint.frameMinXSum) "
+            + "minY=\(fingerprint.frameMinYSum) width=\(fingerprint.frameWidthSum) "
+            + "height=\(fingerprint.frameHeightSum)"
     }
 
 }

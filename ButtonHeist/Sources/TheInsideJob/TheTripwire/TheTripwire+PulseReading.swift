@@ -19,39 +19,42 @@ extension TheTripwire {
         let quietFrames: Int
 
         /// The UI is settled when no layout is pending and the presentation
-        /// fingerprint has been stable for 2+ frames. Animation keys remain
-        /// diagnostic; platform-owned stable animations must not block settle.
+        /// geometry fingerprint has been stable for 2+ frames. Animation keys
+        /// remain diagnostic; layer churn that does not move or resize frames
+        /// must not block settle.
         var isSettled: Bool {
             !layoutPending && quietFrames >= 2
         }
     }
 
-    /// Fingerprint of all presentation layer positions in the window hierarchy.
-    /// Summing positions is cheap and catches any layer movement — if anything
-    /// shifts, the sum shifts.
+    /// Fingerprint of all presentation layer frames in the window hierarchy.
+    /// Summing geometry is cheap and catches movement or resizing while
+    /// ignoring layer-only noise such as opacity animations.
     struct PresentationFingerprint {
-        let positionXSum: CGFloat
-        let positionYSum: CGFloat
-        let opacitySum: CGFloat
+        let frameMinXSum: CGFloat
+        let frameMinYSum: CGFloat
+        let frameWidthSum: CGFloat
+        let frameHeightSum: CGFloat
         let layerCount: Int
 
-        private static let posTolerance: CGFloat = 0.5
-        private static let opacityTolerance: CGFloat = 0.05
+        private static let frameTolerance: CGFloat = 0.5
 
         func matches(_ other: PresentationFingerprint) -> Bool {
             layerCount == other.layerCount
-                && abs(positionXSum - other.positionXSum) < Self.posTolerance
-                && abs(positionYSum - other.positionYSum) < Self.posTolerance
-                && abs(opacitySum - other.opacitySum) < Self.opacityTolerance
+                && abs(frameMinXSum - other.frameMinXSum) < Self.frameTolerance
+                && abs(frameMinYSum - other.frameMinYSum) < Self.frameTolerance
+                && abs(frameWidthSum - other.frameWidthSum) < Self.frameTolerance
+                && abs(frameHeightSum - other.frameHeightSum) < Self.frameTolerance
         }
     }
 
     /// Result of a single layer-tree walk that collects fingerprint,
     /// animation, and layout data in one pass.
     struct LayerScan {
-        var positionXSum: CGFloat = 0
-        var positionYSum: CGFloat = 0
-        var opacitySum: CGFloat = 0
+        var frameMinXSum: CGFloat = 0
+        var frameMinYSum: CGFloat = 0
+        var frameWidthSum: CGFloat = 0
+        var frameHeightSum: CGFloat = 0
         var layerCount: Int = 0
         var hasRelevantAnimations = false
         var hasPendingLayout = false
@@ -59,9 +62,10 @@ extension TheTripwire {
 
         var fingerprint: PresentationFingerprint {
             PresentationFingerprint(
-                positionXSum: positionXSum,
-                positionYSum: positionYSum,
-                opacitySum: opacitySum,
+                frameMinXSum: frameMinXSum,
+                frameMinYSum: frameMinYSum,
+                frameWidthSum: frameWidthSum,
+                frameHeightSum: frameHeightSum,
                 layerCount: layerCount
             )
         }
@@ -77,9 +81,11 @@ extension TheTripwire {
             var stack: [CALayer] = [window.layer]
             while let layer = stack.popLast() {
                 let presentationLayer = layer.presentation() ?? layer
-                scan.positionXSum += presentationLayer.position.x
-                scan.positionYSum += presentationLayer.position.y
-                scan.opacitySum += CGFloat(presentationLayer.opacity)
+                let frame = presentationLayer.frame
+                scan.frameMinXSum += frame.minX
+                scan.frameMinYSum += frame.minY
+                scan.frameWidthSum += frame.width
+                scan.frameHeightSum += frame.height
                 scan.layerCount += 1
 
                 if layer.needsLayout() {

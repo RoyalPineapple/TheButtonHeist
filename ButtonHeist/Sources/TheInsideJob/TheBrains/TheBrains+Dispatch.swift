@@ -24,7 +24,7 @@ extension TheBrains {
         }
         switch message {
         case .activate(let target):
-            return await performInteraction(method: .activate, observationScope: .discovery) {
+            return await performInteraction(method: .activate) {
                 await self.actions.executeActivate(target)
             }
         case .increment(let target):

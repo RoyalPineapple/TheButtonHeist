@@ -115,6 +115,28 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(value, "leave at desk")
     }
 
+    func testActivateVisibleTextFieldFallsBackToTapWithoutDiscoveryScroll() async throws {
+        let fixture = try installVisibleTextInputFixture(
+            identifier: "visible_activation_text_field",
+            label: "Customer Name"
+        )
+        defer { fixture.cleanup() }
+
+        XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
+        XCTAssertFalse(fixture.target.isFirstResponder)
+
+        let result = await brains.executeRuntimeAction(.activate(
+            .predicate(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.textEntry]))
+        ))
+
+        XCTAssertTrue(result.success, result.message ?? "visible text field activate failed")
+        XCTAssertTrue(fixture.target.isFirstResponder)
+        XCTAssertEqual(fixture.scrollView.revealRequestCount, 0)
+        XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
+        XCTAssertEqual(result.activationTrace?.tapActivationDispatched, true)
+        XCTAssertEqual(result.activationTrace?.tapActivationSucceeded, true)
+    }
+
     func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
         let fixture = try installNestedScrollActivationFixture(
             identifier: "nested_scroll_checkout_submit",
@@ -465,6 +487,49 @@ final class ElementInflationProductTests: XCTestCase {
 
         scrollView.revealedElements = [target]
         scrollView.updateAccessibilityVisibility()
+        viewController.view.addSubview(scrollView)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 80
+        window.rootViewController = viewController
+        window.isHidden = false
+        window.layoutIfNeeded()
+
+        return TextInputRevealFixture(
+            window: window,
+            scrollView: scrollView,
+            target: target,
+            identifier: identifier,
+            label: label,
+            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
+            frameOrigin: target.frame.origin
+        )
+    }
+
+    private func installVisibleTextInputFixture(
+        identifier: String,
+        label: String
+    ) throws -> TextInputRevealFixture {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+        viewController.view.accessibilityViewIsModal = true
+
+        let scrollView = RevealingScrollView(frame: CGRect(x: 24, y: 80, width: 320, height: 280))
+        scrollView.contentSize = CGSize(width: 320, height: 1_400)
+        scrollView.backgroundColor = .white
+        scrollView.isAccessibilityElement = false
+
+        let target = RefusingActivationTextField(frame: CGRect(x: 40, y: 24, width: 220, height: 44))
+        target.borderStyle = .roundedRect
+        target.accessibilityLabel = label
+        target.accessibilityIdentifier = identifier
+        target.accessibilityValue = ""
+        target.accessibilityTraits = target.accessibilityTraits.union(.textEntry)
+        target.isAccessibilityElement = true
+        scrollView.addSubview(target)
+
         viewController.view.addSubview(scrollView)
 
         let window = UIWindow(windowScene: windowScene)
@@ -912,6 +977,12 @@ private final class SemanticActivationView: UIView {
     override func accessibilityActivate() -> Bool {
         activationCount += 1
         return true
+    }
+}
+
+private final class RefusingActivationTextField: UITextField {
+    override func accessibilityActivate() -> Bool {
+        false
     }
 }
 

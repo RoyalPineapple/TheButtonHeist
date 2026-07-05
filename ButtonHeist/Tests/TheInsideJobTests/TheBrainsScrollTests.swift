@@ -1411,7 +1411,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
         XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
-        XCTAssertNil(brains.stash.liveScrollView(for: inflatedTarget.screenElement))
+        XCTAssertFalse(brains.stash.liveScrollView(for: inflatedTarget.screenElement) === staleScrollView)
     }
 
     func testObjectDeallocatedRetryCanRevealKnownSemanticTargetAgain() async {
