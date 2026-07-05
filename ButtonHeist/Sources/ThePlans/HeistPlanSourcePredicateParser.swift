@@ -301,14 +301,14 @@ extension HeistPlanSourceParser {
                 guard before == nil else {
                     throw error(previous, "\(property) update predicate accepts before only once")
                 }
-                before = try parseStringMatchFieldValue(field: "\(property) before")
+                before = try parseStringPropertyUpdateFieldValue(field: "\(property) before")
             } else if lookaheadLabel("after") {
                 try expectIdentifier("after")
                 try expectSymbol(":")
                 guard after == nil else {
                     throw error(previous, "\(property) update predicate accepts after only once")
                 }
-                after = try parseStringMatchFieldValue(field: "\(property) after")
+                after = try parseStringPropertyUpdateFieldValue(field: "\(property) after")
             } else {
                 throw error(currentToken, "\(property) update predicate accepts before and after")
             }

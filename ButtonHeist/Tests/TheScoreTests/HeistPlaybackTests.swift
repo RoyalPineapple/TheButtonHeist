@@ -409,7 +409,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("emptyForEachPredicate"), "\(error)")
+            XCTAssertTrue("\(error)".contains("ElementTarget predicate requires"), "\(error)")
         }
     }
 

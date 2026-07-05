@@ -231,7 +231,7 @@ private let rootStringCanonicalSwiftDSL = """
 
         WaitFor(.label(query), timeout: .seconds(1))
 
-        If(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .exclude(.traits([.staticText])), .traits([.button]))) {
+        If(.exists(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .exclude(.traits([.staticText])), .traits([.button])))) {
             Warn("ready")
         }
         .else {
@@ -580,6 +580,7 @@ private func compileCanonicalHeist(_ source: String) async throws -> HeistPlan {
 
 private func buttonHeistPackageRoot() -> URL {
     URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()

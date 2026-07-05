@@ -52,7 +52,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     func render(state: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
         switch state {
         case .exists(let predicate):
-            return try render(predicate: predicate, environment: environment)
+            return try renderExistsState(predicate, environment: environment)
         case .missing(let predicate):
             return ".missing(\(try render(predicate: predicate, environment: environment)))"
         case .existsTarget(let target):
@@ -67,7 +67,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     func render(state: AccessibilityPredicate.State, environment: RenderEnvironment) throws -> String {
         switch state {
         case .exists(let predicate):
-            return render(predicate: predicate)
+            return renderExistsState(predicate)
         case .missing(let predicate):
             return ".missing(\(render(predicate: predicate)))"
         case .existsTarget(let target):
@@ -77,6 +77,20 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .all(let states):
             return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
         }
+    }
+
+    func renderExistsState(_ predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
+        if let shorthand = try renderSingleCheckTarget(predicate.checks, environment: environment) {
+            return shorthand
+        }
+        return ".exists(.element(\(try renderElementPredicateTemplateChecks(predicate, environment: environment))))"
+    }
+
+    func renderExistsState(_ predicate: ElementPredicate) -> String {
+        if let shorthand = renderSingleCheckTarget(predicate.checks) {
+            return shorthand
+        }
+        return ".exists(.element(\(renderElementPredicateChecks(predicate))))"
     }
 
     func render(change: AccessibilityPredicate.Change, environment: RenderEnvironment) throws -> String {

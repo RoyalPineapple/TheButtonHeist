@@ -149,7 +149,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ThePlansTests",
-            dependencies: ["ThePlans"],
+            dependencies: ["ButtonHeistTestSupport", "ThePlans"],
             path: "ButtonHeist/Tests/ThePlansTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

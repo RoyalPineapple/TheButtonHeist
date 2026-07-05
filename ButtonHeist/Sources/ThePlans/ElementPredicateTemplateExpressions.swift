@@ -51,7 +51,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     public var invalidEmptyPayloadDescription: String? {
-        if let description = checks.firstNonNil({ $0.invalidEmptyPayloadDescription }) {
+        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
             return description
         }
         return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription

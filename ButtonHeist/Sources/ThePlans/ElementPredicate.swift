@@ -333,7 +333,7 @@ public enum ElementPredicateCheck<Text: StringMatchPayload>: Sendable, Equatable
             if matches.isEmpty {
                 return "rotors check must not be empty"
             }
-            return matches.firstNonNil { Self.emptyStringPayloadDescription($0, field: "rotor") }
+            return matches.lazy.compactMap { Self.emptyStringPayloadDescription($0, field: "rotor") }.first
         case .exclude(let check):
             if let description = check.invalidEmptyPayloadDescription {
                 return "excluded \(description)"
@@ -343,7 +343,7 @@ public enum ElementPredicateCheck<Text: StringMatchPayload>: Sendable, Equatable
     }
 
     private static func emptyStringPayloadDescription(_ match: StringMatch<Text>, field: String) -> String? {
-        match.value.stringMatchLiteralIsEmpty == true ? "\(field) match value must not be empty" : nil
+        match.valueIfPresent?.stringMatchLiteralIsEmpty == true ? "\(field) match value must not be empty" : nil
     }
 
     public func map<NewText: StringMatchPayload>(
@@ -430,7 +430,7 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
     public var nonEmpty: Self? { hasPredicates ? self : nil }
 
     public var invalidEmptyPayloadDescription: String? {
-        if let description = checks.firstNonNil({ $0.invalidEmptyPayloadDescription }) {
+        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
             return description
         }
         return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription
@@ -722,17 +722,6 @@ extension ElementPredicateCheck: Codable where Text: Codable {
             try container.encode(Kind.exclude, forKey: .kind)
             try container.encode(check, forKey: .check)
         }
-    }
-}
-
-package extension Sequence {
-    func firstNonNil<Value>(_ transform: (Element) -> Value?) -> Value? {
-        for element in self {
-            if let value = transform(element) {
-                return value
-            }
-        }
-        return nil
     }
 }
 

@@ -5,6 +5,11 @@ struct StringMatchModeLabelToken {
     let token: HeistPlanSourceToken
 }
 
+private enum StringMatchEmptyLiteralPolicy {
+    case reject
+    case allowExact
+}
+
 extension HeistPlanSourceParser {
     mutating func parseTargetExpr() throws -> ElementTargetExpr {
         if let target = try parseTargetRefIfPresent() {
@@ -340,6 +345,17 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
+        try parseStringMatchFieldValue(field: field, emptyLiteralPolicy: .reject)
+    }
+
+    mutating func parseStringPropertyUpdateFieldValue(field: String) throws -> StringMatch<StringExpr> {
+        try parseStringMatchFieldValue(field: field, emptyLiteralPolicy: .allowExact)
+    }
+
+    private mutating func parseStringMatchFieldValue(
+        field: String,
+        emptyLiteralPolicy: StringMatchEmptyLiteralPolicy
+    ) throws -> StringMatch<StringExpr> {
         if lookaheadExactStringMatchCall {
             throw error(currentToken, "exact \(field) matches use the literal form: \(field): \"...\"")
         }
@@ -347,12 +363,21 @@ extension HeistPlanSourceParser {
             throw error(label.token, "StringMatch modes use enum-case syntax; use `\(field): .\(label.name)(\"...\")`")
         }
         if startsStringMatchDotCall {
-            return try parseStringMatchDotCall(field: field)
+            return try parseStringMatchDotCall(field: field, emptyLiteralPolicy: emptyLiteralPolicy)
         }
-        return try validatedStringMatch(.exact, value: try parseStringExpr(), field: field, token: previous)
+        return try validatedStringMatch(
+            .exact,
+            value: try parseStringExpr(),
+            field: field,
+            token: previous,
+            emptyLiteralPolicy: emptyLiteralPolicy
+        )
     }
 
-    mutating func parseStringMatchDotCall(field: String) throws -> StringMatch<StringExpr> {
+    private mutating func parseStringMatchDotCall(
+        field: String,
+        emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
+    ) throws -> StringMatch<StringExpr> {
         let token = currentToken
         let name = try parseDotCallName(allowedPrefixes: [])
         guard let mode = stringMatchMode(named: name) else {
@@ -364,7 +389,13 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
         let value = try parseStringExpr()
         try expectSymbol(")")
-        return try validatedStringMatch(mode, value: value, field: field, token: token)
+        return try validatedStringMatch(
+            mode,
+            value: value,
+            field: field,
+            token: token,
+            emptyLiteralPolicy: emptyLiteralPolicy
+        )
     }
 
     func stringMatchModeLabelTokenIfPresent() -> StringMatchModeLabelToken? {
@@ -393,14 +424,16 @@ extension HeistPlanSourceParser {
         StringMatch<StringExpr>.Mode(rawValue: name)
     }
 
-    func validatedStringMatch(
+    private func validatedStringMatch(
         _ mode: StringMatch<StringExpr>.Mode,
         value: StringExpr,
         field: String,
-        token: HeistPlanSourceToken
+        token: HeistPlanSourceToken,
+        emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
     ) throws -> StringMatch<StringExpr> {
         let match = StringMatch(mode: mode, value: value)
-        if match.value.stringMatchLiteralIsEmpty == true {
+        if match.valueIfPresent?.stringMatchLiteralIsEmpty == true,
+           !(emptyLiteralPolicy == .allowExact && mode == .exact) {
             throw error(token, "\(field) match value must not be empty")
         }
         return match

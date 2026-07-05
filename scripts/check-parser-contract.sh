@@ -113,23 +113,16 @@ for manifest_tag in "${MANIFEST_TAGS[@]}"; do
 done
 
 if [[ "${#LOCKFILES[@]}" -gt 0 ]]; then
-    LOCKFILE_PINS=$(PARSER_REPO_URL="$PARSER_REPO_URL" PARSER_IDENTITY="$PARSER_IDENTITY" python3 <<'PY'
+    LOCKFILE_PINS=$(LOCKFILES_JOINED="$(printf '%s\n' "${LOCKFILES[@]}")" PARSER_REPO_URL="$PARSER_REPO_URL" PARSER_IDENTITY="$PARSER_IDENTITY" python3 <<'PY'
 import json
 import os
-import subprocess
 import sys
 
 parser_repo_url = os.environ["PARSER_REPO_URL"].rstrip("/")
 parser_identity = os.environ["PARSER_IDENTITY"].lower()
+lockfiles = os.environ["LOCKFILES_JOINED"].splitlines()
 
-result = subprocess.run(
-    ["git", "ls-files", "--", "*Package.resolved"],
-    check=True,
-    stdout=subprocess.PIPE,
-    text=True,
-)
-
-for path in result.stdout.splitlines():
+for path in lockfiles:
     if not path:
         continue
     try:
