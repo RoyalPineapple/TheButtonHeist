@@ -131,6 +131,12 @@ protocol DeviceConnecting: AnyObject {
     func disconnect()
     @discardableResult
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome
+    @discardableResult
+    func send(
+        _ message: ClientMessage,
+        requestId: String?,
+        requestScreenPayload: ScreenRequestPayload?
+    ) -> DeviceSendOutcome
 }
 
 /// Connection surface used by passive reachability probes. Raw socket

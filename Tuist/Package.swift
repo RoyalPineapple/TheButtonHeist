@@ -7,9 +7,11 @@ import ProjectDescription
 let packageSettings = PackageSettings(
     productTypes: [
         "ArgumentParser": .framework,
+        "AccessibilitySnapshotCore": .framework,
         "AccessibilitySnapshotModel": .framework,
         "AccessibilitySnapshotParser": .framework,
         "AccessibilitySnapshotParser-ObjC": .framework,
+        "AccessibilitySnapshotPreviews": .framework,
     ]
 )
 #endif

@@ -71,6 +71,45 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAccessibilityModeRequestsAccessibilityScreenshot() async throws {
+        let tempDirectory = Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
+        let interface = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Pay", traits: [.button]),
+        ])
+        let config = TheFence.Configuration(artifactBaseDirectory: tempDirectory)
+        let (fence, mockConnection) = makeConnectedFence(configuration: config)
+        mockConnection.autoResponse = { message in
+            switch message {
+            case .requestScreen:
+                return .screen(ScreenPayload(
+                    pngData: pngData,
+                    width: 393,
+                    height: 852,
+                    interface: interface
+                ))
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: []))
+            default:
+                return .actionResult(ActionResult.success(method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(command: .getScreen, values: [
+            "inlineData": .bool(true),
+            "mode": .string("accessibility"),
+        ])
+
+        guard case .screenshotData(let payload, _) = response else {
+            return XCTFail("Expected inline screenshot response, got \(response)")
+        }
+        XCTAssertEqual(payload.pngData, pngData)
+        XCTAssertEqual(mockConnection.sentRequestScreenPayloads.last??.mode, .accessibility)
+    }
+
+    @ButtonHeistActor
     func testInlineGetScreenRejectsOutputBeforeDispatch() async throws {
         let (fence, mockConnection) = makeConnectedFence()
 

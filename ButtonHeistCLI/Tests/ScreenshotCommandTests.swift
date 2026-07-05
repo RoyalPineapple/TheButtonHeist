@@ -16,6 +16,14 @@ final class ScreenshotCommandTests: XCTestCase {
         XCTAssertThrowsError(try ScreenshotCommand.parse(["--inline", "--output", "/tmp/screen.png"]))
     }
 
+    func testAccessibilityFlagSetsScreenMode() throws {
+        let command = try ScreenshotCommand.parse(["--accessibility"])
+
+        let arguments = try command.requestArguments()
+
+        XCTAssertEqual(arguments.value(for: .mode), .string("accessibility"))
+    }
+
     func testInlineCommandResultWritesScreenshotDataAsBinary() throws {
         let expectedData = Data([0x89, 0x50, 0x4E, 0x47])
         let response = FenceResponse.screenshotData(

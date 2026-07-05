@@ -6,7 +6,14 @@ extension TheFence {
     // MARK: - Handler: Screen
 
     func handleGetScreen(_ request: ScreenRequest) async throws -> FenceResponse {
-        let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
+        let payload = request.mode == .raw
+            ? nil
+            : ScreenRequestPayload(mode: request.mode)
+        let screen = try await sendAndAwaitScreen(
+            .requestScreen,
+            requestScreenPayload: payload,
+            timeout: 30
+        )
         let options = ScreenshotResponseOptions()
 
         if case .inlineData = request.destination {

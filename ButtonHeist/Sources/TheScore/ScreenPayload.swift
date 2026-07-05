@@ -1,6 +1,34 @@
 import ThePlans
 import Foundation
 
+public enum ScreenCaptureMode: String, Codable, Sendable, Equatable, CaseIterable {
+    case raw
+    case accessibility
+}
+
+public struct ScreenRequestPayload: Codable, Sendable, Equatable {
+    public let mode: ScreenCaptureMode
+
+    public init(mode: ScreenCaptureMode = .raw) {
+        self.mode = mode
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case mode
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen request payload")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try container.decodeIfPresent(ScreenCaptureMode.self, forKey: .mode) ?? .raw
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+    }
+}
+
 /// Payload containing screen capture data and optional interface evidence.
 public struct ScreenPayload: Codable, Sendable, Equatable {
     public let pngData: String

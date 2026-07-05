@@ -40,14 +40,22 @@ extension TheFence {
         }
     }
 
-    func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
+    func sendAndAwaitScreen(
+        _ message: ClientMessage,
+        requestScreenPayload: ScreenRequestPayload? = nil,
+        timeout: TimeInterval
+    ) async throws -> ScreenPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
         return try await pendingRequests.waitForScreen(
             requestId: requestId,
             timeout: timeout
         ) {
-            self.sendClientMessage(message, requestId: requestId)
+            self.sendClientMessage(
+                message,
+                requestId: requestId,
+                requestScreenPayload: requestScreenPayload
+            )
         }
     }
 
@@ -71,8 +79,16 @@ extension TheFence {
         pendingRequests.cancelAll(error: error)
     }
 
-    private func sendClientMessage(_ message: ClientMessage, requestId: String) {
-        let outcome = handoff.send(message, requestId: requestId)
+    private func sendClientMessage(
+        _ message: ClientMessage,
+        requestId: String,
+        requestScreenPayload: ScreenRequestPayload? = nil
+    ) {
+        let outcome = handoff.send(
+            message,
+            requestId: requestId,
+            requestScreenPayload: requestScreenPayload
+        )
         if case .failed(let failure) = outcome {
             pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
         }

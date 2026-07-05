@@ -110,7 +110,9 @@ let project = Project(
                 .target(name: "ButtonHeistSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotCore"),
                 .external(name: "AccessibilitySnapshotParser"),
+                .external(name: "AccessibilitySnapshotPreviews"),
             ]
         ),
 

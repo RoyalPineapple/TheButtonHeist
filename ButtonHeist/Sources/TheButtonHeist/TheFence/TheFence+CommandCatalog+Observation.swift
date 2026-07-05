@@ -46,9 +46,9 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetScreenRequest,
-                parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec],
+                parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec, FenceParameters.screenMode.spec],
                 projection: .cliAndMCP(
-                    "Capture a PNG screenshot with visible interface state.",
+                    "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )

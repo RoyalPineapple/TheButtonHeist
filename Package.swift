@@ -94,6 +94,16 @@ let package = Package(
                     package: "AccessibilitySnapshotBH",
                     condition: .when(platforms: [.iOS])
                 ),
+                .product(
+                    name: "AccessibilitySnapshotCore",
+                    package: "AccessibilitySnapshotBH",
+                    condition: .when(platforms: [.iOS])
+                ),
+                .product(
+                    name: "AccessibilitySnapshotPreviews",
+                    package: "AccessibilitySnapshotBH",
+                    condition: .when(platforms: [.iOS])
+                ),
             ],
             path: "ButtonHeist/Sources/TheInsideJob",
             swiftSettings: [.swiftLanguageMode(.v6)]
