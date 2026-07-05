@@ -82,391 +82,12 @@ enum HeistValuePayloadDataCorruptedHandling {
     case invalidRequest
 }
 
-protocol HeistValuePayloadExpectationProviding: Decodable {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation { get }
-}
-
-enum HeistValueExpectedType: Sendable, Equatable {
-    case string
-    case boolean
-    case integer
-    case number
-    case object
-    case array
-    case stringMatchObject
-    case elementPredicateCheckObject
-    case arrayOfElementPredicateCheckObjects
-    case arrayOfTraitNames
-    case elementAction
-    case arrayOfElementActions
-    case customContentMatchObject
-
-    var description: String {
-        switch self {
-        case .string:
-            return "string"
-        case .boolean:
-            return "boolean"
-        case .integer:
-            return "integer"
-        case .number:
-            return "number"
-        case .object:
-            return "object"
-        case .array:
-            return "array"
-        case .stringMatchObject:
-            return "StringMatch object with mode and optional value"
-        case .elementPredicateCheckObject:
-            return "element predicate check object"
-        case .arrayOfElementPredicateCheckObjects:
-            return "array of element predicate check objects"
-        case .arrayOfTraitNames:
-            return "array of trait names"
-        case .elementAction:
-            return "element action string or custom action object"
-        case .arrayOfElementActions:
-            return "array of element actions"
-        case .customContentMatchObject:
-            return "custom content match object"
-        }
-    }
-}
-
-struct HeistValuePayloadExpectation: Sendable, Equatable {
-    let root: HeistValueExpectedType
-    let rootArrayItem: HeistValueExpectedType?
-    let paths: [String: HeistValueExpectedType]
-    let arrayItems: [String: HeistValueExpectedType]
-
-    init(
-        root: HeistValueExpectedType,
-        rootArrayItem: HeistValueExpectedType? = nil,
-        paths: [String: HeistValueExpectedType] = [:],
-        arrayItems: [String: HeistValueExpectedType] = [:]
-    ) {
-        self.root = root
-        self.rootArrayItem = rootArrayItem
-        self.paths = paths
-        self.arrayItems = arrayItems
-    }
-
-    func expectedDescription(at codingPath: [CodingKey]) -> String {
-        guard let path = Self.pathKey(codingPath) else {
-            return root.description
-        }
-        if codingPath.last?.intValue != nil {
-            return exactOrSuffixMatch(path, in: arrayItems)?.description
-                ?? rootArrayItem?.description
-                ?? root.description
-        }
-        return exactOrSuffixMatch(path, in: paths)?.description ?? root.description
-    }
-
-    func asArray() -> HeistValuePayloadExpectation {
-        HeistValuePayloadExpectation(
-            root: .array,
-            rootArrayItem: root,
-            paths: paths,
-            arrayItems: arrayItems
-        )
-    }
-
-    private func exactOrSuffixMatch(
-        _ path: String,
-        in expectations: [String: HeistValueExpectedType]
-    ) -> HeistValueExpectedType? {
-        if let expectedType = expectations[path] {
-            return expectedType
-        }
-        let components = path.split(separator: ".")
-        for index in components.indices.dropFirst() {
-            let suffix = components[index...].joined(separator: ".")
-            if let expectedType = expectations[suffix] {
-                return expectedType
-            }
-        }
-        return nil
-    }
-
-    private static func pathKey(_ codingPath: [CodingKey]) -> String? {
-        let components = codingPath.compactMap { key -> String? in
-            key.intValue == nil ? key.stringValue : nil
-        }
-        guard !components.isEmpty else { return nil }
-        return components.joined(separator: ".")
-    }
-
-    static let object = HeistValuePayloadExpectation(root: .object)
-
-    static let stringMatch = HeistValuePayloadExpectation(
-        root: .stringMatchObject,
-        paths: [
-            "mode": .string,
-            "value": .string,
-        ]
-    )
-
-    static let elementPredicateCheck = HeistValuePayloadExpectation(
-        root: .elementPredicateCheckObject,
-        paths: merged([
-            [
-                "kind": .string,
-                "match": .stringMatchObject,
-                "values": .array,
-                "check": .elementPredicateCheckObject,
-            ],
-            prefixed("match", stringMatch.paths),
-            prefixed("check", [
-                "kind": .string,
-                "match": .stringMatchObject,
-                "values": .array,
-            ]),
-            prefixed("check.match", stringMatch.paths),
-        ]),
-        arrayItems: ["values": .elementAction]
-    )
-
-    static let elementAction = HeistValuePayloadExpectation(root: .elementAction)
-
-    static let customContentMatch = HeistValuePayloadExpectation(
-        root: .customContentMatchObject,
-        paths: merged([
-            [
-                "label": .stringMatchObject,
-                "value": .stringMatchObject,
-                "isImportant": .boolean,
-            ],
-            prefixed("label", stringMatch.paths),
-            prefixed("value", stringMatch.paths),
-        ])
-    )
-
-    static let elementPredicate = HeistValuePayloadExpectation(
-        root: .object,
-        paths: elementPredicatePaths,
-        arrayItems: elementPredicateArrayItems
-    )
-
-    static let elementTarget = HeistValuePayloadExpectation(
-        root: .object,
-        paths: merged([
-            elementPredicatePaths,
-            ["ordinal": .integer],
-        ]),
-        arrayItems: elementPredicateArrayItems
-    )
-
-    static let accessibilityPredicate = HeistValuePayloadExpectation(
-        root: .object,
-        paths: merged([
-            elementTarget.paths,
-            [
-                "type": .string,
-                "element": .object,
-                "target": .object,
-                "states": .array,
-                "scopes": .array,
-                "assertions": .array,
-                "property": .string,
-                "before": .stringMatchObject,
-                "after": .stringMatchObject,
-            ],
-            prefixed("before", stringMatch.paths),
-            prefixed("after", stringMatch.paths),
-        ]),
-        arrayItems: merged([
-            elementTarget.arrayItems,
-            [
-                "states": .object,
-                "scopes": .object,
-                "assertions": .object,
-            ],
-        ])
-    )
-
-    static let containerMatcher = HeistValuePayloadExpectation(
-        root: .object,
-        paths: [
-            "containerName": .string,
-            "type": .string,
-            "label": .string,
-            "value": .string,
-            "identifier": .string,
-            "isModalBoundary": .boolean,
-        ]
-    )
-
-    static let subtreeSelector = HeistValuePayloadExpectation(
-        root: .object,
-        paths: merged([
-            [
-                "element": .object,
-                "container": .object,
-                "ordinal": .integer,
-            ],
-            prefixed("element", elementTarget.paths),
-            prefixed("container", containerMatcher.paths),
-        ]),
-        arrayItems: merged([
-            prefixed("element", elementTarget.arrayItems),
-            prefixed("container", containerMatcher.arrayItems),
-        ])
-    )
-
-    private static var elementPredicatePaths: [String: HeistValueExpectedType] {
-        merged([
-            [
-                "checks": .arrayOfElementPredicateCheckObjects,
-                "label": .stringMatchObject,
-                "identifier": .stringMatchObject,
-                "value": .stringMatchObject,
-                "hint": .stringMatchObject,
-                "traits": .arrayOfTraitNames,
-                "actions": .arrayOfElementActions,
-                "customContent": .customContentMatchObject,
-                "rotors": .array,
-            ],
-            prefixed("label", stringMatch.paths),
-            prefixed("identifier", stringMatch.paths),
-            prefixed("value", stringMatch.paths),
-            prefixed("hint", stringMatch.paths),
-            prefixed("customContent", customContentMatch.paths),
-            prefixed("checks", elementPredicateCheck.paths),
-        ])
-    }
-
-    private static var elementPredicateArrayItems: [String: HeistValueExpectedType] {
-        merged([
-            [
-                "checks": .elementPredicateCheckObject,
-                "traits": .string,
-                "actions": .elementAction,
-                "rotors": .stringMatchObject,
-            ],
-            prefixed("checks", elementPredicateCheck.arrayItems),
-        ])
-    }
-
-    static func prefixed(
-        _ prefix: String,
-        _ expectations: [String: HeistValueExpectedType]
-    ) -> [String: HeistValueExpectedType] {
-        expectations.reduce(into: [:]) { result, entry in
-            result["\(prefix).\(entry.key)"] = entry.value
-        }
-    }
-
-    static func merged(
-        _ expectations: [[String: HeistValueExpectedType]]
-    ) -> [String: HeistValueExpectedType] {
-        expectations.reduce(into: [:]) { result, expectation in
-            result.merge(expectation) { _, new in new }
-        }
-    }
-}
-
-extension Array: HeistValuePayloadExpectationProviding where Element: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        Element.heistValuePayloadExpectation.asArray()
-    }
-}
-
-extension AccessibilityPredicate: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .accessibilityPredicate
-    }
-}
-
-extension ElementPredicate: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .elementPredicate
-    }
-}
-
-extension ElementPredicateCheck: HeistValuePayloadExpectationProviding where Text == String {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .elementPredicateCheck
-    }
-}
-
-extension ElementAction: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .elementAction
-    }
-}
-
-extension CustomContentMatch: HeistValuePayloadExpectationProviding where Value == String {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .customContentMatch
-    }
-}
-
-extension ElementTarget: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .elementTarget
-    }
-}
-
-extension StringMatch: HeistValuePayloadExpectationProviding where Value == String {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .stringMatch
-    }
-}
-
-extension ContainerMatcher: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .containerMatcher
-    }
-}
-
-extension SubtreeSelector: HeistValuePayloadExpectationProviding {
-    static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        .subtreeSelector
-    }
-}
-
 extension TheFence {
     enum HeistValuePayloadDecoder {
         static func decode<T: Decodable>(
             _ value: HeistValue,
             field rootField: String,
             as type: T.Type,
-            includesRootInField: Bool = true,
-            dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling = .schemaValidation
-        ) throws -> T {
-            try decode(
-                value,
-                field: rootField,
-                as: type,
-                expectation: .object,
-                includesRootInField: includesRootInField,
-                dataCorruptedHandling: dataCorruptedHandling
-            )
-        }
-
-        static func decode<T: HeistValuePayloadExpectationProviding>(
-            _ value: HeistValue,
-            field rootField: String,
-            as type: T.Type,
-            includesRootInField: Bool = true,
-            dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling = .schemaValidation
-        ) throws -> T {
-            try decode(
-                value,
-                field: rootField,
-                as: type,
-                expectation: T.heistValuePayloadExpectation,
-                includesRootInField: includesRootInField,
-                dataCorruptedHandling: dataCorruptedHandling
-            )
-        }
-
-        static func decode<T: Decodable>(
-            _ value: HeistValue,
-            field rootField: String,
-            as type: T.Type,
-            expectation: HeistValuePayloadExpectation,
             includesRootInField: Bool = true,
             dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling = .schemaValidation
         ) throws -> T {
@@ -478,7 +99,6 @@ extension TheFence {
                     error,
                     value: value,
                     rootField: rootField,
-                    expectation: expectation,
                     includesRootInField: includesRootInField,
                     dataCorruptedHandling: dataCorruptedHandling
                 )
@@ -491,23 +111,22 @@ extension TheFence {
             _ error: DecodingError,
             value: HeistValue,
             rootField: String,
-            expectation: HeistValuePayloadExpectation,
             includesRootInField: Bool,
             dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling
         ) -> Error {
             switch error {
-            case .typeMismatch(_, let context):
+            case .typeMismatch(let expectedType, let context):
                 return SchemaValidationError(
                     field: field(rootField, codingPath: context.codingPath, includesRoot: includesRootInField),
                     observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
                         ?? value.schemaObservedDescription,
-                    expected: expectation.expectedDescription(at: context.codingPath)
+                    expected: expectedDescription(for: expectedType, fallback: context.debugDescription)
                 )
             case .valueNotFound(_, let context):
                 return SchemaValidationError(
                     field: field(rootField, codingPath: context.codingPath, includesRoot: includesRootInField),
                     observed: "missing",
-                    expected: expectation.expectedDescription(at: context.codingPath)
+                    expected: context.debugDescription
                 )
             case .keyNotFound(let key, let context):
                 return SchemaValidationError(
@@ -571,6 +190,21 @@ extension TheFence {
                 }
                 guard case .object(let values) = current else { return nil }
                 return values[key.stringValue]
+            }
+        }
+
+        private static func expectedDescription(for type: Any.Type, fallback: String) -> String {
+            switch type {
+            case is String.Type:
+                return "string"
+            case is Bool.Type:
+                return "boolean"
+            case is Int.Type:
+                return "integer"
+            case is Double.Type, is Float.Type:
+                return "number"
+            default:
+                return fallback
             }
         }
     }
@@ -813,7 +447,7 @@ extension TheFence.CommandArgumentEnvelope {
         field(forRawKey: key)
     }
 
-    func decodePayload<T: HeistValuePayloadExpectationProviding>(
+    func decodePayload<T: Decodable>(
         _ value: HeistValue,
         forKey key: FenceParameterKey,
         as type: T.Type

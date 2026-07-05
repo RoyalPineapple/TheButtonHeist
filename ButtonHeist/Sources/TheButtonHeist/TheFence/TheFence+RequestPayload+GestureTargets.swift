@@ -4,25 +4,25 @@ import ThePlans
 extension TheFence {
 
     func decodeTapTarget(_ request: CommandArgumentEnvelope) throws -> TapTarget {
-        try decodeGestureTarget(request, as: TapTarget.self, expectation: .gesturePointSelection) {
+        try decodeGestureTarget(request, as: TapTarget.self) {
             try $0.validatePublicGestureUnitPoints()
         }
     }
 
     func decodeLongPressTarget(_ request: CommandArgumentEnvelope) throws -> LongPressTarget {
-        try decodeGestureTarget(request, as: LongPressTarget.self, expectation: .longPressGestureTarget) {
+        try decodeGestureTarget(request, as: LongPressTarget.self) {
             try $0.validatePublicGestureUnitPoints()
         }
     }
 
     func decodeSwipeTarget(_ request: CommandArgumentEnvelope) throws -> SwipeTarget {
-        try decodeGestureTarget(request, as: SwipeTarget.self, expectation: .swipeGestureTarget) {
+        try decodeGestureTarget(request, as: SwipeTarget.self) {
             try $0.validatePublicGestureUnitPoints()
         }
     }
 
     func decodeDragTarget(_ request: CommandArgumentEnvelope) throws -> DragTarget {
-        try decodeGestureTarget(request, as: DragTarget.self, expectation: .dragGestureTarget) {
+        try decodeGestureTarget(request, as: DragTarget.self) {
             try $0.validatePublicGestureUnitPoints()
         }
     }
@@ -30,81 +30,17 @@ extension TheFence {
     private func decodeGestureTarget<T: Decodable>(
         _ request: CommandArgumentEnvelope,
         as type: T.Type,
-        expectation: HeistValuePayloadExpectation,
         validate: (T) throws -> Void
     ) throws -> T {
         let target = try HeistValuePayloadDecoder.decode(
             .object(request.argumentValues),
             field: "gesture",
             as: type,
-            expectation: expectation,
             includesRootInField: false
         )
         try validate(target)
         return target
     }
-}
-
-private extension HeistValuePayloadExpectation {
-    static var gesturePointSelection: HeistValuePayloadExpectation {
-        gesturePayloadExpectation(paths: gesturePointSelectionPaths)
-    }
-
-    static var longPressGestureTarget: HeistValuePayloadExpectation {
-        gesturePayloadExpectation(paths: merged([
-            gesturePointSelectionPaths,
-            ["duration": .number],
-        ]))
-    }
-
-    static var swipeGestureTarget: HeistValuePayloadExpectation {
-        gesturePayloadExpectation(paths: [
-            "duration": .number,
-            "elementDirection": .object,
-            "elementUnitPoints": .object,
-            "pointToPoint": .object,
-            "pointDirection": .object,
-            "element": .object,
-            "start": .object,
-            "end": .object,
-            "x": .number,
-            "y": .number,
-            "direction": .string,
-        ])
-    }
-
-    static var dragGestureTarget: HeistValuePayloadExpectation {
-        gesturePayloadExpectation(paths: [
-            "duration": .number,
-            "elementToPoint": .object,
-            "pointToPoint": .object,
-            "element": .object,
-            "start": .object,
-            "end": .object,
-            "x": .number,
-            "y": .number,
-        ])
-    }
-
-    static func gesturePayloadExpectation(
-        paths: [String: HeistValueExpectedType]
-    ) -> HeistValuePayloadExpectation {
-        HeistValuePayloadExpectation(
-            root: .object,
-            paths: merged(
-                [paths, HeistValuePayloadExpectation.elementTarget.paths]
-            ),
-            arrayItems: HeistValuePayloadExpectation.elementTarget.arrayItems
-        )
-    }
-
-    static let gesturePointSelectionPaths: [String: HeistValueExpectedType] = [
-        "element": .object,
-        "unitPoint": .object,
-        "point": .object,
-        "x": .number,
-        "y": .number,
-    ]
 }
 
 private extension TapTarget {
