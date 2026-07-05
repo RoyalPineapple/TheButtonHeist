@@ -2,7 +2,7 @@ import ThePlans
 import TheScore
 
 enum HeistRepairAnalysis {
-    case ineligible(HeistRepairIneligibility)
+    case ineligible(HeistRepairRefusalReason)
     case eligible(HeistEligibleRepairAnalysis)
 
     static func analyze(_ request: HeistRepairRequest) -> HeistRepairAnalysis {
@@ -69,13 +69,6 @@ enum HeistRepairAnalysis {
             rankedCandidates: rankedCandidates
         ))
     }
-}
-
-enum HeistRepairIneligibility {
-    case differentStepPaths
-    case incompatibleHeistFingerprints
-    case oldTargetDidNotResolveExactlyOnce
-    case oldTargetStillResolvesAndSupportsRequestedAction
 }
 
 struct HeistEligibleRepairAnalysis {

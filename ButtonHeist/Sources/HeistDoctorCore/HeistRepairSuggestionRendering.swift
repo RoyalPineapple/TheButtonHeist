@@ -33,23 +33,6 @@ enum HeistRepairSuggestionRenderer {
         }
     }
 
-    static func suggestion(
-        for candidate: ScoredCandidate,
-        analysis: HeistEligibleRepairAnalysis,
-        request: HeistRepairRequest,
-        tiedBestCount: Int
-    ) -> HeistRepairSuggestion? {
-        guard case .suggested(let suggestion) = validateSuggestion(
-            for: candidate,
-            analysis: analysis,
-            request: request,
-            tiedBestCount: tiedBestCount
-        ) else {
-            return nil
-        }
-        return suggestion
-    }
-
     static func validateSuggestion(
         for candidate: ScoredCandidate,
         analysis: HeistEligibleRepairAnalysis,
@@ -230,7 +213,7 @@ enum RepairSuggestionValidation: Sendable, Equatable {
     case rejected(RepairCandidateRejectionReason)
 }
 
-extension HeistRepairIneligibility {
+extension HeistRepairRefusalReason {
     var noSuggestionReason: String {
         switch self {
         case .differentStepPaths:
@@ -241,6 +224,10 @@ extension HeistRepairIneligibility {
             return "old target did not resolve exactly once in the last successful before snapshot"
         case .oldTargetStillResolvesAndSupportsRequestedAction:
             return "old target still resolves and supports the requested action; no target repair needed"
+        case .noCandidateMetScoreThreshold:
+            return "no candidate met the repair score threshold"
+        case .noCandidateValidated:
+            return "no candidate passed repair validation"
         }
     }
 }

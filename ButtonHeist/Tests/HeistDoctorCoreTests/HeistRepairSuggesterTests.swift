@@ -326,6 +326,7 @@ private let expectedRepairJSONReportJSON = """
         #expect(candidate.suggestedTarget == suggestion.newTarget)
         #expect(candidate.confidence == suggestion.confidence)
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)) == diagnosis.suggestions)
+        #expect(HeistRepairSuggester.noSuggestionReason(for: request(last, current)) == nil)
     }
 
     @Test func `diagnosis exposes typed candidate ranking refusal`() throws {
