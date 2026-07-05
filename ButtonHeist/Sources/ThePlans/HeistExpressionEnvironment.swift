@@ -260,7 +260,6 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
     case unresolvedStringReference(String)
     case emptyReference(String)
     case invalidStringMatch(mode: String)
-    case invalidResolvedPredicate(String)
     case unsupportedHeistActionCommand(String)
     case parameterArgumentMismatch(parameter: HeistParameterKind, argument: HeistParameterKind)
 
@@ -274,8 +273,6 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
             return "\(type) reference must not be empty"
         case .invalidStringMatch(let mode):
             return "\(mode) string match value must not be empty"
-        case .invalidResolvedPredicate(let reason):
-            return "resolved element predicate is invalid: \(reason)"
         case .unsupportedHeistActionCommand(let command):
             return "unsupported heist action command \"\(command)\""
         case .parameterArgumentMismatch(let parameter, let argument):

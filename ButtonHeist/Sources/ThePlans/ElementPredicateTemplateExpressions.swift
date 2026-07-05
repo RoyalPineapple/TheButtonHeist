@@ -60,7 +60,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
         let predicate = ElementPredicate(try checks.map { try $0.resolve(in: environment) })
         if let description = predicate.invalidEmptyPayloadDescription {
-            throw HeistExpressionError.invalidResolvedPredicate(description)
+            throw InvalidResolvedElementPredicateError(reason: description)
         }
         return predicate
     }
@@ -166,6 +166,14 @@ extension ElementPredicateTemplate: CustomStringConvertible {
             guard let field = checkField(check) else { return nil }
             return "exclude(\(field))"
         }
+    }
+}
+
+private struct InvalidResolvedElementPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
+    let reason: String
+
+    var description: String {
+        "resolved element predicate is invalid: \(reason)"
     }
 }
 

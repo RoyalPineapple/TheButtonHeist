@@ -1711,6 +1711,45 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
         ))
     }
 
+    public init(
+        invocation: HeistInvocationStep? = nil,
+        name: String? = nil,
+        argument: String? = nil,
+        childFailedPath: String? = nil,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil,
+        expectationEvidence: HeistWaitEvidence? = nil
+    ) {
+        if let invocation {
+            precondition(
+                childFailedPath == nil
+                    || (expectationActionResult == nil && expectation == nil && expectationEvidence == nil),
+                "Child-aborted invocation evidence cannot include expectation evidence"
+            )
+            let expectationSummary = Self.expectationEvidence(
+                actionResult: expectationActionResult,
+                expectation: expectation,
+                waitEvidence: expectationEvidence
+            )
+            storage = .invocation(
+                invocation: invocation,
+                name: name,
+                argument: argument,
+                childFailedPath: childFailedPath,
+                expectation: expectationSummary
+            )
+        } else {
+            precondition(
+                argument == nil
+                    && expectationActionResult == nil
+                    && expectation == nil
+                    && expectationEvidence == nil,
+                "Inline heist invocation evidence cannot include invoke-only fields"
+            )
+            storage = .heist(name: name, childFailedPath: childFailedPath)
+        }
+    }
+
     private init(storage: Storage) {
         self.storage = storage
     }
@@ -1857,6 +1896,31 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
                 key: .expectationEvidence,
                 container: container
             )
+        }
+    }
+
+    private static func expectationEvidence(
+        actionResult: ActionResult?,
+        expectation: ExpectationResult?,
+        waitEvidence: HeistWaitEvidence?
+    ) -> InvocationExpectationEvidence? {
+        switch (actionResult, expectation, waitEvidence) {
+        case (.none, .none, .none):
+            return nil
+        case (.some(let actionResult), .some(let expectation), .none):
+            return InvocationExpectationEvidence(actionResult: actionResult, expectation: expectation)
+        case (.some(let actionResult), .some(let expectation), .some(let waitEvidence)):
+            precondition(
+                waitEvidence.actionResult == actionResult && waitEvidence.expectation == expectation,
+                "Invocation expectation evidence must match expectationActionResult and expectation"
+            )
+            return InvocationExpectationEvidence(
+                actionResult: actionResult,
+                expectation: expectation,
+                waitEvidence: waitEvidence
+            )
+        case (.none, _, .some), (_, .none, .some), (.some, .none, .none), (.none, .some, .none):
+            preconditionFailure("Invocation expectation evidence requires expectationActionResult and expectation")
         }
     }
 
