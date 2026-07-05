@@ -179,7 +179,7 @@ final class ElementInflationProductTests: XCTestCase {
         ])
     }
 
-    func testSemanticActivateIgnoresStaleUnreachableDuplicateWhenOneCandidateIsReachable() async throws {
+    func testSemanticActivateFailsAmbiguousDuplicateBeforeReachabilityChoosesCandidate() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "reachable_duplicate_submit",
             label: "Duplicate Submit"
@@ -196,11 +196,15 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "semantic activate failed")
-        guard result.success else { return }
+        XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(fixture.target.activationCount, 1)
-        XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertEqual(fixture.target.activationCount, 0)
+        XCTAssertFalse(fixture.scrollView.didReceiveRevealRequest)
+        XCTAssertDiagnostic(result.message, contains: [
+            "2 elements match",
+            "use ordinal",
+        ])
     }
 
     func testMissingRevealPathFailsAsInflationDiagnostic() async throws {

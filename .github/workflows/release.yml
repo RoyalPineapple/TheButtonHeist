@@ -290,5 +290,4 @@ jobs:
             --method PUT \
             --field message="Update buttonheist to ${VERSION}" \
             --field content="$(base64 -b 0 < /tmp/buttonheist-final.rb)" \
-            "${SHA_ARG[@]}" \
-            || echo "::warning::Failed to update Homebrew tap — create RoyalPineapple/homebrew-tap and add HOMEBREW_TAP_TOKEN secret"
+            "${SHA_ARG[@]}"

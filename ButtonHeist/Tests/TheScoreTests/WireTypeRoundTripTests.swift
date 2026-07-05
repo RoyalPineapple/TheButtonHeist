@@ -1055,6 +1055,66 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(looseOutcome.utf8))) { error in
             assertDecodingError(error, contains: ["no_match", "index"])
         }
+
+        let missingMatchedIndex = """
+        {
+          "cases": [],
+          "outcome": {
+            "kind": "matched_case"
+          },
+          "elapsedMs": 1
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(missingMatchedIndex.utf8))) { error in
+            assertDecodingError(error, contains: ["matched_case", "requires index"])
+        }
+
+        let outOfRangeMatchedIndex = """
+        {
+          "cases": [],
+          "outcome": {
+            "kind": "matched_case",
+            "index": 0
+          },
+          "elapsedMs": 1
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(outOfRangeMatchedIndex.utf8))) { error in
+            assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
+        }
+    }
+
+    func testHeistInvocationEvidenceRejectsMixedOutcomeFields() throws {
+        let inlineHeistWithInvokeField = """
+        {
+          "name": "Nested",
+          "argument": "Milk"
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))) { error in
+            assertDecodingError(error, contains: ["inline heist invocation evidence", "invoke-only fields"])
+        }
+
+        let childAbortWithExpectation = """
+        {
+          "invocation": {
+            "path": ["LibraryScreen", "addToCart"],
+            "argument": { "type": "none" }
+          },
+          "name": "LibraryScreen.addToCart",
+          "childFailedPath": "$.body[0].invoke.body[0]",
+          "expectationActionResult": {
+            "success": true,
+            "method": "wait"
+          },
+          "expectation": {
+            "met": true
+          }
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistInvocationEvidence.self, from: Data(childAbortWithExpectation.utf8))) { error in
+            assertDecodingError(error, contains: ["child-aborted invocation evidence", "must not include expectation evidence"])
+        }
     }
 
     private func forEachElementIteration(

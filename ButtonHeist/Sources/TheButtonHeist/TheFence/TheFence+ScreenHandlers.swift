@@ -22,14 +22,17 @@ extension TheFence {
         }
 
         do {
-            let outputPath: String? = if case .artifact(let outputPath) = request.destination {
-                outputPath
-            } else {
-                nil
+            let destination: ScreenshotArtifactWriter.Destination = switch request.destination {
+            case .artifact(.some(let outputPath)):
+                .userExplicitOutputPath(outputPath)
+            case .artifact(.none):
+                .automaticPrivateArtifact
+            case .inlineData:
+                .automaticPrivateArtifact
             }
             let url = try screenshotArtifacts.writeScreenshot(
                 base64Data: screen.pngData,
-                outputPath: outputPath,
+                destination: destination,
                 command: .getScreen
             )
             return .screenshot(path: url.path, payload: screen, options: options)

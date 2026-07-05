@@ -301,14 +301,14 @@ extension HeistPlanSourceParser {
                 guard before == nil else {
                     throw error(previous, "\(property) update predicate accepts before only once")
                 }
-                before = try parseStringMatchFieldValue(field: "\(property) before")
+                before = try parseStringPropertyUpdateFieldValue(field: "\(property) before")
             } else if lookaheadLabel("after") {
                 try expectIdentifier("after")
                 try expectSymbol(":")
                 guard after == nil else {
                     throw error(previous, "\(property) update predicate accepts after only once")
                 }
-                after = try parseStringMatchFieldValue(field: "\(property) after")
+                after = try parseStringPropertyUpdateFieldValue(field: "\(property) after")
             } else {
                 throw error(currentToken, "\(property) update predicate accepts before and after")
             }
@@ -629,7 +629,11 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return CustomContentMatch(label: label, value: value, isImportant: isImportant)
+        let match = CustomContentMatch(label: label, value: value, isImportant: isImportant)
+        guard match.hasPredicateLiteral else {
+            throw error(previous, "\(role) match must include label, value, or isImportant")
+        }
+        return match
     }
 
     mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch<StringExpr> {

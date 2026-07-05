@@ -657,18 +657,11 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func schemaInteger(_ key: FenceParameterKey) throws -> Int? {
-        guard let value = value(for: key) else { return nil }
-        guard let integer = value.integerValue else {
-            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "integer")
-        }
-        return integer
+        try value(FenceParameter<Int>.integer(key))
     }
 
     func requiredSchemaInteger(_ key: FenceParameterKey) throws -> Int {
-        guard let integer = try schemaInteger(key) else {
-            throw SchemaValidationError(field: field(key), observed: "missing", expected: "integer")
-        }
-        return integer
+        try requiredValue(FenceParameter<Int>.integer(key))
     }
 
     func schemaNonNegativeInteger(_ key: FenceParameterKey) throws -> Int? {
@@ -680,11 +673,7 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func schemaString(_ key: FenceParameterKey) throws -> String? {
-        guard let value = value(for: key) else { return nil }
-        guard case .string(let string) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "string")
-        }
-        return string
+        try value(FenceParameter<String>.string(key))
     }
 
     func schemaStringMatch(_ key: FenceParameterKey) throws -> StringMatch<String>? {
@@ -727,33 +716,19 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func requiredSchemaString(_ key: FenceParameterKey) throws -> String {
-        guard let value = try schemaString(key) else {
-            throw SchemaValidationError(field: field(key), observed: "missing", expected: "string")
-        }
-        return value
+        try requiredValue(FenceParameter<String>.string(key))
     }
 
     func schemaBoolean(_ key: FenceParameterKey) throws -> Bool? {
-        guard let value = value(for: key) else { return nil }
-        guard case .bool(let bool) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "boolean")
-        }
-        return bool
+        try value(FenceParameter<Bool>.boolean(key))
     }
 
     func schemaNumber(_ key: FenceParameterKey) throws -> Double? {
-        guard let value = value(for: key) else { return nil }
-        guard let number = value.numberValue else {
-            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "number")
-        }
-        return number
+        try value(FenceParameter<Double>.number(key))
     }
 
     func requiredSchemaNumber(_ key: FenceParameterKey) throws -> Double {
-        guard let value = try schemaNumber(key) else {
-            throw SchemaValidationError(field: field(key), observed: "missing", expected: "number")
-        }
-        return value
+        try requiredValue(FenceParameter<Double>.number(key))
     }
 
     func schemaStringArray(_ key: FenceParameterKey) throws -> [String]? {
@@ -819,37 +794,15 @@ extension TheFence.CommandArgumentEnvelope {
     func schemaEnum<E>(
         _ key: FenceParameterKey,
         as type: E.Type
-    ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        guard let rawValue = try schemaString(key) else { return nil }
-        guard let value = E(rawValue: rawValue) else {
-            throw SchemaValidationError(
-                field: field(key),
-                observed: "string \"\(rawValue)\"",
-                expected: SchemaValidationError.expectedEnum(type)
-            )
-        }
-        return value
+    ) throws -> E? where E: CaseIterable & RawRepresentable & Sendable, E.RawValue == String {
+        try value(FenceParameter<E>.enumValue(key))
     }
 
     func requiredSchemaEnum<E>(
         _ key: FenceParameterKey,
         as type: E.Type
-    ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        guard let rawValue = try schemaString(key) else {
-            throw SchemaValidationError(
-                field: field(key),
-                observed: "missing",
-                expected: SchemaValidationError.expectedEnum(type)
-            )
-        }
-        guard let value = E(rawValue: rawValue) else {
-            throw SchemaValidationError(
-                field: field(key),
-                observed: "string \"\(rawValue)\"",
-                expected: SchemaValidationError.expectedEnum(type)
-            )
-        }
-        return value
+    ) throws -> E where E: CaseIterable & RawRepresentable & Sendable, E.RawValue == String {
+        try requiredValue(FenceParameter<E>.enumValue(key))
     }
 
     func field(_ key: FenceParameterKey) -> String {

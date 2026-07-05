@@ -109,10 +109,6 @@ import ThePlans
         return array.constraints.maxItems
     }
 
-    var jsonSchema: FenceParameterJSONSchema {
-        schema.jsonSchema
-    }
-
     public var objectProperties: [FenceParameterSpec] {
         guard case .object(let object) = schema,
               let properties = object.properties else {
@@ -169,22 +165,20 @@ indirect enum FenceParameterSchema: Sendable, Equatable {
         }
     }
 
-    var jsonSchema: FenceParameterJSONSchema {
+    var heistValue: HeistValue {
+        .object(heistValueProperties)
+    }
+
+    private var heistValueProperties: [String: HeistValue] {
         switch self {
         case .unconstrained:
-            return .unconstrained
+            return [:]
         case .scalar(let scalar):
-            return scalar.jsonSchema
+            return scalar.heistValueProperties
         case .object(let object):
-            return .object(
-                properties: object.properties?.map(FenceParameterJSONSchemaProperty.init),
-                additionalProperties: object.additionalProperties
-            )
+            return object.heistValueProperties
         case .array(let array):
-            return .array(
-                items: array.items?.jsonSchema,
-                constraints: array.constraints.jsonSchemaConstraints
-            )
+            return array.heistValueProperties
         }
     }
 
@@ -241,12 +235,27 @@ struct FenceParameterScalarSpec: Sendable, Equatable {
     let kind: FenceParameterScalarKind
     let constraints: FenceParameterScalarConstraints
 
-    var jsonSchema: FenceParameterJSONSchema {
+    var heistValueProperties: [String: HeistValue] {
         switch kind {
         case .string, .integer, .number, .boolean:
-            return .scalar(kind.type, constraints: constraints.jsonSchemaConstraints)
+            var properties = ["type": HeistValue.string(kind.type.jsonSchemaType)]
+            constraints.add(to: &properties)
+            return properties
         case .stringMatch(let modeValues, let description):
-            return .stringMatch(modeValues: modeValues, description: description)
+            return [
+                "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
+                "properties": .object([
+                    FenceParameterKey.mode.rawValue: FenceParameterSchema
+                        .scalar(.string, constraints: FenceParameterScalarConstraints(enumValues: modeValues))
+                        .heistValue,
+                    FenceParameterKey.value.rawValue: FenceParameterSchema.scalar(.string).heistValue,
+                ]),
+                "required": .array([
+                    .string(FenceParameterKey.mode.rawValue),
+                ]),
+                "additionalProperties": .bool(false),
+                "description": .string(description),
+            ]
         }
     }
 }
@@ -254,12 +263,44 @@ struct FenceParameterScalarSpec: Sendable, Equatable {
 struct FenceParameterObjectSpec: Sendable, Equatable {
     let properties: [FenceParameterSpec]?
     let additionalProperties: Bool?
+
+    var heistValueProperties: [String: HeistValue] {
+        var fields = ["type": HeistValue.string(FenceParameterSpec.ParamType.object.jsonSchemaType)]
+        if let properties {
+            fields["properties"] = .object(Self.heistValueProperties(from: properties))
+            let required = properties.filter(\.required).map(\.key)
+            if !required.isEmpty {
+                fields["required"] = .array(required.map { .string($0) })
+            }
+        }
+        if let additionalProperties {
+            fields["additionalProperties"] = .bool(additionalProperties)
+        }
+        return fields
+    }
+
+    private static func heistValueProperties(from properties: [FenceParameterSpec]) -> [String: HeistValue] {
+        var projectedProperties: [String: HeistValue] = [:]
+        for property in properties where projectedProperties[property.key] == nil {
+            projectedProperties[property.key] = property.schema.heistValue
+        }
+        return projectedProperties
+    }
 }
 
 struct FenceParameterArraySpec: Sendable, Equatable {
     let kind: FenceParameterArrayKind
     let items: FenceParameterSchema?
     let constraints: FenceParameterArrayConstraints
+
+    var heistValueProperties: [String: HeistValue] {
+        var fields = ["type": HeistValue.string(FenceParameterSpec.ParamType.array.jsonSchemaType)]
+        constraints.add(to: &fields)
+        if let items {
+            fields["items"] = items.heistValue
+        }
+        return fields
+    }
 }
 
 enum FenceParameterArrayKind: Sendable, Equatable {
@@ -302,16 +343,6 @@ struct FenceParameterScalarConstraints: Sendable, Equatable {
         self.minLength = minLength
     }
 
-    var jsonSchemaConstraints: FenceParameterJSONSchemaConstraints {
-        FenceParameterJSONSchemaConstraints(
-            enumValues: enumValues,
-            defaultValue: defaultValue,
-            minimum: minimum,
-            maximum: maximum,
-            exclusiveMinimum: exclusiveMinimum,
-            minLength: minLength
-        )
-    }
 }
 
 struct FenceParameterArrayConstraints: Sendable, Equatable {
@@ -327,201 +358,9 @@ struct FenceParameterArrayConstraints: Sendable, Equatable {
         self.minItems = minItems
         self.maxItems = maxItems
     }
-
-    var jsonSchemaConstraints: FenceParameterJSONSchemaConstraints {
-        FenceParameterJSONSchemaConstraints(
-            minItems: minItems,
-            maxItems: maxItems
-        )
-    }
 }
 
-indirect enum FenceParameterJSONSchema: Sendable, Equatable {
-    case unconstrained
-    case scalar(FenceParameterJSONScalarSchema)
-    case object(FenceParameterJSONObjectSchema)
-    case array(FenceParameterJSONArraySchema)
-
-    var heistValue: HeistValue {
-        .object(heistValueProperties)
-    }
-
-    private var heistValueProperties: [String: HeistValue] {
-        switch self {
-        case .unconstrained:
-            return [:]
-        case .scalar(let schema):
-            return schema.heistValueProperties
-        case .object(let schema):
-            return schema.heistValueProperties
-        case .array(let schema):
-            return schema.heistValueProperties
-        }
-    }
-
-    static func scalar(
-        _ type: FenceParameterSpec.ParamType,
-        constraints: FenceParameterJSONSchemaConstraints = .empty
-    ) -> Self {
-        .scalar(FenceParameterJSONScalarSchema(type: type, constraints: constraints))
-    }
-
-    static func object(
-        properties: [FenceParameterJSONSchemaProperty]? = nil,
-        additionalProperties: Bool? = nil,
-        constraints: FenceParameterJSONSchemaConstraints = .empty
-    ) -> Self {
-        .object(FenceParameterJSONObjectSchema(
-            properties: properties,
-            additionalProperties: additionalProperties,
-            constraints: constraints
-        ))
-    }
-
-    static func array(
-        items: FenceParameterJSONSchema? = nil,
-        constraints: FenceParameterJSONSchemaConstraints = .empty
-    ) -> Self {
-        .array(FenceParameterJSONArraySchema(items: items, constraints: constraints))
-    }
-
-    static func stringMatch(
-        modeValues: [String],
-        description: String
-    ) -> Self {
-        .object(
-            properties: [
-                FenceParameterJSONSchemaProperty(
-                    key: .mode,
-                    schema: .scalar(.string, constraints: FenceParameterJSONSchemaConstraints(enumValues: modeValues)),
-                    required: true
-                ),
-                FenceParameterJSONSchemaProperty(
-                    key: .value,
-                    schema: .scalar(.string),
-                    required: false
-                ),
-            ],
-            additionalProperties: false,
-            constraints: FenceParameterJSONSchemaConstraints(description: description)
-        )
-    }
-}
-
-struct FenceParameterJSONScalarSchema: Sendable, Equatable {
-    let type: FenceParameterSpec.ParamType
-    let constraints: FenceParameterJSONSchemaConstraints
-
-    var heistValueProperties: [String: HeistValue] {
-        var properties = ["type": HeistValue.string(type.jsonSchemaType)]
-        constraints.add(to: &properties)
-        return properties
-    }
-}
-
-struct FenceParameterJSONObjectSchema: Sendable, Equatable {
-    let properties: [FenceParameterJSONSchemaProperty]?
-    let additionalProperties: Bool?
-    let constraints: FenceParameterJSONSchemaConstraints
-
-    var heistValueProperties: [String: HeistValue] {
-        var fields = ["type": HeistValue.string(FenceParameterSpec.ParamType.object.jsonSchemaType)]
-        constraints.add(to: &fields)
-        if let properties {
-            fields["properties"] = .object(Self.heistValueProperties(from: properties))
-            let required = properties.filter(\.required).map(\.key)
-            if !required.isEmpty {
-                fields["required"] = .array(required.map { .string($0) })
-            }
-        }
-        if let additionalProperties {
-            fields["additionalProperties"] = .bool(additionalProperties)
-        }
-        return fields
-    }
-
-    private static func heistValueProperties(
-        from properties: [FenceParameterJSONSchemaProperty]
-    ) -> [String: HeistValue] {
-        var projectedProperties: [String: HeistValue] = [:]
-        for property in properties where projectedProperties[property.key] == nil {
-            projectedProperties[property.key] = property.schema.heistValue
-        }
-        return projectedProperties
-    }
-}
-
-struct FenceParameterJSONArraySchema: Sendable, Equatable {
-    let items: FenceParameterJSONSchema?
-    let constraints: FenceParameterJSONSchemaConstraints
-
-    var heistValueProperties: [String: HeistValue] {
-        var fields = ["type": HeistValue.string(FenceParameterSpec.ParamType.array.jsonSchemaType)]
-        constraints.add(to: &fields)
-        if let items {
-            fields["items"] = items.heistValue
-        }
-        return fields
-    }
-}
-
-struct FenceParameterJSONSchemaProperty: Sendable, Equatable {
-    let key: String
-    let schema: FenceParameterJSONSchema
-    let required: Bool
-
-    init(
-        key: FenceParameterKey,
-        schema: FenceParameterJSONSchema,
-        required: Bool = false
-    ) {
-        self.key = key.rawValue
-        self.schema = schema
-        self.required = required
-    }
-
-    init(_ spec: FenceParameterSpec) {
-        key = spec.key
-        schema = spec.jsonSchema
-        required = spec.required
-    }
-}
-
-struct FenceParameterJSONSchemaConstraints: Sendable, Equatable {
-    static let empty = Self()
-
-    let enumValues: [String]?
-    let defaultValue: HeistValue?
-    let minimum: Double?
-    let maximum: Double?
-    let exclusiveMinimum: Double?
-    let minLength: Int?
-    let minItems: Int?
-    let maxItems: Int?
-    let description: String?
-
-    init(
-        enumValues: [String]? = nil,
-        defaultValue: HeistValue? = nil,
-        minimum: Double? = nil,
-        maximum: Double? = nil,
-        exclusiveMinimum: Double? = nil,
-        minLength: Int? = nil,
-        minItems: Int? = nil,
-        maxItems: Int? = nil,
-        description: String? = nil
-    ) {
-        self.enumValues = enumValues
-        self.defaultValue = defaultValue
-        self.minimum = minimum
-        self.maximum = maximum
-        self.exclusiveMinimum = exclusiveMinimum
-        self.minLength = minLength
-        self.minItems = minItems
-        self.maxItems = maxItems
-        self.description = description
-    }
-
+private extension FenceParameterScalarConstraints {
     func add(to properties: inout [String: HeistValue]) {
         if let enumValues { properties["enum"] = .array(enumValues.map { .string($0) }) }
         if let defaultValue { properties["default"] = defaultValue }
@@ -529,9 +368,13 @@ struct FenceParameterJSONSchemaConstraints: Sendable, Equatable {
         if let maximum { properties["maximum"] = jsonSchemaNumber(maximum) }
         if let exclusiveMinimum { properties["exclusiveMinimum"] = jsonSchemaNumber(exclusiveMinimum) }
         if let minLength { properties["minLength"] = .int(minLength) }
+    }
+}
+
+private extension FenceParameterArrayConstraints {
+    func add(to properties: inout [String: HeistValue]) {
         if let minItems { properties["minItems"] = .int(minItems) }
         if let maxItems { properties["maxItems"] = .int(maxItems) }
-        if let description { properties["description"] = .string(description) }
     }
 }
 
@@ -960,7 +803,7 @@ private func jsonSchemaNumber(_ value: Double) -> HeistValue {
     static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: HeistValue] {
         var properties: [String: HeistValue] = [:]
         for spec in specs where properties[spec.key] == nil {
-            properties[spec.key] = spec.jsonSchema.heistValue
+            properties[spec.key] = spec.schema.heistValue
         }
         return properties
     }
@@ -968,8 +811,8 @@ private func jsonSchemaNumber(_ value: Double) -> HeistValue {
     static func jsonInputSchema(
         parameters: [FenceParameterSpec]
     ) -> HeistValue {
-        FenceParameterJSONSchema.object(
-            properties: parameters.map(FenceParameterJSONSchemaProperty.init),
+        FenceParameterSchema.object(
+            properties: parameters,
             additionalProperties: false
         ).heistValue
     }

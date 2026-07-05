@@ -3,7 +3,7 @@ import ArgumentParser
 import Foundation
 import ThePlans
 
-struct CLIRequestParameters: Equatable {
+private struct CLIRequestFields: Equatable {
     private var values: [FenceParameterKey: HeistValue]
 
     init() {
@@ -30,10 +30,6 @@ struct CLIRequestParameters: Equatable {
         values[key] = value
     }
 
-    mutating func set(_ key: FenceParameterKey, _ value: CLIRequestObject) {
-        set(key, value.heistValue)
-    }
-
     mutating func set(_ key: FenceParameterKey, _ value: String) {
         set(key, .string(value))
     }
@@ -52,6 +48,55 @@ struct CLIRequestParameters: Equatable {
 
     mutating func set(_ key: FenceParameterKey, _ value: [String]) {
         set(key, .array(value.map(HeistValue.string)))
+    }
+}
+
+struct CLIRequestParameters: Equatable {
+    private var fields: CLIRequestFields
+
+    init() {
+        fields = CLIRequestFields()
+    }
+
+    init(_ values: [(FenceParameterKey, HeistValue)]) {
+        fields = CLIRequestFields(values)
+    }
+
+    subscript(_ key: FenceParameterKey) -> HeistValue? {
+        get { fields[key] }
+        set { fields[key] = newValue }
+    }
+
+    var rawValues: [String: HeistValue] {
+        fields.rawValues
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
+        fields.set(key, value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: CLIRequestObject) {
+        set(key, value.heistValue)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: String) {
+        fields.set(key, value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Int) {
+        fields.set(key, value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Double) {
+        fields.set(key, value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Bool) {
+        fields.set(key, value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: [String]) {
+        fields.set(key, value)
     }
 
     func adding(_ fields: CommandArgumentWriter.Field?...) -> Self {
@@ -65,26 +110,26 @@ struct CLIRequestParameters: Equatable {
     func adding(_ fields: [CommandArgumentWriter.Field?]) -> Self {
         var copy = self
         for field in fields.compactMap({ $0 }) {
-            copy.values[field.key] = field.value
+            copy.fields[field.key] = field.value
         }
         return copy
     }
 }
 
 struct CLIRequestObject: Equatable {
-    private var values: [FenceParameterKey: HeistValue]
+    private var fields: CLIRequestFields
 
     init() {
-        values = [:]
+        fields = CLIRequestFields()
     }
 
-    init(_ fields: [(FenceParameterKey, HeistValue)]) {
-        values = Dictionary(fields, uniquingKeysWith: { _, newest in newest })
+    init(_ values: [(FenceParameterKey, HeistValue)]) {
+        fields = CLIRequestFields(values)
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {
-        get { values[key] }
-        set { values[key] = newValue }
+        get { fields[key] }
+        set { fields[key] = newValue }
     }
 
     var heistValue: HeistValue {
@@ -92,40 +137,37 @@ struct CLIRequestObject: Equatable {
     }
 
     var rawValues: [String: HeistValue] {
-        Dictionary(
-            values.map { ($0.key.rawValue, $0.value) },
-            uniquingKeysWith: { _, newest in newest }
-        )
+        fields.rawValues
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
-        values[key] = value
+        fields.set(key, value)
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: String) {
-        set(key, .string(value))
+        fields.set(key, value)
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: Int) {
-        set(key, .int(value))
+        fields.set(key, value)
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: Double) {
-        set(key, .double(value))
+        fields.set(key, value)
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: [String]) {
-        set(key, .array(value.map(HeistValue.string)))
+        fields.set(key, value)
     }
 
     mutating func appendOneOrMany(_ value: HeistValue, for key: FenceParameterKey) {
-        switch values[key] {
+        switch fields[key] {
         case nil:
-            values[key] = value
+            fields[key] = value
         case .array(let existing)?:
-            values[key] = .array(existing + [value])
+            fields[key] = .array(existing + [value])
         case let existing?:
-            values[key] = .array([existing, value])
+            fields[key] = .array([existing, value])
         }
     }
 }

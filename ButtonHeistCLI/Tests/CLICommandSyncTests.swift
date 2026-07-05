@@ -34,14 +34,15 @@ final class CLICommandSyncTests: XCTestCase {
         ]
         for fileURL in commandFiles {
             let source = try String(contentsOf: fileURL)
+            let sourceForShapeScan = try source.sourceCodeForShapeScanning()
             for (description, pattern) in disallowedPatterns {
                 let regex = try NSRegularExpression(pattern: pattern)
-                let range = NSRange(source.startIndex..<source.endIndex, in: source)
-                guard let match = regex.firstMatch(in: source, range: range),
-                      let matchRange = Range(match.range, in: source) else {
+                let range = NSRange(sourceForShapeScan.startIndex..<sourceForShapeScan.endIndex, in: sourceForShapeScan)
+                guard let match = regex.firstMatch(in: sourceForShapeScan, range: range),
+                      let matchRange = Range(match.range, in: sourceForShapeScan) else {
                     continue
                 }
-                let snippet = source[matchRange].replacingOccurrences(of: "\n", with: "\\n")
+                let snippet = sourceForShapeScan[matchRange].replacingOccurrences(of: "\n", with: "\\n")
                 XCTFail("\(fileURL.lastPathComponent) contains \(description): \(snippet)")
             }
         }
@@ -746,5 +747,34 @@ private final class TemporaryCLIDirectory {
 private extension CLIParsedRequest {
     func argument(_ key: FenceParameterKey) -> HeistValue? {
         arguments.argumentValues[key.rawValue]
+    }
+}
+
+private extension String {
+    func sourceCodeForShapeScanning() throws -> String {
+        var source = self
+        for pattern in [
+            ##"(#*)"""[\s\S]*?"""\1"##,
+            ##"(#*)"(?:\\.|[^"\\])*"\1"##,
+            #"/\*[\s\S]*?\*/"#,
+            #"//[^\n]*"#,
+        ] {
+            let regex = try NSRegularExpression(pattern: pattern)
+            source = source.replacingMatchesWithShapePreservingWhitespace(regex)
+        }
+        return source
+    }
+
+    private func replacingMatchesWithShapePreservingWhitespace(_ regex: NSRegularExpression) -> String {
+        var result = self
+        let range = NSRange(result.startIndex..<result.endIndex, in: result)
+        for match in regex.matches(in: result, range: range).reversed() {
+            guard let matchRange = Range(match.range, in: result) else { continue }
+            let replacement = String(result[matchRange].map { character -> Character in
+                character == "\n" ? "\n" : " "
+            })
+            result.replaceSubrange(matchRange, with: replacement)
+        }
+        return result
     }
 }

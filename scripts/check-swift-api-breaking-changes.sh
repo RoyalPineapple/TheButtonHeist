@@ -28,6 +28,11 @@ PUBLIC_PRODUCTS=(
     TheInsideJob
     ButtonHeistTesting
 )
+INTENTIONAL_BREAKAGES=(
+    "enumelement StringMatch.Mode.isEmpty has been added as a new enum case"
+    "enumelement StringMatch.isEmpty has been added as a new enum case"
+    "constructor HeistInvocationEvidence.init(invocation:name:argument:childFailedPath:expectationActionResult:expectation:expectationEvidence:) has been removed"
+)
 MODE="${BUTTONHEIST_SWIFT_API_BREAKAGE_MODE:-strict}"
 case "$MODE" in
     strict|report) ;;
@@ -37,10 +42,13 @@ case "$MODE" in
         ;;
 esac
 
+OUTPUT_FILE="$(mktemp)"
+trap 'rm -f "$OUTPUT_FILE"' EXIT
+
 set +e
 swift package diagnose-api-breaking-changes "$BASELINE_TAG" \
-    --products "${PUBLIC_PRODUCTS[@]}"
-status=$?
+    --products "${PUBLIC_PRODUCTS[@]}" 2>&1 | tee "$OUTPUT_FILE"
+status=${PIPESTATUS[0]}
 set -e
 
 if [[ "$status" -eq 0 ]]; then
@@ -53,4 +61,35 @@ if [[ "$MODE" == "report" ]]; then
     exit 0
 fi
 
+detected_breakages=()
+while IFS= read -r breakage; do
+    [[ -n "$breakage" ]] || continue
+    detected_breakages+=("$breakage")
+done < <(grep -F "API breakage:" "$OUTPUT_FILE" | sed 's/^.*API breakage: //')
+if [[ "${#detected_breakages[@]}" -eq 0 ]]; then
+    exit "$status"
+fi
+
+unexpected_breakages=()
+for breakage in "${detected_breakages[@]}"; do
+    allowed=0
+    for intentional in "${INTENTIONAL_BREAKAGES[@]}"; do
+        if [[ "$breakage" == "$intentional" ]]; then
+            allowed=1
+            break
+        fi
+    done
+    if [[ "$allowed" -eq 0 ]]; then
+        unexpected_breakages+=("$breakage")
+    fi
+done
+
+if [[ "${#unexpected_breakages[@]}" -eq 0 ]]; then
+    echo "Only intentional Swift API breakage detected:"
+    printf '  - %s\n' "${detected_breakages[@]}"
+    exit 0
+fi
+
+echo "Unexpected Swift API breakage detected:"
+printf '  - %s\n' "${unexpected_breakages[@]}"
 exit "$status"

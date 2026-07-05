@@ -257,7 +257,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 )
             }
             let abortedAtChildPath = children.firstFailedStep?.path
-            let evidence = HeistStepEvidence.invocation(HeistInvocationEvidence(
+            let evidence = HeistStepEvidence.invocation(.heist(
                 name: plan.name.map { "heist \($0)" },
                 childFailedPath: abortedAtChildPath
             ))
@@ -287,7 +287,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 kind: .invoke,
                 durationMs: heistStepDurationMs,
                 intent: .invoke(path: invoke.path.joined(separator: "."), argument: nil),
-                evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invoke.path.joined(separator: ".")))
+                evidence: .invocation(.invocation(invoke, name: invoke.path.joined(separator: ".")))
             )
         case .warn(let warn):
             return .passed(

@@ -475,6 +475,10 @@ final class ElementInflation {
         case nil:
             break
         }
+        if case .failure(let failure) = knownSemanticTarget(target),
+           failure.failedStep == .ambiguous {
+            return .failure(failure)
+        }
         if let screen = await discoverTarget?(target) {
             stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
             switch visibleTargetResolution(target, in: screen) {
@@ -529,12 +533,6 @@ final class ElementInflation {
     private func knownSemanticTarget(
         _ target: ElementTarget
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
-        if let revealable = uniquelyResolvedRevealableTarget(target) {
-            return .success(revealable)
-        }
-        if let reachable = uniquelyResolvedReachableTarget(target) {
-            return .success(reachable)
-        }
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
             return .success(screenElement)
@@ -561,42 +559,6 @@ final class ElementInflation {
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound:
-            return nil
-        }
-    }
-
-    private func uniquelyResolvedRevealableTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
-        uniquelyResolvedRevealableTarget(target, in: stash.settledSemanticScreen)
-    }
-
-    private func uniquelyResolvedRevealableTarget(
-        _ target: ElementTarget,
-        in screen: Screen
-    ) -> TheStash.ScreenElement? {
-        switch target {
-        case .predicate(let predicate, ordinal: nil):
-            let revealableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
-                .filter { $0.scrollMembership != nil && stash.liveScrollView(for: $0) != nil }
-            return revealableMatches.count == 1 ? revealableMatches[0] : nil
-        case .predicate:
-            return nil
-        }
-    }
-
-    private func uniquelyResolvedReachableTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
-        uniquelyResolvedReachableTarget(target, in: stash.settledSemanticScreen)
-    }
-
-    private func uniquelyResolvedReachableTarget(
-        _ target: ElementTarget,
-        in screen: Screen
-    ) -> TheStash.ScreenElement? {
-        switch target {
-        case .predicate(let predicate, ordinal: nil):
-            let reachableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
-                .filter { $0.scrollMembership != nil }
-            return reachableMatches.count == 1 ? reachableMatches[0] : nil
-        case .predicate:
             return nil
         }
     }

@@ -5,6 +5,11 @@ import TheScore
 @ButtonHeistActor
 final class ScreenshotArtifactWriter {
 
+    enum Destination {
+        case automaticPrivateArtifact
+        case userExplicitOutputPath(String)
+    }
+
     private let baseDirectory: URL
 
     init(baseDirectory: URL? = nil) {
@@ -13,14 +18,16 @@ final class ScreenshotArtifactWriter {
 
     func writeScreenshot(
         base64Data: String,
-        outputPath: String?,
+        destination: Destination,
         command: TheFence.Command
     ) throws -> URL {
         let data = try decodeScreenshotData(base64Data)
-        if let outputPath {
+        switch destination {
+        case .automaticPrivateArtifact:
+            return try writeStandaloneScreenshot(data, command: command)
+        case .userExplicitOutputPath(let outputPath):
             return try write(data, toOutputPath: outputPath)
         }
-        return try writeStandaloneScreenshot(data, command: command)
     }
 
     private func write(_ data: Data, toOutputPath outputPath: String) throws -> URL {
@@ -33,10 +40,9 @@ final class ScreenshotArtifactWriter {
 
     private func writeStandaloneScreenshot(_ data: Data, command: TheFence.Command) throws -> URL {
         let subdirectory = baseDirectory.appendingPathComponent("screenshots")
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
         let filename = "\(PrivateStorage.timestampString())-\(UUID().uuidString)-\(command.rawValue).png"
         let fileURL = subdirectory.appendingPathComponent(filename)
-        try data.write(to: fileURL)
+        try PrivateStorage.writePrivateData(data, to: fileURL)
         return fileURL
     }
 

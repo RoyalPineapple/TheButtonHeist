@@ -809,7 +809,7 @@ extension TheBrains {
             kind: .heist,
             durationMs: elapsedMilliseconds(since: start),
             intent: .heist(name: plan.name),
-            evidence: .invocation(HeistInvocationEvidence(
+            evidence: .invocation(.heist(
                 name: plan.name.map { "heist \($0)" } ?? "inline heist",
                 childFailedPath: childExecution.abortedAtChildPath
             )),
@@ -923,7 +923,7 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
+                evidence: .invocation(context.invoke, name: context.requestedName),
                 failure: HeistFailureDetail(
                     category: .invocation,
                     contract: "heist invocation must not recurse",
@@ -943,7 +943,7 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName),
+                evidence: .invocation(context.invoke, name: context.requestedName),
                 failure: HeistFailureDetail(
                     category: .invocation,
                     contract: "heist invocation path resolves to a definition",
@@ -965,8 +965,8 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: HeistInvocationEvidence(
-                    invocation: context.invoke,
+                evidence: .invocation(
+                    context.invoke,
                     name: context.requestedName
                 ),
                 failure: HeistFailureDetail(
@@ -1024,12 +1024,14 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: HeistInvocationEvidence(
-                    invocation: context.invoke,
+                evidence: .invocation(
+                    context.invoke,
                     name: context.requestedName,
                     argument: context.argumentSummary,
-                    expectationActionResult: expectationActionResult,
-                    expectation: expectationResult
+                    expectation: .init(
+                        actionResult: expectationActionResult,
+                        expectation: expectationResult
+                    )
                 ),
                 failure: HeistFailureDetail(
                     category: .expectation,
@@ -1076,14 +1078,19 @@ extension TheBrains {
         let expectationEvidence = expectationOutcome.receipt.map {
             invocationExpectationEvidence(receipt: $0, context: expectationContext)
         }
-        let evidence = HeistInvocationEvidence(
-            invocation: context.invoke,
+        let invocationExpectation = expectationEvidence.map {
+            HeistInvocationEvidence.InvocationExpectationEvidence(
+                actionResult: $0.actionResult,
+                expectation: $0.expectation,
+                waitEvidence: $0
+            )
+        }
+        let evidence = HeistInvocationEvidence.invocation(
+            context.invoke,
             name: context.requestedName,
             argument: context.argumentSummary,
             childFailedPath: childExecution.abortedAtChildPath,
-            expectationActionResult: expectationEvidence?.actionResult,
-            expectation: expectationEvidence?.expectation,
-            expectationEvidence: expectationEvidence
+            expectation: invocationExpectation
         )
         let outcome = HeistReceiptOutcome(
             evidence: evidence,

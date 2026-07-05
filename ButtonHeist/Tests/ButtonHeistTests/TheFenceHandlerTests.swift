@@ -1809,7 +1809,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .heist,
                     durationMs: 5,
-                    evidence: .invocation(HeistInvocationEvidence(
+                    evidence: .invocation(.heist(
                         name: "heist",
                         childFailedPath: childPath
                     )),
@@ -2972,7 +2972,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let parameter = try XCTUnwrap(TheFence.Command.setPasteboard.descriptor.parameters.first { $0.key == "text" })
 
         XCTAssertEqual(parameter.minLength, 1)
-        guard case .object(let schema) = parameter.jsonSchema.heistValue else {
+        guard case .object(let schema) = parameter.schema.heistValue else {
             return XCTFail("Expected text parameter schema")
         }
         XCTAssertEqual(schema["minLength"], .int(1))

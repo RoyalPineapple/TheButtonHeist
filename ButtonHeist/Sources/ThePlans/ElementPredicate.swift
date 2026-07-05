@@ -307,6 +307,45 @@ public enum ElementPredicateCheck<Text: StringMatchPayload>: Sendable, Equatable
         }
     }
 
+    public var invalidEmptyPayloadDescription: String? {
+        switch self {
+        case .label(let match):
+            return Self.emptyStringPayloadDescription(match, field: "label")
+        case .identifier(let match):
+            return Self.emptyStringPayloadDescription(match, field: "identifier")
+        case .value(let match):
+            return Self.emptyStringPayloadDescription(match, field: "value")
+        case .hint(let match):
+            return Self.emptyStringPayloadDescription(match, field: "hint")
+        case .traits(let traits):
+            return traits.isEmpty ? "traits check must not be empty" : nil
+        case .actions(let actions):
+            return actions.isEmpty ? "actions check must not be empty" : nil
+        case .customContent(let match):
+            if let description = match.label.flatMap({ Self.emptyStringPayloadDescription($0, field: "customContent label") }) {
+                return description
+            }
+            if let description = match.value.flatMap({ Self.emptyStringPayloadDescription($0, field: "customContent value") }) {
+                return description
+            }
+            return match.hasPredicateLiteral ? nil : "customContent match must include label, value, or isImportant"
+        case .rotors(let matches):
+            if matches.isEmpty {
+                return "rotors check must not be empty"
+            }
+            return matches.lazy.compactMap { Self.emptyStringPayloadDescription($0, field: "rotor") }.first
+        case .exclude(let check):
+            if let description = check.invalidEmptyPayloadDescription {
+                return "excluded \(description)"
+            }
+            return check.hasPredicateLiteral ? nil : "exclude check must not be empty"
+        }
+    }
+
+    private static func emptyStringPayloadDescription(_ match: StringMatch<Text>, field: String) -> String? {
+        match.valueIfPresent?.stringMatchLiteralIsEmpty == true ? "\(field) match value must not be empty" : nil
+    }
+
     public func map<NewText: StringMatchPayload>(
         _ transform: (Text) throws -> NewText
     ) rethrows -> ElementPredicateCheck<NewText> {
@@ -389,6 +428,13 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
+
+    public var invalidEmptyPayloadDescription: String? {
+        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
+            return description
+        }
+        return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription
+    }
 
     private static func checks(
         label: StringMatch<String>?,
@@ -551,6 +597,12 @@ extension ElementPredicate: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(try container.decodeIfPresent([ElementPredicateCheck<String>].self, forKey: .checks) ?? [])
+        if let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath + [CodingKeys.checks],
+                debugDescription: description
+            ))
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -617,6 +669,12 @@ extension ElementPredicateCheck: Codable where Text: Codable {
             try Self.rejectIrrelevantField(.match, in: container, forKind: .exclude)
             try Self.rejectIrrelevantField(.values, in: container, forKind: .exclude)
             self = .exclude(try container.decode(ElementPredicateCheck<Text>.self, forKey: .check))
+        }
+        if let description = invalidEmptyPayloadDescription {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: description
+            ))
         }
     }
 

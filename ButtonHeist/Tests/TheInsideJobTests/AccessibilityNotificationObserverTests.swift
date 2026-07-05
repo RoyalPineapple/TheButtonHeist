@@ -18,6 +18,23 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testUnsubscribeRemovesSubscriberAndTearsDownInstalledCallback() throws {
+        let bus = AccessibilityNotificationBus()
+
+        AccessibilityNotificationObserver.shared.subscribe(bus)
+        let installed = AccessibilityNotificationObserver.shared.isInstalled
+        XCTAssertEqual(
+            AccessibilityNotificationObserver.shared.lifecycleState,
+            .subscribed(callbackInstalled: installed)
+        )
+
+        AccessibilityNotificationObserver.shared.unsubscribe(bus)
+
+        XCTAssertFalse(AccessibilityNotificationObserver.shared.hasSubscribers)
+        XCTAssertEqual(AccessibilityNotificationObserver.shared.lifecycleState, .unsubscribed)
+        XCTAssertFalse(AccessibilityNotificationObserver.shared.isInstalled)
+    }
+
     func testObserverReceivesPostedPayloadShapes() async throws {
         let bus = AccessibilityNotificationBus()
 

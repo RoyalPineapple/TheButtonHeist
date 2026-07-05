@@ -562,6 +562,42 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testAccessibilityNotificationObjectIdentityResolvesIntoReferenceScreen() {
+        let payloadObject = NSObject()
+        let source = Screen.makeForTests([
+            .init(element(label: "Old", traits: .button), heistId: "old"),
+            .init(element(label: "A acid", traits: .button), heistId: "a_acid", object: payloadObject),
+        ])
+        let reference = Screen.makeForTests(elements: [
+            (element(label: "Section A", traits: .header), "section_a_header"),
+            (element(label: "A acid", traits: .button), "a_acid"),
+        ])
+        let event = PendingAccessibilityNotificationEvent(
+            sequence: 1,
+            code: 1001,
+            name: "screenChanged",
+            timestamp: Date(timeIntervalSince1970: 0),
+            notificationData: .object(AccessibilityNotificationObjectIdentity(
+                object: payloadObject,
+                className: "NSObject",
+                summary: nil
+            )),
+            associatedElement: .none
+        )
+
+        let evidence = bagman.resolveAccessibilityNotificationEvidence(
+            [event],
+            identityScreen: source,
+            referenceScreen: reference
+        )
+
+        guard case .element(let reference)? = evidence.first?.notificationData else {
+            return XCTFail("Expected notification object to resolve into reference screen")
+        }
+        XCTAssertEqual(reference.path, TreePath([1]))
+        XCTAssertEqual(reference.traversalIndex, 1)
+    }
+
     func testFailedSettleClearsPendingAccessibilityNotifications() async {
         let screen = Screen.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
         bagman.accessibilityNotifications.record(
@@ -613,6 +649,28 @@ final class TheStashResolutionTests: XCTestCase {
             [1008],
             "The action window may claim attribution, but the heist owns the stream lifetime."
         )
+    }
+
+    func testPostActionFailedSettleReturnsObservedUnsettledEvidenceInsteadOfBaseline() async {
+        let screen = Screen.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
+        let outcome = SettleSession.Outcome(
+            outcome: .timedOut(timeMs: 1),
+            events: [],
+            finalScreen: screen,
+            elementsByKey: [:]
+        )
+
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: outcome
+        )
+
+        guard case .observedUnsettled(let observedScreen) = result.result else {
+            return XCTFail("Expected observed unsettled settle evidence")
+        }
+        XCTAssertEqual(observedScreen.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Unstable")
+        XCTAssertTrue(bagman.latestSettledSemanticObservationInvalidated)
     }
 
     func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() {

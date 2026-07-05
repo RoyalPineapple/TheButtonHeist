@@ -10,6 +10,18 @@ extension TheStash {
         _ pendingEvents: [PendingAccessibilityNotificationEvent],
         in screen: Screen
     ) -> [AccessibilityNotificationEvidence] {
+        resolveAccessibilityNotificationEvidence(
+            pendingEvents,
+            identityScreen: screen,
+            referenceScreen: screen
+        )
+    }
+
+    func resolveAccessibilityNotificationEvidence(
+        _ pendingEvents: [PendingAccessibilityNotificationEvent],
+        identityScreen: Screen,
+        referenceScreen: Screen
+    ) -> [AccessibilityNotificationEvidence] {
         pendingEvents.map { event in
             autoreleasepool {
                 AccessibilityNotificationEvidence(
@@ -19,11 +31,13 @@ extension TheStash {
                     timestamp: event.timestamp,
                     notificationData: resolveAccessibilityNotificationPayload(
                         event.notificationData,
-                        in: screen
+                        identityScreen: identityScreen,
+                        referenceScreen: referenceScreen
                     ),
                     associatedElement: resolveAccessibilityNotificationPayload(
                         event.associatedElement,
-                        in: screen
+                        identityScreen: identityScreen,
+                        referenceScreen: referenceScreen
                     )
                 )
             }
@@ -32,7 +46,8 @@ extension TheStash {
 
     private func resolveAccessibilityNotificationPayload(
         _ payload: PendingAccessibilityNotificationPayload,
-        in screen: Screen
+        identityScreen: Screen,
+        referenceScreen: Screen
     ) -> AccessibilityNotificationPayload {
         switch payload {
         case .none:
@@ -43,14 +58,14 @@ extension TheStash {
             guard let object = ref.object as? NSObject else {
                 return unresolvedObjectPayload(ref)
             }
-            if let heistId = currentLiveCapture.heistId(matching: object),
-               let elementReference = traceElementReference(for: heistId, in: screen, resolution: .identity) {
+            if let heistId = identityScreen.liveCapture.heistId(matching: object),
+               let elementReference = traceElementReference(for: heistId, in: referenceScreen, resolution: .identity) {
                 return .element(elementReference)
             }
             if let parsedElement = burglar.parseObject(object),
                let elementReference = uniqueTraceElementReference(
                 matching: parsedElement,
-                in: screen,
+                in: referenceScreen,
                 resolution: .singleElement
                ) {
                 return .element(elementReference)
