@@ -127,10 +127,11 @@ extension TheTripwire {
     /// Returns true if settled before timeout, false if timed out.
     ///
     /// **Settle signal boundary.** This is the layer-level settle path: it
-    /// watches CALayer fingerprint, animations, and pending layout, and
+    /// watches CALayer geometry fingerprint and pending layout, and
     /// never reads the AX tree. Use it when the caller only needs "the UI
-    /// has stopped moving" — post-jump SPI animations, broadcast pacing,
-    /// wait-for-idle, wait-for-change polling. For post-action correctness
+    /// has stopped changing frame geometry" — post-jump SPI animations,
+    /// broadcast pacing, wait-for-idle, wait-for-change polling.
+    /// For post-action correctness
     /// (where AX-tree fingerprint stability is the load-bearing signal)
     /// use `SettleSession` instead; for per-frame swipe motion detection
     /// (where the viewport heistId set is the signal) use the swipe-settle

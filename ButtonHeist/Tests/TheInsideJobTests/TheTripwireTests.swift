@@ -16,6 +16,22 @@ final class TheTripwireTests: XCTestCase {
         tripwire = nil
     }
 
+    private func fingerprint(
+        frameMinXSum: CGFloat = 100,
+        frameMinYSum: CGFloat = 200,
+        frameWidthSum: CGFloat = 300,
+        frameHeightSum: CGFloat = 400,
+        layerCount: Int = 5
+    ) -> TheTripwire.PresentationFingerprint {
+        TheTripwire.PresentationFingerprint(
+            frameMinXSum: frameMinXSum,
+            frameMinYSum: frameMinYSum,
+            frameWidthSum: frameWidthSum,
+            frameHeightSum: frameHeightSum,
+            layerCount: layerCount
+        )
+    }
+
     // MARK: - PulseReading.isSettled
 
     func testPulseReadingSettledWhenQuiet() {
@@ -23,7 +39,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: false,
             topmostVC: nil,
             tripwireSignal: .empty,
@@ -38,7 +54,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: true,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: false,
             topmostVC: nil,
             tripwireSignal: .empty,
@@ -53,7 +69,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: true,
             topmostVC: nil,
             tripwireSignal: .empty,
@@ -68,7 +84,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: false,
             topmostVC: nil,
             tripwireSignal: .empty,
@@ -86,7 +102,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: false,
             topmostVC: ObjectIdentifier(vc),
             tripwireSignal: .empty,
@@ -228,7 +244,7 @@ final class TheTripwireTests: XCTestCase {
             tick: 1,
             timestamp: CFAbsoluteTimeGetCurrent(),
             layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            fingerprint: fingerprint(),
             hasRelevantAnimations: false,
             topmostVC: tripwireSignal.topmostVC,
             tripwireSignal: tripwireSignal,
@@ -282,49 +298,31 @@ final class TheTripwireTests: XCTestCase {
     // MARK: - PresentationFingerprint.matches (pure value type)
 
     func testFingerprintMatchesIdentical() {
-        let fp = TheTripwire.PresentationFingerprint(
-            positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5
-        )
+        let fp = fingerprint()
         XCTAssertTrue(fp.matches(fp))
     }
 
     func testFingerprintMatchesWithinTolerance() {
-        let fp1 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100.0, positionYSum: 200.0, opacitySum: 5.0, layerCount: 5
-        )
-        let fp2 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100.3, positionYSum: 200.4, opacitySum: 5.04, layerCount: 5
-        )
+        let fp1 = fingerprint(frameMinXSum: 100.0, frameMinYSum: 200.0)
+        let fp2 = fingerprint(frameMinXSum: 100.3, frameMinYSum: 200.4)
         XCTAssertTrue(fp1.matches(fp2))
     }
 
-    func testFingerprintDoesNotMatchPositionDrift() {
-        let fp1 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100.0, positionYSum: 200.0, opacitySum: 5.0, layerCount: 5
-        )
-        let fp2 = TheTripwire.PresentationFingerprint(
-            positionXSum: 101.0, positionYSum: 200.0, opacitySum: 5.0, layerCount: 5
-        )
+    func testFingerprintDoesNotMatchFrameOriginDrift() {
+        let fp1 = fingerprint(frameMinXSum: 100.0, frameMinYSum: 200.0)
+        let fp2 = fingerprint(frameMinXSum: 101.0, frameMinYSum: 200.0)
         XCTAssertFalse(fp1.matches(fp2))
     }
 
-    func testFingerprintDoesNotMatchOpacityDrift() {
-        let fp1 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100, positionYSum: 200, opacitySum: 5.0, layerCount: 5
-        )
-        let fp2 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100, positionYSum: 200, opacitySum: 5.1, layerCount: 5
-        )
+    func testFingerprintDoesNotMatchFrameSizeDrift() {
+        let fp1 = fingerprint(frameWidthSum: 300.0)
+        let fp2 = fingerprint(frameWidthSum: 301.0)
         XCTAssertFalse(fp1.matches(fp2))
     }
 
     func testFingerprintDoesNotMatchLayerCountDiff() {
-        let fp1 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5
-        )
-        let fp2 = TheTripwire.PresentationFingerprint(
-            positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 6
-        )
+        let fp1 = fingerprint(layerCount: 5)
+        let fp2 = fingerprint(layerCount: 6)
         XCTAssertFalse(fp1.matches(fp2))
     }
 
@@ -446,28 +444,6 @@ final class TheTripwireTests: XCTestCase {
     }
 
     // MARK: - allClear (hosted test)
-
-    func testAllClearFalseWhenAnimating() {
-        let windows = tripwire.getTraversableWindows()
-        guard let window = windows.first?.window else {
-            XCTFail("No window available")
-            return
-        }
-
-        let testLayer = CALayer()
-        window.layer.addSublayer(testLayer)
-
-        let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = 1.0
-        animation.toValue = 0.0
-        animation.duration = 10.0
-        testLayer.add(animation, forKey: "testAnimation")
-
-        XCTAssertFalse(tripwire.allClear())
-
-        testLayer.removeAnimation(forKey: "testAnimation")
-        testLayer.removeFromSuperlayer()
-    }
 
     func testAllClearTrueWhenNoAnimations() {
         let result1 = tripwire.allClear()
