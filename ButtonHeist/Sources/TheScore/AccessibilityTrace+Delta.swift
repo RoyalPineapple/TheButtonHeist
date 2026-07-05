@@ -192,16 +192,23 @@ public extension AccessibilityTrace {
         case screenChanged(ScreenChanged)
     }
 
+    enum AccumulatedDeltaChange: Sendable, Equatable {
+        case noChange
+        case elementsChanged(ElementsChanged)
+        case screenChanged(ScreenChanged)
+        case screenAndElementsChanged(screen: ScreenChanged, elements: ElementsChanged)
+    }
+
     struct AccumulatedDelta: Sendable, Equatable {
         public let elementCount: Int
         public let captureEdge: CaptureEdge
-        public let screenChanged: ScreenChanged?
-        public let elementsChanged: ElementsChanged?
+        public let change: AccumulatedDeltaChange
         public let interactionDigest: InteractionDigest?
         public let transient: [HeistElement]
 
         public var isNoChange: Bool {
-            screenChanged == nil && elementsChanged == nil
+            if case .noChange = change { return true }
+            return false
         }
 
         public var isSemanticChange: Bool {
@@ -209,23 +216,48 @@ public extension AccessibilityTrace {
         }
 
         public var kindDescription: String {
-            if screenChanged != nil { return DeltaKind.screenChanged.rawValue }
-            if elementsChanged != nil { return DeltaKind.elementsChanged.rawValue }
-            return DeltaKind.noChange.rawValue
+            switch change {
+            case .noChange:
+                return DeltaKind.noChange.rawValue
+            case .elementsChanged:
+                return DeltaKind.elementsChanged.rawValue
+            case .screenChanged, .screenAndElementsChanged:
+                return DeltaKind.screenChanged.rawValue
+            }
+        }
+
+        public var screenChanged: ScreenChanged? {
+            switch change {
+            case .screenChanged(let screenChanged):
+                return screenChanged
+            case .screenAndElementsChanged(let screenChanged, _):
+                return screenChanged
+            case .noChange, .elementsChanged:
+                return nil
+            }
+        }
+
+        public var elementsChanged: ElementsChanged? {
+            switch change {
+            case .elementsChanged(let elementsChanged):
+                return elementsChanged
+            case .screenAndElementsChanged(_, let elementsChanged):
+                return elementsChanged
+            case .noChange, .screenChanged:
+                return nil
+            }
         }
 
         public init(
             elementCount: Int,
             captureEdge: CaptureEdge,
-            screenChanged: ScreenChanged?,
-            elementsChanged: ElementsChanged?,
+            change: AccumulatedDeltaChange,
             interactionDigest: InteractionDigest?,
             transient: [HeistElement]
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
-            self.screenChanged = screenChanged
-            self.elementsChanged = elementsChanged
+            self.change = change
             self.interactionDigest = interactionDigest
             self.transient = transient
         }
@@ -233,29 +265,32 @@ public extension AccessibilityTrace {
         public init(
             elementCount: Int,
             captureEdge: CaptureEdge,
-            screenChanged: ScreenChanged?,
-            elementsChanged: ElementsChanged?,
             transient: [HeistElement]
         ) {
             self.init(
                 elementCount: elementCount,
                 captureEdge: captureEdge,
-                screenChanged: screenChanged,
-                elementsChanged: elementsChanged,
+                change: .noChange,
                 interactionDigest: nil,
                 transient: transient
             )
         }
 
         public var projectedDelta: Delta {
-            if let screenChanged { return .screenChanged(screenChanged) }
-            if let elementsChanged { return .elementsChanged(elementsChanged) }
-            return .noChange(NoChange(
+            switch change {
+            case .screenChanged(let screenChanged),
+                 .screenAndElementsChanged(let screenChanged, _):
+                return .screenChanged(screenChanged)
+            case .elementsChanged(let elementsChanged):
+                return .elementsChanged(elementsChanged)
+            case .noChange:
+                return .noChange(NoChange(
                 elementCount: elementCount,
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
                 transient: transient
-            ))
+                ))
+            }
         }
     }
 
@@ -475,11 +510,22 @@ private enum AccessibilityTraceAccumulatedDelta {
             )
             : nil
 
+        let change: AccessibilityTrace.AccumulatedDeltaChange
+        switch (screenChanged, elementsChanged) {
+        case (.some(let screenChanged), .some(let elementsChanged)):
+            change = .screenAndElementsChanged(screen: screenChanged, elements: elementsChanged)
+        case (.some(let screenChanged), nil):
+            change = .screenChanged(screenChanged)
+        case (nil, .some(let elementsChanged)):
+            change = .elementsChanged(elementsChanged)
+        case (nil, nil):
+            change = .noChange
+        }
+
         return AccessibilityTrace.AccumulatedDelta(
             elementCount: last.interface.projectedElements.count,
             captureEdge: captureEdge,
-            screenChanged: screenChanged,
-            elementsChanged: elementsChanged,
+            change: change,
             interactionDigest: interactionDigest,
             transient: transient
         )

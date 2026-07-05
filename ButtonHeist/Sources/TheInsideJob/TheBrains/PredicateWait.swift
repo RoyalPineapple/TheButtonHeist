@@ -767,8 +767,7 @@ private struct WaitNoChangeAfterBaselineEvidence {
         trace.accumulatedDelta ?? AccessibilityTrace.AccumulatedDelta(
             elementCount: capture.interface.projectedElements.count,
             captureEdge: AccessibilityTrace.CaptureEdge(before: capture, after: capture),
-            screenChanged: nil,
-            elementsChanged: nil,
+            change: .noChange,
             interactionDigest: AccessibilityTrace.InteractionDigest(
                 elementCountBefore: capture.interface.projectedElements.count,
                 elementCountAfter: capture.interface.projectedElements.count,
