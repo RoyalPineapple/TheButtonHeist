@@ -3,56 +3,6 @@ import XCTest
 
 import ButtonHeistTesting
 
-private enum DemoHome {
-    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
-    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
-    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
-    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
-    private static let backChromeSettleTimeout = 0.25
-
-    static let openMenu = HeistDef<Void>("DemoHome.openMenu") {
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        WaitFor(.missing(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.missing(rootBackTarget), timeout: .seconds(2))
-        WaitFor(.exists(rootTitle), timeout: .seconds(4))
-
-        Activate(.label("Menu"))
-            .expect(.change(.screen(.exists(.label("Menu")))), timeout: .seconds(8))
-    }
-
-    private static let backOneLevelIfNeeded = HeistDef<Void>("DemoHome.backOneLevelIfNeeded") {
-        try reanchorLongListIfNeeded()
-
-        WaitFor(.exists(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
-            .else {}
-
-        If {
-            Case(.exists(rootBackTarget)) {
-                Activate(.predicate(rootBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
-            }
-            Case(.exists(anyBackTarget)) {
-                Activate(.predicate(anyBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
-            }
-            Else {}
-        }
-    }
-
-    private static let reanchorLongListIfNeeded = HeistDef<Void>("DemoHome.reanchorLongListIfNeeded") {
-        If {
-            Case(.exists(longListFirstRow)) {
-                WaitFor(.exists(longListFirstRow), timeout: .seconds(1))
-            }
-            Else {}
-        }
-    }
-}
-
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
         CustomAction("Add to Cart", on: .label(item))
@@ -111,7 +61,7 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
 
     func testMenuOrderFlowUsesReusablePublicHeists() async throws {
         let heist = try await runHeist("MenuOrderDogfood_orderTwoItems") {
-            try DemoHome.openMenu()
+            try DemoNavigation.openMenu()
 
             ForEach(DemoOrder.greekSaladLabel, DemoOrder.eggplantParmesanLabel) { item in
                 try MenuScreen.addItem(item)
@@ -121,7 +71,7 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .forEachString, .invoke])
-        XCTAssertEqual(heist.result.steps.first?.reportDisplayName, #"RunHeist("DemoHome.openMenu")"#)
+        XCTAssertEqual(heist.result.steps.first?.reportDisplayName, #"RunHeist("DemoNavigation.openMenu")"#)
         XCTAssertEqual(heist.result.steps.last?.reportDisplayName, #"RunHeist("MenuScreen.checkout")"#)
         XCTAssertEqual(heist.result.steps[1].forEachStringEvidence?.iterationCount, DemoOrder.itemLabels.count)
     }

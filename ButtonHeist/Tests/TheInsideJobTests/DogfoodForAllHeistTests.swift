@@ -9,7 +9,7 @@ import ThePlans
 private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
         let destinationTitle = ElementPredicateTemplate(label: .exact(screen), traits: [.header])
-        let backToRoot = try DogfoodNavigation.backToRootIfNeeded()
+        let backToRoot = try DemoNavigation.backToRootIfNeeded()
 
         If {
             Case(.exists(destinationTitle)) {
@@ -22,66 +22,6 @@ private enum DogfoodHome {
                     .expect(.change(.screen(.exists(destinationTitle))), timeout: .seconds(8))
             }
         }
-    }
-}
-
-private enum DogfoodNavigation {
-    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
-    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
-    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
-    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
-    private static let backChromeSettleTimeout = 0.25
-
-    static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
-        WaitFor(.missing(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.missing(rootBackTarget), timeout: .seconds(2))
-        WaitFor(.exists(rootTitle), timeout: .seconds(4))
-    }
-
-    static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
-        try backToRootIfNeeded()
-    }
-
-    private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
-        try reanchorLongListIfNeeded()
-
-        WaitFor(.exists(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
-            .else {}
-
-        If {
-            Case(.exists(rootBackTarget)) {
-                Activate(.predicate(rootBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
-            }
-            Case(.exists(anyBackTarget)) {
-                Activate(.predicate(anyBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
-            }
-            Else {}
-        }
-    }
-
-    private static let reanchorLongListIfNeeded = HeistDef<Void>("DogfoodNavigation.reanchorLongListIfNeeded") {
-        If {
-            Case(.exists(longListFirstRow)) {
-                WaitFor(.exists(longListFirstRow), timeout: .seconds(1))
-            }
-            Else {}
-        }
-    }
-
-    static let backTo = HeistDef<String>("DogfoodNavigation.backTo", parameter: "title") { title in
-        let destinationTitle = ElementPredicateTemplate(label: .exact(title), traits: [.header])
-
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
-            .withoutExpectation("Back navigation is proven by the destination title wait")
-
-        WaitFor(.exists(destinationTitle), timeout: .seconds(8))
     }
 }
 
@@ -249,8 +189,8 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile("Ada Lovelace")
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -267,11 +207,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Buy groceries, High priority")
 
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -290,17 +230,17 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
             ForEach("Buttons & Actions", "Display") { screen in
                 try ControlsDemoScreen.openScreen(screen)
-                try DogfoodNavigation.backTo("Controls Demo")
+                try DemoNavigation.backTo("Controls Demo")
             }
 
             try ControlsDemoScreen.openScreen("Toggles & Pickers")
             try TogglePickerScreen.subscribe()
-            try DogfoodNavigation.backTo("Controls Demo")
+            try DemoNavigation.backTo("Controls Demo")
 
             try ControlsDemoScreen.openScreen("Alerts & Sheets")
             try AlertsScreen.acceptSimpleAlert()
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -323,8 +263,8 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile(name)
 
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(stringRoot.result.steps.map(\.kind), [
@@ -347,8 +287,8 @@ final class DogfoodForAllHeistTests: XCTestCase {
             Activate(target)
                 .expect(.exists(.label("Tap count: 1")), timeout: .seconds(2))
 
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(targetRoot.result.steps.map(\.kind), [
@@ -363,7 +303,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let prebuilt = try HeistPlan("DogfoodPrebuiltCalculator") {
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
         let prebuiltRun = try await runHeist(prebuilt)
 
@@ -395,7 +335,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 WaitFor(.exists(target), timeout: .seconds(1))
             }
 
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -424,8 +364,8 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.driveVolumeToMaximum()
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -446,16 +386,16 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.adjustVolume()
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Custom Rotors")
             try CustomRotorsScreen.findFirstError()
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Touch Canvas")
             try TouchCanvasScreen.exerciseMechanicalGestures()
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -490,8 +430,8 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.pasteName()
-            try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backTo("Controls Demo")
+            try DemoNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Buy groceries, High priority")
@@ -500,7 +440,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 WaitFor(.exists(target), timeout: .seconds(1))
             }
 
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -554,7 +494,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(visibleResult.method, .scrollToVisible)
 
         let cleanupHeist = try await runHeist("DogfoodViewportRuntimeCleanup") {
-            try DogfoodNavigation.backToRoot()
+            try DemoNavigation.backToRoot()
         }
         XCTAssertEqual(cleanupHeist.result.steps.map(\.kind), [.invoke])
     }

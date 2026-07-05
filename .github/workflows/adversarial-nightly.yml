@@ -1,0 +1,110 @@
+name: Adversarial Nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      repeat_count:
+        description: Scenario repeat count
+        required: false
+        default: "20"
+
+concurrency:
+  group: adversarial-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-nightly:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
+      BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.repeat_count || '20' }}
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/adversarial-nightly
+      BUTTONHEIST_RECEIPTS_MODE: failing-and-passing
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Boot simulator in background
+        run: |
+          python3 scripts/select-ios-ci-simulator.py
+          # Boot continues asynchronously while dependencies install.
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Install Tuist
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 12
+        run: tuist install
+
+      - name: Generate project
+        timeout-minutes: 5
+        run: |
+          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
+          ./scripts/clean-generated-projects.sh
+
+      - name: Build BH Demo
+        timeout-minutes: 12
+        run: |
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            build
+
+      - name: Build ButtonHeist CLI
+        timeout-minutes: 8
+        run: swift build --package-path ButtonHeistCLI
+
+      - name: Run adversarial lab
+        timeout-minutes: 20
+        run: |
+          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- python3 scripts/e2e-adversarial-lab.py \
+            --sim-udid "$SIM_UDID" \
+            --app "$APP" \
+            --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
+            --repeat-count "$BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT" \
+            --report "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json"
+
+      - name: Collect adversarial diagnostics
+        if: always()
+        run: |
+          mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
+          if [[ -f "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" ]]; then
+            cp "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" \
+              "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/buttonheist-adversarial-nightly-report.json"
+          fi
+
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" adversarial-nightly
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-adversarial-nightly-${{ github.run_attempt }}
+          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          if-no-files-found: error
+          retention-days: 30
