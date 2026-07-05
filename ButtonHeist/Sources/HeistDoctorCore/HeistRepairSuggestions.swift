@@ -11,8 +11,7 @@ public enum HeistRepairSuggester {
         diagnosis(for: request).suggestions
     }
 
-    public static func noSuggestionReason(for request: HeistRepairRequest) -> String {
+    public static func noSuggestionReason(for request: HeistRepairRequest) -> String? {
         diagnosis(for: request).refusal?.message
-            ?? HeistRepairSuggestionRenderer.noSuggestionReason(for: HeistRepairAnalysis.analyze(request))
     }
 }
