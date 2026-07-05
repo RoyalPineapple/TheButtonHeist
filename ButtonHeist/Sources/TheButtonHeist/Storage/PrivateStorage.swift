@@ -149,6 +149,7 @@ enum PrivateStorage {
     static func writePrivateData(_ data: Data, to url: URL) throws {
         let fileManager = FileManager.default
         let attributes = PrivateFileAttributes.privateFile
+        try createPrivateDirectory(at: url.deletingLastPathComponent())
         let temporaryURL = url.deletingLastPathComponent()
             .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
         try createPrivateFile(at: temporaryURL, contents: data)

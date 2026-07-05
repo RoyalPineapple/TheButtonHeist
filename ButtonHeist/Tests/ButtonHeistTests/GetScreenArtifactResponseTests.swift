@@ -28,7 +28,10 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(payload.height, 852)
         XCTAssertEqual(payload.interface?.projectedElements.count, 1)
         XCTAssertTrue(options.includeInterface)
-        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), pngBytes)
+        let artifactURL = URL(fileURLWithPath: path)
+        XCTAssertEqual(try Data(contentsOf: artifactURL), pngBytes)
+        XCTAssertEqual(try Self.posixPermissions(at: artifactURL.deletingLastPathComponent()), 0o700)
+        XCTAssertEqual(try Self.posixPermissions(at: artifactURL), 0o600)
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("status"), "ok")
@@ -175,6 +178,14 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     private static func makeTempDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("buttonheist-get-screen-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    private static func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        if let permissions = attributes[.posixPermissions] as? Int {
+            return permissions & 0o777
+        }
+        return try XCTUnwrap(attributes[.posixPermissions] as? NSNumber).intValue & 0o777
     }
 
     @ButtonHeistActor
