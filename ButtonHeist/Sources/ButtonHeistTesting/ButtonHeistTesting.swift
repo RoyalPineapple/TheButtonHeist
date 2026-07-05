@@ -79,11 +79,9 @@ func makeRunHeistRequest<Content: HeistContent>(
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
 ) throws -> HeistRunRequest {
-    try makeRunHeistArgumentRequest(
-        name,
-        argument: input,
-        parameter: parameter,
-        content
+    HeistRunRequest(
+        plan: try makeRunHeistPlan(name, parameter: parameter, content: content),
+        argument: .string(.literal(input))
     )
 }
 
@@ -111,11 +109,9 @@ func makeRunHeistRequest<Content: HeistContent>(
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
 ) throws -> HeistRunRequest {
-    try makeRunHeistArgumentRequest(
-        name,
-        argument: input,
-        parameter: parameter,
-        content
+    HeistRunRequest(
+        plan: try makeRunHeistPlan(name, targetParameter: parameter, content: content),
+        argument: .elementTarget(.target(input))
     )
 }
 
@@ -142,109 +138,38 @@ func makeRunHeistRequest<Content: HeistContent>(
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
 ) throws -> HeistRunRequest {
-    try makeRunHeistArgumentRequest(
-        name,
-        argument: input,
-        parameter: parameter,
-        content
-    )
-}
-
-private func makeRunHeistArgumentRequest<Argument: HeistRunArgument, Content: HeistContent>(
-    _ name: String,
-    argument input: Argument,
-    parameter: HeistReferenceName,
-    @HeistBuilder _ content: @escaping (Argument.Expression) throws -> Content
-) throws -> HeistRunRequest {
+    let plan = try makeRunHeistPlan(name, targetParameter: parameter, content: content)
     HeistRunRequest(
-        plan: try shouldWrapDottedCapability(name)
-            ? Argument.makeWrappedPlan(name, parameter: parameter, content: content)
-            : Argument.makeNamedPlan(name, parameter: parameter, content: content),
-        argument: try input.heistArgument()
+        plan: plan,
+        argument: .elementTarget(.target(try input.resolve(in: .empty)))
     )
 }
 
-private protocol HeistRunArgument {
-    associatedtype Expression
-
-    func heistArgument() throws -> HeistArgument
-
-    static func makeNamedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (Expression) throws -> Content
-    ) throws -> HeistPlan
-
-    static func makeWrappedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (Expression) throws -> Content
-    ) throws -> HeistPlan
-}
-
-extension String: HeistRunArgument {
-    typealias Expression = StringExpr
-
-    func heistArgument() throws -> HeistArgument {
-        .string(.literal(self))
+private func makeRunHeistPlan<Content: HeistContent>(
+    _ name: String,
+    parameter: HeistReferenceName,
+    content: @escaping (StringExpr) throws -> Content
+) throws -> HeistPlan {
+    guard shouldWrapDottedCapability(name) else {
+        return try HeistPlan(name, parameter: parameter, content)
     }
-
-    static func makeNamedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (StringExpr) throws -> Content
-    ) throws -> HeistPlan {
-        try HeistPlan(name, parameter: parameter, content)
-    }
-
-    static func makeWrappedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (StringExpr) throws -> Content
-    ) throws -> HeistPlan {
-        let definition = HeistDef<String>(name, parameter: parameter, content)
-        return try HeistPlan(parameter: parameter) { input in
-            try definition(input)
-        }
+    let definition = HeistDef<String>(name, parameter: parameter, content)
+    return try HeistPlan(parameter: parameter) { input in
+        try definition(input)
     }
 }
 
-private protocol ElementTargetHeistRunArgument: HeistRunArgument where Expression == ElementTargetExpr {}
-
-extension ElementTargetHeistRunArgument {
-    static func makeNamedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (ElementTargetExpr) throws -> Content
-    ) throws -> HeistPlan {
-        try HeistPlan(name, targetParameter: parameter, content)
+private func makeRunHeistPlan<Content: HeistContent>(
+    _ name: String,
+    targetParameter parameter: HeistReferenceName,
+    content: @escaping (ElementTargetExpr) throws -> Content
+) throws -> HeistPlan {
+    guard shouldWrapDottedCapability(name) else {
+        return try HeistPlan(name, targetParameter: parameter, content)
     }
-
-    static func makeWrappedPlan<Content: HeistContent>(
-        _ name: String,
-        parameter: HeistReferenceName,
-        content: @escaping (ElementTargetExpr) throws -> Content
-    ) throws -> HeistPlan {
-        let definition = HeistDef<ElementTarget>(name, parameter: parameter, content)
-        return try HeistPlan(targetParameter: parameter) { target in
-            try definition(target)
-        }
-    }
-}
-
-extension ElementTarget: ElementTargetHeistRunArgument {
-    typealias Expression = ElementTargetExpr
-
-    func heistArgument() throws -> HeistArgument {
-        .elementTarget(.target(self))
-    }
-}
-
-extension ElementTargetExpr: ElementTargetHeistRunArgument {
-    typealias Expression = ElementTargetExpr
-
-    func heistArgument() throws -> HeistArgument {
-        .elementTarget(.target(try resolve(in: .empty)))
+    let definition = HeistDef<ElementTarget>(name, parameter: parameter, content)
+    return try HeistPlan(targetParameter: parameter) { target in
+        try definition(target)
     }
 }
 
@@ -321,15 +246,14 @@ public func runHeistSync<Content: HeistContent>(
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
 ) -> Heist? {
-    runHeistSyncArgument(
-        name,
-        argument: input,
-        parameter: parameter,
+    runHeistSyncRequest(
+        makeRequest: {
+            try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
+        },
         recordReceipt: recordReceipt,
-        to: receiptDirectory,
+        receiptDirectory: receiptDirectory,
         file: file,
-        line: line,
-        content
+        line: line
     )
 }
 
@@ -346,36 +270,9 @@ public func runHeistSync<Content: HeistContent>(
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
 ) -> Heist? {
-    runHeistSyncArgument(
-        name,
-        argument: input,
-        parameter: parameter,
-        recordReceipt: recordReceipt,
-        to: receiptDirectory,
-        file: file,
-        line: line,
-        content
-    )
-}
-
-private func runHeistSyncArgument<Argument: HeistRunArgument, Content: HeistContent>(
-    _ name: String,
-    argument input: Argument,
-    parameter: HeistReferenceName,
-    recordReceipt: HeistTestReceiptRecording,
-    to receiptDirectory: URL?,
-    file: StaticString,
-    line: UInt,
-    @HeistBuilder _ content: @escaping (Argument.Expression) throws -> Content
-) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
-            try makeRunHeistArgumentRequest(
-                name,
-                argument: input,
-                parameter: parameter,
-                content
-            )
+            try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
         },
         recordReceipt: recordReceipt,
         receiptDirectory: receiptDirectory,
