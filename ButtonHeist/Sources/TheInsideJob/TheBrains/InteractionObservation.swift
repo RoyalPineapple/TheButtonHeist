@@ -55,15 +55,12 @@ final class InteractionObservation {
     }
 
     func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
-        if let evidence = await stash.observeVisibleSemanticEvidence(timeout: timeout) {
-            return postActionObservation.captureSemanticState(from: evidence)
-        }
-        guard let diagnosticScreen = stash.latestFailedSettleDiagnosticEvidence else { return nil }
-        return postActionObservation.captureSemanticState(
-            from: diagnosticScreen,
-            tripwireSignal: stash.tripwire.tripwireSignal(),
-            settledObservationSequence: nil
-        )
+        baselineState(from: await stash.observeVisibleSemanticEvidence(timeout: timeout))
+    }
+
+    func baselineState(from evidence: VisibleSemanticObservationEvidence?) -> PostActionObservation.BeforeState? {
+        guard let evidence else { return nil }
+        return postActionObservation.captureSemanticState(from: evidence)
     }
 
     func observeSemanticState(

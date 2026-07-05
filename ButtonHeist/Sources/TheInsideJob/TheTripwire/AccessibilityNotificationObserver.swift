@@ -12,6 +12,11 @@ private struct CapturedAccessibilityNotification {
     let associatedElement: CapturedAccessibilityNotificationPayload
 }
 
+enum AccessibilityNotificationObserverLifecycleState: Equatable {
+    case unsubscribed
+    case subscribed(callbackInstalled: Bool)
+}
+
 // Rationale: singleton state is protected by `lock`; callbacks copy weak subscribers before fan-out.
 // swiftlint:disable:next agent_unchecked_sendable_no_comment
 final class AccessibilityNotificationObserver: @unchecked Sendable {
@@ -39,6 +44,17 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
         AccessibilityNotificationCallbackState.shared.isInstalled
     }
 
+    var lifecycleState: AccessibilityNotificationObserverLifecycleState {
+        let hasSubscribers: Bool
+        lock.lock()
+        removeExpiredSubscribers()
+        hasSubscribers = !subscribers.isEmpty
+        lock.unlock()
+
+        guard hasSubscribers else { return .unsubscribed }
+        return .subscribed(callbackInstalled: isInstalled)
+    }
+
     private init() {}
 
     func subscribe(_ subscriber: AccessibilityNotificationBus) {
@@ -53,10 +69,14 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
 
     func unsubscribe(_ subscriber: AccessibilityNotificationBus) {
         lock.lock()
-        defer { lock.unlock() }
-
         subscribers[ObjectIdentifier(subscriber)] = nil
         removeExpiredSubscribers()
+        let shouldUninstall = subscribers.isEmpty
+        lock.unlock()
+
+        if shouldUninstall {
+            AccessibilityNotificationCallbackState.shared.uninstall()
+        }
     }
 
     func uninstall() {
@@ -158,18 +178,29 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
     }
 
     func uninstall() {
+        let registration: AccessibilityNotificationPrivateSPI.InstalledCallback
         lock.lock()
-        defer { lock.unlock() }
+        guard let installedRegistration else {
+            lock.unlock()
+            return
+        }
+        registration = installedRegistration
+        lock.unlock()
 
-        guard let installedRegistration else { return }
         do {
-            try installedRegistration.uninstall()
+            try registration.uninstall()
         } catch {
             accessibilityNotificationLogger.info(
                 "accessibility notification callback uninstall failed: \(String(describing: error), privacy: .public)"
             )
+            return
         }
-        self.installedRegistration = nil
+
+        lock.lock()
+        if installedRegistration === registration {
+            self.installedRegistration = nil
+        }
+        lock.unlock()
         accessibilityNotificationLogger.info("Removed accessibility notification callback")
     }
 

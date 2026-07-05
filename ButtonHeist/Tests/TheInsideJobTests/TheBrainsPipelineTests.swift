@@ -61,6 +61,62 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
+    func testScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {
+        let persistent = AccessibilityElement.make(
+            label: "Inbox",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let beforeScreen = Screen.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Home",
+                    traits: .header,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "home_header")
+            ),
+            (persistent, HeistId(rawValue: "persistent_inbox"))
+        ])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let afterScreen = Screen.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Back",
+                    traits: .backButton,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "back_button")
+            ),
+            (
+                AccessibilityElement.make(
+                    label: "Details",
+                    traits: .header,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "details_header")
+            ),
+            (persistent, HeistId(rawValue: "persistent_inbox"))
+        ])
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .activate,
+            outcome: successOutcome(),
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.screenChangeReason,
+            "navigationMarkerChanged"
+        )
+        let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last?.interface.projectedElements)
+            .compactMap(\.label)
+        XCTAssertTrue(labels.contains("Inbox"), "Persistent visible chrome must survive screen-change final evidence")
+    }
+
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() {
         let result = TheSafecracker.InteractionResult.failure(
             .activate,
@@ -623,7 +679,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(labels.contains("ButtonHeist Demo"))
     }
 
-    func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
+    func testActionResultWithDeltaSettleTimeoutKeepsDiagnosticEvidenceOutOfFinalTrace() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
@@ -637,7 +693,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .timedOut(timeMs: 250))
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "Could not parse post-action accessibility tree")
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 250)
         XCTAssertEqual(
@@ -652,7 +709,21 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
         XCTAssertEqual(brains.stash.settledSemanticScreen.orderedElements.first?.element.label, "Save")
         XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
-        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
+        XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Save")
+    }
+
+    func testActionBaselineDoesNotPromoteDiagnosticOnlyEvidence() {
+        let diagnosticScreen = makeScreen(elements: [("Timeout", .staticText, "timeout")])
+        brains.stash.recordFailedSettleDiagnosticEvidence(diagnosticScreen)
+
+        let baseline = brains.interactionObservation.baselineState(from: nil)
+
+        XCTAssertNil(baseline)
+        XCTAssertEqual(
+            brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label,
+            "Timeout"
+        )
     }
 
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {

@@ -53,7 +53,6 @@ struct VisibleSemanticObservationEvidence {
 struct PostActionSettleObservation {
     enum Result {
         case committed(SettledSemanticObservationEvent)
-        case diagnostic(Screen)
         case unavailable
     }
 
@@ -593,7 +592,7 @@ final class SemanticObservationStream {
         )
         return PostActionSettleObservation(
             settle: outcome,
-            result: stash.latestFailedSettleDiagnosticEvidence.map { .diagnostic($0) } ?? .unavailable
+            result: .unavailable
         )
     }
 

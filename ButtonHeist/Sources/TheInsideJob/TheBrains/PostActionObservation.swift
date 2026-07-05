@@ -60,7 +60,7 @@ final class PostActionObservation {
             switch result {
             case .committed(let event):
                 return event.trace.captures.last?.transition.accessibilityNotifications ?? []
-            case .diagnostic, .unavailable:
+            case .unavailable:
                 return []
             }
         }
@@ -75,11 +75,6 @@ final class PostActionObservation {
         case cancelled(cancelMs: Int)
         case parseFailed
         case settled(FinalEvidence)
-    }
-
-    private enum FinalStateRefinement {
-        case state(BeforeState)
-        case commitSettledVisibleObservation(Screen)
     }
 
     init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
@@ -149,41 +144,22 @@ final class PostActionObservation {
         switch settleEvidence.result {
         case .committed(let visibleEvent):
             observedFinalState = captureFinalSemanticState(after: visibleEvent)
-        case .diagnostic(let diagnosticScreen):
-            observedFinalState = captureSemanticState(
-                from: diagnosticScreen,
-                tripwireSignal: tripwire.tripwireSignal(),
-                settledObservationSequence: nil
-            )
         case .unavailable:
             return nil
-        }
-        let finalState: BeforeState
-        switch refinedScreenChangeFinalState(
-            before: before,
-            observedFinal: observedFinalState
-        ) {
-        case .state(let state):
-            finalState = state
-        case .commitSettledVisibleObservation(let screen):
-            let event = stash.semanticObservationStream.commitSettledVisibleObservation(screen)
-            finalState = captureFinalSemanticState(after: event)
-        case nil:
-            finalState = observedFinalState
         }
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
             settleEvidence.accessibilityNotifications,
             from: observedFinalState,
-            to: finalState
+            to: observedFinalState
         )
         let trace = buildPostActionTrace(
             before: before,
-            final: finalState,
+            final: observedFinalState,
             settleEvidence: settleEvidence,
             accessibilityNotifications: accessibilityNotifications
         )
         guard trace.captures.last != nil else { return nil }
-        return FinalEvidence(state: finalState, trace: trace)
+        return FinalEvidence(state: observedFinalState, trace: trace)
     }
 
     func observationOutcome(
@@ -321,63 +297,6 @@ final class PostActionObservation {
             tripwireSignal: observation.tripwireSignal,
             settledObservationSequence: observation.sequence
         )
-    }
-
-    private func refinedScreenChangeFinalState(
-        before: BeforeState,
-        observedFinal: BeforeState
-    ) -> FinalStateRefinement? {
-        guard observedFinal.settledObservationSequence != nil else { return nil }
-        let classification = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: observedFinal.screenSnapshot
-        )
-        guard classification.isScreenChange else { return nil }
-
-        let observedOverlap = Self.visibleOverlapCount(before: before, after: observedFinal)
-        guard observedOverlap > 0 else { return nil }
-        if let pruned = prunedScreenChangeFinalState(
-            before: before,
-            observedFinal: observedFinal,
-            classification: classification,
-            observedOverlap: observedOverlap
-        ) {
-            return pruned
-        }
-        return nil
-    }
-
-    private func prunedScreenChangeFinalState(
-        before: BeforeState,
-        observedFinal: BeforeState,
-        classification: ScreenClassifier.Classification,
-        observedOverlap: Int
-    ) -> FinalStateRefinement? {
-        guard Self.shouldPruneOldVisibleOverlap(classification) else { return nil }
-        let beforeVisibleIds = Set(before.snapshot.map(\.heistId))
-        let prunedScreen = observedFinal.screen.removingElements(withIds: beforeVisibleIds)
-        let candidate = captureSemanticState(
-            from: prunedScreen,
-            tripwireSignal: observedFinal.tripwireSignal,
-            settledObservationSequence: observedFinal.settledObservationSequence
-        )
-        guard Self.visibleOverlapCount(before: before, after: candidate) < observedOverlap else {
-            return nil
-        }
-        return .commitSettledVisibleObservation(prunedScreen)
-    }
-
-    private static func shouldPruneOldVisibleOverlap(_ classification: ScreenClassifier.Classification) -> Bool {
-        switch classification.reason {
-        case .navigationMarkerChanged, .modalBoundaryChanged:
-            return true
-        case .selectedTabChanged, .primaryHeaderChanged, .rootShapeChanged, nil:
-            return false
-        }
-    }
-
-    private static func visibleOverlapCount(before: BeforeState, after: BeforeState) -> Int {
-        Set(before.snapshot.map(\.heistId)).intersection(after.snapshot.map(\.heistId)).count
     }
 
     private func buildPostActionTrace(

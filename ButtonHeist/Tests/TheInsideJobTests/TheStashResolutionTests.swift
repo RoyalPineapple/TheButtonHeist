@@ -615,6 +615,26 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testPostActionFailedSettleReturnsUnavailableInsteadOfDiagnosticBaseline() async {
+        let screen = Screen.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
+        let outcome = SettleSession.Outcome(
+            outcome: .timedOut(timeMs: 1),
+            events: [],
+            finalScreen: screen,
+            elementsByKey: [:]
+        )
+
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: outcome
+        )
+
+        guard case .unavailable = result.result else {
+            return XCTFail("Expected diagnostic-only settle evidence to stay unavailable")
+        }
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Unstable")
+    }
+
     func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(settled)
