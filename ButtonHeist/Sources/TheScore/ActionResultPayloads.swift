@@ -375,7 +375,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         method: ActionMethod,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -383,44 +382,91 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
+        success(
+            method: method,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    public static func success(
+        method: ActionMethod,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) -> ActionResult {
         ActionResult(
             outcome: .success,
             method: method,
             message: message,
-            announcement: announcement,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
     public static func success(
         payload: ActionResultPayload,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
+    ) -> ActionResult {
+        success(
+            payload: payload,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    public static func success(
+        payload: ActionResultPayload,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
             method: payload.method,
             message: message,
-            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -428,7 +474,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -436,18 +481,44 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
+        failure(
+            method: method,
+            errorKind: errorKind,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    public static func failure(
+        method: ActionMethod,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
             method: method,
             message: message,
-            announcement: announcement,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -455,7 +526,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         payload: ActionResultPayload,
         errorKind: ErrorKind,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -463,18 +533,44 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
+        failure(
+            payload: payload,
+            errorKind: errorKind,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    public static func failure(
+        payload: ActionResultPayload,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
             method: payload.method,
             message: message,
-            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -482,7 +578,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         method: ActionMethod,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -494,14 +589,40 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: message,
-            announcement: announcement,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    package init(
+        outcome: Outcome,
+        method: ActionMethod,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) {
+        self.init(
+            outcome: outcome,
+            method: method,
+            message: message,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -509,7 +630,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         payload: ActionResultPayload,
         message: String? = nil,
-        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -519,16 +639,42 @@ public struct ActionResult: Codable, Sendable, Equatable {
     ) {
         self.init(
             outcome: outcome,
+            payload: payload,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    package init(
+        outcome: Outcome,
+        payload: ActionResultPayload,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) {
+        self.init(
+            outcome: outcome,
             method: payload.method,
             message: message,
-            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: timing
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -536,14 +682,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         method: ActionMethod,
         message: String? = nil,
-        announcement: String? = nil,
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String? = nil
     ) {
         self.outcome = outcome
         self.method = method
@@ -602,14 +748,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            announcement: try container.decodeIfPresent(String.self, forKey: .announcement),
             payload: payload,
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
             subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence),
             activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
-            timing: try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
+            timing: try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing),
+            announcement: try container.decodeIfPresent(String.self, forKey: .announcement)
         )
     }
 
@@ -637,14 +783,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: message,
-            announcement: announcement,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: self.timing?.merging(timing) ?? timing
+            timing: self.timing?.merging(timing) ?? timing,
+            announcement: announcement
         )
     }
 

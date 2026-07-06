@@ -48,6 +48,16 @@ INTENTIONAL_BREAKAGES=(
     "constructor FailureCode.init(rawValue:) has been removed"
     "typealias FailureCode.RawValue has been removed"
     "var TheFence.CommandArgumentEnvelope.argumentValues has been removed"
+    "enumelement FenceResponse.announcements has been added as a new enum case"
+    "enumelement TheFence.Command.getAnnouncements has been added as a new enum case"
+    "enumelement AccessibilityPredicate.announcement has been added as a new enum case"
+    "enumelement AccessibilityPredicateContract.PredicateWireType.announcement has been added as a new enum case"
+    "enumelement AccessibilityPredicateContract.announcement has been added as a new enum case"
+    "enumelement AccessibilityPredicateExpr.announcement has been added as a new enum case"
+    "enumelement ClientMessage.getAnnouncements has been added as a new enum case"
+    "enumelement ClientWireMessageType.getAnnouncements has been added as a new enum case"
+    "enumelement ServerWireMessageType.announcements has been added as a new enum case"
+    "enumelement ServerMessage.announcements has been added as a new enum case"
 )
 
 PACKAGE_PUBLIC_PRODUCTS=()

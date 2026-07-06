@@ -93,24 +93,24 @@ struct HeistWaitReceipt {
             return ActionResult.success(
                 method: method,
                 message: message,
-                announcement: announcement,
-                accessibilityTrace: accessibilityTrace
+                accessibilityTrace: accessibilityTrace,
+                announcement: announcement
             )
         case .timedOut:
             return ActionResult.failure(
                 method: method,
                 errorKind: .timeout,
                 message: message,
-                announcement: announcement,
-                accessibilityTrace: accessibilityTrace
+                accessibilityTrace: accessibilityTrace,
+                announcement: announcement
             )
         case .failed(let errorKind):
             return ActionResult.failure(
                 method: method,
                 errorKind: errorKind,
                 message: message,
-                announcement: announcement,
-                accessibilityTrace: accessibilityTrace
+                accessibilityTrace: accessibilityTrace,
+                announcement: announcement
             )
         }
     }
