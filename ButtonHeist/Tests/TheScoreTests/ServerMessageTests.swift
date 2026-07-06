@@ -515,6 +515,7 @@ final class ServerMessageTests: XCTestCase {
             XCTFail("Expected actionResult with .value payload, got \(decoded)")
             return
         }
+        XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(string, "Hello")
     }
 

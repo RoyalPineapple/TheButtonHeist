@@ -133,6 +133,70 @@ public struct ActionResultPayload: Sendable, Equatable {
         self.resultPayload = resultPayload
     }
 
+    fileprivate static func decoded(
+        method: ActionMethod,
+        resultPayload: ResultPayload,
+        codingPath: [CodingKey]
+    ) throws -> ActionResultPayload {
+        switch (method, resultPayload) {
+        case (.typeText, .value(let value)):
+            return .typeText(value)
+        case (.setPasteboard, .value(let value)):
+            return .setPasteboard(value)
+        case (.getPasteboard, .value(let value)):
+            return .getPasteboard(value)
+        case (.takeScreenshot, .screenshot(let screen)):
+            return .screenshot(screen)
+        case (.rotor, .rotor(let rotor)):
+            return .rotor(rotor)
+        case (.heistPlan, .heistExecution(let result)):
+            return .heistExecution(result)
+        case (.activate, _),
+             (.increment, _),
+             (.decrement, _),
+             (.syntheticTap, _),
+             (.syntheticLongPress, _),
+             (.syntheticSwipe, _),
+             (.syntheticDrag, _),
+             (.typeText, _),
+             (.customAction, _),
+             (.editAction, _),
+             (.resignFirstResponder, _),
+             (.setPasteboard, _),
+             (.getPasteboard, _),
+             (.takeScreenshot, _),
+             (.rotor, _),
+             (.heistPlan, _),
+             (.scroll, _),
+             (.scrollToVisible, _),
+             (.scrollToEdge, _),
+             (.wait, _):
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: payloadValidationMessage(method: method, payload: resultPayload)
+            ))
+        }
+    }
+
+    private static func payloadValidationMessage(method: ActionMethod, payload: ResultPayload) -> String {
+        switch (method, payload) {
+        case (.takeScreenshot, _):
+            return "takeScreenshot ActionResult payload must be screenshot"
+        case (.heistPlan, _):
+            return "heistPlan ActionResult payload must be heistExecution"
+        case (.rotor, _):
+            return "rotor ActionResult payload must be rotor"
+        case (_, .value):
+            return "value ActionResult payload is only valid for typeText, setPasteboard, or getPasteboard"
+        case (_, .screenshot):
+            return "screenshot ActionResult payload is only valid for takeScreenshot"
+        case (_, .heistExecution):
+            return "heistExecution ActionResult payload is only valid for heistPlan"
+        case (_, .rotor):
+            return "rotor ActionResult payload is only valid for rotor"
+        }
+    }
+
     public static func typeText(_ value: String) -> ActionResultPayload {
         ActionResultPayload(method: .typeText, resultPayload: .value(value))
     }
@@ -331,9 +395,53 @@ public struct ActionResult: Codable, Sendable, Equatable {
         }
     }
 
+    private enum MethodAndPayload: Sendable, Equatable {
+        case methodOnly(ActionMethod)
+        case payload(ActionResultPayload)
+
+        init(method: ActionMethod) {
+            self = .methodOnly(method)
+        }
+
+        init(payload: ActionResultPayload) {
+            self = .payload(payload)
+        }
+
+        init(
+            decodedMethod method: ActionMethod,
+            decodedPayload payload: ResultPayload?,
+            codingPath: [CodingKey]
+        ) throws {
+            guard let payload else {
+                self = .methodOnly(method)
+                return
+            }
+            self = .payload(try ActionResultPayload.decoded(
+                method: method,
+                resultPayload: payload,
+                codingPath: codingPath
+            ))
+        }
+
+        var method: ActionMethod {
+            switch self {
+            case .methodOnly(let method):
+                return method
+            case .payload(let payload):
+                return payload.method
+            }
+        }
+
+        var resultPayload: ResultPayload? {
+            guard case .payload(let payload) = self else { return nil }
+            return payload.resultPayload
+        }
+    }
+
     // MARK: - Properties
 
     private let outcome: Outcome
+    private let methodAndPayload: MethodAndPayload
 
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
@@ -342,7 +450,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
-    public let method: ActionMethod
+    public var method: ActionMethod { methodAndPayload.method }
     public let message: String?
     /// First spoken accessibility text observed during this action, sourced
     /// from string payloads on announcement, layoutChanged, or screenChanged.
@@ -350,7 +458,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind? { outcome.errorKind }
     /// Command-specific payload. At most one variant per result.
-    public let payload: ResultPayload?
+    public var payload: ResultPayload? { methodAndPayload.resultPayload }
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
     /// True when the response represents a settled UI state — either the
@@ -410,7 +518,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .success,
             method: method,
             message: message,
-            payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -457,9 +564,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
-            method: payload.method,
+            payload: payload,
             message: message,
-            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -511,7 +617,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .failure(errorKind),
             method: method,
             message: message,
-            payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -561,84 +666,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
     ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
-            method: payload.method,
-            message: message,
-            payload: payload.resultPayload,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
-        )
-    }
-
-    package init(
-        outcome: Outcome,
-        method: ActionMethod,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) {
-        self.init(
-            outcome: outcome,
-            method: method,
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    package init(
-        outcome: Outcome,
-        method: ActionMethod,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String?
-    ) {
-        self.init(
-            outcome: outcome,
-            method: method,
-            message: message,
-            payload: nil,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
-        )
-    }
-
-    package init(
-        outcome: Outcome,
-        payload: ActionResultPayload,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) {
-        self.init(
-            outcome: outcome,
             payload: payload,
             message: message,
             accessibilityTrace: accessibilityTrace,
@@ -647,6 +674,82 @@ public struct ActionResult: Codable, Sendable, Equatable {
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
             timing: timing,
+            announcement: announcement
+        )
+    }
+
+    package init(
+        outcome: Outcome,
+        method: ActionMethod,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        self.init(
+            outcome: outcome,
+            methodAndPayload: .methodOnly(method),
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: nil
+        )
+    }
+
+    package init(
+        outcome: Outcome,
+        method: ActionMethod,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String?
+    ) {
+        self.init(
+            outcome: outcome,
+            methodAndPayload: .methodOnly(method),
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
+            announcement: announcement
+        )
+    }
+
+    package init(
+        outcome: Outcome,
+        payload: ActionResultPayload,
+        message: String? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        self.init(
+            outcome: outcome,
+            methodAndPayload: .payload(payload),
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing,
             announcement: nil
         )
     }
@@ -665,9 +768,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     ) {
         self.init(
             outcome: outcome,
-            method: payload.method,
+            methodAndPayload: .payload(payload),
             message: message,
-            payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -680,9 +782,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     private init(
         outcome: Outcome,
-        method: ActionMethod,
+        methodAndPayload: MethodAndPayload,
         message: String? = nil,
-        payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -692,10 +793,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
         announcement: String? = nil
     ) {
         self.outcome = outcome
-        self.method = method
+        self.methodAndPayload = methodAndPayload
         self.message = message
         self.announcement = announcement ?? accessibilityTrace?.capturedAnnouncements.first?.text
-        self.payload = payload
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
         self.settleTimeMs = settleTimeMs
@@ -728,6 +828,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
         let method = try container.decode(ActionMethod.self, forKey: .method)
         let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind)
         let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
+        let methodAndPayload = try MethodAndPayload(
+            decodedMethod: method,
+            decodedPayload: payload,
+            codingPath: container.codingPath + [CodingKeys.payload]
+        )
 
         guard let outcome = Outcome.decoded(success: success, errorKind: errorKind) else {
             throw DecodingError.dataCorruptedError(
@@ -736,19 +841,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
                 debugDescription: Self.outcomeValidationMessage(success: success, errorKind: errorKind)
             )
         }
-        guard Self.payload(payload, isCompatibleWith: method) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .payload,
-                in: container,
-                debugDescription: Self.payloadValidationMessage(method: method, payload: payload)
-            )
-        }
 
         self.init(
             outcome: outcome,
-            method: method,
+            methodAndPayload: methodAndPayload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            payload: payload,
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
@@ -781,9 +878,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         guard let timing else { return self }
         return ActionResult(
             outcome: outcome,
-            method: method,
+            methodAndPayload: methodAndPayload,
             message: message,
-            payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -796,46 +892,10 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     // MARK: - Private Helpers
 
-    private static func payload(_ payload: ResultPayload?, isCompatibleWith method: ActionMethod) -> Bool {
-        switch payload {
-        case nil:
-            return true
-        case .value:
-            return method == .typeText || method == .setPasteboard || method == .getPasteboard
-        case .rotor:
-            return method == .rotor
-        case .screenshot:
-            return method == .takeScreenshot
-        case .heistExecution:
-            return method == .heistPlan
-        }
-    }
-
     private static func outcomeValidationMessage(success: Bool, errorKind: ErrorKind?) -> String {
         if success, let errorKind {
             return "successful ActionResult must not include errorKind \(errorKind.rawValue)"
         }
         return "failed ActionResult requires errorKind"
-    }
-
-    private static func payloadValidationMessage(method: ActionMethod, payload: ResultPayload?) -> String {
-        switch (method, payload) {
-        case (.takeScreenshot, .some(_)):
-            return "takeScreenshot ActionResult payload must be screenshot"
-        case (.heistPlan, .some(_)):
-            return "heistPlan ActionResult payload must be heistExecution"
-        case (.rotor, .some(_)):
-            return "rotor ActionResult payload must be rotor"
-        case (_, .value):
-            return "value ActionResult payload is only valid for typeText, setPasteboard, or getPasteboard"
-        case (_, .screenshot):
-            return "screenshot ActionResult payload is only valid for takeScreenshot"
-        case (_, .heistExecution):
-            return "heistExecution ActionResult payload is only valid for heistPlan"
-        case (_, .rotor):
-            return "rotor ActionResult payload is only valid for rotor"
-        case (_, nil):
-            return "ActionResult payload is compatible"
-        }
     }
 }
