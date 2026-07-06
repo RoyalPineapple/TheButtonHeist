@@ -23,6 +23,7 @@ extension TheFence {
         case pong
         case interface
         case screen
+        case announcements
         case heistExecution
 
         fileprivate var responseName: String {
@@ -35,6 +36,8 @@ extension TheFence {
                 return "interface"
             case .screen:
                 return "screen"
+            case .announcements:
+                return "announcements"
             case .heistExecution:
                 return "heist execution"
             }
@@ -63,6 +66,7 @@ extension TheFence {
         case pong(PongPayload)
         case interface(Interface)
         case screen(ScreenPayload)
+        case announcements(AnnouncementListPayload)
         case heistExecution(HeistExecutionResult)
 
         var kind: PendingResponseKind {
@@ -75,6 +79,8 @@ extension TheFence {
                 return .interface
             case .screen:
                 return .screen
+            case .announcements:
+                return .announcements
             case .heistExecution:
                 return .heistExecution
             }
@@ -93,6 +99,8 @@ extension TheFence {
                 return .success(.action(result))
             case .screen(let payload):
                 return .success(.screen(payload))
+            case .announcements(let payload):
+                return .success(.announcements(payload))
             case .error(let serverError):
                 return .failure(FenceError.serverError(serverError))
             default:
@@ -194,6 +202,19 @@ extension TheFence {
         ) async throws -> ScreenPayload {
             try await waitForPayload(
                 .screen,
+                requestId: requestId,
+                timeout: timeout,
+                afterRegister: afterRegister
+            )
+        }
+
+        func waitForAnnouncements(
+            requestId: String,
+            timeout: TimeInterval,
+            afterRegister: (() -> Void)? = nil
+        ) async throws -> AnnouncementListPayload {
+            try await waitForPayload(
+                .announcements,
                 requestId: requestId,
                 timeout: timeout,
                 afterRegister: afterRegister
@@ -327,6 +348,15 @@ private extension TheFence.PendingResponseExpectation where Response == ScreenPa
     static var screen: Self {
         Self(kind: .screen) { payload in
             guard case .screen(let result) = payload else { return nil }
+            return result
+        }
+    }
+}
+
+private extension TheFence.PendingResponseExpectation where Response == AnnouncementListPayload {
+    static var announcements: Self {
+        Self(kind: .announcements) { payload in
+            guard case .announcements(let result) = payload else { return nil }
             return result
         }
     }

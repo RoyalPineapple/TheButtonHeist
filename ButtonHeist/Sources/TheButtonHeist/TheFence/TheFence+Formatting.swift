@@ -25,6 +25,8 @@ extension FenceResponse {
             return formatDeviceList(devices)
         case .interface(let interface, let detail):
             return formatInterface(interface, detail: detail)
+        case .announcements(let announcements):
+            return formatAnnouncements(announcements)
         case .action(let command, let result, let expectation):
             var text = formatActionResult(command: command, result: result)
             if result.success, let expectation {
@@ -66,6 +68,15 @@ extension FenceResponse {
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
         }
+    }
+
+    private func formatAnnouncements(_ announcements: [CapturedAnnouncement]) -> String {
+        guard !announcements.isEmpty else { return "No announcements captured" }
+        let now = Date()
+        return announcements.enumerated().map { index, announcement in
+            let age = max(0, now.timeIntervalSince(announcement.timestamp))
+            return "[\(index)] \(String(format: "%.1f", age))s ago: \"\(announcement.text)\" (\(announcement.notificationName))"
+        }.joined(separator: "\n")
     }
 
     private static func formatSessionStateHuman(_ payload: SessionStatePayload) -> String {
@@ -396,6 +407,9 @@ extension FenceResponse {
         }
         if let delta = projection.delta {
             output += "  \(formatDelta(delta))"
+        }
+        if let announcement = projection.announcement {
+            output += "  announcement: \"\(announcement)\""
         }
         if let activationTrace = projection.activationTrace {
             output += "  [activate: \(Self.compactActivationTrace(activationTrace))]"

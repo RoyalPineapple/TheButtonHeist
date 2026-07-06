@@ -10,6 +10,11 @@ enum PredicateObservationDiagnostics {
     static let changePredicateNeedsFutureObservationMessage = "change predicate requires future settled observation after baseline"
 }
 
+enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
+    case futureOnly
+    case heistScoped
+}
+
 // PredicateWait stores main-actor closures and is constructed/used from main-actor observation code.
 @MainActor struct PredicateWait { // swiftlint:disable:this agent_main_actor_value_type
     typealias ObserveEvent = @MainActor (
@@ -21,25 +26,60 @@ enum PredicateObservationDiagnostics {
     typealias LatestSettleFailure = @MainActor () -> String?
     typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
     typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate, String) -> String?
+    typealias AnnouncementCursor = @MainActor (AnnouncementWaitCursorStrategy) -> AccessibilityNotificationCursor
+    typealias AnnouncementWait = @MainActor (
+        AccessibilityNotificationCursor,
+        AnnouncementPredicate,
+        Double
+    ) async -> CapturedAnnouncement?
+    typealias AnnouncementWaitDidMatch = @MainActor (
+        AnnouncementWaitCursorStrategy,
+        CapturedAnnouncement
+    ) -> Void
 
     let observeEvent: ObserveEvent
     let latestEvent: LatestEvent
     let latestSettleFailure: LatestSettleFailure
     let semanticObservation: SemanticObserver
     let presenceTimeoutMessage: PresenceTimeoutMessage
+    let announcementCursor: AnnouncementCursor
+    let waitForAnnouncement: AnnouncementWait
+    let announcementWaitDidMatch: AnnouncementWaitDidMatch
+
+    init(
+        observeEvent: @escaping ObserveEvent,
+        latestEvent: @escaping LatestEvent,
+        latestSettleFailure: @escaping LatestSettleFailure,
+        semanticObservation: @escaping SemanticObserver,
+        presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
+        announcementCursor: @escaping AnnouncementCursor = { _ in .origin },
+        waitForAnnouncement: @escaping AnnouncementWait = { _, _, _ in nil },
+        announcementWaitDidMatch: @escaping AnnouncementWaitDidMatch = { _, _ in }
+    ) {
+        self.observeEvent = observeEvent
+        self.latestEvent = latestEvent
+        self.latestSettleFailure = latestSettleFailure
+        self.semanticObservation = semanticObservation
+        self.presenceTimeoutMessage = presenceTimeoutMessage
+        self.announcementCursor = announcementCursor
+        self.waitForAnnouncement = waitForAnnouncement
+        self.announcementWaitDidMatch = announcementWaitDidMatch
+    }
 
     func wait(
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         do {
             return await wait(
                 for: try step.resolve(in: .empty),
                 initialTrace: initialTrace,
                 after: sequence,
-                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+                announcementCursorStrategy: announcementCursorStrategy
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -64,10 +104,22 @@ enum PredicateObservationDiagnostics {
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
+        if case .announcement(let announcement) = step.predicate {
+            return await waitForAnnouncementPredicate(
+                announcement,
+                step: step,
+                initialTrace: initialTrace,
+                start: start,
+                timeout: timeout,
+                cursorStrategy: announcementCursorStrategy
+            )
+        }
+
         let scope = SemanticObservationScope.discovery
 
         let initialEntry = await observeSemanticState(
@@ -390,6 +442,110 @@ enum PredicateObservationDiagnostics {
         )
     }
 
+    private func waitForAnnouncementPredicate(
+        _ predicate: AnnouncementPredicate,
+        step: ResolvedWaitStep,
+        initialTrace: AccessibilityTrace?,
+        start: CFAbsoluteTime,
+        timeout: Double,
+        cursorStrategy: AnnouncementWaitCursorStrategy
+    ) async -> HeistWaitReceipt {
+        if let initialTrace {
+            return announcementReceiptFromInitialTrace(
+                predicate,
+                step: step,
+                trace: initialTrace,
+                start: start
+            )
+        }
+
+        let cursor = announcementCursor(cursorStrategy)
+        guard let announcement = await waitForAnnouncement(cursor, predicate, timeout) else {
+            let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
+            let expectation = ExpectationResult(
+                met: false,
+                predicate: step.predicate,
+                actual: message
+            )
+            return HeistWaitReceipt(
+                status: .timedOut,
+                message: message,
+                accessibilityTrace: nil,
+                expectation: expectation,
+                announcement: nil
+            )
+        }
+
+        announcementWaitDidMatch(cursorStrategy, announcement)
+        let elapsed = Self.elapsedSeconds(since: start)
+        let expectation = ExpectationResult(
+            met: true,
+            predicate: step.predicate,
+            actual: announcement.text
+        )
+        return HeistWaitReceipt(
+            status: .matched,
+            message: Self.announcementMatchedMessage(announcement, elapsed: elapsed),
+            accessibilityTrace: nil,
+            expectation: expectation,
+            announcement: announcement.text
+        )
+    }
+
+    private func announcementReceiptFromInitialTrace(
+        _ predicate: AnnouncementPredicate,
+        step: ResolvedWaitStep,
+        trace: AccessibilityTrace,
+        start: CFAbsoluteTime
+    ) -> HeistWaitReceipt {
+        guard let announcement = trace.capturedAnnouncements.first else {
+            let message = Self.missingActionAnnouncementMessage(predicate)
+            return HeistWaitReceipt(
+                status: .timedOut,
+                message: message,
+                accessibilityTrace: trace,
+                expectation: ExpectationResult(
+                    met: false,
+                    predicate: step.predicate,
+                    actual: message
+                )
+            )
+        }
+
+        guard predicate.matches(announcement.text) else {
+            let message = Self.mismatchedActionAnnouncementMessage(
+                predicate,
+                actual: announcement.text
+            )
+            return HeistWaitReceipt(
+                status: .failed(.actionFailed),
+                message: message,
+                accessibilityTrace: trace,
+                expectation: ExpectationResult(
+                    met: false,
+                    predicate: step.predicate,
+                    actual: message
+                ),
+                announcement: announcement.text
+            )
+        }
+
+        return HeistWaitReceipt(
+            status: .matched,
+            message: Self.announcementMatchedMessage(
+                announcement,
+                elapsed: Self.elapsedSeconds(since: start)
+            ),
+            accessibilityTrace: trace,
+            expectation: ExpectationResult(
+                met: true,
+                predicate: step.predicate,
+                actual: announcement.text
+            ),
+            announcement: announcement.text
+        )
+    }
+
     private func waitReceipt(
         for step: ResolvedWaitStep,
         trace: AccessibilityTrace? = nil,
@@ -591,6 +747,66 @@ extension PredicateWait {
         default:
             return "predicate met after \(elapsed)s"
         }
+    }
+
+    static func announcementMatchedMessage(
+        _ announcement: CapturedAnnouncement,
+        elapsed: String
+    ) -> String {
+        let message = "announcement \"\(announcement.text)\""
+        return elapsed == "0.0" ? message : "\(message) after \(elapsed)s"
+    }
+
+    static func missingActionAnnouncementMessage(_ predicate: AnnouncementPredicate) -> String {
+        "expected \(expectedActionAnnouncement(predicate)) but none was posted"
+    }
+
+    static func mismatchedActionAnnouncementMessage(
+        _ predicate: AnnouncementPredicate,
+        actual: String
+    ) -> String {
+        "expected \(expectedActionAnnouncement(predicate)) but got '\(singleQuoted(actual))'"
+    }
+
+    static func announcementTimeoutMessage(
+        _ predicate: AnnouncementPredicate,
+        timeout: Double
+    ) -> String {
+        "no \(matchingAnnouncement(predicate)) within \(String(format: "%.1f", timeout))s"
+    }
+
+    private static func expectedActionAnnouncement(_ predicate: AnnouncementPredicate) -> String {
+        guard let match = predicate.match else { return "an announcement" }
+        switch match.mode {
+        case .exact:
+            return "'\(singleQuoted(match.value))'"
+        case .contains:
+            return "announcement containing '\(singleQuoted(match.value))'"
+        case .prefix:
+            return "announcement prefixed by '\(singleQuoted(match.value))'"
+        case .suffix:
+            return "announcement suffixed by '\(singleQuoted(match.value))'"
+        case .isEmpty:
+            return "an empty announcement"
+        }
+    }
+
+    private static func matchingAnnouncement(_ predicate: AnnouncementPredicate) -> String {
+        guard let match = predicate.match else { return "announcement" }
+        switch match.mode {
+        case .exact, .contains:
+            return "announcement matching '\(singleQuoted(match.value))'"
+        case .prefix:
+            return "announcement prefixed by '\(singleQuoted(match.value))'"
+        case .suffix:
+            return "announcement suffixed by '\(singleQuoted(match.value))'"
+        case .isEmpty:
+            return "empty announcement"
+        }
+    }
+
+    private static func singleQuoted(_ text: String) -> String {
+        text.replacingOccurrences(of: "'", with: "\\'")
     }
 
     static func waitTimeoutMessage(
@@ -1020,6 +1236,12 @@ struct PredicateObservationEvidence {
         switch predicate {
         case .state(let state):
             return state.evaluate(in: stateGraph).expectation(for: predicate)
+        case .announcement:
+            return ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: "announcement predicates require spoken accessibility text evidence"
+            )
         case .changePredicate, .noChangePredicate:
             switch changeReadiness {
             case .notRequired, .unavailableTrace:

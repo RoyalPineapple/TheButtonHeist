@@ -236,6 +236,7 @@ public enum FenceResponse {
     case pong(PongPayload)
     case devices([DiscoveredDevice])
     case interface(Interface, detail: InterfaceDetail = .summary)
+    case announcements([CapturedAnnouncement])
     case action(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult? = nil)
     /// Screenshot written to disk. `path` is the resolved filesystem location.
     case screenshot(path: String, payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
@@ -273,7 +274,7 @@ public enum FenceResponse {
     /// Whether callers should treat this response as a failed command.
     public var isFailure: Bool {
         switch self {
-        case .ok, .status, .pong, .devices, .interface, .screenshot, .screenshotData,
+        case .ok, .status, .pong, .devices, .interface, .announcements, .screenshot, .screenshotData,
              .heistCatalog, .heistDescription,
              .sessionState, .targets:
             return false

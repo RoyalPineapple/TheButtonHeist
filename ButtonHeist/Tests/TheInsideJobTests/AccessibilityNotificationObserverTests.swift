@@ -3,6 +3,7 @@ import ButtonHeistSupport
 import UIKit
 import XCTest
 
+import ThePlans
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
@@ -91,6 +92,50 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(claimed.map(\.code), [1008])
         XCTAssertEqual(bus.pendingEvents().map(\.code), [])
+    }
+
+    func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
+        let bus = AccessibilityNotificationBus()
+
+        bus.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Item deleted" as NSString),
+            associatedElement: .none
+        )
+        bus.record(
+            code: 1001,
+            notificationData: CapturedAccessibilityNotificationPayload("3 items selected" as NSString),
+            associatedElement: .none
+        )
+        bus.record(
+            code: 1000,
+            notificationData: CapturedAccessibilityNotificationPayload("Checkout" as NSString),
+            associatedElement: .none
+        )
+
+        let announcements = bus.announcements()
+        XCTAssertEqual(announcements.map(\.text), ["Item deleted", "3 items selected", "Checkout"])
+        XCTAssertEqual(announcements.map(\.notificationName), ["announcement", "layoutChanged", "screenChanged"])
+    }
+
+    func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.announcementCursor()
+
+        async let result = bus.waitForAnnouncement(
+            after: cursor,
+            matching: AnnouncementPredicate(match: .contains("selected")),
+            timeout: 1.0
+        )
+        bus.record(
+            code: 1001,
+            notificationData: CapturedAccessibilityNotificationPayload("3 items selected" as NSString),
+            associatedElement: .none
+        )
+
+        let announcement = await result
+        XCTAssertEqual(announcement?.text, "3 items selected")
+        XCTAssertEqual(announcement?.notificationName, "layoutChanged")
     }
 
     // MARK: - Transition Waiter

@@ -48,6 +48,9 @@ extension FenceResponse {
         if case .value(let value) = projection.payload {
             text += "\nvalue: \"\(value)\""
         }
+        if let announcement = projection.announcement {
+            text += "\nannouncement: \"\(announcement)\""
+        }
         if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }

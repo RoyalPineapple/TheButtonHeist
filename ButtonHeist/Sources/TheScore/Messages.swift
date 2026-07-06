@@ -62,6 +62,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
 
     case clientHello, authenticate, requestInterface, ping, status
     case getPasteboard
+    case getAnnouncements
     case requestScreen
     case runtimeAction
     case heistPlan
@@ -73,6 +74,7 @@ public enum ServerWireMessageType: String, DirectionalWireMessageType {
 
     case serverHello, protocolMismatch, authRequired, info, interface
     case pong, status, error, actionResult, screen, sessionLocked
+    case announcements
 }
 
 // MARK: - TXT Record Keys

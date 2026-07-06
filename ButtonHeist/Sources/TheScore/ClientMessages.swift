@@ -81,6 +81,9 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Read text from the general pasteboard
     case getPasteboard
 
+    /// Read recent spoken accessibility text captured from public AX notifications.
+    case getAnnouncements
+
     /// Request a capture of the current screen
     case requestScreen
 

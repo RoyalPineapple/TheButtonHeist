@@ -16,6 +16,8 @@ extension HeistPlanRuntimeSafetyValidator {
             validateChangePredicate(change, path: path, depth: depth, scope: scope)
         case .noChangePredicate:
             break
+        case .announcement(let announcement):
+            validateAnnouncementPredicate(announcement, path: path, scope: scope)
         }
     }
 
@@ -32,6 +34,25 @@ extension HeistPlanRuntimeSafetyValidator {
             validateChangePredicate(change, path: path, depth: depth)
         case .noChangePredicate:
             break
+        case .announcement(let announcement):
+            validateAnnouncementPredicate(announcement, path: path)
+        }
+    }
+
+    mutating func validateAnnouncementPredicate(
+        _ announcement: AnnouncementPredicate,
+        path: String
+    ) {
+        validateString(announcement.match, path: "\(path).match", role: "announcement")
+    }
+
+    mutating func validateAnnouncementPredicate(
+        _ announcement: AnnouncementPredicateExpr,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        if let match = announcement.match {
+            validateString(match, path: "\(path).match", scope: scope)
         }
     }
 

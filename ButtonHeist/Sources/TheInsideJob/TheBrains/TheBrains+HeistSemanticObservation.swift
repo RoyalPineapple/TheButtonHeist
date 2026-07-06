@@ -18,7 +18,7 @@ extension AccessibilityPredicate {
             return state.observationScope
         case .changePredicate(let change):
             return change.observationScope
-        case .noChangePredicate:
+        case .noChangePredicate, .announcement:
             return .visible
         }
     }

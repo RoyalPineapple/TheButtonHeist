@@ -344,6 +344,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// Explicit mechanical tap commands report the mechanical tap method.
     public let method: ActionMethod
     public let message: String?
+    /// First spoken accessibility text observed during this action, sourced
+    /// from string payloads on announcement, layoutChanged, or screenChanged.
+    public let announcement: String?
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind? { outcome.errorKind }
     /// Command-specific payload. At most one variant per result.
@@ -372,6 +375,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         method: ActionMethod,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -383,6 +387,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .success,
             method: method,
             message: message,
+            announcement: announcement,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -396,6 +401,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         payload: ActionResultPayload,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -407,6 +413,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .success,
             method: payload.method,
             message: message,
+            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -421,6 +428,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -432,6 +440,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .failure(errorKind),
             method: method,
             message: message,
+            announcement: announcement,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -446,6 +455,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         payload: ActionResultPayload,
         errorKind: ErrorKind,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -457,6 +467,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: .failure(errorKind),
             method: payload.method,
             message: message,
+            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -471,6 +482,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         method: ActionMethod,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -482,6 +494,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: message,
+            announcement: announcement,
             payload: nil,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -496,6 +509,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         payload: ActionResultPayload,
         message: String? = nil,
+        announcement: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
@@ -507,6 +521,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: payload.method,
             message: message,
+            announcement: announcement,
             payload: payload.resultPayload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
@@ -521,6 +536,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: Outcome,
         method: ActionMethod,
         message: String? = nil,
+        announcement: String? = nil,
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
@@ -532,6 +548,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         self.outcome = outcome
         self.method = method
         self.message = message
+        self.announcement = announcement ?? accessibilityTrace?.capturedAnnouncements.first?.text
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
@@ -547,6 +564,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case success
         case method
         case message
+        case announcement
         case errorKind
         case payload
         case accessibilityTrace
@@ -584,6 +602,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: try container.decodeIfPresent(String.self, forKey: .message),
+            announcement: try container.decodeIfPresent(String.self, forKey: .announcement),
             payload: payload,
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
@@ -599,6 +618,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encode(success, forKey: .success)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(announcement, forKey: .announcement)
         try container.encodeIfPresent(errorKind, forKey: .errorKind)
         try container.encodeIfPresent(payload, forKey: .payload)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
@@ -617,6 +637,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             outcome: outcome,
             method: method,
             message: message,
+            announcement: announcement,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,

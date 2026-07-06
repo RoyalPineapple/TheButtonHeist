@@ -865,7 +865,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendPredicateTargets(state)
         case .changePredicate(let change):
             appendPredicateTargets(change)
-        case .noChangePredicate:
+        case .noChangePredicate, .announcement:
             break
         }
     }
@@ -876,7 +876,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendPredicateTargets(state)
         case .changePredicate(let change):
             appendPredicateTargets(change)
-        case .noChangePredicate:
+        case .noChangePredicate, .announcement:
             break
         }
     }

@@ -14,11 +14,14 @@ final class InteractionObservation {
 
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
+    private let announcementWaitCursorState: AnnouncementWaitCursorState
     private let predicateWait: PredicateWait
 
     init(stash: TheStash, postActionObservation: PostActionObservation) {
+        let announcementWaitCursorState = AnnouncementWaitCursorState()
         self.stash = stash
         self.postActionObservation = postActionObservation
+        self.announcementWaitCursorState = announcementWaitCursorState
         self.predicateWait = PredicateWait(
             observeEvent: { scope, sequence, timeout in
                 await stash.observeSettledSemanticObservation(
@@ -38,8 +41,28 @@ final class InteractionObservation {
             },
             presenceTimeoutMessage: { predicate, elapsed in
                 stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
+            },
+            announcementCursor: { strategy in
+                announcementWaitCursorState.cursor(
+                    for: strategy,
+                    latest: stash.accessibilityNotifications.announcementCursor()
+                )
+            },
+            waitForAnnouncement: { cursor, predicate, timeout in
+                await stash.accessibilityNotifications.waitForAnnouncement(
+                    after: cursor,
+                    matching: predicate,
+                    timeout: timeout
+                )
+            },
+            announcementWaitDidMatch: { strategy, announcement in
+                announcementWaitCursorState.didMatch(announcement, strategy: strategy)
             }
         )
+    }
+
+    func resetAnnouncementWaitCursorForHeist() {
+        announcementWaitCursorState.resetForHeist()
     }
 
     func prepareBeforeState(
@@ -124,13 +147,15 @@ final class InteractionObservation {
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+            announcementCursorStrategy: announcementCursorStrategy
         )
     }
 
@@ -138,13 +163,15 @@ final class InteractionObservation {
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+            announcementCursorStrategy: announcementCursorStrategy
         )
     }
 
@@ -165,6 +192,36 @@ final class InteractionObservation {
         )
     }
 
+}
+
+private final class AnnouncementWaitCursorState {
+    private var heistCursor: AccessibilityNotificationCursor = .origin
+
+    func resetForHeist() {
+        heistCursor = .origin
+    }
+
+    func cursor(
+        for strategy: AnnouncementWaitCursorStrategy,
+        latest: AccessibilityNotificationCursor
+    ) -> AccessibilityNotificationCursor {
+        switch strategy {
+        case .futureOnly:
+            return latest
+        case .heistScoped:
+            return heistCursor
+        }
+    }
+
+    func didMatch(
+        _ announcement: CapturedAnnouncement,
+        strategy: AnnouncementWaitCursorStrategy
+    ) {
+        guard strategy == .heistScoped else { return }
+        heistCursor = AccessibilityNotificationCursor(
+            sequence: max(heistCursor.sequence, announcement.sequence)
+        )
+    }
 }
 
 #endif // DEBUG

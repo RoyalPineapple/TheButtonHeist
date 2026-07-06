@@ -5,6 +5,7 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
     case getInterface = "get_interface"
     case getScreen = "get_screen"
     case getPasteboard = "get_pasteboard"
+    case getAnnouncements = "get_announcements"
 
     var descriptor: FenceCommandDescriptor {
         switch self {
@@ -59,6 +60,15 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 projection: .cliAndMCP(
                     "Read text from the general pasteboard.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
+                )
+            )
+        case .getAnnouncements:
+            return TheFence.Command.commandDescriptor(
+                command, family: .observation,
+                requestDecoder: TheFence.decodeGetAnnouncementsRequest,
+                projection: .cliAndMCP(
+                    "Read recent spoken accessibility text captured from announcement, layoutChanged, or screenChanged notifications.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )
         }

@@ -57,6 +57,7 @@ struct HeistWaitReceipt {
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
     let warning: HeistPredicateWarning?
+    let announcement: String?
 
     var actionResult: ActionResult {
         makeActionResult()
@@ -73,7 +74,8 @@ struct HeistWaitReceipt {
         expectation: ExpectationResult,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
+        warning: HeistPredicateWarning? = nil,
+        announcement: String? = nil
     ) {
         self.status = status
         self.message = message
@@ -82,6 +84,7 @@ struct HeistWaitReceipt {
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
         self.warning = warning
+        self.announcement = announcement
     }
 
     func makeActionResult(method: ActionMethod = .wait) -> ActionResult {
@@ -90,6 +93,7 @@ struct HeistWaitReceipt {
             return ActionResult.success(
                 method: method,
                 message: message,
+                announcement: announcement,
                 accessibilityTrace: accessibilityTrace
             )
         case .timedOut:
@@ -97,6 +101,7 @@ struct HeistWaitReceipt {
                 method: method,
                 errorKind: .timeout,
                 message: message,
+                announcement: announcement,
                 accessibilityTrace: accessibilityTrace
             )
         case .failed(let errorKind):
@@ -104,6 +109,7 @@ struct HeistWaitReceipt {
                 method: method,
                 errorKind: errorKind,
                 message: message,
+                announcement: announcement,
                 accessibilityTrace: accessibilityTrace
             )
         }

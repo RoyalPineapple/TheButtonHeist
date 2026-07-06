@@ -97,7 +97,7 @@ extension AccessibilityPredicate {
         switch self {
         case .changePredicate, .noChangePredicate:
             return true
-        case .state:
+        case .state, .announcement:
             return false
         }
     }

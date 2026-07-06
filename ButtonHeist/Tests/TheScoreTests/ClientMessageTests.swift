@@ -106,6 +106,7 @@ final class ClientMessageTests: XCTestCase {
             .ping,
             .status,
             .getPasteboard,
+            .getAnnouncements,
             .requestScreen,
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(
@@ -450,6 +451,34 @@ final class ClientMessageTests: XCTestCase {
             // pass
         } else {
             XCTFail("Expected getPasteboard, got \(decoded.message)")
+        }
+    }
+
+    func testGetAnnouncementsRoundTrip() throws {
+        let message = ClientMessage.getAnnouncements
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .getAnnouncements = decoded {
+            // pass
+        } else {
+            XCTFail("Expected getAnnouncements, got \(decoded)")
+        }
+    }
+
+    func testGetAnnouncementsEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "ann-get",
+            message: .getAnnouncements
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "ann-get")
+        if case .getAnnouncements = decoded.message {
+            // pass
+        } else {
+            XCTFail("Expected getAnnouncements, got \(decoded.message)")
         }
     }
 

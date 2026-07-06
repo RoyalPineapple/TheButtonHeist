@@ -36,6 +36,39 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(decoded.settleTimeMs, 750)
     }
 
+    func testActionResultDerivesAnnouncementFromTraceNotificationStringPayload() throws {
+        let first = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 1), tree: [])
+        )
+        let second = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 2), tree: []),
+            parentHash: first.hash,
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: [
+                    AccessibilityNotificationEvidence(
+                        sequence: 7,
+                        code: 1000,
+                        name: "screenChanged",
+                        timestamp: Date(timeIntervalSince1970: 7),
+                        notificationData: .string("Checkout"),
+                        associatedElement: .none
+                    ),
+                ]
+            )
+        )
+        let trace = AccessibilityTrace(captures: [first, second])
+
+        let result = ActionResult.success(method: .activate, accessibilityTrace: trace)
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(result.announcement, "Checkout")
+        XCTAssertEqual(decoded.announcement, "Checkout")
+        XCTAssertEqual(trace.capturedAnnouncements.first?.notificationName, "screenChanged")
+    }
+
     // MARK: - Delta transient payload
 
     func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {

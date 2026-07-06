@@ -264,6 +264,22 @@ public extension AccessibilityPredicate {
         .noChangePredicate
     }
 
+    static var announcement: AccessibilityPredicate {
+        .announcement(AnnouncementPredicate())
+    }
+
+    static func announcement(_ text: String) -> AccessibilityPredicate {
+        .announcement(AnnouncementPredicate(text))
+    }
+
+    static func announcement(_ match: StringMatch<String>) -> AccessibilityPredicate {
+        .announcement(AnnouncementPredicate(match: match))
+    }
+
+    static func announcement(containing text: String) -> AccessibilityPredicate {
+        .announcement(AnnouncementPredicate(match: .contains(text)))
+    }
+
     static func exists(_ predicate: ElementPredicate) -> AccessibilityPredicate {
         .state(.exists(predicate))
     }
@@ -325,6 +341,22 @@ public extension AccessibilityPredicateExpr {
 
     static var noChange: AccessibilityPredicateExpr {
         .noChangePredicate
+    }
+
+    static var announcement: AccessibilityPredicateExpr {
+        .announcement(AnnouncementPredicateExpr())
+    }
+
+    static func announcement(_ text: String) -> AccessibilityPredicateExpr {
+        .announcement(AnnouncementPredicateExpr(text))
+    }
+
+    static func announcement(_ match: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .announcement(AnnouncementPredicateExpr(match: match))
+    }
+
+    static func announcement(containing text: String) -> AccessibilityPredicateExpr {
+        .announcement(AnnouncementPredicateExpr(match: .contains(.literal(text))))
     }
 
     static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> AccessibilityPredicateExpr {
