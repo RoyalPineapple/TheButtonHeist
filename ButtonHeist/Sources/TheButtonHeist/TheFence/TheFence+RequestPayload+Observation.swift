@@ -42,11 +42,20 @@ extension TheFence {
     }
 
     private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
+        let subtree = try decodeInterfaceSubtreeSelector(arguments)
+        let matcher = try interfaceElementMatcher(arguments)
+        if subtree != nil, matcher.hasPredicates {
+            throw SchemaValidationError(
+                field: arguments.field(.subtree),
+                observed: "subtree with element matcher",
+                expected: "use subtree or element matcher fields, not both"
+            )
+        }
         GetInterfaceRequest(
             detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
             query: InterfaceQuery(
-                subtree: try decodeInterfaceSubtreeSelector(arguments),
-                matcher: try interfaceElementMatcher(arguments),
+                subtree: subtree,
+                matcher: matcher,
                 maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
                 maxScrollsPerDiscovery: try interfaceDiscoveryLimit(arguments, .maxScrollsPerDiscovery)
             )
