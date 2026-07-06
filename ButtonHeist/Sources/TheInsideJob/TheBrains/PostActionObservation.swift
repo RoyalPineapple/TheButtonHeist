@@ -3,6 +3,7 @@
 import Foundation
 
 import AccessibilitySnapshotModel
+import ThePlans
 import TheScore
 
 /// A settled semantic observation paired with its trace, delta, and summary.
@@ -24,6 +25,7 @@ enum SemanticObservationTiming {
 @MainActor
 final class PostActionObservation {
     let stash: TheStash
+    let safecracker: TheSafecracker
 
     /// State captured before an action for delta computation.
     struct BeforeState {
@@ -74,8 +76,9 @@ final class PostActionObservation {
         case observed(FinalEvidence)
     }
 
-    init(stash: TheStash) {
+    init(stash: TheStash, safecracker: TheSafecracker) {
         self.stash = stash
+        self.safecracker = safecracker
     }
 
     func captureSemanticState(from observation: SettledSemanticObservation) -> BeforeState {
@@ -190,6 +193,7 @@ final class PostActionObservation {
         let capture = makeTraceCapture(
             interface: semanticInterface.interface,
             sequence: 0,
+            screen: screen,
             tripwireSignal: tripwireSignal,
             screenId: screen.id
         )
@@ -223,6 +227,7 @@ final class PostActionObservation {
         interface: Interface,
         sequence: Int = 1,
         parentHash: String? = nil,
+        screen: Screen? = nil,
         tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil,
         transition: AccessibilityTrace.Transition = .empty
@@ -231,7 +236,7 @@ final class PostActionObservation {
             sequence: sequence,
             interface: interface,
             parentHash: parentHash,
-            context: makeCaptureContext(tripwireSignal: tripwireSignal, screenId: screenId),
+            context: makeCaptureContext(screen: screen, tripwireSignal: tripwireSignal, screenId: screenId),
             transition: transition
         )
     }
@@ -399,6 +404,7 @@ final class PostActionObservation {
     }
 
     private func makeCaptureContext(
+        screen: Screen?,
         tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil
     ) -> AccessibilityTrace.Context {
@@ -410,9 +416,22 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
+            firstResponder: screen.flatMap { firstResponderTarget(in: $0) },
+            keyboardVisible: safecracker.isKeyboardVisible(),
             screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
+    }
+
+    private func firstResponderTarget(in screen: Screen) -> ElementTarget? {
+        guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
+        let elements = screen.orderedElements.map {
+            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+        }
+        return minimumUniquePredicate(
+            for: firstResponderHeistId.predicateSelectionElementId,
+            in: elements
+        )?.target
     }
 
     // MARK: - Result Building

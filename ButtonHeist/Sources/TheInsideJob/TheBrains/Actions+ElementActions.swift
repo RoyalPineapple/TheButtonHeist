@@ -114,9 +114,30 @@ extension Actions {
                     }
                 },
                 activationPointDispatch: safecracker.tap,
-                showFingerprint: safecracker.showFingerprint
+                showFingerprint: safecracker.showFingerprint,
+                textEntryActivationFailure: textEntryActivationFailure
             ).apply(to: context.liveTarget)
         }
+    }
+
+    private func textEntryActivationFailure(
+        screenElement: TheStash.ScreenElement,
+        activationTrace: ActivationTrace
+    ) async -> TheSafecracker.InteractionResult? {
+        guard screenElement.element.traits.contains(.textEntry) else { return nil }
+        guard await safecracker.waitForActiveTextInput() else {
+            return .failure(
+                .activate,
+                message: ActionCapabilityDiagnostic.textEntryFailed(
+                    operation: "post-activation keyboard readiness",
+                    stash: stash,
+                    safecracker: safecracker,
+                    suggestion: "target an editable text field"
+                ),
+                activationTrace: activationTrace
+            )
+        }
+        return nil
     }
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {

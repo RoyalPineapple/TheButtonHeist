@@ -44,6 +44,14 @@ final class TheSafecracker {
         keyboardInput.hasActiveTextInput()
     }
 
+    func waitForActiveTextInput() async -> Bool {
+        for _ in 0..<Self.keyboardPollMaxAttempts {
+            guard await Task.cancellableSleep(for: Self.keyboardPollInterval) else { return false }
+            if hasActiveTextInput() { return true }
+        }
+        return false
+    }
+
     func typeText(
         _ text: String,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay

@@ -196,7 +196,7 @@ extension Actions {
             ))
         }
 
-        guard await waitForActiveTextInput() else {
+        guard await safecracker.waitForActiveTextInput() else {
             return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
@@ -213,14 +213,6 @@ extension Actions {
             resolvedObject: liveTarget.object,
             currentValue: liveTarget.element.value
         ))
-    }
-
-    private func waitForActiveTextInput() async -> Bool {
-        for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
-            guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return false }
-            if safecracker.hasActiveTextInput() { return true }
-        }
-        return false
     }
 
     private static func textInputValue(for target: ElementTarget, in elements: [HeistElement]) -> String? {

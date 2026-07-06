@@ -120,6 +120,63 @@ final class ActivationPolicyTests: XCTestCase {
         )))
     }
 
+    func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async {
+        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            traits: .textEntry,
+            activationPoint: CGPoint(x: 30, y: 40)
+        )
+        var focusConfirmationTrace: ActivationTrace?
+
+        let result = await makePolicy(
+            accessibilityActivate: { _ in .refused },
+            refreshAndResolve: {
+                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+            },
+            activationPointDispatch: { _ in true },
+            textEntryActivationFailure: { _, trace in
+                focusConfirmationTrace = trace
+                return .failure(.activate, message: "text entry did not focus", activationTrace: trace)
+            }
+        ).apply(to: initialTarget)
+
+        let expectedTrace = ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 30, y: 40),
+            tapActivationSucceeded: true
+        ))
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "text entry did not focus")
+        XCTAssertEqual(result.activationTrace, expectedTrace)
+        XCTAssertEqual(focusConfirmationTrace, expectedTrace)
+    }
+
+    func testNonTextEntryActivationPointDispatchDoesNotRequireFocusConfirmation() async {
+        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            traits: .button,
+            activationPoint: CGPoint(x: 30, y: 40)
+        )
+        var focusConfirmationCount = 0
+
+        let result = await makePolicy(
+            accessibilityActivate: { _ in .refused },
+            refreshAndResolve: {
+                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+            },
+            activationPointDispatch: { _ in true },
+            textEntryActivationFailure: { _, _ in
+                focusConfirmationCount += 1
+                return .failure(.activate, message: "unexpected focus confirmation")
+            }
+        ).apply(to: initialTarget)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(focusConfirmationCount, 0)
+    }
+
     func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
@@ -174,13 +231,18 @@ final class ActivationPolicyTests: XCTestCase {
         accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
         activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
-        showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in }
+        showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
+        textEntryActivationFailure: @escaping @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.InteractionResult? = { _, _ in nil }
     ) -> ActivationPolicy {
         ActivationPolicy(
             accessibilityActivate: accessibilityActivate,
             refreshAndResolve: refreshAndResolve,
             activationPointDispatch: activationPointDispatch,
-            showFingerprint: showFingerprint
+            showFingerprint: showFingerprint,
+            textEntryActivationFailure: { screenElement, trace in
+                guard screenElement.element.traits.contains(.textEntry) else { return nil }
+                return await textEntryActivationFailure(screenElement, trace)
+            }
         )
     }
 

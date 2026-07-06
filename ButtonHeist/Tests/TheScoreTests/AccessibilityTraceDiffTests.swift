@@ -539,6 +539,37 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertFalse(digest.elementSetChanged)
     }
 
+    func testInteractionDigestTreatsKeyboardVisibilityChangeAsFirstResponderChange() throws {
+        let interface = makeInterface()
+        let firstResponder = ElementTarget.predicate(ElementPredicate(label: "Search"))
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            context: AccessibilityTrace.Context(
+                firstResponder: firstResponder,
+                keyboardVisible: false,
+                screenId: "library"
+            )
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(
+                firstResponder: firstResponder,
+                keyboardVisible: true,
+                screenId: "library"
+            )
+        )
+
+        let delta = AccessibilityTrace.Delta.between(before, after)
+        let digest = try XCTUnwrap(delta.testInteractionDigest)
+
+        XCTAssertTrue(digest.firstResponderChanged)
+        XCTAssertFalse(digest.screenIdChanged)
+        XCTAssertFalse(digest.elementSetChanged)
+    }
+
     func testCaptureChainMetadataDoesNotAffectDiff() {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(sequence: 1, interface: interface, parentHash: nil)

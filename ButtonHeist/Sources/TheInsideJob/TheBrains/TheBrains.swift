@@ -147,7 +147,7 @@ final class TheBrains {
             tripwire: tripwire,
             navigation: navigation
         )
-        let postActionObservation = PostActionObservation(stash: stash)
+        let postActionObservation = PostActionObservation(stash: stash, safecracker: safecracker)
         self.postActionObservation = postActionObservation
         self.interactionObservation = InteractionObservation(
             stash: stash,
