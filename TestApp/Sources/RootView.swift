@@ -9,6 +9,9 @@ struct RootView: View {
                 NavigationLink("Controls Demo") {
                     ControlsDemoView()
                 }
+                NavigationLink("Adversarial Lab") {
+                    AdversarialLabView()
+                }
                 NavigationLink("Todo List") {
                     TodoListView()
                 }

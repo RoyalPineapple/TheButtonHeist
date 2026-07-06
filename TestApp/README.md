@@ -23,6 +23,7 @@ The app embeds TheInsideJob — it auto-starts when the app launches, no code ch
 | **UIKit Table View** | 3-section grouped table with disclosure indicators and selection |
 | **UIKit Collection View** | 3-column grid of accessibility category items |
 | **Research** | Accessibility SPI harness, trait probes, and diagnostic tools |
+| **Adversarial Lab** | Hostile UI automation fixtures for async reveal, offscreen activation, duplicate labels, dynamic cells, text fallback, stale live objects, modal obstruction, and nested scroll |
 
 ### Controls Demo Sub-screens
 
@@ -39,6 +40,27 @@ The app embeds TheInsideJob — it auto-starts when the app launches, no code ch
 Controls should be findable through their natural accessibility labels, values,
 traits, hints, and actions. Research harness screens may use identifiers when
 they are testing accessibility tree mechanics directly.
+
+### Adversarial Lab
+
+The Adversarial Lab is the demo app's flake laboratory. Each route has one
+passing heist and one intentionally failing heist so receipts prove both the
+runtime behavior and the diagnostics:
+
+| Route | Proves |
+|-------|--------|
+| `/async-reveal` | Notification-woken and silent async destination reveal |
+| `/offscreen-checkout` | Offscreen semantic activation without manual pre-scroll |
+| `/duplicate-labels` | Predicate disambiguation by value, actions, and custom content |
+| `/dynamic-cells` | Semantic identity survives reorder and state mutation |
+| `/text-field-fallback` | Tap fallback focuses a field whose accessibility activation returns false |
+| `/stale-live-object` | Action inflation re-resolves the current element after UIKit replacement |
+| `/modal-obstruction` | Modal action surfaces block background action search |
+| `/nested-scroll` | Deep targets inside nested scroll containers remain reachable |
+
+`.github/workflows/adversarial-nightly.yml` repeats the passing routes and
+samples the failing diagnostics on a schedule. PR CI keeps the normal one-pass
+dogfood coverage.
 
 ## Building and Running
 
