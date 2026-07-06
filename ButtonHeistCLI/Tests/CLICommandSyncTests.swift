@@ -370,7 +370,7 @@ final class CLICommandSyncTests: XCTestCase {
                 failure.message.contains("Public JSON request id must be string"),
                 failure.message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -385,7 +385,7 @@ final class CLICommandSyncTests: XCTestCase {
                 failure.message.contains("does not support bool"),
                 failure.message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -400,7 +400,7 @@ final class CLICommandSyncTests: XCTestCase {
                 failure.message.contains("Public JSON request id"),
                 failure.message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -413,7 +413,7 @@ final class CLICommandSyncTests: XCTestCase {
                 failure.message.contains("Expected JSON object input"),
                 failure.message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -424,7 +424,7 @@ final class CLICommandSyncTests: XCTestCase {
             let failure = requestBuildFailure(from: error)
             let message = failure.message
             XCTAssertTrue(message.contains("Public JSON request is not valid JSON"), message)
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -461,7 +461,7 @@ final class CLICommandSyncTests: XCTestCase {
                 let message = failure.message
                 XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
                 XCTAssertTrue(message.contains("expected number > 0"), message)
-                XCTAssertEqual(failure.details.code, FailureCode(.requestValidationError))
+                XCTAssertEqual(failure.details.code, .requestValidationError)
             }
         }
     }
@@ -476,7 +476,7 @@ final class CLICommandSyncTests: XCTestCase {
             let message = failure.message
             XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
             XCTAssertTrue(message.contains("expected number in 0...30"), message)
-            XCTAssertEqual(failure.details.code, FailureCode(.requestValidationError))
+            XCTAssertEqual(failure.details.code, .requestValidationError)
         }
     }
 
@@ -501,7 +501,7 @@ final class CLICommandSyncTests: XCTestCase {
                 message.contains(#"JSON input command "perform" is not supported"#),
                 message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -525,7 +525,7 @@ final class CLICommandSyncTests: XCTestCase {
                 message.contains("Public JSON request exceeds \(PublicJSONInputLimits.maxRequestBytes) bytes"),
                 message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -549,7 +549,7 @@ final class CLICommandSyncTests: XCTestCase {
                 ),
                 message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
@@ -569,7 +569,7 @@ final class CLICommandSyncTests: XCTestCase {
                 ),
                 message
             )
-            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
+            XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
