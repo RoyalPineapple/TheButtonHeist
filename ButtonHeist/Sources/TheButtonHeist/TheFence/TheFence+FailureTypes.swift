@@ -253,29 +253,34 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Public failure code value that preserves raw JSON strings at boundaries while
-/// exposing typed metadata for codes known to this client.
+/// Public failure code value. Failure codes are exact-lockstep product contract
+/// values; unknown strings fail during JSON decoding instead of entering core
+/// diagnostic state.
 public struct FailureCode: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
-    public let rawValue: String
+    private let code: KnownFailureCode
 
-    public var knownCode: KnownFailureCode? {
-        KnownFailureCode(rawValue: rawValue)
+    public var rawValue: String {
+        code.rawValue
     }
 
-    public var kind: DiagnosticFailureKind? {
-        knownCode?.kind
+    public var knownCode: KnownFailureCode {
+        code
     }
 
-    public var phase: FailurePhase? {
-        knownCode?.phase
+    public var kind: DiagnosticFailureKind {
+        code.kind
     }
 
-    public var retryable: Bool? {
-        knownCode?.retryable
+    public var phase: FailurePhase {
+        code.phase
+    }
+
+    public var retryable: Bool {
+        code.retryable
     }
 
     public var defaultHint: String? {
-        knownCode?.defaultHint
+        code.defaultHint
     }
 
     public var description: String {
@@ -283,16 +288,19 @@ public struct FailureCode: Codable, Sendable, Equatable, Hashable, CustomStringC
     }
 
     public init(_ knownCode: KnownFailureCode) {
-        self.rawValue = knownCode.rawValue
-    }
-
-    init(decodingRawValue rawValue: String) {
-        self.rawValue = rawValue
+        self.code = knownCode
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(decodingRawValue: try container.decode(String.self))
+        let rawValue = try container.decode(String.self)
+        guard let knownCode = KnownFailureCode(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown Button Heist failure code \"\(rawValue)\""
+            )
+        }
+        self.init(knownCode)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -425,26 +433,6 @@ extension ConnectionFailure {
 
 private extension DiagnosticFailureKind {
     init(details: FailureDetails) {
-        if let typedKind = details.code.kind {
-            self = typedKind
-            return
-        }
-
-        switch details.phase {
-        case .discovery:
-            self = .discovery
-        case .setup, .transport, .protocolNegotiation, .tls:
-            self = .connection
-        case .authentication:
-            self = .authentication
-        case .session:
-            self = .session
-        case .server:
-            self = .server
-        case .request:
-            self = .request
-        case .client:
-            self = .client
-        }
+        self = details.code.kind
     }
 }

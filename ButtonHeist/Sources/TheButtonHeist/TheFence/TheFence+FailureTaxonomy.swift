@@ -168,7 +168,7 @@ private extension Array where Element == HeistBuildDiagnostic {
             return FailureDetails(code: .requestInvalid)
         }
         return FailureDetails(
-            code: FailureCode(decodingRawValue: primary.code.rawValue),
+            code: .requestInvalid,
             phase: .request,
             retryable: false,
             hint: primary.hint

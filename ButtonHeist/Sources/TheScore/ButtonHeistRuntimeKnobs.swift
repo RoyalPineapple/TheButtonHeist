@@ -12,38 +12,22 @@ package struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
     }
 
     package static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")
-    package static let buttonHeistPostScrollLayoutFrames = RuntimeKnobEnvironmentKey("BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES")
     package static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")
-    package static let buttonHeistTripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BUTTONHEIST_TRIPWIRE_PULSE_HZ")
     package static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")
-    package static let buttonHeistMaxScrollsPerContainer = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER")
     package static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")
-    package static let buttonHeistMaxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY")
     package static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")
-    package static let buttonHeistScrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET")
-    package static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")
-    package static let buttonHeistVisibleElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_VISIBLE_ELEMENT_BUDGET")
     package static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")
-    package static let buttonHeistTotalNodeBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_TOTAL_NODE_BUDGET")
 
     fileprivate static let processProjectionKeys: [RuntimeKnobEnvironmentKey] = {
-        let aliases: [RuntimeKnobEnvironmentKey] = [
+        let canonicalKeys: [RuntimeKnobEnvironmentKey] = [
             .postScrollLayoutFrames,
-            .buttonHeistPostScrollLayoutFrames,
             .tripwirePulseFramesPerSecond,
-            .buttonHeistTripwirePulseFramesPerSecond,
             .maxScrollsPerContainer,
-            .buttonHeistMaxScrollsPerContainer,
             .maxScrollsPerDiscovery,
-            .buttonHeistMaxScrollsPerDiscovery,
             .scrollSubtreeElementBudget,
-            .buttonHeistScrollSubtreeElementBudget,
-            .visibleElementBudget,
-            .buttonHeistVisibleElementBudget,
             .totalNodeBudget,
-            .buttonHeistTotalNodeBudget,
         ]
-        return aliases + aliases.map(\.testRunnerPrefixed)
+        return canonicalKeys + canonicalKeys.map(\.testRunnerPrefixed)
     }()
 }
 
@@ -101,42 +85,37 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
     ) -> ButtonHeistRuntimeKnobs {
         ButtonHeistRuntimeKnobs(
             postScrollLayoutFrames: intOverride(
-                keys: [.postScrollLayoutFrames, .buttonHeistPostScrollLayoutFrames],
+                keys: [.postScrollLayoutFrames],
                 environment: environment,
                 defaultValue: defaultPostScrollLayoutFrames,
                 range: 0...10
             ),
             tripwirePulseFramesPerSecond: intOverride(
-                keys: [.tripwirePulseFramesPerSecond, .buttonHeistTripwirePulseFramesPerSecond],
+                keys: [.tripwirePulseFramesPerSecond],
                 environment: environment,
                 defaultValue: defaultTripwirePulseFramesPerSecond,
                 range: 1...120
             ),
             maxScrollsPerContainer: intOverride(
-                keys: [.maxScrollsPerContainer, .buttonHeistMaxScrollsPerContainer],
+                keys: [.maxScrollsPerContainer],
                 environment: environment,
                 defaultValue: defaultMaxScrollsPerContainer,
                 range: 1...2_000
             ),
             maxScrollsPerDiscovery: intOverride(
-                keys: [.maxScrollsPerDiscovery, .buttonHeistMaxScrollsPerDiscovery],
+                keys: [.maxScrollsPerDiscovery],
                 environment: environment,
                 defaultValue: defaultMaxScrollsPerDiscovery,
                 range: 1...2_000
             ),
             visibleElementBudget: intOverride(
-                keys: [
-                    .scrollSubtreeElementBudget,
-                    .buttonHeistScrollSubtreeElementBudget,
-                    .visibleElementBudget,
-                    .buttonHeistVisibleElementBudget,
-                ],
+                keys: [.scrollSubtreeElementBudget],
                 environment: environment,
                 defaultValue: defaultVisibleElementBudget,
                 range: 0...1_000
             ),
             totalNodeBudget: intOverride(
-                keys: [.totalNodeBudget, .buttonHeistTotalNodeBudget],
+                keys: [.totalNodeBudget],
                 environment: environment,
                 defaultValue: defaultTotalNodeBudget,
                 range: 0...5_000

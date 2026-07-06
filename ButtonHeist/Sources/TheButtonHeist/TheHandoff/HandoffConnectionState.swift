@@ -141,21 +141,21 @@ struct HandoffFailureDiagnostic: Equatable, Sendable {
 enum HandoffFailureFormatter {
     static func message(for diagnostic: HandoffFailureDiagnostic) -> String {
         switch diagnostic.details.code.knownCode {
-        case .connectionFailed?:
+        case .connectionFailed:
             return diagnostic.cause
-        case .setupTimeout?:
+        case .setupTimeout:
             return "Connection timed out"
-        case .discoveryNoDeviceFound?:
+        case .discoveryNoDeviceFound:
             return "No device found"
-        case .discoveryNoMatchingDevice?:
+        case .discoveryNoMatchingDevice:
             let available = diagnostic.candidates.joined(separator: ", ")
             return "No device matching '\(diagnostic.target ?? "(none)")' (available: \(available))"
-        case .discoveryAmbiguousDeviceTarget?:
+        case .discoveryAmbiguousDeviceTarget:
             let matches = diagnostic.candidates.joined(separator: ", ")
             return "Ambiguous device target '\(diagnostic.target ?? "(none)")' (matches: \(matches))"
-        case .authFailed?:
+        case .authFailed:
             return diagnostic.cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
-        case .sessionLocked?:
+        case .sessionLocked:
             return diagnostic.cause
         default:
             return connectionFailureMessage(for: diagnostic)

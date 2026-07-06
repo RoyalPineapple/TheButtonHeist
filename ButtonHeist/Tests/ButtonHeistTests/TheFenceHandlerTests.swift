@@ -520,10 +520,11 @@ final class TheFenceHandlerTests: XCTestCase {
         ]
         let response = FenceResponse.failure(FenceError.heistBuildDiagnostics(diagnostics))
         let failure = try XCTUnwrap(response.diagnosticFailure)
+        let expectedFailureCode = KnownFailureCode.requestInvalid.rawValue
 
-        XCTAssertEqual(failure.failureCode.rawValue, diagnostics[0].code.rawValue)
-        XCTAssertNil(failure.failureCode.knownCode)
-        XCTAssertEqual(failure.code, diagnostics[0].code.rawValue)
+        XCTAssertEqual(failure.failureCode, FailureCode(.requestInvalid))
+        XCTAssertEqual(failure.failureCode.knownCode, .requestInvalid)
+        XCTAssertEqual(failure.code, expectedFailureCode)
         XCTAssertEqual(failure.kind, .request)
         XCTAssertEqual(failure.phase, .request)
         XCTAssertFalse(failure.retryable)
@@ -532,15 +533,15 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("expected an identifier"), failure.message)
 
         let json = try publicJSONProbe(response).object()
-        XCTAssertEqual(try json.string("code"), diagnostics[0].code.rawValue)
-        XCTAssertEqual(try json.string("errorCode"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try json.string("code"), expectedFailureCode)
+        XCTAssertEqual(try json.string("errorCode"), expectedFailureCode)
         XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.request.rawValue)
         XCTAssertEqual(try json.string("phase"), FailurePhase.request.rawValue)
         XCTAssertFalse(try json.bool("retryable"))
         XCTAssertEqual(try json.string("hint"), diagnostics[0].hint)
 
         let detailsJSON = try json.object("details")
-        XCTAssertEqual(try detailsJSON.string("code"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try detailsJSON.string("code"), expectedFailureCode)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.request.rawValue)
         XCTAssertFalse(try detailsJSON.bool("retryable"))
 
@@ -595,21 +596,16 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    func testCustomFailureCodeDecodesAtBoundaryAndUsesPhaseFallback() throws {
-        let code = try JSONDecoder().decode(FailureCode.self, from: Data(#""plugin.custom_failure""#.utf8))
-        let details = FailureDetails(
-            code: code,
-            phase: .server,
-            retryable: false,
-            hint: nil
-        )
-        let failure = DiagnosticFailure(message: "Plugin failed", details: details)
-
-        XCTAssertNil(failure.failureCode.knownCode)
-        XCTAssertEqual(failure.failureCode.rawValue, "plugin.custom_failure")
-        XCTAssertEqual(failure.code, "plugin.custom_failure")
-        XCTAssertEqual(failure.kind, .server)
-        XCTAssertEqual(failure.phase, .server)
+    func testUnknownFailureCodeDecodeFailsAtBoundary() throws {
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            FailureCode.self,
+            from: Data(#""plugin.custom_failure""#.utf8)
+        )) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("Unknown Button Heist failure code"))
+        }
     }
 
     func testDiagnosticFailureJSONPreservesRawKnownCodesAcrossRepresentativeKinds() throws {

@@ -3,6 +3,9 @@
 import Foundation
 import ThePlans
 
+// Package contract: app-hosted tests import TheInsideJob and assert against
+// execution receipt types from TheScore. This intentional re-export is
+// allowlisted by scripts/check-buttonheist-import-contract.sh.
 @_exported import TheScore
 
 /// Completed in-process heist execution receipt for app and UI tests.
