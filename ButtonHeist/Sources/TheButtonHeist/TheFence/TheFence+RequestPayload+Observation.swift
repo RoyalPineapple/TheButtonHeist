@@ -51,7 +51,7 @@ extension TheFence {
                 expected: "use subtree or element matcher fields, not both"
             )
         }
-        GetInterfaceRequest(
+        return GetInterfaceRequest(
             detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
             query: InterfaceQuery(
                 subtree: subtree,

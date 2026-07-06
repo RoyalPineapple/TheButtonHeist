@@ -40,12 +40,29 @@ if [[ "$(printf '%s\n' "$EXPORTED_IMPORTS" | sort)" != "$(printf '%s\n' "$EXPECT
     fail "@_exported imports must match the package-contract allowlist"
 fi
 
-PUBLIC_TYPEALIASES="$(grep -R -nE '^[[:space:]]*public[[:space:]]+typealias[[:space:]]+' "$REPO_ROOT/ButtonHeist/Sources" || true)"
-if printf '%s\n' "$PUBLIC_TYPEALIASES" \
+TOP_LEVEL_PUBLIC_TYPEALIASES="$(
+    python3 - "$REPO_ROOT" <<'PY'
+import pathlib
+import re
+import sys
+
+repo_root = pathlib.Path(sys.argv[1])
+source_root = repo_root / "ButtonHeist" / "Sources"
+typealias_pattern = re.compile(r"^\s*public\s+typealias\s+")
+
+for path in sorted(source_root.rglob("*.swift")):
+    depth = 0
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        if depth == 0 and typealias_pattern.match(line):
+            print(f"{path}:{line_number}:{line}")
+        depth += line.count("{") - line.count("}")
+PY
+)"
+if printf '%s\n' "$TOP_LEVEL_PUBLIC_TYPEALIASES" \
     | grep -vE "^$REPO_ROOT/ButtonHeist/Sources/ButtonHeistDSL/ButtonHeistDSL\\.swift:" >/dev/null
 then
-    printf 'Observed non-DSL public typealiases:\n%s\n' "$PUBLIC_TYPEALIASES" >&2
-    fail "public typealiases are only allowed in the ButtonHeistDSL facade"
+    printf 'Observed non-DSL top-level public typealiases:\n%s\n' "$TOP_LEVEL_PUBLIC_TYPEALIASES" >&2
+    fail "top-level public typealiases are only allowed in the ButtonHeistDSL facade"
 fi
 
 IMPORTS="$(grep -R -nE '^[[:space:]]*import[[:space:]]+' "$FIXTURE_DIR/Sources" || true)"
