@@ -113,14 +113,18 @@ extension TheBrains {
 
     func executePasteboardRead() -> ActionResult {
         let result = actions.executeGetPasteboard()
-        var builder = ActionResultBuilder()
-        builder.message = result.message
         switch result.outcome {
         case .success(let success):
-            guard let payload = success.payload else { return builder.success(method: result.method) }
-            return builder.success(payload: payload)
+            guard let payload = success.payload else {
+                return .success(method: result.method, message: result.message)
+            }
+            return .success(payload: payload, message: result.message)
         case .failure(let failure):
-            return builder.failure(method: result.method, errorKind: Self.actionErrorKind(for: failure.kind))
+            return .failure(
+                method: result.method,
+                errorKind: Self.actionErrorKind(for: failure.kind),
+                message: result.message
+            )
         }
     }
 

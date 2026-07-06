@@ -467,9 +467,11 @@ extension TheBrains {
         do {
             environment = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
         } catch {
-            var builder = ActionResultBuilder()
-            builder.message = "Could not bind root heist argument: \(error)"
-            return builder.failure(method: .heistPlan, errorKind: .validationError)
+            return .failure(
+                method: .heistPlan,
+                errorKind: .validationError,
+                message: "Could not bind root heist argument: \(error)"
+            )
         }
         let execution = await executeHeistStepAccumulator(
             plan.body,
@@ -507,16 +509,15 @@ extension TheBrains {
             )
         }
 
-        var builder = ActionResultBuilder()
-        builder.message = heistExecutionMessage(
+        let message = heistExecutionMessage(
             completedCount: stepResults.count,
             abortedAtPath: abortedAtPath
         )
 
         if abortedAtPath == nil {
-            return builder.success(payload: .heistExecution(heistResult))
+            return .success(payload: .heistExecution(heistResult), message: message)
         }
-        return builder.failure(errorKind: .actionFailed, payload: .heistExecution(heistResult))
+        return .failure(payload: .heistExecution(heistResult), errorKind: .actionFailed, message: message)
     }
 
     private func failureScreenshotStep(
@@ -1055,9 +1056,11 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist run expectation: \(error)"
-        var builder = ActionResultBuilder()
-        builder.message = observed
-        let expectationActionResult = builder.failure(method: .wait, errorKind: .actionFailed)
+        let expectationActionResult = ActionResult.failure(
+            method: .wait,
+            errorKind: .actionFailed,
+            message: observed
+        )
         let expectationResult = ExpectationResult(
             met: false,
             predicate: nil,

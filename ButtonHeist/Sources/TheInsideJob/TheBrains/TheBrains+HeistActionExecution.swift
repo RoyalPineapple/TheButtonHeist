@@ -509,7 +509,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
-        let expectationActionResult = ActionResultBuilder().failure(method: .wait, errorKind: .actionFailed)
+        let expectationActionResult = ActionResult.failure(method: .wait, errorKind: .actionFailed)
         let expectation = ExpectationResult(
             met: false,
             predicate: nil,

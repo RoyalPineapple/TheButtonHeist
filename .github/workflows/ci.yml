@@ -45,6 +45,9 @@ jobs:
       - name: Validate release/install contract
         run: scripts/validate-release-contract.sh
 
+      - name: Validate adversarial receipt timing parser
+        run: python3 scripts/check-e2e-adversarial-lab-timing.py
+
   submodule-pin:
     runs-on: macos-15
     timeout-minutes: 5

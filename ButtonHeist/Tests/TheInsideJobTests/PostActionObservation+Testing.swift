@@ -6,10 +6,11 @@ extension PostActionObservation {
     /// Test-only projection helper. Production callers must supply a settled
     /// observation or explicit screen evidence through the interaction gateway.
     func captureSemanticState() -> BeforeState {
-        captureSemanticState(
+        let latestEvent = stash.latestSettledSemanticObservationEvent
+        return captureSemanticState(
             from: stash.settledSemanticScreen,
-            tripwireSignal: tripwire.tripwireSignal(),
-            settledObservationSequence: stash.latestSettledSemanticObservationEvent?.sequence
+            tripwireSignal: latestEvent?.observation.tripwireSignal ?? .empty,
+            settledObservationSequence: latestEvent?.sequence
         )
     }
 }
