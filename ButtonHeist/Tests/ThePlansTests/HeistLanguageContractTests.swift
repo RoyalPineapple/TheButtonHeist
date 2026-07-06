@@ -143,46 +143,50 @@ import Testing
 private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissionCandidate, path: String, observed: String)] {
     try [
         (
-            HeistPlanAdmissionCandidate(body: [try stringLoop(parameter: "item", body: [
+            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "item", body: [
                 try stringLoop(parameter: "size"),
-            ])]),
+            ]))]),
             "$.body[0].for_each_string.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [try stringLoop(parameter: "rowName", body: [
+            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "rowName", body: [
                 try elementLoop(parameter: "rowTarget"),
-            ])]),
+            ]))]),
             "$.body[0].for_each_string.body[0].for_each_element",
             "for_each_element inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [try elementLoop(parameter: "section", body: [
+            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
                 try stringLoop(parameter: "size"),
-            ])]),
+            ]))]),
             "$.body[0].for_each_element.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
         (
-            HeistPlanAdmissionCandidate(body: [try elementLoop(parameter: "section", body: [
+            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
                 try elementLoop(parameter: "row"),
-            ])]),
+            ]))]),
             "$.body[0].for_each_element.body[0].for_each_element",
             "for_each_element inside collection loop"
         ),
         (
             HeistPlanAdmissionCandidate(
                 definitions: [
-                    HeistPlanAdmissionCandidate(name: "Inner", body: [try stringLoop(parameter: "size")]),
+                    HeistPlanAdmissionCandidate(name: "Inner", body: [admissionStep(try stringLoop(parameter: "size"))]),
                 ],
-                body: [try stringLoop(parameter: "item", body: [
+                body: [admissionStep(try stringLoop(parameter: "item", body: [
                     .invoke(HeistInvocationStep(path: ["Inner"])),
-                ])]
+                ]))]
             ),
             "$.body[0].for_each_string.body[0].invoke.body[0].for_each_string",
             "for_each_string inside collection loop"
         ),
     ]
+}
+
+private func admissionStep(_ step: HeistStep) -> HeistStepAdmissionCandidate {
+    HeistStepAdmissionCandidate(step)
 }
 
 private func stringLoop(
