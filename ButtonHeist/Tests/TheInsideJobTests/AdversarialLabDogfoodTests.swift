@@ -92,44 +92,52 @@ final class AdversarialLabDogfoodTests: XCTestCase {
         XCTAssertTrue(failure.description.localizedCaseInsensitiveContains("ambiguous"), failure.description)
     }
 
-    func testDynamicCellsKeepSemanticIdentityAfterMutation() async throws {
-        let pizza = ElementTarget.element(
-            .label("Margherita Pizza"),
+    func testDynamicCellsKeepSemanticIdentityAfterChurn() async throws {
+        let noodles = ElementTarget.element(
+            .label("Nebula Noodles Prime"),
+            .customContent(.match(label: "SKU", value: "SKU-72")),
             .customContent(.match(label: "Category", value: "Mains")),
-            .customContent(.match(label: "Unit Price", value: "$14.00")),
+            .customContent(.match(label: "Churn State", value: "post-churn")),
+            .customContent(.match(label: "Menu Slot", value: "deep target after churn")),
+            .customContent(.match(label: "Unit Price", value: "$18.00")),
             .actions([.custom("Add to Cart")])
         )
 
         let heist = try await runHeist("AdversarialDynamicCellsPass") {
             try DemoNavigation.openAdversarialScenario("Dynamic Cells")
-            Activate(.label("Reorder menu"))
-                .expect(.exists(.label("Menu reordered")), timeout: .seconds(2))
-            CustomAction("Add to Cart", on: pizza)
+            Activate(.label("Churn menu"))
+                .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
+            CustomAction("Add to Cart", on: noodles)
                 .expect(.exists(.element(
-                    .label("Margherita Pizza"),
+                    .label("Nebula Noodles Prime"),
+                    .customContent(.match(label: "SKU", value: "SKU-72")),
+                    .customContent(.match(label: "Churn State", value: "post-churn")),
                     .customContent(.match(label: "Quantity", value: "1")),
-                    .customContent(.match(label: "Line Total", value: "$14.00")),
+                    .customContent(.match(label: "Line Total", value: "$18.00")),
                     .actions([.custom("Remove from Cart")])
-                )), timeout: .seconds(2))
+                )), timeout: .seconds(6))
         }
 
         XCTAssertNil(heist.result.firstFailedStep)
     }
 
-    func testDynamicCellsImpossibleActionStateFails() async throws {
-        let impossible = ElementTarget.element(
-            .label("Margherita Pizza"),
-            .customContent(.match(label: "Quantity", value: "0")),
-            .actions([.custom("Remove from Cart")])
+    func testDynamicCellsStalePreChurnSemanticTargetFails() async throws {
+        let stale = ElementTarget.element(
+            .label("Nebula Noodles"),
+            .customContent(.match(label: "SKU", value: "SKU-72")),
+            .customContent(.match(label: "Churn State", value: "pre-churn")),
+            .actions([.custom("Add to Cart")])
         )
 
-        let failure = try await expectHeistFailure("AdversarialDynamicCellsImpossibleStateFails") {
+        let failure = try await expectHeistFailure("AdversarialDynamicCellsStaleTargetFails") {
             try DemoNavigation.openAdversarialScenario("Dynamic Cells")
-            CustomAction("Remove from Cart", on: impossible)
+            Activate(.label("Churn menu"))
+                .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
+            CustomAction("Add to Cart", on: stale)
         }
 
         XCTAssertEqual(failure.failedStepKind, .action)
-        XCTAssertNotNil(failure.result.firstFailedStep?.failure)
+        XCTAssertTrue(failure.description.localizedCaseInsensitiveContains("pre-churn"), failure.description)
     }
 
     func testTextFieldFallbackTypesThroughTapActivation() async throws {

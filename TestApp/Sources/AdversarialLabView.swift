@@ -245,26 +245,22 @@ private struct DynamicCellsScenarioView: View {
         let id: String
         var name: String
         let category: String
-        let detail: String
+        var detail: String
         let unitPrice: String
+        let sku: String
+        var churnState: String
+        var slot: String
     }
 
-    @State private var items = [
-        MenuItem(id: "pizza", name: "Margherita Pizza", category: "Mains", detail: "Tomato and mozzarella", unitPrice: "$14.00"),
-        MenuItem(id: "salad", name: "Greek Salad", category: "Mains", detail: "Feta and olives", unitPrice: "$9.50"),
-        MenuItem(id: "soda", name: "Coke", category: "Drinks", detail: "Bottle", unitPrice: "$3.00"),
-    ]
+    @State private var items: [MenuItem] = DynamicCellsScenarioView.makeMenuItems()
     @State private var quantities: [String: Int] = [:]
-    @State private var didReorder = false
+    @State private var didChurn = false
 
     var body: some View {
         List {
             Section {
-                Button("Reorder menu") {
-                    items.reverse()
-                    didReorder.toggle()
-                }
-                Text(didReorder ? "Menu reordered" : "Menu stable")
+                Button("Churn menu") { churnMenu() }
+                Text(didChurn ? "Menu churned" : "Menu stable")
             }
 
             Section("Menu") {
@@ -275,14 +271,101 @@ private struct DynamicCellsScenarioView: View {
         }
         .navigationTitle("Dynamic Cells")
         .onAppear {
-            items = [
-                MenuItem(id: "pizza", name: "Margherita Pizza", category: "Mains", detail: "Tomato and mozzarella", unitPrice: "$14.00"),
-                MenuItem(id: "salad", name: "Greek Salad", category: "Mains", detail: "Feta and olives", unitPrice: "$9.50"),
-                MenuItem(id: "soda", name: "Coke", category: "Drinks", detail: "Bottle", unitPrice: "$3.00"),
-            ]
+            items = Self.makeMenuItems()
             quantities = [:]
-            didReorder = false
+            didChurn = false
         }
+    }
+
+    private static func makeMenuItems() -> [MenuItem] {
+        (1...80).map { index in
+            if index == 72 {
+                MenuItem(
+                    id: "dish-\(index)",
+                    name: "Nebula Noodles",
+                    category: "Mains",
+                    detail: "Black garlic and sesame",
+                    unitPrice: "$18.00",
+                    sku: "SKU-72",
+                    churnState: "pre-churn",
+                    slot: "deep target"
+                )
+            } else {
+                MenuItem(
+                    id: "dish-\(index)",
+                    name: "Rotating Special \(index % 12)",
+                    category: index.isMultiple(of: 5) ? "Drinks" : "Mains",
+                    detail: "Batch \(index % 9) fixture",
+                    unitPrice: "$\(8 + index % 17).00",
+                    sku: "SKU-\(index)",
+                    churnState: "pre-churn",
+                    slot: index < 18 ? "front shelf" : index < 60 ? "middle shelf" : "deep shelf"
+                )
+            }
+        }
+    }
+
+    private func churnMenu() {
+        guard !didChurn else { return }
+        var nextItems = items.filter {
+            !["dish-4", "dish-11", "dish-23", "dish-38", "dish-67", "dish-79"].contains($0.id)
+        }
+        let inserts = [
+            (
+                index: 0,
+                item: MenuItem(
+                    id: "dish-insert-front",
+                    name: "Flash Insert Bao",
+                    category: "Specials",
+                    detail: "Inserted during churn",
+                    unitPrice: "$12.00",
+                    sku: "SKU-new-front",
+                    churnState: "post-churn",
+                    slot: "front insert"
+                )
+            ),
+            (
+                index: 34,
+                item: MenuItem(
+                    id: "dish-insert-middle",
+                    name: "Rotating Special 3",
+                    category: "Specials",
+                    detail: "Middle insert reusing a common label",
+                    unitPrice: "$13.00",
+                    sku: "SKU-new-middle",
+                    churnState: "post-churn",
+                    slot: "middle insert"
+                )
+            ),
+            (
+                index: 70,
+                item: MenuItem(
+                    id: "dish-insert-deep",
+                    name: "Rotating Special 8",
+                    category: "Mains",
+                    detail: "Deep insert reusing a common label",
+                    unitPrice: "$16.00",
+                    sku: "SKU-new-deep",
+                    churnState: "post-churn",
+                    slot: "deep insert"
+                )
+            ),
+        ]
+        inserts.forEach { nextItems.insert($0.item, at: $0.index) }
+
+        let pivot = 24
+        items = Array(nextItems.suffix(pivot)) + Array(nextItems.dropLast(pivot))
+
+        guard let targetIndex = items.firstIndex(where: { $0.id == "dish-72" }) else { return }
+        var target = items.remove(at: targetIndex)
+        target.name = "Nebula Noodles Prime"
+        target.detail = "Black garlic, sesame, and chili oil"
+        target.churnState = "post-churn"
+        target.slot = "deep target after churn"
+        items.append(target)
+        let liveIDs = Set(items.map(\.id))
+        quantities = quantities.filter { liveIDs.contains($0.key) }
+        didChurn = true
     }
 
     private func menuRow(_ item: MenuItem) -> some View {
@@ -298,6 +381,9 @@ private struct DynamicCellsScenarioView: View {
         .accessibilityValue(quantity == 0 ? "Quantity 0" : "Quantity \(quantity)")
         .accessibilityCustomContent(Text("Category"), Text(item.category), importance: .high)
         .accessibilityCustomContent(Text("Detail"), Text(item.detail))
+        .accessibilityCustomContent(Text("SKU"), Text(item.sku), importance: .high)
+        .accessibilityCustomContent(Text("Churn State"), Text(item.churnState), importance: .high)
+        .accessibilityCustomContent(Text("Menu Slot"), Text(item.slot))
         .accessibilityCustomContent(Text("Unit Price"), Text(item.unitPrice), importance: .high)
         .accessibilityCustomContent(Text("Quantity"), Text("\(quantity)"), importance: .high)
         .accessibilityCustomContent(Text("Line Total"), Text(lineTotal(unitPrice: item.unitPrice, quantity: quantity)))

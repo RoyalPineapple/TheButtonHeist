@@ -493,7 +493,13 @@ extension HeistPlanSourceParser {
             return .decrement
         case "custom":
             try expectSymbol("(")
+            let customNameToken = currentToken
             let customName = try parseStringLiteral()
+            do {
+                try CustomActionTarget.validate(actionName: customName)
+            } catch let validationError {
+                throw error(customNameToken, String(describing: validationError))
+            }
             try expectSymbol(")")
             return .custom(customName)
         default:

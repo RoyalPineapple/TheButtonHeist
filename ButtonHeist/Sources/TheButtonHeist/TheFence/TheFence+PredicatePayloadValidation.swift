@@ -17,6 +17,9 @@ extension TheFence {
             guard let match = object[key] else { continue }
             try validateStringMatchArray(match, field: "\(field).\(key)")
         }
+        if let actions = object["actions"] {
+            try validateElementActionsValue(actions, field: "\(field).actions")
+        }
         if let checks = object["checks"] {
             try validateElementPredicateChecks(checks, field: "\(field).checks")
         }
@@ -197,11 +200,18 @@ extension TheFence {
                     expected: "custom action name string"
                 )
             }
-            guard case .string = custom else {
+            guard case .string(let name) = custom else {
                 throw SchemaValidationError(
                     field: "\(field).custom",
                     observed: custom.schemaObservedDescription,
                     expected: "custom action name string"
+                )
+            }
+            guard !name.isEmpty else {
+                throw SchemaValidationError(
+                    field: "\(field).custom",
+                    observed: "string \"\"",
+                    expected: "non-empty custom action name string"
                 )
             }
         default:

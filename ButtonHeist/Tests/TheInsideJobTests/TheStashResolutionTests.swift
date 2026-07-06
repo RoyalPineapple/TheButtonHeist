@@ -1880,6 +1880,26 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("ordinal"), "Should hint about ordinal usage")
     }
 
+    func testAmbiguousMatchedCountIsExactBeyondDisplayedCandidateLimit() {
+        for index in 0..<12 {
+            register(
+                element(label: "Duplicate", value: "\(index)"),
+                heistId: HeistId(rawValue: "duplicate_\(index)"),
+                index: index
+            )
+        }
+
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Duplicate")))
+        guard case .ambiguous(let facts) = result else {
+            XCTFail("Expected .ambiguous, got \(result)")
+            return
+        }
+        XCTAssertEqual(facts.matchedCount, 12)
+        XCTAssertEqual(facts.candidates.count, 10)
+        XCTAssertTrue(result.diagnostics.contains("10+ elements match"))
+        XCTAssertTrue(result.diagnostics.contains("... and more"))
+    }
+
     func testOrdinalZeroOnSingleMatchSucceeds() {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)

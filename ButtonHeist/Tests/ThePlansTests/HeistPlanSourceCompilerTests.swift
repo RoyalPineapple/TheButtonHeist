@@ -60,6 +60,7 @@ import Testing
         (#"Activate(.label(""))"#, "label match value must not be empty"),
         ("Activate(.traits([]))", "traits predicate payload must not be empty"),
         ("Activate(.actions([]))", "actions predicate payload must not be empty"),
+        (#"Activate(.actions([.custom("")]))"#, "custom action name must not be empty"),
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
         ("Activate(.customContent(.match()))", "customContent match must include label, value, or isImportant"),
     ]

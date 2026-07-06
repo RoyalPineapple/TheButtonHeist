@@ -3652,6 +3652,42 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParseExpectationRejectsEmptyCustomActionPredicateNames() async {
+        let cases: [(HeistValue, String)] = [
+            (
+                .object([
+                    "actions": .array([.object(["custom": .string("")])]),
+                ]),
+                "element.actions[0].custom"
+            ),
+            (
+                .object([
+                    "checks": .array([
+                        predicateCheckValue(kind: "actions", values: [
+                            .object(["custom": .string("")]),
+                        ]),
+                    ]),
+                ]),
+                "element.checks[0].values[0].custom"
+            ),
+        ]
+
+        for (element, field) in cases {
+            XCTAssertThrowsError(try parseTypedExpectation(.object([
+                "type": .string("exists"),
+                "element": element,
+            ]))) { error in
+                guard let error = error as? SchemaValidationError else {
+                    XCTFail("Expected SchemaValidationError, got \(error)")
+                    return
+                }
+                XCTAssertEqual(error.field, field)
+                XCTAssertEqual(error.expected, "non-empty custom action name string")
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testParseExpectationRejectsDeletedDeliveryType() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("delivery"),

@@ -410,11 +410,28 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 expected: wait.predicate.description
             )
             : nil
-        let evidence = HeistStepEvidence.wait(HeistWaitEvidence(
-            outcome: failure == nil ? .matched : .failed,
-            actionResult: result,
-            expectation: expectation
-        ))
+        let waitEvidence: HeistWaitEvidence
+        if failure == nil {
+            guard let metExpectation = MetExpectationResult(expectation) else {
+                preconditionFailure("Passed wait mock fixture requires a met expectation")
+            }
+            guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
+                actionResult: result,
+                expectation: metExpectation
+            ) else {
+                preconditionFailure("Passed wait mock fixture requires a successful action result")
+            }
+            waitEvidence = .matched(matchedCheck)
+        } else {
+            guard let unmatchedCheck = HeistWaitEvidence.UnmatchedCheck(
+                actionResult: result,
+                expectation: expectation
+            ) else {
+                preconditionFailure("Failed wait mock fixture requires unmatched wait evidence")
+            }
+            waitEvidence = .failed(unmatchedCheck)
+        }
+        let evidence = HeistStepEvidence.wait(waitEvidence)
         if let failure {
             return .failed(
                 path: path,

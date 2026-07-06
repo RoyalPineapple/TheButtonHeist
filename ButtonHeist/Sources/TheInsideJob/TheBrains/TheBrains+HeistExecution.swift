@@ -1142,12 +1142,29 @@ extension TheBrains {
         receipt: HeistWaitReceipt,
         context: InvocationExpectationContext?
     ) -> HeistWaitEvidence {
-        HeistWaitEvidence(
-            outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed,
+        let finalSummary = receipt.observationSummary ?? receipt.expectation.actual
+        if let expectation = MetExpectationResult(receipt.expectation),
+           let check = HeistWaitEvidence.MatchedCheck(
+               actionResult: receipt.actionResult,
+               expectation: expectation
+           ) {
+            return .matched(
+                check,
+                baselineSummary: context?.baseline.observationSummary,
+                finalSummary: finalSummary,
+                warning: receipt.warning
+            )
+        }
+        guard let check = HeistWaitEvidence.UnmatchedCheck(
             actionResult: receipt.actionResult,
-            expectation: receipt.expectation,
+            expectation: receipt.expectation
+        ) else {
+            preconditionFailure("Failed invocation expectation evidence requires a failed action result or unmet expectation")
+        }
+        return .failed(
+            check,
             baselineSummary: context?.baseline.observationSummary,
-            finalSummary: receipt.observationSummary ?? receipt.expectation.actual,
+            finalSummary: finalSummary,
             warning: receipt.warning
         )
     }
