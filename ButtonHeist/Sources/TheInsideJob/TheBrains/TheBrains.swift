@@ -141,12 +141,7 @@ final class TheBrains {
             tripwire: tripwire,
             navigation: navigation
         )
-        let postActionObservation = PostActionObservation(
-            stash: stash,
-            safecracker: safecracker,
-            tripwire: tripwire,
-            navigation: navigation
-        )
+        let postActionObservation = PostActionObservation(stash: stash)
         self.postActionObservation = postActionObservation
         self.interactionObservation = InteractionObservation(
             stash: stash,
@@ -155,19 +150,14 @@ final class TheBrains {
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
-        var builder = ActionResultBuilder()
-        if let diagnostic = stash.latestSemanticObservationFailureDiagnostic() {
-            builder.message = "Could not observe accessibility tree; \(diagnostic)"
-        } else {
-            builder.message = TheBrains.treeUnavailableMessage
-        }
-        return builder.failure(method: method, errorKind: .accessibilityTreeUnavailable)
+        let message = stash.latestSemanticObservationFailureDiagnostic()
+            .map { "Could not observe accessibility tree; \($0)" }
+            ?? TheBrains.treeUnavailableMessage
+        return .failure(method: method, errorKind: .accessibilityTreeUnavailable, message: message)
     }
 
     func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
-        var builder = ActionResultBuilder()
-        builder.message = TheBrains.runtimeInactiveMessage
-        return builder.failure(method: method, errorKind: .actionFailed)
+        .failure(method: method, errorKind: .actionFailed, message: TheBrains.runtimeInactiveMessage)
     }
 
     // MARK: - Clear

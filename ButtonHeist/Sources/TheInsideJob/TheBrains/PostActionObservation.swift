@@ -24,9 +24,6 @@ enum SemanticObservationTiming {
 @MainActor
 final class PostActionObservation {
     let stash: TheStash
-    let safecracker: TheSafecracker
-    let tripwire: TheTripwire
-    let navigation: Navigation
 
     /// State captured before an action for delta computation.
     struct BeforeState {
@@ -77,11 +74,8 @@ final class PostActionObservation {
         case observed(FinalEvidence)
     }
 
-    init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
+    init(stash: TheStash) {
         self.stash = stash
-        self.safecracker = safecracker
-        self.tripwire = tripwire
-        self.navigation = navigation
     }
 
     func captureSemanticState(from observation: SettledSemanticObservation) -> BeforeState {
@@ -147,7 +141,7 @@ final class PostActionObservation {
         case .observedUnsettled(let screen):
             observedFinalState = captureSemanticState(
                 from: screen,
-                tripwireSignal: tripwire.tripwireSignal(),
+                tripwireSignal: before.tripwireSignal,
                 settledObservationSequence: nil
             )
         case .unavailable:
@@ -229,7 +223,7 @@ final class PostActionObservation {
         interface: Interface,
         sequence: Int = 1,
         parentHash: String? = nil,
-        tripwireSignal: TheTripwire.TripwireSignal? = nil,
+        tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.Capture {
@@ -247,10 +241,11 @@ final class PostActionObservation {
         parentCapture: AccessibilityTrace.Capture? = nil,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace {
-        let capture = makeTraceCapture(
-            interface: afterInterface,
+        let capture = AccessibilityTrace.Capture(
             sequence: parentCapture == nil ? 1 : 2,
+            interface: afterInterface,
             parentHash: parentCapture?.hash,
+            context: parentCapture?.context ?? .empty,
             transition: transition
         )
         if let parentCapture {
@@ -404,11 +399,10 @@ final class PostActionObservation {
     }
 
     private func makeCaptureContext(
-        tripwireSignal: TheTripwire.TripwireSignal? = nil,
+        tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil
     ) -> AccessibilityTrace.Context {
-        let signal = tripwireSignal ?? tripwire.tripwireSignal()
-        let windows = signal.windowStack.windows.enumerated().map { index, window in
+        let windows = tripwireSignal.windowStack.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
                 index: index,
                 level: Double(window.level),
@@ -416,7 +410,6 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
-            keyboardVisible: safecracker.isKeyboardVisible(),
             screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
