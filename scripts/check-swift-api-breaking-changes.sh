@@ -20,14 +20,6 @@ if [[ -z "$BASELINE_TAG" ]]; then
 fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
-PUBLIC_PRODUCTS=(
-    ThePlans
-    TheScore
-    ButtonHeistDSL
-    TheInsideJob
-    ButtonHeistTesting
-    ButtonHeist
-)
 INTENTIONAL_BREAKAGES=(
     "enumelement HeistActionCommandType.dismiss has been added as a new enum case"
     "enumelement HeistActionCommandType.magicTap has been added as a new enum case"
@@ -51,12 +43,17 @@ INTENTIONAL_BREAKAGES=(
     "var HeistActionEvidence.ResultEvidence.expectation has been removed"
     "constructor HeistWaitEvidence.init(outcome:actionResult:expectation:baselineSummary:finalSummary:warning:) has been removed"
     "typealias ElementMatches has been removed"
-    "struct FailureCode has removed conformance to RawRepresentable"
+    "var FailureDetails.code has declared type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "accessor FailureDetails.code.Get() has return type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "var DiagnosticFailure.failureCode has declared type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "accessor DiagnosticFailure.failureCode.Get() has return type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "var ConnectionFailure.failureCode has declared type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "accessor ConnectionFailure.failureCode.Get() has return type change from ButtonHeist.FailureCode to ButtonHeist.KnownFailureCode"
+    "constructor FailureDetails.init(code:phase:retryable:hint:) has been removed"
+    "constructor ConnectionFailure.init(message:failureCode:phase:retryable:hint:) has been removed"
     "enumelement KnownFailureCode.tlsCertificateMismatch has been removed"
     "enumelement KnownFailureCode.tlsMissingFingerprint has been removed"
-    "constructor FailureCode.init(boundaryRawValue:) has been removed"
-    "constructor FailureCode.init(rawValue:) has been removed"
-    "typealias FailureCode.RawValue has been removed"
+    "struct FailureCode has been removed"
     "var TheFence.CommandArgumentEnvelope.argumentValues has been removed"
     "enumelement FenceResponse.announcements has been added as a new enum case"
     "enumelement TheFence.Command.getAnnouncements has been added as a new enum case"
@@ -68,18 +65,24 @@ INTENTIONAL_BREAKAGES=(
     "enumelement ClientWireMessageType.getAnnouncements has been added as a new enum case"
     "enumelement ServerWireMessageType.announcements has been added as a new enum case"
     "enumelement ServerMessage.announcements has been added as a new enum case"
+    "var RuntimeKnobEnvironmentKey.buttonHeistPostScrollLayoutFrames has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistTripwirePulseFramesPerSecond has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistMaxScrollsPerContainer has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistMaxScrollsPerDiscovery has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistScrollSubtreeElementBudget has been removed"
+    "var RuntimeKnobEnvironmentKey.visibleElementBudget has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistVisibleElementBudget has been removed"
+    "var RuntimeKnobEnvironmentKey.buttonHeistTotalNodeBudget has been removed"
 )
 
-PACKAGE_PUBLIC_PRODUCTS=()
+PUBLIC_PRODUCTS=()
 while IFS= read -r product; do
-    PACKAGE_PUBLIC_PRODUCTS+=("$product")
+    PUBLIC_PRODUCTS+=("$product")
 done < <(grep -E '^[[:space:]]*[.]library[(]name:[[:space:]]*"[^"]+"' Package.swift \
     | sed -E 's/.*name:[[:space:]]*"([^"]+)".*/\1/')
 
-if [[ "${PUBLIC_PRODUCTS[*]}" != "${PACKAGE_PUBLIC_PRODUCTS[*]}" ]]; then
-    echo "Error: Swift API check products do not match Package.swift library products."
-    echo "Configured: ${PUBLIC_PRODUCTS[*]}"
-    echo "Package.swift: ${PACKAGE_PUBLIC_PRODUCTS[*]}"
+if [[ "${#PUBLIC_PRODUCTS[@]}" -eq 0 ]]; then
+    echo "Error: no Swift library products found in Package.swift."
     exit 2
 fi
 

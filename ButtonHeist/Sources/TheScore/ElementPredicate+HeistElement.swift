@@ -88,15 +88,11 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 
     package init(interface: Interface) {
-        let annotationsByPath = interface.annotations.elementByPath
-        self.init(interface.tree.pathIndexedElements.enumerated().map { offset, item in
+        self.init(interface.graph.elementsInTraversalOrder.enumerated().map { offset, record in
             ElementMatch(
-                path: item.path,
+                path: record.path,
                 traversalOrder: offset,
-                element: HeistElement(
-                    accessibilityElement: item.element,
-                    annotation: annotationsByPath[item.path]
-                )
+                element: record.projectedElement
             )
         })
     }

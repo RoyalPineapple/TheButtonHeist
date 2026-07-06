@@ -604,6 +604,29 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testInterfaceQueryRejectsSubtreeAndMatcher() {
+        let json = #"""
+        {
+          "subtree": {
+            "element": {
+              "checks": [
+                { "kind": "label", "match": "Save" }
+              ]
+            }
+          },
+          "matcher": {
+            "checks": [
+              { "kind": "identifier", "match": "save" }
+            ]
+          }
+        }
+        """#
+
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["interface query accepts subtree or matcher, not both"])
+        }
+    }
+
     // MARK: - SubtreeSelector
 
     func testSubtreeSelectorElementUsesToolSchemaShape() throws {

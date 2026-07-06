@@ -38,7 +38,7 @@ public enum DiagnosticFailureKind: String, Sendable, Equatable {
 ///
 /// The raw values are the stable strings emitted in public JSON. Keep metadata
 /// switches exhaustive so adding a known code requires explicit classification.
-public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
+public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStringConvertible {
     case requestInvalid = "request.invalid"
     case requestMissingTarget = "request.missing_target"
     case requestAccessibilityTreeUnavailable = "request.accessibility_tree_unavailable"
@@ -251,71 +251,16 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
             return "Omit inlineData or pass output to receive a screenshot artifact path."
         }
     }
-}
-
-/// Public failure code value that preserves raw JSON strings at boundaries while
-/// exposing typed metadata for codes known to this client.
-public struct FailureCode: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
-    public let rawValue: String
-
-    public var knownCode: KnownFailureCode? {
-        KnownFailureCode(rawValue: rawValue)
-    }
-
-    public var kind: DiagnosticFailureKind? {
-        knownCode?.kind
-    }
-
-    public var phase: FailurePhase? {
-        knownCode?.phase
-    }
-
-    public var retryable: Bool? {
-        knownCode?.retryable
-    }
-
-    public var defaultHint: String? {
-        knownCode?.defaultHint
-    }
 
     public var description: String {
         rawValue
-    }
-
-    public init(_ knownCode: KnownFailureCode) {
-        self.rawValue = knownCode.rawValue
-    }
-
-    init(decodingRawValue rawValue: String) {
-        self.rawValue = rawValue
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        self.init(decodingRawValue: try container.decode(String.self))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-}
-
-public extension FailureDetails {
-    init(code knownCode: KnownFailureCode, hint: String? = nil) {
-        self.init(
-            code: FailureCode(knownCode),
-            phase: knownCode.phase,
-            retryable: knownCode.retryable,
-            hint: hint ?? knownCode.defaultHint
-        )
     }
 }
 
 /// Canonical diagnostic failure shape used by CLI and MCP responses.
 public struct DiagnosticFailure: Sendable, Equatable {
     /// Typed machine-readable failure code.
-    public let failureCode: FailureCode
+    public let failureCode: KnownFailureCode
     /// Broad diagnostic category for the failure.
     public let kind: DiagnosticFailureKind
     /// User-facing failure message.
@@ -387,26 +332,22 @@ public struct DiagnosticFailure: Sendable, Equatable {
 /// Typed connection-attempt failure preserved from the lower-level disconnect cause.
 public struct ConnectionFailure: Equatable, Sendable {
     public let message: String
-    public let failureCode: FailureCode
-    public let phase: FailurePhase
-    public let retryable: Bool
+    public let failureCode: KnownFailureCode
     public let hint: String?
 
     /// Raw JSON/API boundary projection of `failureCode`.
     public var errorCode: String { failureCode.rawValue }
+    public var phase: FailurePhase { failureCode.phase }
+    public var retryable: Bool { failureCode.retryable }
 
     public init(
         message: String,
-        failureCode: FailureCode,
-        phase: FailurePhase,
-        retryable: Bool,
-        hint: String?
+        failureCode: KnownFailureCode,
+        hint: String? = nil
     ) {
         self.message = message
         self.failureCode = failureCode
-        self.phase = phase
-        self.retryable = retryable
-        self.hint = hint
+        self.hint = hint ?? failureCode.defaultHint
     }
 }
 
@@ -416,8 +357,6 @@ extension ConnectionFailure {
         self.init(
             message: reason.connectionFailureMessage,
             failureCode: details.code,
-            phase: details.phase,
-            retryable: details.retryable,
             hint: details.hint
         )
     }
@@ -425,26 +364,6 @@ extension ConnectionFailure {
 
 private extension DiagnosticFailureKind {
     init(details: FailureDetails) {
-        if let typedKind = details.code.kind {
-            self = typedKind
-            return
-        }
-
-        switch details.phase {
-        case .discovery:
-            self = .discovery
-        case .setup, .transport, .protocolNegotiation, .tls:
-            self = .connection
-        case .authentication:
-            self = .authentication
-        case .session:
-            self = .session
-        case .server:
-            self = .server
-        case .request:
-            self = .request
-        case .client:
-            self = .client
-        }
+        self = details.code.kind
     }
 }

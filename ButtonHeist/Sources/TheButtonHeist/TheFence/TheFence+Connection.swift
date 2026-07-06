@@ -82,8 +82,6 @@ extension TheFence {
             throw FenceError.connectionFailure(ConnectionFailure(
                 message: "Could not reach ButtonHeist server at \(device.name)",
                 failureCode: details.code,
-                phase: details.phase,
-                retryable: details.retryable,
                 hint: details.hint
             ))
         }

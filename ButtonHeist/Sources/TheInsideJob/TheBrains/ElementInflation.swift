@@ -1,6 +1,7 @@
 #if canImport(UIKit) && DEBUG
 import UIKit
 
+import ButtonHeistSupport
 import TheScore
 import ThePlans
 
@@ -383,38 +384,115 @@ final class ElementInflation {
     /// actor, and task cancellation exits promptly.
     private func awaitRevealPathGrace(for target: ElementTarget) async -> RevealPathGraceOutcome {
         let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
-        var cursor = stash.accessibilityNotifications.transitionCursor()
-        var didRetryReveal = false
-        while !Task.isCancelled {
-            let remaining = deadline - CFAbsoluteTimeGetCurrent()
-            guard remaining > 0 else { break }
-            if let advanced = await stash.accessibilityNotifications.waitForTransitionEvent(
-                after: cursor,
-                timeout: min(revealPathSilentReparseInterval, remaining)
-            ) {
-                cursor = advanced
+        var driver = StateDriver(
+            initial: RevealPathGraceState.idle,
+            machine: RevealPathGraceMachine(silentReparseInterval: revealPathSilentReparseInterval)
+        )
+        var effect = driver.send(.begin(
+            cursor: stash.accessibilityNotifications.transitionCursor(),
+            remaining: revealPathGraceRemainingTime(until: deadline)
+        )).revealPathGraceEffect
+
+        while true {
+            switch effect {
+            case .waitForTransitionEvent(let cursor, let timeout):
+                guard !Task.isCancelled else {
+                    effect = driver.send(.cancelled).revealPathGraceEffect
+                    continue
+                }
+                let advanced = await stash.accessibilityNotifications.waitForTransitionEvent(
+                    after: cursor,
+                    timeout: timeout
+                )
+                effect = driver.send(.transitionWaitCompleted(advanced)).revealPathGraceEffect
+
+            case .yieldRealFrame:
+                await tripwire.yieldRealFrames(1)
+                effect = driver.send(Task.isCancelled ? .cancelled : .frameYielded).revealPathGraceEffect
+
+            case .refreshVisibleTree:
+                effect = driver.send(.visibleTreeRefreshCompleted(
+                    stash.refreshCurrentVisibleTree() != nil,
+                    remaining: revealPathGraceRemainingTime(until: deadline)
+                )).revealPathGraceEffect
+
+            case .resolveVisibleTarget:
+                switch visibleTargetResolution(target) {
+                case .success(let visible)?:
+                    guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
+                    else {
+                        preconditionFailure("Reveal path grace visible resolution did not finish as resolved.")
+                    }
+                    return .resolved(visible, didReveal: false)
+                case .failure(let failure)?:
+                    guard case .finish(.failedVisibleTarget) = driver.send(.visibleTargetFailed).revealPathGraceEffect
+                    else {
+                        preconditionFailure("Reveal path grace visible failure did not finish as failed.")
+                    }
+                    return .failed(failure)
+                case nil:
+                    effect = driver.send(.visibleTargetMissing(
+                        remaining: revealPathGraceRemainingTime(until: deadline)
+                    )).revealPathGraceEffect
+                }
+
+            case .attemptKnownTargetReveal:
+                switch await attemptRevealPathGraceKnownTarget(for: target) {
+                case .unavailable:
+                    effect = driver.send(.knownTargetRevealAttempted(
+                        .unavailable,
+                        remaining: revealPathGraceRemainingTime(until: deadline)
+                    )).revealPathGraceEffect
+                case .failed:
+                    effect = driver.send(.knownTargetRevealAttempted(
+                        .failed,
+                        remaining: revealPathGraceRemainingTime(until: deadline)
+                    )).revealPathGraceEffect
+                case .revealed(let fresh, let didReveal):
+                    guard case .finish(.resolvedAfterKnownReveal(let effectDidReveal)) = driver.send(
+                        .knownTargetRevealAttempted(
+                            .revealed(didReveal: didReveal),
+                            remaining: revealPathGraceRemainingTime(until: deadline)
+                        )
+                    ).revealPathGraceEffect else {
+                        preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
+                    }
+                    return .resolved(fresh, didReveal: effectDidReveal)
+                }
+
+            case .finish(.timedOut), .finish(.cancelled):
+                return .timedOut
+
+            case .finish(.resolvedVisible),
+                 .finish(.failedVisibleTarget),
+                 .finish(.resolvedAfterKnownReveal):
+                preconditionFailure("Reveal path grace terminal effect must be consumed with boundary payload.")
             }
-            await tripwire.yieldRealFrames(1)
-            guard !Task.isCancelled else { break }
-            guard stash.refreshCurrentVisibleTree() != nil else { continue }
-            switch visibleTargetResolution(target) {
-            case .success(let visible)?:
-                return .resolved(visible, didReveal: false)
-            case .failure(let failure)?:
-                return .failed(failure)
-            case nil:
-                break
-            }
-            guard !didRetryReveal,
-                  case .success(let fresh) = knownSemanticTarget(target),
-                  fresh.scrollMembership != nil
-            else { continue }
-            didRetryReveal = true
-            let retryReveal = await revealSemanticTarget(fresh)
-            if case .failed = retryReveal { continue }
-            return .resolved(fresh, didReveal: retryReveal.didReveal)
         }
-        return .timedOut
+    }
+
+    private func revealPathGraceRemainingTime(until deadline: CFAbsoluteTime) -> Double {
+        deadline - CFAbsoluteTimeGetCurrent()
+    }
+
+    private enum RevealPathGraceKnownTargetAttempt {
+        case unavailable
+        case failed
+        case revealed(TheStash.ScreenElement, didReveal: Bool)
+    }
+
+    private func attemptRevealPathGraceKnownTarget(
+        for target: ElementTarget
+    ) async -> RevealPathGraceKnownTargetAttempt {
+        guard case .success(let fresh) = knownSemanticTarget(target),
+              fresh.scrollMembership != nil
+        else { return .unavailable }
+
+        let retryReveal = await revealSemanticTarget(fresh)
+        if case .failed = retryReveal {
+            return .failed
+        }
+        return .revealed(fresh, didReveal: retryReveal.didReveal)
     }
 
     private func stateAfterRefresh(

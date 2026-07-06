@@ -20,6 +20,10 @@ public struct InterfaceQuery: Sendable, Equatable {
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
     ) {
+        precondition(
+            subtree == nil || !matcher.hasPredicates,
+            "interface query accepts subtree or matcher, not both"
+        )
         self.subtree = subtree
         self.matcher = matcher
         self.maxScrollsPerContainer = Self.checkedDiscoveryLimit(
@@ -37,8 +41,17 @@ extension InterfaceQuery: Codable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: InterfaceQueryCodingKeys.self, typeName: "interface query")
         let container = try decoder.container(keyedBy: InterfaceQueryCodingKeys.self)
-        self.subtree = try container.decodeIfPresent(SubtreeSelector.self, forKey: .subtree)
-        self.matcher = try container.decodeIfPresent(ElementPredicate.self, forKey: .matcher) ?? ElementPredicate()
+        let subtree = try container.decodeIfPresent(SubtreeSelector.self, forKey: .subtree)
+        let matcher = try container.decodeIfPresent(ElementPredicate.self, forKey: .matcher) ?? ElementPredicate()
+        if subtree != nil, matcher.hasPredicates {
+            throw DecodingError.dataCorruptedError(
+                forKey: .matcher,
+                in: container,
+                debugDescription: "interface query accepts subtree or matcher, not both"
+            )
+        }
+        self.subtree = subtree
+        self.matcher = matcher
         self.maxScrollsPerContainer = try Self.decodeDiscoveryLimit(
             from: container,
             forKey: .maxScrollsPerContainer

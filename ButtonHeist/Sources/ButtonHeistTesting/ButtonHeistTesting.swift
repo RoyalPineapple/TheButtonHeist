@@ -1,5 +1,8 @@
 #if canImport(UIKit)
 #if DEBUG
+// Package contract: app-hosted tests import ButtonHeistTesting and author
+// heists directly. Re-exporting the DSL here is intentional and allowlisted by
+// scripts/check-buttonheist-import-contract.sh.
 @_exported import ButtonHeistDSL
 import Darwin
 import Foundation

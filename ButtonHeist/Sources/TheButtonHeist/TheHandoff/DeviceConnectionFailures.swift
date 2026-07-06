@@ -55,35 +55,30 @@ enum DisconnectReason: Error, LocalizedError {
         switch self {
         case .networkError(let error):
             return HandoffFailureDiagnostic(
-                operation: .transport,
                 target: nil,
                 cause: "Network error: \(error.localizedDescription)",
                 code: .transportNetworkError
             )
         case .bufferOverflow:
             return HandoffFailureDiagnostic(
-                operation: .transport,
                 target: nil,
                 cause: "Server exceeded max buffer size",
                 code: .transportBufferOverflow
             )
         case .eventBacklogOverflow(let maxEvents):
             return HandoffFailureDiagnostic(
-                operation: .transport,
                 target: nil,
                 cause: "Connection event backlog exceeded \(maxEvents) buffered events",
                 code: .transportEventBacklogOverflow
             )
         case .serverClosed:
             return HandoffFailureDiagnostic(
-                operation: .transport,
                 target: nil,
                 cause: "Connection closed by server",
                 code: .transportServerClosed
             )
         case .authFailed(let reason, let hint):
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: "Auth failed: \(reason)",
                 code: .authFailed,
@@ -91,28 +86,24 @@ enum DisconnectReason: Error, LocalizedError {
             )
         case .sessionLocked(let message):
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: "Session locked: \(message)",
                 code: .sessionLocked
             )
         case .protocolMismatch(let message):
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: "Protocol mismatch: \(message)",
                 code: .protocolMismatch
             )
         case .localDisconnect:
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: "Disconnected by client",
                 code: .clientLocalDisconnect
             )
         case .missingToken:
             return HandoffFailureDiagnostic(
-                operation: .transport,
                 target: nil,
                 cause: "No token available for TLS pre-shared-key authentication",
                 code: .tlsMissingToken

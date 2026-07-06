@@ -88,14 +88,15 @@ final class SemanticObservationCycles {
         }
     }
 
-    private struct Waiter {
+    private struct WaiterKey: Hashable, Sendable {
+        let id: UInt64
         let scope: SemanticObservationScope
         let afterCycle: UInt64
-        let continuation: OneShotContinuation<Void>
     }
 
     private var driver = StateDriver(initial: CyclePhase.idle(completed: 0, generation: 0), machine: CycleMachine())
-    private var waiters = WaiterStore<Waiter>()
+    private var nextWaiterID: UInt64 = 0
+    private var waiters = WaiterStore<WaiterKey, TimedOneShot<Void>>()
 
     private var phase: CyclePhase {
         driver.state
@@ -142,8 +143,8 @@ final class SemanticObservationCycles {
     }
 
     func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {
-        let id = waiters.reserveID()
-        let continuationBox = OneShotContinuation<Void>()
+        let key = reserveWaiterKey(scope: scope, afterCycle: cycle)
+        let oneShot = TimedOneShot<Void>()
 
         await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -151,41 +152,41 @@ final class SemanticObservationCycles {
                     continuation.resume()
                     return
                 }
-                guard continuationBox.register(continuation) else {
+                guard oneShot.register(continuation) else {
                     continuation.resume()
                     return
                 }
 
-                waiters.insert(Waiter(
-                    scope: scope,
-                    afterCycle: cycle,
-                    continuation: continuationBox
-                ), id: id)
+                waiters.insert(oneShot, for: key)
             }
         } onCancel: {
-            continuationBox.resume(returning: ())
+            oneShot.resolve(returning: ())
         }
-        completeWaiter(id)
+        completeWaiter(key)
     }
 
     func completeAllWaiters() {
         for waiter in waiters.removeAll() {
-            waiter.continuation.resume(returning: ())
+            waiter.resolve(returning: ())
         }
     }
 
     private func completeWaiters(scope: SemanticObservationScope) {
-        let completed = waiters.removeAll { waiter in
-            scope.canFulfill(waiter.scope) && phase.baseline > waiter.afterCycle
+        let completed = waiters.removeAll { key in
+            scope.canFulfill(key.scope) && phase.baseline > key.afterCycle
         }
-        for waiter in completed {
-            waiter.continuation.resume(returning: ())
+        for (_, waiter) in completed {
+            waiter.resolve(returning: ())
         }
     }
 
-    private func completeWaiter(_ id: UInt64) {
-        guard let waiter = waiters.remove(id: id) else { return }
-        waiter.continuation.resume(returning: ())
+    private func completeWaiter(_ key: WaiterKey) {
+        waiters.resolve(key, returning: ())
+    }
+
+    private func reserveWaiterKey(scope: SemanticObservationScope, afterCycle: UInt64) -> WaiterKey {
+        defer { nextWaiterID &+= 1 }
+        return WaiterKey(id: nextWaiterID, scope: scope, afterCycle: afterCycle)
     }
 }
 

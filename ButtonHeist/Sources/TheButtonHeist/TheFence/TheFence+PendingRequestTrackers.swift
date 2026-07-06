@@ -54,8 +54,6 @@ extension TheFence {
             return .connectionFailure(ConnectionFailure(
                 message: message,
                 failureCode: details.code,
-                phase: details.phase,
-                retryable: details.retryable,
                 hint: details.hint
             ))
         }
@@ -133,21 +131,18 @@ extension TheFence {
     fileprivate struct PendingRequest: Sendable {
         let owner: UUID
         let expectedKind: PendingResponseKind
-        let response: OneShotContinuation<Result<PendingResponsePayload, Error>>
-        let timeoutTask: Task<Void, Never>
+        let response: TimedOneShot<Result<PendingResponsePayload, Error>>
 
         func resume(_ result: Result<PendingResponsePayload, Error>, requestId: String) {
-            timeoutTask.cancel()
-
             switch result {
             case .success(let payload) where payload.kind != expectedKind:
-                response.resume(returning: .failure(PendingResponseKind.responseTypeMismatchError(
+                response.resolve(returning: .failure(PendingResponseKind.responseTypeMismatchError(
                     expected: expectedKind,
                     actual: payload.kind,
                     requestId: requestId
                 )))
             default:
-                response.resume(returning: result)
+                response.resolve(returning: result)
             }
         }
     }
@@ -254,22 +249,19 @@ extension TheFence {
                         return
                     }
 
-                    let response = OneShotContinuation<Result<PendingResponsePayload, Error>>()
+                    let response = TimedOneShot<Result<PendingResponsePayload, Error>>()
                     precondition(response.register(continuation), "New pending request response was resumed before registration")
-
-                    let timeoutTask = Task {
-                        guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
-                        if let request = self.removePendingRequest(requestId: requestId, owner: owner) {
-                            request.resume(.failure(FenceError.actionTimeout), requestId: requestId)
-                        }
-                    }
 
                     pending[requestId] = PendingRequest(
                         owner: owner,
                         expectedKind: expectation.kind,
-                        response: response,
-                        timeoutTask: timeoutTask
+                        response: response
                     )
+                    response.armTimeout(after: .seconds(timeout)) { [weak self] in
+                        if let request = await self?.removePendingRequest(requestId: requestId, owner: owner) {
+                            request.resume(.failure(FenceError.actionTimeout), requestId: requestId)
+                        }
+                    }
                     afterRegister?()
                 }
                 return try expectation.decode(result, requestId: requestId).get()
