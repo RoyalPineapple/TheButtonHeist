@@ -54,15 +54,18 @@ import ThePlans
     public let key: String
     let schema: FenceParameterSchema
     public let required: Bool
+    let validation: FenceParameterValidation
 
     init(
         key: String,
         schema: FenceParameterSchema,
-        required: Bool
+        required: Bool,
+        validation: FenceParameterValidation = .schema
     ) {
         self.key = key
         self.schema = schema
         self.required = required
+        self.validation = validation
     }
 
     public var type: ParamType {
@@ -144,6 +147,11 @@ import ThePlans
         return object.additionalProperties ?? false
     }
 
+}
+
+enum FenceParameterValidation: Sendable, Equatable {
+    case schema
+    case customPayload
 }
 
 indirect enum FenceParameterSchema: Sendable, Equatable {
@@ -690,12 +698,14 @@ func param(
 
 func objectParam(
     _ key: FenceParameterKey,
-    required: Bool = false
+    required: Bool = false,
+    validation: FenceParameterValidation = .schema
 ) -> FenceParameterSpec {
     FenceParameterSpec(
         key: key.rawValue,
         schema: .object(),
-        required: required
+        required: required,
+        validation: validation
     )
 }
 
@@ -703,12 +713,14 @@ func objectParam(
     _ key: FenceParameterKey,
     required: Bool = false,
     properties: [FenceParameterSpec],
-    additionalProperties: Bool = false
+    additionalProperties: Bool = false,
+    validation: FenceParameterValidation = .schema
 ) -> FenceParameterSpec {
     FenceParameterSpec(
         key: key.rawValue,
         schema: .object(properties: properties, additionalProperties: additionalProperties),
-        required: required
+        required: required,
+        validation: validation
     )
 }
 
@@ -748,6 +760,12 @@ func stringArrayParam(
 
 private func jsonSchemaNumber(_ value: Double) -> HeistValue {
     value.rounded(.towardZero) == value ? .int(Int(value)) : .double(value)
+}
+
+extension FenceParameterSpec {
+    var usesCustomPayloadValidation: Bool {
+        validation == .customPayload
+    }
 }
 
 @_spi(ButtonHeistTooling) public enum MCPExposure: Sendable, Equatable {
@@ -829,9 +847,9 @@ enum FenceParameterBlocks: Sendable {
     static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
-        objectParam(.target, properties: inlineElementTargetFields),
+        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
     ]
-    static let gestureElement = objectParam(.element, properties: inlineElementTargetFields)
+    static let gestureElement = objectParam(.element, properties: inlineElementTargetFields, validation: .customPayload)
     static let gestureUnitPoint = objectParam(.unitPoint, properties: unitPoint)
     static let gesturePoint = objectParam(.point, properties: screenPoint)
 
@@ -926,7 +944,7 @@ enum FenceParameterBlocks: Sendable {
     static let interfaceSubtree: FenceParameterSpec = objectParam(
         .subtree,
         properties: [
-            objectParam(.element, properties: subtreeElementProperties),
+            objectParam(.element, properties: subtreeElementProperties, validation: .customPayload),
             subtreeContainer,
             param(.ordinal, .integer, minimum: 0),
         ]
@@ -943,20 +961,20 @@ enum FenceParameterBlocks: Sendable {
     /// per-type required-field rules.
     private static let stateProperties: [FenceParameterSpec] = [
         param(.type, .string, enumValues: ["exists", "missing", "all"]),
-        objectParam(.element, properties: matcherFields),
-        objectParam(.target, properties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields, validation: .customPayload),
+        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
         param(.targetRef, .string),
         arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
         param(.type, .string, enumValues: ["exists", "missing", "all", "appeared", "disappeared", "updated"]),
-        objectParam(.element, properties: matcherFields),
-        objectParam(.target, properties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields, validation: .customPayload),
+        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
         param(.targetRef, .string),
         FenceParameters.elementProperty.spec,
-        objectParam(.before, properties: matcherFields),
-        objectParam(.after, properties: matcherFields),
+        objectParam(.before, properties: matcherFields, validation: .customPayload),
+        objectParam(.after, properties: matcherFields, validation: .customPayload),
         arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
@@ -978,12 +996,12 @@ enum FenceParameterBlocks: Sendable {
     /// carry `screen` state assertions or `elements` delta assertions.
     private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
         predicateType,
-        objectParam(.element, properties: matcherFields),
-        objectParam(.target, properties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields, validation: .customPayload),
+        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
         param(.targetRef, .string),
         FenceParameters.elementProperty.spec,
-        objectParam(.before, properties: matcherFields),
-        objectParam(.after, properties: matcherFields),
+        objectParam(.before, properties: matcherFields, validation: .customPayload),
+        objectParam(.after, properties: matcherFields, validation: .customPayload),
         stringMatchParam(.match),
         arrayParam(
             .states,
@@ -997,12 +1015,14 @@ enum FenceParameterBlocks: Sendable {
 
     static let expect: FenceParameterSpec = objectParam(
         .expect,
-        properties: accessibilityPredicateProperties
+        properties: accessibilityPredicateProperties,
+        validation: .customPayload
     )
 
     static let predicate: FenceParameterSpec = objectParam(
         .predicate, required: true,
-        properties: accessibilityPredicateProperties
+        properties: accessibilityPredicateProperties,
+        validation: .customPayload
     )
 
     static let expectationTimeout = FenceParameters.timeout.spec
@@ -1031,7 +1051,8 @@ enum FenceParameterBlocks: Sendable {
         return FenceParameterSpec(
             key: key.rawValue,
             schema: .scalar(.stringMatch(modeValues: modeValues, description: description)),
-            required: false
+            required: false,
+            validation: .customPayload
         )
     }
 
