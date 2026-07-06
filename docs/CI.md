@@ -9,6 +9,29 @@ the `buttonheist` CLI/MCP build must be the same release. The wire handshake
 compares versions for exact equality and rejects mismatches, so pin the CLI to
 the release your app embeds rather than installing "latest" in CI.
 
+## Receipt artifact contract
+
+CI receipt capture uses the repository's existing wrapper, collector, and
+manifest scripts. The contract is the script flow and the raw receipt files it
+uploads, not a new evidence format:
+
+- `scripts/run-with-heist-receipts.sh` wraps a test or replay command, sets
+  `BUTTONHEIST_RECEIPTS_DIR` and `BUTTONHEIST_RECEIPTS_MODE`, preserves the
+  wrapped command's exit status, and supports `--ios-sandbox` for
+  simulator-hosted test processes that must write receipts inside their own
+  container.
+- `scripts/collect-ios-heist-receipts.sh` copies `*.json` and `*.json.gz`
+  receipts from simulator `buttonheist-receipts` directories into the host
+  artifact directory. It also writes `collection-diagnostics.txt`, and missing
+  receipts are diagnostics rather than collection-script failures.
+- `scripts/write-ci-heist-receipt-manifest.sh` writes `manifest.txt` and
+  `receipt-files.txt` into the artifact directory so downloaded CI artifacts
+  are readable without custom tooling.
+
+Upload the whole receipt directory after the manifest step. Consumers should
+look for `manifest.txt`, then inspect the raw `.json` or `.json.gz` receipts
+listed in `receipt-files.txt`.
+
 ## Topology 1: app-hosted tests (recommended)
 
 Heists embed directly in XCTest or Swift Testing through `ButtonHeistTesting`
@@ -49,6 +72,32 @@ runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
 
 If no URL is supplied, receipts are written under the process temporary
 directory at `buttonheist-receipts/`.
+
+In CI, prefer the receipt wrapper so branch policy controls whether receipts
+are captured for failures only or for both failing and passing runs:
+
+```bash
+scripts/run-with-heist-receipts.sh \
+  --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+  --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+  -- xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests
+
+scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" macos-tests
+```
+
+iOS simulator-hosted test bundles write inside the app/test process sandbox.
+Use the wrapper's `--ios-sandbox` sentinel for the test run, then collect and
+manifest receipts from the simulator:
+
+```bash
+scripts/run-with-heist-receipts.sh \
+  --ios-sandbox \
+  --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+  -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests
+
+scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
+```
 
 ## Topology 2: external driver
 
@@ -123,4 +172,4 @@ Artifact resolution options and diagnostics are covered in
 | Heists are regression tests for one app | App-hosted — failures land in the suite that owns the screen |
 | Flows stored as `.heist` artifacts, replayed across builds | External driver |
 | An agent explores or authors in CI | External driver |
-| System dialogs or other-process surfaces in the flow | Pair with an out-of-process shell; see [Scope and limits](SCOPE-AND-LIMITS.md) |
+| System dialogs or other-process surfaces in the flow | Pair with an out-of-process shell such as XCUITest; Button Heist still asserts only app-owned surfaces. See [Scope and limits](SCOPE-AND-LIMITS.md) |

@@ -33,6 +33,13 @@ cross it, pair the tools: The Button Heist drives and audits the in-app
 interface; an out-of-process shell such as XCUITest handles system dialogs and
 other-process surfaces around it.
 
+The handoff should be explicit in tests. XCUITest should tap SpringBoard or
+other system UI, then Button Heist should assert the app-owned accessibility
+contract once the app is back on an in-process screen. Do not send Button Heist
+commands while a SpringBoard alert is visible; that surface is outside the app
+tree by design. See the paired example in
+[Adoption examples](../examples/adoption-examples.md#pairing-with-xcuitest-for-system-dialogs).
+
 ## What "settled" means
 
 Evidence is captured against a settled interface, and "settled" has an exact
