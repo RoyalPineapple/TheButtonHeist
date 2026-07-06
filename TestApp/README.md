@@ -52,15 +52,17 @@ runtime behavior and the diagnostics:
 | `/async-reveal` | Notification-woken and silent async destination reveal |
 | `/offscreen-checkout` | Offscreen semantic activation without manual pre-scroll |
 | `/duplicate-labels` | Predicate disambiguation by value, actions, and custom content |
-| `/dynamic-cells` | Semantic identity survives reorder and state mutation |
+| `/dynamic-cells` | Semantic identity survives 50+ row offscreen insert/delete/reorder/rename churn and stale semantic diagnostics |
 | `/text-field-fallback` | Tap fallback focuses a field whose accessibility activation returns false |
 | `/stale-live-object` | Action inflation re-resolves the current element after UIKit replacement |
 | `/modal-obstruction` | Modal action surfaces block background action search |
 | `/nested-scroll` | Deep targets inside nested scroll containers remain reachable |
 
 `.github/workflows/adversarial-nightly.yml` repeats the passing routes and
-samples the failing diagnostics on a schedule. PR CI keeps the normal one-pass
-dogfood coverage.
+samples the failing diagnostics on a schedule. The nightly report records both
+scenario wall-clock time and receipt-derived timing buckets, including
+unexpected hits against one-second reveal and geometry ceilings. PR CI keeps the
+normal one-pass dogfood coverage.
 
 ## Building and Running
 

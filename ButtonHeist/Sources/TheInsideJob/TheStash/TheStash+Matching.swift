@@ -147,6 +147,13 @@ extension TheStash {
         return matches
     }
 
+    /// All matching screen elements in traversal order. Use when diagnostics
+    /// need the exact match-set size rather than an early-exit prefix.
+    func matchScreenElements(_ predicate: ElementPredicate, in screen: Screen) -> [ScreenElement] {
+        guard predicate.hasPredicates else { return [] }
+        return selectElements(in: screen).filter { $0.matches(predicate) }
+    }
+
 }
 
 private extension Screen.ScreenElement {

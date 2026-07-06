@@ -397,14 +397,56 @@ extension TheBrains {
         _ receipt: HeistWaitReceipt,
         outcome: HeistPredicateEvidenceOutcome
     ) -> HeistWaitEvidence {
-        HeistWaitEvidence(
-            outcome: outcome,
-            actionResult: receipt.actionResult,
-            expectation: receipt.expectation,
-            baselineSummary: nil,
-            finalSummary: receipt.expectation.actual,
-            warning: receipt.warning
-        )
+        let finalSummary = receipt.expectation.actual
+
+        func matchedCheck() -> HeistWaitEvidence.MatchedCheck {
+            guard let expectation = MetExpectationResult(receipt.expectation) else {
+                preconditionFailure("Matched wait evidence requires a met expectation")
+            }
+            guard let check = HeistWaitEvidence.MatchedCheck(
+                actionResult: receipt.actionResult,
+                expectation: expectation
+            ) else {
+                preconditionFailure("Matched wait evidence requires a successful action result")
+            }
+            return check
+        }
+
+        func unmatchedCheck(_ description: String) -> HeistWaitEvidence.UnmatchedCheck {
+            guard let check = HeistWaitEvidence.UnmatchedCheck(
+                actionResult: receipt.actionResult,
+                expectation: receipt.expectation
+            ) else {
+                preconditionFailure("\(description) wait evidence requires a failed action result or unmet expectation")
+            }
+            return check
+        }
+
+        switch outcome {
+        case .matched:
+            return .matched(
+                matchedCheck(),
+                baselineSummary: nil,
+                finalSummary: finalSummary,
+                warning: receipt.warning
+            )
+        case .handledElse:
+            return .handledElse(
+                unmatchedCheck("Handled-else"),
+                baselineSummary: nil,
+                finalSummary: finalSummary,
+                warning: receipt.warning
+            )
+        case .failed:
+            return .failed(
+                unmatchedCheck("Failed"),
+                baselineSummary: nil,
+                finalSummary: finalSummary,
+                warning: receipt.warning
+            )
+        case .continued:
+            preconditionFailure("Continued outcome is only valid for repeat_until evidence")
+        }
     }
 
     private func actionCommandResolution(

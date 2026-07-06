@@ -39,6 +39,7 @@ INTENTIONAL_BREAKAGES=(
     "var HeistActionEvidence.ResultEvidence.reportedResult has been removed"
     "var HeistActionEvidence.ResultEvidence.traceResult has been removed"
     "var HeistActionEvidence.ResultEvidence.expectation has been removed"
+    "constructor HeistWaitEvidence.init(outcome:actionResult:expectation:baselineSummary:finalSummary:warning:) has been removed"
     "typealias ElementMatches has been removed"
     "struct FailureCode has removed conformance to RawRepresentable"
     "enumelement KnownFailureCode.tlsCertificateMismatch has been removed"

@@ -10,6 +10,59 @@ import TheScore
 /// Orchestrates client registration, admission, delivery, and disconnects.
 private let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
+private struct SessionReleaseTimer {
+    private enum State {
+        case idle(generation: UInt64)
+        case scheduled(task: Task<Void, Never>, generation: UInt64)
+    }
+
+    private var state: State = .idle(generation: 0)
+
+    var task: Task<Void, Never>? {
+        switch state {
+        case .idle:
+            return nil
+        case .scheduled(let task, _):
+            return task
+        }
+    }
+
+    mutating func replace(
+        timeout: TimeInterval,
+        onExpired: @escaping @Sendable (UInt64) async -> Void
+    ) {
+        cancel()
+        let scheduledGeneration = generation
+        let task = Task { [timeout, scheduledGeneration] in
+            guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
+            guard !Task.isCancelled else { return }
+            await onExpired(scheduledGeneration)
+        }
+        state = .scheduled(task: task, generation: scheduledGeneration)
+    }
+
+    mutating func cancel() {
+        task?.cancel()
+        state = .idle(generation: generation &+ 1)
+    }
+
+    func isCurrentScheduledGeneration(_ generation: UInt64) -> Bool {
+        switch state {
+        case .idle:
+            return false
+        case .scheduled(_, let scheduledGeneration):
+            return scheduledGeneration == generation
+        }
+    }
+
+    private var generation: UInt64 {
+        switch state {
+        case .idle(let generation), .scheduled(_, let generation):
+            return generation
+        }
+    }
+}
+
 actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
@@ -21,8 +74,7 @@ actor TheMuscle {
     private var admission: TheMuscleAdmission
     private var session: TheMuscleSession
     private var delivery: ClientDelivery = .unwired
-    private var sessionReleaseTimer: Task<Void, Never>?
-    private var sessionReleaseTimerGeneration: UInt64 = 0
+    private var sessionReleaseTimer = SessionReleaseTimer()
 
     private let delayedDisconnects = MuscleDelayedDisconnects(
         gracePeriod: TheMuscle.disconnectGracePeriod
@@ -63,8 +115,13 @@ actor TheMuscle {
 
     /// Test seam: wait for the currently scheduled session release timer.
     func awaitSessionReleaseTimerForTesting() async {
-        let timer = sessionReleaseTimer
+        let timer = sessionReleaseTimer.task
         await timer?.value
+    }
+
+    /// Test seam: whether a session release timer is currently scheduled.
+    var hasSessionReleaseTimerForTesting: Bool {
+        sessionReleaseTimer.task != nil
     }
 
     // MARK: - Session Accessors
@@ -288,7 +345,7 @@ actor TheMuscle {
     // MARK: - Session Release
 
     private func sessionReleaseTimerFired(generation: UInt64) async {
-        guard generation == sessionReleaseTimerGeneration else { return }
+        guard sessionReleaseTimer.isCurrentScheduledGeneration(generation) else { return }
         await releaseSession()
     }
 
@@ -323,19 +380,13 @@ actor TheMuscle {
     }
 
     private func replaceSessionReleaseTimer(timeout: TimeInterval) {
-        cancelSessionReleaseTimer()
-        let generation = sessionReleaseTimerGeneration
-        sessionReleaseTimer = Task { [weak self, timeout, generation] in
-            guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
-            guard !Task.isCancelled else { return }
+        sessionReleaseTimer.replace(timeout: timeout) { [weak self] generation in
             await self?.sessionReleaseTimerFired(generation: generation)
         }
     }
 
     private func cancelSessionReleaseTimer() {
-        sessionReleaseTimer?.cancel()
-        sessionReleaseTimer = nil
-        sessionReleaseTimerGeneration &+= 1
+        sessionReleaseTimer.cancel()
     }
 
     // MARK: - Helpers

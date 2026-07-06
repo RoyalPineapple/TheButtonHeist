@@ -303,7 +303,7 @@ private extension TheStash {
             }
             return .resolved(matches[ordinal])
         }
-        let matches = matchScreenElements(predicate, limit: 2, in: screen)
+        let matches = matchScreenElements(predicate, in: screen)
         switch matches.count {
         case 0:
             return .notFound(TargetNotFoundFacts(
@@ -317,13 +317,12 @@ private extension TheStash {
         case 1:
             return .resolved(matches[0])
         default:
-            let capped = matchScreenElements(predicate, limit: 11, in: screen)
             return .ambiguous(TargetAmbiguityFacts(
                 predicate: predicate,
-                candidates: capped.prefix(10).map {
+                candidates: matches.prefix(10).map {
                     TargetCandidateFacts(screenElement: $0, visibleHeistIds: screen.visibleIds)
                 },
-                matchedCount: capped.count,
+                matchedCount: matches.count,
                 resolutionScope: resolutionScope
             ))
         }

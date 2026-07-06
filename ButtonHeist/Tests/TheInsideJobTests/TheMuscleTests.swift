@@ -673,6 +673,8 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(connectionsDuringDrain.isEmpty, "No connections during draining")
         let driverIdDuringDrain = await muscle.activeSessionDriverId
         XCTAssertNotNil(driverIdDuringDrain, "Driver should still own session while draining")
+        let hasReleaseTimerDuringDrain = await muscle.hasSessionReleaseTimerForTesting
+        XCTAssertTrue(hasReleaseTimerDuringDrain)
 
         // Same driver reconnects — should rejoin the draining session, not claim a new one.
         await installCallbacks()
@@ -682,6 +684,8 @@ final class TheMuscleTests: XCTestCase {
         let driverIdAfter = await muscle.activeSessionDriverId
         XCTAssertTrue(connectionsAfter.contains(2), "New client should be in session")
         XCTAssertEqual(driverIdAfter, driverIdDuringDrain)
+        let hasReleaseTimerAfterRejoin = await muscle.hasSessionReleaseTimerForTesting
+        XCTAssertFalse(hasReleaseTimerAfterRejoin)
     }
 
     func testDifferentDriverBlockedDuringGracePeriod() async throws {

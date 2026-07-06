@@ -548,6 +548,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
         let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
+        guard let handledElseCheck = HeistWaitEvidence.UnmatchedCheck(
+            actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
+            expectation: expectation
+        ) else {
+            preconditionFailure("Handled-else wait fixture requires unmatched wait evidence")
+        }
         let result = HeistExecutionResult(
             steps: [
                 .passed(
@@ -555,10 +561,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     kind: .wait,
                     durationMs: 2000,
                     intent: .wait(predicate: predicate.description, timeout: 2),
-                    evidence: .wait(HeistWaitEvidence(
-                        outcome: .handledElse,
-                        actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
-                        expectation: expectation
+                    evidence: .wait(.handledElse(
+                        handledElseCheck
                     )),
                     children: [
                         warnStep(path: "$.body[0].wait.else_body[0]", message: "No result"),
@@ -1190,6 +1194,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let predicate = evidenceProjectionPredicate()
         let expectation = ExpectationResult(met: true, predicate: predicate, actual: "Ready")
+        let actionResult = ActionResult.success(method: .wait)
+        guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
+            actionResult: actionResult,
+            expectation: MetExpectationResult(predicate: expectation.predicate, actual: expectation.actual)
+        ) else {
+            preconditionFailure("Matched invocation fixture requires successful wait evidence")
+        }
         return (
             name: "invokeInvocation",
             step: .passed(
@@ -1202,12 +1213,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     name: "LibraryScreen.addToCart",
                     argument: "Milk",
                     expectation: .init(
-                        actionResult: ActionResult.success(method: .wait),
+                        actionResult: actionResult,
                         expectation: expectation,
-                        waitEvidence: HeistWaitEvidence(
-                            outcome: .matched,
-                            actionResult: ActionResult.success(method: .wait),
-                            expectation: expectation,
+                        waitEvidence: .matched(
+                            matchedCheck,
                             baselineSummary: "before addToCart",
                             finalSummary: "Ready"
                         )
@@ -1323,12 +1332,34 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         warning: HeistPredicateWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.wait(HeistWaitEvidence(
-            outcome: failure == nil ? .matched : .failed,
-            actionResult: actionResult,
-            expectation: expectation,
-            warning: warning
-        ))
+        let waitEvidence: HeistWaitEvidence
+        if failure == nil {
+            guard let metExpectation = MetExpectationResult(expectation) else {
+                preconditionFailure("Passed wait test fixture requires a met expectation")
+            }
+            guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
+                actionResult: actionResult,
+                expectation: metExpectation
+            ) else {
+                preconditionFailure("Passed wait test fixture requires a successful action result")
+            }
+            waitEvidence = .matched(
+                matchedCheck,
+                warning: warning
+            )
+        } else {
+            guard let unmatchedCheck = HeistWaitEvidence.UnmatchedCheck(
+                actionResult: actionResult,
+                expectation: expectation
+            ) else {
+                preconditionFailure("Failed wait test fixture requires unmatched wait evidence")
+            }
+            waitEvidence = .failed(
+                unmatchedCheck,
+                warning: warning
+            )
+        }
+        let evidence = HeistStepEvidence.wait(waitEvidence)
         if let failure {
             return .failed(
                 path: path,
