@@ -220,7 +220,8 @@ Runtime admission enforces structural bounds so a durable plan stays a bounded
 recording. Current limits: 500 total steps, nesting depth 16, 100 values per
 string `ForEach`, a maximum `limit` of 100 per element `ForEach`, and 250
 definitions per plan. Plans that exceed a bound are rejected at admission with
-a diagnostic, not truncated.
+a diagnostic, not truncated. Collection `ForEach` loops MUST NOT contain another
+collection `ForEach` loop, directly or through expanded `RunHeist` bodies.
 
 ## Durable DSL examples
 

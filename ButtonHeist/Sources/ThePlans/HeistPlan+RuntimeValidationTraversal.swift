@@ -16,6 +16,10 @@ struct ResolvedStringLoopPayloadValidationContext {
 /// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
 /// RepeatUntil/WaitFor - runtime floors.
 struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
+    private static let nestedCollectionLoopContract = "collection loops must not be nested"
+    private static let nestedCollectionLoopCorrection =
+        "Flatten this heist so ForEach bodies contain only non-collection steps."
+
     let limits: HeistPlanRuntimeSafetyLimits
 
     var failures: [HeistPlanRuntimeSafetyFailure] = []
@@ -102,10 +106,12 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
+        validateCollectionLoopNesting(kind: "for_each_element", path: context.path)
         validateForEachElement(step, path: context.path)
     }
 
     mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {
+        validateCollectionLoopNesting(kind: "for_each_string", path: context.path)
         validateForEachString(
             step,
             path: context.path,
@@ -371,6 +377,19 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
     }
 
+    mutating func validateCollectionLoopNesting(
+        kind: String,
+        path: HeistTraversalPath
+    ) {
+        guard path.isInsideCollectionLoopBody else { return }
+        fail(
+            path: path.description,
+            contract: Self.nestedCollectionLoopContract,
+            observed: "\(kind) inside collection loop",
+            correction: Self.nestedCollectionLoopCorrection
+        )
+    }
+
     mutating func validateForEachElement(
         _ step: ForEachElementStep,
         path: HeistTraversalPath
@@ -480,5 +499,12 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             visitor: &validator
         )
         failures += validator.failures
+    }
+}
+
+private extension HeistTraversalPath {
+    var isInsideCollectionLoopBody: Bool {
+        description.contains(".\(HeistTraversalPathField.forEachElement.rawValue).body") ||
+            description.contains(".\(HeistTraversalPathField.forEachString.rawValue).body")
     }
 }
