@@ -361,7 +361,7 @@ private extension HeistPlan {
                 appendUnique("viewport", to: &tags)
             case .oneFingerTap, .longPress, .swipe, .drag:
                 appendUnique("gesture", to: &tags)
-            case .activate, .increment, .decrement, .performCustomAction, .rotor,
+            case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
                     .editAction, .setPasteboard, .resignFirstResponder:
                 appendUnique("semantic-action", to: &tags)
             case .takeScreenshot:

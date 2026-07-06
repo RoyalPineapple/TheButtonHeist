@@ -39,6 +39,10 @@ extension TheBrains {
             return await performInteraction(method: .customAction, observationScope: .discovery) {
                 await self.actions.executeCustomAction(target)
             }
+        case .dismiss:
+            return await performInteraction(method: .dismiss) { await self.actions.executeDismiss() }
+        case .magicTap:
+            return await performInteraction(method: .magicTap) { await self.actions.executeMagicTap() }
         case .rotor(let target):
             return await performRotor(target)
         case .editAction(let target):

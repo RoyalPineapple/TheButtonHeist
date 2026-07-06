@@ -254,6 +254,10 @@ extension HeistPlanSourceParser {
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSetPasteboardAction()))]
         case ["TakeScreenshot"]:
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTakeScreenshotAction()))]
+        case ["ScreenActions", "Dismiss"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissAction()))]
+        case ["ScreenActions", "MagicTap"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMagicTapAction()))]
         case ["Edit"]:
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseEditAction()))]
         case ["DismissKeyboard"]:

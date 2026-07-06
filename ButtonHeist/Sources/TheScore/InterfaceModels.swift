@@ -559,6 +559,15 @@ extension InterfaceDiscoveryOmittedContainer: Comparable {
     }
 }
 
+public enum ScreenAction: String, Codable, Equatable, Hashable, Sendable, CaseIterable, Comparable {
+    case dismiss
+    case magicTap
+
+    public static func < (lhs: ScreenAction, rhs: ScreenAction) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
 /// A snapshot of the current accessibility interface returned by the server.
 ///
 /// The wire shape carries the parser's full-fidelity `AccessibilityHierarchy`
@@ -569,6 +578,7 @@ public struct Interface: Codable, Equatable, Sendable {
     public let tree: [AccessibilityHierarchy]
     public let annotations: InterfaceAnnotations
     public let diagnostics: InterfaceDiagnostics?
+    public let screenActions: [ScreenAction]
     package let traceIdentities: InterfaceTraceIdentities
 
     /// Button Heist element projection in VoiceOver traversal order.
@@ -603,10 +613,27 @@ public struct Interface: Codable, Equatable, Sendable {
         annotations: InterfaceAnnotations = .empty,
         diagnostics: InterfaceDiagnostics? = nil
     ) {
+        self.init(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: []
+        )
+    }
+
+    public init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil,
+        screenActions: [ScreenAction] = []
+    ) {
         self.timestamp = timestamp
         self.tree = tree
         self.annotations = annotations
         self.diagnostics = diagnostics
+        self.screenActions = screenActions.sorted()
         self.traceIdentities = .empty
     }
 
@@ -617,10 +644,29 @@ public struct Interface: Codable, Equatable, Sendable {
         diagnostics: InterfaceDiagnostics? = nil,
         traceIdentities: InterfaceTraceIdentities
     ) {
+        self.init(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: [],
+            traceIdentities: traceIdentities
+        )
+    }
+
+    package init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil,
+        screenActions: [ScreenAction] = [],
+        traceIdentities: InterfaceTraceIdentities
+    ) {
         self.timestamp = timestamp
         self.tree = tree
         self.annotations = annotations
         self.diagnostics = diagnostics
+        self.screenActions = screenActions.sorted()
         self.traceIdentities = traceIdentities
     }
 
@@ -628,7 +674,8 @@ public struct Interface: Codable, Equatable, Sendable {
         lhs.timestamp == rhs.timestamp &&
             lhs.tree == rhs.tree &&
             lhs.annotations == rhs.annotations &&
-            lhs.diagnostics == rhs.diagnostics
+            lhs.diagnostics == rhs.diagnostics &&
+            lhs.screenActions == rhs.screenActions
     }
 
     public func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface {
@@ -637,6 +684,18 @@ public struct Interface: Codable, Equatable, Sendable {
             tree: tree,
             annotations: annotations,
             diagnostics: diagnostics,
+            screenActions: screenActions,
+            traceIdentities: traceIdentities
+        )
+    }
+
+    public func withScreenActions(_ screenActions: [ScreenAction]) -> Interface {
+        Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: screenActions,
             traceIdentities: traceIdentities
         )
     }

@@ -25,6 +25,7 @@ struct PublicInterface: Encodable {
     let timestamp: String
     let screenDescription: String
     let screenId: String?
+    let screenActions: [String]?
     let rendering: PublicInterfaceRendering
     let diagnostics: InterfaceDiagnostics?
     let navigation: PublicNavigation
@@ -48,6 +49,8 @@ struct PublicInterface: Encodable {
         self.timestamp = formatter.string(from: projection.timestamp)
         self.screenDescription = projection.screenDescription
         self.screenId = projection.screenId
+        let screenActions = projection.screenActions.map(\.rawValue)
+        self.screenActions = screenActions.isEmpty ? nil : screenActions
         self.diagnostics = projection.diagnostics
         self.navigation = PublicNavigation(projection: projection.navigation)
         self.tree = projection.tree.map { PublicTreeNode(projection: $0, detail: projection.detail) }
@@ -59,6 +62,8 @@ struct PublicInterface: Encodable {
         self.timestamp = formatter.string(from: projection.timestamp)
         self.screenDescription = projection.screenDescription
         self.screenId = projection.screenId
+        let screenActions = projection.screenActions.map(\.rawValue)
+        self.screenActions = screenActions.isEmpty ? nil : screenActions
         self.rendering = PublicInterfaceRendering(projection: projection.rendering)
         self.diagnostics = projection.diagnostics
         self.navigation = PublicNavigation(projection: projection.navigation)

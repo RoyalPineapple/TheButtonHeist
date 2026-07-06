@@ -658,6 +658,10 @@ private extension HeistActionCommand {
             return .activate
         case .rotor:
             return .rotor
+        case .dismiss:
+            return .perform
+        case .magicTap:
+            return .perform
         case .mechanicalTap:
             return .oneFingerTap
         case .mechanicalLongPress:

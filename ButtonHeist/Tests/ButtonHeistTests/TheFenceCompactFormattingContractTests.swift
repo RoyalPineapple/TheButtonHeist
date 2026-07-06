@@ -35,6 +35,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "drag: ok")
     }
 
+    func testScreenActionHandlerMessageRendersInCompactHumanAndJSON() throws {
+        let response = FenceResponse.action(
+            command: .perform,
+            result: makeTestActionResult(
+                method: .dismiss,
+                message: "Handler: UINavigationController"
+            )
+        )
+
+        XCTAssertEqual(response.compactFormatted(), "perform: ok\nHandler: UINavigationController")
+        XCTAssertEqual(response.humanFormatted(), "✓ perform  Handler: UINavigationController")
+
+        let json = try publicJSONProbe(response)
+        XCTAssertEqual(try json.string("message"), "Handler: UINavigationController")
+    }
+
     func testExplicitOneFingerTapKeepsMechanicalResultIdentity() {
         let result = makeTestActionResult(method: .syntheticTap)
         let output = FenceResponse.action(command: .oneFingerTap, result: result).compactFormatted()
@@ -1118,6 +1134,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         [1] "Messages" summaryElement
         [2] "Search" searchField
         """)
+    }
+
+    func testInterfaceRendersScreenActionsInCompactAndJSON() throws {
+        let interface = formattingFixtureInterface().withScreenActions([.dismiss, .magicTap])
+        let compact = FenceResponse.compactInterface(interface, detail: .summary)
+        let json = try publicInterfaceJSONProbe(PublicInterface(interface: interface, detail: .summary))
+
+        XCTAssertTrue(compact.hasPrefix("Actions: dismiss, magicTap\n4 elements"), compact)
+        XCTAssertEqual(try json.strings("screenActions"), ["dismiss", "magicTap"])
     }
 
     func testCompactInterfaceRendersHorizontalAndBothAxisScrollSummaries() {

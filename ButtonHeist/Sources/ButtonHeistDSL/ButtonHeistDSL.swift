@@ -46,6 +46,7 @@ public typealias SetPasteboard = ThePlans.SetPasteboard
 public typealias TakeScreenshot = ThePlans.TakeScreenshot
 public typealias Edit = ThePlans.Edit
 public typealias DismissKeyboard = ThePlans.DismissKeyboard
+public typealias ScreenActions = ThePlans.ScreenActions
 public typealias Mechanical = ThePlans.Mechanical
 
 public typealias EditAction = ThePlans.EditAction

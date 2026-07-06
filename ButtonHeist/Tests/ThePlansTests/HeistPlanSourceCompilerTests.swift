@@ -108,6 +108,25 @@ import Testing
     }
 }
 
+@Test func `screen action namespace compiles regular actions`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    ScreenActions.Dismiss()
+        .expect(.screenChanged)
+    ScreenActions.MagicTap()
+        .withoutExpectation("Magic tap toggles process-local playback state")
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .dismiss,
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+        .action(try ActionStep(
+            command: .magicTap,
+            expectationPolicy: .waived(try ActionExpectationWaiver("Magic tap toggles process-local playback state")))),
+    ])
+
+    #expect(plan == expected)
+}
+
 @Test func `inline plan source type text replacement and clear compile`() throws {
     let replacement = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("b", into: .identifier("Field"), replacingExisting: true)

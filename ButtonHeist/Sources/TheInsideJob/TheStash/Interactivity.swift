@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import ObjectiveC.runtime
 
 import TheScore
 
@@ -43,27 +42,7 @@ extension TheStash {
     }
 
     private static func overridesAccessibilityActivate(_ object: NSObject) -> Bool {
-        guard var currentClass = object_getClass(object) else { return false }
-        let selector = #selector(NSObject.accessibilityActivate)
-
-        while !isDefaultActivationBoundary(currentClass),
-              let superclass = class_getSuperclass(currentClass) {
-            if let currentMethod = class_getInstanceMethod(currentClass, selector),
-               let superclassMethod = class_getInstanceMethod(superclass, selector),
-               method_getImplementation(currentMethod) != method_getImplementation(superclassMethod) {
-                return true
-            }
-            currentClass = superclass
-        }
-        return false
-    }
-
-    private static func isDefaultActivationBoundary(_ type: AnyClass) -> Bool {
-        type == NSObject.self
-            || type == UIResponder.self
-            || type == UIView.self
-            || type == UIControl.self
-            || type == UIAccessibilityElement.self
+        AXMethodOverrides.object(object, overrides: #selector(NSObject.accessibilityActivate))
     }
 
     /// Check if an element is interactive based on its parsed accessibility data.

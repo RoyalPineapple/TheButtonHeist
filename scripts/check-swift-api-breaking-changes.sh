@@ -29,6 +29,16 @@ PUBLIC_PRODUCTS=(
     ButtonHeist
 )
 INTENTIONAL_BREAKAGES=(
+    "enumelement HeistActionCommandType.dismiss has been added as a new enum case"
+    "enumelement HeistActionCommandType.magicTap has been added as a new enum case"
+    "enumelement HeistActionCommand.dismiss has been added as a new enum case"
+    "enumelement HeistActionCommand.magicTap has been added as a new enum case"
+    "enumelement ActionMethod.dismiss has been added as a new enum case"
+    "enumelement ActionMethod.magicTap has been added as a new enum case"
+    "enumelement RuntimeActionMessage.dismiss has been added as a new enum case"
+    "enumelement RuntimeActionMessage.magicTap has been added as a new enum case"
+    "enumelement RuntimeActionType.dismiss has been added as a new enum case"
+    "enumelement RuntimeActionType.magicTap has been added as a new enum case"
     "struct ElementMatches has been removed"
     "constructor ForEach.init(_:parameter:content:) has been removed"
     "constructor ForEach.init(_:limit:parameter:_:) has been removed"

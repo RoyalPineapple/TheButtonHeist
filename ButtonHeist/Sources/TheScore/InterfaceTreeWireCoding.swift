@@ -8,6 +8,7 @@ extension Interface {
         case tree
         case annotations
         case diagnostics
+        case screenActions
     }
 
     public init(from decoder: Decoder) throws {
@@ -18,6 +19,7 @@ extension Interface {
             .map { $0.hierarchy }
         annotations = try container.decode(InterfaceAnnotations.self, forKey: .annotations)
         diagnostics = try container.decodeIfPresent(InterfaceDiagnostics.self, forKey: .diagnostics)
+        screenActions = try container.decodeIfPresent([ScreenAction].self, forKey: .screenActions) ?? []
         traceIdentities = .empty
     }
 
@@ -27,6 +29,9 @@ extension Interface {
         try container.encode(tree.map(InterfaceTreeWireNode.init), forKey: .tree)
         try container.encode(annotations, forKey: .annotations)
         try container.encodeIfPresent(diagnostics, forKey: .diagnostics)
+        if !screenActions.isEmpty {
+            try container.encode(screenActions, forKey: .screenActions)
+        }
     }
 }
 

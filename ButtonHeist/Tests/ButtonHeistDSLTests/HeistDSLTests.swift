@@ -427,6 +427,25 @@ func mechanicalNamespaceBuildsExplicitEscapeHatches() throws {
 }
 
 @Test
+func screenActionsNamespaceBuildsRegularActionContent() throws {
+    let heist = try HeistPlan {
+        ScreenActions.Dismiss()
+            .expect(.screenChanged)
+        ScreenActions.MagicTap()
+            .withoutExpectation("Magic tap toggles process-local playback state")
+    }
+
+    #expect(heist.body == [
+        .action(try ActionStep(
+            command: .dismiss,
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+        .action(try ActionStep(
+            command: .magicTap,
+            expectationPolicy: .waived(try ActionExpectationWaiver("Magic tap toggles process-local playback state")))),
+    ])
+}
+
+@Test
 func customActionAndRotorBuildSemanticActionSteps() throws {
     let heist = try HeistPlan {
         CustomAction("Archive", on: .label("Message"))

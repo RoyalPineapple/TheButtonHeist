@@ -3426,6 +3426,8 @@ final class TheFenceHandlerTests: XCTestCase {
             "pinch",
             "rotate",
             "two_finger_tap",
+            "dismiss",
+            "magic_tap",
         ]
 
         for commandName in removedCommands {

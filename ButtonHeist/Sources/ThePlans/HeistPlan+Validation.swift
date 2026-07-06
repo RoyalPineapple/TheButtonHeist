@@ -181,7 +181,7 @@ private extension HeistActionCommand {
             return .mechanical
         case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
             return .viewport
-        case .editAction, .setPasteboard, .dismissKeyboard:
+        case .dismiss, .magicTap, .editAction, .setPasteboard, .dismissKeyboard:
             return .ambient
         case .takeScreenshot:
             return .observation

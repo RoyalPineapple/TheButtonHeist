@@ -24,6 +24,12 @@ package enum RuntimeActionMessage: Sendable, Equatable {
     /// Move through a custom accessibility rotor.
     case rotor(RotorTarget)
 
+    /// Perform the screen-level accessibility escape action.
+    case dismiss
+
+    /// Perform the screen-level accessibility magic tap action.
+    case magicTap
+
     /// Tap at a point or element.
     case oneFingerTap(TapTarget)
 
@@ -66,6 +72,7 @@ package enum RuntimeActionMessage: Sendable, Equatable {
 
 package enum RuntimeActionType: String, Sendable, Equatable, CaseIterable {
     case activate, increment, decrement, performCustomAction, rotor
+    case dismiss, magicTap
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard
     case takeScreenshot
@@ -81,6 +88,8 @@ package extension RuntimeActionMessage {
         case .decrement: return .decrement
         case .performCustomAction: return .performCustomAction
         case .rotor: return .rotor
+        case .dismiss: return .dismiss
+        case .magicTap: return .magicTap
         case .oneFingerTap: return .oneFingerTap
         case .longPress: return .longPress
         case .swipe: return .swipe

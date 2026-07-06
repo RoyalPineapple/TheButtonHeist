@@ -49,6 +49,8 @@ struct CanonicalHeistSourceRoundTripTests {
             ))),
             .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
             .action(try ActionStep(command: .takeScreenshot)),
+            .action(try ActionStep(command: .dismiss)),
+            .action(try ActionStep(command: .magicTap)),
             .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
             .action(try ActionStep(command: .dismissKeyboard)),
             .action(try ActionStep(

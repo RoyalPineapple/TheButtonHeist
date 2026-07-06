@@ -76,7 +76,7 @@ extension HeistActionCommand {
             return [.scroll(target)]
         case .viewportScrollToEdge(let target):
             return target.selection.targetOccurrences
-        case .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
+        case .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return []
         }
     }
@@ -110,7 +110,7 @@ public extension HeistActionCommand {
         case .viewportScrollToEdge:
             return "scroll_to_edge is a viewport debug command, not a durable heist action"
         case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap, .mechanicalLongPress,
-             .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
+             .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return nil
         }
     }
