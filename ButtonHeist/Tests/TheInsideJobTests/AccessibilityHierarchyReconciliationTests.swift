@@ -428,10 +428,10 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
     }
 
     func testSafeIntReturnsZeroForNonFinite() {
-        XCTAssertEqual(safeInt(.nan), 0)
-        XCTAssertEqual(safeInt(.infinity), 0)
-        XCTAssertEqual(safeInt(-.infinity), 0)
-        XCTAssertEqual(safeInt(.signalingNaN), 0)
+        XCTAssertEqual(safeInt(CGFloat.nan), 0)
+        XCTAssertEqual(safeInt(CGFloat.infinity), 0)
+        XCTAssertEqual(safeInt(-CGFloat.infinity), 0)
+        XCTAssertEqual(safeInt(CGFloat.signalingNaN), 0)
     }
 
     func testSafeIntPassesThroughNormalValues() {
