@@ -167,6 +167,8 @@ public struct ActionResultPayload: Sendable, Equatable {
              (.takeScreenshot, _),
              (.rotor, _),
              (.heistPlan, _),
+             (.dismiss, _),
+             (.magicTap, _),
              (.scroll, _),
              (.scrollToVisible, _),
              (.scrollToEdge, _),
