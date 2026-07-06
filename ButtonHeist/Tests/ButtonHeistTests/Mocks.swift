@@ -290,7 +290,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 path: path,
                 kind: .invoke,
                 durationMs: heistStepDurationMs,
-                intent: .invoke(path: invoke.path.joined(separator: "."), argument: nil),
+                intent: .invoke(
+                    path: HeistInvocationPath.preconditionValidated(components: invoke.path),
+                    argument: invoke.argument
+                ),
                 evidence: .invocation(.invocation(invoke, name: invoke.path.joined(separator: ".")))
             )
         case .warn(let warn):
@@ -379,7 +382,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 path: path,
                 kind: .wait,
                 durationMs: heistStepDurationMs,
-                intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+                intent: .wait(predicate: wait.predicate, timeout: wait.timeout),
                 failure: HeistFailureDetail(
                     category: .wait,
                     contract: "wait predicate resolves before evaluation",
@@ -428,7 +431,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 path: path,
                 kind: .wait,
                 durationMs: heistStepDurationMs,
-                intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+                intent: .wait(predicate: wait.predicate, timeout: wait.timeout),
                 evidence: evidence,
                 failure: failure
             )
@@ -437,7 +440,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             path: path,
             kind: .wait,
             durationMs: heistStepDurationMs,
-            intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+            intent: .wait(predicate: wait.predicate, timeout: wait.timeout),
             evidence: evidence
         )
     }
@@ -471,7 +474,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             durationMs: heistStepDurationMs,
             intent: .forEachElement(
                 parameter: forEach.parameter,
-                matching: forEach.matching.description,
+                matching: forEach.matching,
                 limit: forEach.limit
             ),
             evidence: .forEachElement(HeistForEachElementEvidence(
@@ -513,7 +516,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             path: path,
             kind: .repeatUntil,
             durationMs: heistStepDurationMs,
-            intent: .repeatUntil(predicate: predicate.description, timeout: repeatUntil.timeout),
+            intent: .repeatUntil(predicate: .predicate(predicate), timeout: repeatUntil.timeout),
             evidence: .repeatUntil(HeistRepeatUntilEvidence.predicateMet(
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
@@ -561,10 +564,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     }
 
     private func mockActionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
-        .action(
-            command: command.wireType.rawValue,
-            target: command.reportTarget.map(String.init(describing:))
-        )
+        .action(command: command)
     }
 
     private func mockActionFailure(

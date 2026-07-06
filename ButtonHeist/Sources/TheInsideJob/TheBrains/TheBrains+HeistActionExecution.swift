@@ -578,14 +578,11 @@ extension TheBrains {
     }
 
     private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
-        .action(
-            command: command.wireType.rawValue,
-            target: command.reportTarget.map(String.init(describing:))
-        )
+        .action(command: command)
     }
 
     private func waitIntent(_ wait: WaitStep) -> HeistStepIntent {
-        .wait(predicate: wait.predicate.description, timeout: wait.timeout)
+        .wait(predicate: wait.predicate, timeout: wait.timeout)
     }
 
     private func actionDispatchFailure(

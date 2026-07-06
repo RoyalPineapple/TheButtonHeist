@@ -7,26 +7,28 @@ enum SemanticObservationSettleCadence {
 
     @MainActor
     static func settleVisibleObservationForCurrentDemand(
-        hasActiveDemand: Bool,
+        demandState: SemanticObservationDemandState,
         stash: TheStash,
         tripwire: TheTripwire,
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int
     ) async -> SettleSession.Outcome {
-        if hasActiveDemand {
+        switch demandState {
+        case .active:
             return await settleVisibleObservationAtActiveCadence(
                 stash: stash,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: timeoutMs
             )
+        case .idle:
+            return await settleVisibleObservationAtIdleCadence(
+                stash: stash,
+                tripwire: tripwire,
+                baselineTripwireSignal: baselineTripwireSignal,
+                timeoutMs: timeoutMs
+            )
         }
-        return await settleVisibleObservationAtIdleCadence(
-            stash: stash,
-            tripwire: tripwire,
-            baselineTripwireSignal: baselineTripwireSignal,
-            timeoutMs: timeoutMs
-        )
     }
 
     @MainActor

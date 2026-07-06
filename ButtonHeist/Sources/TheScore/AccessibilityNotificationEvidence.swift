@@ -102,14 +102,26 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
         let type = try container.decode(PayloadType.self, forKey: .type)
         switch type {
         case .none:
+            try Self.rejectIfPresent(.value, in: container, type: type)
+            try Self.rejectIfPresent(.element, in: container, type: type)
+            try Self.rejectIfPresent(.object, in: container, type: type)
             self = .none
         case .string:
+            try Self.rejectIfPresent(.element, in: container, type: type)
+            try Self.rejectIfPresent(.object, in: container, type: type)
             self = .string(try container.decode(String.self, forKey: .value))
         case .element:
+            try Self.rejectIfPresent(.value, in: container, type: type)
+            try Self.rejectIfPresent(.object, in: container, type: type)
             self = .element(try container.decode(AccessibilityNotificationElementReference.self, forKey: .element))
         case .unresolvedObject:
+            try Self.rejectIfPresent(.value, in: container, type: type)
+            try Self.rejectIfPresent(.element, in: container, type: type)
             self = .unresolvedObject(try container.decode(AccessibilityNotificationObjectPayload.self, forKey: .object))
         case .unresolvedElement:
+            try Self.rejectIfPresent(.value, in: container, type: type)
+            try Self.rejectIfPresent(.element, in: container, type: type)
+            try Self.rejectIfPresent(.object, in: container, type: type)
             self = .unresolvedElement
         }
     }
@@ -131,6 +143,19 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
         case .unresolvedElement:
             try container.encode(PayloadType.unresolvedElement, forKey: .type)
         }
+    }
+
+    private static func rejectIfPresent(
+        _ key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        type: PayloadType
+    ) throws {
+        guard container.contains(key) else { return }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "\(type.rawValue) accessibility notification payload must not include \(key.stringValue)"
+        )
     }
 }
 

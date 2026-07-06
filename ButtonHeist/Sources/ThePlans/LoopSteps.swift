@@ -138,18 +138,21 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
     }
 }
 
-public struct ResolvedRepeatUntilStep: Sendable, Equatable {
-    public let predicate: AccessibilityPredicate
-    public let timeout: Double
-    public let body: [HeistStep]
-    public let elseBody: [HeistStep]?
+package struct ResolvedRepeatUntilStep: Sendable, Equatable {
+    package let predicateExpression: AccessibilityPredicateExpr
+    package let predicate: AccessibilityPredicate
+    package let timeout: Double
+    package let body: [HeistStep]
+    package let elseBody: [HeistStep]?
 
-    public init(
+    package init(
+        predicateExpression: AccessibilityPredicateExpr,
         predicate: AccessibilityPredicate,
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]? = nil
     ) {
+        self.predicateExpression = predicateExpression
         self.predicate = predicate
         self.timeout = timeout
         self.body = body
@@ -157,9 +160,10 @@ public struct ResolvedRepeatUntilStep: Sendable, Equatable {
     }
 }
 
-public extension RepeatUntilStep {
+package extension RepeatUntilStep {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedRepeatUntilStep {
         ResolvedRepeatUntilStep(
+            predicateExpression: predicate,
             predicate: try predicate.resolve(in: environment),
             timeout: timeout,
             body: body,

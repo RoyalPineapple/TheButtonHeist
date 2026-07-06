@@ -411,8 +411,11 @@ final class ElementInflation {
                 effect = driver.send(Task.isCancelled ? .cancelled : .frameYielded).revealPathGraceEffect
 
             case .refreshVisibleTree:
+                let refreshResult: RevealPathGraceVisibleTreeRefreshResult = stash.refreshCurrentVisibleTree() == nil
+                    ? .unavailable
+                    : .refreshed
                 effect = driver.send(.visibleTreeRefreshCompleted(
-                    stash.refreshCurrentVisibleTree() != nil,
+                    refreshResult,
                     remaining: revealPathGraceRemainingTime(until: deadline)
                 )).revealPathGraceEffect
 

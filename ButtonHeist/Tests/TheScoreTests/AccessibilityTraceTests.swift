@@ -207,6 +207,22 @@ final class AccessibilityTraceTests: XCTestCase {
         )
     }
 
+    func testNotificationPayloadRejectsFieldsFromOtherVariants() {
+        let json = #"{"type":"none","value":"Hello"}"#
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AccessibilityNotificationPayload.self, from: Data(json.utf8))
+        ) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertEqual(
+                context.debugDescription,
+                "none accessibility notification payload must not include value"
+            )
+        }
+    }
+
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
         let first = makeElement(label: "First", actions: [.activate])
         let second = makeElement(label: "Second", actions: [.increment])

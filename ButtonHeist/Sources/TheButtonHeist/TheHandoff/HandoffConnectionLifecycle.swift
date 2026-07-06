@@ -269,32 +269,33 @@ final class HandoffConnectionLifecycle {
 
         let waiterID = UUID()
         let timeoutDuration: Duration = .seconds(max(timeout, 0))
-        let timeoutTask = Task { @ButtonHeistActor [weak self] in
-            guard await Task.cancellableSleep(for: timeoutDuration) else { return }
-            self?.waiters.fail(id: waiterID, attemptID: attemptID, with: HandoffConnectionError.timeout)
-        }
-        defer { timeoutTask.cancel() }
+        let completion = TimedOneShot<Result<Void, Error>>()
 
-        let result = await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Error>, Never>) in
-                let completion = TimedOneShot<Result<Void, Error>>()
-                _ = completion.register(continuation)
-                if Task.isCancelled {
-                    completion.resolve(returning: .failure(CancellationError()))
-                    return
-                }
+        let result = await completion.wait(
+            cancellationValue: .failure(CancellationError()),
+            onRegistered: { completion in
                 guard activeAttemptID == attemptID else {
                     completion.resolve(returning: .failure(HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)))
                     return
                 }
                 waiters.register(id: waiterID, attemptID: attemptID, completion: completion)
+                completion.armTimeout(after: timeoutDuration) { [weak self] in
+                    await self?.failConnectionWaiter(id: waiterID, attemptID: attemptID, with: HandoffConnectionError.timeout)
+                }
+            },
+            onFinished: {
+                waiters.cancel(id: waiterID)
             }
-        } onCancel: {
-            Task { @ButtonHeistActor [weak self] in
-                self?.waiters.cancel(id: waiterID)
-            }
-        }
+        )
         try result.get()
+    }
+
+    private func failConnectionWaiter(
+        id: UUID,
+        attemptID: UUID,
+        with failure: HandoffConnectionError
+    ) {
+        waiters.fail(id: id, attemptID: attemptID, with: failure)
     }
 
     @discardableResult

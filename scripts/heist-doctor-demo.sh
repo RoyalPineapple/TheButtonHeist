@@ -180,11 +180,12 @@ struct DoctorDemoFixture {
                 message: "No element matching \(target)",
                 accessibilityTrace: trace
             )
+        let command = HeistActionCommand.activate(.target(target))
         let evidence = HeistStepEvidence.action(.dispatch(
-            command: .activate(.target(target)),
+            command: command,
             dispatchResult: actionResult
         ))
-        let intent = HeistStepIntent.action(command: "activate", target: target.description)
+        let intent = HeistStepIntent.action(command: command)
         let step: HeistExecutionStepResult
         switch status {
         case .passed:

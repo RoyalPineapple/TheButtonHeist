@@ -93,6 +93,12 @@ INTENTIONAL_BREAKAGES=(
     "constructor ActivationTrace.init(axActivateReturned:tapActivationDispatched:tapActivationPoint:tapActivationSucceeded:) has been removed"
     "constructor RequestEnvelope.init(buttonHeistVersion:requestId:message:requestScreenPayload:) has been removed"
     "var RequestEnvelope.explicitScreenRequestPayload has been removed"
+    "enumelement HeistStepIntent.action has declared type change from (TheScore.HeistStepIntent.Type) -> (Swift.String, Swift.String?) -> TheScore.HeistStepIntent to (TheScore.HeistStepIntent.Type) -> (ThePlans.HeistActionCommand) -> TheScore.HeistStepIntent"
+    "enumelement HeistStepIntent.wait has declared type change from (TheScore.HeistStepIntent.Type) -> (Swift.String, Swift.Double) -> TheScore.HeistStepIntent to (TheScore.HeistStepIntent.Type) -> (ThePlans.AccessibilityPredicateExpr, Swift.Double) -> TheScore.HeistStepIntent"
+    "enumelement HeistStepIntent.forEachElement has declared type change from (TheScore.HeistStepIntent.Type) -> (ThePlans.HeistReferenceName, Swift.String, Swift.Int) -> TheScore.HeistStepIntent to (TheScore.HeistStepIntent.Type) -> (ThePlans.HeistReferenceName, ThePlans.ElementPredicate, Swift.Int) -> TheScore.HeistStepIntent"
+    "enumelement HeistStepIntent.repeatUntil has declared type change from (TheScore.HeistStepIntent.Type) -> (Swift.String, Swift.Double) -> TheScore.HeistStepIntent to (TheScore.HeistStepIntent.Type) -> (ThePlans.AccessibilityPredicateExpr, Swift.Double) -> TheScore.HeistStepIntent"
+    "enumelement HeistStepIntent.invoke has declared type change from (TheScore.HeistStepIntent.Type) -> (Swift.String, Swift.String?) -> TheScore.HeistStepIntent to (TheScore.HeistStepIntent.Type) -> (ThePlans.HeistInvocationPath, ThePlans.HeistArgument) -> TheScore.HeistStepIntent"
+    "constructor ResolvedRepeatUntilStep.init(predicate:timeout:body:elseBody:) has been removed"
 )
 
 PUBLIC_PRODUCTS=()
