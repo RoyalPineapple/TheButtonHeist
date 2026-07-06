@@ -611,6 +611,21 @@ public struct Interface: Codable, Equatable, Sendable {
         timestamp: Date,
         tree: [AccessibilityHierarchy],
         annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil
+    ) {
+        self.init(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: []
+        )
+    }
+
+    public init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
         diagnostics: InterfaceDiagnostics? = nil,
         screenActions: [ScreenAction] = []
     ) {
@@ -620,6 +635,23 @@ public struct Interface: Codable, Equatable, Sendable {
         self.diagnostics = diagnostics
         self.screenActions = screenActions.sorted()
         self.traceIdentities = .empty
+    }
+
+    package init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil,
+        traceIdentities: InterfaceTraceIdentities
+    ) {
+        self.init(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: [],
+            traceIdentities: traceIdentities
+        )
     }
 
     package init(
