@@ -460,12 +460,10 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
                 predicate: step.predicate,
                 actual: message
             )
-            return HeistWaitReceipt(
-                status: .timedOut,
+            return .timedOut(
                 message: message,
                 accessibilityTrace: nil,
-                expectation: expectation,
-                announcement: nil
+                expectation: expectation
             )
         }
 
@@ -475,8 +473,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
             predicate: step.predicate,
             actual: announcement.text
         )
-        return HeistWaitReceipt(
-            status: .matched,
+        return .matched(
             message: Self.announcementMatchedMessage(announcement, elapsed: elapsed),
             accessibilityTrace: nil,
             expectation: expectation,
@@ -492,8 +489,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
     ) -> HeistWaitReceipt {
         guard let announcement = trace.capturedAnnouncements.first else {
             let message = Self.missingActionAnnouncementMessage(predicate)
-            return HeistWaitReceipt(
-                status: .timedOut,
+            return .timedOut(
                 message: message,
                 accessibilityTrace: trace,
                 expectation: ExpectationResult(
@@ -509,8 +505,8 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
                 predicate,
                 actual: announcement.text
             )
-            return HeistWaitReceipt(
-                status: .failed(.actionFailed),
+            return .failed(
+                errorKind: .actionFailed,
                 message: message,
                 accessibilityTrace: trace,
                 expectation: ExpectationResult(
@@ -522,8 +518,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
             )
         }
 
-        return HeistWaitReceipt(
-            status: .matched,
+        return .matched(
             message: Self.announcementMatchedMessage(
                 announcement,
                 elapsed: Self.elapsedSeconds(since: start)
@@ -716,14 +711,22 @@ extension PredicateWait {
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
             ))
-        return HeistWaitReceipt(
-            status: success ? .matched : .timedOut,
+        if success {
+            return .matched(
+                message: message,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: observedSequence,
+                observationSummary: observationSummary,
+                warning: warning
+            )
+        }
+        return .timedOut(
             message: message,
             accessibilityTrace: trace,
             expectation: expectation,
             observedSequence: observedSequence,
-            observationSummary: observationSummary,
-            warning: warning
+            observationSummary: observationSummary
         )
     }
 

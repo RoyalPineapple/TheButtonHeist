@@ -1,26 +1,8 @@
 #if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
 import CoreGraphics
+import TheScore
 import UIKit
-
-// MARK: - Safe Numeric Conversions
-
-/// Convert a `CGFloat` to `Int` without trapping on pathological inputs.
-///
-/// `Int(_:)` traps with a Swift runtime SIGTRAP when the input is non-finite
-/// (NaN, +/-infinity) or finite-but-out-of-range (e.g. `1e100`,
-/// `CGFloat.greatestFiniteMagnitude`). Accessibility geometry can contain
-/// those values, and fingerprinting must not let one poisoned frame crash parse.
-///
-/// For any finite value where `Int(cgFloat)` already succeeds, this returns the
-/// same value. Only inputs that would trap are clamped to `Int.min`, `Int.max`,
-/// or `0`.
-func safeInt(_ cgFloat: CGFloat) -> Int {
-    guard cgFloat.isFinite else { return 0 }
-    if cgFloat >= CGFloat(Int.max) { return Int.max }
-    if cgFloat <= CGFloat(Int.min) { return Int.min }
-    return Int(cgFloat)
-}
 
 // MARK: - Coarse Frame Comparison
 
@@ -88,77 +70,4 @@ extension UIBezierPath {
     }
 }
 
-// MARK: - Content Fingerprint
-
-extension AccessibilityElement {
-    /// Identity hash based on content only: no traversal index.
-    func fingerprint() -> Int {
-        var hasher = Hasher()
-        hasher.combine(label)
-        hasher.combine(identifier)
-        hasher.combine(value)
-        hasher.combine(traits)
-        switch shape {
-        case let .frame(rect):
-            hasher.combine(safeInt(rect.origin.x))
-            hasher.combine(safeInt(rect.origin.y))
-        case let .path(path):
-            let bounds = safePathBounds(path)
-            hasher.combine(safeInt(bounds.origin.x))
-            hasher.combine(safeInt(bounds.origin.y))
-        }
-        switch shape {
-        case let .frame(rect):
-            hasher.combine(safeInt(rect.size.width))
-            hasher.combine(safeInt(rect.size.height))
-        case let .path(path):
-            let bounds = safePathBounds(path)
-            hasher.combine(safeInt(bounds.size.width))
-            hasher.combine(safeInt(bounds.size.height))
-        }
-        return hasher.finalize()
-    }
-
-    /// Convenience fingerprint using window-space geometry.
-    var contentFingerprint: Int {
-        fingerprint()
-    }
-}
-
-extension AccessibilityHierarchy {
-    /// Content-only fingerprint for a hierarchy node. Ignores traversal indices.
-    var contentFingerprint: Int {
-        folded(
-            onElement: { element, _ in
-                var hasher = Hasher()
-                hasher.combine(0)
-                hasher.combine(element.contentFingerprint)
-                return hasher.finalize()
-            },
-            onContainer: { container, childFingerprints in
-                var hasher = Hasher()
-                hasher.combine(1)
-                hasher.combine(container)
-                for childFingerprint in childFingerprints {
-                    hasher.combine(childFingerprint)
-                }
-                return hasher.finalize()
-            }
-        )
-    }
-}
-
-func contentFingerprints(
-    for elements: [AccessibilityElement]
-) -> [Int] {
-    elements.map { $0.fingerprint() }
-}
-
-private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {
-    let path = UIBezierPath()
-    for element in pathElements {
-        element.apply(to: path)
-    }
-    return path.safeBounds
-}
 #endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

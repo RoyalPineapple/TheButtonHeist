@@ -3,6 +3,7 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import TheScore
 
 struct TimelineKey: Hashable, Sendable {
     let label: String?

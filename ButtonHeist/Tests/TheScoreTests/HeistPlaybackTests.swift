@@ -521,16 +521,16 @@ final class HeistPlanTests: XCTestCase {
     func testForEachExecutionResultWithFailureIsFailure() {
         let result = HeistExecutionStepResult.failed(
             path: "$.body[0]",
-            kind: .forEachElement,
+            receiptKind: .forEachElement,
             durationMs: 100,
-            evidence: .forEachElement(HeistForEachElementEvidence(
+            evidence: HeistForEachElementEvidence(
                 parameter: "target",
                 matching: ElementPredicate(label: "Cell"),
                 limit: 10,
                 matchedCount: 3,
                 iterationCount: 2,
                 failureReason: "child step failed at iteration 2"
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .loop,
                 contract: "for_each_element completes all matched iterations",
@@ -544,15 +544,15 @@ final class HeistPlanTests: XCTestCase {
     func testForEachExecutionResultWithoutFailureIsNotFailure() {
         let result = HeistExecutionStepResult.passed(
             path: "$.body[0]",
-            kind: .forEachElement,
+            receiptKind: .forEachElement,
             durationMs: 100,
-            evidence: .forEachElement(HeistForEachElementEvidence(
+            evidence: HeistForEachElementEvidence(
                 parameter: "target",
                 matching: ElementPredicate(label: "Cell"),
                 limit: 10,
                 matchedCount: 3,
                 iterationCount: 3
-            ))
+            )
         )
 
         XCTAssertFalse(result.isFailure)

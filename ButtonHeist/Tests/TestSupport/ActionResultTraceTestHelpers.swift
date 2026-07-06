@@ -122,20 +122,19 @@ package func makeTestHeistActionStep(
     let actionEvidence = command.map {
         HeistActionEvidence.dispatch(command: $0, dispatchResult: result)
     } ?? HeistActionEvidence.dispatch(dispatchResult: result)
-    let evidence = HeistStepEvidence.action(actionEvidence)
     guard !result.success else {
         return .passed(
             path: path,
-            kind: .action,
+            receiptKind: .action,
             durationMs: durationMs,
-            evidence: evidence
+            evidence: actionEvidence
         )
     }
     return .failed(
         path: path,
-        kind: .action,
+        receiptKind: .action,
         durationMs: durationMs,
-        evidence: evidence,
+        evidence: actionEvidence,
         failure: HeistFailureDetail(
             category: result.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",

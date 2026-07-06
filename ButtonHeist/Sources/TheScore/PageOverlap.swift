@@ -1,30 +1,29 @@
-#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import Foundation
 
 // MARK: - Overlap Detection
 
 /// Result of sliding two fingerprint sequences to find their overlap region.
-struct OverlapResult: Equatable {
+package struct OverlapResult: Equatable {
     /// Index into the accumulated sequence where the overlap begins.
-    let accumulatedStart: Int
+    package let accumulatedStart: Int
 
     /// Index into the page sequence where the overlap begins.
-    let pageStart: Int
+    package let pageStart: Int
 
     /// Number of consecutive matching fingerprints in the overlap.
-    let length: Int
+    package let length: Int
 
     /// True when no overlap was found and the page is entirely new content.
-    var isEmpty: Bool { length == 0 }
+    package var isEmpty: Bool { length == 0 }
 
-    var accumulatedEnd: Int { accumulatedStart + length }
+    package var accumulatedEnd: Int { accumulatedStart + length }
 
-    var pageEnd: Int { pageStart + length }
+    package var pageEnd: Int { pageStart + length }
 }
 
 /// Slide two fingerprint sequences over each other to find the longest
 /// contiguous overlap.
-func findOverlap(
+package func findOverlap(
     accumulated: [Int],
     page: [Int]
 ) -> OverlapResult {
@@ -77,4 +76,3 @@ func findOverlap(
         length: bestLength
     )
 }
-#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

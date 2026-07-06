@@ -1237,8 +1237,7 @@ final class TheBrainsActionTests: XCTestCase {
                 switch request {
                 case .immediate:
                     let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
-                    return HeistWaitReceipt(
-                        status: .timedOut,
+                    return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
                         expectation: expectation,
@@ -1248,16 +1247,15 @@ final class TheBrainsActionTests: XCTestCase {
                 case .afterObservation:
                     afterObservationCount += 1
                     let expectation = PredicateEvaluation.evaluate(predicate, in: matchedTrace)
-                    return HeistWaitReceipt(
-                        status: .matched,
+                    return .matched(
                         message: expectation.actual,
                         accessibilityTrace: matchedTrace,
                         expectation: expectation
                     )
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
-                    return HeistWaitReceipt(
-                        status: .failed(.general),
+                    return .failed(
+                        errorKind: .general,
                         message: "unexpected wait request",
                         accessibilityTrace: nil,
                         expectation: ExpectationResult(met: false, predicate: predicate, actual: "unexpected wait request")
@@ -1299,8 +1297,7 @@ final class TheBrainsActionTests: XCTestCase {
                 switch request {
                 case .immediate:
                     let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
-                    return HeistWaitReceipt(
-                        status: .timedOut,
+                    return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
                         expectation: expectation,
@@ -1308,8 +1305,7 @@ final class TheBrainsActionTests: XCTestCase {
                         observationSummary: "known: 1 elements"
                     )
                 case .afterObservation:
-                    return HeistWaitReceipt(
-                        status: .timedOut,
+                    return .timedOut(
                         message: "no observed accessibility trace",
                         accessibilityTrace: nil,
                         expectation: ExpectationResult(met: false, predicate: .change(), actual: "no observed accessibility trace"),
@@ -1318,8 +1314,8 @@ final class TheBrainsActionTests: XCTestCase {
                     )
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
-                    return HeistWaitReceipt(
-                        status: .failed(.general),
+                    return .failed(
+                        errorKind: .general,
                         message: "unexpected wait request",
                         accessibilityTrace: nil,
                         expectation: ExpectationResult(met: false, predicate: predicate, actual: "unexpected wait request")
@@ -4177,14 +4173,31 @@ final class TheBrainsActionTests: XCTestCase {
             message: expectation.actual,
             accessibilityTrace: observation.accessibilityTrace
         )
-        return HeistWaitReceipt(
-            status: heistWaitStatus(for: result),
-            message: result.message,
-            accessibilityTrace: result.accessibilityTrace,
-            expectation: expectation,
-            observedSequence: observation.event.sequence,
-            observationSummary: observation.summary
-        )
+        switch heistWaitStatus(for: result) {
+        case .matched:
+            return .matched(
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation,
+                observedSequence: observation.event.sequence,
+                observationSummary: observation.summary
+            )
+        case .timedOut:
+            return .timedOut(
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation,
+                observedSequence: observation.event.sequence,
+                observationSummary: observation.summary
+            )
+        case .failed(let errorKind):
+            return .failed(
+                errorKind: errorKind,
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation
+            )
+        }
     }
 
     private func heistWaitReceipt(
@@ -4209,12 +4222,27 @@ final class TheBrainsActionTests: XCTestCase {
         result: ActionResult,
         expectation: ExpectationResult
     ) -> HeistWaitReceipt {
-        HeistWaitReceipt(
-            status: heistWaitStatus(for: result),
-            message: result.message,
-            accessibilityTrace: result.accessibilityTrace,
-            expectation: expectation
-        )
+        switch heistWaitStatus(for: result) {
+        case .matched:
+            return .matched(
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation
+            )
+        case .timedOut:
+            return .timedOut(
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation
+            )
+        case .failed(let errorKind):
+            return .failed(
+                errorKind: errorKind,
+                message: result.message,
+                accessibilityTrace: result.accessibilityTrace,
+                expectation: expectation
+            )
+        }
     }
 
     private func heistWaitStatus(for result: ActionResult) -> HeistWaitReceipt.Status {

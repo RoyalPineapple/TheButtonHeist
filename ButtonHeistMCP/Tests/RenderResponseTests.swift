@@ -55,16 +55,16 @@ struct RenderResponseTests {
                 steps: [
                     HeistExecutionStepResult.passed(
                         path: "$.body[0]",
-                        kind: .action,
+                        receiptKind: .action,
                         durationMs: 1,
                         intent: .action(command: command),
-                        evidence: .action(.dispatch(
+                        evidence: .dispatch(
                             command: command,
                             dispatchResult: .success(
                                 method: .activate,
                                 accessibilityTrace: trace
                             )
-                        ))
+                        )
                     ),
                 ],
                 durationMs: 3

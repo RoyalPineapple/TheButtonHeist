@@ -1,22 +1,20 @@
-#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
-import AccessibilitySnapshotParser
-import CoreGraphics
+import AccessibilitySnapshotModel
 
 // MARK: - Page Reconciliation
 
 /// Result of merging a new page into the accumulated element sequence.
-struct PageReconciliation: Equatable {
+package struct PageReconciliation: Equatable {
     /// The merged element sequence after incorporating the page.
-    let elements: [AccessibilityElement]
+    package let elements: [AccessibilityElement]
 
     /// The overlap region that anchored the merge.
-    let overlap: OverlapResult
+    package let overlap: OverlapResult
 
     /// Elements from the page that were inserted (not present in accumulated).
-    let inserted: [AccessibilityElement]
+    package let inserted: [AccessibilityElement]
 
     /// How many elements were in the accumulated sequence before the merge.
-    let previousCount: Int
+    package let previousCount: Int
 }
 
 /// Reconcile a visible page into accumulated semantic memory.
@@ -30,7 +28,7 @@ struct PageReconciliation: Equatable {
 ///   - page: Elements from the current viewport.
 ///
 /// When no overlap is found, the page is appended as entirely new content.
-func reconcilePage(
+package func reconcilePage(
     accumulated: [AccessibilityElement],
     page: [AccessibilityElement]
 ) -> PageReconciliation {
@@ -94,5 +92,3 @@ private func reconcileByOverlap(
         previousCount: accumulated.count
     )
 }
-
-#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

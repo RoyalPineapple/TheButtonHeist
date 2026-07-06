@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+@testable import TheScore
 
 @MainActor
 final class AccessibilityHierarchyReconciliationTests: XCTestCase {

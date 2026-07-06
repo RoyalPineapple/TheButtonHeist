@@ -261,14 +261,14 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 )
             }
             let abortedAtChildPath = children.firstFailedStep?.path
-            let evidence = HeistStepEvidence.invocation(.heist(
+            let evidence = HeistInvocationEvidence.heist(
                 name: plan.name.map { "heist \($0)" },
                 childFailedPath: abortedAtChildPath
-            ))
+            )
             if let abortedAtChildPath {
                 return .childAborted(
                     path: path,
-                    kind: .heist,
+                    receiptKind: .heist,
                     durationMs: heistStepDurationMs,
                     intent: .heist(name: plan.name),
                     evidence: evidence,
@@ -279,7 +279,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             }
             return .passed(
                 path: path,
-                kind: .heist,
+                receiptKind: .heist,
                 durationMs: heistStepDurationMs,
                 intent: .heist(name: plan.name),
                 evidence: evidence,
@@ -288,21 +288,21 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         case .invoke(let invoke):
             return .passed(
                 path: path,
-                kind: .invoke,
+                receiptKind: .invocation,
                 durationMs: heistStepDurationMs,
                 intent: .invoke(
                     path: HeistInvocationPath.preconditionValidated(components: invoke.path),
                     argument: invoke.argument
                 ),
-                evidence: .invocation(.invocation(invoke, name: invoke.path.joined(separator: ".")))
+                evidence: .invocation(invoke, name: invoke.path.joined(separator: "."))
             )
         case .warn(let warn):
             return .passed(
                 path: path,
-                kind: .warn,
+                receiptKind: .warning,
                 durationMs: heistStepDurationMs,
                 intent: .warn(message: warn.message),
-                evidence: .warning(HeistExecutionWarning(path: path, message: warn.message))
+                evidence: HeistExecutionWarning(path: path, message: warn.message)
             )
         case .fail(let fail):
             return .failed(
@@ -328,10 +328,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else {
             return .failed(
                 path: path,
-                kind: .action,
+                receiptKind: .action,
                 durationMs: heistStepDurationMs,
                 intent: mockActionIntent(action.command),
-                evidence: .action(.commandResolutionFailure(command: action.command)),
+                evidence: .commandResolutionFailure(command: action.command),
                 failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action command resolves before dispatch",
@@ -355,19 +355,19 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         if let failure {
             return .failed(
                 path: path,
-                kind: .action,
+                receiptKind: .action,
                 durationMs: heistStepDurationMs,
                 intent: mockActionIntent(action.command),
-                evidence: .action(actionEvidence),
+                evidence: actionEvidence,
                 failure: failure
             )
         }
         return .passed(
             path: path,
-            kind: .action,
+            receiptKind: .action,
             durationMs: heistStepDurationMs,
             intent: mockActionIntent(action.command),
-            evidence: .action(actionEvidence)
+            evidence: actionEvidence
         )
     }
 
@@ -425,23 +425,22 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             }
             waitEvidence = .failed(unmatchedCheck)
         }
-        let evidence = HeistStepEvidence.wait(waitEvidence)
         if let failure {
             return .failed(
                 path: path,
-                kind: .wait,
+                receiptKind: .wait,
                 durationMs: heistStepDurationMs,
                 intent: .wait(predicate: wait.predicate, timeout: wait.timeout),
-                evidence: evidence,
+                evidence: waitEvidence,
                 failure: failure
             )
         }
         return .passed(
             path: path,
-            kind: .wait,
+            receiptKind: .wait,
             durationMs: heistStepDurationMs,
             intent: .wait(predicate: wait.predicate, timeout: wait.timeout),
-            evidence: evidence
+            evidence: waitEvidence
         )
     }
 
@@ -452,14 +451,14 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         .passed(
             path: path,
-            kind: .conditional,
+            receiptKind: .conditional,
             durationMs: heistStepDurationMs,
             intent: .conditional,
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
+            evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
                 cases: mockCaseResults(for: conditional.cases),
                 outcome: .noMatch,
                 elapsedMs: heistStepDurationMs
-            )))
+            ))
         )
     }
 
@@ -470,20 +469,20 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         .passed(
             path: path,
-            kind: .forEachElement,
+            receiptKind: .forEachElement,
             durationMs: heistStepDurationMs,
             intent: .forEachElement(
                 parameter: forEach.parameter,
                 matching: forEach.matching,
                 limit: forEach.limit
             ),
-            evidence: .forEachElement(HeistForEachElementEvidence(
+            evidence: HeistForEachElementEvidence(
                 parameter: forEach.parameter,
                 matching: forEach.matching,
                 limit: forEach.limit,
                 matchedCount: 0,
                 iterationCount: 0
-            ))
+            )
         )
     }
 
@@ -494,14 +493,14 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         .passed(
             path: path,
-            kind: .forEachString,
+            receiptKind: .forEachString,
             durationMs: heistStepDurationMs,
             intent: .forEachString(parameter: forEach.parameter, count: forEach.values.count),
-            evidence: .forEachString(HeistForEachStringEvidence(
+            evidence: HeistForEachStringEvidence(
                 parameter: forEach.parameter,
                 count: forEach.values.count,
                 iterationCount: forEach.values.count
-            ))
+            )
         )
     }
 
@@ -514,15 +513,15 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             ?? .state(.exists(ElementPredicate(label: "unresolved")))
         return .passed(
             path: path,
-            kind: .repeatUntil,
+            receiptKind: .repeatUntil,
             durationMs: heistStepDurationMs,
             intent: .repeatUntil(predicate: .predicate(predicate), timeout: repeatUntil.timeout),
-            evidence: .repeatUntil(HeistRepeatUntilEvidence.predicateMet(
+            evidence: HeistRepeatUntilEvidence.predicateMet(
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
                 expectation: MetExpectationResult(predicate: predicate)
-            ))
+            )
         )
     }
 

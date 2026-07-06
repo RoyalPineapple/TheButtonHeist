@@ -82,10 +82,10 @@ final class HeistRunProjectionTests: XCTestCase {
             steps: [
                 .passed(
                     path: "$.body[0]",
-                    kind: .warn,
+                    receiptKind: .warning,
                     durationMs: durationMs,
                     intent: .warn(message: "ready"),
-                    evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "ready"))
+                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "ready")
                 ),
             ],
             durationMs: durationMs

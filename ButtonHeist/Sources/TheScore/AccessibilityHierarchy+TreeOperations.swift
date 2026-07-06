@@ -1,10 +1,8 @@
-#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
-import AccessibilitySnapshotParser
-import TheScore
+import AccessibilitySnapshotModel
 
 // MARK: - Fold
 
-extension AccessibilityHierarchy {
+package extension AccessibilityHierarchy {
     func folded<Result>(
         onElement: (AccessibilityElement, Int) -> Result,
         onContainer: (AccessibilityContainer, [Result]) -> Result
@@ -23,7 +21,7 @@ extension AccessibilityHierarchy {
 
 // MARK: - Top-Down Context Propagation
 
-extension AccessibilityHierarchy {
+package extension AccessibilityHierarchy {
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
     /// - `first`: maximum number of results to collect. 0 (default) means no limit — walk the
@@ -62,7 +60,7 @@ extension AccessibilityHierarchy {
     }
 }
 
-extension Array where Element == AccessibilityHierarchy {
+package extension Array where Element == AccessibilityHierarchy {
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
     ///
     /// - `first`: maximum number of results to collect. 0 (default) means no limit.
@@ -90,7 +88,7 @@ extension Array where Element == AccessibilityHierarchy {
 
 // MARK: - Bottom-Up Fold with Shared Accumulator
 
-extension AccessibilityHierarchy {
+package extension AccessibilityHierarchy {
     /// Bottom-up fold that threads a shared mutable accumulator through the recursion.
     ///
     /// Like `folded(onElement:onContainer:)` but with an `inout Accumulator` parameter
@@ -121,7 +119,7 @@ extension AccessibilityHierarchy {
 
 // MARK: - Leaf Extraction
 
-extension AccessibilityHierarchy {
+package extension AccessibilityHierarchy {
     /// The accessibility elements in this subtree, preserving traversal index.
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
@@ -169,7 +167,7 @@ extension AccessibilityHierarchy {
 
 // MARK: - Array Conveniences
 
-extension Array where Element == AccessibilityHierarchy {
+package extension Array where Element == AccessibilityHierarchy {
     /// The accessibility elements across all roots, sorted by traversal index.
     var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         flatMap(\.elements).sorted { $0.traversalIndex < $1.traversalIndex }
@@ -204,5 +202,3 @@ extension Array where Element == AccessibilityHierarchy {
         return result
     }
 }
-
-#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

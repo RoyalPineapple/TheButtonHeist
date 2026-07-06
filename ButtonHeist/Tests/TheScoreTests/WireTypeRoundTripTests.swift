@@ -874,17 +874,17 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 .failed(
                     path: "$.body[0]",
-                    kind: .action,
+                    receiptKind: .action,
                     durationMs: 0,
                     intent: .action(command: command),
-                    evidence: .action(.dispatch(
+                    evidence: .dispatch(
                         command: command,
                         dispatchResult: .failure(
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
                         )
-                    )),
+                    ),
                     failure: failure
                 ),
             ],
@@ -921,16 +921,16 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 .passed(
                     path: "$.body[0]",
-                    kind: .forEachElement,
+                    receiptKind: .forEachElement,
                     durationMs: 500,
                     intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
-                    evidence: .forEachElement(HeistForEachElementEvidence(
+                    evidence: HeistForEachElementEvidence(
                         parameter: "row",
                         matching: matching,
                         limit: 10,
                         matchedCount: 3,
                         iterationCount: 3
-                    )),
+                    ),
                     children: [
                         forEachElementIteration(index: 0, durationMs: 50, matching: matching),
                         forEachElementIteration(index: 1, durationMs: 45, matching: matching),
@@ -971,17 +971,17 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 .failed(
                     path: "$.body[0]",
-                    kind: .forEachElement,
+                    receiptKind: .forEachElement,
                     durationMs: 200,
                     intent: .forEachElement(parameter: "row", matching: ElementPredicate(label: "Row"), limit: 10),
-                    evidence: .forEachElement(HeistForEachElementEvidence(
+                    evidence: HeistForEachElementEvidence(
                         parameter: "row",
                         matching: ElementPredicate(label: "Row"),
                         limit: 10,
                         matchedCount: 5,
                         iterationCount: 2,
                         failureReason: "child step failed at iteration 2"
-                    )),
+                    ),
                     failure: HeistFailureDetail(
                         category: .loop,
                         contract: "for_each_element completes all matched iterations",
@@ -1007,15 +1007,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let child = HeistExecutionStepResult.failed(
             path: "$.body[0].conditional.cases[0].body[0]",
-            kind: .action,
+            receiptKind: .action,
             durationMs: 4,
-            evidence: .action(.dispatch(
+            evidence: .dispatch(
                 dispatchResult: .failure(
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "button disabled",
                 )
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "action dispatch succeeds",
@@ -1026,10 +1026,10 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 .childAborted(
                     path: "$.body[0]",
-                    kind: .conditional,
+                    receiptKind: .conditional,
                     durationMs: 6,
                     intent: .conditional,
-                    evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
+                    evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: predicate,
@@ -1039,7 +1039,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                         outcome: .matchedCase(index: 0),
                         elapsedMs: 2,
                         lastObservedSummary: "screen: login; known: 3 elements"
-                    ))),
+                    )),
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "child execution completes without failure",
@@ -1256,10 +1256,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         let path = "$.body[0].for_each_element.iterations[\(index)]"
         return .passed(
             path: path,
-            kind: .forEachIteration,
+            receiptKind: .forEachElementIteration,
             durationMs: durationMs,
             intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
-            evidence: .forEachElement(HeistForEachElementEvidence(
+            evidence: HeistForEachElementEvidence(
                 parameter: "row",
                 matching: matching,
                 limit: 10,
@@ -1268,15 +1268,15 @@ final class WireTypeRoundTripTests: XCTestCase {
                 iterationOrdinal: index,
                 targetOrdinal: index,
                 targetSummary: "predicate(label=\"Row\", ordinal: \(index))"
-            )),
+            ),
             children: [
                 .passed(
                     path: "\(path).body[0]",
-                    kind: .action,
+                    receiptKind: .action,
                     durationMs: durationMs,
-                    evidence: .action(.dispatch(
+                    evidence: .dispatch(
                         dispatchResult: .success(method: .activate, message: "activated")
-                    ))
+                    )
                 ),
             ]
         )

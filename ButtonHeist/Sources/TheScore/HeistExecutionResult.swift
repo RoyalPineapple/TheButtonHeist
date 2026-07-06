@@ -198,6 +198,83 @@ public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case invoke
 }
 
+public struct HeistStepReceiptKind<Evidence>: Sendable {
+    public let stepKind: HeistExecutionStepKind
+    fileprivate let wrapEvidence: @Sendable (Evidence) -> HeistStepEvidence
+
+    fileprivate init(
+        stepKind: HeistExecutionStepKind,
+        wrapEvidence: @escaping @Sendable (Evidence) -> HeistStepEvidence
+    ) {
+        self.stepKind = stepKind
+        self.wrapEvidence = wrapEvidence
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistActionEvidence {
+    static var action: Self {
+        Self(stepKind: .action, wrapEvidence: HeistStepEvidence.action)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistWaitEvidence {
+    static var wait: Self {
+        Self(stepKind: .wait, wrapEvidence: HeistStepEvidence.wait)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistCaseSelectionEvidence {
+    static var conditional: Self {
+        Self(stepKind: .conditional, wrapEvidence: HeistStepEvidence.caseSelection)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistForEachElementEvidence {
+    static var forEachElement: Self {
+        Self(stepKind: .forEachElement, wrapEvidence: HeistStepEvidence.forEachElement)
+    }
+
+    static var forEachElementIteration: Self {
+        Self(stepKind: .forEachIteration, wrapEvidence: HeistStepEvidence.forEachElement)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistForEachStringEvidence {
+    static var forEachString: Self {
+        Self(stepKind: .forEachString, wrapEvidence: HeistStepEvidence.forEachString)
+    }
+
+    static var forEachStringIteration: Self {
+        Self(stepKind: .forEachIteration, wrapEvidence: HeistStepEvidence.forEachString)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistRepeatUntilEvidence {
+    static var repeatUntil: Self {
+        Self(stepKind: .repeatUntil, wrapEvidence: HeistStepEvidence.repeatUntil)
+    }
+
+    static var repeatUntilIteration: Self {
+        Self(stepKind: .repeatUntilIteration, wrapEvidence: HeistStepEvidence.repeatUntil)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistInvocationEvidence {
+    static var heist: Self {
+        Self(stepKind: .heist, wrapEvidence: HeistStepEvidence.invocation)
+    }
+
+    static var invocation: Self {
+        Self(stepKind: .invoke, wrapEvidence: HeistStepEvidence.invocation)
+    }
+}
+
+public extension HeistStepReceiptKind where Evidence == HeistExecutionWarning {
+    static var warning: Self {
+        Self(stepKind: .warn, wrapEvidence: HeistStepEvidence.warning)
+    }
+}
+
 public enum HeistExecutionStepStatus: String, Codable, Sendable, Equatable {
     case passed
     case failed
@@ -239,7 +316,42 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         kind: HeistExecutionStepKind,
         durationMs: Int,
         intent: HeistStepIntent? = nil,
-        evidence: HeistStepEvidence? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        passedWithEvidence(
+            path: path,
+            kind: kind,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: nil,
+            children: children
+        )
+    }
+
+    public static func passed<Evidence>(
+        path: String,
+        receiptKind: HeistStepReceiptKind<Evidence>,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: Evidence,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        passedWithEvidence(
+            path: path,
+            kind: receiptKind.stepKind,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: receiptKind.wrapEvidence(evidence),
+            children: children
+        )
+    }
+
+    private static func passedWithEvidence(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence?,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
@@ -259,7 +371,46 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         kind: HeistExecutionStepKind,
         durationMs: Int,
         intent: HeistStepIntent? = nil,
-        evidence: HeistStepEvidence? = nil,
+        failure: HeistFailureDetail,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        failedWithEvidence(
+            path: path,
+            kind: kind,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: nil,
+            failure: failure,
+            children: children
+        )
+    }
+
+    public static func failed<Evidence>(
+        path: String,
+        receiptKind: HeistStepReceiptKind<Evidence>,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: Evidence,
+        failure: HeistFailureDetail,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        failedWithEvidence(
+            path: path,
+            kind: receiptKind.stepKind,
+            durationMs: durationMs,
+            intent: intent,
+            evidence: receiptKind.wrapEvidence(evidence),
+            failure: failure,
+            children: children
+        )
+    }
+
+    private static func failedWithEvidence(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence?,
         failure: HeistFailureDetail,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
@@ -276,23 +427,23 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func childAborted(
+    public static func childAborted<Evidence>(
         path: String,
-        kind: HeistExecutionStepKind,
+        receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
         intent: HeistStepIntent? = nil,
-        evidence: HeistStepEvidence,
+        evidence: Evidence,
         failure: HeistFailureDetail,
         abortedAtChildPath: String,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             path: path,
-            kind: kind,
+            kind: receiptKind.stepKind,
             durationMs: durationMs,
             intent: intent,
             outcome: .childAborted(HeistExecutionStepChildAbortedOutcome(
-                evidence: evidence,
+                evidence: receiptKind.wrapEvidence(evidence),
                 failure: failure,
                 abortedAtChildPath: abortedAtChildPath,
                 children: children
@@ -300,19 +451,19 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func childAborted(
+    public static func childAborted<Evidence>(
         path: String,
-        kind: HeistExecutionStepKind,
+        receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
         intent: HeistStepIntent? = nil,
-        evidence: HeistStepEvidence,
+        evidence: Evidence,
         failure: HeistFailureDetail,
         child: HeistExecutionStepResult,
         remainingChildren: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         childAborted(
             path: path,
-            kind: kind,
+            receiptKind: receiptKind,
             durationMs: durationMs,
             intent: intent,
             evidence: evidence,

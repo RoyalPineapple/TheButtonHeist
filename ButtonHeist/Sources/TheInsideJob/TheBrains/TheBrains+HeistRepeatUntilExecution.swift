@@ -524,26 +524,25 @@ extension TheBrains {
             durationMs: Int,
             intent: HeistStepIntent
         ) -> HeistExecutionStepResult {
-            let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
             switch self {
             case .predicateMet,
                  .timeoutHandledByElse:
                 return .passed(
                     path: path,
-                    kind: .repeatUntil,
+                    receiptKind: .repeatUntil,
                     durationMs: durationMs,
                     intent: intent,
-                    evidence: stepEvidence,
+                    evidence: evidence,
                     children: children
                 )
             case .timedOut(_, let failure, _),
                  .initialUnavailable(_, let failure, _):
                 return .failed(
                     path: path,
-                    kind: .repeatUntil,
+                    receiptKind: .repeatUntil,
                     durationMs: durationMs,
                     intent: intent,
-                    evidence: stepEvidence,
+                    evidence: evidence,
                     failure: failure,
                     children: children
                 )
@@ -551,10 +550,10 @@ extension TheBrains {
                  .timeoutElseFailed(_, let failure, let abortedAtChildPath, _):
                 return .childAborted(
                     path: path,
-                    kind: .repeatUntil,
+                    receiptKind: .repeatUntil,
                     durationMs: durationMs,
                     intent: intent,
-                    evidence: stepEvidence,
+                    evidence: evidence,
                     failure: failure,
                     abortedAtChildPath: abortedAtChildPath,
                     children: children
