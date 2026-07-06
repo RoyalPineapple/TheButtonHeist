@@ -3,23 +3,12 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import ButtonHeistSupport
 
 import TheScore
 import ThePlans
 
 extension Navigation {
-
-    private enum ScanResult: Equatable {
-        case terminal(ScrollTraversalTerminal)
-        case completed
-        case omitted(ExplorationOmissionReason)
-    }
-
-    private enum ScrollScanOutcome: Equatable {
-        case terminal(ScrollTraversalTerminal)
-        case exhausted
-        case limitHit(ExplorationOmissionReason)
-    }
 
     func scanForHeistId(_ heistId: HeistId) async -> ExploredScreen? {
         let startTime = CACurrentMediaTime()
@@ -123,7 +112,7 @@ extension Navigation {
         target: ElementTarget?,
         targetHeistId: HeistId?,
         exploration: inout SemanticExploration
-    ) async -> ScanResult {
+    ) async -> ScrollContainerScanResult {
         let savedVisualOrigin = containerExploration.savedVisualOrigin
         let goal = scanGoal(target: target, targetHeistId: targetHeistId)
 
@@ -131,38 +120,32 @@ extension Navigation {
             return .omitted(.containerScrollLimit)
         }
 
-        let forward = await runScrollScan(
-            ScrollScanPlan(container: containerExploration, direction: .forward, goal: goal),
-            exploration: &exploration
+        var driver = StateDriver(
+            initial: ScrollContainerScanState.idle,
+            machine: ScrollContainerScanMachine()
         )
-        switch forward {
-        case .terminal(let terminal):
-            return .terminal(terminal)
-        case .limitHit(let reason):
-            await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
-            return .omitted(reason)
-        case .exhausted:
-            break
+        var effect = driver.send(.begin).scrollContainerScanEffect
+        while true {
+            switch effect {
+            case .run(let direction):
+                let outcome = await runScrollScan(
+                    ScrollScanPlan(container: containerExploration, direction: direction, goal: goal),
+                    exploration: &exploration
+                )
+                effect = driver.send(.scanCompleted(outcome)).scrollContainerScanEffect
+
+            case .restore:
+                await restoreContainerPosition(
+                    containerExploration,
+                    savedVisualOrigin: savedVisualOrigin,
+                    exploration: &exploration
+                )
+                effect = driver.send(.restoreCompleted).scrollContainerScanEffect
+
+            case .finish(let result):
+                return result
+            }
         }
-
-        await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
-
-        let backward = await runScrollScan(
-            ScrollScanPlan(container: containerExploration, direction: .back, goal: goal),
-            exploration: &exploration
-        )
-        switch backward {
-        case .terminal(let terminal):
-            return .terminal(terminal)
-        case .limitHit(let reason):
-            await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
-            return .omitted(reason)
-        case .exhausted:
-            break
-        }
-
-        await restoreContainerPosition(containerExploration, savedVisualOrigin: savedVisualOrigin, exploration: &exploration)
-        return .completed
     }
 
     private func scanGoal(target: ElementTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
@@ -452,6 +435,19 @@ extension Navigation {
             x = Int(point.x.rounded())
             y = Int(point.y.rounded())
         }
+    }
+}
+
+private extension StateChange
+where State == Navigation.ScrollContainerScanState,
+      Effect == Navigation.ScrollContainerScanEffect,
+      Rejection == Navigation.ScrollContainerScanRejection {
+
+    var scrollContainerScanEffect: Navigation.ScrollContainerScanEffect {
+        guard let effect = singleEffect else {
+            preconditionFailure("ScrollContainerScanMachine must emit exactly one effect per accepted event.")
+        }
+        return effect
     }
 }
 

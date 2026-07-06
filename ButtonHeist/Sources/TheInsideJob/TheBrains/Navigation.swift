@@ -248,7 +248,7 @@ final class Navigation {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    enum ExplorationOmissionReason: String, Hashable {
+    enum ExplorationOmissionReason: String, Hashable, Sendable {
         case discoveryScrollLimit = "scroll-attempt-budget"
         case containerScrollLimit = "container-scroll-budget"
         case leadingEdgeResetLimit = "leading-edge-reset-budget"
