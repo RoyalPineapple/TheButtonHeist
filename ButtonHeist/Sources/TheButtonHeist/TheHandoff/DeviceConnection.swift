@@ -172,7 +172,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         let parameters = Self.makeTLSParameters(token: token.rawValue)
         deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
-        let conn = NWConnection(to: device.endpoint, using: parameters)
+        let conn = NWConnection(to: device.endpoint.nwEndpoint, using: parameters)
         let sessionID = UUID()
 
         // `connect` is idempotent: any prior consumer Task and event stream

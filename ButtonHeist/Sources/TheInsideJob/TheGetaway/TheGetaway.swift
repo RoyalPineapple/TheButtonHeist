@@ -81,9 +81,9 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .getAnnouncements:
             sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
-        case .requestScreen:
+        case .requestScreen(let payload):
             await handleScreen(
-                mode: envelope.explicitScreenRequestPayload?.mode ?? .raw,
+                mode: payload.mode,
                 requestId: requestId,
                 respond: respond
             )

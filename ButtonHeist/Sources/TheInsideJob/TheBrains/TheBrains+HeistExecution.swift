@@ -174,14 +174,6 @@ extension TheBrains {
             }
         }
 
-        var completedReceiptOutcome: HeistReceiptCompletedOutcome {
-            switch self {
-            case .notEvaluated, .matched:
-                return .passed
-            case .failed(receipt: _, detail: let detail):
-                return .failed(detail)
-            }
-        }
     }
 
     private enum HeistExecutionPhase: Equatable, Sendable {
@@ -192,31 +184,6 @@ extension TheBrains {
 
     private enum HeistExecutionEffect: Equatable, Sendable {
         case captureFailureScreenshot(failedPath: String)
-    }
-
-    private enum FailureEvidenceLevel {
-        case hierarchy
-        case screenshot
-        case accessibilitySnapshot
-
-        static var current: FailureEvidenceLevel {
-            switch ProcessInfo.processInfo.environment["BUTTONHEIST_FAILURE_EVIDENCE"]?.lowercased() {
-            case "hierarchy":
-                return .hierarchy
-            case "hierarchy+accessibilitysnapshot", "accessibility", "accessibilitysnapshot":
-                return .accessibilitySnapshot
-            default:
-                return .screenshot
-            }
-        }
-
-        var captureMode: ScreenCaptureMode? {
-            switch self {
-            case .hierarchy: nil
-            case .screenshot: .raw
-            case .accessibilitySnapshot: .accessibility
-            }
-        }
     }
 
     private enum HeistExecutionTerminal: Equatable, Sendable {
@@ -485,7 +452,7 @@ extension TheBrains {
         for effect in execution.terminalEffects {
             switch effect {
             case .captureFailureScreenshot(let failedPath):
-                guard let mode = FailureEvidenceLevel.current.captureMode else { continue }
+                guard let mode = failureEvidencePolicy.captureMode else { continue }
                 guard let failureScreenshotStep = await failureScreenshotStep(
                     runtime: runtime,
                     failedPath: failedPath,
@@ -531,12 +498,18 @@ extension TheBrains {
             : await executeTakeScreenshot(mode: mode)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
+        let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result)
+        let outcome: HeistStepReceiptOutcome
+        if let failure = failureScreenshotDetail(for: result) {
+            outcome = .failed(evidence: .action(evidence), failure: failure)
+        } else {
+            outcome = .passed(evidence: .action(evidence))
+        }
         return heistActionReceipt(
             path: "\(failedPath).failure.actions[0]",
             durationMs: elapsedMilliseconds(since: start),
             intent: .action(command: command.wireType.rawValue, target: nil),
-            evidence: .dispatch(command: command, dispatchResult: result),
-            failure: failureScreenshotDetail(for: result)
+            outcome: outcome
         )
     }
 
@@ -968,7 +941,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: .invocation(context.invoke, name: context.requestedName),
+                evidence: .invocation(HeistInvocationEvidence.invocation(
+                    context.invoke,
+                    name: context.requestedName
+                )),
                 failure: HeistFailureDetail(
                     category: .invocation,
                     contract: "heist invocation must not recurse",
@@ -988,7 +964,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: .invocation(context.invoke, name: context.requestedName),
+                evidence: .invocation(HeistInvocationEvidence.invocation(
+                    context.invoke,
+                    name: context.requestedName
+                )),
                 failure: HeistFailureDetail(
                     category: .invocation,
                     contract: "heist invocation path resolves to a definition",
@@ -1010,10 +989,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: .invocation(
+                evidence: .invocation(HeistInvocationEvidence.invocation(
                     context.invoke,
                     name: context.requestedName
-                ),
+                )),
                 failure: HeistFailureDetail(
                     category: .validation,
                     contract: "heist invocation argument binds to the target parameter",
@@ -1071,7 +1050,7 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             outcome: .failed(
-                evidence: .invocation(
+                evidence: .invocation(HeistInvocationEvidence.invocation(
                     context.invoke,
                     name: context.requestedName,
                     argument: context.argumentSummary,
@@ -1079,7 +1058,7 @@ extension TheBrains {
                         actionResult: expectationActionResult,
                         expectation: expectationResult
                     )
-                ),
+                )),
                 failure: HeistFailureDetail(
                     category: .expectation,
                     contract: "heist invocation expectation predicate resolves before evaluation",
@@ -1096,7 +1075,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         childExecution: HeistReceiptChildren
     ) async -> InvocationExpectationOutcome {
-        guard case .completed = childExecution, let context else { return .notEvaluated }
+        guard childExecution.abortedAtChildPath == nil, let context else { return .notEvaluated }
         let receipt: HeistWaitReceipt
         if let observedSequence = context.baseline.observedSequence {
             receipt = await runtime.wait(.afterObservation(
@@ -1139,14 +1118,26 @@ extension TheBrains {
             childFailedPath: childExecution.abortedAtChildPath,
             expectation: invocationExpectation
         )
-        let outcome = HeistReceiptOutcome(
-            evidence: evidence,
-            children: childExecution,
-            completedOutcome: expectationOutcome.completedReceiptOutcome,
-            childFailure: { childAbort in
-                childFailureDetail(category: .invocation, childPath: childAbort.abortedAtChildPath)
-            }
-        )
+        let outcome: HeistStepReceiptOutcome
+        switch expectationOutcome {
+        case .notEvaluated, .matched:
+            outcome = childAwarePassedOutcome(
+                evidence: .invocation(evidence),
+                children: childExecution,
+                childFailure: { childPath in
+                    childFailureDetail(category: .invocation, childPath: childPath)
+                }
+            )
+        case .failed(receipt: _, detail: let detail):
+            outcome = childAwareFailedOutcome(
+                evidence: .invocation(evidence),
+                failure: detail,
+                children: childExecution,
+                childFailure: { childPath in
+                    childFailureDetail(category: .invocation, childPath: childPath)
+                }
+            )
+        }
         return heistInvocationReceipt(
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),

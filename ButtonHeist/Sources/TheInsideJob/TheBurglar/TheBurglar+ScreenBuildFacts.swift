@@ -154,25 +154,35 @@ extension TheBurglar.ScreenBuildFacts {
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> ElementScrollFactsExtraction {
-        let indexedElements = hierarchy.pathIndexedElements
+        let indexedElementsByPath = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedElements.map { ($0.path, $0.element) }
+        )
+        var elementPathsByContainerPath: [TreePath: [TreePath]] = [:]
+        for (path, context) in elementContextsByPath {
+            guard let membership = context.scrollMembership else { continue }
+            elementPathsByContainerPath[membership.containerPath, default: []].append(path)
+        }
+
         var elementsByPath: [TreePath: TheBurglar.ScreenBuildElementScrollFacts] = [:]
         var visibleIndicesByContainerPath: [TreePath: Set<Int>] = [:]
 
         for (containerPath, scrollView) in scrollViewsByPath {
-            for item in indexedElements
-                where item.path != containerPath && item.path.hasPrefix(containerPath) {
-                let index = scrollIndex(of: objectsByPath[item.path], in: scrollView)
+            for path in elementPathsByContainerPath[containerPath, default: []] {
+                guard let element = indexedElementsByPath[path],
+                      let membership = elementContextsByPath[path]?.scrollMembership
+                else { continue }
+
+                let index = scrollIndex(of: objectsByPath[path], in: scrollView)
                 if let index {
                     visibleIndicesByContainerPath[containerPath, default: []].insert(index)
                 }
-                guard elementContextsByPath[item.path]?.scrollMembership?.containerPath == containerPath else {
-                    continue
-                }
-                elementsByPath[item.path] = TheBurglar.ScreenBuildElementScrollFacts(
-                    containerPath: containerPath,
-                    index: index,
+                elementsByPath[path] = TheBurglar.ScreenBuildElementScrollFacts(
+                    membership: Screen.ScrollMembership(
+                        containerPath: membership.containerPath,
+                        index: index
+                    ),
                     observedScrollContentActivationPoint: observedScrollContentActivationPoint(
-                        for: item.element,
+                        for: element,
                         in: scrollView
                     )
                 )

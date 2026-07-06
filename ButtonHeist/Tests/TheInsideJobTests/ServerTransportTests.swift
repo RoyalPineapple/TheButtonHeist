@@ -72,6 +72,62 @@ final class ServerTransportTests: XCTestCase {
         XCTAssertEqual(startCount, 1)
     }
 
+    @MainActor
+    func testDuplicateStartWhileStartingIsRejected() async throws {
+        let transport = ServerTransport(token: "starting-token")
+        let startGate = TransportStartGate()
+        transport.startOverride = { _, _ in
+            await startGate.enterAndWaitForRelease()
+            return 49152
+        }
+
+        let startTask = Task { @MainActor in
+            try await transport.start(port: 0, bindToLoopback: true)
+        }
+        await startGate.waitUntilEntered()
+
+        do {
+            _ = try await transport.start(port: 0, bindToLoopback: true)
+            XCTFail("Expected ServerTransport to reject duplicate start while starting")
+        } catch let error as ServerTransportError {
+            XCTAssertEqual(error, .alreadyRunning)
+        } catch {
+            XCTFail("Expected ServerTransportError.alreadyRunning, got \(error)")
+        }
+
+        startGate.release()
+        let port = try await startTask.value
+        XCTAssertEqual(port, 49152)
+    }
+
+    @MainActor
+    func testStopWhileStartingRejectsStaleStartCompletion() async throws {
+        let transport = ServerTransport(token: "starting-token")
+        let startGate = TransportStartGate()
+        transport.startOverride = { _, _ in
+            await startGate.enterAndWaitForRelease()
+            return 49152
+        }
+
+        let startTask = Task { @MainActor in
+            try await transport.start(port: 0, bindToLoopback: true)
+        }
+        await startGate.waitUntilEntered()
+
+        await transport.stop()
+        startGate.release()
+
+        do {
+            _ = try await startTask.value
+            XCTFail("Expected stale start completion to be rejected")
+        } catch let error as ServerTransportError {
+            XCTAssertEqual(error, .stopped)
+        } catch {
+            XCTFail("Expected ServerTransportError.stopped, got \(error)")
+        }
+        XCTAssertEqual(transport.listeningPort, 0)
+    }
+
     func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
         let eventStream = TransportEventStream.makeEventStream(
             bufferLimit: ServerTransport.eventStreamBufferLimit
@@ -134,5 +190,39 @@ final class ServerTransportTests: XCTestCase {
 
         XCTAssertFalse(advertisement.isAdvertising)
         XCTAssertTrue(advertisement.currentTXTRecord.isEmpty)
+    }
+
+    @MainActor
+    private final class TransportStartGate {
+        private var entered = false
+        private var released = false
+        private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+        private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+        func enterAndWaitForRelease() async {
+            entered = true
+            let waiters = enteredWaiters
+            enteredWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+
+            guard !released else { return }
+            await withCheckedContinuation { continuation in
+                releaseWaiters.append(continuation)
+            }
+        }
+
+        func waitUntilEntered() async {
+            guard !entered else { return }
+            await withCheckedContinuation { continuation in
+                enteredWaiters.append(continuation)
+            }
+        }
+
+        func release() {
+            released = true
+            let waiters = releaseWaiters
+            releaseWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
     }
 }

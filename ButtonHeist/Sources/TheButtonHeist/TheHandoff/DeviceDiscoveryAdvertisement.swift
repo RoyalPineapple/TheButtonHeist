@@ -2,7 +2,7 @@ import Network
 
 extension DeviceDiscovery {
     func makeDevice(from result: NWBrowser.Result) -> DiscoveredDevice? {
-        guard case let .service(name, _, _, _) = result.endpoint else {
+        guard case let .service(name, type, domain, _) = result.endpoint else {
             return nil
         }
         let serviceName = DiscoveryServiceName(name)
@@ -28,7 +28,7 @@ extension DeviceDiscovery {
         return DiscoveredDevice(
             deviceID: .serviceName(serviceName),
             name: serviceName.rawValue,
-            endpoint: result.endpoint,
+            endpoint: .service(name: name, type: type, domain: domain),
             simulatorUDID: simUDID,
             installationId: installationId,
             displayDeviceName: displayDeviceName,

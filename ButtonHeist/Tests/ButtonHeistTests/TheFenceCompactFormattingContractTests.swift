@@ -213,12 +213,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     before: makeReceiptTestInterface(elementCount: 3),
                     after: makeReceiptTestInterface(elementCount: 3)
                 ),
-                activationTrace: ActivationTrace(
+                activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,
-                    tapActivationDispatched: true,
                     tapActivationPoint: ScreenPoint(x: 888, y: 372),
                     tapActivationSucceeded: true
-                )
+                ))
             )
         )
 

@@ -38,10 +38,7 @@ struct ActivationPolicy {
             screenElement = resolvedElement
             refreshedLiveTarget = liveTarget
         case .failure(let result):
-            return result.withActivationTrace(ActivationTrace(
-                axActivateReturned: nil,
-                tapActivationDispatched: false
-            ))
+            return result.withActivationTrace(ActivationTrace(.refreshFailed))
         }
 
         let activateOutcome = accessibilityActivate(refreshedLiveTarget)
@@ -49,21 +46,17 @@ struct ActivationPolicy {
             showFingerprint(refreshedLiveTarget.activationPoint)
             return .success(
                 method: .activate,
-                activationTrace: ActivationTrace(
-                    axActivateReturned: activateOutcome.axActivateReturned,
-                    tapActivationDispatched: false
-                )
+                activationTrace: ActivationTrace(.accessibilityActivate)
             )
         }
 
         let activationPoint = refreshedLiveTarget.activationPoint
         let tapActivationSucceeded = await activationPointDispatch(activationPoint)
-        let trace = ActivationTrace(
+        let trace = ActivationTrace(.activationPointFallback(
             axActivateReturned: activateOutcome.axActivateReturned,
-            tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: Double(activationPoint.x), y: Double(activationPoint.y)),
             tapActivationSucceeded: tapActivationSucceeded
-        )
+        ))
         if tapActivationSucceeded {
             return .success(method: .activate, activationTrace: trace)
         }

@@ -27,9 +27,6 @@ extension RequestEnvelope {
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
-        requestScreenPayload = type == .requestScreen
-            ? try payloadDecoder.map { try ScreenRequestPayload(from: $0) }
-            : nil
         message = try decodeClientMessage(from: payloadDecoder, type: type)
     }
 
@@ -39,10 +36,7 @@ extension RequestEnvelope {
         try container.encodeIfPresent(requestId, forKey: .requestId)
         let wire = clientMessageWireRepresentation(message)
         try container.encode(wire.type, forKey: .type)
-        if let requestScreenPayload, case .requestScreen = message {
-            try ClientMessageWirePayload.requestScreen(requestScreenPayload)
-                .encode(to: container.superEncoder(forKey: .payload))
-        } else if let payload = wire.payload {
+        if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
         }
     }
@@ -101,8 +95,11 @@ private func clientMessageWireRepresentation(
         return ClientMessageWireRepresentation(type: .getPasteboard, payload: nil)
     case .getAnnouncements:
         return ClientMessageWireRepresentation(type: .getAnnouncements, payload: nil)
-    case .requestScreen:
-        return ClientMessageWireRepresentation(type: .requestScreen, payload: nil)
+    case .requestScreen(let payload):
+        return ClientMessageWireRepresentation(
+            type: .requestScreen,
+            payload: payload == ScreenRequestPayload() ? nil : .requestScreen(payload)
+        )
     case .runtimeAction(let payload):
         return ClientMessageWireRepresentation(type: .runtimeAction, payload: .runtimeAction(payload))
     case .authenticate(let payload):
@@ -147,9 +144,9 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
         return .getAnnouncements
     case .requestScreen:
         if let payloadDecoder {
-            _ = try ScreenRequestPayload(from: payloadDecoder)
+            return .requestScreen(try ScreenRequestPayload(from: payloadDecoder))
         }
-        return .requestScreen
+        return .requestScreen()
     case .runtimeAction:
         return .runtimeAction(try HeistActionCommand(from: try payload()))
     case .authenticate:

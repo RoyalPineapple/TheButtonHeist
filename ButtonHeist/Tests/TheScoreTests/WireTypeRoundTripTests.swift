@@ -138,6 +138,41 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, ActionPerformanceTiming(settleMs: 74))
     }
 
+    func testActivationTraceRejectsMismatchedTapFields() throws {
+        let missingTapResult = """
+        {
+          "axActivateReturned": false,
+          "tapActivationDispatched": true,
+          "tapActivationPoint": { "x": 10, "y": 20 }
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(ActivationTrace.self, from: Data(missingTapResult.utf8))) { error in
+            assertDecodingError(error, contains: ["requires tapActivationPoint and tapActivationSucceeded"])
+        }
+
+        let strayTapPoint = """
+        {
+          "axActivateReturned": true,
+          "tapActivationDispatched": false,
+          "tapActivationPoint": { "x": 10, "y": 20 },
+          "tapActivationSucceeded": true
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(ActivationTrace.self, from: Data(strayTapPoint.utf8))) { error in
+            assertDecodingError(error, contains: ["require tapActivationDispatched"])
+        }
+
+        let declinedWithoutFallback = """
+        {
+          "axActivateReturned": false,
+          "tapActivationDispatched": false
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(ActivationTrace.self, from: Data(declinedWithoutFallback.utf8))) { error in
+            assertDecodingError(error, contains: ["axActivateReturned=false requires activation-point fallback fields"])
+        }
+    }
+
     func testActionPerformanceTimingMergingPreservesExistingFieldsAndAppliesOverlay() {
         let original = ActionPerformanceTiming(
             beforeObservationMs: 1,
@@ -1104,6 +1139,53 @@ final class WireTypeRoundTripTests: XCTestCase {
         """
         XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(outOfRangeMatchedIndex.utf8))) { error in
             assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
+        }
+    }
+
+    func testForEachStringEvidenceRejectsPartialIterationShape() throws {
+        let missingValue = """
+        {
+          "parameter": "item",
+          "count": 2,
+          "iterationCount": 1,
+          "iterationOrdinal": 0
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(HeistForEachStringEvidence.self, from: Data(missingValue.utf8))) { error in
+            assertDecodingError(error, contains: ["requires iterationOrdinal and value together"])
+        }
+    }
+
+    func testForEachElementEvidenceRejectsPartialIterationShape() throws {
+        let missingTargetSummary = """
+        {
+          "parameter": "item",
+          "matching": { "checks": [{ "kind": "label", "match": "Cell" }] },
+          "limit": 10,
+          "matchedCount": 2,
+          "iterationCount": 1,
+          "iterationOrdinal": 0,
+          "targetOrdinal": 0
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(HeistForEachElementEvidence.self, from: Data(missingTargetSummary.utf8))) { error in
+            assertDecodingError(error, contains: ["requires iterationOrdinal, targetOrdinal, and targetSummary together"])
+        }
+    }
+
+    func testRotorTextRangeRejectsPartialIndexedShape() throws {
+        let missingEndOffset = """
+        {
+          "rangeDescription": "[0..<4]",
+          "text": "Menu",
+          "startOffset": 0
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(RotorTextRange.self, from: Data(missingEndOffset.utf8))) { error in
+            assertDecodingError(error, contains: ["requires startOffset and endOffset together"])
         }
     }
 

@@ -84,7 +84,7 @@ final class MessageIntegrationTests: XCTestCase {
             .requestInterface(InterfaceQuery()),
             .ping,
             .status,
-            .requestScreen
+            .requestScreen()
         ]
 
         for msg in clientMessages {

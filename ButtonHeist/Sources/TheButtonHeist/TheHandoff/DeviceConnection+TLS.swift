@@ -9,18 +9,11 @@ nonisolated extension DeviceConnection {
         ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
     }
 
-    static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
+    static func isLoopbackEndpoint(_ endpoint: DiscoveredDeviceEndpoint) -> Bool {
         guard case .hostPort(let host, _) = endpoint else { return false }
-
-        switch host {
-        case .ipv4(let addr):
-            return addr == .loopback || addr.rawValue.first == 127
-        case .ipv6(let addr):
-            return addr == .loopback
-        case .name:
-            return false
-        @unknown default:
-            return false
-        }
+        let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "::1" ||
+            normalized == "0:0:0:0:0:0:0:1" ||
+            normalized.hasPrefix("127.")
     }
 }

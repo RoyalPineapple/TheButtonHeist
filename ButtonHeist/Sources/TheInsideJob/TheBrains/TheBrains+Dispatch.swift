@@ -74,11 +74,14 @@ extension TheBrains {
                 method: .typeText,
                 observationScope: .discovery,
                 afterStatePayload: { context in
-                    self.actions.typeTextPayload(
+                    guard let payload = self.actions.typeTextPayload(
                         for: target,
                         resolvedElementId: context.resolvedElementId,
                         in: context.afterState
-                    )
+                    ) else {
+                        return .none
+                    }
+                    return .payload(payload)
                 },
                 interaction: { await self.actions.executeTypeText(target) }
             )
@@ -135,7 +138,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
+        afterStatePayload: ((PostActionPayloadContext) -> PostActionObservation.ResolvedActionOutcomePayload)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {

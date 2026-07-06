@@ -179,19 +179,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     @discardableResult
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
-        send(message, requestId: requestId, requestScreenPayload: nil)
-    }
-
-    @discardableResult
-    func send(
-        _ message: ClientMessage,
-        requestId: String?,
-        requestScreenPayload: ScreenRequestPayload?
-    ) -> DeviceSendOutcome {
         guard sendOutcome == .enqueued else { return sendOutcome }
         sent.append((message, requestId))
-        if case .requestScreen = message {
-            sentRequestScreenPayloads.append(requestScreenPayload)
+        if case .requestScreen(let payload) = message {
+            sentRequestScreenPayloads.append(payload)
         }
         if let asyncSendFailure {
             Task { @ButtonHeistActor [self] in

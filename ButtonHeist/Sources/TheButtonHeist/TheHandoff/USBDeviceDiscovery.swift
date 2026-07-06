@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 import ButtonHeistSupport
-import Network
 import os.log
 
 import TheScore
@@ -138,18 +137,10 @@ final class USBDeviceDiscovery: DeviceDiscovering {
             currentIDs.insert(deviceID)
 
             if session.knownDevices[deviceID] == nil {
-                guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-                    logger.error("Invalid port number: \(self.port)")
-                    return
-                }
-                let endpoint = NWEndpoint.hostPort(
-                    host: NWEndpoint.Host(ipv6Address),
-                    port: nwPort
-                )
                 let device = DiscoveredDevice(
                     deviceID: deviceID,
                     name: "\(connectedDevice.name) (USB)",
-                    endpoint: endpoint,
+                    endpoint: .hostPort(host: ipv6Address, port: port),
                     displayDeviceName: connectedDevice.name,
                     connectionType: .usb
                 )

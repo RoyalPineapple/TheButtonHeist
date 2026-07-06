@@ -1101,6 +1101,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     parameter: "item",
                     count: 2,
                     iterationCount: 1,
+                    iterationOrdinal: 0,
                     value: "Milk"
                 ))
             ),
@@ -1127,6 +1128,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     limit: 3,
                     matchedCount: 2,
                     iterationCount: 2,
+                    iterationOrdinal: 1,
                     targetOrdinal: 1,
                     targetSummary: "\"Row\" staticText"
                 ))

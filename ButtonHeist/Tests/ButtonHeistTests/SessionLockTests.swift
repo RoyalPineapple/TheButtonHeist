@@ -9,7 +9,7 @@ final class SessionLockTests: XCTestCase {
         DiscoveredDevice(
             id: "mock",
             name: "MockApp#test",
-            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
+            endpoint: DiscoveredDeviceEndpoint.hostPort(host: "::1", port: 1)
         )
     }
 

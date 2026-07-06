@@ -166,6 +166,27 @@ final class StartupConfigurationTests: XCTestCase {
         )
     }
 
+    func testFailureEvidencePolicyResolvesAtStartupBoundary() {
+        XCTAssertEqual(
+            StartupConfiguration.resolve(
+                env: environment([.failureEvidence: "hierarchy"]),
+                infoPlist: makeInfoPlist([.failureEvidence: "accessibility"])
+            ).failureEvidencePolicy,
+            ResolvedStartupValue(value: .hierarchy, source: .environment)
+        )
+        XCTAssertEqual(
+            StartupConfiguration.resolve(
+                env: .empty,
+                infoPlist: makeInfoPlist([.failureEvidence: "accessibilitySnapshot"])
+            ).failureEvidencePolicy,
+            ResolvedStartupValue(value: .accessibilitySnapshot, source: .infoPlist)
+        )
+        XCTAssertEqual(
+            StartupConfiguration.resolve(env: .empty, infoPlist: makeInfoPlist([:])).failureEvidencePolicy,
+            ResolvedStartupValue(value: .screenshot, source: .defaultValue)
+        )
+    }
+
     func testEmptyTokenAndInstanceIdAreIgnoredWithWarnings() {
         let configuration = StartupConfiguration.resolve(
             env: environment([
@@ -254,6 +275,8 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
         XCTAssertFalse(runtimeConfiguration.fingerprintsEnabled)
         XCTAssertEqual(runtimeConfiguration.fingerprintsEnabledSource, .api)
+        XCTAssertEqual(runtimeConfiguration.failureEvidencePolicy, startupConfiguration.failureEvidencePolicy.value)
+        XCTAssertEqual(runtimeConfiguration.failureEvidencePolicySource, startupConfiguration.failureEvidencePolicy.source)
     }
 
     func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() {

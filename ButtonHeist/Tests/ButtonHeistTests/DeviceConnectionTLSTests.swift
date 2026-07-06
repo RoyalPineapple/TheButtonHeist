@@ -7,7 +7,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
         DiscoveredDevice(
             id: "test",
             name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+            endpoint: DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         )
     }
 
@@ -237,27 +237,27 @@ final class DeviceConnectionTLSTests: XCTestCase {
     // MARK: - Loopback Detection
 
     func testIPv4LoopbackDetected() {
-        let endpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: 8080)
+        let endpoint = DiscoveredDeviceEndpoint.hostPort(host: "127.0.0.1", port: 8080)
         XCTAssertTrue(DeviceConnection.isLoopbackEndpoint(endpoint))
     }
 
     func testIPv6LoopbackDetected() {
-        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: 8080)
+        let endpoint = DiscoveredDeviceEndpoint.hostPort(host: "::1", port: 8080)
         XCTAssertTrue(DeviceConnection.isLoopbackEndpoint(endpoint))
     }
 
     func testHostnameLocalhostNotTreatedAsLoopback() {
-        let endpoint = NWEndpoint.hostPort(host: .name("localhost", nil), port: 8080)
+        let endpoint = DiscoveredDeviceEndpoint.hostPort(host: "localhost", port: 8080)
         XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint), "Hostname 'localhost' must not be treated as loopback")
     }
 
     func testRemoteIPNotLoopback() {
-        let endpoint = NWEndpoint.hostPort(host: .ipv4(.init("192.168.1.1")!), port: 8080)
+        let endpoint = DiscoveredDeviceEndpoint.hostPort(host: "192.168.1.1", port: 8080)
         XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint))
     }
 
     func testServiceEndpointNotLoopback() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint))
     }
 }

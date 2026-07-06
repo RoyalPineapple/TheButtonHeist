@@ -2,6 +2,7 @@
 import UIKit
 @testable import AccessibilitySnapshotParser
 import ThePlans
+@testable import TheInsideJob
 @testable import TheScore
 
 struct AccessibilityElementBuilder {
@@ -78,7 +79,7 @@ struct AccessibilityElementBuilder {
 ///
 /// Use `.make(label:traits:...)` for the common case and
 /// `.make(label:heistTraits:...)` when traits should be expressed as
-/// `[HeistTrait]` (mapped through `UIAccessibilityTraits.fromNames`).
+/// `[HeistTrait]` (mapped through TheInsideJob's UIKit bridge).
 extension AccessibilityElement {
     typealias Shape = AccessibilityShape
 
@@ -118,9 +119,9 @@ extension AccessibilityElement {
         )
     }
 
-    /// Convenience that takes `[HeistTrait]` and maps via
-    /// `UIAccessibilityTraits.fromNames`. Useful in trait-policy and
-    /// id-assignment tests that drive traits from the wire enum.
+    /// Convenience that takes `[HeistTrait]` and maps via TheInsideJob's
+    /// UIKit bridge. Useful in trait-policy and id-assignment tests that drive
+    /// traits from the wire enum.
     static func make(
         description: String? = nil,
         label: String? = nil,

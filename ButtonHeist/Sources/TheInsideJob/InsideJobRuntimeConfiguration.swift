@@ -16,6 +16,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     let fingerprintsEnabled: Bool
     let fingerprintsEnabledSource: StartupConfigurationSource
+    let failureEvidencePolicy: FailureEvidencePolicy
+    let failureEvidencePolicySource: StartupConfigurationSource
     let sessionIdentity: InsideJobSessionIdentity
 
     static func resolve(
@@ -43,7 +45,9 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             addressFamily: addressFamily,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
             fingerprintsEnabled: fingerprintsEnabled ?? startupConfiguration.fingerprintsEnabled.value,
-            fingerprintsEnabledSource: fingerprintsEnabled == nil ? startupConfiguration.fingerprintsEnabled.source : .api
+            fingerprintsEnabledSource: fingerprintsEnabled == nil ? startupConfiguration.fingerprintsEnabled.source : .api,
+            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy.value,
+            failureEvidencePolicySource: startupConfiguration.failureEvidencePolicy.source
         )
     }
 
@@ -64,7 +68,9 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             addressFamily: .dualStack,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
             fingerprintsEnabled: startupConfiguration.fingerprintsEnabled.value,
-            fingerprintsEnabledSource: startupConfiguration.fingerprintsEnabled.source
+            fingerprintsEnabledSource: startupConfiguration.fingerprintsEnabled.source,
+            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy.value,
+            failureEvidencePolicySource: startupConfiguration.failureEvidencePolicy.source
         )
     }
 
@@ -101,6 +107,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
         fingerprintsEnabled: Bool = true,
         fingerprintsEnabledSource: StartupConfigurationSource = .defaultValue,
+        failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
+        failureEvidencePolicySource: StartupConfigurationSource = .defaultValue,
         sessionIdentity: InsideJobSessionIdentity? = nil
     ) {
         self.token = token
@@ -114,6 +122,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         self.sessionReleaseTimeout = sessionReleaseTimeout
         self.fingerprintsEnabled = fingerprintsEnabled
         self.fingerprintsEnabledSource = fingerprintsEnabledSource
+        self.failureEvidencePolicy = failureEvidencePolicy
+        self.failureEvidencePolicySource = failureEvidencePolicySource
         self.sessionIdentity = sessionIdentity ?? InsideJobSessionIdentity.make(instanceId: instanceId)
     }
 }

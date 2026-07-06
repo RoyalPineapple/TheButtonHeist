@@ -120,7 +120,10 @@ struct LiveLookup {
     }
 
     func container(forPath path: TreePath) -> AccessibilityContainer? {
-        capture.hierarchy.pathIndexedContainers.first { $0.path == path }?.container
+        guard case .container(let container, _) = capture.hierarchy.node(at: path) else {
+            return nil
+        }
+        return container
     }
 
     func containerName(forPath path: TreePath) -> ContainerName? {

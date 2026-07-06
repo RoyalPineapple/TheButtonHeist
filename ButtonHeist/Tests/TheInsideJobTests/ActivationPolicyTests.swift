@@ -59,10 +59,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(events, ["refresh", "activate:refreshed"])
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
-        XCTAssertEqual(result.activationTrace, ActivationTrace(
-            axActivateReturned: true,
-            tapActivationDispatched: false
-        ))
+        XCTAssertEqual(result.activationTrace, ActivationTrace(.accessibilityActivate))
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
@@ -89,10 +86,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "activation refresh failed")
         XCTAssertEqual(activateCount, 0)
         XCTAssertTrue(dispatchedPoints.isEmpty)
-        XCTAssertEqual(result.activationTrace, ActivationTrace(
-            axActivateReturned: nil,
-            tapActivationDispatched: false
-        ))
+        XCTAssertEqual(result.activationTrace, ActivationTrace(.refreshFailed))
     }
 
     func testActivationPointDispatchCanCompleteActivate() async {
@@ -119,12 +113,11 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
-        XCTAssertEqual(result.activationTrace, ActivationTrace(
+        XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
-            tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 30, y: 40),
             tapActivationSucceeded: true
-        ))
+        )))
     }
 
     func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async {
@@ -157,12 +150,11 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
-        XCTAssertEqual(result.activationTrace, ActivationTrace(
+        XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
-            tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 52, y: 52),
             tapActivationSucceeded: false
-        ))
+        )))
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed: accessibilityActivate() declined after semantic refresh",
             "activation-point dispatch was attempted at the fresh accessibility activation point",
