@@ -817,10 +817,10 @@ private let expectedRepairJSONReportJSON = """
         )
         let step = HeistExecutionStepResult.failed(
             path: "$.body[0]",
-            kind: .action,
+            receiptKind: .action,
             durationMs: 1,
             intent: .action(command: .activate(.target(target))),
-            evidence: .action(.expectation(
+            evidence: .expectation(
                 command: .activate(.target(target)),
                 dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
                 expectationResult: ActionResult.failure(
@@ -834,7 +834,7 @@ private let expectedRepairJSONReportJSON = """
                     predicate: predicate,
                     actual: "timed out waiting for checkout"
                 )
-            )),
+            ),
             failure: failure
         )
 
@@ -1161,14 +1161,14 @@ private let expectedRepairJSONReportJSON = """
                 accessibilityTrace: trace
             )
         }
-        let evidence = HeistStepEvidence.action(.dispatch(
+        let evidence = HeistActionEvidence.dispatch(
             command: .activate(.target(target)),
             dispatchResult: actionResult
-        ))
+        )
         let step = status == .failed
             ? HeistExecutionStepResult.failed(
                 path: path,
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 1,
                 intent: .action(command: .activate(.target(target))),
                 evidence: evidence,
@@ -1181,7 +1181,7 @@ private let expectedRepairJSONReportJSON = """
             )
             : HeistExecutionStepResult.passed(
                 path: path,
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 1,
                 intent: .action(command: .activate(.target(target))),
                 evidence: evidence

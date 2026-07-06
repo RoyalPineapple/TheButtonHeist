@@ -174,11 +174,19 @@ extension FenceCommandDescriptor {
             throw SchemaValidationError(field: field, observed: "missing", expected: parameter.expectedTypeDescription)
         }
 
-        guard !parameter.usesCustomPayloadValidation else {
+        guard !ownsCustomPayloadValidation(for: parameter) else {
             return
         }
 
         try validateSchema(parameter.schema, value: value, field: field)
+    }
+
+    func ownsCustomPayloadValidation(for parameter: FenceParameterSpec) -> Bool {
+        parameter.usesCustomPayloadValidation || ownsRunHeistArgumentPayloadValidation(for: parameter)
+    }
+
+    private func ownsRunHeistArgumentPayloadValidation(for parameter: FenceParameterSpec) -> Bool {
+        command == .runHeist && parameter.key == FenceParameterKey.argument.rawValue
     }
 
     func validateSchema(
@@ -432,19 +440,6 @@ extension FenceCommandDescriptor {
 }
 
 private extension FenceParameterSpec {
-    var usesCustomPayloadValidation: Bool {
-        switch key {
-        case FenceParameterKey.target.rawValue,
-             FenceParameterKey.element.rawValue,
-             FenceParameterKey.predicate.rawValue,
-             FenceParameterKey.expect.rawValue,
-             FenceParameterKey.argument.rawValue:
-            return true
-        default:
-            return type == .stringMatch
-        }
-    }
-
     var expectedTypeDescription: String {
         if let enumValues {
             return SchemaValidationError.expectedEnumValues(enumValues)

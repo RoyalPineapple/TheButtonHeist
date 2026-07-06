@@ -28,6 +28,7 @@ extension TheInsideJob {
             self, selector: #selector(appWillTerminate),
             name: UIApplication.willTerminateNotification, object: nil
         )
+        setLifecycleObservationInstalled(true)
     }
 
     func stopLifecycleObservationIfNeeded() {
@@ -36,6 +37,7 @@ extension TheInsideJob {
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willTerminateNotification, object: nil)
+        setLifecycleObservationInstalled(false)
     }
 
     @objc private func appWillResignActive() {
@@ -47,9 +49,8 @@ extension TheInsideJob {
     }
 
     private func beginLifecycleSuspension() {
-        spawnLifecycleTask { [weak self] in
-            await self?.suspend()
-        }
+        let change = applyLifecycleEvent(.lifecycleSuspensionNotification)
+        performLifecycleSchedulingEffects(change.effects)
     }
 
     @objc private func appWillEnterForeground() {
@@ -63,30 +64,14 @@ extension TheInsideJob {
     }
 
     private func scheduleForegroundResume(replacingExisting: Bool) {
-        if case .resuming(let attempt) = serverPhase {
-            guard replacingExisting else { return }
-            attempt.task.cancel()
-            spawnLifecycleTask { [weak self] in
-                await attempt.task.value
-                await self?.resumeAfterLifecycleBoundary()
-            }
-            return
-        }
-
-        guard case .suspended = serverPhase else {
-            return
-        }
-
-        spawnLifecycleTask { [weak self] in
-            await self?.resumeAfterLifecycleBoundary()
-        }
+        let change = applyLifecycleEvent(.foregroundNotification(replacingExisting: replacingExisting))
+        performLifecycleSchedulingEffects(change.effects)
     }
 
     @objc private func appWillTerminate() {
         insideJobLogger.info("App will terminate, stopping server")
-        spawnLifecycleTask { [weak self] in
-            await self?.stop()
-        }
+        let change = applyLifecycleEvent(.terminationNotification)
+        performLifecycleSchedulingEffects(change.effects)
     }
 
     /// Spawn a Task that wraps an async lifecycle transition. The handle is
@@ -106,32 +91,20 @@ extension TheInsideJob {
     // MARK: - Suspend / Resume
 
     func suspend() async {
-        let resources: InsideJobRuntimeResources
-        switch serverPhase {
-        case .running(let runningResources):
-            resources = runningResources
-        case .resuming(let attempt):
-            attempt.task.cancel()
-            await attempt.task.value
-            guard case .suspended = serverPhase else { return }
-            return
-        case .starting, .stopped, .suspended, .suspending, .stopping:
-            return
+        let suspension: InsideJobSuspension?
+        if case .running(let resources) = serverPhase {
+            brains.clearCache()
+            suspension = InsideJobSuspension(id: UUID(), resources: resources)
+        } else {
+            suspension = nil
         }
 
-        brains.clearCache()
-        let suspension = InsideJobSuspension(id: UUID(), resources: resources)
-        serverPhase = .suspending(suspension)
-        releaseRuntimeOwnedResources(policy: .suspend, idleTimerBaseline: resources.idleTimerBaseline)
+        let change = applyLifecycleEvent(.suspendRequested(suspension))
+        await performLifecycleEffects(change.effects)
 
-        await resources.transport.stop()
-        await muscle.tearDown()
-        await getaway.tearDown()
-
-        guard case .suspending(let currentSuspension) = serverPhase,
-              currentSuspension.id == suspension.id
-        else { return }
-        serverPhase = .suspended(InsideJobSuspendedRuntime(idleTimerBaseline: resources.idleTimerBaseline))
+        guard let suspension else { return }
+        let finishChange = applyLifecycleEvent(.suspendFinished(suspension.id))
+        await performLifecycleEffects(finishChange.effects)
 
         insideJobLogger.info("Server suspended")
     }
@@ -141,7 +114,7 @@ extension TheInsideJob {
         await resumeAfterLifecycleBoundary()
     }
 
-    private func resumeAfterLifecycleBoundary() async {
+    func resumeAfterLifecycleBoundary() async {
         guard case .suspended(let suspendedRuntime) = serverPhase else { return }
 
         insideJobLogger.info("Resuming server...")
@@ -153,22 +126,34 @@ extension TheInsideJob {
             do {
                 try Task.checkCancellation()
 
-                let resources = try await self.startRuntimeResourcesForResume(
-                    idleTimerBaseline: suspendedRuntime.idleTimerBaseline
+                let transport = try self.makeRuntimeTransport(phase: .resume)
+                startedTransport = transport
+
+                let startChange = self.applyLifecycleEvent(
+                    .resumeTransportRequested(
+                        resumeID,
+                        transport: transport,
+                        idleTimerBaseline: suspendedRuntime.idleTimerBaseline
+                    )
                 )
+                guard startChange.singleEffect != nil else {
+                    await self.cleanupFailedTransportStartup(startedTransport)
+                    return
+                }
+
+                let resources = try await self.startRuntimeResources(from: startChange.effects)
                 startedTransport = resources.transport
 
                 try Task.checkCancellation()
 
-                guard self.isCurrentResumeAttempt(resumeID) else {
-                    if let startedTransport {
-                        await self.cleanupFailedTransportStartup(startedTransport)
-                    }
+                let finishChange = self.applyLifecycleEvent(.resumeSucceeded(resumeID, resources))
+                guard finishChange.effects.contains(.activateRuntime(resources)) else {
+                    await self.cleanupFailedTransportStartup(startedTransport)
                     return
                 }
 
-                self.activateRuntime(resources)
                 startedTransport = nil
+                await self.performLifecycleEffects(finishChange.effects)
 
                 insideJobLogger.info("Server resumed on port \(resources.actualPort)")
 
@@ -176,22 +161,30 @@ extension TheInsideJob {
             } catch is CancellationError {
                 await self.cleanupFailedTransportStartup(startedTransport)
                 startedTransport = nil
-                self.finishFailedResumeAttempt(resumeID)
+                let failureChange = self.applyLifecycleEvent(.resumeFailed(resumeID))
+                await self.performLifecycleEffects(failureChange.effects)
                 insideJobLogger.info("Server resume cancelled")
             } catch {
                 insideJobLogger.error("Failed to resume server: \(error)")
                 await self.cleanupFailedTransportStartup(startedTransport)
                 startedTransport = nil
-                self.finishFailedResumeAttempt(resumeID)
+                let failureChange = self.applyLifecycleEvent(.resumeFailed(resumeID))
+                await self.performLifecycleEffects(failureChange.effects)
             }
         }
-        serverPhase = .resuming(
-            InsideJobResumeAttempt(
-                id: resumeID,
-                suspendedRuntime: suspendedRuntime,
-                task: task
+        let change = applyLifecycleEvent(
+            .resumeRequested(
+                InsideJobResumeAttempt(
+                    id: resumeID,
+                    suspendedRuntime: suspendedRuntime,
+                    task: task
+                )
             )
         )
+        guard case .resuming = change.state else {
+            task.cancel()
+            return
+        }
     }
 }
 

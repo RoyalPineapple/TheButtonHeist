@@ -203,15 +203,15 @@ import TheScore
             steps: [
                 .passed(
                     path: "$.body[0]",
-                    kind: .action,
+                    receiptKind: .action,
                     durationMs: 12,
                     intent: .action(command: .activate(.predicate(.label("Checkout")))),
-                    evidence: .action(.expectation(
+                    evidence: .expectation(
                         command: .activate(.predicate(.label("Checkout"))),
                         dispatchResult: result,
                         expectationResult: ActionResult.success(method: .wait, message: "screenChanged"),
                         expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
-                    ))
+                    )
                 ),
             ],
             durationMs: 12

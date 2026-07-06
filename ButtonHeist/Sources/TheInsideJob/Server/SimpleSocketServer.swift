@@ -2,6 +2,7 @@ import Foundation
 import Network
 import os
 
+import ButtonHeistSupport
 import TheScore
 
 /// TCP server using Network framework.
@@ -9,18 +10,74 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = ButtonHeistLog.logger(.handoff(.server))
 
-actor SimpleSocketServer {
-    // MARK: - State Machines
+enum SimpleSocketServerPhase: Equatable, Sendable {
+    case stopped
+    case starting(UUID)
+    case listening(port: UInt16)
+}
 
-    private enum ServerPhase {
-        case stopped
-        case starting(UUID)
-        case listening(listeners: [NWListener], port: UInt16)
+struct SimpleSocketServerLifecycleMachine: SimpleStateMachine {
+    enum Event: Equatable, Sendable {
+        case beginStarting(UUID)
+        case finishStarting(UUID, port: UInt16)
+        case failStarting(UUID)
+        case stop
     }
 
+    enum Effect: Equatable, Sendable {
+        case clearPublishedPort
+        case publishPort(UInt16)
+        case stopRuntime
+    }
+
+    enum Rejection: Equatable, Sendable {
+        case alreadyRunning
+        case staleStartAttempt
+        case alreadyStopped
+    }
+
+    func advance(
+        _ state: SimpleSocketServerPhase,
+        with event: Event
+    ) -> StateChange<SimpleSocketServerPhase, Effect, Rejection> {
+        switch (state, event) {
+        case (.stopped, .beginStarting(let attemptID)):
+            return .changed(to: .starting(attemptID))
+        case (.starting, .beginStarting),
+             (.listening, .beginStarting):
+            return .rejected(.alreadyRunning, stayingIn: state)
+
+        case (.starting(let currentID), .finishStarting(let attemptID, let port)) where currentID == attemptID:
+            return .changed(to: .listening(port: port), effects: [.publishPort(port)])
+        case (.stopped, .finishStarting),
+             (.starting, .finishStarting),
+             (.listening, .finishStarting):
+            return .rejected(.staleStartAttempt, stayingIn: state)
+
+        case (.starting(let currentID), .failStarting(let attemptID)) where currentID == attemptID:
+            return .changed(to: .stopped, effects: [.clearPublishedPort])
+        case (.stopped, .failStarting),
+             (.starting, .failStarting),
+             (.listening, .failStarting):
+            return .rejected(.staleStartAttempt, stayingIn: state)
+
+        case (.stopped, .stop):
+            return .rejected(.alreadyStopped, stayingIn: .stopped)
+        case (.starting, .stop),
+             (.listening, .stop):
+            return .changed(to: .stopped, effects: [.clearPublishedPort, .stopRuntime])
+        }
+    }
+}
+
+actor SimpleSocketServer {
     // MARK: - Actor-isolated mutable state
 
-    private var serverPhase: ServerPhase = .stopped
+    private var lifecycle = StateDriver(
+        initial: SimpleSocketServerPhase.stopped,
+        machine: SimpleSocketServerLifecycleMachine()
+    )
+    private var activeListeners: [NWListener] = []
     var clientRegistry = SocketClientRegistry()
 
     /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
@@ -117,13 +174,12 @@ actor SimpleSocketServer {
         parameters: NWParameters,
         callbacks: SocketServerCallbacks?
     ) async throws -> UInt16 {
-        guard case .stopped = serverPhase else {
+        let attemptID = UUID()
+        guard case .changed = lifecycle.send(.beginStarting(attemptID)) else {
             throw ServerError.alreadyRunning
         }
 
         if let callbacks { self.clientLifecycle.callbacks = callbacks }
-        let attemptID = UUID()
-        serverPhase = .starting(attemptID)
 
         do {
             let listenerStartup = try await SocketListenerStartup.start(
@@ -139,49 +195,51 @@ actor SimpleSocketServer {
                 }
             }
 
-            guard case .starting(let currentAttemptID) = serverPhase,
-                  currentAttemptID == attemptID
-            else {
+            let completion = lifecycle.send(.finishStarting(attemptID, port: listenerStartup.port))
+            guard case .changed = completion else {
                 listenerStartup.listeners.forEach { $0.cancel() }
                 throw CancellationError()
             }
 
-            self.serverPhase = .listening(listeners: listenerStartup.listeners, port: listenerStartup.port)
-            self._syncListeningPort.withLock { $0 = listenerStartup.port }
+            activeListeners = listenerStartup.listeners
+            applyLifecycleEffects(completion.effects)
 
             return listenerStartup.port
         } catch {
-            if case .starting(let currentAttemptID) = serverPhase,
-               currentAttemptID == attemptID {
-                serverPhase = .stopped
-                _syncListeningPort.withLock { $0 = 0 }
-            }
+            applyLifecycleEffects(lifecycle.send(.failStarting(attemptID)).effects)
             throw error
         }
     }
 
     /// Stop the server.
     func stop() {
-        let listeners: [NWListener]
-        switch serverPhase {
-        case .stopped:
-            return
-        case .starting:
-            listeners = []
-        case .listening(let activeListeners, _):
-            listeners = activeListeners
-        }
+        let stop = lifecycle.send(.stop)
+        guard stop.effects.contains(.stopRuntime) else { return }
+        let listeners = activeListeners
+        activeListeners = []
 
         let allClients = clientRegistry.drain()
         pendingCallbackTasks.cancelAll()
-        serverPhase = .stopped
-        _syncListeningPort.withLock { $0 = 0 }
+        applyLifecycleEffects(stop.effects)
 
         clientLifecycle.cancelClientsWithoutNotifying(allClients)
         for listener in listeners {
             listener.cancel()
         }
         logger.info("Server stopped")
+    }
+
+    private func applyLifecycleEffects(_ effects: [SimpleSocketServerLifecycleMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .clearPublishedPort:
+                _syncListeningPort.withLock { $0 = 0 }
+            case .publishPort(let port):
+                _syncListeningPort.withLock { $0 = port }
+            case .stopRuntime:
+                continue
+            }
+        }
     }
 
     /// Spawn a Task that bridges an `NWListener` / `NWConnection` callback

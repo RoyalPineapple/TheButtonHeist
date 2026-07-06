@@ -181,17 +181,17 @@ struct DoctorDemoFixture {
                 accessibilityTrace: trace
             )
         let command = HeistActionCommand.activate(.target(target))
-        let evidence = HeistStepEvidence.action(.dispatch(
+        let evidence = HeistActionEvidence.dispatch(
             command: command,
             dispatchResult: actionResult
-        ))
+        )
         let intent = HeistStepIntent.action(command: command)
         let step: HeistExecutionStepResult
         switch status {
         case .passed:
             step = .passed(
                 path: "$.body[0]",
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 1,
                 intent: intent,
                 evidence: evidence
@@ -199,7 +199,7 @@ struct DoctorDemoFixture {
         case .failed:
             step = .failed(
                 path: "$.body[0]",
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 1,
                 intent: intent,
                 evidence: evidence,

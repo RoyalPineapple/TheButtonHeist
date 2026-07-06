@@ -130,10 +130,10 @@ import Testing
             steps: [
                 .passed(
                     path: "$.body[0]",
-                    kind: .warn,
+                    receiptKind: .warning,
                     durationMs: 2,
                     intent: .warn(message: "record receipt"),
-                    evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "record receipt"))
+                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "record receipt")
                 ),
             ],
             durationMs: 2

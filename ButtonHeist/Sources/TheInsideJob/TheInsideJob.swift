@@ -3,6 +3,7 @@
 import UIKit
 import os.log
 
+import ButtonHeistSupport
 import TheScore
 
 let insideJobLogger = ButtonHeistLog.logger(.insideJob(.server))
@@ -86,7 +87,15 @@ public final class TheInsideJob {
 
     // MARK: - Properties
 
-    var serverPhase: ServerPhase = .stopped
+    private var lifecycle = StateDriver(
+        initial: ServerPhase.stopped,
+        machine: InsideJobLifecycleMachine()
+    )
+    private var lifecycleObserversInstalled = false
+
+    var serverPhase: ServerPhase {
+        lifecycle.state
+    }
 
     let muscle: TheMuscle
     let tripwire = TheTripwire()
@@ -119,12 +128,7 @@ public final class TheInsideJob {
     }
 
     var lifecycleObservationIsInstalled: Bool {
-        switch serverPhase {
-        case .running, .suspending, .suspended, .resuming:
-            return true
-        case .starting, .stopped, .stopping:
-            return false
-        }
+        lifecycleObserversInstalled
     }
 
     var retainedIdleTimerBaseline: Bool? {
@@ -155,6 +159,17 @@ public final class TheInsideJob {
         case .starting, .stopped, .suspended, .resuming, .stopping:
             return nil
         }
+    }
+
+    @discardableResult
+    func applyLifecycleEvent(
+        _ event: InsideJobLifecycleMachine.Event
+    ) -> StateChange<ServerPhase, InsideJobLifecycleMachine.Effect, InsideJobLifecycleMachine.Rejection> {
+        lifecycle.send(event)
+    }
+
+    func setLifecycleObservationInstalled(_ installed: Bool) {
+        lifecycleObserversInstalled = installed
     }
 
     // MARK: - Initialization
@@ -250,21 +265,45 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let attemptID = UUID()
-        let resources = try await startRuntimeResourcesForStartup(attemptID: attemptID)
-        guard isCurrentStartAttempt(attemptID) else {
-            await cleanupFailedTransportStartup(resources.transport)
+        let attempt = try makeRuntimeStartAttempt(id: attemptID, phase: .startup)
+        let startChange = applyLifecycleEvent(
+            .startRequested(
+                attempt,
+                idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
+            )
+        )
+        guard startChange.singleEffect != nil else {
+            insideJobLogger.info("start() called while already running — ignoring")
+            return
+        }
+
+        do {
+            let resources = try await startRuntimeResources(from: startChange.effects)
+            let finishChange = applyLifecycleEvent(.startSucceeded(attemptID, resources))
+            guard finishChange.effects.contains(.activateRuntime(resources)) else {
+                await performLifecycleEffect(.cleanupTransport(resources.transport))
+                throw CancellationError()
+            }
+            await performLifecycleEffects(finishChange.effects)
+        } catch {
+            let failureChange = applyLifecycleEvent(.startFailed(attemptID))
+            if failureChange.effects.isEmpty {
+                await performLifecycleEffect(.cleanupTransport(attempt.transport))
+            } else {
+                await performLifecycleEffects(failureChange.effects)
+            }
+            throw error
+        }
+
+        guard case .running = serverPhase else {
             throw CancellationError()
         }
-        activateRuntime(resources)
 
         insideJobLogger.info("Server started successfully")
     }
 
     public func stop() async {
         await stopRuntime()
-
-        await muscle.tearDown()
-        await getaway.tearDown()
 
         insideJobLogger.info("Server stopped")
     }

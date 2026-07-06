@@ -50,14 +50,121 @@ struct HeistWaitReceipt {
         }
     }
 
-    let status: Status
-    let message: String?
-    let accessibilityTrace: AccessibilityTrace?
-    let expectation: ExpectationResult
-    let observedSequence: SettledObservationSequence?
-    let observationSummary: String?
-    let warning: HeistPredicateWarning?
-    let announcement: String?
+    struct MatchedEvidence {
+        let message: String?
+        let accessibilityTrace: AccessibilityTrace?
+        let expectation: ExpectationResult
+        let observedSequence: SettledObservationSequence?
+        let observationSummary: String?
+        let warning: HeistPredicateWarning?
+        let announcement: String?
+    }
+
+    struct TimedOutEvidence {
+        let message: String?
+        let accessibilityTrace: AccessibilityTrace?
+        let expectation: ExpectationResult
+        let observedSequence: SettledObservationSequence?
+        let observationSummary: String?
+    }
+
+    struct FailedEvidence {
+        let errorKind: ErrorKind
+        let message: String?
+        let accessibilityTrace: AccessibilityTrace?
+        let expectation: ExpectationResult
+        let announcement: String?
+    }
+
+    enum Outcome {
+        case matched(MatchedEvidence)
+        case timedOut(TimedOutEvidence)
+        case failed(FailedEvidence)
+    }
+
+    let outcome: Outcome
+
+    var status: Status {
+        switch outcome {
+        case .matched:
+            return .matched
+        case .timedOut:
+            return .timedOut
+        case .failed(let evidence):
+            return .failed(evidence.errorKind)
+        }
+    }
+
+    var message: String? {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.message
+        case .timedOut(let evidence):
+            return evidence.message
+        case .failed(let evidence):
+            return evidence.message
+        }
+    }
+
+    var accessibilityTrace: AccessibilityTrace? {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.accessibilityTrace
+        case .timedOut(let evidence):
+            return evidence.accessibilityTrace
+        case .failed(let evidence):
+            return evidence.accessibilityTrace
+        }
+    }
+
+    var expectation: ExpectationResult {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.expectation
+        case .timedOut(let evidence):
+            return evidence.expectation
+        case .failed(let evidence):
+            return evidence.expectation
+        }
+    }
+
+    var observedSequence: SettledObservationSequence? {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.observedSequence
+        case .timedOut(let evidence):
+            return evidence.observedSequence
+        case .failed:
+            return nil
+        }
+    }
+
+    var observationSummary: String? {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.observationSummary
+        case .timedOut(let evidence):
+            return evidence.observationSummary
+        case .failed:
+            return nil
+        }
+    }
+
+    var warning: HeistPredicateWarning? {
+        guard case .matched(let evidence) = outcome else { return nil }
+        return evidence.warning
+    }
+
+    var announcement: String? {
+        switch outcome {
+        case .matched(let evidence):
+            return evidence.announcement
+        case .timedOut:
+            return nil
+        case .failed(let evidence):
+            return evidence.announcement
+        }
+    }
 
     var actionResult: ActionResult {
         makeActionResult()
@@ -67,8 +174,7 @@ struct HeistWaitReceipt {
         status.succeeded
     }
 
-    init(
-        status: Status,
+    static func matched(
         message: String?,
         accessibilityTrace: AccessibilityTrace?,
         expectation: ExpectationResult,
@@ -76,15 +182,48 @@ struct HeistWaitReceipt {
         observationSummary: String? = nil,
         warning: HeistPredicateWarning? = nil,
         announcement: String? = nil
-    ) {
-        self.status = status
-        self.message = message
-        self.accessibilityTrace = accessibilityTrace
-        self.expectation = expectation
-        self.observedSequence = observedSequence
-        self.observationSummary = observationSummary
-        self.warning = warning
-        self.announcement = announcement
+    ) -> HeistWaitReceipt {
+        HeistWaitReceipt(outcome: .matched(MatchedEvidence(
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            expectation: expectation,
+            observedSequence: observedSequence,
+            observationSummary: observationSummary,
+            warning: warning,
+            announcement: announcement
+        )))
+    }
+
+    static func timedOut(
+        message: String?,
+        accessibilityTrace: AccessibilityTrace?,
+        expectation: ExpectationResult,
+        observedSequence: SettledObservationSequence? = nil,
+        observationSummary: String? = nil
+    ) -> HeistWaitReceipt {
+        HeistWaitReceipt(outcome: .timedOut(TimedOutEvidence(
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            expectation: expectation,
+            observedSequence: observedSequence,
+            observationSummary: observationSummary
+        )))
+    }
+
+    static func failed(
+        errorKind: ErrorKind,
+        message: String?,
+        accessibilityTrace: AccessibilityTrace?,
+        expectation: ExpectationResult,
+        announcement: String? = nil
+    ) -> HeistWaitReceipt {
+        HeistWaitReceipt(outcome: .failed(FailedEvidence(
+            errorKind: errorKind,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            expectation: expectation,
+            announcement: announcement
+        )))
     }
 
     func makeActionResult(method: ActionMethod = .wait) -> ActionResult {

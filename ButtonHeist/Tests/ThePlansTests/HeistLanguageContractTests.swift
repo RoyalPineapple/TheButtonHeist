@@ -128,6 +128,81 @@ import Testing
     )
 }
 
+@Test func `semantic validation rejects nested collection loops`() throws {
+    for testCase in try nestedCollectionLoopCases() {
+        let diagnostic = try #require(testCase.candidate.semanticValidationResult().failureDiagnostics?.first)
+        #expect(diagnostic.code == .planRuntimeSafety)
+        #expect(diagnostic.title == "Plan semantic validation failed")
+        #expect(diagnostic.phase == .planValidation)
+        #expect(diagnostic.path == testCase.path)
+        #expect(diagnostic.message == "collection loops must not be nested; observed \(testCase.observed)")
+        #expect(diagnostic.hint == "Flatten this heist so ForEach bodies contain only non-collection steps.")
+    }
+}
+
+private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissionCandidate, path: String, observed: String)] {
+    [
+        (
+            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "item", body: [
+                try stringLoop(parameter: "size"),
+            ]))]),
+            "$.body[0].for_each_string.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+        (
+            HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "rowName", body: [
+                try elementLoop(parameter: "rowTarget"),
+            ]))]),
+            "$.body[0].for_each_string.body[0].for_each_element",
+            "for_each_element inside collection loop"
+        ),
+        (
+            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
+                try stringLoop(parameter: "size"),
+            ]))]),
+            "$.body[0].for_each_element.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+        (
+            HeistPlanAdmissionCandidate(body: [admissionStep(try elementLoop(parameter: "section", body: [
+                try elementLoop(parameter: "row"),
+            ]))]),
+            "$.body[0].for_each_element.body[0].for_each_element",
+            "for_each_element inside collection loop"
+        ),
+        (
+            HeistPlanAdmissionCandidate(
+                definitions: [
+                    HeistPlanAdmissionCandidate(name: "Inner", body: [admissionStep(try stringLoop(parameter: "size"))]),
+                ],
+                body: [admissionStep(try stringLoop(parameter: "item", body: [
+                    .invoke(HeistInvocationStep(path: ["Inner"])),
+                ]))]
+            ),
+            "$.body[0].for_each_string.body[0].invoke.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+    ]
+}
+
+private func admissionStep(_ step: HeistStep) -> HeistStepAdmissionCandidate {
+    HeistStepAdmissionCandidate(step)
+}
+
+private func stringLoop(
+    parameter: HeistReferenceName,
+    body: [HeistStep] = [.warn(WarnStep(message: "nested"))]
+) throws -> HeistStep {
+    .forEachString(try ForEachStringStep(values: ["Milk"], parameter: parameter, body: body))
+}
+
+private func elementLoop(
+    parameter: HeistReferenceName,
+    body: [HeistStep] = [.warn(WarnStep(message: "nested"))]
+) throws -> HeistStep {
+    .forEachElement(try ForEachElementStep(matching: .label("Row"), limit: 1, parameter: parameter, body: body))
+}
+
 private func expectDefinitionPathFailure(
     _ path: String,
     contains expectedMessage: String

@@ -128,6 +128,47 @@ final class DocumentationContractTests: XCTestCase {
         }
     }
 
+    func testCIReceiptContractDocumentsExistingScripts() throws {
+        let ci = try contents(relativePath: "docs/CI.md")
+
+        for script in [
+            "scripts/run-with-heist-receipts.sh",
+            "scripts/collect-ios-heist-receipts.sh",
+            "scripts/write-ci-heist-receipt-manifest.sh",
+        ] {
+            XCTAssertTrue(ci.contains(script), script)
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: repositoryRoot().appendingPathComponent(script).path),
+                script
+            )
+        }
+
+        for phrase in [
+            "BUTTONHEIST_RECEIPTS_DIR",
+            "BUTTONHEIST_RECEIPTS_MODE",
+            "--ios-sandbox",
+            "manifest.txt",
+            "receipt-files.txt",
+            "collection-diagnostics.txt",
+            "runHeistSync(\"Checkout.pay\", recordReceipt: .always, to: receiptsURL)",
+        ] {
+            XCTAssertTrue(ci.containsNormalizedMarkdown(phrase), phrase)
+        }
+    }
+
+    func testScopeDocumentsSystemSurfaceBoundary() throws {
+        let scope = try contents(relativePath: "docs/SCOPE-AND-LIMITS.md")
+
+        for phrase in [
+            "server sees only its own process's accessibility tree",
+            "SpringBoard-owned permission alerts",
+            "XCUITest should tap SpringBoard or other system UI",
+            "Do not send Button Heist commands while a SpringBoard alert is visible",
+        ] {
+            XCTAssertTrue(scope.containsNormalizedMarkdown(phrase), phrase)
+        }
+    }
+
     func testHomebrewRendererAcceptsOnlySemVerReleaseVersions() throws {
         let renderer = try contents(relativePath: "scripts/render-homebrew-formula.sh")
 
@@ -193,16 +234,19 @@ final class DocumentationContractTests: XCTestCase {
             "ButtonHeistCLI/README.md",
             "ButtonHeistMCP/README.md",
             "examples/README.md",
+            "examples/adoption-examples.md",
             "examples/semantic-command.md",
             "docs/ACCESSIBILITY-CONTRACT.md",
             "docs/API.md",
             "docs/ARCHITECTURE.md",
             "docs/AUTH.md",
             "docs/BONJOUR_TROUBLESHOOTING.md",
+            "docs/CI.md",
             "docs/HEIST-DOCTOR.md",
             "docs/HEIST-FORMAT.md",
             "docs/MCP-AGENT-GUIDE.md",
             "docs/README.md",
+            "docs/SCOPE-AND-LIMITS.md",
             "docs/SWIFT-HEIST-AUTHORING.md",
             "docs/USB_DEVICE_CONNECTIVITY.md",
             "docs/WIRE-PROTOCOL.md",

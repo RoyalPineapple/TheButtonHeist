@@ -60,9 +60,9 @@ final class PublicActionResultJSONTests: XCTestCase {
             steps: [
                 .passed(
                     path: "$.body[0]",
-                    kind: .warn,
+                    receiptKind: .warning,
                     durationMs: 1,
-                    evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "heads up"))
+                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "heads up")
                 ),
             ],
             durationMs: 1
@@ -158,9 +158,9 @@ final class PublicActionResultJSONTests: XCTestCase {
                 steps: [
                     .failed(
                         path: "$.body[0]",
-                        kind: .action,
+                        receiptKind: .action,
                         durationMs: 7,
-                        evidence: .action(.dispatch(dispatchResult: actionResult)),
+                        evidence: .dispatch(dispatchResult: actionResult),
                         failure: HeistFailureDetail(
                             category: .targetResolution,
                             contract: "action dispatch succeeds",
@@ -354,11 +354,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
     ) throws -> PublicHeistActionResultDTO {
-        let evidence = HeistStepEvidence.action(.dispatch(dispatchResult: result))
+        let evidence = HeistActionEvidence.dispatch(dispatchResult: result)
         let step = status == .failed
             ? HeistExecutionStepResult.failed(
                 path: "$.body[0]",
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 7,
                 evidence: evidence,
                 failure: failure ?? HeistFailureDetail(
@@ -369,7 +369,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
             : HeistExecutionStepResult.passed(
                 path: "$.body[0]",
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 7,
                 evidence: evidence
             )

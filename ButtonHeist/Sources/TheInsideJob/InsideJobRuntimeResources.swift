@@ -13,8 +13,6 @@ extension TheInsideJob {
         tripwire.startPulse()
         brains.startSemanticObservation()
         brains.safecracker.startKeyboardObservation()
-
-        serverPhase = .running(resources)
     }
 
     func releaseRuntimeOwnedResources(policy: RuntimeReleasePolicy, idleTimerBaseline: Bool) {

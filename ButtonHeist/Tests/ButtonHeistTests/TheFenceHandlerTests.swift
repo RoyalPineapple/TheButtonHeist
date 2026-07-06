@@ -1770,14 +1770,14 @@ final class TheFenceHandlerTests: XCTestCase {
         let childPath = "$.body[0].heist.body[0]"
         let child = HeistExecutionStepResult.failed(
             path: childPath,
-            kind: .action,
+            receiptKind: .action,
             durationMs: 5,
-            evidence: .action(.dispatch(
+            evidence: .dispatch(
                 dispatchResult: ActionResult.failure(
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "boom")
-            )),
+            ),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "activate command succeeds",
@@ -1788,12 +1788,12 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 .childAborted(
                     path: "$.body[0]",
-                    kind: .heist,
+                    receiptKind: .heist,
                     durationMs: 5,
-                    evidence: .invocation(.heist(
+                    evidence: .heist(
                         name: "heist",
                         childFailedPath: childPath
-                    )),
+                    ),
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "heist body completes without failure",

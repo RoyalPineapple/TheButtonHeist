@@ -132,6 +132,10 @@ func testCheckoutCompletes() {
 If no URL is supplied, explicit sync-test receipts are written under the process
 temporary directory at `buttonheist-receipts/`.
 
+See [Adoption examples](../examples/adoption-examples.md) for a copyable
+KIF-style replacement that records receipts with
+`runHeistSync(..., recordReceipt: .always, to:)`.
+
 `RunHeist(...)` composes inside durable plans. `runHeist(...)` executes a heist
 now from Swift tests. `run_heist` crosses the CLI/MCP tool boundary.
 
@@ -163,6 +167,10 @@ is unreachable from the host, the launch system may require external port
 forwarding; the app process can report the bound simulator-side port but cannot
 create that host bridge itself.
 
+Bare `joinHeist` is manual-only: it intentionally never returns, so CI watchdogs
+will eventually kill the parked test. For a takeover that must end inside an
+automated run, use `withJoinedHeistSession`.
+
 For tests that should keep running while a client connects, scope the same live
 session around the code that needs it:
 
@@ -180,6 +188,13 @@ func testCheckoutWithExternalProbe() throws {
 `withJoinedHeistSession` accepts the same `port`, `addressFamily`, and
 `allowedScopes` parameters as `joinHeist`, then stops the fresh InsideJob
 server when the closure exits.
+
+For flows that include SpringBoard permission alerts or other process-owned
+surfaces, keep the process boundary explicit: XCUITest handles the system UI,
+and Button Heist asserts only the app-owned accessibility contract after the
+app is back on an in-process screen. The boundary is documented in
+[Scope and limits](SCOPE-AND-LIMITS.md), with a paired example in
+[Adoption examples](../examples/adoption-examples.md#pairing-with-xcuitest-for-system-dialogs).
 
 Inside a durable plan, `RunHeist("Name", argument)` is the composition step
 that invokes a named reusable heist. It is not a Swift helper call:

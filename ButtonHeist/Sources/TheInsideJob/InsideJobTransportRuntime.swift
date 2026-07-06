@@ -7,115 +7,80 @@ import TheScore
 
 @MainActor
 extension TheInsideJob {
-    func startRuntimeResourcesForStartup(attemptID: UUID) async throws -> InsideJobRuntimeResources {
-        let resources = try await startRuntimeResources(
-            phase: .startup,
-            startupAttemptID: attemptID,
-            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled,
-            leavesStoppedOnFailure: true
+    func makeRuntimeStartAttempt(
+        id: UUID,
+        phase: InsideJobRuntimeStartPhase
+    ) throws -> InsideJobStartAttempt {
+        InsideJobStartAttempt(
+            id: id,
+            transport: try makeRuntimeTransport(phase: phase)
         )
-        logStartupSummary(
-            actualPort: resources.actualPort,
-            bonjourServiceName: resources.bonjourServiceName
-        )
-        return resources
     }
 
-    func startRuntimeResourcesForResume(
-        idleTimerBaseline: Bool
+    func makeRuntimeTransport(phase: InsideJobRuntimeStartPhase) throws -> ServerTransport {
+        let token = try requireRuntimeToken(phase: phase)
+        insideJobLogger.info("TLS PSK material ready")
+        return transportFactory(token, runtimeConfiguration.allowedScopes)
+    }
+
+    func startRuntimeResources(
+        from effects: [InsideJobLifecycleMachine.Effect]
     ) async throws -> InsideJobRuntimeResources {
-        try await startRuntimeResources(
-            phase: .resume,
-            startupAttemptID: nil,
-            idleTimerBaseline: idleTimerBaseline,
-            leavesStoppedOnFailure: false
-        )
+        guard effects.count == 1,
+              case .startTransport(let request) = effects[0]
+        else {
+            throw CancellationError()
+        }
+        return try await startRuntimeResources(for: request)
     }
 
     func stopRuntime() async {
-        if case .resuming(let attempt) = serverPhase {
-            attempt.task.cancel()
-            await attempt.task.value
-        }
-
-        let resourcesToStop: InsideJobRuntimeResources?
-        let startupTransportToStop: ServerTransport?
-        let idleTimerBaseline: Bool?
-        switch serverPhase {
-        case .starting(let attempt):
-            resourcesToStop = nil
-            startupTransportToStop = attempt.transport
-            idleTimerBaseline = nil
-        case .running(let resources):
-            resourcesToStop = resources
-            startupTransportToStop = nil
-            idleTimerBaseline = resources.idleTimerBaseline
-        case .suspending(let suspension):
-            resourcesToStop = suspension.resources
-            startupTransportToStop = nil
-            idleTimerBaseline = suspension.resources.idleTimerBaseline
-        case .suspended(let suspended):
-            resourcesToStop = nil
-            startupTransportToStop = nil
-            idleTimerBaseline = suspended.idleTimerBaseline
-        case .resuming:
-            resourcesToStop = nil
-            startupTransportToStop = nil
-            idleTimerBaseline = retainedIdleTimerBaseline
-        case .stopping, .stopped:
+        let attempt = InsideJobStopAttempt(id: UUID())
+        let change = applyLifecycleEvent(.stopRequested(attempt))
+        guard !change.effects.isEmpty else {
             return
         }
 
-        serverPhase = .stopping(InsideJobStopAttempt(id: UUID()))
-        if let idleTimerBaseline {
-            releaseRuntimeOwnedResources(policy: .stop, idleTimerBaseline: idleTimerBaseline)
+        await performLifecycleEffects(change.effects)
+        if change.effects.contains(where: \.isCancelResumeEffect) {
+            guard case .suspended = serverPhase else { return }
+            await stopRuntime()
+            return
         }
-        await cleanupFailedTransportStartup(startupTransportToStop)
-        await resourcesToStop?.transport.stop()
 
-        serverPhase = .stopped
+        let finishChange = applyLifecycleEvent(.stopFinished(attempt.id))
+        await performLifecycleEffects(finishChange.effects)
     }
 
     private func startRuntimeResources(
-        phase: InsideJobRuntimeStartPhase,
-        startupAttemptID: UUID?,
-        idleTimerBaseline: Bool,
-        leavesStoppedOnFailure: Bool
+        for request: InsideJobTransportStartRequest
     ) async throws -> InsideJobRuntimeResources {
-        let token = try requireRuntimeToken(phase: phase)
-        insideJobLogger.info("TLS PSK material ready")
-
-        let transport = transportFactory(token, runtimeConfiguration.allowedScopes)
-        if let startupAttemptID {
-            serverPhase = .starting(InsideJobStartAttempt(id: startupAttemptID, transport: transport))
-        }
-        installTransportOverflowHandler(transport)
-        await getaway.wireTransport(transport)
+        installTransportOverflowHandler(request.transport)
+        await getaway.wireTransport(request.transport)
 
         let exposure = ServerExposure(
             allowedScopes: runtimeConfiguration.allowedScopes,
             addressFamily: runtimeConfiguration.addressFamily
         )
-        do {
-            let actualPort = try await transport.start(
-                port: runtimeConfiguration.preferredPort,
-                bindToLoopback: exposure.bindsToLoopbackOnly,
-                addressFamily: exposure.addressFamily
+        let actualPort = try await request.transport.start(
+            port: runtimeConfiguration.preferredPort,
+            bindToLoopback: exposure.bindsToLoopbackOnly,
+            addressFamily: exposure.addressFamily
+        )
+        let serviceName = advertiseService(on: request.transport, port: actualPort)
+        let resources = InsideJobRuntimeResources(
+            transport: request.transport,
+            actualPort: actualPort,
+            bonjourServiceName: serviceName,
+            idleTimerBaseline: request.idleTimerBaseline
+        )
+        if request.phase == .startup {
+            logStartupSummary(
+                actualPort: resources.actualPort,
+                bonjourServiceName: resources.bonjourServiceName
             )
-            let serviceName = advertiseService(on: transport, port: actualPort)
-            return InsideJobRuntimeResources(
-                transport: transport,
-                actualPort: actualPort,
-                bonjourServiceName: serviceName,
-                idleTimerBaseline: idleTimerBaseline
-            )
-        } catch {
-            await cleanupFailedTransportStartup(transport)
-            if let startupAttemptID {
-                finishFailedStartAttempt(startupAttemptID, leavesStoppedOnFailure: leavesStoppedOnFailure)
-            }
-            throw error
         }
+        return resources
     }
 
     func requireRuntimeToken(phase: InsideJobRuntimeStartPhase) throws -> String {
@@ -146,25 +111,85 @@ extension TheInsideJob {
         getaway.identity.tlsActive = false
     }
 
-    func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {
-        guard case .resuming(let attempt) = serverPhase else { return false }
-        return attempt.id == resumeID
+    func performLifecycleEffects(_ effects: [InsideJobLifecycleMachine.Effect]) async {
+        for effect in effects {
+            await performLifecycleEffect(effect)
+        }
     }
 
-    func isCurrentStartAttempt(_ startID: UUID) -> Bool {
-        guard case .starting(let attempt) = serverPhase else { return false }
-        return attempt.id == startID
+    func performLifecycleSchedulingEffects(_ effects: [InsideJobLifecycleMachine.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .scheduleSuspend:
+                spawnLifecycleTask { [weak self] in
+                    await self?.suspend()
+                }
+            case .scheduleResume(let attempt):
+                spawnLifecycleTask { [weak self] in
+                    if let attempt {
+                        await self?.performLifecycleEffect(.cancelResume(attempt))
+                    }
+                    await self?.resumeAfterLifecycleBoundary()
+                }
+            case .scheduleStop:
+                spawnLifecycleTask { [weak self] in
+                    await self?.stop()
+                }
+            case .startTransport,
+                 .stopTransport,
+                 .cleanupTransport,
+                 .releaseResources,
+                 .cancelResume,
+                 .activateRuntime,
+                 .tearDownRuntimeServices:
+                spawnLifecycleTask { [weak self] in
+                    await self?.performLifecycleEffect(effect)
+                }
+            }
+        }
     }
 
-    func finishFailedStartAttempt(_ startID: UUID, leavesStoppedOnFailure: Bool) {
-        guard leavesStoppedOnFailure, isCurrentStartAttempt(startID) else { return }
-        serverPhase = .stopped
+    func performLifecycleEffect(_ effect: InsideJobLifecycleMachine.Effect) async {
+        switch effect {
+        case .scheduleSuspend:
+            spawnLifecycleTask { [weak self] in
+                await self?.suspend()
+            }
+        case .scheduleResume(let attempt):
+            spawnLifecycleTask { [weak self] in
+                if let attempt {
+                    await self?.performLifecycleEffect(.cancelResume(attempt))
+                }
+                await self?.resumeAfterLifecycleBoundary()
+            }
+        case .scheduleStop:
+            spawnLifecycleTask { [weak self] in
+                await self?.stop()
+            }
+        case .startTransport:
+            assertionFailure("startTransport effects must be awaited by the lifecycle operation that requested them")
+        case .stopTransport(let transport):
+            await transport.stop()
+        case .cleanupTransport(let transport):
+            await cleanupFailedTransportStartup(transport)
+        case .releaseResources(let policy, let idleTimerBaseline):
+            releaseRuntimeOwnedResources(policy: policy, idleTimerBaseline: idleTimerBaseline)
+        case .cancelResume(let attempt):
+            attempt.task.cancel()
+            await attempt.task.value
+        case .activateRuntime(let resources):
+            activateRuntime(resources)
+        case .tearDownRuntimeServices:
+            await muscle.tearDown()
+            await getaway.tearDown()
+        }
     }
+}
 
-    func finishFailedResumeAttempt(_ resumeID: UUID) {
-        guard isCurrentResumeAttempt(resumeID) else { return }
-        guard case .resuming(let attempt) = serverPhase else { return }
-        serverPhase = .suspended(attempt.suspendedRuntime)
+private extension InsideJobLifecycleMachine.Effect {
+    var isCancelResumeEffect: Bool {
+        if case .cancelResume = self { return true }
+        return false
     }
 }
 

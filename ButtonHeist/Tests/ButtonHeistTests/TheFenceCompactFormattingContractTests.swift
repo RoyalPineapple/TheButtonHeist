@@ -1024,15 +1024,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 .childAborted(
                     path: "$.body[0]",
-                    kind: .forEachString,
+                    receiptKind: .forEachString,
                     durationMs: 30,
                     intent: .forEachString(parameter: "item", count: 2),
-                    evidence: .forEachString(HeistForEachStringEvidence(
+                    evidence: HeistForEachStringEvidence(
                         parameter: "item",
                         count: 2,
                         iterationCount: 2,
                         failureReason: "iteration 1 failed for value \"Eggs\""
-                    )),
+                    ),
                     failure: HeistFailureDetail(
                         category: .loop,
                         contract: "for_each_string completes all 2 value(s)",
@@ -1802,33 +1802,32 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let intent = command.map {
             HeistStepIntent.action(command: $0)
         }
-        let receiptEvidence = HeistStepEvidence.action(evidence)
         if let failure {
             return .failed(
                 path: path,
-                kind: .action,
+                receiptKind: .action,
                 durationMs: 1,
                 intent: intent,
-                evidence: receiptEvidence,
+                evidence: evidence,
                 failure: failure
             )
         }
         return .passed(
             path: path,
-            kind: .action,
+            receiptKind: .action,
             durationMs: 1,
             intent: intent,
-            evidence: receiptEvidence
+            evidence: evidence
         )
     }
 
     private func warnReceiptStep(path: String, message: String) -> HeistExecutionStepResult {
         .passed(
             path: path,
-            kind: .warn,
+            receiptKind: .warning,
             durationMs: 1,
             intent: .warn(message: message),
-            evidence: .warning(HeistExecutionWarning(path: path, message: message))
+            evidence: HeistExecutionWarning(path: path, message: message)
         )
     }
 
@@ -1853,11 +1852,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         failure: HeistFailureDetail? = nil,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.caseSelection(HeistCaseSelectionEvidence(selection: selection))
+        let evidence = HeistCaseSelectionEvidence(selection: selection)
         if let abortedAtChildPath = children.firstFailedStep?.path {
             return .childAborted(
                 path: "$.body[0]",
-                kind: kind,
+                receiptKind: .conditional,
                 durationMs: 3,
                 intent: .conditional,
                 evidence: evidence,
@@ -1873,7 +1872,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         if status == .failed {
             return .failed(
                 path: "$.body[0]",
-                kind: kind,
+                receiptKind: .conditional,
                 durationMs: 3,
                 intent: .conditional,
                 evidence: evidence,
@@ -1887,7 +1886,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
         return .passed(
             path: "$.body[0]",
-            kind: kind,
+            receiptKind: .conditional,
             durationMs: 3,
             intent: .conditional,
             evidence: evidence,
@@ -1903,14 +1902,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         let path = "$.body[0].for_each_string.iterations[\(ordinal)]"
-        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
+        let evidence = HeistForEachStringEvidence(
             parameter: "item",
             count: 2,
             iterationCount: 2,
             iterationOrdinal: ordinal,
             value: value,
             failureReason: failureReason
-        ))
+        )
         let failure = failureReason.map {
             HeistFailureDetail(
                 category: .loop,
@@ -1921,7 +1920,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         if let abortedAtChildPath = children.firstFailedStep?.path {
             return .childAborted(
                 path: path,
-                kind: .forEachIteration,
+                receiptKind: .forEachStringIteration,
                 durationMs: 1,
                 evidence: evidence,
                 failure: failure ?? HeistFailureDetail(
@@ -1936,7 +1935,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         if status == .failed {
             return .failed(
                 path: path,
-                kind: .forEachIteration,
+                receiptKind: .forEachStringIteration,
                 durationMs: 1,
                 evidence: evidence,
                 failure: failure ?? HeistFailureDetail(
@@ -1949,7 +1948,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
         return .passed(
             path: path,
-            kind: .forEachIteration,
+            receiptKind: .forEachStringIteration,
             durationMs: 1,
             evidence: evidence,
             children: children

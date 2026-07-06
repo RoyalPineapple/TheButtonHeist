@@ -49,6 +49,52 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 }
 
 @Test
+func `JSONDecoder decode of nested collection loops is rejected by runtime safety validation`() throws {
+    let nestedCollectionLoop = Data("""
+    {
+      "version": 1,
+      "body": [
+        {
+          "type": "for_each_string",
+          "for_each_string": {
+            "values": [ "Milk" ],
+            "parameter": "item",
+            "body": [
+              {
+                "type": "for_each_element",
+                "for_each_element": {
+                  "matching": {
+                    "checks": [
+                      { "kind": "label", "match": "Row" }
+                    ]
+                  },
+                  "limit": 1,
+                  "parameter": "row",
+                  "body": [
+                    { "type": "warn", "warn": { "message": "nested" } }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+    """.utf8)
+
+    do {
+        _ = try JSONDecoder().decode(HeistPlan.self, from: nestedCollectionLoop)
+        Issue.record("Expected nested collection loop JSON to fail runtime safety validation")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        let failure = try #require(error.failures.first)
+        #expect(failure.path == "$.body[0].for_each_string.body[0].for_each_element")
+        #expect(failure.contract == "collection loops must not be nested")
+        #expect(failure.observed == "for_each_element inside collection loop")
+        #expect(failure.correction == "Flatten this heist so ForEach bodies contain only non-collection steps.")
+    }
+}
+
+@Test
 func `predicate case wire boundary decodes only snapshot predicates`() throws {
     let transitionCase = Data("""
     {

@@ -380,13 +380,13 @@ final class HeistReceiptTests: XCTestCase {
                 ),
                 .passed(
                     path: "$.body[0].failure.actions[0]",
-                    kind: .action,
+                    receiptKind: .action,
                     durationMs: 1,
                     intent: .action(command: .takeScreenshot),
-                    evidence: .action(.dispatch(
+                    evidence: .dispatch(
                         command: .takeScreenshot,
                         dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
-                    ))
+                    )
                 ),
             ],
             durationMs: 2,
@@ -492,8 +492,7 @@ private final class ReceiptWaitScript {
                 predicate: step.predicate,
                 actual: "no settled semantic observation available"
             )
-            return HeistWaitReceipt(
-                status: .timedOut,
+            return .timedOut(
                 message: expectation.actual,
                 accessibilityTrace: nil,
                 expectation: expectation
@@ -507,8 +506,16 @@ private final class ReceiptWaitScript {
         previousCapture = state.capture
 
         let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace)
-        return HeistWaitReceipt(
-            status: expectation.met ? .matched : .timedOut,
+        if expectation.met {
+            return .matched(
+                message: expectation.actual,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: nextSequence,
+                observationSummary: "known: \(state.interface.projectedElements.count) elements"
+            )
+        }
+        return .timedOut(
             message: expectation.actual,
             accessibilityTrace: trace,
             expectation: expectation,

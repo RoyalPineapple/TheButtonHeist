@@ -35,14 +35,14 @@ final class RuntimeResourceObservationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testRuntimeActivationIsIdempotent() {
+    func testRuntimeActivationIsIdempotent() async {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
         XCTAssertFalse(job.lifecycleObservationIsInstalled)
 
-        job.activateRuntime(resources)
+        await activateRuntime()
 
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
@@ -50,7 +50,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
 
-        job.activateRuntime(resources)
+        await job.performLifecycleEffect(.activateRuntime(resources))
 
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
@@ -61,7 +61,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
 
     func testSuspendStopsRuntimeOwnedObservationButPreservesLifecycleObservation() async {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
-        job.activateRuntime(resources)
+        await activateRuntime()
         XCTAssertTrue(job.brains.semanticObservationIsActive)
         XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
@@ -79,7 +79,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
 
     func testStopClearsLifecycleObservationAndIdleTimerBaseline() async {
         let idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
-        job.activateRuntime(resources)
+        await activateRuntime()
         XCTAssertTrue(job.lifecycleObservationIsInstalled)
         assertIdleTimerProtection(on: job, retainedBaseline: idleTimerBaseline)
 
@@ -94,7 +94,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
     }
 
     func testSuspendResourceReleasePreservesLatestSettleFailureDiagnostic() async {
-        job.activateRuntime(resources)
+        await activateRuntime()
         let diagnostic = await recordSettleFailureDiagnostic()
 
         job.releaseRuntimeOwnedResources(
@@ -110,7 +110,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
     }
 
     func testStopPreservesLatestSettleFailureDiagnostic() async {
-        job.activateRuntime(resources)
+        await activateRuntime()
         let diagnostic = await recordSettleFailureDiagnostic()
 
         await job.stop()
@@ -150,6 +150,18 @@ final class RuntimeResourceObservationTests: XCTestCase {
         }
         XCTAssertTrue(diagnostic.contains("runtime resource diagnostic"))
         return diagnostic
+    }
+
+    private func activateRuntime() async {
+        let attempt = TheInsideJob.InsideJobStartAttempt(id: UUID(), transport: resources.transport)
+        _ = job.applyLifecycleEvent(
+            .startRequested(
+                attempt,
+                idleTimerBaseline: resources.idleTimerBaseline
+            )
+        )
+        let change = job.applyLifecycleEvent(.startSucceeded(attempt.id, resources))
+        await job.performLifecycleEffects(change.effects)
     }
 }
 

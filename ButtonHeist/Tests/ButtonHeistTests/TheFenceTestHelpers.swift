@@ -549,20 +549,19 @@ func makeTestHeistActionStep(
         } ?? .dispatch(dispatchResult: result)
     }
 
-    let receiptEvidence = HeistStepEvidence.action(evidence)
     guard !result.success else {
         return .passed(
             path: path,
-            kind: .action,
+            receiptKind: .action,
             durationMs: durationMs,
-            evidence: receiptEvidence
+            evidence: evidence
         )
     }
     return .failed(
         path: path,
-        kind: .action,
+        receiptKind: .action,
         durationMs: durationMs,
-        evidence: receiptEvidence,
+        evidence: evidence,
         failure: HeistFailureDetail(
             category: result.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",

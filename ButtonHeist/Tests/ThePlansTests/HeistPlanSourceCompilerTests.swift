@@ -1706,27 +1706,80 @@ import Testing
     }
 }
 
-@Test func `parser accepts nested ForEach bodies and scopes aliases`() throws {
-    let source = """
-    HeistPlan("NestedLoops", parameter: "screen") { screen in
-        If(.exists(.label(screen))) {
+@Test func `parser rejects nested ForEach bodies through runtime diagnostics`() throws {
+    let cases: [(source: String, path: String, observed: String)] = [
+        (
+            root("""
             ForEach("Milk", "Eggs") { item in
                 ForEach("Small") { size in
                     TypeText(size, into: .label(item))
                 }
             }
-        }
-
-        ForEach("Message") { rowName in
-            ForEach(.label("Message"), limit: 1) { rowTarget in
-                Activate(rowTarget).expect(.exists(rowTarget))
-                TypeText(rowName, into: .label("Search"))
+            """),
+            "$.body[0].for_each_string.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+        (
+            root("""
+            ForEach("Message") { rowName in
+                ForEach(.label("Message"), limit: 1) { rowTarget in
+                    Activate(rowTarget).expect(.exists(rowTarget))
+                    TypeText(rowName, into: .label("Search"))
+                }
             }
-        }
-    }
-    """
+            """),
+            "$.body[0].for_each_string.body[0].for_each_element",
+            "for_each_element inside collection loop"
+        ),
+        (
+            root("""
+            ForEach(.label("Section"), limit: 1) { section in
+                ForEach("Small") { size in
+                    Activate(section)
+                }
+            }
+            """),
+            "$.body[0].for_each_element.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+        (
+            root("""
+            ForEach(.label("Section"), limit: 1) { section in
+                ForEach(.label("Row"), limit: 1) { row in
+                    Activate(row)
+                }
+            }
+            """),
+            "$.body[0].for_each_element.body[0].for_each_element",
+            "for_each_element inside collection loop"
+        ),
+        (
+            """
+            HeistPlan("NestedThroughRunHeist") {
+                HeistDef<Void>("Inner") {
+                    ForEach("Small") { size in
+                        Warn("nested")
+                    }
+                }
 
-    _ = try HeistPlanSourceCompiler().compile(source)
+                ForEach("Milk") { item in
+                    RunHeist("Inner")
+                }
+            }
+            """,
+            "$.body[0].for_each_string.body[0].invoke.body[0].for_each_string",
+            "for_each_string inside collection loop"
+        ),
+    ]
+
+    for testCase in cases {
+        let diagnostic = compileDiagnostic(testCase.source)
+        #expect(diagnostic.code.rawValue == "heist.plan.runtime_safety")
+        #expect(diagnostic.phase == .planValidation)
+        #expect(diagnostic.path == testCase.path)
+        #expect(diagnostic.message == "collection loops must not be nested; observed \(testCase.observed)")
+        #expect(diagnostic.hint == "Flatten this heist so ForEach bodies contain only non-collection steps.")
+    }
 }
 
 @Test func `runtime source compiler rejects standard definition cap`() throws {
