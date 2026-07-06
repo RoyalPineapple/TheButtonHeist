@@ -48,6 +48,7 @@ enum StartupConfigurationWarning: Equatable, Sendable {
 
 enum StartupInfoPlistKey: String, CaseIterable, Sendable {
     case disableAutoStart = "InsideJobDisableAutoStart"
+    case failureEvidence = "ButtonHeistFailureEvidence"
     case fingerprintsEnabled = "InsideJobFingerprintsEnabled"
     case token = "InsideJobToken"
     case instanceId = "InsideJobInstanceId"
@@ -245,6 +246,7 @@ struct StartupEnvironmentKey: RawRepresentable, Hashable, Sendable {
     static let scope = StartupEnvironmentKey(.insideJobScope)
     static let sessionTimeout = StartupEnvironmentKey(.insideJobSessionTimeout)
     static let fingerprintsEnabled = StartupEnvironmentKey(rawValue: "INSIDEJOB_FINGERPRINTS")
+    static let failureEvidence = StartupEnvironmentKey(rawValue: "BUTTONHEIST_FAILURE_EVIDENCE")
 
     fileprivate static let processProjectionKeys: [StartupEnvironmentKey] = [
         .disableAutoStart,
@@ -254,6 +256,7 @@ struct StartupEnvironmentKey: RawRepresentable, Hashable, Sendable {
         .scope,
         .sessionTimeout,
         .fingerprintsEnabled,
+        .failureEvidence,
     ]
 }
 
@@ -295,6 +298,7 @@ struct StartupConfiguration: Equatable, Sendable {
     let preferredPort: ResolvedStartupValue<UInt16>
     let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
     let sessionTimeout: ResolvedStartupValue<TimeInterval>
+    let failureEvidencePolicy: ResolvedStartupValue<FailureEvidencePolicy>
     let warnings: [StartupConfigurationWarning]
 
     init(
@@ -304,6 +308,7 @@ struct StartupConfiguration: Equatable, Sendable {
         preferredPort: ResolvedStartupValue<UInt16>,
         allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>,
         sessionTimeout: ResolvedStartupValue<TimeInterval>,
+        failureEvidencePolicy: ResolvedStartupValue<FailureEvidencePolicy> = ResolvedStartupValue(value: .screenshot, source: .defaultValue),
         fingerprintsEnabled: ResolvedStartupValue<Bool> = ResolvedStartupValue(value: true, source: .defaultValue),
         warnings: [StartupConfigurationWarning]
     ) {
@@ -314,6 +319,7 @@ struct StartupConfiguration: Equatable, Sendable {
         self.preferredPort = preferredPort
         self.allowedScopes = allowedScopes
         self.sessionTimeout = sessionTimeout
+        self.failureEvidencePolicy = failureEvidencePolicy
         self.warnings = warnings
     }
 
@@ -363,6 +369,11 @@ struct StartupConfiguration: Equatable, Sendable {
             plist: plist,
             warnings: &warnings
         )
+        let failureEvidencePolicy = resolveFailureEvidencePolicy(
+            env: env,
+            plist: plist,
+            warnings: &warnings
+        )
 
         return StartupConfiguration(
             disableAutoStart: disableAutoStart,
@@ -371,6 +382,7 @@ struct StartupConfiguration: Equatable, Sendable {
             preferredPort: preferredPort,
             allowedScopes: allowedScopes,
             sessionTimeout: sessionTimeout,
+            failureEvidencePolicy: failureEvidencePolicy,
             fingerprintsEnabled: fingerprintsEnabled,
             warnings: warnings
         )
@@ -616,6 +628,37 @@ struct StartupConfiguration: Equatable, Sendable {
         }
 
         return ResolvedStartupValue(value: true, source: .defaultValue)
+    }
+
+    private static func resolveFailureEvidencePolicy(
+        env: StartupEnvironment,
+        plist: StartupInfoPlist,
+        warnings: inout [StartupConfigurationWarning]
+    ) -> ResolvedStartupValue<FailureEvidencePolicy> {
+        if let envValue = env[.failureEvidence] {
+            if let parsed = FailureEvidencePolicy(rawValue: envValue) {
+                return ResolvedStartupValue(value: parsed, source: .environment)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: StartupEnvironmentKey.failureEvidence.rawValue,
+                source: .environment,
+                value: envValue
+            ))
+        }
+
+        if let plistValue = plist[.failureEvidence] {
+            if let string = plistValue.string,
+               let parsed = FailureEvidencePolicy(rawValue: string) {
+                return ResolvedStartupValue(value: parsed, source: .infoPlist)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: StartupInfoPlistKey.failureEvidence.rawValue,
+                source: .infoPlist,
+                value: String(describing: plistValue)
+            ))
+        }
+
+        return ResolvedStartupValue(value: .screenshot, source: .defaultValue)
     }
 }
 

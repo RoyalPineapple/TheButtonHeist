@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 /// Client-side coordinator for device discovery, connection, admission, keepalive, and auto-reconnect.
 ///
@@ -93,6 +94,9 @@ final class TheHandoff {
     var reconnectAttemptTimeout: TimeInterval = 10
     var autoReconnectRecoveryPolicy: AutoReconnectRecoveryPolicy {
         AutoReconnectRecoveryPolicy(maxAttempts: reconnectMaxAttempts, baseInterval: reconnectInterval)
+    }
+    var reconnectSleeper: (TimeInterval) async -> Bool = { sleepDuration in
+        await Task.cancellableSleep(for: .seconds(sleepDuration))
     }
 
     // MARK: - Injectable Closures

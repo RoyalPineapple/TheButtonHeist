@@ -17,6 +17,24 @@ private func waitUntil(
     return await condition()
 }
 
+@ButtonHeistActor
+private final class ManualReconnectSleeper {
+    private var continuations: [CheckedContinuation<Bool, Never>] = []
+    private(set) var sleepCallCount = 0
+
+    func sleep(_: TimeInterval) async -> Bool {
+        sleepCallCount += 1
+        return await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func resumeNext(returning result: Bool = true) {
+        guard !continuations.isEmpty else { return }
+        continuations.removeFirst().resume(returning: result)
+    }
+}
+
 final class TheHandoffStateTests: XCTestCase {
 
     @ButtonHeistActor
@@ -288,9 +306,10 @@ final class TheHandoffStateTests: XCTestCase {
     // MARK: - Auto Reconnect
 
     @ButtonHeistActor
-    func testDisableAutoReconnectCancelsReconnectRunner() async throws {
+    func testDisableAutoReconnectCancelsReconnectRunner() async {
         let handoff = TheHandoff()
-        handoff.reconnectInterval = 0.01
+        let reconnectSleeper = ManualReconnectSleeper()
+        handoff.reconnectSleeper = reconnectSleeper.sleep
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         var connectionCount = 0
         handoff.makeConnection = { _ in
@@ -306,28 +325,30 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.setupAutoReconnect(filter: "App")
         handoff.connect(to: device)
 
-        handoff.disableAutoReconnect()
+        await Task.yield()
+        XCTAssertEqual(reconnectSleeper.sleepCallCount, 1)
 
-        // Negative assertion: if the reconnect runner survives disable, it will
-        // make another connection attempt quickly.
-        // swiftlint:disable:next agent_test_task_sleep
-        try await Task.sleep(for: .milliseconds(100))
+        handoff.disableAutoReconnect()
+        reconnectSleeper.resumeNext()
+        await Task.yield()
+
         XCTAssertEqual(connectionCount, 1)
     }
 
     @ButtonHeistActor
-    func testReplacingAutoReconnectFilterPreventsStaleReconnect() async throws {
+    func testReplacingAutoReconnectFilterPreventsStaleReconnect() async {
         let handoff = TheHandoff()
-        handoff.reconnectInterval = 0.01
+        let reconnectSleeper = ManualReconnectSleeper()
+        handoff.reconnectSleeper = reconnectSleeper.sleep
         let oldDevice = DiscoveredDevice(
             id: "old-device",
             name: "OldApp#one",
-            endpoint: .hostPort(host: .ipv4(.loopback), port: 1111)
+            endpoint: .hostPort(host: "127.0.0.1", port: 1111)
         )
         let newDevice = DiscoveredDevice(
             id: "new-device",
             name: "NewApp#one",
-            endpoint: .hostPort(host: .ipv4(.loopback), port: 2222)
+            endpoint: .hostPort(host: "127.0.0.1", port: 2222)
         )
 
         let mockDiscovery = MockDiscovery()
@@ -348,13 +369,12 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.setupAutoReconnect(filter: "OldApp")
         handoff.connect(to: oldDevice)
         XCTAssertEqual(connectedIDs, ["old-device"])
+        await Task.yield()
+        XCTAssertEqual(reconnectSleeper.sleepCallCount, 1)
 
         handoff.setupAutoReconnect(filter: "NewApp")
-
-        // Negative assertion: give the stale reconnect task time to fire if it
-        // survived the filter replacement.
-        // swiftlint:disable:next agent_test_task_sleep
-        try await Task.sleep(for: .milliseconds(150))
+        reconnectSleeper.resumeNext()
+        await Task.yield()
 
         XCTAssertEqual(connectedIDs, ["old-device"])
     }
@@ -591,9 +611,10 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
+    func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async {
         let handoff = TheHandoff()
-        handoff.reconnectInterval = 0.01
+        let reconnectSleeper = ManualReconnectSleeper()
+        handoff.reconnectSleeper = reconnectSleeper.sleep
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
         let disconnected = expectation(description: "disconnect event received")
@@ -617,13 +638,10 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(connectionCount, 1)
 
         await fulfillment(of: [disconnected], timeout: 5)
-
-        // Give the reconnect loop time to fire if it were going to (it shouldn't).
-        // Asserts a *negative* — needs wall-clock elapsed time, not a signal to wait on.
-        // swiftlint:disable:next agent_test_task_sleep
-        try await Task.sleep(for: .milliseconds(100))
+        await Task.yield()
 
         XCTAssertEqual(connectionCount, 1)
+        XCTAssertEqual(reconnectSleeper.sleepCallCount, 0)
     }
 
     @ButtonHeistActor
@@ -632,12 +650,12 @@ final class TheHandoffStateTests: XCTestCase {
         let deviceA = DiscoveredDevice(
             id: "device-a",
             name: "App#A",
-            endpoint: .hostPort(host: .ipv4(.loopback), port: 1111)
+            endpoint: .hostPort(host: "127.0.0.1", port: 1111)
         )
         let deviceB = DiscoveredDevice(
             id: "device-b",
             name: "App#B",
-            endpoint: .hostPort(host: .ipv4(.loopback), port: 2222)
+            endpoint: .hostPort(host: "127.0.0.1", port: 2222)
         )
         let connectionA = MockConnection()
         let connectionB = MockConnection()
@@ -797,13 +815,13 @@ final class TheHandoffStateTests: XCTestCase {
         let originalDevice = DiscoveredDevice(
             id: "old-service",
             name: "Checkout#old",
-            endpoint: .service(name: "old-service", type: "_buttonheist._tcp", domain: "local.", interface: nil),
+            endpoint: .service(name: "old-service", type: "_buttonheist._tcp", domain: "local."),
             installationId: "old-installation"
         )
         let differentDeviceMatchingFilter = DiscoveredDevice(
             id: "new-service",
             name: "Checkout#new",
-            endpoint: .service(name: "new-service", type: "_buttonheist._tcp", domain: "local.", interface: nil),
+            endpoint: .service(name: "new-service", type: "_buttonheist._tcp", domain: "local."),
             installationId: "new-installation"
         )
         let gaveUp = expectation(description: "reconnect reports terminal failure")
@@ -860,7 +878,7 @@ final class TheHandoffStateTests: XCTestCase {
         let staleDevice = DiscoveredDevice(
             id: "stale-service",
             name: "Stale#one",
-            endpoint: .service(name: "stale-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
+            endpoint: .service(name: "stale-service", type: "_buttonheist._tcp", domain: "local.")
         )
         let mockDiscovery = MockDiscovery()
         handoff.makeDiscovery = { mockDiscovery }
@@ -887,7 +905,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(
             id: "failed-service",
             name: "Failed#one",
-            endpoint: .service(name: "failed-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
+            endpoint: .service(name: "failed-service", type: "_buttonheist._tcp", domain: "local.")
         )
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [device]
@@ -911,12 +929,12 @@ final class TheHandoffStateTests: XCTestCase {
         let staleDevice = DiscoveredDevice(
             id: "stale-service",
             name: "Stale#one",
-            endpoint: .service(name: "stale-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
+            endpoint: .service(name: "stale-service", type: "_buttonheist._tcp", domain: "local.")
         )
         let currentDevice = DiscoveredDevice(
             id: "current-service",
             name: "Current#one",
-            endpoint: .service(name: "current-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
+            endpoint: .service(name: "current-service", type: "_buttonheist._tcp", domain: "local.")
         )
         let staleDiscovery = MockDiscovery()
         let currentDiscovery = MockDiscovery()
@@ -1020,7 +1038,7 @@ final class TheHandoffStateTests: XCTestCase {
         let reachableDevice = DiscoveredDevice(
             id: "reachable-device",
             name: "ReachableApp#live",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 1)
+            endpoint: .hostPort(host: "::1", port: 1)
         )
         let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
@@ -1074,7 +1092,7 @@ final class TheHandoffStateTests: XCTestCase {
         let discoveredDevice = DiscoveredDevice(
             id: "reachable-device",
             name: "AccessibilityTestApp#live",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 2)
+            endpoint: .hostPort(host: "::1", port: 2)
         )
 
         let handoff = TheHandoff()
@@ -1113,7 +1131,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(
             id: "single-device",
             name: "AccessibilityTestApp#single",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 3)
+            endpoint: .hostPort(host: "::1", port: 3)
         )
 
         let handoff = TheHandoff()
@@ -1156,12 +1174,12 @@ final class TheHandoffStateTests: XCTestCase {
         let firstDevice = DiscoveredDevice(
             id: "first-device",
             name: "AccessibilityTestApp#first",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 4)
+            endpoint: .hostPort(host: "::1", port: 4)
         )
         let secondDevice = DiscoveredDevice(
             id: "second-device",
             name: "AccessibilityTestApp#second",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 5)
+            endpoint: .hostPort(host: "::1", port: 5)
         )
 
         let handoff = TheHandoff()
@@ -1186,17 +1204,17 @@ final class TheHandoffStateTests: XCTestCase {
         let existingDevice = DiscoveredDevice(
             id: "existing-device",
             name: "AccessibilityTestApp#existing",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 6)
+            endpoint: .hostPort(host: "::1", port: 6)
         )
         let firstDevice = DiscoveredDevice(
             id: "replacement-first",
             name: "AccessibilityTestApp#first",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 7)
+            endpoint: .hostPort(host: "::1", port: 7)
         )
         let secondDevice = DiscoveredDevice(
             id: "replacement-second",
             name: "AccessibilityTestApp#second",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 8)
+            endpoint: .hostPort(host: "::1", port: 8)
         )
 
         let handoff = TheHandoff()
@@ -1247,12 +1265,12 @@ final class TheHandoffStateTests: XCTestCase {
         let existingDevice = DiscoveredDevice(
             id: "existing-device",
             name: "AccessibilityTestApp#existing",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 9)
+            endpoint: .hostPort(host: "::1", port: 9)
         )
         let replacementDevice = DiscoveredDevice(
             id: "replacement-device",
             name: "AccessibilityTestApp#replacement",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 10)
+            endpoint: .hostPort(host: "::1", port: 10)
         )
 
         let handoff = TheHandoff()

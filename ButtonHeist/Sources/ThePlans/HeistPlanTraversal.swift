@@ -172,7 +172,7 @@ struct HeistPlanTraversal {
                 path: path.index(index),
                 depth: depth,
                 stepIndex: index,
-                nextStep: steps.dropFirst(index + 1).first,
+                nextStep: index + 1 < steps.count ? steps[index + 1] : nil,
                 referenceBindings: referenceBindings,
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
@@ -544,39 +544,16 @@ extension HeistTraversalContext {
 struct HeistDefinitionScope {
     let definitions: [HeistPlan]
     let pathPrefix: [String]
+    private let definitionIndex: HeistDefinitionIndex
 
     init(definitions: [HeistPlan], pathPrefix: [String] = []) {
         self.definitions = definitions
         self.pathPrefix = pathPrefix
+        self.definitionIndex = HeistDefinitionIndex(definitions: definitions)
     }
 
     func resolve(path: HeistInvocationPath) -> ResolvedHeistDefinition? {
-        guard let first = path.components.first else { return nil }
-        guard let direct = definitions.first(where: { $0.name == first }) else { return nil }
-        return resolve(
-            remaining: Array(path.components.dropFirst()),
-            definition: direct,
-            namePath: pathPrefix + [first]
-        )
-    }
-
-    private func resolve(
-        remaining: [String],
-        definition: HeistPlan,
-        namePath: [String]
-    ) -> ResolvedHeistDefinition? {
-        guard let next = remaining.first else {
-            return ResolvedHeistDefinition(
-                definition: definition,
-                invocationPath: HeistInvocationPath.preconditionValidated(components: namePath)
-            )
-        }
-        guard let child = definition.definitions.first(where: { $0.name == next }) else { return nil }
-        return resolve(
-            remaining: Array(remaining.dropFirst()),
-            definition: child,
-            namePath: namePath + [next]
-        )
+        definitionIndex.resolve(components: path.components, componentIndex: 0, namePath: pathPrefix)
     }
 
     func resolveInvocation(path: HeistInvocationPath, rootScope: HeistDefinitionScope) -> ResolvedHeistDefinition? {
@@ -585,6 +562,53 @@ struct HeistDefinitionScope {
         }
         guard path.components.count > 1 else { return nil }
         return rootScope.resolve(path: path)
+    }
+}
+
+private struct HeistDefinitionIndex {
+    private struct Entry {
+        let definition: HeistPlan
+        let children: HeistDefinitionIndex
+    }
+
+    private let entriesByName: [String: Entry]
+
+    init(definitions: [HeistPlan]) {
+        var entriesByName: [String: Entry] = [:]
+        for definition in definitions {
+            guard let name = definition.name,
+                  entriesByName[name] == nil
+            else { continue }
+            entriesByName[name] = Entry(
+                definition: definition,
+                children: HeistDefinitionIndex(definitions: definition.definitions)
+            )
+        }
+        self.entriesByName = entriesByName
+    }
+
+    func resolve(
+        components: [String],
+        componentIndex: Int,
+        namePath: [String]
+    ) -> ResolvedHeistDefinition? {
+        guard components.indices.contains(componentIndex) else { return nil }
+        let component = components[componentIndex]
+        guard let entry = entriesByName[component] else { return nil }
+
+        let resolvedNamePath = namePath + [component]
+        guard componentIndex + 1 < components.count else {
+            return ResolvedHeistDefinition(
+                definition: entry.definition,
+                invocationPath: HeistInvocationPath.preconditionValidated(components: resolvedNamePath)
+            )
+        }
+
+        return entry.children.resolve(
+            components: components,
+            componentIndex: componentIndex + 1,
+            namePath: resolvedNamePath
+        )
     }
 }
 

@@ -250,18 +250,24 @@ extension TheBrains {
                 trace: actionResult.accessibilityTrace
             ))
             let evaluation = waitEvaluation(wait: wait, receipt: receipt, purpose: .actionExpectation)
+            let evidence = HeistActionEvidence.expectation(
+                command: command,
+                dispatchResult: actionResult,
+                expectationResult: evaluation.receipt.actionResult,
+                expectation: evaluation.receipt.expectation,
+                warning: actionWarning(command: command, actionResult: actionResult)
+            )
+            let outcome: HeistStepReceiptOutcome
+            if let failure = evaluation.failure {
+                outcome = .failed(evidence: .action(evidence), failure: failure)
+            } else {
+                outcome = .passed(evidence: .action(evidence))
+            }
             return heistActionReceipt(
                 path: path,
                 durationMs: elapsedMilliseconds(since: start),
                 intent: actionIntent(command),
-                evidence: .expectation(
-                    command: command,
-                    dispatchResult: actionResult,
-                    expectationResult: evaluation.receipt.actionResult,
-                    expectation: evaluation.receipt.expectation,
-                    warning: actionWarning(command: command, actionResult: actionResult)
-                ),
-                failure: evaluation.failure
+                outcome: outcome
             )
         }
     }
@@ -273,12 +279,18 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let failure = actionDispatchFailure(command: command, result: actionResult)
+        let evidence = actionEvidence(command: command, actionResult: actionResult)
+        let outcome: HeistStepReceiptOutcome
+        if let failure {
+            outcome = .failed(evidence: .action(evidence), failure: failure)
+        } else {
+            outcome = .passed(evidence: .action(evidence))
+        }
         return heistActionReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: actionEvidence(command: command, actionResult: actionResult),
-            failure: failure
+            outcome: outcome
         )
     }
 
@@ -333,12 +345,12 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let evidence = waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome)
-        let outcome: HeistReceiptOutcome<HeistWaitEvidence>
+        let outcome: HeistStepReceiptOutcome
         switch evaluation {
         case .matched:
-            outcome = .passed(evidence: evidence, children: .empty)
+            outcome = .passed(evidence: .wait(evidence))
         case .failed(let failedEvaluation):
-            outcome = .failed(evidence: evidence, failure: failedEvaluation.detail, children: .empty)
+            outcome = .failed(evidence: .wait(evidence), failure: failedEvaluation.detail)
         }
         return heistWaitReceipt(
             path: path,
@@ -367,17 +379,13 @@ extension TheBrains {
         )
         let evidence = waitEvidencePayload(receipt, outcome: .handledElse)
         let childExecution = HeistReceiptChildren(children)
-        let outcome: HeistReceiptOutcome<HeistWaitEvidence>
-        switch childExecution {
-        case .completed(let completed):
-            outcome = .passed(evidence: evidence, children: completed)
-        case .childAborted(let childAbort):
-            outcome = .childAborted(
-                evidence: evidence,
-                failure: childFailureDetail(category: .wait, childPath: childAbort.abortedAtChildPath),
-                children: childAbort
-            )
-        }
+        let outcome = childAwarePassedOutcome(
+            evidence: .wait(evidence),
+            children: childExecution,
+            childFailure: { childPath in
+                childFailureDetail(category: .wait, childPath: childPath)
+            }
+        )
         return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
@@ -470,8 +478,10 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: .commandResolutionFailure(command: command),
-            failure: failure.detail
+            outcome: .failed(
+                evidence: .action(.commandResolutionFailure(command: command)),
+                failure: failure.detail
+            )
         )
     }
 
@@ -519,14 +529,16 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            evidence: .expectation(
-                command: command,
-                dispatchResult: actionResult,
-                expectationResult: expectationActionResult,
-                expectation: expectation,
-                warning: actionWarning(command: command, actionResult: actionResult)
-            ),
-            failure: failure.detail
+            outcome: .failed(
+                evidence: .action(.expectation(
+                    command: command,
+                    dispatchResult: actionResult,
+                    expectationResult: expectationActionResult,
+                    expectation: expectation,
+                    warning: actionWarning(command: command, actionResult: actionResult)
+                )),
+                failure: failure.detail
+            )
         )
     }
 

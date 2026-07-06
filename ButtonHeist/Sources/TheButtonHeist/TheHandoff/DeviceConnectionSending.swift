@@ -5,23 +5,13 @@ import Network
 extension DeviceConnection {
     @discardableResult
     func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
-        send(message, requestId: requestId, requestScreenPayload: nil)
-    }
-
-    @discardableResult
-    func send(
-        _ message: ClientMessage,
-        requestId: String?,
-        requestScreenPayload: ScreenRequestPayload?
-    ) -> DeviceSendOutcome {
         guard case .connected(let active) = connectionState,
               let sessionID = currentSessionID else {
             return .failed(.notConnected)
         }
         let envelope = RequestEnvelope(
             requestId: requestId,
-            message: message,
-            requestScreenPayload: requestScreenPayload
+            message: message
         )
         let data: Data
         do {

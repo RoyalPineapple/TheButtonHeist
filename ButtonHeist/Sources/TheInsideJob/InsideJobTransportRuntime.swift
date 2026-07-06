@@ -7,9 +7,10 @@ import TheScore
 
 @MainActor
 extension TheInsideJob {
-    func startRuntimeResourcesForStartup() async throws -> InsideJobRuntimeResources {
+    func startRuntimeResourcesForStartup(attemptID: UUID) async throws -> InsideJobRuntimeResources {
         let resources = try await startRuntimeResources(
             phase: .startup,
+            startupAttemptID: attemptID,
             idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled,
             leavesStoppedOnFailure: true
         )
@@ -25,6 +26,7 @@ extension TheInsideJob {
     ) async throws -> InsideJobRuntimeResources {
         try await startRuntimeResources(
             phase: .resume,
+            startupAttemptID: nil,
             idleTimerBaseline: idleTimerBaseline,
             leavesStoppedOnFailure: false
         )
@@ -37,19 +39,28 @@ extension TheInsideJob {
         }
 
         let resourcesToStop: InsideJobRuntimeResources?
+        let startupTransportToStop: ServerTransport?
         let idleTimerBaseline: Bool?
         switch serverPhase {
+        case .starting(let attempt):
+            resourcesToStop = nil
+            startupTransportToStop = attempt.transport
+            idleTimerBaseline = nil
         case .running(let resources):
             resourcesToStop = resources
+            startupTransportToStop = nil
             idleTimerBaseline = resources.idleTimerBaseline
         case .suspending(let suspension):
             resourcesToStop = suspension.resources
+            startupTransportToStop = nil
             idleTimerBaseline = suspension.resources.idleTimerBaseline
         case .suspended(let suspended):
             resourcesToStop = nil
+            startupTransportToStop = nil
             idleTimerBaseline = suspended.idleTimerBaseline
         case .resuming:
             resourcesToStop = nil
+            startupTransportToStop = nil
             idleTimerBaseline = retainedIdleTimerBaseline
         case .stopping, .stopped:
             return
@@ -59,6 +70,7 @@ extension TheInsideJob {
         if let idleTimerBaseline {
             releaseRuntimeOwnedResources(policy: .stop, idleTimerBaseline: idleTimerBaseline)
         }
+        await cleanupFailedTransportStartup(startupTransportToStop)
         await resourcesToStop?.transport.stop()
 
         serverPhase = .stopped
@@ -66,6 +78,7 @@ extension TheInsideJob {
 
     private func startRuntimeResources(
         phase: InsideJobRuntimeStartPhase,
+        startupAttemptID: UUID?,
         idleTimerBaseline: Bool,
         leavesStoppedOnFailure: Bool
     ) async throws -> InsideJobRuntimeResources {
@@ -73,6 +86,9 @@ extension TheInsideJob {
         insideJobLogger.info("TLS PSK material ready")
 
         let transport = transportFactory(token, runtimeConfiguration.allowedScopes)
+        if let startupAttemptID {
+            serverPhase = .starting(InsideJobStartAttempt(id: startupAttemptID, transport: transport))
+        }
         installTransportOverflowHandler(transport)
         await getaway.wireTransport(transport)
 
@@ -95,8 +111,8 @@ extension TheInsideJob {
             )
         } catch {
             await cleanupFailedTransportStartup(transport)
-            if leavesStoppedOnFailure {
-                serverPhase = .stopped
+            if let startupAttemptID {
+                finishFailedStartAttempt(startupAttemptID, leavesStoppedOnFailure: leavesStoppedOnFailure)
             }
             throw error
         }
@@ -133,6 +149,16 @@ extension TheInsideJob {
     func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {
         guard case .resuming(let attempt) = serverPhase else { return false }
         return attempt.id == resumeID
+    }
+
+    func isCurrentStartAttempt(_ startID: UUID) -> Bool {
+        guard case .starting(let attempt) = serverPhase else { return false }
+        return attempt.id == startID
+    }
+
+    func finishFailedStartAttempt(_ startID: UUID, leavesStoppedOnFailure: Bool) {
+        guard leavesStoppedOnFailure, isCurrentStartAttempt(startID) else { return }
+        serverPhase = .stopped
     }
 
     func finishFailedResumeAttempt(_ resumeID: UUID) {

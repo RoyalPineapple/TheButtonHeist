@@ -99,15 +99,6 @@ extension TheBrains {
         case predicateMet(MetExpectationResult)
         case continued(UnmetExpectationResult)
         case failed(expectation: UnmetExpectationResult, childPath: String)
-
-        var abortedAtChildPath: String? {
-            switch self {
-            case .predicateMet, .continued:
-                return nil
-            case .failed(expectation: _, childPath: let childPath):
-                return childPath
-            }
-        }
     }
 
     private enum RepeatUntilPostBodyCheck {
@@ -254,25 +245,24 @@ extension TheBrains {
             guard case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes) = terminal else {
                 return state
             }
-            switch HeistReceiptChildren(children) {
-            case .childAborted(let childAbort):
+            let childExecution = HeistReceiptChildren(children)
+            if let abortedAtChildPath = childExecution.abortedAtChildPath {
                 return .terminal(.timeoutElseFailed(
                     observation: observation,
                     expectation: expectation,
                     iterationCount: iterationCount,
                     iterationNodes: iterationNodes,
-                    elseChildren: childAbort.children,
-                    childPath: childAbort.abortedAtChildPath
-                ))
-            case .completed(let completed):
-                return .terminal(.timeoutHandledByElse(
-                    observation: observation,
-                    expectation: expectation,
-                    iterationCount: iterationCount,
-                    iterationNodes: iterationNodes,
-                    elseChildren: completed.children
+                    elseChildren: childExecution.children,
+                    childPath: abortedAtChildPath
                 ))
             }
+            return .terminal(.timeoutHandledByElse(
+                observation: observation,
+                expectation: expectation,
+                iterationCount: iterationCount,
+                iterationNodes: iterationNodes,
+                elseChildren: childExecution.children
+            ))
         }
     }
 
@@ -1000,18 +990,26 @@ extension TheBrains {
         }
         let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
         let childExecution = HeistReceiptChildren(children)
-        let receiptOutcome = HeistReceiptOutcome(
-            evidence: stepEvidence,
-            children: childExecution,
-            completedOutcome: HeistReceiptCompletedOutcome(
-                failure: outcome.abortedAtChildPath.map {
-                    childFailureDetail(category: .loop, childPath: $0)
+        let receiptOutcome: HeistStepReceiptOutcome
+        switch outcome {
+        case .predicateMet, .continued:
+            receiptOutcome = childAwarePassedOutcome(
+                evidence: stepEvidence,
+                children: childExecution,
+                childFailure: { childPath in
+                    childFailureDetail(category: .loop, childPath: childPath)
                 }
-            ),
-            childFailure: { childAbort in
-                childFailureDetail(category: .loop, childPath: childAbort.abortedAtChildPath)
-            }
-        )
+            )
+        case .failed(expectation: _, childPath: let childPath):
+            receiptOutcome = childAwareFailedOutcome(
+                evidence: stepEvidence,
+                failure: childFailureDetail(category: .loop, childPath: childPath),
+                children: childExecution,
+                childFailure: { childPath in
+                    childFailureDetail(category: .loop, childPath: childPath)
+                }
+            )
+        }
         return heistLoopReceipt(
             path: frame.path,
             kind: .repeatUntilIteration,

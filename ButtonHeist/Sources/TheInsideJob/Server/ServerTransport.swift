@@ -38,8 +38,13 @@ private struct ServerTransportStopAttempt: Equatable, Sendable {
     }
 }
 
+private struct ServerTransportStartAttempt: Equatable, Sendable {
+    let id: UUID
+}
+
 private enum ServerTransportRuntimePhase: Equatable, Sendable {
     case initialized
+    case starting(ServerTransportStartAttempt)
     case running
     case stopping(ServerTransportStopAttempt)
     case stopped
@@ -47,7 +52,9 @@ private enum ServerTransportRuntimePhase: Equatable, Sendable {
 
 private struct ServerTransportLifecycleMachine: SimpleStateMachine {
     enum Event: Equatable, Sendable {
-        case markRunning
+        case beginStarting(ServerTransportStartAttempt)
+        case finishStarting(UUID)
+        case failStarting(UUID)
         case beginStopping(ServerTransportStopAttempt?)
         case finishStopping(UUID)
     }
@@ -57,6 +64,7 @@ private struct ServerTransportLifecycleMachine: SimpleStateMachine {
     enum Rejection: Equatable, Sendable {
         case alreadyRunning
         case stopped
+        case staleStartAttempt
         case missingStopAttempt
         case staleStopAttempt
     }
@@ -66,15 +74,36 @@ private struct ServerTransportLifecycleMachine: SimpleStateMachine {
         with event: Event
     ) -> StateChange<ServerTransportRuntimePhase, Effect, Rejection> {
         switch (state, event) {
-        case (.initialized, .markRunning):
-            return .changed(to: .running)
-        case (.running, .markRunning):
+        case (.initialized, .beginStarting(let attempt)):
+            return .changed(to: .starting(attempt))
+        case (.starting, .beginStarting),
+             (.running, .beginStarting):
             return .rejected(.alreadyRunning, stayingIn: state)
-        case (.stopping, .markRunning),
-             (.stopped, .markRunning):
+        case (.stopping, .beginStarting),
+             (.stopped, .beginStarting):
             return .rejected(.stopped, stayingIn: state)
 
+        case (.starting(let attempt), .finishStarting(let id)) where attempt.id == id:
+            return .changed(to: .running)
+        case (.initialized, .finishStarting),
+             (.starting, .finishStarting),
+             (.running, .finishStarting),
+             (.stopping, .finishStarting),
+             (.stopped, .finishStarting):
+            return .rejected(.staleStartAttempt, stayingIn: state)
+
+        case (.starting(let attempt), .failStarting(let id)) where attempt.id == id:
+            return .changed(to: .initialized)
+        case (.initialized, .failStarting),
+             (.starting, .failStarting),
+             (.running, .failStarting),
+             (.stopping, .failStarting),
+             (.stopped, .failStarting):
+            return .rejected(.staleStartAttempt, stayingIn: state)
+
         case (.initialized, .beginStopping(nil)):
+            return .changed(to: .stopped)
+        case (.starting, .beginStopping):
             return .changed(to: .stopped)
         case (.initialized, .beginStopping):
             return .rejected(.missingStopAttempt, stayingIn: state)
@@ -91,6 +120,7 @@ private struct ServerTransportLifecycleMachine: SimpleStateMachine {
         case (.stopping, .finishStopping):
             return .rejected(.staleStopAttempt, stayingIn: state)
         case (.initialized, .finishStopping),
+             (.starting, .finishStopping),
              (.running, .finishStopping),
              (.stopped, .finishStopping):
             return .changed(to: state)
@@ -191,6 +221,8 @@ final class ServerTransport {
         switch lifecycle.state {
         case .initialized:
             break
+        case .starting:
+            throw ServerTransportError.alreadyRunning
         case .running:
             throw ServerTransportError.alreadyRunning
         case .stopping:
@@ -203,21 +235,41 @@ final class ServerTransport {
             throw ServerTransportError.tlsTokenRequired
         }
         let params = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
+        let attempt = ServerTransportStartAttempt(id: UUID())
+        lifecycle.send(.beginStarting(attempt))
+
         if let startOverride {
-            let actualPort = try await startOverride(port, bindToLoopback)
-            lifecycle.send(.markRunning)
-            return actualPort
+            do {
+                let actualPort = try await startOverride(port, bindToLoopback)
+                let finish = lifecycle.send(.finishStarting(attempt.id))
+                guard finish.state == .running else {
+                    throw ServerTransportError.stopped
+                }
+                return actualPort
+            } catch {
+                _ = lifecycle.send(.failStarting(attempt.id))
+                throw error
+            }
         }
         let callbacks = makeCallbacks()
-        let actualPort = try await server.startAsync(
-            port: port,
-            bindToLoopback: bindToLoopback,
-            addressFamily: addressFamily,
-            tlsParameters: params,
-            callbacks: callbacks
-        )
-        lifecycle.send(.markRunning)
-        return actualPort
+        do {
+            let actualPort = try await server.startAsync(
+                port: port,
+                bindToLoopback: bindToLoopback,
+                addressFamily: addressFamily,
+                tlsParameters: params,
+                callbacks: callbacks
+            )
+            let finish = lifecycle.send(.finishStarting(attempt.id))
+            guard finish.state == .running else {
+                await server.stop()
+                throw ServerTransportError.stopped
+            }
+            return actualPort
+        } catch {
+            _ = lifecycle.send(.failStarting(attempt.id))
+            throw error
+        }
     }
 
     @MainActor
@@ -236,6 +288,9 @@ final class ServerTransport {
 
         switch lifecycle.state {
         case .initialized:
+            lifecycle.send(.beginStopping(nil))
+            return
+        case .starting:
             lifecycle.send(.beginStopping(nil))
             return
         case .stopped:
@@ -265,7 +320,9 @@ final class ServerTransport {
     /// Await completion of any in-flight stop operation.
     @MainActor
     func waitForStopped() async {
-        if case .stopping(let attempt) = lifecycle.state {
+        if case .starting = lifecycle.state {
+            lifecycle.send(.beginStopping(nil))
+        } else if case .stopping(let attempt) = lifecycle.state {
             await attempt.task.value
             lifecycle.send(.finishStopping(attempt.id))
         }

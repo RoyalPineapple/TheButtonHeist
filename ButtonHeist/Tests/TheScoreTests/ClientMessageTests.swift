@@ -107,7 +107,7 @@ final class ClientMessageTests: XCTestCase {
             .status,
             .getPasteboard,
             .getAnnouncements,
-            .requestScreen,
+            .requestScreen(),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")))))
@@ -295,7 +295,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testRequestScreenshotEncodeDecode() throws {
-        let message = ClientMessage.requestScreen
+        let message = ClientMessage.requestScreen()
         let data = try JSONEncoder().encode(message)
         let object = try JSONProbe(data: data)
         XCTAssertEqual(try object.string("type"), "requestScreen")
@@ -312,8 +312,7 @@ final class ClientMessageTests: XCTestCase {
     func testRequestAccessibilityScreenshotEncodeDecode() throws {
         let envelope = RequestEnvelope(
             requestId: "screen-1",
-            message: .requestScreen,
-            requestScreenPayload: ScreenRequestPayload(mode: .accessibility)
+            message: .requestScreen(ScreenRequestPayload(mode: .accessibility))
         )
         let data = try JSONEncoder().encode(envelope)
         let object = try JSONProbe(data: data)
@@ -321,8 +320,8 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(try object.object("payload").string("mode"), "accessibility")
 
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
-        if case .requestScreen = decoded.message {
-            XCTAssertEqual(decoded.explicitScreenRequestPayload?.mode, .accessibility)
+        if case .requestScreen(let payload) = decoded.message {
+            XCTAssertEqual(payload.mode, .accessibility)
         } else {
             XCTFail("Expected requestScreen, got \(decoded.message)")
         }

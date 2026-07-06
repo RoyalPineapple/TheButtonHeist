@@ -101,7 +101,7 @@ public final class TheInsideJob {
 
     var isRunning: Bool {
         switch serverPhase {
-        case .running, .suspending, .suspended, .resuming, .stopping: return true
+        case .starting, .running, .suspending, .suspended, .resuming, .stopping: return true
         case .stopped:
             return false
         }
@@ -113,7 +113,7 @@ public final class TheInsideJob {
             return resources.transport
         case .suspending(let suspension):
             return suspension.resources.transport
-        case .stopping, .stopped, .suspended, .resuming:
+        case .starting, .stopping, .stopped, .suspended, .resuming:
             return nil
         }
     }
@@ -122,7 +122,7 @@ public final class TheInsideJob {
         switch serverPhase {
         case .running, .suspending, .suspended, .resuming:
             return true
-        case .stopped, .stopping:
+        case .starting, .stopped, .stopping:
             return false
         }
     }
@@ -137,7 +137,7 @@ public final class TheInsideJob {
             return suspended.idleTimerBaseline
         case .resuming(let attempt):
             return attempt.suspendedRuntime.idleTimerBaseline
-        case .stopped, .stopping:
+        case .starting, .stopped, .stopping:
             return nil
         }
     }
@@ -152,7 +152,7 @@ public final class TheInsideJob {
             return resources.actualPort
         case .suspending(let suspension):
             return suspension.resources.actualPort
-        case .stopped, .suspended, .resuming, .stopping:
+        case .starting, .stopped, .suspended, .resuming, .stopping:
             return nil
         }
     }
@@ -223,7 +223,8 @@ public final class TheInsideJob {
         )
         self.brains = TheBrains(
             tripwire: self.tripwire,
-            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled
+            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled,
+            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy
         )
         self.getaway = TheGetaway(
             muscle: self.muscle,
@@ -248,7 +249,12 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let resources = try await startRuntimeResourcesForStartup()
+        let attemptID = UUID()
+        let resources = try await startRuntimeResourcesForStartup(attemptID: attemptID)
+        guard isCurrentStartAttempt(attemptID) else {
+            await cleanupFailedTransportStartup(resources.transport)
+            throw CancellationError()
+        }
         activateRuntime(resources)
 
         insideJobLogger.info("Server started successfully")

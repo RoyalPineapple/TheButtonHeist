@@ -188,12 +188,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             target: .predicate(ElementPredicate(identifier: "checkout_button")),
             element: element
         )
-        let activationTrace = ActivationTrace(
+        let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
-            tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 50, y: 22),
             tapActivationSucceeded: true
-        )
+        ))
         let success = TheSafecracker.InteractionResult.success(
             payload: .setPasteboard("ok"),
             message: "completed",
@@ -381,12 +380,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         let screen = Screen.makeForTests(elements: [(element, HeistId(rawValue: "tap_activated_option"))])
         brains.stash.installScreenForTesting(screen)
         let before = brains.postActionObservation.captureSemanticState()
-        let activationTrace = ActivationTrace(
+        let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
-            tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 888, y: 372),
             tapActivationSucceeded: true
-        )
+        ))
 
         let result = await brains.interactionObservation.finishAfterAction(
             method: .activate,

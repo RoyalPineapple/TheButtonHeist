@@ -11,6 +11,7 @@ enum InsideJobRuntimeStartPhase: Equatable, Sendable {
 extension TheInsideJob {
     enum ServerPhase {
         case stopped
+        case starting(InsideJobStartAttempt)
         case running(InsideJobRuntimeResources)
         case suspending(InsideJobSuspension)
         case suspended(InsideJobSuspendedRuntime)
@@ -23,6 +24,11 @@ extension TheInsideJob {
         let actualPort: UInt16
         let bonjourServiceName: String?
         let idleTimerBaseline: Bool
+    }
+
+    struct InsideJobStartAttempt {
+        let id: UUID
+        let transport: ServerTransport
     }
 
     struct InsideJobSuspendedRuntime {

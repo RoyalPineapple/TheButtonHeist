@@ -51,6 +51,7 @@ extension TheInsideJob {
             "addressFamily=\(runtimeConfiguration.addressFamily.rawValue)",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
             "fingerprints=\(runtimeConfiguration.fingerprintsEnabled)(\(runtimeConfiguration.fingerprintsEnabledSource.label))",
+            "failureEvidence=\(runtimeConfiguration.failureEvidencePolicy.label)(\(runtimeConfiguration.failureEvidencePolicySource.label))",
             "tls=psk",
             bonjourDescription
         ].joined(separator: " ")

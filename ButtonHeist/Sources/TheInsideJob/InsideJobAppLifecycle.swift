@@ -115,7 +115,7 @@ extension TheInsideJob {
             await attempt.task.value
             guard case .suspended = serverPhase else { return }
             return
-        case .stopped, .suspended, .suspending, .stopping:
+        case .starting, .stopped, .suspended, .suspending, .stopping:
             return
         }
 

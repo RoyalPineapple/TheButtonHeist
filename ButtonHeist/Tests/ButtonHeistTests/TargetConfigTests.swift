@@ -385,7 +385,7 @@ final class TargetConfigTests: XCTestCase {
     private static let testDevice = DiscoveredDevice(
         id: "mock-device",
         name: "MockApp#test",
-        endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
+        endpoint: DiscoveredDeviceEndpoint.hostPort(host: "::1", port: 1)
     )
 
     private static let testServerInfo = ServerInfo(

@@ -14,6 +14,7 @@ actor SimpleSocketServer {
 
     private enum ServerPhase {
         case stopped
+        case starting(UUID)
         case listening(listeners: [NWListener], port: UInt16)
     }
 
@@ -121,28 +122,55 @@ actor SimpleSocketServer {
         }
 
         if let callbacks { self.clientLifecycle.callbacks = callbacks }
-        let listenerStartup = try await SocketListenerStartup.start(
-            port: port,
-            bindToLoopback: bindToLoopback,
-            addressFamily: addressFamily,
-            parameters: parameters,
-            queue: queue
-        ) { [weak self] connection in
-            guard let self else { return }
-            self.spawnTrackedTask { server in
-                await server.handleNewConnection(connection)
+        let attemptID = UUID()
+        serverPhase = .starting(attemptID)
+
+        do {
+            let listenerStartup = try await SocketListenerStartup.start(
+                port: port,
+                bindToLoopback: bindToLoopback,
+                addressFamily: addressFamily,
+                parameters: parameters,
+                queue: queue
+            ) { [weak self] connection in
+                guard let self else { return }
+                self.spawnTrackedTask { server in
+                    await server.handleNewConnection(connection)
+                }
             }
+
+            guard case .starting(let currentAttemptID) = serverPhase,
+                  currentAttemptID == attemptID
+            else {
+                listenerStartup.listeners.forEach { $0.cancel() }
+                throw CancellationError()
+            }
+
+            self.serverPhase = .listening(listeners: listenerStartup.listeners, port: listenerStartup.port)
+            self._syncListeningPort.withLock { $0 = listenerStartup.port }
+
+            return listenerStartup.port
+        } catch {
+            if case .starting(let currentAttemptID) = serverPhase,
+               currentAttemptID == attemptID {
+                serverPhase = .stopped
+                _syncListeningPort.withLock { $0 = 0 }
+            }
+            throw error
         }
-
-        self.serverPhase = .listening(listeners: listenerStartup.listeners, port: listenerStartup.port)
-        self._syncListeningPort.withLock { $0 = listenerStartup.port }
-
-        return listenerStartup.port
     }
 
     /// Stop the server.
     func stop() {
-        guard case .listening(let listeners, _) = serverPhase else { return }
+        let listeners: [NWListener]
+        switch serverPhase {
+        case .stopped:
+            return
+        case .starting:
+            listeners = []
+        case .listening(let activeListeners, _):
+            listeners = activeListeners
+        }
 
         let allClients = clientRegistry.drain()
         pendingCallbackTasks.cancelAll()

@@ -305,7 +305,7 @@ final class WireCommandParityTests: XCTestCase {
             .status,
             .getPasteboard,
             .getAnnouncements,
-            .requestScreen,
+            .requestScreen(),
             .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(command: .activate(.identifier(.literal("target"))))),

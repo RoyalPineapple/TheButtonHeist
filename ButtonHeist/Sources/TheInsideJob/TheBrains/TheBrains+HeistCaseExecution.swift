@@ -68,7 +68,7 @@ extension TheBrains {
                     intent: dispatch.intent,
                     evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
                     childFailureCategory: .invocation,
-                    children: .completed(.empty)
+                    children: .empty
                 )
             }
 

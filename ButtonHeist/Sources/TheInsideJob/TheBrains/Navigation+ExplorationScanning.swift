@@ -393,13 +393,14 @@ extension Navigation {
         in hierarchy: [AccessibilityHierarchy],
         tolerance: CGFloat = 1
     ) -> Bool {
-        guard case .container(let container, _) = hierarchy.node(at: containerPath) else {
+        guard let subtree = hierarchy.node(at: containerPath),
+              case .container(let container, _) = subtree
+        else {
             return false
         }
         let containerFrame = container.frame
-        let hits: [Bool] = hierarchy.compactMapSubtrees { node, path -> Bool? in
+        let hits: [Bool] = subtree.compactMapSubtrees(path: containerPath) { node, path -> Bool? in
             guard path != containerPath,
-                  path.hasPrefix(containerPath),
                   case .element(let element, _) = node
             else {
                 return nil

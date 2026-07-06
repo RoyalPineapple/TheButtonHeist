@@ -18,6 +18,12 @@ extension Navigation {
         let path: TreePath
     }
 
+    private struct ScrollContainerEvidence {
+        let container: AccessibilityContainer
+        let path: TreePath
+        let contentSize: AccessibilitySize
+    }
+
     @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
         case resolved(ScrollableTarget)
         case failed(ContainerScrollFailure)
@@ -182,7 +188,10 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        stash.latestObservedLiveHierarchy.pathIndexedContainers.compactMap { item -> ScrollPlan? in
+        let indexedContainers = stash.latestObservedLiveHierarchy.pathIndexedContainers
+        let safeSwipeBounds = currentSwipeSafeBounds(in: indexedContainers)
+
+        return indexedContainers.compactMap { item -> ScrollPlan? in
             let container = item.container
             let path = item.path
             guard case .scrollable(let contentSize) = container.type else { return nil }
@@ -197,9 +206,12 @@ extension Navigation {
                 return nil
             }
             guard let target = self.scrollableTarget(
-                for: container,
-                path: path,
-                contentSize: contentSize
+                for: ScrollContainerEvidence(
+                    container: container,
+                    path: path,
+                    contentSize: contentSize
+                ),
+                safeSwipeBounds: safeSwipeBounds
             ) else {
                 return nil
             }
@@ -215,13 +227,39 @@ extension Navigation {
         path: TreePath? = nil,
         contentSize: AccessibilitySize
     ) -> ScrollableTarget? {
+        scrollableTarget(
+            for: container,
+            path: path,
+            contentSize: contentSize,
+            safeSwipeBounds: currentSwipeSafeBounds()
+        )
+    }
+
+    private func scrollableTarget(
+        for evidence: ScrollContainerEvidence,
+        safeSwipeBounds: CGRect
+    ) -> ScrollableTarget? {
+        scrollableTarget(
+            for: evidence.container,
+            path: evidence.path,
+            contentSize: evidence.contentSize,
+            safeSwipeBounds: safeSwipeBounds
+        )
+    }
+
+    private func scrollableTarget(
+        for container: AccessibilityContainer,
+        path: TreePath? = nil,
+        contentSize: AccessibilitySize,
+        safeSwipeBounds: CGRect
+    ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
         if let path,
            let scrollView = stash.liveScrollableContainerView(forPath: path) {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(scrollView)
         }
-        guard let screenFrame = safeSwipeFrame(from: container.frame.cgRect) else {
+        guard let screenFrame = safeSwipeFrame(from: container.frame.cgRect, safeBounds: safeSwipeBounds) else {
             return nil
         }
         return .swipeable(frame: screenFrame, contentSize: cgContentSize)
@@ -241,7 +279,11 @@ extension Navigation {
     /// which every element carries as a back-reference to its owning nav bar;
     /// that path needs LLDB validation across OS versions before shipping.
     func safeSwipeFrame(from frame: CGRect) -> CGRect? {
-        let safeIntersection = frame.intersection(currentSwipeSafeBounds())
+        safeSwipeFrame(from: frame, safeBounds: currentSwipeSafeBounds())
+    }
+
+    private func safeSwipeFrame(from frame: CGRect, safeBounds: CGRect) -> CGRect? {
+        let safeIntersection = frame.intersection(safeBounds)
         if !safeIntersection.isNull, !safeIntersection.isEmpty {
             return safeIntersection
         }
@@ -257,12 +299,15 @@ extension Navigation {
     /// the window's `safeAreaInsets.top` — covers the status bar / notch but
     /// not nav bars (see `safeSwipeFrame`).
     private func currentSwipeSafeBounds() -> CGRect {
+        currentSwipeSafeBounds(in: stash.latestObservedLiveHierarchy.pathIndexedContainers)
+    }
+
+    private func currentSwipeSafeBounds(in containers: [PathIndexedAccessibilityContainer]) -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let tabBarTop = stash.latestObservedLiveHierarchy
-            .flattenToContainers()
+        let tabBarTop = containers
             .compactMap { container -> CGFloat? in
-                guard case .tabBar = container.type else { return nil }
-                return container.frame.minY
+                guard case .tabBar = container.container.type else { return nil }
+                return container.container.frame.minY
             }
             .min()
 

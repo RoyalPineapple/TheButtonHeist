@@ -80,20 +80,11 @@ extension TheHandoff {
 
     @discardableResult
     func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
-        send(message, requestId: requestId, requestScreenPayload: nil)
-    }
-
-    @discardableResult
-    func send(
-        _ message: ClientMessage,
-        requestId: String? = nil,
-        requestScreenPayload: ScreenRequestPayload?
-    ) -> DeviceSendOutcome {
         guard case .connected = connectionPhase,
               let connection = connectionLifecycle.activeConnection else {
             return .failed(.notConnected)
         }
-        return connection.send(message, requestId: requestId, requestScreenPayload: requestScreenPayload)
+        return connection.send(message, requestId: requestId)
     }
 
     @discardableResult

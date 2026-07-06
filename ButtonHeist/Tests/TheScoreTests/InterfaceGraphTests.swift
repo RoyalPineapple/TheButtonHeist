@@ -107,31 +107,15 @@ final class InterfaceGraphTests: XCTestCase {
         }
     }
 
-    func testGraphCoreSourcesStayValueOnly() throws {
-        let buttonHeistDirectory = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let sourcePaths = [
-            "Sources/TheScore/AccessibilityHierarchyGraph.swift",
-        ]
-        let forbiddenTokens = [
-            "import UIKit",
-            "NSObject",
-            "UIView",
-            "UIScrollView",
-            "weak var",
-        ]
-
-        for sourcePath in sourcePaths {
-            let source = try String(
-                contentsOf: buttonHeistDirectory.appendingPathComponent(sourcePath),
-                encoding: .utf8
-            )
-            for token in forbiddenTokens {
-                XCTAssertFalse(source.contains(token), "\(sourcePath) must not contain \(token)")
-            }
-        }
+    func testGraphCoreTypesRemainValueContracts() {
+        assertValueContract(AccessibilityNodeRecord.self)
+        assertValueContract(AccessibilityElementNodeRecord.self)
+        assertValueContract(AccessibilityHierarchyGraph.self)
+        assertValueContract(InterfaceGraphElementRecord.self)
+        assertValueContract(InterfaceGraphContainerRecord.self)
+        assertValueContract(InterfaceGraphNodeKind.self)
+        assertValueContract(InterfaceGraphNodeRecord.self)
+        assertValueContract(InterfaceGraph.self)
     }
 
     private func makeElement(label: String) -> HeistElement {
@@ -147,4 +131,6 @@ final class InterfaceGraphTests: XCTestCase {
             actions: []
         )
     }
+
+    private func assertValueContract<T: Equatable & Sendable>(_: T.Type) {}
 }

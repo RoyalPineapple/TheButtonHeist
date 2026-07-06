@@ -23,6 +23,7 @@ final class TheBrains {
     let actions: Actions
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
+    let failureEvidencePolicy: FailureEvidencePolicy
     private var observationDriver = StateDriver(
         initial: ObservationRuntimePhase.inactive,
         machine: ObservationRuntimeMachine()
@@ -123,8 +124,13 @@ final class TheBrains {
         }
     }
 
-    init(tripwire: TheTripwire, fingerprintsEnabled: Bool = true) {
+    init(
+        tripwire: TheTripwire,
+        fingerprintsEnabled: Bool = true,
+        failureEvidencePolicy: FailureEvidencePolicy = .screenshot
+    ) {
         self.tripwire = tripwire
+        self.failureEvidencePolicy = failureEvidencePolicy
         let stash = TheStash(tripwire: tripwire)
         let safecracker = TheSafecracker(fingerprintsEnabled: fingerprintsEnabled)
         self.stash = stash

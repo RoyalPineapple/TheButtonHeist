@@ -58,6 +58,64 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         await harness.job.stop()
     }
 
+    func testStartWhileStartingDoesNotCreateAnotherRuntime() async throws {
+        let startupGate = RuntimeStartGate()
+        let harness = makeRuntimeHarness(startOverride: { _, _, _ in
+            await startupGate.enterAndWaitForRelease()
+            return 23456
+        })
+
+        let startTask = Task { @MainActor in
+            try await harness.job.start()
+        }
+        await startupGate.waitUntilEntered()
+        guard case .starting = harness.job.serverPhase else {
+            return XCTFail("Expected starting phase, got \(harness.job.serverPhase)")
+        }
+
+        try await harness.job.start()
+
+        guard case .starting = harness.job.serverPhase else {
+            return XCTFail("Expected starting phase, got \(harness.job.serverPhase)")
+        }
+        XCTAssertEqual(harness.startCallCount(), 1)
+
+        startupGate.release()
+        try await startTask.value
+
+        assertRunning(harness.job, transport: harness.latestTransport(), actualPort: 23456)
+        XCTAssertEqual(harness.startCallCount(), 1)
+
+        await harness.job.stop()
+    }
+
+    func testStopWhileStartingPreventsStaleActivation() async throws {
+        let startupGate = RuntimeStartGate()
+        let harness = makeRuntimeHarness(startOverride: { _, _, _ in
+            await startupGate.enterAndWaitForRelease()
+            return 23456
+        })
+
+        let startTask = Task { @MainActor in
+            try await harness.job.start()
+        }
+        await startupGate.waitUntilEntered()
+        guard case .starting = harness.job.serverPhase else {
+            return XCTFail("Expected starting phase, got \(harness.job.serverPhase)")
+        }
+
+        await harness.job.stop()
+        startupGate.release()
+
+        do {
+            try await startTask.value
+            XCTFail("Expected stale startup completion to be rejected")
+        } catch {}
+
+        assertStoppedClearingLifecycleState(harness.job)
+        XCTAssertEqual(harness.startCallCount(), 1)
+    }
+
     func testStartWhileSuspendedDoesNotResumeRuntime() async throws {
         let harness = makeRuntimeHarness(actualPort: 23456)
         try await harness.job.start()

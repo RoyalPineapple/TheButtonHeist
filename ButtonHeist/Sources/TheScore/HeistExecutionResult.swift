@@ -1443,24 +1443,113 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     public let parameter: HeistReferenceName
     public let count: Int
     public let iterationCount: Int
-    public let iterationOrdinal: Int?
-    public let value: String?
-    public let failureReason: String?
+    private let shape: Shape
+
+    public var iterationOrdinal: Int? {
+        guard case .iteration(let iterationOrdinal, _, _) = shape else {
+            return nil
+        }
+        return iterationOrdinal
+    }
+
+    public var value: String? {
+        guard case .iteration(_, let value, _) = shape else {
+            return nil
+        }
+        return value
+    }
+
+    public var failureReason: String? {
+        switch shape {
+        case .summary(let failureReason), .iteration(_, _, let failureReason):
+            return failureReason
+        }
+    }
 
     public init(
         parameter: HeistReferenceName,
         count: Int,
         iterationCount: Int,
-        iterationOrdinal: Int? = nil,
-        value: String? = nil,
         failureReason: String? = nil
     ) {
         self.parameter = parameter
         self.count = count
         self.iterationCount = iterationCount
-        self.iterationOrdinal = iterationOrdinal
-        self.value = value
-        self.failureReason = failureReason
+        self.shape = .summary(failureReason: failureReason)
+    }
+
+    public init(
+        parameter: HeistReferenceName,
+        count: Int,
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        value: String,
+        failureReason: String? = nil
+    ) {
+        self.parameter = parameter
+        self.count = count
+        self.iterationCount = iterationCount
+        self.shape = .iteration(
+            iterationOrdinal: iterationOrdinal,
+            value: value,
+            failureReason: failureReason
+        )
+    }
+
+    private enum Shape: Sendable, Equatable {
+        case summary(failureReason: String?)
+        case iteration(iterationOrdinal: Int, value: String, failureReason: String?)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case parameter
+        case count
+        case iterationCount
+        case iterationOrdinal
+        case value
+        case failureReason
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "HeistForEachStringEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
+        let value = try container.decodeIfPresent(String.self, forKey: .value)
+        let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
+
+        switch (iterationOrdinal, value) {
+        case (.some(let iterationOrdinal), .some(let value)):
+            self.init(
+                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
+                count: try container.decode(Int.self, forKey: .count),
+                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                iterationOrdinal: iterationOrdinal,
+                value: value,
+                failureReason: failureReason
+            )
+        case (nil, nil):
+            self.init(
+                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
+                count: try container.decode(Int.self, forKey: .count),
+                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                failureReason: failureReason
+            )
+        case (.some, nil), (nil, .some):
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "for_each_string iteration evidence requires iterationOrdinal and value together"
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(parameter, forKey: .parameter)
+        try container.encode(count, forKey: .count)
+        try container.encode(iterationCount, forKey: .iterationCount)
+        try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(failureReason, forKey: .failureReason)
     }
 }
 
@@ -1470,10 +1559,35 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     public let limit: Int
     public let matchedCount: Int
     public let iterationCount: Int
-    public let iterationOrdinal: Int?
-    public let targetOrdinal: Int?
-    public let targetSummary: String?
-    public let failureReason: String?
+    private let shape: Shape
+
+    public var iterationOrdinal: Int? {
+        guard case .iteration(let iterationOrdinal, _, _, _) = shape else {
+            return nil
+        }
+        return iterationOrdinal
+    }
+
+    public var targetOrdinal: Int? {
+        guard case .iteration(_, let targetOrdinal, _, _) = shape else {
+            return nil
+        }
+        return targetOrdinal
+    }
+
+    public var targetSummary: String? {
+        guard case .iteration(_, _, let targetSummary, _) = shape else {
+            return nil
+        }
+        return targetSummary
+    }
+
+    public var failureReason: String? {
+        switch shape {
+        case .summary(let failureReason), .iteration(_, _, _, let failureReason):
+            return failureReason
+        }
+    }
 
     public init(
         parameter: HeistReferenceName,
@@ -1481,9 +1595,6 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         limit: Int,
         matchedCount: Int,
         iterationCount: Int,
-        iterationOrdinal: Int? = nil,
-        targetOrdinal: Int? = nil,
-        targetSummary: String? = nil,
         failureReason: String? = nil
     ) {
         self.parameter = parameter
@@ -1491,10 +1602,104 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         self.limit = limit
         self.matchedCount = matchedCount
         self.iterationCount = iterationCount
-        self.iterationOrdinal = iterationOrdinal
-        self.targetOrdinal = targetOrdinal
-        self.targetSummary = targetSummary
-        self.failureReason = failureReason
+        self.shape = .summary(failureReason: failureReason)
+    }
+
+    public init(
+        parameter: HeistReferenceName,
+        matching: ElementPredicate,
+        limit: Int,
+        matchedCount: Int,
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        targetOrdinal: Int,
+        targetSummary: String,
+        failureReason: String? = nil
+    ) {
+        self.parameter = parameter
+        self.matching = matching
+        self.limit = limit
+        self.matchedCount = matchedCount
+        self.iterationCount = iterationCount
+        self.shape = .iteration(
+            iterationOrdinal: iterationOrdinal,
+            targetOrdinal: targetOrdinal,
+            targetSummary: targetSummary,
+            failureReason: failureReason
+        )
+    }
+
+    private enum Shape: Sendable, Equatable {
+        case summary(failureReason: String?)
+        case iteration(
+            iterationOrdinal: Int,
+            targetOrdinal: Int,
+            targetSummary: String,
+            failureReason: String?
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case parameter
+        case matching
+        case limit
+        case matchedCount
+        case iterationCount
+        case iterationOrdinal
+        case targetOrdinal
+        case targetSummary
+        case failureReason
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "HeistForEachElementEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
+        let targetOrdinal = try container.decodeIfPresent(Int.self, forKey: .targetOrdinal)
+        let targetSummary = try container.decodeIfPresent(String.self, forKey: .targetSummary)
+        let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
+
+        switch (iterationOrdinal, targetOrdinal, targetSummary) {
+        case (.some(let iterationOrdinal), .some(let targetOrdinal), .some(let targetSummary)):
+            self.init(
+                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
+                matching: try container.decode(ElementPredicate.self, forKey: .matching),
+                limit: try container.decode(Int.self, forKey: .limit),
+                matchedCount: try container.decode(Int.self, forKey: .matchedCount),
+                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                iterationOrdinal: iterationOrdinal,
+                targetOrdinal: targetOrdinal,
+                targetSummary: targetSummary,
+                failureReason: failureReason
+            )
+        case (nil, nil, nil):
+            self.init(
+                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
+                matching: try container.decode(ElementPredicate.self, forKey: .matching),
+                limit: try container.decode(Int.self, forKey: .limit),
+                matchedCount: try container.decode(Int.self, forKey: .matchedCount),
+                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                failureReason: failureReason
+            )
+        default:
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "for_each_element iteration evidence requires iterationOrdinal, targetOrdinal, and targetSummary together"
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(parameter, forKey: .parameter)
+        try container.encode(matching, forKey: .matching)
+        try container.encode(limit, forKey: .limit)
+        try container.encode(matchedCount, forKey: .matchedCount)
+        try container.encode(iterationCount, forKey: .iterationCount)
+        try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
+        try container.encodeIfPresent(targetOrdinal, forKey: .targetOrdinal)
+        try container.encodeIfPresent(targetSummary, forKey: .targetSummary)
+        try container.encodeIfPresent(failureReason, forKey: .failureReason)
     }
 }
 

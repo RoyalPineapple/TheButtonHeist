@@ -45,20 +45,92 @@ public struct RotorResult: Codable, Sendable, Equatable {
 
 /// Text range returned by a rotor result.
 public struct RotorTextRange: Codable, Equatable, Sendable {
-    public let text: String?
-    public let startOffset: Int?
-    public let endOffset: Int?
-    public let rangeDescription: String
+    private let shape: Shape
 
-    public init(
-        text: String? = nil,
-        startOffset: Int? = nil,
-        endOffset: Int? = nil,
-        rangeDescription: String
-    ) {
-        self.text = text
-        self.startOffset = startOffset
-        self.endOffset = endOffset
-        self.rangeDescription = rangeDescription
+    public var text: String? {
+        guard case .indexed(let text, _, _, _) = shape else {
+            return nil
+        }
+        return text
+    }
+
+    public var startOffset: Int? {
+        guard case .indexed(_, let startOffset, _, _) = shape else {
+            return nil
+        }
+        return startOffset
+    }
+
+    public var endOffset: Int? {
+        guard case .indexed(_, _, let endOffset, _) = shape else {
+            return nil
+        }
+        return endOffset
+    }
+
+    public var rangeDescription: String {
+        switch shape {
+        case .described(let rangeDescription), .indexed(_, _, _, let rangeDescription):
+            return rangeDescription
+        }
+    }
+
+    public init(rangeDescription: String) {
+        self.shape = .described(rangeDescription: rangeDescription)
+    }
+
+    public init(text: String?, startOffset: Int, endOffset: Int, rangeDescription: String) {
+        self.shape = .indexed(
+            text: text,
+            startOffset: startOffset,
+            endOffset: endOffset,
+            rangeDescription: rangeDescription
+        )
+    }
+
+    private enum Shape: Equatable, Sendable {
+        case described(rangeDescription: String)
+        case indexed(text: String?, startOffset: Int, endOffset: Int, rangeDescription: String)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case text
+        case startOffset
+        case endOffset
+        case rangeDescription
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "RotorTextRange")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let text = try container.decodeIfPresent(String.self, forKey: .text)
+        let startOffset = try container.decodeIfPresent(Int.self, forKey: .startOffset)
+        let endOffset = try container.decodeIfPresent(Int.self, forKey: .endOffset)
+        let rangeDescription = try container.decode(String.self, forKey: .rangeDescription)
+
+        switch (text, startOffset, endOffset) {
+        case (nil, nil, nil):
+            self.init(rangeDescription: rangeDescription)
+        case (let text, .some(let startOffset), .some(let endOffset)):
+            self.init(
+                text: text,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                rangeDescription: rangeDescription
+            )
+        default:
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "RotorTextRange requires startOffset and endOffset together; description-only ranges cannot include text"
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(startOffset, forKey: .startOffset)
+        try container.encodeIfPresent(endOffset, forKey: .endOffset)
+        try container.encode(rangeDescription, forKey: .rangeDescription)
     }
 }

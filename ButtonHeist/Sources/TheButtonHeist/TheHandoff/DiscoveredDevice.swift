@@ -1,5 +1,4 @@
 import Foundation
-import Network
 
 import TheScore
 
@@ -93,6 +92,11 @@ private struct DiscoveryHostPortTarget: Equatable, Sendable {
     }
 }
 
+public enum DiscoveredDeviceEndpoint: Hashable, Sendable {
+    case hostPort(host: String, port: UInt16)
+    case service(name: String, type: String, domain: String)
+}
+
 struct DiscoveryResolutionQuery: Equatable, Sendable, CustomStringConvertible {
     let rawValue: String
     let normalizedValue: String
@@ -121,7 +125,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public var id: String { deviceID.rawValue }
     /// Advertised service label, usually `AppName#instanceId`.
     let name: String
-    let endpoint: NWEndpoint
+    public let endpoint: DiscoveredDeviceEndpoint
     /// Simulator UDID from Bonjour TXT record (nil on physical devices)
     let simulatorUDID: String?
     /// Stable installation identifier from Bonjour TXT record
@@ -133,7 +137,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     /// Connection scope advertised or inferred at discovery time.
     let connectionType: ConnectionScope
 
-    public init(id: String, name: String, endpoint: NWEndpoint,
+    public init(id: String, name: String, endpoint: DiscoveredDeviceEndpoint,
                 simulatorUDID: String? = nil,
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
@@ -151,7 +155,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         )
     }
 
-    init(deviceID: DiscoveryDeviceID, name: String, endpoint: NWEndpoint,
+    init(deviceID: DiscoveryDeviceID, name: String, endpoint: DiscoveredDeviceEndpoint,
          simulatorUDID: String? = nil,
          installationId: String? = nil,
          displayDeviceName: String? = nil,
@@ -182,18 +186,18 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return DiscoveredDevice(
             deviceID: resolvedId,
             name: resolvedName,
-            endpoint: .hostPort(host: .init(target.host), port: .init(integerLiteral: target.port))
+            endpoint: .hostPort(host: target.host, port: target.port)
         )
     }
 
     /// Convenience init for direct host:port connections (no Bonjour).
     init(host: String, port: UInt16) {
-        let endpoint = NWEndpoint.hostPort(
-            host: NWEndpoint.Host(host),
-            port: NWEndpoint.Port(integerLiteral: port)
-        )
         let deviceID = DiscoveryDeviceID.hostPort(host: host, port: port)
-        self.init(deviceID: deviceID, name: deviceID.rawValue, endpoint: endpoint)
+        self.init(
+            deviceID: deviceID,
+            name: deviceID.rawValue,
+            endpoint: .hostPort(host: host, port: port)
+        )
     }
 
     /// Parse a direct loopback connection target from a filter string.
