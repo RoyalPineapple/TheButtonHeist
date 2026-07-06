@@ -41,6 +41,7 @@ struct ToolSyncTests {
         let expected = [
             "connect",
             "describe_heist",
+            "get_announcements",
             "get_interface",
             "get_pasteboard",
             "get_screen",

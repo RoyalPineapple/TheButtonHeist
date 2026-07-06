@@ -47,8 +47,8 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         latestSettleFailure: @escaping LatestSettleFailure,
         semanticObservation: @escaping SemanticObserver,
         presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
-        announcementCursor: @escaping AnnouncementCursor = { _ in .origin },
-        waitForAnnouncement: @escaping AnnouncementWait = { _, _, _ in nil }
+        announcementCursor: @escaping AnnouncementCursor,
+        waitForAnnouncement: @escaping AnnouncementWait
     ) {
         self.observeEvent = observeEvent
         self.latestEvent = latestEvent

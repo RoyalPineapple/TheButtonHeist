@@ -1292,7 +1292,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             semanticObservation: { event in
                 self.brains.postActionObservation.semanticObservation(from: event)
             },
-            presenceTimeoutMessage: { _, _ in nil }
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
         )
 
         let receipt = await wait.wait(
@@ -1323,7 +1325,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             semanticObservation: { event in
                 self.brains.postActionObservation.semanticObservation(from: event)
             },
-            presenceTimeoutMessage: { _, _ in nil }
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
         )
 
         let receipt = await wait.wait(

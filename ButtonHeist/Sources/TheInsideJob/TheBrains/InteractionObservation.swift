@@ -15,7 +15,16 @@ final class InteractionObservation {
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
-    private lazy var predicateWait: PredicateWait = {
+    private var predicateWait: PredicateWait {
+        makePredicateWait()
+    }
+
+    init(stash: TheStash, postActionObservation: PostActionObservation) {
+        self.stash = stash
+        self.postActionObservation = postActionObservation
+    }
+
+    private func makePredicateWait() -> PredicateWait {
         let stash = self.stash
         let postActionObservation = self.postActionObservation
         return PredicateWait(
@@ -60,11 +69,6 @@ final class InteractionObservation {
                 return announcement
             }
         )
-    }()
-
-    init(stash: TheStash, postActionObservation: PostActionObservation) {
-        self.stash = stash
-        self.postActionObservation = postActionObservation
     }
 
     func resetAnnouncementWaitCursorForHeist() {
