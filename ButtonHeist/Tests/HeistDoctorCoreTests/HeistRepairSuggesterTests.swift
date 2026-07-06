@@ -819,7 +819,7 @@ private let expectedRepairJSONReportJSON = """
             path: "$.body[0]",
             kind: .action,
             durationMs: 1,
-            intent: .action(command: "activate", target: target.description),
+            intent: .action(command: .activate(.target(target))),
             evidence: .action(.expectation(
                 command: .activate(.target(target)),
                 dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
@@ -1170,7 +1170,7 @@ private let expectedRepairJSONReportJSON = """
                 path: path,
                 kind: .action,
                 durationMs: 1,
-                intent: .action(command: "activate", target: target.description),
+                intent: .action(command: .activate(.target(target))),
                 evidence: evidence,
                 failure: HeistFailureDetail(
                     category: .targetResolution,
@@ -1183,7 +1183,7 @@ private let expectedRepairJSONReportJSON = """
                 path: path,
                 kind: .action,
                 durationMs: 1,
-                intent: .action(command: "activate", target: target.description),
+                intent: .action(command: .activate(.target(target))),
                 evidence: evidence
         )
         return HeistExecutionResult(

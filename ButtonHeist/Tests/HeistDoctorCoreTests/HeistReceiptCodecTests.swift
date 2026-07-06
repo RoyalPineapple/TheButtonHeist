@@ -205,7 +205,7 @@ import TheScore
                     path: "$.body[0]",
                     kind: .action,
                     durationMs: 12,
-                    intent: .action(command: "Activate", target: "target(predicate(label=\"Checkout\"))"),
+                    intent: .action(command: .activate(.predicate(.label("Checkout")))),
                     evidence: .action(.expectation(
                         command: .activate(.predicate(.label("Checkout"))),
                         dispatchResult: result,

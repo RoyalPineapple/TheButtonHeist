@@ -542,10 +542,8 @@ extension ActionResult {
 }
 
 private struct PostActionResultReceipt {
-    let method: ActionMethod
-    let outcome: ActionResult.Outcome
+    let projection: PostActionResultProjection
     let message: String?
-    let payload: ActionResultPayload?
     let accessibilityTrace: AccessibilityTrace
     let settled: Bool
     let settleTimeMs: Int
@@ -563,10 +561,12 @@ private struct PostActionResultReceipt {
         switch observationOutcome {
         case .cancelled(let cancelMs):
             self.init(
-                method: method,
-                outcome: .failure(.actionFailed),
+                projection: PostActionResultProjection(
+                    method: method,
+                    payload: outcome.immediatePayload,
+                    failure: .actionFailed
+                ),
                 message: "cancelled after \(cancelMs)ms",
-                payload: outcome.immediatePayload,
                 accessibilityTrace: AccessibilityTrace(capture: before.capture),
                 settled: false,
                 settleTimeMs: cancelMs,
@@ -576,10 +576,12 @@ private struct PostActionResultReceipt {
 
         case .parseFailed:
             self.init(
-                method: method,
-                outcome: .failure(.actionFailed),
+                projection: PostActionResultProjection(
+                    method: method,
+                    payload: outcome.immediatePayload,
+                    failure: .actionFailed
+                ),
                 message: "Could not parse post-action accessibility tree",
-                payload: outcome.immediatePayload,
                 accessibilityTrace: AccessibilityTrace(capture: before.capture),
                 settled: settleEvidence.didSettleCleanly,
                 settleTimeMs: settleEvidence.timeMs,
@@ -589,10 +591,12 @@ private struct PostActionResultReceipt {
 
         case .observed(let finalEvidence):
             self.init(
-                method: method,
-                outcome: outcome.actionResultOutcome,
+                projection: PostActionResultProjection(
+                    method: method,
+                    outcome: outcome,
+                    payload: outcome.resolvedPayload(after: finalEvidence.state)
+                ),
                 message: message,
-                payload: outcome.resolvedPayload(after: finalEvidence.state),
                 accessibilityTrace: finalEvidence.trace,
                 settled: settleEvidence.didSettleCleanly,
                 settleTimeMs: settleEvidence.timeMs,
@@ -603,20 +607,16 @@ private struct PostActionResultReceipt {
     }
 
     init(
-        method: ActionMethod,
-        outcome: ActionResult.Outcome,
+        projection: PostActionResultProjection,
         message: String?,
-        payload: ActionResultPayload?,
         accessibilityTrace: AccessibilityTrace,
         settled: Bool,
         settleTimeMs: Int,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?
     ) {
-        self.method = method
-        self.outcome = outcome
+        self.projection = projection
         self.message = message
-        self.payload = payload
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
         self.settleTimeMs = settleTimeMs
@@ -625,8 +625,8 @@ private struct PostActionResultReceipt {
     }
 
     var actionResult: ActionResult {
-        switch (outcome, payload) {
-        case (.success, .none):
+        switch projection {
+        case .success(let method):
             return .success(
                 method: method,
                 message: message,
@@ -636,7 +636,7 @@ private struct PostActionResultReceipt {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
-        case (.success, .some(let payload)):
+        case .successPayload(let payload):
             return .success(
                 payload: payload,
                 message: message,
@@ -646,7 +646,7 @@ private struct PostActionResultReceipt {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
-        case (.failure(let errorKind), .none):
+        case .failure(let method, let errorKind):
             return .failure(
                 method: method,
                 errorKind: errorKind,
@@ -657,7 +657,7 @@ private struct PostActionResultReceipt {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
-        case (.failure(let errorKind), .some(let payload)):
+        case .failurePayload(let payload, let errorKind):
             return .failure(
                 payload: payload,
                 errorKind: errorKind,
@@ -668,6 +668,42 @@ private struct PostActionResultReceipt {
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
+        }
+    }
+}
+
+private enum PostActionResultProjection {
+    case success(ActionMethod)
+    case successPayload(ActionResultPayload)
+    case failure(ActionMethod, ErrorKind)
+    case failurePayload(ActionResultPayload, ErrorKind)
+
+    init(
+        method: ActionMethod,
+        outcome: PostActionObservation.ActionOutcome,
+        payload: ActionResultPayload?
+    ) {
+        switch outcome {
+        case .success:
+            self.init(method: method, payload: payload)
+        case .failure(let failure):
+            self.init(method: method, payload: payload, failure: failure.errorKind)
+        }
+    }
+
+    init(method: ActionMethod, payload: ActionResultPayload?) {
+        if let payload {
+            self = .successPayload(payload)
+        } else {
+            self = .success(method)
+        }
+    }
+
+    init(method: ActionMethod, payload: ActionResultPayload?, failure: ErrorKind) {
+        if let payload {
+            self = .failurePayload(payload, failure)
+        } else {
+            self = .failure(method, failure)
         }
     }
 }
@@ -719,15 +755,6 @@ private extension PostActionObservation.ActionOutcome {
             return success.activationTrace
         case .failure(let failure):
             return failure.activationTrace
-        }
-    }
-
-    var actionResultOutcome: ActionResult.Outcome {
-        switch self {
-        case .success:
-            return .success
-        case .failure(let failure):
-            return .failure(failure.errorKind)
         }
     }
 

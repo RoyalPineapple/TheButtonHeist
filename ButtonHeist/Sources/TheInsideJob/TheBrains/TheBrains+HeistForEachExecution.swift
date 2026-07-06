@@ -251,7 +251,7 @@ extension TheBrains {
             path: path,
             kind: .forEachIteration,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
+            intent: .forEachElement(parameter: step.parameter, matching: step.matching, limit: step.limit),
             outcome: outcome
         )
     }
@@ -274,7 +274,7 @@ extension TheBrains {
             path: path,
             kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
+            intent: .forEachElement(parameter: step.parameter, matching: step.matching, limit: step.limit),
             outcome: forEachLoopReceiptOutcome(
                 evidence: evidence,
                 outcome: outcome,
@@ -457,7 +457,7 @@ extension TheBrains {
             path: path,
             kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
+            intent: .forEachElement(parameter: parameter, matching: matching, limit: limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: parameter,
                 matching: matching,
@@ -488,7 +488,7 @@ extension TheBrains {
             path: path,
             kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
+            intent: .forEachElement(parameter: parameter, matching: matching, limit: limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: parameter,
                 matching: matching,

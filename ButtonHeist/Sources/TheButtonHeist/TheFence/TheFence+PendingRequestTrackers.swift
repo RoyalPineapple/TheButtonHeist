@@ -236,21 +236,15 @@ extension TheFence {
             afterRegister: (() -> Void)? = nil
         ) async throws -> Response {
             let owner = UUID()
+            let response = TimedOneShot<Result<PendingResponsePayload, Error>>()
 
-            return try await withTaskCancellationHandler {
-                let result: Result<PendingResponsePayload, Error> = await withCheckedContinuation { continuation in
-                    if Task.isCancelled {
-                        continuation.resume(returning: .failure(CancellationError()))
-                        return
-                    }
-
+            let result = await response.wait(
+                cancellationValue: .failure(CancellationError()),
+                onRegistered: { response in
                     guard pending[requestId] == nil else {
-                        continuation.resume(returning: .failure(PendingRequestError.duplicateRequestId(requestId)))
+                        response.resolve(returning: .failure(PendingRequestError.duplicateRequestId(requestId)))
                         return
                     }
-
-                    let response = TimedOneShot<Result<PendingResponsePayload, Error>>()
-                    precondition(response.register(continuation), "New pending request response was resumed before registration")
 
                     pending[requestId] = PendingRequest(
                         owner: owner,
@@ -263,15 +257,14 @@ extension TheFence {
                         }
                     }
                     afterRegister?()
-                }
-                return try expectation.decode(result, requestId: requestId).get()
-            } onCancel: {
-                Task { @ButtonHeistActor [weak self] in
-                    if let request = self?.removePendingRequest(requestId: requestId, owner: owner) {
+                },
+                onFinished: {
+                    if let request = removePendingRequest(requestId: requestId, owner: owner) {
                         request.resume(.failure(CancellationError()), requestId: requestId)
                     }
                 }
-            }
+            )
+            return try expectation.decode(result, requestId: requestId).get()
         }
 
         @discardableResult

@@ -508,7 +508,7 @@ extension TheBrains {
         return heistActionReceipt(
             path: "\(failedPath).failure.actions[0]",
             durationMs: elapsedMilliseconds(since: start),
-            intent: .action(command: command.wireType.rawValue, target: nil),
+            intent: .action(command: command),
             outcome: outcome
         )
     }
@@ -926,8 +926,8 @@ extension TheBrains {
         invocationName: String
     ) -> HeistStepIntent {
         HeistStepIntent.invoke(
-            path: invocationName,
-            argument: invoke.argument == .none ? nil : invoke.runHeistSummary
+            path: invoke.invocationPath,
+            argument: invoke.argument
         )
     }
 

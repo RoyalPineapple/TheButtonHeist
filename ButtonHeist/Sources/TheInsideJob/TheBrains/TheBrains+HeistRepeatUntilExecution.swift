@@ -944,7 +944,7 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: .repeatUntil(
-                predicate: step.predicate.description,
+                predicate: step.predicateExpression,
                 timeout: step.timeout
             )
         )
@@ -1015,7 +1015,7 @@ extension TheBrains {
             kind: .repeatUntilIteration,
             durationMs: elapsedMilliseconds(since: frame.start),
             intent: .repeatUntil(
-                predicate: step.predicate.description,
+                predicate: step.predicateExpression,
                 timeout: step.timeout
             ),
             outcome: receiptOutcome
@@ -1031,7 +1031,7 @@ extension TheBrains {
             path: context.path,
             kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: .repeatUntil(predicate: step.predicate.description, timeout: step.timeout),
+            intent: .repeatUntil(predicate: step.predicateExpression, timeout: step.timeout),
             failure: HeistFailureDetail(
                 category: .loop,
                 contract: "repeat_until execution reaches a terminal state",
@@ -1051,7 +1051,7 @@ extension TheBrains {
             path: path,
             kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .repeatUntil(predicate: step.predicate.description, timeout: step.timeout),
+            intent: .repeatUntil(predicate: step.predicate, timeout: step.timeout),
             failure: HeistFailureDetail(
                 category: .validation,
                 contract: "repeat_until predicate resolves before evaluation",

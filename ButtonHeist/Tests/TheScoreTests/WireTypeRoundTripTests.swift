@@ -876,7 +876,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .action,
                     durationMs: 0,
-                    intent: .action(command: "activate", target: "predicate(label=\"Save\")"),
+                    intent: .action(command: command),
                     evidence: .action(.dispatch(
                         command: command,
                         dispatchResult: .failure(
@@ -907,6 +907,12 @@ final class WireTypeRoundTripTests: XCTestCase {
             "No element matching label \"Save\""
         )
         XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
+
+        let payload = try JSONProbe(data: data)
+        let intent = try payload.array("steps")[0].object("intent")
+        XCTAssertEqual(try intent.string("type"), "action")
+        XCTAssertEqual(try intent.object("command").string("type"), "activate")
+        try intent.assertMissing("target")
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
@@ -917,7 +923,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .forEachElement,
                     durationMs: 500,
-                    intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
+                    intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
                     evidence: .forEachElement(HeistForEachElementEvidence(
                         parameter: "row",
                         matching: matching,
@@ -953,6 +959,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let steps = try payload.array("steps")
         let stepPayload = try XCTUnwrap(steps.first)
         XCTAssertEqual(try stepPayload.string("kind"), "for_each_element")
+        let intent = try stepPayload.object("intent")
+        XCTAssertEqual(try intent.string("type"), "for_each_element")
+        XCTAssertEqual(try intent.object("matching").array("checks")[0].string("kind"), "label")
         try stepPayload.assertMissing("childResults")
         _ = try stepPayload.array("children")
     }
@@ -964,7 +973,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .forEachElement,
                     durationMs: 200,
-                    intent: .forEachElement(parameter: "row", matching: "predicate(label=\"Row\")", limit: 10),
+                    intent: .forEachElement(parameter: "row", matching: ElementPredicate(label: "Row"), limit: 10),
                     evidence: .forEachElement(HeistForEachElementEvidence(
                         parameter: "row",
                         matching: ElementPredicate(label: "Row"),
@@ -1056,6 +1065,23 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         XCTAssertEqual(decodedStep.children.first?.actionEvidence?.dispatchResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
+    }
+
+    func testHeistCaseMatchResultRejectsMismatchedNestedPredicate() throws {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
+        let mismatchedPredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Settings")))
+        let payload = HeistCaseMatchResultPayload(
+            predicate: predicate,
+            result: ExpectationResult(met: true, predicate: mismatchedPredicate)
+        )
+        let data = try encoder.encode(payload)
+
+        XCTAssertThrowsError(try decoder.decode(HeistCaseMatchResult.self, from: data)) { error in
+            assertDecodingError(
+                error,
+                contains: ["heist case match result predicate must match nested expectation result predicate"]
+            )
+        }
     }
 
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
@@ -1232,7 +1258,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             path: path,
             kind: .forEachIteration,
             durationMs: durationMs,
-            intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
+            intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: "row",
                 matching: matching,
@@ -1440,5 +1466,10 @@ final class WireTypeRoundTripTests: XCTestCase {
                 line: line
             )
         }
+    }
+
+    private struct HeistCaseMatchResultPayload: Encodable {
+        let predicate: AccessibilityPredicate
+        let result: ExpectationResult
     }
 }

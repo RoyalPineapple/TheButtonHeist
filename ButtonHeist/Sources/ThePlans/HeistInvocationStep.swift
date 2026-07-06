@@ -154,7 +154,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
     public let path: [String]
     public let argument: HeistArgument
     public let expectation: WaitStep?
-    let invocationPath: HeistInvocationPath
+    package let invocationPath: HeistInvocationPath
 
     public init(
         path: [String],

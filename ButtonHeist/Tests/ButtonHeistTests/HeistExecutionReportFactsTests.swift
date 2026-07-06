@@ -165,7 +165,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .action,
                     durationMs: 5,
-                    intent: .action(command: "activate", target: "label=Pay"),
+                    intent: .action(command: .activate(.target(.predicate(ElementPredicate(label: "Pay"))))),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
                         dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
@@ -452,7 +452,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .action,
                     durationMs: 5,
-                    intent: .action(command: "activate", target: "label=Pay"),
+                    intent: .action(command: .activate(.target(.predicate(ElementPredicate(label: "Pay"))))),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
                         dispatchResult: ActionResult.success(method: .activate),
@@ -560,7 +560,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .wait,
                     durationMs: 2000,
-                    intent: .wait(predicate: predicate.description, timeout: 2),
+                    intent: .wait(predicate: .predicate(predicate), timeout: 2),
                     evidence: .wait(.handledElse(
                         handledElseCheck
                     )),
@@ -663,7 +663,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .invoke,
                     durationMs: 5,
-                    intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
+                    intent: .invoke(
+                        path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"),
+                        argument: .string(.literal("Milk"))
+                    ),
                     evidence: .invocation(.invocation(
                         invocation,
                         name: "LibraryScreen.addToCart",
@@ -806,7 +809,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0]",
                     kind: .action,
                     durationMs: 5,
-                    intent: .action(command: "activate", target: "label=Pay"),
+                    intent: .action(command: .activate(.target(.predicate(ElementPredicate(label: "Pay"))))),
                     evidence: .action(.expectation(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
                         dispatchResult: ActionResult.success(method: .activate),
@@ -875,7 +878,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "$.body[0].failure.actions[0]",
                     kind: .action,
                     durationMs: 1,
-                    intent: .action(command: "takeScreenshot", target: nil),
+                    intent: .action(command: .takeScreenshot),
                     evidence: .action(.dispatch(
                         command: .takeScreenshot,
                         dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
@@ -1121,7 +1124,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 path: "$.body[0]",
                 kind: .forEachElement,
                 durationMs: 5,
-                intent: .forEachElement(parameter: "row", matching: "label=Row", limit: 3),
+                intent: .forEachElement(parameter: "row", matching: ElementPredicate(label: "Row"), limit: 3),
                 evidence: .forEachElement(HeistForEachElementEvidence(
                     parameter: "row",
                     matching: ElementPredicate(label: "Row"),
@@ -1151,7 +1154,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 path: "$.body[0]",
                 kind: .repeatUntil,
                 durationMs: 6,
-                intent: .repeatUntil(predicate: predicate.description, timeout: 2),
+                intent: .repeatUntil(predicate: .predicate(predicate), timeout: 2),
                 evidence: .repeatUntil(HeistRepeatUntilEvidence.predicateMet(
                     predicate: predicate,
                     timeout: 2,
@@ -1209,7 +1212,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 path: "$.body[0]",
                 kind: .invoke,
                 durationMs: 8,
-                intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
+                intent: .invoke(path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"), argument: .string(.literal("Milk"))),
                 evidence: .invocation(.invocation(
                     invocation,
                     name: "LibraryScreen.addToCart",
@@ -1302,7 +1305,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         }
 
         let intent = command.map {
-            HeistStepIntent.action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+            HeistStepIntent.action(command: $0)
         }
         let receiptEvidence = HeistStepEvidence.action(evidence)
         if let failure {
@@ -1362,12 +1365,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             )
         }
         let evidence = HeistStepEvidence.wait(waitEvidence)
+        let intentPredicate: AccessibilityPredicateExpr = expectation.predicate
+            .map(AccessibilityPredicateExpr.predicate)
+            ?? .predicate(.state(.exists(ElementPredicate(label: "predicate"))))
         if let failure {
             return .failed(
                 path: path,
                 kind: .wait,
                 durationMs: 20,
-                intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
+                intent: .wait(predicate: intentPredicate, timeout: 0),
                 evidence: evidence,
                 failure: failure
             )
@@ -1376,7 +1382,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             path: path,
             kind: .wait,
             durationMs: 20,
-            intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
+            intent: .wait(predicate: intentPredicate, timeout: 0),
             evidence: evidence
         )
     }

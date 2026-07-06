@@ -94,3 +94,34 @@ package struct TimedOneShot<Value: Sendable>: Sendable {
         timer?.cancel()
     }
 }
+
+package extension TimedOneShot {
+    func wait(
+        isolation: isolated (any Actor)? = #isolation,
+        cancellationValue: @autoclosure @escaping @Sendable () -> Value,
+        onRegistered: (TimedOneShot<Value>) -> Void,
+        onFinished: () -> Void = {}
+    ) async -> Value {
+        let result = await withTaskCancellationHandler(
+            operation: {
+                await withCheckedContinuation(isolation: isolation) { (continuation: CheckedContinuation<Value, Never>) in
+                    if Task.isCancelled {
+                        continuation.resume(returning: cancellationValue())
+                        return
+                    }
+                    guard register(continuation) else {
+                        continuation.resume(returning: cancellationValue())
+                        return
+                    }
+                    onRegistered(self)
+                }
+            },
+            onCancel: {
+                _ = resolve(returning: cancellationValue())
+            },
+            isolation: isolation
+        )
+        onFinished()
+        return result
+    }
+}

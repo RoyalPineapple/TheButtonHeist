@@ -12,7 +12,7 @@ struct RevealPathGraceMachine: SimpleStateMachine, Equatable {
         switch (state, event) {
         case (.idle, .begin(let cursor, let remaining)):
             return waitOrFinish(
-                RevealPathGraceLoopContext(cursor: cursor, didRetryReveal: false),
+                RevealPathGraceLoopContext(cursor: cursor, knownRevealRetry: .available),
                 remaining: remaining
             )
 
@@ -25,10 +25,10 @@ struct RevealPathGraceMachine: SimpleStateMachine, Equatable {
         case (.yieldingFrame(let context), .frameYielded):
             return change(to: .refreshingVisibleTree(context), effect: .refreshVisibleTree)
 
-        case (.refreshingVisibleTree(let context), .visibleTreeRefreshCompleted(true, _)):
+        case (.refreshingVisibleTree(let context), .visibleTreeRefreshCompleted(.refreshed, _)):
             return change(to: .resolvingVisibleTarget(context), effect: .resolveVisibleTarget)
 
-        case (.refreshingVisibleTree(let context), .visibleTreeRefreshCompleted(false, let remaining)):
+        case (.refreshingVisibleTree(let context), .visibleTreeRefreshCompleted(.unavailable, let remaining)):
             return waitOrFinish(context, remaining: remaining)
 
         case (.resolvingVisibleTarget, .visibleTargetResolved):
@@ -38,11 +38,11 @@ struct RevealPathGraceMachine: SimpleStateMachine, Equatable {
             return finish(.failedVisibleTarget)
 
         case (.resolvingVisibleTarget(let context), .visibleTargetMissing(let remaining)):
-            guard !context.didRetryReveal else {
+            guard case .available = context.knownRevealRetry else {
                 return waitOrFinish(context, remaining: remaining)
             }
             return change(
-                to: .attemptingKnownTargetReveal(context.markingRevealRetried()),
+                to: .attemptingKnownTargetReveal(context.spendKnownRevealRetry()),
                 effect: .attemptKnownTargetReveal
             )
 
@@ -105,16 +105,21 @@ typealias RevealPathGraceTransition = StateChange<
 
 struct RevealPathGraceLoopContext: Sendable, Equatable {
     let cursor: AccessibilityNotificationCursor
-    let didRetryReveal: Bool
+    let knownRevealRetry: RevealPathGraceKnownRevealRetry
 
     func advanced(to cursor: AccessibilityNotificationCursor?) -> RevealPathGraceLoopContext {
         guard let cursor else { return self }
-        return RevealPathGraceLoopContext(cursor: cursor, didRetryReveal: didRetryReveal)
+        return RevealPathGraceLoopContext(cursor: cursor, knownRevealRetry: knownRevealRetry)
     }
 
-    func markingRevealRetried() -> RevealPathGraceLoopContext {
-        RevealPathGraceLoopContext(cursor: cursor, didRetryReveal: true)
+    func spendKnownRevealRetry() -> RevealPathGraceLoopContext {
+        RevealPathGraceLoopContext(cursor: cursor, knownRevealRetry: .spent)
     }
+}
+
+enum RevealPathGraceKnownRevealRetry: Sendable, Equatable {
+    case available
+    case spent
 }
 
 enum RevealPathGraceState: Sendable, Equatable {
@@ -131,12 +136,17 @@ enum RevealPathGraceEvent: Sendable, Equatable {
     case begin(cursor: AccessibilityNotificationCursor, remaining: Double)
     case transitionWaitCompleted(AccessibilityNotificationCursor?)
     case frameYielded
-    case visibleTreeRefreshCompleted(Bool, remaining: Double)
+    case visibleTreeRefreshCompleted(RevealPathGraceVisibleTreeRefreshResult, remaining: Double)
     case visibleTargetResolved
     case visibleTargetFailed
     case visibleTargetMissing(remaining: Double)
     case knownTargetRevealAttempted(RevealPathGraceKnownRevealResult, remaining: Double)
     case cancelled
+}
+
+enum RevealPathGraceVisibleTreeRefreshResult: Sendable, Equatable {
+    case refreshed
+    case unavailable
 }
 
 enum RevealPathGraceEffect: Sendable, Equatable {

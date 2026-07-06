@@ -55,6 +55,13 @@ import Testing
         await #expect(!harness.resolve("missing", returning: 5))
     }
 
+    @Test func `synchronous resolution still runs waiter cleanup`() async {
+        let harness = WaiterHarness()
+
+        await #expect(harness.waitResolvingDuringRegistration(key: "immediate", returning: 11) == 11)
+        await #expect(harness.count == 0)
+        await #expect(!harness.resolve("immediate", returning: 12))
+    }
 }
 
 private actor WaiterHarness {
@@ -69,28 +76,34 @@ private actor WaiterHarness {
 
     func wait(key: String, timeout: Duration?, timeoutValue: Int) async -> Int {
         let oneShot = TimedOneShot<Int>()
-        let result = await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Int, Never>) in
-                if Task.isCancelled {
-                    continuation.resume(returning: Self.cancelledValue)
-                    return
-                }
-                guard oneShot.register(continuation) else {
-                    continuation.resume(returning: Self.cancelledValue)
-                    return
-                }
+        return await oneShot.wait(
+            cancellationValue: Self.cancelledValue,
+            onRegistered: { oneShot in
                 waiters.insert(oneShot, for: key)
                 if let timeout {
                     oneShot.armTimeout(after: timeout) { [weak self] in
                         await self?.timeout(key: key, returning: timeoutValue)
                     }
                 }
+            },
+            onFinished: {
+                waiters.resolve(key, returning: Self.cancelledValue)
             }
-        } onCancel: {
-            oneShot.resolve(returning: Self.cancelledValue)
-        }
-        waiters.resolve(key, returning: Self.cancelledValue)
-        return result
+        )
+    }
+
+    func waitResolvingDuringRegistration(key: String, returning value: Int) async -> Int {
+        let oneShot = TimedOneShot<Int>()
+        return await oneShot.wait(
+            cancellationValue: Self.cancelledValue,
+            onRegistered: { oneShot in
+                waiters.insert(oneShot, for: key)
+                oneShot.resolve(returning: value)
+            },
+            onFinished: {
+                waiters.resolve(key, returning: Self.cancelledValue)
+            }
+        )
     }
 
     @discardableResult

@@ -57,10 +57,7 @@ struct RenderResponseTests {
                         path: "$.body[0]",
                         kind: .action,
                         durationMs: 1,
-                        intent: .action(
-                            command: command.wireType.rawValue,
-                            target: command.reportTarget.map(String.init(describing:))
-                        ),
+                        intent: .action(command: command),
                         evidence: .action(.dispatch(
                             command: command,
                             dispatchResult: .success(

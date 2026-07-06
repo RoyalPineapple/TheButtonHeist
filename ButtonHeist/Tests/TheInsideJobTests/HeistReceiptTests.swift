@@ -382,7 +382,7 @@ final class HeistReceiptTests: XCTestCase {
                     path: "$.body[0].failure.actions[0]",
                     kind: .action,
                     durationMs: 1,
-                    intent: .action(command: "takeScreenshot", target: nil),
+                    intent: .action(command: .takeScreenshot),
                     evidence: .action(.dispatch(
                         command: .takeScreenshot,
                         dispatchResult: ActionResult.success(payload: .screenshot(screenshot))

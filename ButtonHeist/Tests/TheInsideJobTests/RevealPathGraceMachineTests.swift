@@ -15,7 +15,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
         }
 
         let initialCursor = cursor(4)
-        let context = RevealPathGraceLoopContext(cursor: initialCursor, didRetryReveal: false)
+        let context = RevealPathGraceLoopContext(cursor: initialCursor, knownRevealRetry: .available)
         let cases = [
             StartCase(
                 name: "uses silent cadence while time remains",
@@ -62,7 +62,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
         )
         XCTAssertEqual(driver.send(.frameYielded).revealPathGraceEffect, .refreshVisibleTree)
         XCTAssertEqual(
-            driver.send(.visibleTreeRefreshCompleted(true, remaining: 0.8)).revealPathGraceEffect,
+            driver.send(.visibleTreeRefreshCompleted(.refreshed, remaining: 0.8)).revealPathGraceEffect,
             .resolveVisibleTarget
         )
         XCTAssertEqual(
@@ -82,7 +82,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
         XCTAssertEqual(driver.send(.transitionWaitCompleted(nil)).revealPathGraceEffect, .yieldRealFrame)
         XCTAssertEqual(driver.send(.frameYielded).revealPathGraceEffect, .refreshVisibleTree)
         XCTAssertEqual(
-            driver.send(.visibleTreeRefreshCompleted(true, remaining: 0.9)).revealPathGraceEffect,
+            driver.send(.visibleTreeRefreshCompleted(.refreshed, remaining: 0.9)).revealPathGraceEffect,
             .resolveVisibleTarget
         )
         XCTAssertEqual(
@@ -97,7 +97,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
         XCTAssertEqual(driver.send(.transitionWaitCompleted(nil)).revealPathGraceEffect, .yieldRealFrame)
         XCTAssertEqual(driver.send(.frameYielded).revealPathGraceEffect, .refreshVisibleTree)
         XCTAssertEqual(
-            driver.send(.visibleTreeRefreshCompleted(true, remaining: 0.6)).revealPathGraceEffect,
+            driver.send(.visibleTreeRefreshCompleted(.refreshed, remaining: 0.6)).revealPathGraceEffect,
             .resolveVisibleTarget
         )
         XCTAssertEqual(
@@ -112,7 +112,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
         _ = driver.send(.begin(cursor: cursor(3), remaining: 1))
         _ = driver.send(.transitionWaitCompleted(nil))
         _ = driver.send(.frameYielded)
-        _ = driver.send(.visibleTreeRefreshCompleted(true, remaining: 0.9))
+        _ = driver.send(.visibleTreeRefreshCompleted(.refreshed, remaining: 0.9))
         _ = driver.send(.visibleTargetMissing(remaining: 0.9))
 
         XCTAssertEqual(
@@ -122,15 +122,36 @@ final class RevealPathGraceMachineTests: XCTestCase {
         XCTAssertEqual(driver.state, .finished)
     }
 
+    func testUnavailableVisibleRefreshWaitsUntilGraceWindowExpires() {
+        var driver = StateDriver(initial: RevealPathGraceState.idle, machine: machine)
+
+        _ = driver.send(.begin(cursor: cursor(4), remaining: 1))
+        _ = driver.send(.transitionWaitCompleted(nil))
+        _ = driver.send(.frameYielded)
+
+        XCTAssertEqual(
+            driver.send(.visibleTreeRefreshCompleted(.unavailable, remaining: 0.4)).revealPathGraceEffect,
+            .waitForTransitionEvent(after: cursor(4), timeout: 0.15)
+        )
+
+        _ = driver.send(.transitionWaitCompleted(nil))
+        _ = driver.send(.frameYielded)
+
+        XCTAssertEqual(
+            driver.send(.visibleTreeRefreshCompleted(.unavailable, remaining: 0)).revealPathGraceEffect,
+            .finish(.timedOut)
+        )
+    }
+
     func testCancellationFromActiveStatesFinishesAsCancelled() {
-        let context = RevealPathGraceLoopContext(cursor: cursor(1), didRetryReveal: false)
+        let context = RevealPathGraceLoopContext(cursor: cursor(1), knownRevealRetry: .available)
         let cases: [(String, RevealPathGraceState)] = [
             ("idle", .idle),
             ("waiting", .waitingForTransition(context)),
             ("yielding", .yieldingFrame(context)),
             ("refreshing", .refreshingVisibleTree(context)),
             ("resolving", .resolvingVisibleTarget(context)),
-            ("attempting reveal", .attemptingKnownTargetReveal(context.markingRevealRetried())),
+            ("attempting reveal", .attemptingKnownTargetReveal(context.spendKnownRevealRetry())),
         ]
 
         for (name, state) in cases {
@@ -150,7 +171,7 @@ final class RevealPathGraceMachineTests: XCTestCase {
             let rejection: RevealPathGraceRejection
         }
 
-        let context = RevealPathGraceLoopContext(cursor: cursor(1), didRetryReveal: false)
+        let context = RevealPathGraceLoopContext(cursor: cursor(1), knownRevealRetry: .available)
         let cases = [
             RejectionCase(
                 name: "frame yield before wait",

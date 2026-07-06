@@ -1800,7 +1800,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
 
         let intent = command.map {
-            HeistStepIntent.action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+            HeistStepIntent.action(command: $0)
         }
         let receiptEvidence = HeistStepEvidence.action(evidence)
         if let failure {

@@ -299,6 +299,10 @@ final class SemanticObservationStream {
         scopePressure.activeDemandCount
     }
 
+    var activeObservationDemandState: SemanticObservationDemandState {
+        scopePressure.demandState
+    }
+
     var hasActiveObservationDemand: Bool {
         scopePressure.hasActiveDemand
     }
@@ -414,7 +418,7 @@ final class SemanticObservationStream {
         guard let stash else { return nil }
 
         let initialOutcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
-            hasActiveDemand: hasActiveObservationDemand,
+            demandState: activeObservationDemandState,
             stash: stash,
             tripwire: tripwire,
             baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
@@ -545,7 +549,7 @@ final class SemanticObservationStream {
             outcome = providedOutcome
         } else {
             outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
-                hasActiveDemand: hasActiveObservationDemand,
+                demandState: activeObservationDemandState,
                 stash: stash,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
@@ -757,8 +761,11 @@ final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState(stash: TheStash) async -> Bool {
-        if hasActiveObservationDemand {
+        switch activeObservationDemandState {
+        case .active:
             return await observeVisibleSemanticStateAtActiveCadence(stash: stash)
+        case .idle:
+            break
         }
 
         if let reading = tripwire.latestReading,

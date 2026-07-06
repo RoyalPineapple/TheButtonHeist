@@ -27,28 +27,28 @@ final class ConnectionResultWaiters {
         }
     }
 
-    private var waiters: [UUID: Waiter] = [:]
+    private var waiters = WaiterStore<UUID, Waiter>()
 
     func register(id: UUID, attemptID: UUID, completion: TimedOneShot<Result<Void, Error>>) {
-        assert(waiters[id] == nil, "ConnectionResultWaiters registered duplicate waiter id")
-        waiters[id] = Waiter(attemptID: attemptID, completion: completion)
+        waiters.insert(Waiter(attemptID: attemptID, completion: completion), for: id)
     }
 
     func cancel(id: UUID) {
-        guard let waiter = waiters.removeValue(forKey: id) else { return }
+        guard let waiter = waiters.remove(id) else { return }
         waiter.cancel()
     }
 
     func fail(id: UUID, attemptID: UUID, with failure: HandoffConnectionError) {
-        guard let waiter = waiters[id], waiter.attemptID == attemptID else { return }
-        waiters[id] = nil
+        let matchingWaiters = waiters.removeAll { key, waiter in
+            key == id && waiter.attemptID == attemptID
+        }
+        guard let waiter = matchingWaiters.first?.waiter else { return }
         waiter.resolve(with: .failed(failure))
     }
 
     func resolve(attemptID: UUID, with result: HandoffConnectionAttemptResult) {
-        let waiterIDs = waiters.compactMap { $0.value.attemptID == attemptID ? $0.key : nil }
-        for id in waiterIDs {
-            guard let waiter = waiters.removeValue(forKey: id) else { continue }
+        let matchingWaiters = waiters.removeAll { _, waiter in waiter.attemptID == attemptID }
+        for (_, waiter) in matchingWaiters {
             waiter.resolve(with: result)
         }
     }
