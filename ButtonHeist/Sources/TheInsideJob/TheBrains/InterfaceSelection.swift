@@ -54,56 +54,46 @@ struct InterfaceSelector {
     }
 
     private func selectLeafSubtrees(matching predicate: ElementPredicate) -> Interface {
-        let annotations = interface.annotations.elementByPath
-        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
-            guard case .element(let element, let traversalIndex) = node else { return nil }
-            let annotation = annotations[path]
-            guard HeistElement(
-                accessibilityElement: element,
-                annotation: annotation
-            ).matches(predicate) else { return nil }
+        let candidates = interface.graph.elementsInTraversalOrder.compactMap { record -> InterfaceLeafCandidate? in
+            guard record.projectedElement.matches(predicate) else { return nil }
             return InterfaceLeafCandidate(
-                node: node,
-                path: path,
-                traversalIndex: traversalIndex,
-                annotation: annotation,
-                traceIdentity: interface.traceIdentities[path]
+                node: record.node,
+                path: record.path,
+                traversalIndex: record.traversalIndex,
+                annotation: record.annotation,
+                traceIdentity: record.traceIdentity
             )
         }
         return selectedInterface(forLeafCandidates: candidates)
     }
 
     private func select(_ subtree: SubtreeSelector) throws(InterfaceSelectionError) -> Interface {
-        let elementAnnotations = interface.annotations.elementByPath
-        let containerAnnotations = interface.annotations.containerByPath
-        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceSubtreeCandidate? in
-            switch node {
-            case .element(let element, let traversalIndex):
-                let projected = HeistElement(
-                    accessibilityElement: element,
-                    annotation: elementAnnotations[path]
-                )
+        let graph = interface.graph
+        let candidates = graph.nodesInPathOrder.compactMap { record -> InterfaceSubtreeCandidate? in
+            switch record.kind {
+            case .element(let elementRecord):
+                let projected = elementRecord.projectedElement
                 guard case .element(let target) = subtree else { return nil }
                 switch target {
                 case .predicate(let predicate, _):
                     guard projected.matches(predicate) else { return nil }
                 }
                 return InterfaceSubtreeCandidate(
-                    node: node,
-                    originalPath: path,
-                    traversalIndex: traversalIndex,
+                    node: record.node,
+                    originalPath: record.path,
+                    traversalIndex: elementRecord.traversalIndex,
                     summary: projected.subtreeCandidateSummary
                 )
-            case .container(let container, _):
-                let annotation = containerAnnotations[path]
+
+            case .container(let containerRecord):
                 guard case .container(let matcher, _) = subtree,
-                      container.matches(matcher, annotation: annotation)
+                      containerRecord.container.matches(matcher, annotation: containerRecord.annotation)
                 else { return nil }
                 return InterfaceSubtreeCandidate(
-                    node: node,
-                    originalPath: path,
+                    node: record.node,
+                    originalPath: record.path,
                     traversalIndex: nil,
-                    summary: container.subtreeCandidateSummary(annotation: annotation)
+                    summary: containerRecord.container.subtreeCandidateSummary(annotation: containerRecord.annotation)
                 )
             }
         }.sorted()
@@ -143,19 +133,11 @@ struct InterfaceSelector {
     }
 
     private func annotations(for candidate: InterfaceSubtreeCandidate) -> InterfaceAnnotations {
-        interface.annotations(
-            forSubtree: candidate.node,
-            originalPath: candidate.originalPath,
-            rootPath: TreePath([0])
-        )
+        interface.graph.annotationsForSubtree(originalPath: candidate.originalPath, rootPath: TreePath([0]))
     }
 
     private func traceIdentities(for candidate: InterfaceSubtreeCandidate) -> InterfaceTraceIdentities {
-        interface.traceIdentities(
-            forSubtree: candidate.node,
-            originalPath: candidate.originalPath,
-            rootPath: TreePath([0])
-        )
+        interface.graph.traceIdentitiesForSubtree(originalPath: candidate.originalPath, rootPath: TreePath([0]))
     }
 
     private func selectedInterface(forLeafCandidates candidates: [InterfaceLeafCandidate]) -> Interface {

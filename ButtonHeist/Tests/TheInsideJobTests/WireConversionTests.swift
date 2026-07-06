@@ -402,6 +402,47 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "second_button").traceElementIdentity)
     }
 
+    func testContainerSubtreeSelectionPreservesAnnotationsAndTraceIdentity() throws {
+        let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
+        let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: nil),
+            frame: .zero
+        )
+        let screen = Screen(
+            elements: [
+                "first_button": first,
+                "second_button": second,
+            ],
+            hierarchy: [
+                .container(container, children: [
+                    .element(first.element, traversalIndex: 0),
+                    .element(second.element, traversalIndex: 1),
+                ]),
+            ],
+            containerNamesByPath: [TreePath([0]): "actions"],
+            heistIdsByPath: [
+                TreePath([0, 0]): "first_button",
+                TreePath([0, 1]): "second_button",
+            ],
+            firstResponderHeistId: nil
+        )
+        let interface = WireConversion.toInterface(from: screen)
+
+        let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+            subtree: .container(ContainerMatcher(containerName: "actions"))
+        ))
+        let records = selected.projectedElementRecords
+
+        XCTAssertEqual(selected.projectedElements.map(\.label), ["First", "Second"])
+        XCTAssertEqual(selected.annotations.containerByPath[TreePath([0])]?.containerName, "actions")
+        XCTAssertEqual(selected.annotations.elementByPath[TreePath([0, 0])]?.actions, [.activate])
+        XCTAssertEqual(records.map(\.traceIdentity), [
+            HeistId(rawValue: "first_button").traceElementIdentity,
+            HeistId(rawValue: "second_button").traceElementIdentity,
+        ])
+    }
+
     func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() throws {
         let visible = makeElement(
             label: "aardvark",

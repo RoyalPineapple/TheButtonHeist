@@ -576,25 +576,21 @@ public struct Interface: Codable, Equatable, Sendable {
         projectedElementRecords.map(\.element)
     }
 
+    package var graph: InterfaceGraph {
+        do {
+            return try InterfaceGraph(interface: self)
+        } catch {
+            preconditionFailure("Invalid Interface graph: \(error)")
+        }
+    }
+
     /// Trace-aware element projection in VoiceOver traversal order.
     ///
     /// `projectedElements` intentionally stays a public, content-only view.
     /// Diffing uses records so optional trace identity can participate in
     /// pairing without leaking into `HeistElement`.
     package var projectedElementRecords: [InterfaceElementRecord] {
-        let annotationsByPath = annotations.elementByPath
-        return tree.pathIndexedElements.map { item in
-            let annotation = annotationsByPath[item.path]
-            return InterfaceElementRecord(
-                path: item.path,
-                traversalIndex: item.traversalIndex,
-                element: HeistElement(
-                    accessibilityElement: item.element,
-                    annotation: annotation
-                ),
-                traceIdentity: traceIdentities[item.path]
-            )
-        }
+        graph.elementsInTraversalOrder.map(\.interfaceRecord)
     }
 
     public init(
@@ -646,30 +642,7 @@ public struct Interface: Codable, Equatable, Sendable {
         originalPath: TreePath,
         rootPath: TreePath
     ) -> InterfaceAnnotations {
-        let elementsByPath = annotations.elementByPath
-        let elements = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceElementAnnotation? in
-            guard case .element = node else { return nil }
-            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
-            let oldPath = originalPath.appending(contentsOf: relativePath)
-            guard let annotation = elementsByPath[oldPath] else { return nil }
-            return InterfaceElementAnnotation(
-                path: newPath,
-                actions: annotation.actions
-            )
-        }
-        let containersByPath = annotations.containerByPath
-        let containers = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceContainerAnnotation? in
-            guard case .container = node else { return nil }
-            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
-            let oldPath = originalPath.appending(contentsOf: relativePath)
-            guard let annotation = containersByPath[oldPath] else { return nil }
-            return InterfaceContainerAnnotation(
-                path: newPath,
-                containerName: annotation.containerName,
-                scrollInventory: annotation.scrollInventory
-            )
-        }
-        return InterfaceAnnotations(elements: elements, containers: containers)
+        graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath)
     }
 
     package func traceIdentities(
@@ -677,14 +650,7 @@ public struct Interface: Codable, Equatable, Sendable {
         originalPath: TreePath,
         rootPath: TreePath
     ) -> InterfaceTraceIdentities {
-        let identities = node.compactMapSubtrees(path: rootPath) { node, newPath -> (TreePath, TraceElementIdentity)? in
-            guard case .element = node else { return nil }
-            guard let relativePath = newPath.removingPrefix(rootPath) else { return nil }
-            let oldPath = originalPath.appending(contentsOf: relativePath)
-            guard let identity = traceIdentities[oldPath] else { return nil }
-            return (newPath, identity)
-        }
-        return InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: identities))
+        graph.traceIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
     }
 
 }
