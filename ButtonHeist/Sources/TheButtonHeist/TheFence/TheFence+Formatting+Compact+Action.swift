@@ -51,6 +51,9 @@ extension FenceResponse {
         if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }
+        if let message = projection.message, message.hasPrefix("Handler: ") {
+            text += "\n\(message)"
+        }
         if let expectation = projection.expectation, !expectation.met {
             text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
             if let hint = expectation.hint {

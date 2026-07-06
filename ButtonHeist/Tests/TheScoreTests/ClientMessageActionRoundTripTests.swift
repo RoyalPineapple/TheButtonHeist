@@ -17,6 +17,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
                 target: .target(target),
                 direction: .previous
             ))),
+            .action(try ActionStep(command: .dismiss)),
+            .action(try ActionStep(command: .magicTap)),
             .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
             .action(try ActionStep(command: .dismissKeyboard)),
         ])
@@ -27,8 +29,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             return action.command
         }
 
-        XCTAssertEqual(commands.count, 4)
-        let expectedTypes: [RuntimeActionType] = [.activate, .rotor, .editAction, .resignFirstResponder]
+        XCTAssertEqual(commands.count, 6)
+        let expectedTypes: [RuntimeActionType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .resignFirstResponder]
         XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
     }
 

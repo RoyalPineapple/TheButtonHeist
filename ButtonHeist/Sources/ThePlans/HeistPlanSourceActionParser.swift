@@ -257,6 +257,18 @@ extension HeistPlanSourceParser {
         return .takeScreenshot
     }
 
+    mutating func parseDismissAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        try expectSymbol(")")
+        return .dismiss
+    }
+
+    mutating func parseMagicTapAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        try expectSymbol(")")
+        return .magicTap
+    }
+
     mutating func parseEditAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let action = try parseEnumCase(EditAction.self, role: "edit action")

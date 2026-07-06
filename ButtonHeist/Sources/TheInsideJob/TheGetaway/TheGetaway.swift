@@ -151,6 +151,10 @@ final class TheGetaway {
             return .scrollToVisible
         case .viewportScrollToEdge:
             return .scrollToEdge
+        case .dismiss:
+            return .dismiss
+        case .magicTap:
+            return .magicTap
         case .editAction:
             return .editAction
         case .setPasteboard:

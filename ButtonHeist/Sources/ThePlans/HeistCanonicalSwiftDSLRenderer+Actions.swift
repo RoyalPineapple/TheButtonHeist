@@ -73,6 +73,10 @@ extension HeistCanonicalSwiftDSLRenderer {
             return "SetPasteboard(\(quote(target.text)))"
         case .takeScreenshot:
             return "TakeScreenshot()"
+        case .dismiss:
+            return "ScreenActions.Dismiss()"
+        case .magicTap:
+            return "ScreenActions.MagicTap()"
         case .dismissKeyboard:
             return "DismissKeyboard()"
         }

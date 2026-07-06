@@ -401,6 +401,20 @@ private let actionCommandContractCases: [ActionCommandContractCase] = [
         canonicalLine: "TakeScreenshot()"
     ),
     ActionCommandContractCase(
+        wireType: .dismiss,
+        command: .dismiss,
+        durabilityFailure: nil,
+        reportTarget: nil,
+        canonicalLine: "ScreenActions.Dismiss()"
+    ),
+    ActionCommandContractCase(
+        wireType: .magicTap,
+        command: .magicTap,
+        durabilityFailure: nil,
+        reportTarget: nil,
+        canonicalLine: "ScreenActions.MagicTap()"
+    ),
+    ActionCommandContractCase(
         wireType: .scroll,
         command: .viewportScroll(ScrollTarget(selection: .element(.label("Scrollable List")), direction: .down)),
         durabilityFailure: "scroll is a viewport debug command, not a durable heist action",

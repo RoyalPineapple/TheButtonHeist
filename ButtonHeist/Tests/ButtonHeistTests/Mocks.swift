@@ -633,6 +633,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         case .decrement: return .decrement
         case .performCustomAction: return .customAction
         case .rotor: return .rotor
+        case .dismiss: return .dismiss
+        case .magicTap: return .magicTap
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
         case .takeScreenshot: return .takeScreenshot

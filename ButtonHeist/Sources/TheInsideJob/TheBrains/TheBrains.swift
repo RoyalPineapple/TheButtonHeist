@@ -209,7 +209,9 @@ final class TheBrains {
                 for: exploration.screen,
                 includedElementCount: interface.projectedElements.count
             )
-            return .success(interface.withDiagnostics(diagnostics))
+            return .success(interface
+                .withDiagnostics(diagnostics)
+                .withScreenActions(actions.availableScreenActions()))
         } catch {
             return .failure(.selection(error))
         }

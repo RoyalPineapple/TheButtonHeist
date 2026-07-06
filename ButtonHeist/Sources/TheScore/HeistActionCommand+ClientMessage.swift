@@ -15,6 +15,8 @@ package extension HeistActionCommand {
         case .decrement: return .decrement
         case .customAction: return .performCustomAction
         case .rotor: return .rotor
+        case .dismiss: return .dismiss
+        case .magicTap: return .magicTap
         case .typeText: return .typeText
         case .mechanicalTap: return .oneFingerTap
         case .mechanicalLongPress: return .longPress
@@ -49,6 +51,10 @@ package extension HeistActionCommand {
                 selection: selection,
                 direction: direction
             ))
+        case .dismiss:
+            return .dismiss
+        case .magicTap:
+            return .magicTap
         case .typeText(let text, let target, let replacingExisting):
             let resolvedText = try text.resolve(in: environment)
             return .typeText(try TypeTextTarget(

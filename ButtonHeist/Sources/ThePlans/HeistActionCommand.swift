@@ -2,6 +2,7 @@ import Foundation
 
 public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equatable, CustomStringConvertible {
     case activate, increment, decrement, performCustomAction, rotor
+    case dismiss, magicTap
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard, takeScreenshot
     case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
@@ -15,6 +16,8 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
     case decrement(ElementTargetExpr)
     case customAction(name: String, target: ElementTargetExpr)
     case rotor(selection: RotorSelection, target: ElementTargetExpr, direction: RotorDirection)
+    case dismiss
+    case magicTap
     case typeText(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false)
     case mechanicalTap(TapTarget)
     case mechanicalLongPress(LongPressTarget)
@@ -39,6 +42,8 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .decrement: return .decrement
         case .customAction: return .performCustomAction
         case .rotor: return .rotor
+        case .dismiss: return .dismiss
+        case .magicTap: return .magicTap
         case .typeText: return .typeText
         case .mechanicalTap: return .oneFingerTap
         case .mechanicalLongPress: return .longPress
@@ -99,7 +104,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             try roundTrip(target)
         case .setPasteboard(let target):
             try roundTrip(target)
-        case .takeScreenshot, .dismissKeyboard:
+        case .dismiss, .magicTap, .takeScreenshot, .dismissKeyboard:
             break
         }
     }
@@ -141,6 +146,22 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .rotor:
             let payload = try RotorExprPayload(from: try payload())
             self = .rotor(selection: payload.selection, target: payload.target, direction: payload.direction)
+        case .dismiss:
+            if let payloadDecoder {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: payloadDecoder.codingPath,
+                    debugDescription: "\(type.rawValue) must not include a payload"
+                ))
+            }
+            self = .dismiss
+        case .magicTap:
+            if let payloadDecoder {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: payloadDecoder.codingPath,
+                    debugDescription: "\(type.rawValue) must not include a payload"
+                ))
+            }
+            self = .magicTap
         case .typeText:
             let payload = try TypeTextExprPayload(from: try payload())
             self = .typeText(text: payload.text, target: payload.target, replacingExisting: payload.replacingExisting)
@@ -210,7 +231,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             try target.encode(to: container.superEncoder(forKey: .payload))
         case .setPasteboard(let target):
             try target.encode(to: container.superEncoder(forKey: .payload))
-        case .takeScreenshot, .dismissKeyboard:
+        case .dismiss, .magicTap, .takeScreenshot, .dismissKeyboard:
             break
         }
     }

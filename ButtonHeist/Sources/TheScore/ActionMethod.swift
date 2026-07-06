@@ -8,6 +8,8 @@ public enum ActionMethod: String, Codable, Sendable {
     case activate
     case increment
     case decrement
+    case dismiss
+    case magicTap
     case syntheticTap
     case syntheticLongPress
     case syntheticSwipe

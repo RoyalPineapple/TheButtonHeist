@@ -54,6 +54,9 @@ extension FenceResponse {
         if let screenTitle = nonEmpty(projection.navigation.screenTitle) {
             lines.append(screenTitle)
         }
+        if !projection.screenActions.isEmpty {
+            lines.append("Actions: \(projection.screenActions.map(\.rawValue).joined(separator: ", "))")
+        }
         lines.append("\(projection.elementCount) elements")
         lines.append(contentsOf: compactDiscoveryDiagnostics(projection.diagnostics?.discovery))
         lines.append(contentsOf: compactTreeLines(projection))

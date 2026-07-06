@@ -26,6 +26,8 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     `Decrement(.label("Quantity"))`
                     `CustomAction("Archive", on: .label("Message"))`
                     `Rotor("Headings", on: .label("Article"))`
+                    `ScreenActions.Dismiss()`
+                    `ScreenActions.MagicTap()`
                     `SetPasteboard("hello")`
                     `Edit(.paste)`
                     `DismissKeyboard()`

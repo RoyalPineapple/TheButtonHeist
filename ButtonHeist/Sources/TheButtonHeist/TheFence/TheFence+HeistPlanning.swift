@@ -181,7 +181,7 @@ private extension HeistActionCommand {
         switch self {
         case .activate, .increment, .decrement, .customAction, .rotor,
              .typeText, .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe,
-             .mechanicalDrag, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
+             .mechanicalDrag, .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return true
         case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
             return false

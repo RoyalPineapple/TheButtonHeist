@@ -406,6 +406,36 @@ public struct DismissKeyboard: HeistActionContent {
     }
 }
 
+public enum ScreenActions {
+    public struct Dismiss: HeistActionContent {
+        public let command: HeistActionCommand
+        public let expectationPolicy: ActionExpectationPolicy
+
+        public init() {
+            self.init(command: .dismiss)
+        }
+
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
+            self.command = command
+            self.expectationPolicy = expectationPolicy
+        }
+    }
+
+    public struct MagicTap: HeistActionContent {
+        public let command: HeistActionCommand
+        public let expectationPolicy: ActionExpectationPolicy
+
+        public init() {
+            self.init(command: .magicTap)
+        }
+
+        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
+            self.command = command
+            self.expectationPolicy = expectationPolicy
+        }
+    }
+}
+
 public enum Mechanical {
     public struct Tap: HeistActionContent {
         public let command: HeistActionCommand

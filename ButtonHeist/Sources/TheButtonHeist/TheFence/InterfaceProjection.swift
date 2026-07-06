@@ -97,6 +97,7 @@ struct InterfaceProjection: Sendable {
     let detail: InterfaceDetail
     let screenDescription: String
     let screenId: String?
+    let screenActions: [ScreenAction]
     let diagnostics: InterfaceDiagnostics?
     let navigation: InterfaceNavigationProjection
     let rendering: InterfaceRenderingProjection
@@ -112,6 +113,7 @@ struct InterfaceProjection: Sendable {
         detail = profile.interfaceDetail
         screenDescription = InterfaceSummary.screenDescription(forProjectedElements: projectedElements)
         screenId = InterfaceSummary.screenId(forProjectedElements: projectedElements)
+        screenActions = interface.screenActions
         diagnostics = interface.diagnostics
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
         elementCount = projectedElementRecords.count
