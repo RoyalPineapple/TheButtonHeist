@@ -14,12 +14,20 @@ final class InteractionObservation {
 
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
-    private let predicateWait: PredicateWait
+    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
+    private var predicateWait: PredicateWait {
+        makePredicateWait()
+    }
 
     init(stash: TheStash, postActionObservation: PostActionObservation) {
         self.stash = stash
         self.postActionObservation = postActionObservation
-        self.predicateWait = PredicateWait(
+    }
+
+    private func makePredicateWait() -> PredicateWait {
+        let stash = self.stash
+        let postActionObservation = self.postActionObservation
+        return PredicateWait(
             observeEvent: { scope, sequence, timeout in
                 await stash.observeSettledSemanticObservation(
                     scope: scope,
@@ -38,8 +46,33 @@ final class InteractionObservation {
             },
             presenceTimeoutMessage: { predicate, elapsed in
                 stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
+            },
+            announcementCursor: { [weak self] strategy in
+                switch strategy {
+                case .futureOnly:
+                    return stash.accessibilityNotifications.announcementCursor()
+                case .heistScoped:
+                    return self?.heistAnnouncementCursor ?? .origin
+                }
+            },
+            waitForAnnouncement: { [weak self] cursor, predicate, timeout in
+                let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
+                    after: cursor,
+                    matching: predicate,
+                    timeout: timeout
+                )
+                if let announcement, let self {
+                    self.heistAnnouncementCursor = AccessibilityNotificationCursor(
+                        sequence: max(self.heistAnnouncementCursor.sequence, announcement.sequence)
+                    )
+                }
+                return announcement
             }
         )
+    }
+
+    func resetAnnouncementWaitCursorForHeist() {
+        heistAnnouncementCursor = .origin
     }
 
     func prepareBeforeState(
@@ -124,13 +157,15 @@ final class InteractionObservation {
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+            announcementCursorStrategy: announcementCursorStrategy
         )
     }
 
@@ -138,13 +173,15 @@ final class InteractionObservation {
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        allowsTransitionFinalStateWarning: Bool = true
+        allowsTransitionFinalStateWarning: Bool = true,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+            announcementCursorStrategy: announcementCursorStrategy
         )
     }
 

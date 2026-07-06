@@ -1,5 +1,6 @@
 import Foundation
 import ThePlans
+import TheScore
 
 protocol FencePublicJSONResponse: Encodable {}
 
@@ -125,6 +126,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):
             try PublicInterfaceResponse(interface: interface, detail: detail, profile: profile).encode(to: encoder)
+        case .announcements(let announcements):
+            try PublicAnnouncementsResponse(announcements: announcements).encode(to: encoder)
         case .action(let command, let result, let expectation):
             let expectationHint = expectation.flatMap {
                 FenceResponse.expectationFailureHint($0, command: command, result: result)
@@ -166,4 +169,9 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicTargetsResponse(targets: targets, defaultTarget: defaultTarget).encode(to: encoder)
         }
     }
+}
+
+struct PublicAnnouncementsResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let announcements: [CapturedAnnouncement]
 }

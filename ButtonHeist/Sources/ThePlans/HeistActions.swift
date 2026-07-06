@@ -632,7 +632,7 @@ private func screenChangeExpectation(_ predicate: AccessibilityPredicateExpr) ->
         return ScreenChangeExpectation(state: allState(states))
     case .predicate(.changePredicate(.screenScope(let states))):
         return ScreenChangeExpectation(state: allState(states.map(StatePredicateExpr.init)))
-    case .predicate, .state, .changePredicate, .noChangePredicate:
+    case .predicate, .state, .changePredicate, .noChangePredicate, .announcement:
         return nil
     }
 }
@@ -643,7 +643,7 @@ private func stateExpression(_ predicate: AccessibilityPredicateExpr) -> StatePr
         return state
     case .predicate(.state(let state)):
         return StatePredicateExpr(state)
-    case .predicate, .changePredicate, .noChangePredicate:
+    case .predicate, .changePredicate, .noChangePredicate, .announcement:
         return nil
     }
 }

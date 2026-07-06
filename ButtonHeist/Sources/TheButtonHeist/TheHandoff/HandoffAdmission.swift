@@ -60,7 +60,7 @@ struct HandoffAdmission {
             default:
                 return nil
             }
-        case .info, .interface, .actionResult, .screen, .status, .pong:
+        case .info, .interface, .actionResult, .screen, .announcements, .status, .pong:
             return nil
         }
     }

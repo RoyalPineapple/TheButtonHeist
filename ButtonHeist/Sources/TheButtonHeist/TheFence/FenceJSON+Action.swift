@@ -8,6 +8,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case status
     case method
     case message
+    case announcement
     case value
     case rotor
     case screenshot
@@ -65,6 +66,7 @@ private struct PublicActionResultModel {
     let status: PublicStatus
     let method: String
     let message: String?
+    let announcement: String?
     let payload: PublicActionPayload
     let delta: DeltaProjection?
     let screenName: String?
@@ -79,6 +81,7 @@ private struct PublicActionResultModel {
         self.status = PublicStatus(projection.status)
         self.method = projection.actionMethod.rawValue
         self.message = projection.message
+        self.announcement = projection.announcement
         self.payload = PublicActionPayload(projection: projection.payload)
         self.delta = projection.delta
         self.screenName = projection.screenName
@@ -97,6 +100,7 @@ private struct PublicActionResultModel {
         try container.encode(status, forKey: .status)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(announcement, forKey: .announcement)
         try payload.encodeFields(to: &container)
         try container.encodeIfPresent(delta, forKey: .delta)
         try container.encodeIfPresent(screenName, forKey: .screenName)

@@ -14,7 +14,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - AccessibilityPredicate
 
     func testAccessibilityPredicateWireContractValuesStayStable() {
-        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "all", "no_change", "change"])
+        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "all", "no_change", "change", "announcement"])
         XCTAssertEqual(AccessibilityPredicate.wireTypeValues, AccessibilityPredicateContract.PredicateWireType.values)
         XCTAssertEqual(AccessibilityPredicateContract.StateWireType.values, ["exists", "missing", "all"])
         XCTAssertEqual(AccessibilityPredicateContract.ChangeScopeWireType.values, ["screen", "elements", "all"])

@@ -229,7 +229,7 @@ final class WireCommandParityTests: XCTestCase {
     private func sampleArguments(for command: TheFence.Command) -> [String: HeistValue] {
         let target = targetArgumentValue(identifier: "target")
         switch command {
-        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getSessionState,
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements, .getSessionState,
              .listTargets, .dismissKeyboard:
             return [:]
         case .perform:
@@ -304,6 +304,7 @@ final class WireCommandParityTests: XCTestCase {
             .ping,
             .status,
             .getPasteboard,
+            .getAnnouncements,
             .requestScreen,
             .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [

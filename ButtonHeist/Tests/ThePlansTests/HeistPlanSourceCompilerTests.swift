@@ -38,6 +38,24 @@ import Testing
     #expect(plan == expected)
 }
 
+@Test func `runtime parser accepts announcement predicates`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Activate(.label("Delete")).expect(.announcement("Item deleted"))
+    WaitFor(.announcement(containing: "processed"), timeout: .seconds(5))
+    WaitFor(.announcement)
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Delete"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .announcement("Item deleted"), timeout: 1))
+        )),
+        .wait(WaitStep(predicate: .announcement(containing: "processed"), timeout: 5)),
+        .wait(WaitStep(predicate: .announcement)),
+    ])
+
+    #expect(plan == expected)
+}
+
 @Test func `runtime parser rejects exact StringMatch source spelling`() {
     #expect(throws: HeistPlanSourceCompilerError.self) {
         _ = try HeistPlanSourceCompiler().compile(root("""

@@ -13,6 +13,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try render(changePredicate: change, environment: environment)
         case .noChangePredicate:
             return ".noChange"
+        case .announcement(let announcement):
+            return try render(announcement: announcement, environment: environment)
         case .predicate(let predicate):
             return try render(predicate: predicate, environment: environment)
         }
@@ -26,7 +28,19 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try render(changePredicate: change, environment: environment)
         case .noChangePredicate:
             return ".noChange"
+        case .announcement(let announcement):
+            return render(announcement: announcement)
         }
+    }
+
+    func render(announcement: AnnouncementPredicateExpr, environment: RenderEnvironment) throws -> String {
+        guard let match = announcement.match else { return ".announcement" }
+        return try ".announcement(\(renderCallArgument(match, environment: environment)))"
+    }
+
+    func render(announcement: AnnouncementPredicate) -> String {
+        guard let match = announcement.match else { return ".announcement" }
+        return ".announcement(\(renderCallArgument(match)))"
     }
 
     func render(changePredicate change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {

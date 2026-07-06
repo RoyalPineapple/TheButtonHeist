@@ -31,6 +31,8 @@ extension HeistPlanSourceParser {
             }
         case "noChange":
             return .noChangePredicate
+        case "announcement":
+            return .announcement(try parseAnnouncementPredicateExpr())
         case "exists":
             return .state(try parseExistsMissingState(name: name))
         case "missing":
@@ -52,6 +54,38 @@ extension HeistPlanSourceParser {
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
+    }
+
+    mutating func parseAnnouncementPredicateExpr() throws -> AnnouncementPredicateExpr {
+        guard consumeSymbol("(") else {
+            return AnnouncementPredicateExpr()
+        }
+        if consumeSymbol(")") {
+            return AnnouncementPredicateExpr()
+        }
+        let match: StringMatch<StringExpr>
+        if lookaheadLabel("containing") {
+            try expectIdentifier("containing")
+            try expectSymbol(":")
+            let token = currentToken
+            match = try validatedAnnouncementStringMatch(.contains, value: try parseStringExpr(), token: token)
+        } else {
+            match = try parseStringMatchCallArgument(field: "announcement")
+        }
+        try expectSymbol(")")
+        return AnnouncementPredicateExpr(match: match)
+    }
+
+    private func validatedAnnouncementStringMatch(
+        _ mode: StringMatch<StringExpr>.Mode,
+        value: StringExpr,
+        token: HeistPlanSourceToken
+    ) throws -> StringMatch<StringExpr> {
+        let match = StringMatch(mode: mode, value: value)
+        if match.valueIfPresent?.stringMatchLiteralIsEmpty == true {
+            throw error(token, "announcement match value must not be empty")
+        }
+        return match
     }
 
     mutating func parseChangePredicateExpr() throws -> ChangePredicateExpr {

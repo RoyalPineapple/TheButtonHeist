@@ -285,7 +285,7 @@ extension TheFence {
         }
     }
 
-    private nonisolated static func validateStringMatchObject(_ value: HeistValue, field: String) throws {
+    nonisolated static func validateStringMatchObject(_ value: HeistValue, field: String) throws {
         guard case .object = value else {
             throw SchemaValidationError(
                 field: field,

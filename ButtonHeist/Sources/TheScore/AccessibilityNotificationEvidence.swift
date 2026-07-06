@@ -34,6 +34,43 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
     }
 }
 
+/// Normalized spoken accessibility text observed from UIKit accessibility
+/// notifications. The source notification may be `announcement`,
+/// `layoutChanged`, or `screenChanged`; the text is exposed uniformly because
+/// VoiceOver presents all three string payloads as spoken output.
+public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
+    public let sequence: UInt64
+    public let text: String
+    public let timestamp: Date
+    public let notificationCode: UInt32
+    public let notificationName: String
+    public let associatedElement: AccessibilityNotificationPayload
+
+    public init(
+        sequence: UInt64,
+        text: String,
+        timestamp: Date,
+        notificationCode: UInt32,
+        notificationName: String,
+        associatedElement: AccessibilityNotificationPayload = .none
+    ) {
+        self.sequence = sequence
+        self.text = text
+        self.timestamp = timestamp
+        self.notificationCode = notificationCode
+        self.notificationName = notificationName
+        self.associatedElement = associatedElement
+    }
+}
+
+public struct AnnouncementListPayload: Codable, Sendable, Equatable {
+    public let announcements: [CapturedAnnouncement]
+
+    public init(announcements: [CapturedAnnouncement]) {
+        self.announcements = announcements
+    }
+}
+
 public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hashable {
     case none
     /// String payload posted by the app/runtime, for example announcements.
@@ -93,6 +130,28 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
             try container.encode(object, forKey: .object)
         case .unresolvedElement:
             try container.encode(PayloadType.unresolvedElement, forKey: .type)
+        }
+    }
+}
+
+public extension AccessibilityNotificationEvidence {
+    var capturedAnnouncement: CapturedAnnouncement? {
+        guard case .string(let text) = notificationData else { return nil }
+        return CapturedAnnouncement(
+            sequence: sequence,
+            text: text,
+            timestamp: timestamp,
+            notificationCode: code,
+            notificationName: name,
+            associatedElement: associatedElement
+        )
+    }
+}
+
+public extension AccessibilityTrace {
+    var capturedAnnouncements: [CapturedAnnouncement] {
+        captures.flatMap { capture in
+            capture.transition.accessibilityNotifications.compactMap(\.capturedAnnouncement)
         }
     }
 }

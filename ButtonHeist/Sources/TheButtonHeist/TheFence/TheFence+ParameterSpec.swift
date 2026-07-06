@@ -984,6 +984,7 @@ enum FenceParameterBlocks: Sendable {
         FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields),
         objectParam(.after, properties: matcherFields),
+        stringMatchParam(.match),
         arrayParam(
             .states,
             items: .object(properties: stateProperties, additionalProperties: true)

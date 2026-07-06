@@ -38,6 +38,8 @@ extension FenceResponse {
             )
             let projection = InterfaceProjection(interface: interface, profile: projectionProfile)
             return Self.compactInterface(projection)
+        case .announcements(let announcements):
+            return Self.compactAnnouncements(announcements)
         case .action(let command, let result, let expectation):
             return compactActionResult(command: command, result, expectation: expectation, profile: profile)
         case .screenshot(let path, let payload, let options):
@@ -107,6 +109,15 @@ extension FenceResponse {
             lines.append("interface: unavailable")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private static func compactAnnouncements(_ announcements: [CapturedAnnouncement]) -> String {
+        guard !announcements.isEmpty else { return "announcements: none" }
+        let now = Date()
+        return announcements.enumerated().map { index, announcement in
+            let age = max(0, now.timeIntervalSince(announcement.timestamp))
+            return "[\(index)] \(String(format: "%.1f", age))s ago \(announcement.notificationName): \"\(announcement.text)\""
+        }.joined(separator: "\n")
     }
 
 }

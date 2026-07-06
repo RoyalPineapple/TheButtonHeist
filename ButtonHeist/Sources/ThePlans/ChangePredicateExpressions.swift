@@ -334,6 +334,7 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
     case state(StatePredicateExpr)
     case changePredicate(ChangePredicateExpr)
     case noChangePredicate
+    case announcement(AnnouncementPredicateExpr)
 
     public init(_ predicate: AccessibilityPredicate) {
         self = .predicate(predicate)
@@ -349,6 +350,8 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
             return .changePredicate(try change.resolve(in: environment))
         case .noChangePredicate:
             return .noChange
+        case .announcement(let announcement):
+            return .announcement(try announcement.resolve(in: environment))
         }
     }
 
@@ -363,6 +366,8 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         case "no_change":
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate expression")
             self = .noChangePredicate
+        case "announcement":
+            self = .announcement(try AnnouncementPredicateExpr(from: decoder))
         default:
             self = .predicate(try AccessibilityPredicate(from: decoder))
         }
@@ -379,6 +384,10 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         case .noChangePredicate:
             var container = encoder.container(keyedBy: PredicateProbeKeys.self)
             try container.encode("no_change", forKey: .type)
+        case .announcement(let announcement):
+            var container = encoder.container(keyedBy: PredicateProbeKeys.self)
+            try container.encode("announcement", forKey: .type)
+            try announcement.encode(to: encoder)
         }
     }
 
@@ -398,6 +407,8 @@ public extension AccessibilityPredicateExpr {
             return lhsChange == rhsChange
         case (.noChangePredicate, .noChangePredicate):
             return true
+        case (.announcement(let lhsAnnouncement), .announcement(let rhsAnnouncement)):
+            return lhsAnnouncement == rhsAnnouncement
         case (.predicate(let predicate), .state(let state)),
              (.state(let state), .predicate(let predicate)):
             guard case .state(let predicateState) = predicate,
@@ -415,8 +426,17 @@ public extension AccessibilityPredicateExpr {
         case (.predicate(let predicate), .noChangePredicate),
              (.noChangePredicate, .predicate(let predicate)):
             return predicate == .noChange
+        case (.predicate(let predicate), .announcement(let announcement)),
+             (.announcement(let announcement), .predicate(let predicate)):
+            guard case .announcement(let predicateAnnouncement) = predicate,
+                  let resolvedAnnouncement = try? announcement.resolve(in: .empty) else {
+                return false
+            }
+            return predicateAnnouncement == resolvedAnnouncement
         case (.state, .changePredicate), (.changePredicate, .state), (.state, .noChangePredicate), (.noChangePredicate, .state),
-             (.changePredicate, .noChangePredicate), (.noChangePredicate, .changePredicate):
+             (.changePredicate, .noChangePredicate), (.noChangePredicate, .changePredicate),
+             (.state, .announcement), (.announcement, .state), (.changePredicate, .announcement), (.announcement, .changePredicate),
+             (.noChangePredicate, .announcement), (.announcement, .noChangePredicate):
             return false
         }
     }
@@ -433,6 +453,8 @@ extension AccessibilityPredicateExpr: CustomStringConvertible {
             return ScoreDescription.call("change", [change.description])
         case .noChangePredicate:
             return "no_change"
+        case .announcement(let announcement):
+            return announcement.description
         }
     }
 }

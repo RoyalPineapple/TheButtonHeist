@@ -96,6 +96,8 @@ private func serverMessageWireRepresentation(
         return ServerMessageWireRepresentation(type: .actionResult, payload: .actionResult(payload))
     case .screen(let payload):
         return ServerMessageWireRepresentation(type: .screen, payload: .screen(payload))
+    case .announcements(let payload):
+        return ServerMessageWireRepresentation(type: .announcements, payload: .announcements(payload))
     case .status(let payload):
         return ServerMessageWireRepresentation(type: .status, payload: .status(payload))
     }
@@ -139,6 +141,8 @@ private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWire
         return .actionResult(try ActionResult(from: try payload()))
     case .screen:
         return .screen(try ScreenPayload(from: try payload()))
+    case .announcements:
+        return .announcements(try AnnouncementListPayload(from: try payload()))
     case .status:
         return .status(try StatusPayload(from: try payload()))
     }
@@ -153,6 +157,7 @@ private enum ServerMessageWirePayload {
     case interface(Interface)
     case actionResult(ActionResult)
     case screen(ScreenPayload)
+    case announcements(AnnouncementListPayload)
     case status(StatusPayload)
 
     func encode(to encoder: Encoder) throws {
@@ -172,6 +177,8 @@ private enum ServerMessageWirePayload {
         case .actionResult(let payload):
             try payload.encode(to: encoder)
         case .screen(let payload):
+            try payload.encode(to: encoder)
+        case .announcements(let payload):
             try payload.encode(to: encoder)
         case .status(let payload):
             try payload.encode(to: encoder)

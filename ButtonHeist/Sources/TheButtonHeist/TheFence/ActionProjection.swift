@@ -46,6 +46,7 @@ struct ActionProjection: Sendable {
     let status: PublicResponseStatus
     let actionMethod: ActionMethodProjection
     let message: String?
+    let announcement: String?
     let payload: ActionPayloadProjection
     let delta: DeltaProjection?
     let screenName: String?
@@ -68,6 +69,7 @@ struct ActionProjection: Sendable {
         status = result.publicStatus(expectation: surfacedExpectation)
         self.actionMethod = actionMethod
         message = result.message
+        announcement = result.announcement
         switch result.payload {
         case .value(let value):
             payload = .value(value)

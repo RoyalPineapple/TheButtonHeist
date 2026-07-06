@@ -54,7 +54,7 @@ package extension AccessibilityPredicate {
 
     var requestsGeometryChangeEvidence: Bool {
         switch self {
-        case .state, .noChangePredicate:
+        case .state, .noChangePredicate, .announcement:
             return false
         case .changePredicate(let change):
             return change.requestsGeometryChangeEvidence
@@ -108,6 +108,12 @@ private extension AccessibilityPredicate {
         case .noChangePredicate:
             let met = changeEvidence.isNoChange
             return ExpectationResult(met: met, predicate: self, actual: met ? nil : changeEvidence.kindDescription)
+        case .announcement:
+            return ExpectationResult(
+                met: false,
+                predicate: self,
+                actual: "announcement predicates require spoken accessibility text evidence"
+            )
         }
     }
 }

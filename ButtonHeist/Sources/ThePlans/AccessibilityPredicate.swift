@@ -22,6 +22,7 @@ import Foundation
 /// {"type": "change"}
 /// {"type": "change",  "scopes": [ {"type": "screen", "assertions": [ <State object>, ... ]} ]}
 /// {"type": "change",  "scopes": [ {"type": "elements", "assertions": [ <ElementDeltaPredicate object>, ... ]} ]}
+/// {"type": "announcement", "match": { ...StringMatch... }}
 /// ```
 public enum AccessibilityPredicate: Sendable, Equatable {
     /// A condition over the latest observed interface snapshot.
@@ -30,6 +31,8 @@ public enum AccessibilityPredicate: Sendable, Equatable {
     case changePredicate(Change)
     /// No baseline-to-current semantic transition was observed.
     case noChangePredicate
+    /// An accessibility announcement was posted.
+    case announcement(AnnouncementPredicate)
 
     // MARK: - Nested Types
 
@@ -79,6 +82,7 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     case state(State)
     case change(Change)
     case noChange
+    case announcement
 
     public enum PredicateWireType: String, CaseIterable, Sendable {
         case exists
@@ -86,6 +90,7 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
         case all
         case noChange = "no_change"
         case change
+        case announcement
 
         public static var values: [String] {
             allCases.map(\.rawValue)
@@ -223,6 +228,8 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
             return .change
         case .noChange:
             return .noChange
+        case .announcement:
+            return .announcement
         }
     }
 }
@@ -241,6 +248,8 @@ public extension AccessibilityPredicate {
             return .change(change.contract)
         case .noChangePredicate:
             return .noChange
+        case .announcement:
+            return .announcement
         }
     }
 }
@@ -297,7 +306,7 @@ extension AccessibilityPredicate: Codable {
     public static let wireTypeValues: [String] = AccessibilityPredicateContract.PredicateWireType.values
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, scopes
+        case type, scopes, match
     }
 
     public init(from decoder: Decoder) throws {
@@ -320,6 +329,11 @@ extension AccessibilityPredicate: Codable {
             try decoder.rejectUnknownKeys(allowed: ["type", "scopes"], typeName: "change predicate")
             let scopes = try container.decodeIfPresent([AccessibilityPredicate.ChangeScope].self, forKey: .scopes) ?? []
             self = .changePredicate(Self.composedChange(scopes))
+        case .announcement:
+            try decoder.rejectUnknownKeys(allowed: ["type", "match"], typeName: "announcement predicate")
+            self = .announcement(AnnouncementPredicate(
+                match: try container.decodeIfPresent(StringMatch<String>.self, forKey: .match)
+            ))
         }
     }
 
@@ -338,6 +352,10 @@ extension AccessibilityPredicate: Codable {
         case .noChangePredicate:
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(predicateContract.predicateWireType.rawValue, forKey: .type)
+        case .announcement(let announcement):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(predicateContract.predicateWireType.rawValue, forKey: .type)
+            try container.encodeIfPresent(announcement.match, forKey: .match)
         }
     }
 
@@ -581,6 +599,7 @@ extension AccessibilityPredicate: CustomStringConvertible {
         case .state(let stateClause): return stateClause.description
         case .changePredicate(let change): return ScoreDescription.call("change", [change.description])
         case .noChangePredicate: return "no_change"
+        case .announcement(let announcement): return announcement.description
         }
     }
 }

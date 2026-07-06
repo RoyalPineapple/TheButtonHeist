@@ -75,6 +75,18 @@ extension TheBrains {
                 return sequence
             }
         }
+
+        var announcementCursorStrategy: AnnouncementWaitCursorStrategy {
+            switch self {
+            case .standalone:
+                return .heistScoped
+            case .actionEndpoint,
+                 .immediate,
+                 .afterObservation,
+                 .baselineTraceOnly:
+                return .futureOnly
+            }
+        }
     }
 
     struct HeistExecutionRuntime {
@@ -101,7 +113,8 @@ extension TheBrains {
                         request.step,
                         initialTrace: request.initialTrace,
                         after: request.afterSequence,
-                        allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+                        allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
+                        announcementCursorStrategy: request.announcementCursorStrategy
                     )
                 },
                 selectPredicateCase: { cases, timeout in
@@ -443,6 +456,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = stash.accessibilityNotifications.beginHeistScope()
+        interactionObservation.resetAnnouncementWaitCursorForHeist()
         defer { notificationScope.cancel() }
 
         let demand = stash.beginSemanticObservationDemand(scope: .visible)

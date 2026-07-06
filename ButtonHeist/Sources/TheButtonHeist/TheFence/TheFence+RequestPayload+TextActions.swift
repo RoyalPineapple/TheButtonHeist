@@ -14,6 +14,17 @@ extension TheFence {
         }
     }
 
+    static func decodeGetAnnouncementsRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence in
+            try await fence.handleGetAnnouncements()
+        }
+    }
+
     static func decodeDismissKeyboardRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,

@@ -4,6 +4,7 @@ import Foundation
 import UIKit
 
 import ButtonHeistSupport
+import ThePlans
 import TheScore
 
 /// `@unchecked Sendable` justification: all mutable state is protected by
@@ -44,6 +45,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         let timeoutTask: Task<Void, Never>?
     }
 
+    private struct AnnouncementWaiter {
+        let afterSequence: UInt64
+        let predicate: AnnouncementPredicate
+        let continuation: OneShotContinuation<CapturedAnnouncement?>
+        let timeoutTask: Task<Void, Never>?
+    }
+
     private let maxBufferedEvents = 64
     private let lock = NSLock()
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
@@ -53,6 +61,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
     private var transitionWaiters = WaiterStore<TransitionWaiter>()
+    private var announcementWaiters = WaiterStore<AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
         lock.lock()
@@ -80,6 +89,71 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
         return AccessibilityNotificationCursor(sequence: latestTransitionSequenceStorage)
+    }
+
+    func announcementCursor() -> AccessibilityNotificationCursor {
+        lock.lock()
+        defer { lock.unlock() }
+        return AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+    }
+
+    func announcements(after cursor: AccessibilityNotificationCursor = .origin) -> [CapturedAnnouncement] {
+        lock.lock()
+        defer { lock.unlock() }
+        return bufferedEvents.compactMap { event in
+            guard event.sequence > cursor.sequence else { return nil }
+            return event.capturedAnnouncement
+        }
+    }
+
+    func waitForAnnouncement(
+        after cursor: AccessibilityNotificationCursor,
+        matching predicate: AnnouncementPredicate,
+        timeout: TimeInterval
+    ) async -> CapturedAnnouncement? {
+        let waiterId = reserveAnnouncementWaiterIdentifier()
+        let continuationBox = OneShotContinuation<CapturedAnnouncement?>()
+
+        let result: CapturedAnnouncement? = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<CapturedAnnouncement?, Never>) in
+                if Task.isCancelled {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                guard continuationBox.register(continuation) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                lock.lock()
+                if let announcement = firstAnnouncementLocked(after: cursor, matching: predicate) {
+                    lock.unlock()
+                    continuationBox.resume(returning: announcement)
+                    return
+                }
+                guard timeout > 0 else {
+                    lock.unlock()
+                    continuationBox.resume(returning: nil)
+                    return
+                }
+
+                let timeoutMilliseconds = Int64(max(1, timeout * 1_000))
+                let timeoutTask = waiterTimeout(after: .milliseconds(timeoutMilliseconds)) { [weak self] in
+                    self?.completeAnnouncementWaiter(waiterId, returning: nil)
+                }
+                announcementWaiters.insert(AnnouncementWaiter(
+                    afterSequence: cursor.sequence,
+                    predicate: predicate,
+                    continuation: continuationBox,
+                    timeoutTask: timeoutTask
+                ), id: waiterId)
+                lock.unlock()
+            }
+        } onCancel: {
+            continuationBox.resume(returning: nil)
+        }
+        completeAnnouncementWaiter(waiterId, returning: nil)
+        return result
     }
 
     /// Suspend until a transition-completion notification is recorded after
@@ -147,6 +221,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return transitionWaiters.removeAll { $0.afterSequence < sequence }
     }
 
+    private func recordAnnouncementEventLocked(_ event: PendingAccessibilityNotificationEvent) -> [(AnnouncementWaiter, CapturedAnnouncement)] {
+        guard let announcement = event.capturedAnnouncement else { return [] }
+        let waiters = announcementWaiters.removeAll { waiter in
+            waiter.afterSequence < event.sequence && waiter.predicate.matches(announcement.text)
+        }
+        return waiters.map { ($0, announcement) }
+    }
+
     var hasActiveNotificationScope: Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -164,6 +246,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return transitionWaiters.reserveID()
     }
 
+    private func reserveAnnouncementWaiterIdentifier() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return announcementWaiters.reserveID()
+    }
+
     private func completeTransitionWaiter(
         _ waiterId: UInt64,
         returning cursor: AccessibilityNotificationCursor?
@@ -174,6 +263,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
         waiter?.timeoutTask?.cancel()
         waiter?.continuation.resume(returning: cursor)
+    }
+
+    private func completeAnnouncementWaiter(
+        _ waiterId: UInt64,
+        returning announcement: CapturedAnnouncement?
+    ) {
+        lock.lock()
+        let waiter = announcementWaiters.remove(id: waiterId)
+        lock.unlock()
+
+        waiter?.timeoutTask?.cancel()
+        waiter?.continuation.resume(returning: announcement)
     }
 
     /// Opens the outer correlation window for a running heist.
@@ -227,13 +328,18 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         if bufferedEvents.count > maxBufferedEvents {
             bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
         }
-        let resumedWaiters = recordTransitionEventLocked(kind: kind, sequence: event.sequence)
+        let resumedTransitionWaiters = recordTransitionEventLocked(kind: kind, sequence: event.sequence)
+        let resumedAnnouncementWaiters = recordAnnouncementEventLocked(event)
         lock.unlock()
 
         let cursor = AccessibilityNotificationCursor(sequence: event.sequence)
-        for waiter in resumedWaiters {
+        for waiter in resumedTransitionWaiters {
             waiter.timeoutTask?.cancel()
             waiter.continuation.resume(returning: cursor)
+        }
+        for (waiter, announcement) in resumedAnnouncementWaiters {
+            waiter.timeoutTask?.cancel()
+            waiter.continuation.resume(returning: announcement)
         }
     }
 
@@ -261,6 +367,19 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
         bufferedEvents.removeAll()
+    }
+
+    private func firstAnnouncementLocked(
+        after cursor: AccessibilityNotificationCursor,
+        matching predicate: AnnouncementPredicate
+    ) -> CapturedAnnouncement? {
+        for event in bufferedEvents where event.sequence > cursor.sequence {
+            guard let announcement = event.capturedAnnouncement,
+                  predicate.matches(announcement.text)
+            else { continue }
+            return announcement
+        }
+        return nil
     }
 
     fileprivate static func stringPayload(_ value: AnyObject?) -> String? {
@@ -465,12 +584,38 @@ struct PendingAccessibilityNotificationEvent {
     let timestamp: Date
     let notificationData: PendingAccessibilityNotificationPayload
     let associatedElement: PendingAccessibilityNotificationPayload
+
+    var capturedAnnouncement: CapturedAnnouncement? {
+        guard case .string(let text) = notificationData else { return nil }
+        return CapturedAnnouncement(
+            sequence: sequence,
+            text: text,
+            timestamp: timestamp,
+            notificationCode: code,
+            notificationName: name,
+            associatedElement: associatedElement.publicPayload
+        )
+    }
 }
 
 enum PendingAccessibilityNotificationPayload {
     case none
     case string(String)
     case object(AccessibilityNotificationObjectIdentity)
+
+    var publicPayload: AccessibilityNotificationPayload {
+        switch self {
+        case .none:
+            return .none
+        case .string(let value):
+            return .string(value)
+        case .object(let identity):
+            return .unresolvedObject(AccessibilityNotificationObjectPayload(
+                className: identity.className,
+                summary: identity.summary
+            ))
+        }
+    }
 }
 
 struct CapturedAccessibilityNotificationPayload {

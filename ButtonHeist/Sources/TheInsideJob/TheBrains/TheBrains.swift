@@ -35,6 +35,10 @@ final class TheBrains {
         }
     }
 
+    func capturedAnnouncements() -> AnnouncementListPayload {
+        AnnouncementListPayload(announcements: stash.accessibilityNotifications.announcements())
+    }
+
     private enum ObservationRuntimePhase: Equatable, Sendable {
         case inactive
         case observing

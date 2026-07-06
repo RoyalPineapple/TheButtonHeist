@@ -59,6 +59,17 @@ extension TheFence {
         }
     }
 
+    func sendAndAwaitAnnouncements(timeout: TimeInterval) async throws -> AnnouncementListPayload {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        let requestId = UUID().uuidString
+        return try await pendingRequests.waitForAnnouncements(
+            requestId: requestId,
+            timeout: timeout
+        ) {
+            self.sendClientMessage(.getAnnouncements, requestId: requestId)
+        }
+    }
+
     func sendAndAwaitHeistExecution(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
