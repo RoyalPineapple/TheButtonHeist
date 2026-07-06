@@ -4,7 +4,7 @@ public struct AnnouncementPredicate: Codable, Sendable, Equatable, Hashable {
     public let match: StringMatch<String>?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, match
+        case match
     }
 
     public init(match: StringMatch<String>? = nil) {
@@ -42,7 +42,7 @@ public struct AnnouncementPredicateExpr: Codable, Sendable, Equatable, Hashable 
     public let match: StringMatch<StringExpr>?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, match
+        case match
     }
 
     public init(match: StringMatch<StringExpr>? = nil) {

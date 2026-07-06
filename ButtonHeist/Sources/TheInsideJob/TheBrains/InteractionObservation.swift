@@ -14,15 +14,11 @@ final class InteractionObservation {
 
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
-    private let announcementWaitCursorState: AnnouncementWaitCursorState
-    private let predicateWait: PredicateWait
-
-    init(stash: TheStash, postActionObservation: PostActionObservation) {
-        let announcementWaitCursorState = AnnouncementWaitCursorState()
-        self.stash = stash
-        self.postActionObservation = postActionObservation
-        self.announcementWaitCursorState = announcementWaitCursorState
-        self.predicateWait = PredicateWait(
+    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
+    private lazy var predicateWait: PredicateWait = {
+        let stash = self.stash
+        let postActionObservation = self.postActionObservation
+        return PredicateWait(
             observeEvent: { scope, sequence, timeout in
                 await stash.observeSettledSemanticObservation(
                     scope: scope,
@@ -42,27 +38,37 @@ final class InteractionObservation {
             presenceTimeoutMessage: { predicate, elapsed in
                 stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
             },
-            announcementCursor: { strategy in
-                announcementWaitCursorState.cursor(
-                    for: strategy,
-                    latest: stash.accessibilityNotifications.announcementCursor()
-                )
+            announcementCursor: { [weak self] strategy in
+                switch strategy {
+                case .futureOnly:
+                    return stash.accessibilityNotifications.announcementCursor()
+                case .heistScoped:
+                    return self?.heistAnnouncementCursor ?? .origin
+                }
             },
-            waitForAnnouncement: { cursor, predicate, timeout in
-                await stash.accessibilityNotifications.waitForAnnouncement(
+            waitForAnnouncement: { [weak self] cursor, predicate, timeout in
+                let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
                     after: cursor,
                     matching: predicate,
                     timeout: timeout
                 )
-            },
-            announcementWaitDidMatch: { strategy, announcement in
-                announcementWaitCursorState.didMatch(announcement, strategy: strategy)
+                if let announcement, let self {
+                    self.heistAnnouncementCursor = AccessibilityNotificationCursor(
+                        sequence: max(self.heistAnnouncementCursor.sequence, announcement.sequence)
+                    )
+                }
+                return announcement
             }
         )
+    }()
+
+    init(stash: TheStash, postActionObservation: PostActionObservation) {
+        self.stash = stash
+        self.postActionObservation = postActionObservation
     }
 
     func resetAnnouncementWaitCursorForHeist() {
-        announcementWaitCursorState.resetForHeist()
+        heistAnnouncementCursor = .origin
     }
 
     func prepareBeforeState(
@@ -192,36 +198,6 @@ final class InteractionObservation {
         )
     }
 
-}
-
-private final class AnnouncementWaitCursorState {
-    private var heistCursor: AccessibilityNotificationCursor = .origin
-
-    func resetForHeist() {
-        heistCursor = .origin
-    }
-
-    func cursor(
-        for strategy: AnnouncementWaitCursorStrategy,
-        latest: AccessibilityNotificationCursor
-    ) -> AccessibilityNotificationCursor {
-        switch strategy {
-        case .futureOnly:
-            return latest
-        case .heistScoped:
-            return heistCursor
-        }
-    }
-
-    func didMatch(
-        _ announcement: CapturedAnnouncement,
-        strategy: AnnouncementWaitCursorStrategy
-    ) {
-        guard strategy == .heistScoped else { return }
-        heistCursor = AccessibilityNotificationCursor(
-            sequence: max(heistCursor.sequence, announcement.sequence)
-        )
-    }
 }
 
 #endif // DEBUG

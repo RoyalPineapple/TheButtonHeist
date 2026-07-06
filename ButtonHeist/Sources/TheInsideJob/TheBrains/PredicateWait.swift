@@ -32,10 +32,6 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         AnnouncementPredicate,
         Double
     ) async -> CapturedAnnouncement?
-    typealias AnnouncementWaitDidMatch = @MainActor (
-        AnnouncementWaitCursorStrategy,
-        CapturedAnnouncement
-    ) -> Void
 
     let observeEvent: ObserveEvent
     let latestEvent: LatestEvent
@@ -44,7 +40,6 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
     let presenceTimeoutMessage: PresenceTimeoutMessage
     let announcementCursor: AnnouncementCursor
     let waitForAnnouncement: AnnouncementWait
-    let announcementWaitDidMatch: AnnouncementWaitDidMatch
 
     init(
         observeEvent: @escaping ObserveEvent,
@@ -53,8 +48,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         semanticObservation: @escaping SemanticObserver,
         presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
         announcementCursor: @escaping AnnouncementCursor = { _ in .origin },
-        waitForAnnouncement: @escaping AnnouncementWait = { _, _, _ in nil },
-        announcementWaitDidMatch: @escaping AnnouncementWaitDidMatch = { _, _ in }
+        waitForAnnouncement: @escaping AnnouncementWait = { _, _, _ in nil }
     ) {
         self.observeEvent = observeEvent
         self.latestEvent = latestEvent
@@ -63,7 +57,6 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         self.presenceTimeoutMessage = presenceTimeoutMessage
         self.announcementCursor = announcementCursor
         self.waitForAnnouncement = waitForAnnouncement
-        self.announcementWaitDidMatch = announcementWaitDidMatch
     }
 
     func wait(
@@ -476,7 +469,6 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
             )
         }
 
-        announcementWaitDidMatch(cursorStrategy, announcement)
         let elapsed = Self.elapsedSeconds(since: start)
         let expectation = ExpectationResult(
             met: true,
@@ -776,32 +768,44 @@ extension PredicateWait {
     }
 
     private static func expectedActionAnnouncement(_ predicate: AnnouncementPredicate) -> String {
-        guard let match = predicate.match else { return "an announcement" }
-        switch match.mode {
-        case .exact:
-            return "'\(singleQuoted(match.value))'"
-        case .contains:
-            return "announcement containing '\(singleQuoted(match.value))'"
-        case .prefix:
-            return "announcement prefixed by '\(singleQuoted(match.value))'"
-        case .suffix:
-            return "announcement suffixed by '\(singleQuoted(match.value))'"
-        case .isEmpty:
-            return "an empty announcement"
-        }
+        announcementMatchDescription(
+            predicate,
+            any: "an announcement",
+            exact: { "'\($0)'" },
+            contains: { "announcement containing '\($0)'" },
+            empty: "an empty announcement"
+        )
     }
 
     private static func matchingAnnouncement(_ predicate: AnnouncementPredicate) -> String {
-        guard let match = predicate.match else { return "announcement" }
+        announcementMatchDescription(
+            predicate,
+            any: "announcement",
+            exact: { "announcement matching '\($0)'" },
+            contains: { "announcement matching '\($0)'" },
+            empty: "empty announcement"
+        )
+    }
+
+    private static func announcementMatchDescription(
+        _ predicate: AnnouncementPredicate,
+        any: String,
+        exact: (String) -> String,
+        contains: (String) -> String,
+        empty: String
+    ) -> String {
+        guard let match = predicate.match else { return any }
         switch match.mode {
-        case .exact, .contains:
-            return "announcement matching '\(singleQuoted(match.value))'"
+        case .exact:
+            return exact(singleQuoted(match.value))
+        case .contains:
+            return contains(singleQuoted(match.value))
         case .prefix:
             return "announcement prefixed by '\(singleQuoted(match.value))'"
         case .suffix:
             return "announcement suffixed by '\(singleQuoted(match.value))'"
         case .isEmpty:
-            return "empty announcement"
+            return empty
         }
     }
 
