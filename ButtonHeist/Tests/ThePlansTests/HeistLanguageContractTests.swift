@@ -141,7 +141,7 @@ import Testing
 }
 
 private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissionCandidate, path: String, observed: String)] {
-    try [
+    [
         (
             HeistPlanAdmissionCandidate(body: [admissionStep(try stringLoop(parameter: "item", body: [
                 try stringLoop(parameter: "size"),
