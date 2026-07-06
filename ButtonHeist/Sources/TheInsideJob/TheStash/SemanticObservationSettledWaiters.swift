@@ -7,14 +7,14 @@ import TheScore
 
 @MainActor
 final class SemanticObservationSettledWaiters {
-    private struct Waiter {
+    private struct WaiterKey: Hashable, Sendable {
+        let id: UInt64
         let scope: SemanticObservationScope
         let afterSequence: SettledObservationSequence?
-        let continuation: OneShotContinuation<SettledSemanticObservationEvent?>
-        let timeoutTask: Task<Void, Never>?
     }
 
-    private var waiters = WaiterStore<Waiter>()
+    private var nextWaiterID: UInt64 = 0
+    private var waiters = AsyncWaiterRegistry<WaiterKey, SettledSemanticObservationEvent?>()
 
     var count: Int {
         waiters.count
@@ -25,8 +25,8 @@ final class SemanticObservationSettledWaiters {
         afterSequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
-        let id = waiters.reserveID()
-        let continuationBox = OneShotContinuation<SettledSemanticObservationEvent?>()
+        let key = reserveWaiterKey(scope: scope, afterSequence: afterSequence)
+        let oneShot = TimedOneShot<SettledSemanticObservationEvent?>()
 
         let result: SettledSemanticObservationEvent? = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>) in
@@ -34,61 +34,58 @@ final class SemanticObservationSettledWaiters {
                     continuation.resume(returning: nil)
                     return
                 }
-                guard continuationBox.register(continuation) else {
+                guard oneShot.register(continuation) else {
                     continuation.resume(returning: nil)
                     return
                 }
 
-                let timeoutTask: Task<Void, Never>? = observationWaitTimeout(timeout).map { timeout in
-                    let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
-                    return waiterTimeout(after: .nanoseconds(nanoseconds)) { [weak self] in
-                        await self?.complete(id, returning: nil)
+                waiters.insert(oneShot, for: key)
+                if let timeoutDuration = observationWaitTimeout(timeout) {
+                    oneShot.armTimeout(after: timeoutDuration) { [weak self] in
+                        await self?.complete(key, returning: nil)
                     }
                 }
-                waiters.insert(Waiter(
-                    scope: scope,
-                    afterSequence: afterSequence,
-                    continuation: continuationBox,
-                    timeoutTask: timeoutTask
-                ), id: id)
             }
         } onCancel: {
-            continuationBox.resume(returning: nil)
+            oneShot.resolve(returning: nil)
         }
-        complete(id, returning: nil)
+        complete(key, returning: nil)
         return result
     }
 
     func completeAll(returning event: SettledSemanticObservationEvent?) {
         for waiter in waiters.removeAll() {
-            complete(waiter, returning: event)
+            waiter.resolve(returning: event)
         }
     }
 
     func completeWaiters(with eventsByFulfilledScope: [SemanticObservationScope: SettledSemanticObservationEvent]) {
-        let completed = waiters.removeAll { waiter in
-            guard let event = eventsByFulfilledScope[waiter.scope] else { return false }
-            return event.sequence > (waiter.afterSequence ?? 0)
+        let completed = waiters.removeAll { key in
+            guard let event = eventsByFulfilledScope[key.scope] else { return false }
+            return event.sequence > (key.afterSequence ?? 0)
         }
-        for waiter in completed {
-            complete(waiter, returning: eventsByFulfilledScope[waiter.scope])
+        for (key, waiter) in completed {
+            waiter.resolve(returning: eventsByFulfilledScope[key.scope])
         }
     }
 
-    private func complete(_ id: UInt64, returning event: SettledSemanticObservationEvent?) {
-        guard let waiter = waiters.remove(id: id) else { return }
-        complete(waiter, returning: event)
+    private func complete(_ key: WaiterKey, returning event: SettledSemanticObservationEvent?) {
+        waiters.resolve(key, returning: event)
     }
 
-    private func complete(_ waiter: Waiter, returning event: SettledSemanticObservationEvent?) {
-        waiter.timeoutTask?.cancel()
-        waiter.continuation.resume(returning: event)
+    private func reserveWaiterKey(
+        scope: SemanticObservationScope,
+        afterSequence: SettledObservationSequence?
+    ) -> WaiterKey {
+        defer { nextWaiterID &+= 1 }
+        return WaiterKey(id: nextWaiterID, scope: scope, afterSequence: afterSequence)
     }
 
-    private func observationWaitTimeout(_ timeout: Double?) -> Double? {
+    private func observationWaitTimeout(_ timeout: Double?) -> Duration? {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
-        return timeout
+        let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
+        return .nanoseconds(nanoseconds)
     }
 }
 
