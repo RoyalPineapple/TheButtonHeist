@@ -6,7 +6,7 @@ import UIKit
 enum AXMethodOverrides {
 
     static func object(_ object: NSObject, overrides selector: Selector) -> Bool {
-        object(object, overrides: selector, relativeTo: defaultBaseClass(for: object))
+        Self.object(object, overrides: selector, relativeTo: defaultBaseClass(for: object))
     }
 
     static func object(_ object: NSObject, overrides selector: Selector, relativeTo baseClass: AnyClass) -> Bool {

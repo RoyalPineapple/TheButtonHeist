@@ -118,14 +118,14 @@ final class AccessibilityActionDispatcher {
         }
 
         func appendAccessibilityContainerChain(from object: NSObject) {
-            var current = object.accessibilityContainer as? NSObject
+            var current = Self.accessibilityContainer(of: object)
             while let container = current {
                 if let responder = container as? UIResponder {
                     appendResponderChain(from: responder)
                     return
                 }
                 append(container)
-                current = container.accessibilityContainer as? NSObject
+                current = Self.accessibilityContainer(of: container)
             }
         }
 
@@ -139,6 +139,16 @@ final class AccessibilityActionDispatcher {
         }
         appendResponderChain(from: fallback)
         return candidates
+    }
+
+    private static func accessibilityContainer(of object: NSObject) -> NSObject? {
+        if let element = object as? UIAccessibilityElement {
+            return element.accessibilityContainer as? NSObject
+        }
+        guard object.responds(to: NSSelectorFromString("accessibilityContainer")) else {
+            return nil
+        }
+        return object.value(forKey: "accessibilityContainer") as? NSObject
     }
 
     private static func canHandle(_ action: ResponderAction, object: NSObject) -> Bool {
@@ -197,7 +207,7 @@ final class AccessibilityActionDispatcher {
             }
         }
 
-        func perform(on object: NSObject) -> Bool {
+        @MainActor func perform(on object: NSObject) -> Bool {
             switch self {
             case .dismiss:
                 return object.accessibilityPerformEscape()
