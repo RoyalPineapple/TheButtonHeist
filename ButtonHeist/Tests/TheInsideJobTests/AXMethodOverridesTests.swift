@@ -20,6 +20,7 @@ func customObjectOverridesAccessibilityActionFromNSObject() {
 }
 
 @Test("Navigation controller default escape is base behavior")
+@MainActor
 func navigationControllerDefaultEscapeIsBaseBehavior() {
     #expect(!AXMethodOverrides.object(
         UINavigationController(),
@@ -28,6 +29,7 @@ func navigationControllerDefaultEscapeIsBaseBehavior() {
 }
 
 @Test("Navigation controller subclass escape override is detected")
+@MainActor
 func navigationControllerSubclassEscapeOverrideIsDetected() {
     #expect(AXMethodOverrides.object(
         CustomNavigationController(),
