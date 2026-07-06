@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 @testable import AccessibilitySnapshotParser
+import ButtonHeistSupport
 @testable import TheInsideJob
 import ThePlans
 import TheScore
@@ -193,6 +194,57 @@ final class ScreenManifestTests: XCTestCase {
         XCTAssertEqual(omitted.scrollAxis, .vertical)
         XCTAssertEqual(omitted.contentHeight, 2_000)
         XCTAssertTrue(diagnostics.nextAction?.contains("maxScrollsPerDiscovery") == true)
+    }
+
+    // MARK: - Scroll Container Scan Machine
+
+    func testScrollContainerScanMachineRunsForwardThenRestoresBeforeBackward() {
+        var driver = StateDriver(
+            initial: Navigation.ScrollContainerScanState.idle,
+            machine: Navigation.ScrollContainerScanMachine()
+        )
+
+        XCTAssertEqual(driver.send(.begin).effects, [.run(.forward)])
+        XCTAssertEqual(driver.state, .scanning(.forward))
+        XCTAssertEqual(driver.send(.scanCompleted(.exhausted)).effects, [.restore])
+        XCTAssertEqual(driver.state, .restoring(.beforeBackwardScan))
+        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.run(.back)])
+        XCTAssertEqual(driver.state, .scanning(.back))
+    }
+
+    func testScrollContainerScanMachineRestoresBeforeCompletingExhaustiveScan() {
+        var driver = StateDriver(
+            initial: Navigation.ScrollContainerScanState.scanning(.back),
+            machine: Navigation.ScrollContainerScanMachine()
+        )
+
+        XCTAssertEqual(driver.send(.scanCompleted(.exhausted)).effects, [.restore])
+        XCTAssertEqual(driver.state, .restoring(.beforeCompletion))
+        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.finish(.completed)])
+        XCTAssertEqual(driver.state, .finished(.completed))
+    }
+
+    func testScrollContainerScanMachineRestoresBeforeOmittingLimitHit() {
+        var driver = StateDriver(
+            initial: Navigation.ScrollContainerScanState.scanning(.forward),
+            machine: Navigation.ScrollContainerScanMachine()
+        )
+
+        XCTAssertEqual(driver.send(.scanCompleted(.limitHit(.containerScrollLimit))).effects, [.restore])
+        XCTAssertEqual(driver.state, .restoring(.beforeOmission(.containerScrollLimit)))
+        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.finish(.omitted(.containerScrollLimit))])
+        XCTAssertEqual(driver.state, .finished(.omitted(.containerScrollLimit)))
+    }
+
+    func testScrollContainerScanMachineFinishesTerminalWithoutRestore() {
+        let terminal = Navigation.ScrollTraversalTerminal.foundHeistId("save")
+        var driver = StateDriver(
+            initial: Navigation.ScrollContainerScanState.scanning(.forward),
+            machine: Navigation.ScrollContainerScanMachine()
+        )
+
+        XCTAssertEqual(driver.send(.scanCompleted(.terminal(terminal))).effects, [.finish(.terminal(terminal))])
+        XCTAssertEqual(driver.state, .finished(.terminal(terminal)))
     }
 
     // MARK: - maxScrollsPerContainer

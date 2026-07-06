@@ -829,12 +829,6 @@ private struct LiveCaptureRemovalResult {
     let pathMap: [TreePath: TreePath]
 }
 
-private struct AccessibilityHierarchyRemovalResult {
-    let hierarchy: [AccessibilityHierarchy]
-    let heistIdsByPath: [TreePath: HeistId]
-    let pathMap: [TreePath: TreePath]
-}
-
 private extension LiveCapture {
     func removingElementsWithPathMap(
         withIds removedIds: Set<HeistId>
@@ -844,12 +838,12 @@ private extension LiveCapture {
         }
         let filteredLiveTree = hierarchy.removingElements(
             withIds: removedIds,
-            heistIdsByPath: heistIdsByPath
+            idsByPath: heistIdsByPath
         )
         let liveCapture = LiveCapture(
             hierarchy: filteredLiveTree.hierarchy,
             containerNamesByPath: Self.remap(containerNamesByPath, using: filteredLiveTree.pathMap),
-            heistIdsByPath: filteredLiveTree.heistIdsByPath,
+            heistIdsByPath: filteredLiveTree.idsByPath,
             elementRefs: elementRefs.filter { !removedIds.contains($0.key) },
             containerRefsByPath: Self.remap(containerRefsByPath, using: filteredLiveTree.pathMap),
             containerContentFramesByPath: Self.remap(containerContentFramesByPath, using: filteredLiveTree.pathMap),
@@ -897,75 +891,6 @@ private extension LiveCapture {
                 )
             }
         )
-    }
-}
-
-private extension Array where Element == AccessibilityHierarchy {
-    func removingElements(
-        withIds removedIds: Set<HeistId>,
-        heistIdsByPath: [TreePath: HeistId]
-    ) -> AccessibilityHierarchyRemovalResult {
-        var hierarchy: [AccessibilityHierarchy] = []
-        var remappedHeistIdsByPath: [TreePath: HeistId] = [:]
-        var pathMap: [TreePath: TreePath] = [:]
-        for (oldIndex, node) in enumerated() {
-            let oldPath = TreePath([oldIndex])
-            let newPath = TreePath([hierarchy.count])
-            guard let filteredNode = node.removingElements(
-                withIds: removedIds,
-                oldPath: oldPath,
-                newPath: newPath,
-                heistIdsByPath: heistIdsByPath,
-                remappedHeistIdsByPath: &remappedHeistIdsByPath,
-                pathMap: &pathMap
-            ) else { continue }
-            hierarchy.append(filteredNode)
-        }
-        return AccessibilityHierarchyRemovalResult(
-            hierarchy: hierarchy,
-            heistIdsByPath: remappedHeistIdsByPath,
-            pathMap: pathMap
-        )
-    }
-}
-
-private extension AccessibilityHierarchy {
-    func removingElements(
-        withIds removedIds: Set<HeistId>,
-        oldPath: TreePath,
-        newPath: TreePath,
-        heistIdsByPath: [TreePath: HeistId],
-        remappedHeistIdsByPath: inout [TreePath: HeistId],
-        pathMap: inout [TreePath: TreePath]
-    ) -> AccessibilityHierarchy? {
-        switch self {
-        case .element(let element, let traversalIndex):
-            guard let heistId = heistIdsByPath[oldPath] else { return self }
-            guard !removedIds.contains(heistId) else { return nil }
-            pathMap[oldPath] = newPath
-            remappedHeistIdsByPath[newPath] = heistId
-            return .element(element, traversalIndex: traversalIndex)
-        case .container(let container, let children):
-            pathMap[oldPath] = newPath
-            var filteredChildren: [AccessibilityHierarchy] = []
-            for (oldIndex, child) in children.enumerated() {
-                let oldChildPath = oldPath.appending(oldIndex)
-                let newChildPath = newPath.appending(filteredChildren.count)
-                guard let filteredChild = child.removingElements(
-                    withIds: removedIds,
-                    oldPath: oldChildPath,
-                    newPath: newChildPath,
-                    heistIdsByPath: heistIdsByPath,
-                    remappedHeistIdsByPath: &remappedHeistIdsByPath,
-                    pathMap: &pathMap
-                ) else { continue }
-                filteredChildren.append(filteredChild)
-            }
-            return .container(
-                container,
-                children: filteredChildren
-            )
-        }
     }
 }
 
