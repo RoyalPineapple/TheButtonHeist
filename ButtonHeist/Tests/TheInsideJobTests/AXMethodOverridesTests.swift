@@ -3,28 +3,32 @@ import Testing
 import UIKit
 @testable import TheInsideJob
 
-@Test func `Plain object does not override accessibility action from NSObject`() {
+@Test("Plain object does not override accessibility action from NSObject")
+func plainObjectDoesNotOverrideAccessibilityActionFromNSObject() {
     #expect(!AXMethodOverrides.object(
         NSObject(),
         overrides: #selector(NSObject.accessibilityPerformMagicTap)
     ))
 }
 
-@Test func `Custom object overrides accessibility action from NSObject`() {
+@Test("Custom object overrides accessibility action from NSObject")
+func customObjectOverridesAccessibilityActionFromNSObject() {
     #expect(AXMethodOverrides.object(
         CustomMagicTapObject(),
         overrides: #selector(NSObject.accessibilityPerformMagicTap)
     ))
 }
 
-@Test func `Navigation controller default escape is base behavior`() {
+@Test("Navigation controller default escape is base behavior")
+func navigationControllerDefaultEscapeIsBaseBehavior() {
     #expect(!AXMethodOverrides.object(
         UINavigationController(),
         overrides: #selector(NSObject.accessibilityPerformEscape)
     ))
 }
 
-@Test func `Navigation controller subclass escape override is detected`() {
+@Test("Navigation controller subclass escape override is detected")
+func navigationControllerSubclassEscapeOverrideIsDetected() {
     #expect(AXMethodOverrides.object(
         CustomNavigationController(),
         overrides: #selector(NSObject.accessibilityPerformEscape)

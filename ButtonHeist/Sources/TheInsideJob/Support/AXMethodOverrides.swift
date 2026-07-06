@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import Darwin
 import ObjectiveC.runtime
 import UIKit
 
@@ -11,16 +10,22 @@ enum AXMethodOverrides {
     }
 
     static func object(_ object: NSObject, overrides selector: Selector, relativeTo baseClass: AnyClass) -> Bool {
-        guard classIsSubclassOrSame(type(of: object), baseClass) else { return false }
-        guard let overrideImplementation = declaredOverrideImplementation(
-            of: selector,
-            in: type(of: object),
-            stoppingBefore: baseClass
-        ) else { return false }
-        guard let baseImplementation = implementation(of: selector, in: baseClass) else {
-            return true
+        guard let objectClass = object_getClass(object),
+              classIsSubclassOrSame(objectClass, baseClass)
+        else { return false }
+
+        var currentType: AnyClass? = objectClass
+        while let candidate = currentType, candidate != baseClass {
+            guard let superclass = class_getSuperclass(candidate) else { return false }
+
+            let candidateImplementation = implementation(of: selector, in: candidate)
+            let superclassImplementation = implementation(of: selector, in: superclass)
+            if candidateImplementation != superclassImplementation {
+                return candidateImplementation != nil
+            }
+            currentType = superclass
         }
-        return overrideImplementation != baseImplementation
+        return false
     }
 
     private static func classIsSubclassOrSame(_ type: AnyClass, _ baseClass: AnyClass) -> Bool {
@@ -34,44 +39,8 @@ enum AXMethodOverrides {
         return false
     }
 
-    private static func declaredOverrideImplementation(
-        of selector: Selector,
-        in type: AnyClass,
-        stoppingBefore baseClass: AnyClass
-    ) -> IMP? {
-        var currentType: AnyClass? = type
-        while let candidate = currentType, candidate != baseClass {
-            if let implementation = declaredImplementation(of: selector, in: candidate) {
-                return implementation
-            }
-            currentType = class_getSuperclass(candidate)
-        }
-        return nil
-    }
-
-    private static func declaredImplementation(of selector: Selector, in type: AnyClass) -> IMP? {
-        var methodCount: UInt32 = 0
-        guard let methods = class_copyMethodList(type, &methodCount) else { return nil }
-        defer { free(methods) }
-
-        for index in 0..<Int(methodCount) {
-            let method = methods[index]
-            if method_getName(method) == selector {
-                return method_getImplementation(method)
-            }
-        }
-        return nil
-    }
-
     private static func implementation(of selector: Selector, in type: AnyClass) -> IMP? {
-        var currentType: AnyClass? = type
-        while let candidate = currentType {
-            if let method = class_getInstanceMethod(candidate, selector) {
-                return method_getImplementation(method)
-            }
-            currentType = class_getSuperclass(candidate)
-        }
-        return nil
+        class_getInstanceMethod(type, selector).map(method_getImplementation)
     }
 
     private static func defaultBaseClass(for object: NSObject) -> AnyClass {
