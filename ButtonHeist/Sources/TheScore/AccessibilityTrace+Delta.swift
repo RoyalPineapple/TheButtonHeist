@@ -25,6 +25,10 @@ public extension AccessibilityTrace {
         public let screenIdBefore: String?
         public let screenIdAfter: String?
         public let screenIdChanged: Bool
+        /// True when direct first-responder identity or software keyboard
+        /// visibility changes. Keyboard movement is focus evidence for
+        /// transition-heavy text-entry activations where the final responder
+        /// target may be rebuilt under a new screen.
         public let firstResponderChanged: Bool
 
         public init(
@@ -549,6 +553,7 @@ extension AccessibilityTrace.InteractionDigest {
             screenIdBefore: before.screenId,
             screenIdAfter: after.screenId,
             firstResponderChanged: before.context.firstResponder != after.context.firstResponder
+                || before.context.keyboardVisible != after.context.keyboardVisible
         )
     }
 }

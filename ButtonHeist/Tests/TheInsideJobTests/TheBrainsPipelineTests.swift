@@ -61,7 +61,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
-    func testSemanticStateCaptureProjectsSuppliedWindowSignalWithoutKeyboardProbe() {
+    func testSemanticStateCaptureProjectsFocusAndWindowSignals() {
         let screen = makeScreen(elements: [("Sign In", .button, "button_sign_in")])
         let windowOwner = NSObject()
         let tripwireSignal = TheTripwire.TripwireSignal(
@@ -82,10 +82,31 @@ final class TheBrainsPipelineTests: XCTestCase {
             settledObservationSequence: nil
         )
 
-        XCTAssertNil(state.capture.context.keyboardVisible)
+        XCTAssertEqual(state.capture.context.keyboardVisible, false)
         XCTAssertEqual(state.capture.context.windowStack, [
             AccessibilityTrace.WindowContext(index: 0, level: 7, isKeyWindow: true),
         ])
+    }
+
+    func testSemanticStateCaptureProjectsFirstResponderTarget() throws {
+        let screen = Screen.makeForTests(
+            elements: [
+                (AccessibilityElement.make(label: "Email", traits: [.textEntry]), "email_field"),
+                (AccessibilityElement.make(label: "Submit", traits: [.button]), "submit_button"),
+            ],
+            firstResponderHeistId: "email_field"
+        )
+
+        let state = brains.postActionObservation.captureSemanticState(
+            from: screen,
+            tripwireSignal: .empty,
+            settledObservationSequence: nil
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(state.capture.context.firstResponder),
+            .predicate(ElementPredicate(label: "Email"))
+        )
     }
 
     func testScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {

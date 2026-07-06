@@ -28,6 +28,7 @@ struct ActivationPolicy {
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var activationPointDispatch: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
+    var textEntryActivationFailure: @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.InteractionResult?
 
     @MainActor
     func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
@@ -44,9 +45,13 @@ struct ActivationPolicy {
         let activateOutcome = accessibilityActivate(refreshedLiveTarget)
         if activateOutcome == .success {
             showFingerprint(refreshedLiveTarget.activationPoint)
+            let trace = ActivationTrace(.accessibilityActivate)
+            if let failure = await textEntryActivationFailure(screenElement, trace) {
+                return failure
+            }
             return .success(
                 method: .activate,
-                activationTrace: ActivationTrace(.accessibilityActivate)
+                activationTrace: trace
             )
         }
 
@@ -58,6 +63,9 @@ struct ActivationPolicy {
             tapActivationSucceeded: tapActivationSucceeded
         ))
         if tapActivationSucceeded {
+            if let failure = await textEntryActivationFailure(screenElement, trace) {
+                return failure
+            }
             return .success(method: .activate, activationTrace: trace)
         }
 
