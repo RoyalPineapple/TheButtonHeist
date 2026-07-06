@@ -277,14 +277,14 @@ final class HandoffConnectionLifecycle {
 
         let result = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Error>, Never>) in
-                let completion = OneShotContinuation<Result<Void, Error>>()
+                let completion = TimedOneShot<Result<Void, Error>>()
                 _ = completion.register(continuation)
                 if Task.isCancelled {
-                    completion.resume(returning: .failure(CancellationError()))
+                    completion.resolve(returning: .failure(CancellationError()))
                     return
                 }
                 guard activeAttemptID == attemptID else {
-                    completion.resume(returning: .failure(HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)))
+                    completion.resolve(returning: .failure(HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)))
                     return
                 }
                 waiters.register(id: waiterID, attemptID: attemptID, completion: completion)

@@ -29,30 +29,15 @@ package struct AccessibilityElementNodeRecord: Equatable, Sendable {
     }
 }
 
-package struct AccessibilityContainerNodeRecord: Equatable, Sendable {
-    package let path: TreePath
-    package let container: AccessibilityContainer
-    package let node: AccessibilityHierarchy
-
-    package init(path: TreePath, container: AccessibilityContainer, node: AccessibilityHierarchy) {
-        self.path = path
-        self.container = container
-        self.node = node
-    }
-}
-
 package struct AccessibilityHierarchyGraph: Equatable, Sendable {
-    package let tree: [AccessibilityHierarchy]
     package let nodesInPathOrder: [AccessibilityNodeRecord]
     package let elementsInTraversalOrder: [AccessibilityElementNodeRecord]
-    package let containersInPathOrder: [AccessibilityContainerNodeRecord]
 
     private let nodesByPath: [TreePath: AccessibilityHierarchy]
 
     package init(tree: [AccessibilityHierarchy]) {
         var nodesInPathOrder: [AccessibilityNodeRecord] = []
         var elements: [AccessibilityElementNodeRecord] = []
-        var containers: [AccessibilityContainerNodeRecord] = []
         var nodesByPath: [TreePath: AccessibilityHierarchy] = [:]
 
         func visit(_ node: AccessibilityHierarchy, path: TreePath) {
@@ -81,12 +66,7 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
                     traversalIndex: traversalIndex
                 ))
 
-            case .container(let container, let children):
-                containers.append(AccessibilityContainerNodeRecord(
-                    path: path,
-                    container: container,
-                    node: node
-                ))
+            case .container(_, let children):
                 for (index, child) in children.enumerated() {
                     visit(child, path: path.appending(index))
                 }
@@ -97,7 +77,6 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
             visit(root, path: TreePath([index]))
         }
 
-        self.tree = tree
         self.nodesInPathOrder = nodesInPathOrder
         self.elementsInTraversalOrder = elements.sorted {
             if $0.traversalIndex != $1.traversalIndex {
@@ -105,7 +84,6 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
             }
             return $0.path < $1.path
         }
-        self.containersInPathOrder = containers
         self.nodesByPath = nodesByPath
     }
 
@@ -234,7 +212,6 @@ package struct InterfaceGraph: Equatable, Sendable {
     package let containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation]
     package let traceIdentityByPath: [TreePath: TraceElementIdentity]
     package let elementsInTraversalOrder: [InterfaceGraphElementRecord]
-    package let containersInPathOrder: [InterfaceGraphContainerRecord]
     package let nodesInPathOrder: [InterfaceGraphNodeRecord]
 
     package init(interface: Interface) throws(InterfaceGraphValidationError) {
@@ -268,30 +245,24 @@ package struct InterfaceGraph: Equatable, Sendable {
                 traceIdentity: traceIdentityByPath[record.path]
             )
         }
-        let containerRecords = hierarchy.containersInPathOrder.map { record in
-            InterfaceGraphContainerRecord(
-                path: record.path,
-                container: record.container,
-                node: record.node,
-                annotation: containerAnnotationByPath[record.path]
-            )
-        }
-
-        let elementsByPath = Dictionary(uniqueKeysWithValues: elementRecords.map { ($0.path, $0) })
-        let containersByPath = Dictionary(uniqueKeysWithValues: containerRecords.map { ($0.path, $0) })
         let nodeRecords = hierarchy.nodesInPathOrder.map { record in
             let kind: InterfaceGraphNodeKind
             switch record.node {
-            case .element:
-                guard let elementRecord = elementsByPath[record.path] else {
-                    preconditionFailure("InterfaceGraph missing element record for path \(record.path.diagnosticDescription)")
-                }
-                kind = .element(elementRecord)
-            case .container:
-                guard let containerRecord = containersByPath[record.path] else {
-                    preconditionFailure("InterfaceGraph missing container record for path \(record.path.diagnosticDescription)")
-                }
-                kind = .container(containerRecord)
+            case .element(let element, let traversalIndex):
+                kind = .element(InterfaceGraphElementRecord(
+                    path: record.path,
+                    traversalIndex: traversalIndex,
+                    accessibilityElement: element,
+                    annotation: elementAnnotationByPath[record.path],
+                    traceIdentity: traceIdentityByPath[record.path]
+                ))
+            case .container(let container, _):
+                kind = .container(InterfaceGraphContainerRecord(
+                    path: record.path,
+                    container: container,
+                    node: record.node,
+                    annotation: containerAnnotationByPath[record.path]
+                ))
             }
             return InterfaceGraphNodeRecord(
                 path: record.path,
@@ -306,26 +277,11 @@ package struct InterfaceGraph: Equatable, Sendable {
         self.containerAnnotationByPath = containerAnnotationByPath
         self.traceIdentityByPath = traceIdentityByPath
         self.elementsInTraversalOrder = elementRecords
-        self.containersInPathOrder = containerRecords
         self.nodesInPathOrder = nodeRecords
     }
 
     package func node(at path: TreePath) -> AccessibilityHierarchy? {
         hierarchy.node(at: path)
-    }
-
-    package func element(at path: TreePath) -> InterfaceGraphElementRecord? {
-        guard case .element(let record)? = nodesInPathOrder.first(where: { $0.path == path })?.kind else {
-            return nil
-        }
-        return record
-    }
-
-    package func container(at path: TreePath) -> InterfaceGraphContainerRecord? {
-        guard case .container(let record)? = nodesInPathOrder.first(where: { $0.path == path })?.kind else {
-            return nil
-        }
-        return record
     }
 
     package func annotationsForSubtree(

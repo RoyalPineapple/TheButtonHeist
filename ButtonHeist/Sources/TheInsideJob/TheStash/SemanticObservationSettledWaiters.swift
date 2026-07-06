@@ -14,7 +14,7 @@ final class SemanticObservationSettledWaiters {
     }
 
     private var nextWaiterID: UInt64 = 0
-    private var waiters = AsyncWaiterRegistry<WaiterKey, SettledSemanticObservationEvent?>()
+    private var waiters = WaiterStore<WaiterKey, TimedOneShot<SettledSemanticObservationEvent?>>()
 
     var count: Int {
         waiters.count

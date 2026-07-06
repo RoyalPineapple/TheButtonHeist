@@ -110,7 +110,7 @@ final class EnvironmentConfigTests: XCTestCase {
             }
             XCTAssertEqual(error.kind, .readFailed)
             XCTAssertEqual(error.path, path)
-            XCTAssertEqual(error.failureDetails.code.knownCode, .configReadFailed)
+            XCTAssertEqual(error.failureDetails.code, .configReadFailed)
         }
     }
 

@@ -39,7 +39,7 @@ final class ConnectionPhaseTests: XCTestCase {
         ]
 
         for (error, knownCode, phase, retryable) in cases {
-            XCTAssertEqual(error.diagnostic.details.code.knownCode, knownCode)
+            XCTAssertEqual(error.diagnostic.details.code, knownCode)
             XCTAssertEqual(error.failureCode, knownCode.rawValue)
             XCTAssertEqual(error.phase, phase)
             XCTAssertEqual(error.retryable, retryable)

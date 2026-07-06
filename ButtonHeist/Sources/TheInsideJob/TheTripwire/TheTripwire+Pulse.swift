@@ -14,7 +14,7 @@ extension TheTripwire {
         let target: PulseTick
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
-        var settleWaiters = WaiterStore<SettleWaiter>()
+        var settleWaiters = WaiterStore<UInt64, SettleWaiter>()
 
         init(link: CADisplayLink, target: PulseTick) {
             self.link = link
@@ -37,7 +37,7 @@ extension TheTripwire {
         var quietFrames: Int
         let requiredQuietFrames: Int
         let deadline: CFAbsoluteTime
-        let continuation: OneShotContinuation<Bool>
+        let continuation: TimedOneShot<Bool>
     }
 
     // MARK: - Pulse Lifecycle
@@ -60,7 +60,7 @@ extension TheTripwire {
         let waiters = context.settleWaiters.removeAll()
 
         for waiter in waiters {
-            waiter.continuation.resume(returning: false)
+            waiter.continuation.resolve(returning: false)
         }
 
         pulsePhase = .idle
@@ -83,7 +83,7 @@ extension TheTripwire {
     func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
         guard let context = runningContext else { return false }
         let waiterID = context.settleWaiters.reserveID()
-        let oneShot = OneShotContinuation<Bool>()
+        let oneShot = TimedOneShot<Bool>()
 
         let result = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -99,7 +99,7 @@ extension TheTripwire {
                 }
             }
         } onCancel: {
-            oneShot.resume(returning: false)
+            oneShot.resolve(returning: false)
         }
         removeSettleWaiter(id: waiterID)
         return result
@@ -214,7 +214,7 @@ extension TheTripwire {
             $0.quietFrames >= $0.requiredQuietFrames || now >= $0.deadline
         }
         for waiter in completed {
-            waiter.continuation.resume(returning: waiter.quietFrames >= waiter.requiredQuietFrames)
+            waiter.continuation.resolve(returning: waiter.quietFrames >= waiter.requiredQuietFrames)
         }
     }
 

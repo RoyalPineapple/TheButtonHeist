@@ -210,7 +210,7 @@ final class TargetConfigTests: XCTestCase {
             XCTAssertEqual(error.kind, .readFailed)
             XCTAssertEqual(error.path, path)
             XCTAssertTrue(error.localizedDescription.contains("Failed to read config"))
-            XCTAssertEqual(error.failureDetails.code.knownCode, .configReadFailed)
+            XCTAssertEqual(error.failureDetails.code, .configReadFailed)
             XCTAssertEqual(error.failureDetails.phase, .setup)
         }
     }
@@ -229,7 +229,7 @@ final class TargetConfigTests: XCTestCase {
             XCTAssertEqual(error.kind, .readFailed)
             XCTAssertEqual(error.path, tmpDir.path)
             XCTAssertTrue(error.localizedDescription.contains("Failed to read config"))
-            XCTAssertEqual(error.failureDetails.code.knownCode, .configReadFailed)
+            XCTAssertEqual(error.failureDetails.code, .configReadFailed)
         }
     }
 
@@ -250,7 +250,7 @@ final class TargetConfigTests: XCTestCase {
             XCTAssertEqual(error.kind, .decodeFailed)
             XCTAssertEqual(error.path, configFile.path)
             XCTAssertTrue(error.localizedDescription.contains("Failed to decode config"))
-            XCTAssertEqual(error.failureDetails.code.knownCode, .configDecodeFailed)
+            XCTAssertEqual(error.failureDetails.code, .configDecodeFailed)
             XCTAssertEqual(error.failureDetails.phase, .setup)
         }
     }
@@ -289,7 +289,7 @@ final class TargetConfigTests: XCTestCase {
             }
             XCTAssertEqual(error.kind, .decodeFailed)
             XCTAssertEqual(error.path, configFile.path)
-            XCTAssertEqual(error.failureDetails.code.knownCode, .configDecodeFailed)
+            XCTAssertEqual(error.failureDetails.code, .configDecodeFailed)
         }
     }
 

@@ -184,7 +184,7 @@ final class PendingRequestRegistryTests: XCTestCase {
             return XCTFail("Expected protocol mismatch FenceError, got \(error)", file: file, line: line)
         }
 
-        XCTAssertEqual(failure.failureCode, FailureCode(.protocolMismatch), file: file, line: line)
+        XCTAssertEqual(failure.failureCode, .protocolMismatch, file: file, line: line)
         XCTAssertEqual(failure.phase, .protocolNegotiation, file: file, line: line)
         XCTAssertFalse(failure.retryable, file: file, line: line)
         XCTAssertEqual(failure.hint, KnownFailureCode.protocolMismatch.defaultHint, file: file, line: line)

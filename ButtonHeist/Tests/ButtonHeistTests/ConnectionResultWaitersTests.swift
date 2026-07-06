@@ -71,7 +71,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
     ) -> Task<Result<Void, Error>, Never> {
         Task { @ButtonHeistActor in
             await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Error>, Never>) in
-                let completion = OneShotContinuation<Result<Void, Error>>()
+                let completion = TimedOneShot<Result<Void, Error>>()
                 _ = completion.register(continuation)
                 waiters.register(
                     id: id,

@@ -43,7 +43,6 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
         switch self {
         case .connectionFailed(let message):
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: message,
                 code: .connectionFailed
@@ -52,7 +51,6 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             return reason.diagnostic
         case .timeout:
             return HandoffFailureDiagnostic(
-                operation: .connection,
                 target: nil,
                 cause: "Connection timed out",
                 code: .setupTimeout,
@@ -60,7 +58,6 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             )
         case .noDeviceFound:
             return HandoffFailureDiagnostic(
-                operation: .discovery,
                 target: nil,
                 cause: "No device found",
                 code: .discoveryNoDeviceFound,
@@ -68,7 +65,6 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             )
         case .noMatchingDevice(let filter, let available):
             return HandoffFailureDiagnostic(
-                operation: .resolution,
                 target: filter,
                 cause: "No matching device",
                 code: .discoveryNoMatchingDevice,
@@ -76,7 +72,6 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             )
         case .ambiguousDeviceTarget(let filter, let matches):
             return HandoffFailureDiagnostic(
-                operation: .resolution,
                 target: filter,
                 cause: "Ambiguous device target",
                 code: .discoveryAmbiguousDeviceTarget,
@@ -86,15 +81,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
     }
 }
 
-enum HandoffFailureOperation: String, Equatable, Sendable {
-    case discovery
-    case resolution
-    case connection
-    case transport
-}
-
 struct HandoffFailureDiagnostic: Equatable, Sendable {
-    let operation: HandoffFailureOperation
     let target: String?
     let cause: String
     let details: FailureDetails
@@ -106,14 +93,12 @@ struct HandoffFailureDiagnostic: Equatable, Sendable {
     var hint: String? { details.hint }
 
     init(
-        operation: HandoffFailureOperation,
         target: String?,
         cause: String,
         code: KnownFailureCode,
         hint: String?,
         candidates: [String] = []
     ) {
-        self.operation = operation
         self.target = target
         self.cause = cause
         self.details = FailureDetails(code: code, hint: hint)
@@ -121,14 +106,12 @@ struct HandoffFailureDiagnostic: Equatable, Sendable {
     }
 
     init(
-        operation: HandoffFailureOperation,
         target: String?,
         cause: String,
         code: KnownFailureCode,
         candidates: [String] = []
     ) {
         self.init(
-            operation: operation,
             target: target,
             cause: cause,
             code: code,
@@ -140,7 +123,7 @@ struct HandoffFailureDiagnostic: Equatable, Sendable {
 
 enum HandoffFailureFormatter {
     static func message(for diagnostic: HandoffFailureDiagnostic) -> String {
-        switch diagnostic.details.code.knownCode {
+        switch diagnostic.details.code {
         case .connectionFailed:
             return diagnostic.cause
         case .setupTimeout:

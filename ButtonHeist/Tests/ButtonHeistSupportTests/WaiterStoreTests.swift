@@ -3,7 +3,7 @@ import Testing
 
 @Suite struct WaiterStoreTests {
     @Test func `reserved waiter can be removed once`() {
-        var store = WaiterStore<Int>()
+        var store = WaiterStore<UInt64, Int>()
         let id = store.reserveID()
 
         store.insert(7, id: id)
@@ -15,7 +15,7 @@ import Testing
     }
 
     @Test func `remove all where leaves non matching waiters`() {
-        var store = WaiterStore<String>()
+        var store = WaiterStore<UInt64, String>()
         let keepID = store.insert("keep")
         let dropID = store.insert("drop")
 

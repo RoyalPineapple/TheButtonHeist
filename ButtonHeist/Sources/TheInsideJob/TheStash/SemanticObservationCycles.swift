@@ -96,7 +96,7 @@ final class SemanticObservationCycles {
 
     private var driver = StateDriver(initial: CyclePhase.idle(completed: 0, generation: 0), machine: CycleMachine())
     private var nextWaiterID: UInt64 = 0
-    private var waiters = AsyncWaiterRegistry<WaiterKey, Void>()
+    private var waiters = WaiterStore<WaiterKey, TimedOneShot<Void>>()
 
     private var phase: CyclePhase {
         driver.state

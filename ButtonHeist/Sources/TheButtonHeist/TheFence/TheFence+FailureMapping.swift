@@ -33,8 +33,6 @@ private extension ConnectionFailure {
         self.init(
             message: "Transport send failed: \(failure.description)",
             failureCode: details.code,
-            phase: details.phase,
-            retryable: details.retryable,
             hint: details.hint
         )
     }

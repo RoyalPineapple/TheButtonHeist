@@ -67,12 +67,7 @@ public extension FenceError {
             )
         case .connectionFailure(let failure):
             return FenceFailureDescriptor(
-                details: FailureDetails(
-                    code: failure.failureCode,
-                    phase: failure.phase,
-                    retryable: failure.retryable,
-                    hint: failure.hint
-                ),
+                details: FailureDetails(code: failure.failureCode, hint: failure.hint),
                 coreMessage: failure.message,
                 displayMessage: failure.message
             )
@@ -124,7 +119,7 @@ public extension FenceError {
         case .serverError(let serverError):
             let displayMessage = "Action failed: \(serverError.message)"
             return FenceFailureDescriptor(
-                details: serverError.failureDescriptor.details,
+                details: serverError.failureDetails,
                 coreMessage: displayMessage,
                 displayMessage: displayMessage
             )
@@ -168,9 +163,7 @@ private extension Array where Element == HeistBuildDiagnostic {
             return FailureDetails(code: .requestInvalid)
         }
         return FailureDetails(
-            code: FailureCode(.requestInvalid),
-            phase: .request,
-            retryable: false,
+            code: .requestInvalid,
             hint: primary.hint
         )
     }

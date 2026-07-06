@@ -17,37 +17,23 @@ package struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
     package static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")
     package static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")
     package static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")
-
-    fileprivate static let processProjectionKeys: [RuntimeKnobEnvironmentKey] = {
-        let canonicalKeys: [RuntimeKnobEnvironmentKey] = [
-            .postScrollLayoutFrames,
-            .tripwirePulseFramesPerSecond,
-            .maxScrollsPerContainer,
-            .maxScrollsPerDiscovery,
-            .scrollSubtreeElementBudget,
-            .totalNodeBudget,
-        ]
-        return canonicalKeys + canonicalKeys.map(\.testRunnerPrefixed)
-    }()
 }
 
 package struct RuntimeKnobEnvironment: Equatable, Sendable {
     package static let empty = RuntimeKnobEnvironment()
 
-    private let values: [RuntimeKnobEnvironmentKey: String]
+    private let values: [String: String]
 
     package init(values: [RuntimeKnobEnvironmentKey: String] = [:]) {
-        self.values = values
+        self.values = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
     }
 
     fileprivate init(rawValues: [String: String]) {
-        self.values = Dictionary(uniqueKeysWithValues: RuntimeKnobEnvironmentKey.processProjectionKeys.compactMap { key in
-            rawValues[key.rawValue].map { (key, $0) }
-        })
+        self.values = rawValues
     }
 
     fileprivate subscript(key: RuntimeKnobEnvironmentKey) -> String? {
-        values[key]
+        values[key.rawValue]
     }
 }
 
@@ -85,37 +71,37 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
     ) -> ButtonHeistRuntimeKnobs {
         ButtonHeistRuntimeKnobs(
             postScrollLayoutFrames: intOverride(
-                keys: [.postScrollLayoutFrames],
+                key: .postScrollLayoutFrames,
                 environment: environment,
                 defaultValue: defaultPostScrollLayoutFrames,
                 range: 0...10
             ),
             tripwirePulseFramesPerSecond: intOverride(
-                keys: [.tripwirePulseFramesPerSecond],
+                key: .tripwirePulseFramesPerSecond,
                 environment: environment,
                 defaultValue: defaultTripwirePulseFramesPerSecond,
                 range: 1...120
             ),
             maxScrollsPerContainer: intOverride(
-                keys: [.maxScrollsPerContainer],
+                key: .maxScrollsPerContainer,
                 environment: environment,
                 defaultValue: defaultMaxScrollsPerContainer,
                 range: 1...2_000
             ),
             maxScrollsPerDiscovery: intOverride(
-                keys: [.maxScrollsPerDiscovery],
+                key: .maxScrollsPerDiscovery,
                 environment: environment,
                 defaultValue: defaultMaxScrollsPerDiscovery,
                 range: 1...2_000
             ),
             visibleElementBudget: intOverride(
-                keys: [.scrollSubtreeElementBudget],
+                key: .scrollSubtreeElementBudget,
                 environment: environment,
                 defaultValue: defaultVisibleElementBudget,
                 range: 0...1_000
             ),
             totalNodeBudget: intOverride(
-                keys: [.totalNodeBudget],
+                key: .totalNodeBudget,
                 environment: environment,
                 defaultValue: defaultTotalNodeBudget,
                 range: 0...5_000
@@ -124,18 +110,16 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
     }
 
     private static func intOverride(
-        keys: [RuntimeKnobEnvironmentKey],
+        key: RuntimeKnobEnvironmentKey,
         environment: RuntimeKnobEnvironment,
         defaultValue: Int,
         range: ClosedRange<Int>
     ) -> Int {
-        for key in keys {
-            if let value = boundedInt(environment[key], range: range) {
-                return value
-            }
-            if let value = boundedInt(environment[key.testRunnerPrefixed], range: range) {
-                return value
-            }
+        if let value = boundedInt(environment[key], range: range) {
+            return value
+        }
+        if let value = boundedInt(environment[key.testRunnerPrefixed], range: range) {
+            return value
         }
         return defaultValue
     }

@@ -60,7 +60,7 @@ import Testing
 private actor WaiterHarness {
     static let cancelledValue = -1
 
-    private var waiters = AsyncWaiterRegistry<String, Int>()
+    private var waiters = WaiterStore<String, TimedOneShot<Int>>()
     private(set) var timeoutFireCount = 0
 
     var count: Int {

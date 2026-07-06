@@ -1,6 +1,6 @@
-package struct WaiterStore<Waiter> {
+package struct WaiterStore<Key: Hashable, Waiter> {
     private var nextID: UInt64 = 0
-    private var storage: [UInt64: Waiter] = [:]
+    private var storage: [Key: Waiter] = [:]
 
     package init() {}
 
@@ -12,25 +12,13 @@ package struct WaiterStore<Waiter> {
         storage.isEmpty
     }
 
-    package mutating func reserveID() -> UInt64 {
-        defer { nextID &+= 1 }
-        return nextID
+    package mutating func insert(_ waiter: Waiter, for key: Key) {
+        precondition(storage[key] == nil, "WaiterStore registered duplicate waiter key")
+        storage[key] = waiter
     }
 
-    @discardableResult
-    package mutating func insert(_ waiter: Waiter) -> UInt64 {
-        let id = reserveID()
-        insert(waiter, id: id)
-        return id
-    }
-
-    package mutating func insert(_ waiter: Waiter, id: UInt64) {
-        precondition(storage[id] == nil, "WaiterStore registered duplicate waiter id")
-        storage[id] = waiter
-    }
-
-    package mutating func remove(id: UInt64) -> Waiter? {
-        storage.removeValue(forKey: id)
+    package mutating func remove(_ key: Key) -> Waiter? {
+        storage.removeValue(forKey: key)
     }
 
     package mutating func removeAll() -> [Waiter] {
@@ -39,33 +27,64 @@ package struct WaiterStore<Waiter> {
         return waiters
     }
 
-    package mutating func removeAll(where shouldRemove: (Waiter) -> Bool) -> [Waiter] {
-        var removed: [Waiter] = []
-        for id in Array(storage.keys) {
-            guard let waiter = storage[id], shouldRemove(waiter) else { continue }
-            if let waiter = storage.removeValue(forKey: id) {
-                removed.append(waiter)
+    package mutating func removeAll(where shouldRemove: (Key, Waiter) -> Bool) -> [(key: Key, waiter: Waiter)] {
+        var removed: [(key: Key, waiter: Waiter)] = []
+        for key in Array(storage.keys) {
+            guard let waiter = storage[key], shouldRemove(key, waiter) else { continue }
+            if let waiter = storage.removeValue(forKey: key) {
+                removed.append((key, waiter))
             }
         }
         return removed
     }
 
-    package mutating func updateAll(_ update: (inout Waiter) -> Void) {
-        for id in Array(storage.keys) {
-            guard var waiter = storage[id] else { continue }
-            update(&waiter)
-            storage[id] = waiter
+    package mutating func updateAll(_ update: (Key, inout Waiter) -> Void) {
+        for key in Array(storage.keys) {
+            guard var waiter = storage[key] else { continue }
+            update(key, &waiter)
+            storage[key] = waiter
         }
     }
 }
 
-package func waiterTimeout(
-    after duration: Duration,
-    _ operation: @escaping @Sendable () async -> Void
-) -> Task<Void, Never> {
-    Task {
-        _ = try? await Task.sleep(for: duration)
-        guard !Task.isCancelled else { return }
-        await operation()
+package extension WaiterStore where Key == UInt64 {
+    mutating func reserveID() -> UInt64 {
+        defer { nextID &+= 1 }
+        return nextID
+    }
+
+    @discardableResult
+    mutating func insert(_ waiter: Waiter) -> UInt64 {
+        let id = reserveID()
+        insert(waiter, id: id)
+        return id
+    }
+
+    mutating func insert(_ waiter: Waiter, id: UInt64) {
+        insert(waiter, for: id)
+    }
+
+    mutating func remove(id: UInt64) -> Waiter? {
+        remove(id)
+    }
+
+    mutating func removeAll(where shouldRemove: (Waiter) -> Bool) -> [Waiter] {
+        removeAll { _, waiter in shouldRemove(waiter) }.map(\.waiter)
+    }
+
+    mutating func updateAll(_ update: (inout Waiter) -> Void) {
+        updateAll { _, waiter in update(&waiter) }
+    }
+}
+
+package extension WaiterStore {
+    @discardableResult
+    mutating func resolve<Value>(_ key: Key, returning value: Value) -> Bool where Waiter == TimedOneShot<Value> {
+        guard let waiter = remove(key) else { return false }
+        return waiter.resolve(returning: value)
+    }
+
+    mutating func removeAll<Value>(where shouldRemove: (Key) -> Bool) -> [(key: Key, waiter: TimedOneShot<Value>)] where Waiter == TimedOneShot<Value> {
+        removeAll { key, _ in shouldRemove(key) }
     }
 }

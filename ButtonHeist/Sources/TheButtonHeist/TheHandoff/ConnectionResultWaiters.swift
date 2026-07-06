@@ -11,25 +11,25 @@ enum HandoffConnectionAttemptResult: Equatable {
 final class ConnectionResultWaiters {
     private struct Waiter {
         let attemptID: UUID
-        let completion: OneShotContinuation<Result<Void, Error>>
+        let completion: TimedOneShot<Result<Void, Error>>
 
         func resolve(with result: HandoffConnectionAttemptResult) {
             switch result {
             case .connected:
-                completion.resume(returning: .success(()))
+                completion.resolve(returning: .success(()))
             case .failed(let failure):
-                completion.resume(returning: .failure(failure))
+                completion.resolve(returning: .failure(failure))
             }
         }
 
         func cancel() {
-            completion.resume(returning: .failure(CancellationError()))
+            completion.resolve(returning: .failure(CancellationError()))
         }
     }
 
     private var waiters: [UUID: Waiter] = [:]
 
-    func register(id: UUID, attemptID: UUID, completion: OneShotContinuation<Result<Void, Error>>) {
+    func register(id: UUID, attemptID: UUID, completion: TimedOneShot<Result<Void, Error>>) {
         assert(waiters[id] == nil, "ConnectionResultWaiters registered duplicate waiter id")
         waiters[id] = Waiter(attemptID: attemptID, completion: completion)
     }

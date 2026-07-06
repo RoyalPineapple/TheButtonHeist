@@ -31,7 +31,11 @@ final class InterfaceGraphTests: XCTestCase {
             "Third",
             "Second",
         ])
-        XCTAssertEqual(graph.containersInPathOrder.map(\.path), [
+        let containerPaths = graph.nodesInPathOrder.compactMap { record -> TreePath? in
+            guard case .container = record.kind else { return nil }
+            return record.path
+        }
+        XCTAssertEqual(containerPaths, [
             TreePath([0]),
             TreePath([0, 1]),
         ])
@@ -83,9 +87,11 @@ final class InterfaceGraphTests: XCTestCase {
             ])
         )
 
-        XCTAssertEqual(graph.element(at: savePath)?.annotation?.actions, [.activate])
-        XCTAssertEqual(graph.element(at: savePath)?.traceIdentity, saveIdentity)
-        XCTAssertEqual(graph.element(at: cancelPath)?.traceIdentity, cancelIdentity)
+        let saveRecord = graph.elementsInTraversalOrder.first { $0.path == savePath }
+        let cancelRecord = graph.elementsInTraversalOrder.first { $0.path == cancelPath }
+        XCTAssertEqual(saveRecord?.annotation?.actions, [.activate])
+        XCTAssertEqual(saveRecord?.traceIdentity, saveIdentity)
+        XCTAssertEqual(cancelRecord?.traceIdentity, cancelIdentity)
     }
 
     func testTraceIdentityPathWithoutElementRejected() {

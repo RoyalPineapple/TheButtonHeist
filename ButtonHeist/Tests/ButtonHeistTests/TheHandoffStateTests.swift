@@ -1659,7 +1659,7 @@ final class TheHandoffStateTests: XCTestCase {
                 return XCTFail("Expected .disconnected, got \(error)")
             }
             XCTAssertEqual(reason, .missingToken)
-            XCTAssertEqual(error.diagnostic.details.code.knownCode, .tlsMissingToken)
+            XCTAssertEqual(error.diagnostic.details.code, .tlsMissingToken)
             XCTAssertEqual(error.failureCode, KnownFailureCode.tlsMissingToken.rawValue)
             XCTAssertEqual(error.phase, .tls)
             XCTAssertFalse(error.retryable)
