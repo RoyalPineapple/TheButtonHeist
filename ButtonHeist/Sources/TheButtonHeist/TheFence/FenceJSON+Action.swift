@@ -388,11 +388,13 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
 
 struct PublicHeistReport: Encodable {
     let summary: PublicHeistReportSummary
+    let metrics: HeistExecutionMetricProjection
     let nodes: [PublicHeistReportNode]
     let netDelta: PublicHeistDelta?
 
     init(projection: HeistReportProjection) {
         self.summary = PublicHeistReportSummary(projection: projection.summary)
+        self.metrics = projection.metrics
         self.nodes = projection.nodes.map { PublicHeistReportNode(projection: $0) }
         self.netDelta = projection.netDelta.map { PublicHeistDelta(projection: $0) }
     }

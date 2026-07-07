@@ -21,14 +21,6 @@ from typing import Any
 
 
 BUNDLE_ID = "com.buttonheist.testapp"
-ACTION_TIMING_BUCKETS = [
-    "targetResolutionMs",
-    "actionDispatchMs",
-    "settleMs",
-    "beforeObservationMs",
-    "finalSemanticEvidenceMs",
-    "totalMs",
-]
 CEILING_HIT_TOLERANCE_MS = 25
 
 
@@ -101,50 +93,6 @@ def add_sample(samples: dict[str, list[int]], bucket: str, value: int | None) ->
         samples.setdefault(bucket, []).append(value)
 
 
-def value_at(value: Any, path: tuple[str, ...]) -> Any:
-    current = value
-    for key in path:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-    return current
-
-
-def dict_at(value: Any, path: tuple[str, ...]) -> dict[str, Any] | None:
-    result = value_at(value, path)
-    return result if isinstance(result, dict) else None
-
-
-def first_dict_at(value: Any, paths: tuple[tuple[str, ...], ...]) -> dict[str, Any] | None:
-    for path in paths:
-        result = dict_at(value, path)
-        if result is not None:
-            return result
-    return None
-
-
-def add_action_result_timing(
-    samples: dict[str, list[int]],
-    result: Any,
-    *,
-    expectation_wait: bool = False,
-    force_wait_pipeline: bool = False,
-) -> None:
-    if not isinstance(result, dict):
-        return
-    timing = result.get("timing")
-    if not isinstance(timing, dict):
-        return
-
-    method = result.get("method")
-    prefix = "waitPipeline" if force_wait_pipeline or method == "wait" else "actionPipeline"
-    for bucket in ACTION_TIMING_BUCKETS:
-        add_sample(samples, f"{prefix}.{bucket}", ms(timing.get(bucket)))
-
-    if expectation_wait:
-        add_sample(samples, "expectationWaitMs", ms(timing.get("totalMs")))
-
-
 def merge_receipt_timing_samples(target: dict[str, list[int]], source: dict[str, list[int]]) -> None:
     for bucket, values in source.items():
         target.setdefault(bucket, []).extend(values)
@@ -154,80 +102,34 @@ def summarize_receipt_timing(samples: dict[str, list[int]]) -> dict[str, dict[st
     return {bucket: sample_stats(values) for bucket, values in sorted(samples.items()) if values}
 
 
-def report_nodes(response: Any) -> list[dict[str, Any]]:
+def report_metrics_object(response: Any) -> dict[str, Any] | None:
     if not isinstance(response, dict):
-        return []
+        return None
     report = response.get("report")
     if not isinstance(report, dict):
-        return []
-    nodes = report.get("nodes")
-    return nodes if isinstance(nodes, list) else []
+        return None
+    metrics = report.get("metrics")
+    return metrics if isinstance(metrics, dict) else None
 
 
-def walk_nodes(nodes: list[Any]) -> list[dict[str, Any]]:
-    visited: list[dict[str, Any]] = []
-    stack = list(reversed(nodes))
-    while stack:
-        node = stack.pop()
-        if not isinstance(node, dict):
-            continue
-        visited.append(node)
-        children = node.get("children")
-        if isinstance(children, list):
-            stack.extend(reversed(children))
-    return visited
-
-
-def collect_evidence_timing(samples: dict[str, list[int]], evidence: Any) -> None:
-    if not isinstance(evidence, dict):
+def add_receipt_metric_samples(samples: dict[str, list[int]], metrics: dict[str, Any]) -> None:
+    sample_rows = metrics.get("samples")
+    if not isinstance(sample_rows, list):
         return
-
-    result_paths = [
-        ((("action", "result"),), False, False),
-        ((("action", "expectationResult"),), True, True),
-        ((("wait", "result"),), False, True),
-        ((("repeatUntil", "result"),), False, True),
-        ((("invocation", "expectationEvidence", "result"), ("invocation", "expectationResult")), True, True),
-    ]
-    for paths, expectation_wait, force_wait_pipeline in result_paths:
-        add_action_result_timing(
-            samples,
-            first_dict_at(evidence, paths),
-            expectation_wait=expectation_wait,
-            force_wait_pipeline=force_wait_pipeline,
-        )
-
-
-def intent_payload(intent: Any, name: str) -> dict[str, Any] | None:
-    if not isinstance(intent, dict):
-        return None
-    value = intent.get(name)
-    if isinstance(value, dict):
-        return value
-    if intent.get("type") == name or intent.get("kind") == name:
-        return intent
-    return None
-
-
-def timing_total_ms(result: Any) -> int | None:
-    if not isinstance(result, dict):
-        return None
-    timing = result.get("timing")
-    if not isinstance(timing, dict):
-        return None
-    return ms(timing.get("totalMs"))
-
-
-def first_present_ms(*values: int | None) -> int | None:
-    for value in values:
-        if value is not None:
-            return value
-    return None
+    for row in sample_rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        add_sample(samples, name, ms(row.get("valueMs")))
 
 
 def ceiling_hit(
     *,
-    node: dict[str, Any],
+    path: Any,
+    kind: Any,
+    status: Any,
     source: str,
     budget_ms: int | None,
     elapsed_ms: int | None,
@@ -238,63 +140,47 @@ def ceiling_hit(
     if elapsed_ms < threshold_ms:
         return None
     return {
-        "path": node.get("path"),
-        "kind": node.get("kind"),
-        "status": node.get("status"),
+        "path": path,
+        "kind": kind,
+        "status": status,
         "source": source,
         "budgetMs": budget_ms,
         "elapsedMs": elapsed_ms,
     }
 
 
-def node_ceiling_hits(node: dict[str, Any]) -> list[dict[str, Any]]:
-    evidence = node.get("evidence") if isinstance(node.get("evidence"), dict) else {}
-    intent = node.get("intent")
-    wait_intent = intent_payload(intent, "wait")
-    repeat_intent = intent_payload(intent, "repeatUntil")
-
-    checks = [
-        (
-            "intent.wait.timeout",
-            ms(value_at(wait_intent, ("timeout",)), scale=1000),
-            first_present_ms(timing_total_ms(dict_at(evidence, ("wait", "result"))), ms(node.get("durationMs"))),
-        ),
-        (
-            "repeatUntil.timeout",
-            first_present_ms(
-                ms(value_at(evidence, ("repeatUntil", "timeout")), scale=1000),
-                ms(value_at(repeat_intent, ("timeout",)), scale=1000),
-            ),
-            ms(node.get("durationMs")),
-        ),
-        (
-            "caseSelection.timeout",
-            ms(value_at(evidence, ("caseSelection", "timeout")), scale=1000),
-            first_present_ms(ms(value_at(evidence, ("caseSelection", "elapsedMs"))), ms(node.get("durationMs"))),
-        ),
-    ]
-    return [
-        hit
-        for source, budget_ms, elapsed_ms in checks
-        if (hit := ceiling_hit(node=node, source=source, budget_ms=budget_ms, elapsed_ms=elapsed_ms)) is not None
-    ]
+def receipt_ceiling_hits(metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    ceiling_rows = metrics.get("ceilings")
+    if not isinstance(ceiling_rows, list):
+        return []
+    hits: list[dict[str, Any]] = []
+    for row in ceiling_rows:
+        if not isinstance(row, dict):
+            continue
+        source = row.get("source")
+        if not isinstance(source, str) or not source:
+            continue
+        hit = ceiling_hit(
+            path=row.get("path"),
+            kind=row.get("kind"),
+            status=row.get("status"),
+            source=source,
+            budget_ms=ms(row.get("budgetMs")),
+            elapsed_ms=ms(row.get("elapsedMs")),
+        )
+        if hit is not None:
+            hits.append(hit)
+    return hits
 
 
 def receipt_metrics(response: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     samples = empty_receipt_timing_samples()
     ceiling_hits: list[dict[str, Any]] = []
-    if not isinstance(response, dict):
+    metrics = report_metrics_object(response)
+    if metrics is None:
         return samples, ceiling_hits
-
-    report = response.get("report")
-    if isinstance(report, dict):
-        summary = report.get("summary")
-        if isinstance(summary, dict):
-            add_sample(samples, "heistDurationMs", ms(summary.get("durationMs")))
-
-    for node in walk_nodes(report_nodes(response)):
-        collect_evidence_timing(samples, node.get("evidence"))
-        ceiling_hits.extend(node_ceiling_hits(node))
+    add_receipt_metric_samples(samples, metrics)
+    ceiling_hits.extend(receipt_ceiling_hits(metrics))
     return samples, ceiling_hits
 
 
@@ -708,7 +594,7 @@ def main() -> int:
                     failures.append({
                         "iteration": iteration,
                         "returncode": result.returncode,
-                        "durationMs": duration_ms,
+                        "cliWallDurationMs": duration_ms,
                         "receiptTimingMs": summarize_receipt_timing(iteration_timing),
                         "ceilingHits": iteration_hits,
                         "response": parsed,
@@ -721,7 +607,7 @@ def main() -> int:
                 "attempted": len(durations),
                 "passed": len(durations) - len(failures),
                 "failed": len(failures),
-                "durationMs": stats(durations),
+                "cliWallDurationMs": stats(durations),
                 "receiptTimingMs": summarize_receipt_timing(timing_samples),
                 "unexpectedCeilingHits": ceiling_hits,
                 "failures": failures,
@@ -740,7 +626,7 @@ def main() -> int:
                 "passed": matched,
                 "expectedText": expected_text,
                 "returncode": result.returncode,
-                "durationMs": duration_ms,
+                "cliWallDurationMs": duration_ms,
                 "receiptTimingMs": summarize_receipt_timing(timing_samples),
                 "ceilingHits": ceiling_hits,
                 "response": parsed,

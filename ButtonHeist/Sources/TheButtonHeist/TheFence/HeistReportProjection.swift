@@ -52,6 +52,7 @@ struct HeistExpectationsProjection: Sendable {
 struct HeistReportProjection: Sendable {
     let status: PublicResponseStatus
     let summary: HeistReportSummaryProjection
+    let metrics: HeistExecutionMetricProjection
     let nodes: [HeistReportNodeProjection]
     let outputNodes: [HeistReportNodeProjection]
     let failedStepPath: String?
@@ -82,6 +83,7 @@ struct HeistReportProjection: Sendable {
         nodes = rollup.rootNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
         outputNodes = rollup.outputNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
         summary = HeistReportSummaryProjection(summary: reportSummary)
+        metrics = HeistExecutionMetricProjection(rollup: rollup)
         failedStepPath = reportSummary.abortedAtPath
         failureScreenshotSummary = result.failureScreenshotSummary
         failureInterfaceDump = result.failureInterfaceDump(

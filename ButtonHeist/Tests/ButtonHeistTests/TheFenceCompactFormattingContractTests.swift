@@ -7,6 +7,22 @@ import TheScore
 
 final class TheFenceCompactFormattingContractTests: XCTestCase {
 
+    private struct MetricSampleExpectation: Equatable {
+        let name: String
+        let valueMs: Int
+        let path: String?
+
+        init(name: String, valueMs: Int, path: String?) {
+            self.name = name
+            self.valueMs = valueMs
+            self.path = path
+        }
+
+        init(sample: PublicHeistReportMetricSampleDTO) {
+            self.init(name: sample.name, valueMs: sample.valueMs, path: sample.path)
+        }
+    }
+
     func testCompactActionRenderingUsesParsedCommandNames() {
         let cases: [(command: TheFence.Command, method: ActionMethod, expected: String)] = [
             (.typeText, .typeText, "type_text: ok"),
@@ -689,6 +705,47 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.compactFormatted().contains("[expectations: 1/1]"))
         XCTAssertTrue(response.humanFormatted().contains("Heist: 2 top-level step(s) executed in 5ms"))
         XCTAssertTrue(response.humanFormatted().contains("[expectations: 1/1 met]"))
+    }
+
+    func testPublicHeistJSONIncludesScoreMetricProjection() throws {
+        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Submit"))))
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(command: command, expectationPolicy: .expect(ActionExpectation(
+                predicate: expected,
+                timeout: 1
+            )))),
+        ])
+        let result = HeistExecutionResult(
+            steps: [
+                actionReceiptStep(
+                    command: command,
+                    result: ActionResult.success(
+                        method: .activate,
+                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
+                    ),
+                    expectationActionResult: ActionResult.success(
+                        method: .wait,
+                        timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                    ),
+                    expectation: ExpectationResult(met: true, predicate: expected)
+                ),
+            ],
+            durationMs: 12
+        )
+
+        let metrics = try publicHeistReportResponseDTO(
+            FenceResponse.heistExecution(plan: plan, result: result)
+        ).report.metrics
+
+        XCTAssertEqual(metrics.samples.map(MetricSampleExpectation.init(sample:)), [
+            MetricSampleExpectation(name: "heistDurationMs", valueMs: 12, path: nil),
+            MetricSampleExpectation(name: "actionPipeline.targetResolutionMs", valueMs: 1, path: "$.body[0]"),
+            MetricSampleExpectation(name: "actionPipeline.totalMs", valueMs: 5, path: "$.body[0]"),
+            MetricSampleExpectation(name: "waitPipeline.settleMs", valueMs: 7, path: "$.body[0]"),
+            MetricSampleExpectation(name: "waitPipeline.totalMs", valueMs: 9, path: "$.body[0]"),
+            MetricSampleExpectation(name: "expectationWaitMs", valueMs: 9, path: "$.body[0]"),
+        ])
     }
 
     func testExplicitSingleActionHeistKeepsReportShapeAcrossPublicFormats() throws {

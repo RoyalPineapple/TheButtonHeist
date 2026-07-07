@@ -298,6 +298,212 @@ package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
     }
 }
 
+package struct HeistExecutionMetricProjection: Codable, Sendable, Equatable {
+    package let samples: [HeistExecutionMetricSample]
+    package let ceilings: [HeistExecutionCeilingMetric]
+
+    package init(result: HeistExecutionResult) {
+        self.init(rollup: HeistExecutionEvidenceRollup(result: result))
+    }
+
+    package init(rollup: HeistExecutionEvidenceRollup) {
+        var builder = HeistExecutionMetricProjectionBuilder()
+        builder.append(.heistDurationMs, valueMs: rollup.summary.durationMs)
+        for node in rollup.nodes {
+            builder.appendMetrics(for: node)
+        }
+        samples = builder.samples
+        ceilings = builder.ceilings
+    }
+}
+
+package enum HeistExecutionMetricName: String, Codable, Sendable, Equatable, CaseIterable {
+    case heistDurationMs
+    case actionPipelineTargetResolutionMs = "actionPipeline.targetResolutionMs"
+    case actionPipelineActionDispatchMs = "actionPipeline.actionDispatchMs"
+    case actionPipelineSettleMs = "actionPipeline.settleMs"
+    case actionPipelineBeforeObservationMs = "actionPipeline.beforeObservationMs"
+    case actionPipelineFinalSemanticEvidenceMs = "actionPipeline.finalSemanticEvidenceMs"
+    case actionPipelineTotalMs = "actionPipeline.totalMs"
+    case waitPipelineTargetResolutionMs = "waitPipeline.targetResolutionMs"
+    case waitPipelineActionDispatchMs = "waitPipeline.actionDispatchMs"
+    case waitPipelineSettleMs = "waitPipeline.settleMs"
+    case waitPipelineBeforeObservationMs = "waitPipeline.beforeObservationMs"
+    case waitPipelineFinalSemanticEvidenceMs = "waitPipeline.finalSemanticEvidenceMs"
+    case waitPipelineTotalMs = "waitPipeline.totalMs"
+    case expectationWaitMs
+}
+
+package struct HeistExecutionMetricSample: Codable, Sendable, Equatable {
+    package let name: HeistExecutionMetricName
+    package let valueMs: Int
+    package let path: String?
+    package let kind: String?
+    package let status: HeistExecutionStepStatus?
+
+    package init(
+        name: HeistExecutionMetricName,
+        valueMs: Int,
+        path: String? = nil,
+        kind: String? = nil,
+        status: HeistExecutionStepStatus? = nil
+    ) {
+        self.name = name
+        self.valueMs = valueMs
+        self.path = path
+        self.kind = kind
+        self.status = status
+    }
+}
+
+package enum HeistExecutionCeilingMetricSource: String, Codable, Sendable, Equatable, CaseIterable {
+    case intentWaitTimeout = "intent.wait.timeout"
+    case repeatUntilTimeout = "repeatUntil.timeout"
+    case caseSelectionTimeout = "caseSelection.timeout"
+}
+
+package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
+    package let source: HeistExecutionCeilingMetricSource
+    package let budgetMs: Int
+    package let elapsedMs: Int
+    package let path: String
+    package let kind: String
+    package let status: HeistExecutionStepStatus
+
+    package init(
+        source: HeistExecutionCeilingMetricSource,
+        budgetMs: Int,
+        elapsedMs: Int,
+        path: String,
+        kind: String,
+        status: HeistExecutionStepStatus
+    ) {
+        self.source = source
+        self.budgetMs = budgetMs
+        self.elapsedMs = elapsedMs
+        self.path = path
+        self.kind = kind
+        self.status = status
+    }
+}
+
+private struct HeistExecutionMetricProjectionBuilder {
+    var samples: [HeistExecutionMetricSample] = []
+    var ceilings: [HeistExecutionCeilingMetric] = []
+
+    mutating func appendMetrics(for node: HeistExecutionEvidenceNode) {
+        appendTimingMetrics(for: node)
+        appendCeilingMetrics(for: node)
+    }
+
+    mutating func append(
+        _ name: HeistExecutionMetricName,
+        valueMs: Int?,
+        node: HeistExecutionEvidenceNode? = nil
+    ) {
+        guard let valueMs else { return }
+        samples.append(HeistExecutionMetricSample(
+            name: name,
+            valueMs: max(0, valueMs),
+            path: node?.reportFacts.path,
+            kind: node?.reportFacts.kind,
+            status: node?.reportFacts.status
+        ))
+    }
+
+    private mutating func appendTimingMetrics(for node: HeistExecutionEvidenceNode) {
+        switch node.step.evidence {
+        case .action(let evidence):
+            appendActionTiming(evidence.dispatchResult?.timing, node: node)
+            if let expectationResult = evidence.expectationResult {
+                appendWaitTiming(expectationResult.timing, node: node)
+                append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
+            }
+        case .wait(let evidence):
+            appendWaitTiming(evidence.actionResult.timing, node: node)
+        case .repeatUntil(let evidence):
+            appendWaitTiming(evidence.actionResult?.timing, node: node)
+        case .invocation(let evidence):
+            let expectationResult = evidence.expectationEvidence?.actionResult ?? evidence.expectationActionResult
+            appendWaitTiming(expectationResult?.timing, node: node)
+            append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
+        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
+            break
+        }
+    }
+
+    private mutating func appendActionTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
+        guard let timing else { return }
+        append(.actionPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
+        append(.actionPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
+        append(.actionPipelineSettleMs, valueMs: timing.settleMs, node: node)
+        append(.actionPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
+        append(.actionPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
+        append(.actionPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    }
+
+    private mutating func appendWaitTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
+        guard let timing else { return }
+        append(.waitPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
+        append(.waitPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
+        append(.waitPipelineSettleMs, valueMs: timing.settleMs, node: node)
+        append(.waitPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
+        append(.waitPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
+        append(.waitPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    }
+
+    private mutating func appendCeilingMetrics(for node: HeistExecutionEvidenceNode) {
+        switch node.step.evidence {
+        case .wait(let evidence):
+            guard case .wait(_, let timeout) = node.step.intent else { return }
+            appendCeiling(
+                .intentWaitTimeout,
+                budgetMs: Self.milliseconds(seconds: timeout),
+                elapsedMs: evidence.actionResult.timing?.totalMs ?? node.step.durationMs,
+                node: node
+            )
+        case .repeatUntil(let evidence):
+            appendCeiling(
+                .repeatUntilTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.timeout),
+                elapsedMs: node.step.durationMs,
+                node: node
+            )
+        case .caseSelection(let evidence):
+            appendCeiling(
+                .caseSelectionTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.selection.timeout),
+                elapsedMs: evidence.selection.elapsedMs,
+                node: node
+            )
+        case .action, .forEachString, .forEachElement, .invocation, .warning, .none:
+            break
+        }
+    }
+
+    private mutating func appendCeiling(
+        _ source: HeistExecutionCeilingMetricSource,
+        budgetMs: Int?,
+        elapsedMs: Int,
+        node: HeistExecutionEvidenceNode
+    ) {
+        guard let budgetMs else { return }
+        ceilings.append(HeistExecutionCeilingMetric(
+            source: source,
+            budgetMs: budgetMs,
+            elapsedMs: max(0, elapsedMs),
+            path: node.reportFacts.path,
+            kind: node.reportFacts.kind,
+            status: node.reportFacts.status
+        ))
+    }
+
+    private static func milliseconds(seconds: Double?) -> Int? {
+        guard let seconds, seconds.isFinite else { return nil }
+        return max(0, Int((seconds * 1_000).rounded()))
+    }
+}
+
 package enum HeistExecutionStepReportDetail: Sendable, Equatable {
     case action(HeistActionEvidence)
     case wait(HeistWaitEvidence)
