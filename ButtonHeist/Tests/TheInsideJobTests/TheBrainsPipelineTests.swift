@@ -806,6 +806,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(brains.stash.latestSettledSemanticObservationEvent?.sequence, settledSequence)
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
         XCTAssertEqual(brains.stash.settledSemanticScreen.orderedElements.first?.element.label, "Save")
+        XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
+        XCTAssertEqual(result.accessibilityTrace?.captures.first?.interface.projectedElements.first?.label, "Save")
     }
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
@@ -825,6 +827,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .actionFailed)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 300)
+        XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
+        XCTAssertEqual(result.accessibilityTrace?.captures.first?.interface.projectedElements.first?.label, "Save")
     }
 
     // MARK: - Wait Evidence Path

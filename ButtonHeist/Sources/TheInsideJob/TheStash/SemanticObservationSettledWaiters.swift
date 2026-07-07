@@ -64,8 +64,8 @@ final class SemanticObservationSettledWaiters {
             guard let event = eventsByFulfilledScope[key.scope] else { return false }
             return event.sequence > (key.afterSequence ?? 0)
         }
-        for (key, waiter) in completed {
-            waiter.resolve(returning: eventsByFulfilledScope[key.scope])
+        for removal in completed {
+            removal.waiter.resolve(returning: eventsByFulfilledScope[removal.key.scope])
         }
     }
 

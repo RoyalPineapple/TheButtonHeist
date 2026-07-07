@@ -331,6 +331,7 @@ extension TheFence.CommandArgumentEnvelope {
                 expected: "StringMatch object with mode and optional value"
             )
         }
+        try TheFence.validateStringMatchObject(value, field: field(key))
 
         return try decodePayload(value, forKey: key, as: StringMatch<String>.self)
     }
@@ -341,16 +342,8 @@ extension TheFence.CommandArgumentEnvelope {
         case .object:
             guard let match = try schemaStringMatch(key) else { return [] }
             return [match]
-        case .array(let values):
-            for (index, value) in values.enumerated() {
-                guard case .object = value else {
-                    throw SchemaValidationError(
-                        field: "\(field(key))[\(index)]",
-                        observed: value.schemaObservedDescription,
-                        expected: "StringMatch object with mode and optional value"
-                    )
-                }
-            }
+        case .array:
+            try TheFence.validateStringMatchArray(value, field: field(key))
             return try decodePayload(value, forKey: key, as: [StringMatch<String>].self)
         default:
             throw SchemaValidationError(

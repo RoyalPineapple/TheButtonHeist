@@ -307,6 +307,22 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     ])
 }
 
+@Test func `describe expected effects dedupes typed predicates before projection`() throws {
+    let description = try HeistPlan(
+        name: "submit",
+        body: [
+            .action(try ActionStep(
+                command: .activate(.predicate(.label("Submit"))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
+            .wait(WaitStep(predicate: .exists(.label("Done")), timeout: 2)),
+        ]
+    ).describeHeist(named: "submit")
+
+    #expect(description.semanticSurface.expectations == [#"exists(predicate(label="Done"))"#])
+    #expect(description.semanticSurface.waits == [#"exists(predicate(label="Done"))"#])
+    #expect(description.semanticSurface.expectedEffects == [#"exists(predicate(label="Done"))"#])
+}
+
 @Test func `describe missing name reports available names`() throws {
     let plan = try HeistPlan(
         name: "root",

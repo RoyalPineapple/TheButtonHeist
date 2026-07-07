@@ -1,3 +1,15 @@
+package struct WaiterStoreRemoval<Key: Hashable, Waiter> {
+    package let key: Key
+    package let waiter: Waiter
+
+    package init(key: Key, waiter: Waiter) {
+        self.key = key
+        self.waiter = waiter
+    }
+}
+
+extension WaiterStoreRemoval: Equatable where Key: Equatable, Waiter: Equatable {}
+
 package struct WaiterStore<Key: Hashable, Waiter> {
     private var nextID: UInt64 = 0
     private var storage: [Key: Waiter] = [:]
@@ -27,12 +39,12 @@ package struct WaiterStore<Key: Hashable, Waiter> {
         return waiters
     }
 
-    package mutating func removeAll(where shouldRemove: (Key, Waiter) -> Bool) -> [(key: Key, waiter: Waiter)] {
-        var removed: [(key: Key, waiter: Waiter)] = []
+    package mutating func removeAll(where shouldRemove: (Key, Waiter) -> Bool) -> [WaiterStoreRemoval<Key, Waiter>] {
+        var removed: [WaiterStoreRemoval<Key, Waiter>] = []
         for key in Array(storage.keys) {
             guard let waiter = storage[key], shouldRemove(key, waiter) else { continue }
             if let waiter = storage.removeValue(forKey: key) {
-                removed.append((key, waiter))
+                removed.append(WaiterStoreRemoval(key: key, waiter: waiter))
             }
         }
         return removed
@@ -84,7 +96,7 @@ package extension WaiterStore {
         return waiter.resolve(returning: value)
     }
 
-    mutating func removeAll<Value>(where shouldRemove: (Key) -> Bool) -> [(key: Key, waiter: TimedOneShot<Value>)] where Waiter == TimedOneShot<Value> {
+    mutating func removeAll<Value>(where shouldRemove: (Key) -> Bool) -> [WaiterStoreRemoval<Key, TimedOneShot<Value>>] where Waiter == TimedOneShot<Value> {
         removeAll { key, _ in shouldRemove(key) }
     }
 }

@@ -383,15 +383,31 @@ struct ResolvedCatalogHeist {
 
 private struct HeistCollectedSemanticSurface {
     let actionCommands: [HeistActionCommandType]
-    let targetPredicates: [String]
-    let waits: [String]
-    let expectations: [String]
+    let targetPredicates: [HeistTargetPredicateFact]
+    let waits: [AccessibilityPredicateExpr]
+    let expectations: [AccessibilityPredicateExpr]
     let nestedRunHeists: [String]
-    let expectedEffects: [String]
+    let expectedEffects: [AccessibilityPredicateExpr]
     let semanticFacets: [HeistSemanticSurfaceFacet]
 
     var catalogActionCommands: [String] {
         actionCommands.map(\.rawValue)
+    }
+
+    var catalogTargetPredicates: [String] {
+        targetPredicates.map(\.catalogValue)
+    }
+
+    var catalogWaits: [String] {
+        waits.map(\.description)
+    }
+
+    var catalogExpectations: [String] {
+        expectations.map(\.description)
+    }
+
+    var catalogExpectedEffects: [String] {
+        expectedEffects.map(\.description)
     }
 
     var catalogSemanticSurfaces: [String] {
@@ -401,13 +417,30 @@ private struct HeistCollectedSemanticSurface {
     var projectedSurface: HeistSemanticSurface {
         HeistSemanticSurface(
             actionCommands: catalogActionCommands,
-            targetPredicates: targetPredicates,
-            waits: waits,
-            expectations: expectations,
+            targetPredicates: catalogTargetPredicates,
+            waits: catalogWaits,
+            expectations: catalogExpectations,
             nestedRunHeists: nestedRunHeists,
-            expectedEffects: expectedEffects,
+            expectedEffects: catalogExpectedEffects,
             semanticSurfaces: catalogSemanticSurfaces
         )
+    }
+}
+
+private enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
+    case predicate(ElementPredicate)
+    case template(ElementPredicateTemplate)
+    case targetReference(HeistReferenceName)
+
+    var catalogValue: String {
+        switch self {
+        case .predicate(let predicate):
+            return predicate.description
+        case .template(let predicate):
+            return predicate.description
+        case .targetReference(let reference):
+            return "target_ref(\(reference))"
+        }
     }
 }
 
@@ -551,11 +584,11 @@ private extension ElementAction {
 
 private struct HeistSemanticSurfaceBuilder {
     var actionCommands: [HeistActionCommandType] = []
-    var targetPredicates: [String] = []
-    var waits: [String] = []
-    var expectations: [String] = []
+    var targetPredicates: [HeistTargetPredicateFact] = []
+    var waits: [AccessibilityPredicateExpr] = []
+    var expectations: [AccessibilityPredicateExpr] = []
     var nestedRunHeists: [String] = []
-    var expectedEffects: [String] = []
+    var expectedEffects: [AccessibilityPredicateExpr] = []
     var semanticFacets: [HeistSemanticSurfaceFacet] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistCollectedSemanticSurface {
@@ -745,16 +778,14 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func collectWait(_ predicate: AccessibilityPredicateExpr) {
-        let description = predicate.description
-        appendUnique(description, to: &waits)
-        appendUnique(description, to: &expectedEffects)
+        appendUnique(predicate, to: &waits)
+        appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
     }
 
     mutating func collectExpectation(_ predicate: AccessibilityPredicateExpr) {
-        let description = predicate.description
-        appendUnique(description, to: &expectations)
-        appendUnique(description, to: &expectedEffects)
+        appendUnique(predicate, to: &expectations)
+        appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
     }
 
@@ -763,10 +794,10 @@ private struct HeistSemanticSurfaceBuilder {
         case .target(let target):
             appendTargetPredicate(target)
         case .predicate(let predicate, _):
-            appendUnique(predicate.description, to: &targetPredicates)
+            appendUnique(.template(predicate), to: &targetPredicates)
             appendSemanticSurfaces(predicate)
         case .ref(let reference):
-            appendUnique("target_ref(\(reference))", to: &targetPredicates)
+            appendUnique(.targetReference(reference), to: &targetPredicates)
         }
     }
 
@@ -787,7 +818,7 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendTargetPredicate(_ predicate: ElementPredicate) {
-        appendUnique(predicate.description, to: &targetPredicates)
+        appendUnique(.predicate(predicate), to: &targetPredicates)
         appendSemanticSurfaces(predicate)
     }
 
@@ -897,7 +928,7 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func appendPredicateTargets(_ state: StatePredicateExpr) {
         switch state {
         case .exists(let predicate), .missing(let predicate):
-            appendUnique(predicate.description, to: &targetPredicates)
+            appendUnique(.template(predicate), to: &targetPredicates)
             appendSemanticSurfaces(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
@@ -994,11 +1025,11 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicateExpr) {
         switch predicate {
         case .appearedElement(let element), .disappearedElement(let element):
-            appendUnique(element.description, to: &targetPredicates)
+            appendUnique(.template(element), to: &targetPredicates)
             appendSemanticSurfaces(element)
         case .updatedElement(let update):
             if let element = update.element {
-                appendUnique(element.description, to: &targetPredicates)
+                appendUnique(.template(element), to: &targetPredicates)
                 appendSemanticSurfaces(element)
             }
         }
