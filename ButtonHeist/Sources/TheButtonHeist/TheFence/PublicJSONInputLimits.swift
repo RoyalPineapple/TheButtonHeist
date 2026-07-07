@@ -129,6 +129,48 @@ public enum PublicJSONRoot: Sendable {
     case object
 }
 
+private enum PublicJSONParsedValue: Decodable {
+    case null
+    case bool(Bool)
+    case number(Double)
+    case string(String)
+    case array([PublicJSONParsedValue])
+    case object([String: PublicJSONParsedValue])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let int = try? container.decode(Int.self) {
+            self = .number(Double(int))
+        } else if let double = try? container.decode(Double.self) {
+            self = .number(double)
+        } else if let array = try? container.decode([PublicJSONParsedValue].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: PublicJSONParsedValue].self) {
+            self = .object(object)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
+        }
+    }
+
+    func matches(root: PublicJSONRoot) -> Bool {
+        switch (root, self) {
+        case (.any, _),
+             (.array, .array),
+             (.object, .object):
+            return true
+        case (.array, _),
+             (.object, _):
+            return false
+        }
+    }
+}
+
 /// Decodes public JSON input after applying size and shape limits.
 public enum PublicJSONInputDecoder {
     public static func decode<T: Decodable>(
@@ -256,24 +298,15 @@ public enum PublicJSONInputPreflight {
 
         try validateRootPrefix(data, root: root, context: context, rootMismatchMessage: rootMismatchMessage)
 
-        let value: Any
+        let value: PublicJSONParsedValue
         do {
-            value = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+            value = try JSONDecoder().decode(PublicJSONParsedValue.self, from: data)
         } catch {
             throw PublicJSONInputError("\(context) is not valid JSON")
         }
 
-        switch root {
-        case .any:
-            break
-        case .array:
-            guard value is [Any] else {
-                throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
-            }
-        case .object:
-            guard value is [String: Any] else {
-                throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
-            }
+        guard value.matches(root: root) else {
+            throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
         }
 
         var traversal = PublicJSONParsedInputTraversal(
@@ -498,31 +531,31 @@ private struct PublicJSONParsedInputTraversal {
         self.makeError = makeError
     }
 
-    mutating func validate(_ value: Any, depth: Int) throws {
+    mutating func validate(_ value: PublicJSONParsedValue, depth: Int) throws {
         try state.validateDepth(depth, policy: policy, makeError: makeError)
 
         switch value {
-        case is NSNull:
+        case .null:
             try state.validateNull(policy: policy, makeError: makeError)
-        case let string as String:
-            try state.validateStringBytes(jsonStringEncodedSize(string), policy: policy, makeError: makeError)
-        case let number as NSNumber:
-            guard Double(truncating: number).isFinite else {
-                throw makeError(.nonFiniteNumber(Double(truncating: number)))
+        case .bool:
+            break
+        case let .number(number):
+            guard number.isFinite else {
+                throw makeError(.nonFiniteNumber(number))
             }
-        case let array as [Any]:
+        case let .string(string):
+            try state.validateStringBytes(jsonStringEncodedSize(string), policy: policy, makeError: makeError)
+        case let .array(array):
             try state.countArrayValues(array.count, policy: policy, makeError: makeError)
             for element in array {
                 try validate(element, depth: depth + 1)
             }
-        case let object as [String: Any]:
+        case let .object(object):
             try state.countObjectKeys(object.count, policy: policy, makeError: makeError)
             for (key, nested) in object {
                 try state.validateStringBytes(jsonStringEncodedSize(key), policy: policy, makeError: makeError)
                 try validate(nested, depth: depth + 1)
             }
-        default:
-            break
         }
     }
 

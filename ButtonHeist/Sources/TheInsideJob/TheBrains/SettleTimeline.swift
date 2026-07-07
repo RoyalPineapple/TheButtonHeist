@@ -43,6 +43,7 @@ extension AccessibilityElement {
 
 @MainActor struct SettleObservationLedger { // swiftlint:disable:this agent_main_actor_value_type
     private(set) var elementsByKey: [TimelineKey: AccessibilityElement] = [:]
+    private(set) var currentGenerationLastObservation: SettleRecordedObservation?
     private(set) var latestChangeDescription: String?
     private let bucket: CGFloat
     private var previousElements: [AccessibilityElement]?
@@ -64,12 +65,18 @@ extension AccessibilityElement {
         for element in elements {
             elementsByKey[element.timelineKey(bucket: bucket)] = element
         }
-        return SettleRecordedObservation(
+        let observation = SettleRecordedObservation(
             screen: screen,
             fingerprint: SettleTimeline.fingerprint(of: elements, bucket: bucket),
             elementsByKey: elementsByKey,
             instabilityDescription: latestChangeDescription
         )
+        currentGenerationLastObservation = observation
+        return observation
+    }
+
+    mutating func resetCurrentGeneration() {
+        currentGenerationLastObservation = nil
     }
 }
 
@@ -80,6 +87,10 @@ struct SettleRecordedObservation: Equatable, @unchecked Sendable {
     let fingerprint: Int
     let elementsByKey: [TimelineKey: AccessibilityElement]
     let instabilityDescription: String?
+
+    var sample: SettleObservationSample {
+        SettleObservationSample(fingerprint: fingerprint)
+    }
 }
 
 @MainActor enum SettleTimeline { // swiftlint:disable:this agent_main_actor_value_type
