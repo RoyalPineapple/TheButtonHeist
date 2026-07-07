@@ -55,9 +55,11 @@ final class SettleSessionTests: XCTestCase {
         ledger: inout SettleObservationLedger,
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
-        send(
-            .observation(recordedObservation(screen, ledger: &ledger), elapsedMs: elapsedMs),
+        let observation = recordedObservation(screen, ledger: &ledger)
+        return send(
+            .observation(observation.sample, elapsedMs: elapsedMs),
             machine: machine,
+            ledger: &ledger,
             state: &state
         )
     }
@@ -65,13 +67,18 @@ final class SettleSessionTests: XCTestCase {
     private func send(
         _ event: SettleLoopMachine.Event,
         machine: SettleLoopMachine,
+        ledger: inout SettleObservationLedger,
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
+        let eventCount = state.events.count
         let transition = machine.advance(state, with: event)
         state = transition.settleState
+        if state.events.count > eventCount {
+            ledger.resetCurrentGeneration()
+        }
         return MachineStep(
             effect: transition.settleEffect,
-            outcome: SettleSession.outcome(for: transition)
+            outcome: SettleSession.outcome(for: transition, observations: ledger)
         )
     }
 
@@ -212,11 +219,11 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let observation, let timeMs)) = step.effect else {
+        guard case .terminal(.settled(let timeMs)) = step.effect else {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 2)
-        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
@@ -234,11 +241,11 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 30, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let observation, let timeMs)) = step.effect else {
+        guard case .terminal(.settled(let timeMs)) = step.effect else {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 30)
-        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineFingerprintChangeResetsStability() {
@@ -261,11 +268,11 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertContinue(reduceObservation(ready, elapsedMs: 3, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(ready, elapsedMs: 4, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let observation, let timeMs)) = step.effect else {
+        guard case .terminal(.settled(let timeMs)) = step.effect else {
             return XCTFail("Expected settled terminal effect after post-change stability, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 4)
-        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
@@ -283,8 +290,8 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertContinue(reduceObservation(stale, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, state: &state))
-        let outcome = send(.timeout(elapsedMs: 10), machine: machine, state: &state).outcome
+        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+        let outcome = send(.timeout(elapsedMs: 10), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 10))
         XCTAssertNil(outcome?.finalScreen)
@@ -306,14 +313,14 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, state: &state))
+        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let observation, let timeMs)) = step.effect else {
+        guard case .terminal(.settled(let timeMs)) = step.effect else {
             return XCTFail("Expected notification-only signal to allow settle, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 1)
-        XCTAssertEqual(observation.screen.liveCapture.hierarchy.sortedElements.first?.label, "Stable")
+        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Stable")
         XCTAssertTrue(state.events.isEmpty)
     }
 
@@ -329,7 +336,7 @@ final class SettleSessionTests: XCTestCase {
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let outcome = send(.yieldFailed(.cancellation, elapsedMs: 7), machine: machine, state: &state).outcome
+        let outcome = send(.yieldFailed(.cancellation, elapsedMs: 7), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .cancelled(timeMs: 7))
         XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
@@ -347,7 +354,7 @@ final class SettleSessionTests: XCTestCase {
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let outcome = send(.timeout(elapsedMs: 99), machine: machine, state: &state).outcome
+        let outcome = send(.timeout(elapsedMs: 99), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 99))
         XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
@@ -365,7 +372,7 @@ final class SettleSessionTests: XCTestCase {
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let step = send(.yieldFailed(.error, elapsedMs: 11), machine: machine, state: &state)
+        let step = send(.yieldFailed(.error, elapsedMs: 11), machine: machine, ledger: &ledger, state: &state)
         guard case .terminal(.yieldFailed(let timeMs)) = step.effect else {
             return XCTFail("Expected yieldFailed terminal effect, got \(step.effect)")
         }

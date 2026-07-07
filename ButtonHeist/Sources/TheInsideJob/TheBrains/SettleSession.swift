@@ -82,10 +82,12 @@ enum SettleLoopYieldFailure: Equatable, Sendable {
     case error
 }
 
+struct SettleObservationSample: Equatable, Sendable {
+    let fingerprint: Int
+}
+
 struct SettleLoopMachine: SimpleStateMachine, Equatable {
-    // Rationale: settle state is driven by the main-actor settle loop and stores captured UIKit evidence.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    enum State: Equatable, @unchecked Sendable {
+    enum State: Equatable, Sendable {
         case consecutiveCycles(ConsecutiveCycleState)
         case quietWindow(QuietWindowState)
 
@@ -107,18 +109,6 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
             progress.events
         }
 
-        var currentGenerationLastObservation: SettleRecordedObservation? {
-            progress.currentGenerationLastObservation
-        }
-
-        var elementsByKey: [TimelineKey: AccessibilityElement] {
-            progress.elementsByKey
-        }
-
-        var instabilityDescription: String? {
-            progress.instabilityDescription
-        }
-
         fileprivate var progress: SettleLoopProgress {
             switch self {
             case .consecutiveCycles(let state):
@@ -129,26 +119,20 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
         }
     }
 
-    // Rationale: settle events are created and consumed by the main-actor settle loop.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    enum Event: Equatable, @unchecked Sendable {
-        case observation(SettleRecordedObservation, elapsedMs: Int)
+    enum Event: Equatable, Sendable {
+        case observation(SettleObservationSample, elapsedMs: Int)
         case tripwireSignal(TheTripwire.TripwireSignal)
         case yieldFailed(SettleLoopYieldFailure, elapsedMs: Int)
         case timeout(elapsedMs: Int)
     }
 
-    // Rationale: settle effects are returned to the main-actor settle loop driver.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    enum Effect: Equatable, @unchecked Sendable {
+    enum Effect: Equatable, Sendable {
         case continuePolling
         case terminal(Terminal)
     }
 
-    // Rationale: terminal settle outcomes carry captured observations consumed on the main actor.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    enum Terminal: Equatable, @unchecked Sendable {
-        case settled(SettleRecordedObservation, timeMs: Int)
+    enum Terminal: Equatable, Sendable {
+        case settled(timeMs: Int)
         case timedOut(timeMs: Int)
         case cancelled(timeMs: Int)
         case yieldFailed(timeMs: Int)
@@ -156,9 +140,7 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
 
     enum Rejection: Equatable, Sendable {}
 
-    // Rationale: cycle state is private to the main-actor settle loop driver.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ConsecutiveCycleState: Equatable, @unchecked Sendable {
+    struct ConsecutiveCycleState: Equatable, Sendable {
         let required: Int
         fileprivate var progress: SettleLoopProgress
         var previousFingerprint: Int?
@@ -172,9 +154,7 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
         }
     }
 
-    // Rationale: quiet-window state is private to the main-actor settle loop driver.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct QuietWindowState: Equatable, @unchecked Sendable {
+    struct QuietWindowState: Equatable, Sendable {
         let milliseconds: Int
         fileprivate var progress: SettleLoopProgress
         var previousFingerprint: Int?
@@ -204,13 +184,12 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
     }
 
     private func record(
-        _ observation: SettleRecordedObservation,
+        _ observation: SettleObservationSample,
         elapsedMs: Int,
         state: State
     ) -> SettleLoopTransition {
         switch state {
         case .consecutiveCycles(var cycleState):
-            cycleState.progress.captureTimeline(from: observation)
             if cycleState.previousFingerprint == observation.fingerprint {
                 cycleState.stableCycles += 1
             } else {
@@ -224,11 +203,10 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
             }
             return change(
                 to: nextState,
-                effect: .terminal(.settled(observation, timeMs: elapsedMs))
+                effect: .terminal(.settled(timeMs: elapsedMs))
             )
 
         case .quietWindow(var quietState):
-            quietState.progress.captureTimeline(from: observation)
             if quietState.previousFingerprint != observation.fingerprint {
                 quietState.previousFingerprint = observation.fingerprint
                 quietState.quietStartedAtMs = elapsedMs
@@ -241,7 +219,7 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
             }
             return change(
                 to: nextState,
-                effect: .terminal(.settled(observation, timeMs: elapsedMs))
+                effect: .terminal(.settled(timeMs: elapsedMs))
             )
         }
     }
@@ -283,27 +261,13 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
     }
 }
 
-// Rationale: progress stores captured parser evidence but never leaves the main-actor settle driver.
-// swiftlint:disable:next agent_unchecked_sendable_no_comment
-private struct SettleLoopProgress: Equatable, @unchecked Sendable {
+private struct SettleLoopProgress: Equatable, Sendable {
     var tripwireBaseline: TheTripwire.TripwireSignal
     var events: [SettleEvent]
-    var currentGenerationLastObservation: SettleRecordedObservation?
-    var elementsByKey: [TimelineKey: AccessibilityElement]
-    var instabilityDescription: String?
 
     init(tripwireBaseline: TheTripwire.TripwireSignal) {
         self.tripwireBaseline = tripwireBaseline
         self.events = []
-        self.currentGenerationLastObservation = nil
-        self.elementsByKey = [:]
-        self.instabilityDescription = nil
-    }
-
-    mutating func captureTimeline(from observation: SettleRecordedObservation) {
-        currentGenerationLastObservation = observation
-        elementsByKey = observation.elementsByKey
-        instabilityDescription = observation.instabilityDescription
     }
 
     mutating func recordTripwireBaselineReset(
@@ -311,7 +275,6 @@ private struct SettleLoopProgress: Equatable, @unchecked Sendable {
         to signal: TheTripwire.TripwireSignal
     ) {
         events.append(.tripwireSignalChanged(from: previous, to: signal))
-        currentGenerationLastObservation = nil
     }
 }
 
@@ -503,42 +466,46 @@ where State == SettleLoopMachine.State,
         ).run(start: start)
     }
 
-    static func outcome(for transition: SettleLoopTransition) -> Outcome? {
+    static func outcome(
+        for transition: SettleLoopTransition,
+        observations: SettleObservationLedger
+    ) -> Outcome? {
         switch transition.settleEffect {
         case .continuePolling:
             return nil
         case .terminal(let terminal):
-            return outcome(for: terminal, state: transition.settleState)
+            return outcome(for: terminal, state: transition.settleState, observations: observations)
         }
     }
 
     private static func outcome(
         for terminal: SettleLoopMachine.Terminal,
-        state: SettleLoopMachine.State
+        state: SettleLoopMachine.State,
+        observations: SettleObservationLedger
     ) -> Outcome {
         switch terminal {
-        case .settled(let observation, let timeMs):
+        case .settled(let timeMs):
             return Outcome(
                 outcome: .settled(timeMs: timeMs),
                 events: state.events,
-                finalScreen: observation.screen,
-                elementsByKey: state.elementsByKey
+                finalScreen: observations.currentGenerationLastObservation?.screen,
+                elementsByKey: observations.elementsByKey
             )
         case .timedOut(let timeMs), .yieldFailed(let timeMs):
             return Outcome(
                 outcome: .timedOut(timeMs: timeMs),
                 events: state.events,
-                finalScreen: state.currentGenerationLastObservation?.screen,
-                elementsByKey: state.elementsByKey,
-                instabilityDescription: state.instabilityDescription
+                finalScreen: observations.currentGenerationLastObservation?.screen,
+                elementsByKey: observations.elementsByKey,
+                instabilityDescription: observations.latestChangeDescription
             )
         case .cancelled(let timeMs):
             return Outcome(
                 outcome: .cancelled(timeMs: timeMs),
                 events: state.events,
-                finalScreen: state.currentGenerationLastObservation?.screen,
-                elementsByKey: state.elementsByKey,
-                instabilityDescription: state.instabilityDescription
+                finalScreen: observations.currentGenerationLastObservation?.screen,
+                elementsByKey: observations.elementsByKey,
+                instabilityDescription: observations.latestChangeDescription
             )
         }
     }
@@ -573,10 +540,11 @@ private struct SettleLoopRunner {
         )
 
         if let initial = parseProvider() {
+            let observation = observations.record(initial)
             let transition = driver.send(
-                .observation(observations.record(initial), elapsedMs: elapsedMs(since: start)),
+                .observation(observation.sample, elapsedMs: elapsedMs(since: start)),
             )
-            if let outcome = SettleSession.outcome(for: transition) {
+            if let outcome = SettleSession.outcome(for: transition, observations: observations) {
                 return outcome
             }
         }
@@ -588,34 +556,36 @@ private struct SettleLoopRunner {
                 let transition = driver.send(
                     .yieldFailed(.cancellation, elapsedMs: elapsedMs(since: start))
                 )
-                return SettleSession.outcome(for: transition)!
+                return SettleSession.outcome(for: transition, observations: observations)!
             } catch {
                 let transition = driver.send(
                     .yieldFailed(.error, elapsedMs: elapsedMs(since: start))
                 )
-                return SettleSession.outcome(for: transition)!
+                return SettleSession.outcome(for: transition, observations: observations)!
             }
 
             let eventCount = driver.state.events.count
             let tripwireTransition = driver.send(.tripwireSignal(tripwireSignalProvider()))
-            if let outcome = SettleSession.outcome(for: tripwireTransition) {
+            if let outcome = SettleSession.outcome(for: tripwireTransition, observations: observations) {
                 return outcome
             }
             if driver.state.events.count > eventCount {
+                observations.resetCurrentGeneration()
                 continue
             }
 
             guard let parse = parseProvider() else { continue }
+            let observation = observations.record(parse)
             let observationTransition = driver.send(
-                .observation(observations.record(parse), elapsedMs: elapsedMs(since: start))
+                .observation(observation.sample, elapsedMs: elapsedMs(since: start))
             )
-            if let outcome = SettleSession.outcome(for: observationTransition) {
+            if let outcome = SettleSession.outcome(for: observationTransition, observations: observations) {
                 return outcome
             }
         }
 
         let transition = driver.send(.timeout(elapsedMs: elapsedMs(since: start)))
-        return SettleSession.outcome(for: transition)!
+        return SettleSession.outcome(for: transition, observations: observations)!
     }
 
     @MainActor
