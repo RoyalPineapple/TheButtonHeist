@@ -607,7 +607,7 @@ package extension ElementPredicateSubjectBacked {
 
 package extension ElementPredicate {
     /// The single source of truth for predicate evaluation.
-    func matches<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
+    func matches(_ subject: some ElementPredicateSubject) -> Bool {
         ElementPredicateGraph(matches: [
             ElementPredicateMatch(identity: 0, traversalOrder: 0, subject: subject),
         ])
@@ -880,7 +880,7 @@ extension ElementPredicateCheck: Codable where Text: Codable {
 }
 
 package extension ElementPredicateCheck where Text == String {
-    func matches<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
+    func matches(_ subject: some ElementPredicateSubject) -> Bool {
         switch self {
         case .exclude(let check):
             return !check.matches(subject)
@@ -889,7 +889,7 @@ package extension ElementPredicateCheck where Text == String {
         }
     }
 
-    fileprivate func matchesSubject<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
+    fileprivate func matchesSubject(_ subject: some ElementPredicateSubject) -> Bool {
         switch self {
         case .label(let match):
             return match.matches(optional: subject.predicateLabel)
