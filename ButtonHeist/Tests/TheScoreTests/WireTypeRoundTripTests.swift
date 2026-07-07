@@ -864,11 +864,17 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
         let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Save"))))
+        let activationTrace = ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 195, y: 139),
+            tapActivationSucceeded: true
+        ))
         let failure = HeistFailureDetail(
             category: .targetResolution,
             contract: "action dispatch succeeds",
             observed: "No element matching label \"Save\"",
-            expected: "predicate(label=\"Save\")"
+            expected: "predicate(label=\"Save\")",
+            activationTrace: activationTrace
         )
         let result = HeistExecutionResult.failed(
             steps: [
@@ -883,6 +889,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
+                            activationTrace: activationTrace
                         )
                     ),
                     failure: failure
@@ -907,12 +914,18 @@ final class WireTypeRoundTripTests: XCTestCase {
             "No element matching label \"Save\""
         )
         XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
+        XCTAssertEqual(decoded.steps[0].failure?.activationTrace, activationTrace)
 
         let payload = try JSONProbe(data: data)
-        let intent = try payload.array("steps")[0].object("intent")
+        let step = try payload.array("steps")[0]
+        let intent = try step.object("intent")
+        let failureTrace = try step.object("failure").object("activationTrace")
         XCTAssertEqual(try intent.string("type"), "action")
         XCTAssertEqual(try intent.object("command").string("type"), "activate")
         try intent.assertMissing("target")
+        XCTAssertEqual(try failureTrace.bool("axActivateReturned"), false)
+        XCTAssertEqual(try failureTrace.bool("tapActivationDispatched"), true)
+        XCTAssertEqual(try failureTrace.bool("tapActivationSucceeded"), true)
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {

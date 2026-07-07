@@ -2613,6 +2613,7 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
     public let contract: String
     public let observed: String
     public let expected: String?
+    public let activationTrace: ActivationTrace?
 
     public init(
         category: HeistFailureCategory,
@@ -2620,10 +2621,27 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
         observed: String,
         expected: String? = nil
     ) {
+        self.init(
+            category: category,
+            contract: contract,
+            observed: observed,
+            expected: expected,
+            activationTrace: nil
+        )
+    }
+
+    public init(
+        category: HeistFailureCategory,
+        contract: String,
+        observed: String,
+        expected: String? = nil,
+        activationTrace: ActivationTrace?
+    ) {
         self.category = category
         self.contract = contract
         self.observed = observed
         self.expected = expected
+        self.activationTrace = activationTrace
     }
 }
 

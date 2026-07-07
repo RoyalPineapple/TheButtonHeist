@@ -726,6 +726,35 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
     }
 
+    func testFailedActivateHeistActionCopiesActivationTraceToFailureDetail() async throws {
+        let activationTrace = ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 195, y: 139),
+            tapActivationSucceeded: true
+        ))
+        let target = ElementTarget.predicate(ElementPredicate(label: "Search all items"))
+        let command = HeistActionCommand.activate(.target(target))
+        let runtime = heistRuntime(observations: []) { _ in
+            ActionResult.failure(
+                method: .activate,
+                errorKind: .actionFailed,
+                message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
+                activationTrace: activationTrace
+            )
+        }
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        guard case .heistExecution(let heist) = result.payload else {
+            return XCTFail("Expected failed heist execution payload")
+        }
+        let step = try XCTUnwrap(heist.steps.first)
+        XCTAssertEqual(step.actionEvidence?.dispatchResult?.activationTrace, activationTrace)
+        XCTAssertEqual(step.failure?.activationTrace, activationTrace)
+    }
+
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let commands: [(HeistActionCommand, RuntimeActionType)] = [
