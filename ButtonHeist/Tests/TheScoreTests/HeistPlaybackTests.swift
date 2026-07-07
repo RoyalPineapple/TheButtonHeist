@@ -68,11 +68,13 @@ final class HeistPlanTests: XCTestCase {
         let action = try json.object("action")
         let command = try action.object("command")
         XCTAssertEqual(try command.string("type"), "activate")
-        let target = try command.object("payload")
+        let target = try command.object("payload").object("target")
         let checks = try target.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "label")
-        XCTAssertEqual(try checks[0].string("match"), "List")
+        let labelMatch = try checks[0].object("match")
+        XCTAssertEqual(try labelMatch.string("mode"), "exact")
+        XCTAssertEqual(try labelMatch.string("value"), "List")
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["adjustable"])
     }
@@ -101,7 +103,12 @@ final class HeistPlanTests: XCTestCase {
           "action": {
             "command": {
               "type": "activate",
-              "payload": {"label": "Save", "unexpectedTargetField": "button_save"}
+              "payload": {
+                "target": {
+                  "checks": [{"kind": "label", "match": {"mode": "exact", "value": "Save"}}],
+                  "unexpectedTargetField": "button_save"
+                }
+              }
             }
           }
         }
@@ -119,7 +126,7 @@ final class HeistPlanTests: XCTestCase {
           "action": {
             "command": {
               "type": "activate",
-              "payload": {"label": "Save"}
+              "payload": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Save"}}]}
             }
           }
         }
@@ -173,7 +180,7 @@ final class HeistPlanTests: XCTestCase {
             "cases": [{
               "predicate": {
                 "type": "exists",
-                "element": {"checks": [{"kind": "label", "match": "Home"}]}
+                "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
               },
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
@@ -196,7 +203,7 @@ final class HeistPlanTests: XCTestCase {
             "cases": [{
               "predicate": {
                 "type": "exists",
-                "element": {"checks": [{"kind": "label", "match": "Home"}]}
+                "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
               },
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
@@ -247,7 +254,7 @@ final class HeistPlanTests: XCTestCase {
           "wait": {
             "predicate": {
               "type": "exists",
-              "element": {"checks": [{"kind": "label", "match": "Home"}]}
+              "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
             },
             "timeout": -1
           }
@@ -266,7 +273,7 @@ final class HeistPlanTests: XCTestCase {
           "waitForCases": {
             "predicate": {
               "type": "exists",
-              "element": {"checks": [{"kind": "label", "match": "Home"}]}
+              "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
             },
             "timeout": 1
           }
@@ -418,7 +425,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": 0,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -434,7 +441,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": -1,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -452,7 +459,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": 5,
             "parameter": "target"
           }
@@ -469,9 +476,12 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each",
           "for_each": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": 5,
-            "element": {"label": "Cell", "ordinal": 0},
+            "element": {
+              "checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}],
+              "ordinal": 0
+            },
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
@@ -487,7 +497,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": 5,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}]
@@ -504,7 +514,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "for_each_element",
           "for_each_element": {
-            "matching": {"checks": [{"kind": "label", "match": "Cell"}]},
+            "matching": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Cell"}}]},
             "limit": 5,
             "parameter": "target",
             "body": [{"type": "warn", "warn": {"message": "hi"}}],

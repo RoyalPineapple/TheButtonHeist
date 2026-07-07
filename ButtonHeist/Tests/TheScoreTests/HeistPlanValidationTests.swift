@@ -119,13 +119,13 @@ func actionStepRejectsExpectationAndWaiverTogether() {
     {
       "command": {
         "type": "activate",
-        "payload": {"label": "Save"}
+        "payload": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Save"}}]}
       },
       "expectation": {
         "predicate": {
           "type": "exists",
           "element": {
-            "checks": [{ "kind": "label", "match": "Done" }]
+            "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Done" } }]
           }
         },
         "timeout": 1

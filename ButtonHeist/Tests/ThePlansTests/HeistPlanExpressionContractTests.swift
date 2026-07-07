@@ -32,13 +32,13 @@ func `empty refs are rejected at expression boundaries`() throws {
     expectDecodingError(ElementTargetExpr.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
     expectDecodingError(
         ElementPredicateTemplate.self,
-        #"{"checks":[{"kind":"label","match":{"ref":"   "}}]}"#,
+        #"{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"   "}}}]}"#,
         contains: "string reference must not be empty"
     )
     expectDecodingError(StatePredicateExpr.self, #"{"type": "exists","target_ref":"   "}"#, contains: "target_ref must not be empty")
     expectDecodingError(
         ElementUpdatePredicateExpr.self,
-        #"{"property":"value","before":{"ref":"   "}}"#,
+        #"{"property":"value","before":{"mode":"exact","value":{"ref":"   "}}}"#,
         contains: "string reference must not be empty"
     )
 }
@@ -121,9 +121,9 @@ func `expression codable shapes remain stable`() throws {
         value: .exact(.literal("Ready"))
     )
     let expectedTemplateJSON = """
-        {"checks":[{"kind":"label","match":{"ref":"title"}},\
+        {"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"title"}}},\
         {"kind":"identifier","match":{"mode":"contains","value":"field"}},\
-        {"kind":"value","match":"Ready"}]}
+        {"kind":"value","match":{"mode":"exact","value":"Ready"}}]}
         """
     #expect(try sortedJSON(template) == expectedTemplateJSON)
 
@@ -134,7 +134,9 @@ func `expression codable shapes remain stable`() throws {
         change: .value(before: .exact(.ref("old")), after: .exact(.literal("new")))
     )))
     let expectedChangeJSON = """
-        {"scopes":[{"assertions":[{"after":"new","before":{"ref":"old"},"element":{"checks":[{"kind":"label","match":{"ref":"item"}}]},\
+        {"scopes":[{"assertions":[{"after":{"mode":"exact","value":"new"},\
+        "before":{"mode":"exact","value":{"ref":"old"}},\
+        "element":{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"item"}}}]},\
         "property":"value","type":"updated"}],"type":"elements"}],"type":"change"}
         """
     #expect(try sortedJSON(change) == expectedChangeJSON)

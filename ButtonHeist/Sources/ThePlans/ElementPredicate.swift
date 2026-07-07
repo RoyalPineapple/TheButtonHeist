@@ -140,23 +140,7 @@ extension StringMatch: Codable where Value: Codable {
         case mode, value
     }
 
-    private enum ExactReferenceCodingKeys: String, CodingKey {
-        case ref
-    }
-
     public init(from decoder: Decoder) throws {
-        if Value.self == StringExpr.self,
-           let referenceContainer = try? decoder.container(keyedBy: ExactReferenceCodingKeys.self),
-           referenceContainer.contains(.ref) {
-            self = .exact(try Value(from: decoder))
-            return
-        }
-
-        if let exactValue = try? decoder.singleValueContainer().decode(Value.self) {
-            self = .exact(exactValue)
-            return
-        }
-
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let mode = try container.decode(Mode.self, forKey: .mode)
@@ -183,19 +167,11 @@ extension StringMatch: Codable where Value: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
         if case .isEmpty = self {
-            var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(mode, forKey: .mode)
             return
         }
-
-        if case .exact(let value) = self {
-            var container = encoder.singleValueContainer()
-            try container.encode(value)
-            return
-        }
-
-        var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(mode, forKey: .mode)
         try container.encode(value, forKey: .value)
     }

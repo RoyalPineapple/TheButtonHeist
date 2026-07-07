@@ -28,14 +28,14 @@ struct PublicSessionStateResponse: FencePublicJSONResponse {
 }
 
 struct PublicSessionFailure: Encodable {
-    let errorCode: String
+    let code: String
     let phase: String
     let retryable: Bool
     let message: String?
     let hint: String?
 
     init(payload: SessionFailurePayload) {
-        self.errorCode = payload.errorCode
+        self.code = payload.code
         self.phase = payload.phase.rawValue
         self.retryable = payload.retryable
         self.message = payload.message

@@ -400,10 +400,11 @@ available.
 
 Expectations use object form with a `type` discriminator, for example
 `{"type":"change","scopes":[{"type":"screen"}]}` or
-`{"type":"exists","element":{"label":{"mode":"exact","value":"Success"}}}`.
+`{"type":"exists","element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Success"}}]}}`.
 
 Expectations use the current object grammar at every public boundary. Element
-expectations select subjects with predicate fields, not `heistId`.
+expectations select subjects with predicate checks, not flat matcher fields or
+`heistId`.
 Element update predicates use `before` and `after` matcher objects for the old
 and new element state; raw `from`/`to` string fields are not part of the public
 grammar.

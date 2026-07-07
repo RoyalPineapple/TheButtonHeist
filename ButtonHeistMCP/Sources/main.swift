@@ -45,8 +45,8 @@ struct ButtonHeistMCPServer {
         defer { context.idleMonitor.resetTimer() }
         do {
             switch routedToolRequest(try MCPToolRequest(name: params.name, arguments: params.arguments)) {
-            case .success(let request):
-                let response = try await context.fence.execute(request)
+            case .success(let input):
+                let response = try await context.fence.execute(try context.fence.admit(input))
                 return renderResponse(response)
             case .failure(let error):
                 return renderResponse(.failure(error))
@@ -57,7 +57,7 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    static func routedToolRequest(_ request: MCPToolRequest) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
+    static func routedToolRequest(_ request: MCPToolRequest) -> Result<FenceCommandInput, FenceOperationRoutingError> {
         return TheFence.Command.routeToolRequest(
             named: request.name,
             arguments: request.arguments

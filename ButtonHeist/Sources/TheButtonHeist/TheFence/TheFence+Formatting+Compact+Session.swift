@@ -18,7 +18,7 @@ extension FenceResponse {
     private static func compactSessionStateFailure(_ failure: SessionFailurePayload?, label: String) -> String? {
         guard let failure else { return nil }
         var text = "session: \(label)"
-        text += " (\(failure.errorCode))"
+        text += " (\(failure.code))"
         if let hint = failure.hint {
             text += ": \(hint)"
         } else if let message = failure.message {

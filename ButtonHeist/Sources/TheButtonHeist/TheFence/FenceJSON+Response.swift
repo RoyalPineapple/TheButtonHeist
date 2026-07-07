@@ -29,7 +29,6 @@ struct PublicErrorResponse: FencePublicJSONResponse {
     let message: String
     let code: String
     let kind: String
-    let errorCode: String?
     let phase: String?
     let retryable: Bool?
     let hint: String?
@@ -39,7 +38,6 @@ struct PublicErrorResponse: FencePublicJSONResponse {
         self.message = failure.message
         self.code = failure.code
         self.kind = failure.kind.rawValue
-        self.errorCode = failure.code
         self.phase = failure.details.phase.rawValue
         self.retryable = failure.details.retryable
         self.hint = failure.details.hint

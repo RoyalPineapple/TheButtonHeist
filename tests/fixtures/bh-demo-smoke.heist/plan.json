@@ -4,18 +4,23 @@
       "action" : {
         "command" : {
           "payload" : {
-            "checks" : [
-              {
-                "kind" : "label",
-                "match" : "Controls Demo"
-              },
-              {
-                "kind" : "traits",
-                "values" : [
-                  "button"
-                ]
-              }
-            ]
+            "target" : {
+              "checks" : [
+                {
+                  "kind" : "label",
+                  "match" : {
+                    "mode" : "exact",
+                    "value" : "Controls Demo"
+                  }
+                },
+                {
+                  "kind" : "traits",
+                  "values" : [
+                    "button"
+                  ]
+                }
+              ]
+            }
           },
           "type" : "activate"
         },
@@ -25,7 +30,10 @@
               "checks" : [
                 {
                   "kind" : "label",
-                  "match" : "Text Input"
+                  "match" : {
+                    "mode" : "exact",
+                    "value" : "Text Input"
+                  }
                 }
               ]
             },
@@ -40,18 +48,23 @@
       "action" : {
         "command" : {
           "payload" : {
-            "checks" : [
-              {
-                "kind" : "label",
-                "match" : "Display"
-              },
-              {
-                "kind" : "traits",
-                "values" : [
-                  "button"
-                ]
-              }
-            ]
+            "target" : {
+              "checks" : [
+                {
+                  "kind" : "label",
+                  "match" : {
+                    "mode" : "exact",
+                    "value" : "Display"
+                  }
+                },
+                {
+                  "kind" : "traits",
+                  "values" : [
+                    "button"
+                  ]
+                }
+              ]
+            }
           },
           "type" : "activate"
         },
@@ -61,7 +74,10 @@
               "checks" : [
                 {
                   "kind" : "label",
-                  "match" : "Apple Accessibility"
+                  "match" : {
+                    "mode" : "exact",
+                    "value" : "Apple Accessibility"
+                  }
                 }
               ]
             },

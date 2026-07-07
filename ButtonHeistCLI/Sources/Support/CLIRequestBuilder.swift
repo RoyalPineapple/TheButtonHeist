@@ -2,15 +2,11 @@
 import Foundation
 
 struct CLIParsedRequest {
-    let operation: FenceOperationRequest
+    let input: FenceCommandInput
     let requestId: PublicRequestId?
 
     var command: TheFence.Command {
-        operation.command
-    }
-
-    var arguments: TheFence.CommandArgumentEnvelope {
-        operation.arguments
+        input.command
     }
 }
 
@@ -62,9 +58,10 @@ enum CLIRequestBuilder {
         let requestId = envelope.requestId
         do {
             switch TheFence.Command.routeCLICommandEnvelope(envelope.arguments, context: "JSON input") {
-            case .success(let routed):
+            case .success(let input):
+                try input.validatePublicContract()
                 return CLIParsedRequest(
-                    operation: routed,
+                    input: input,
                     requestId: requestId
                 )
             case .failure(let error):

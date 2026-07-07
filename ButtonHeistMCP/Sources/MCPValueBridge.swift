@@ -142,7 +142,6 @@ enum MCPValueBridge {
             "message": .string(failure.message),
             "code": .string(failure.code),
             "kind": .string(failure.kind.rawValue),
-            "errorCode": .string(failure.code),
             "phase": .string(failure.phase.rawValue),
             "retryable": .bool(failure.retryable),
             "hint": failure.hint.map(Value.string) ?? .null,
@@ -162,7 +161,6 @@ private struct MCPStructuredErrorFallback: Encodable {
     let message: String
     let code: String
     let kind: String
-    let errorCode: String
     let phase: String
     let retryable: Bool
     let hint: String?
@@ -172,7 +170,6 @@ private struct MCPStructuredErrorFallback: Encodable {
         message = failure.message
         code = failure.code
         kind = failure.kind.rawValue
-        errorCode = failure.code
         phase = failure.phase.rawValue
         retryable = failure.retryable
         hint = failure.hint

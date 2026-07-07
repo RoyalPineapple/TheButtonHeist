@@ -55,6 +55,18 @@ package protocol PredicateSelectionSubject: ElementPredicateSubject {
     var predicateMatcherFacts: [AccessibilityMatcherFact] { get }
 }
 
+package struct PredicateSelectionSubjectElement<Subject: PredicateSelectionSubject>: ElementPredicateSubjectBacked {
+    package let id: PredicateSelectionElementId
+    package let element: Subject
+
+    package init(id: PredicateSelectionElementId, element: Subject) {
+        self.id = id
+        self.element = element
+    }
+
+    package var predicateSubject: Subject { element }
+}
+
 public struct PredicateCandidate: Sendable, Equatable {
     public let predicate: ElementPredicate
     public let atoms: [MatcherAtom]
@@ -210,7 +222,7 @@ public func minimumUniquePredicate(
 
 package func minimumUniquePredicate<Subject: PredicateSelectionSubject>(
     for contextElementId: PredicateSelectionElementId,
-    in elements: [(id: PredicateSelectionElementId, element: Subject)]
+    in elements: [PredicateSelectionSubjectElement<Subject>]
 ) -> MinimumPredicateSelection? {
     MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: elements)
 }
@@ -249,26 +261,20 @@ public enum MinimumPredicateSelector {
     ) -> MinimumPredicateSelection? {
         minimumUniquePredicate(
             for: contextElementId,
-            in: context.elements.map { (id: $0.id, element: $0.element) }
+            in: context.elements.map { PredicateSelectionSubjectElement(id: $0.id, element: $0.element) }
         )
     }
 
     package static func minimumUniquePredicate<Subject: PredicateSelectionSubject>(
         for contextElementId: PredicateSelectionElementId,
-        in elements: [(id: PredicateSelectionElementId, element: Subject)]
+        in elements: [PredicateSelectionSubjectElement<Subject>]
     ) -> MinimumPredicateSelection? {
         guard let targetElement = elements.first(where: { $0.id == contextElementId }) else {
             return nil
         }
 
         let candidates = predicateCandidates(forSubject: targetElement.element)
-        let graph = ElementPredicateGraph(matches: elements.enumerated().map { offset, candidate in
-            ElementPredicateMatch(
-                identity: candidate.id,
-                traversalOrder: offset,
-                subject: candidate.element
-            )
-        })
+        let graph = ElementPredicateGraph(subjects: elements, identity: \.id)
         var bestAmbiguousCandidate: PredicateCandidate?
         var bestAmbiguousRank: PredicateCandidate.OrdinalBaseRank?
 

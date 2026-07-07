@@ -511,13 +511,9 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case path
         case kind
-        case status
         case durationMs
         case intent
-        case evidence
-        case failure
-        case abortedAtChildPath
-        case children
+        case outcome
     }
 
     public init(from decoder: Decoder) throws {
@@ -527,28 +523,17 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
         durationMs = try container.decode(Int.self, forKey: .durationMs)
         intent = try container.decodeIfPresent(HeistStepIntent.self, forKey: .intent)
-        outcome = try Self.validatedOutcome(
-            kind: kind,
-            status: try container.decode(HeistExecutionStepStatus.self, forKey: .status),
-            evidence: try container.decodeIfPresent(HeistStepEvidence.self, forKey: .evidence),
-            failure: try container.decodeIfPresent(HeistFailureDetail.self, forKey: .failure),
-            abortedAtChildPath: try container.decodeIfPresent(String.self, forKey: .abortedAtChildPath),
-            children: try container.decode([HeistExecutionStepResult].self, forKey: .children),
-            codingPath: container.codingPath
-        )
+        outcome = try container.decode(HeistExecutionStepOutcome.self, forKey: .outcome)
+        try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: container.codingPath + [CodingKeys.outcome])
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(path, forKey: .path)
         try container.encode(kind, forKey: .kind)
-        try container.encode(status, forKey: .status)
         try container.encode(durationMs, forKey: .durationMs)
         try container.encodeIfPresent(intent, forKey: .intent)
-        try container.encodeIfPresent(evidence, forKey: .evidence)
-        try container.encodeIfPresent(failure, forKey: .failure)
-        try container.encodeIfPresent(abortedAtChildPath, forKey: .abortedAtChildPath)
-        try container.encode(children, forKey: .children)
+        try container.encode(outcome, forKey: .outcome)
     }
 
     private static func validatedOutcome(
@@ -574,13 +559,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             guard failure == nil else {
                 throw receiptError(
                     "passed heist execution step must not include failure",
-                    codingPath: codingPath + [CodingKeys.failure]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
                 )
             }
             guard failedChildPath == nil else {
                 throw receiptError(
                     "passed heist execution step must not contain failed child \(failedChildPath ?? "")",
-                    codingPath: codingPath + [CodingKeys.children]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
                 )
             }
             return .passed(HeistExecutionStepPassedOutcome(evidence: evidence, children: children))
@@ -588,14 +573,14 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             guard let failure else {
                 throw receiptError(
                     "failed heist execution step must include failure",
-                    codingPath: codingPath + [CodingKeys.failure]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
                 )
             }
             if let abortedAtChildPath {
                 guard let evidence else {
                     throw receiptError(
                         "child-aborted heist execution step must include evidence",
-                        codingPath: codingPath + [CodingKeys.evidence]
+                        codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
                     )
                 }
                 return .childAborted(HeistExecutionStepChildAbortedOutcome(
@@ -614,19 +599,19 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             guard evidence == nil else {
                 throw receiptError(
                     "skipped heist execution step must not include evidence",
-                    codingPath: codingPath + [CodingKeys.evidence]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
                 )
             }
             guard failure == nil else {
                 throw receiptError(
                     "skipped heist execution step must not include failure",
-                    codingPath: codingPath + [CodingKeys.failure]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
                 )
             }
             guard children.allSatisfy({ $0.status == .skipped }) else {
                 throw receiptError(
                     "skipped heist execution step children must also be skipped",
-                    codingPath: codingPath + [CodingKeys.children]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
                 )
             }
             return .skipped(HeistExecutionStepSkippedOutcome(children: children))
@@ -687,7 +672,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         guard isCompatible else {
             throw receiptError(
                 "\(kind.rawValue) heist execution step cannot include \(evidence.receiptKindDescription) evidence",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
     }
@@ -739,7 +724,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             guard evidence.actionResult.success && evidence.expectation.met else {
                 throw receiptError(
                     "passed matched wait step must include successful wait evidence",
-                    codingPath: codingPath + [CodingKeys.evidence]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
                 )
             }
         case .handledElse:
@@ -747,7 +732,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         case .continued, .failed:
             throw receiptError(
                 "passed wait step must include matched or handled_else evidence outcome",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
     }
@@ -759,13 +744,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         if evidence.dispatchResult?.success == false {
             throw receiptError(
                 "passed action heist execution step must not include failed action evidence",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
         if evidence.expectationResult?.success == false || evidence.expectation?.met == false {
             throw receiptError(
                 "passed action heist execution step must not include failed expectation evidence",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
     }
@@ -780,14 +765,14 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             guard evidence.expectation.met, evidence.failureReason == nil else {
                 throw receiptError(
                     "passed matched repeat_until step must include met predicate evidence",
-                    codingPath: codingPath + [CodingKeys.evidence]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
                 )
             }
         case .continued:
             guard allowsContinued, !evidence.expectation.met, evidence.failureReason == nil else {
                 throw receiptError(
                     "continued repeat_until evidence is only valid for passed non-terminal iterations",
-                    codingPath: codingPath + [CodingKeys.evidence]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
                 )
             }
         case .handledElse:
@@ -795,7 +780,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         case .failed:
             throw receiptError(
                 "passed repeat_until step must not include failed evidence outcome",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
     }
@@ -807,7 +792,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         guard failureReason == nil else {
             throw receiptError(
                 "passed loop heist execution step must not include failure reason evidence",
-                codingPath: codingPath + [CodingKeys.evidence]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
     }
@@ -823,18 +808,18 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         case (.none, .some(let failedChildPath)):
             throw receiptError(
                 "failed child \(failedChildPath) requires abortedAtChildPath",
-                codingPath: codingPath + [CodingKeys.abortedAtChildPath]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.abortedAtChildPath]
             )
         case (.some(let abortedAtChildPath), .none):
             throw receiptError(
                 "abortedAtChildPath \(abortedAtChildPath) has no failed child",
-                codingPath: codingPath + [CodingKeys.abortedAtChildPath]
+                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.abortedAtChildPath]
             )
         case (.some(let abortedAtChildPath), .some(let failedChildPath)):
             guard abortedAtChildPath == failedChildPath else {
                 throw receiptError(
                     "abortedAtChildPath \(abortedAtChildPath) must match first failed child \(failedChildPath)",
-                    codingPath: codingPath + [CodingKeys.abortedAtChildPath]
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.abortedAtChildPath]
                 )
             }
         }
@@ -846,11 +831,79 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
 
 }
 
-public enum HeistExecutionStepOutcome: Sendable, Equatable {
+public enum HeistExecutionStepOutcome: Codable, Sendable, Equatable {
     case passed(HeistExecutionStepPassedOutcome)
     case failed(HeistExecutionStepFailedOutcome)
     case childAborted(HeistExecutionStepChildAbortedOutcome)
     case skipped(HeistExecutionStepSkippedOutcome)
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case type
+        case evidence
+        case failure
+        case abortedAtChildPath
+        case children
+    }
+
+    private enum OutcomeType: String, Codable {
+        case passed
+        case failed
+        case childAborted = "child_aborted"
+        case skipped
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step outcome")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(OutcomeType.self, forKey: .type) {
+        case .passed:
+            self = .passed(HeistExecutionStepPassedOutcome(
+                evidence: try container.decodeIfPresent(HeistStepEvidence.self, forKey: .evidence),
+                children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
+            ))
+        case .failed:
+            self = .failed(HeistExecutionStepFailedOutcome(
+                evidence: try container.decodeIfPresent(HeistStepEvidence.self, forKey: .evidence),
+                failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
+                children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
+            ))
+        case .childAborted:
+            self = .childAborted(HeistExecutionStepChildAbortedOutcome(
+                evidence: try container.decode(HeistStepEvidence.self, forKey: .evidence),
+                failure: try container.decode(HeistFailureDetail.self, forKey: .failure),
+                abortedAtChildPath: try container.decode(String.self, forKey: .abortedAtChildPath),
+                children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
+            ))
+        case .skipped:
+            self = .skipped(HeistExecutionStepSkippedOutcome(
+                children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .passed(let outcome):
+            try container.encode(OutcomeType.passed, forKey: .type)
+            try container.encodeIfPresent(outcome.evidence, forKey: .evidence)
+            try container.encode(outcome.children, forKey: .children)
+        case .failed(let outcome):
+            try container.encode(OutcomeType.failed, forKey: .type)
+            try container.encodeIfPresent(outcome.evidence, forKey: .evidence)
+            try container.encode(outcome.failure, forKey: .failure)
+            try container.encode(outcome.children, forKey: .children)
+        case .childAborted(let outcome):
+            try container.encode(OutcomeType.childAborted, forKey: .type)
+            try container.encode(outcome.evidence, forKey: .evidence)
+            try container.encode(outcome.failure, forKey: .failure)
+            try container.encode(outcome.abortedAtChildPath, forKey: .abortedAtChildPath)
+            try container.encode(outcome.children, forKey: .children)
+        case .skipped(let outcome):
+            try container.encode(OutcomeType.skipped, forKey: .type)
+            try container.encode(outcome.children, forKey: .children)
+        }
+    }
 
     public var status: HeistExecutionStepStatus {
         switch self {
@@ -1353,69 +1406,106 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type
         case command
-        case actionResult
-        case expectationActionResult
+        case dispatchResult
+        case expectationResult
         case expectation
         case warning
+    }
+
+    private enum EvidenceType: String, Codable {
+        case commandResolutionFailure = "command_resolution_failure"
+        case dispatch
+        case commandlessDispatch = "commandless_dispatch"
+        case expectation
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let command = try container.decodeIfPresent(HeistActionCommand.self, forKey: .command)
-        let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
-        let expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
-        let expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
-        let warning = try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
-
-        switch (command, actionResult, expectationActionResult, expectation, warning) {
-        case (.some(let command), .none, .none, .none, .none):
-            self = .commandResolutionFailure(command: command)
-        case (.some(let command), .some(let actionResult), .none, .none, let warning):
-            self = .dispatch(command: command, dispatchResult: actionResult, warning: warning)
-        case (.none, .some(let actionResult), .none, .none, .none):
-            self = .dispatch(dispatchResult: actionResult)
-        case (.none, .some, .none, .none, .some):
-            throw Self.evidenceError("heist action warning evidence requires command", codingPath: container.codingPath)
-        case (.some(let command), .some(let actionResult), .some(let expectationActionResult), .some(let expectation), let warning):
+        switch try container.decode(EvidenceType.self, forKey: .type) {
+        case .commandResolutionFailure:
+            self = .commandResolutionFailure(
+                command: try container.decode(HeistActionCommand.self, forKey: .command)
+            )
+            try Self.rejectFields(
+                except: [.type, .command],
+                in: container,
+                typeName: EvidenceType.commandResolutionFailure.rawValue
+            )
+        case .dispatch:
+            self = .dispatch(
+                command: try container.decode(HeistActionCommand.self, forKey: .command),
+                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult),
+                warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+            )
+            try Self.rejectFields(
+                except: [.type, .command, .dispatchResult, .warning],
+                in: container,
+                typeName: EvidenceType.dispatch.rawValue
+            )
+        case .commandlessDispatch:
+            self = .dispatch(
+                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
+            )
+            try Self.rejectFields(
+                except: [.type, .dispatchResult],
+                in: container,
+                typeName: EvidenceType.commandlessDispatch.rawValue
+            )
+        case .expectation:
             self = .expectation(
-                command: command,
-                dispatchResult: actionResult,
-                expectationResult: expectationActionResult,
-                expectation: expectation,
-                warning: warning
+                command: try container.decode(HeistActionCommand.self, forKey: .command),
+                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult),
+                expectationResult: try container.decode(ActionResult.self, forKey: .expectationResult),
+                expectation: try container.decode(ExpectationResult.self, forKey: .expectation),
+                warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
             )
-        case (.none, .none, .none, .none, .none):
-            throw Self.evidenceError("heist action evidence must include command or actionResult", codingPath: container.codingPath)
-        case (.none, _, .some, _, _):
-            throw Self.evidenceError("heist action expectation evidence requires command", codingPath: container.codingPath)
-        case (_, _, .some, .none, _),
-             (_, _, .none, .some, _):
-            throw Self.evidenceError(
-                "heist action expectation evidence requires both expectationActionResult and expectation",
-                codingPath: container.codingPath
+            try Self.rejectFields(
+                except: [.type, .command, .dispatchResult, .expectationResult, .expectation, .warning],
+                in: container,
+                typeName: EvidenceType.expectation.rawValue
             )
-        case (_, .none, .some, _, _):
-            throw Self.evidenceError("heist action expectation evidence requires actionResult", codingPath: container.codingPath)
-        case (.none, .none, .none, .none, .some):
-            throw Self.evidenceError("heist action warning evidence requires actionResult", codingPath: container.codingPath)
-        case (.some, .none, .none, .none, .some):
-            throw Self.evidenceError("heist action warning evidence requires actionResult", codingPath: container.codingPath)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(command, forKey: .command)
-        try container.encodeIfPresent(dispatchResult, forKey: .actionResult)
-        try container.encodeIfPresent(expectationResult, forKey: .expectationActionResult)
-        try container.encodeIfPresent(expectation, forKey: .expectation)
-        try container.encodeIfPresent(warning, forKey: .warning)
+        switch storage {
+        case .commandResolutionFailure(let command):
+            try container.encode(EvidenceType.commandResolutionFailure, forKey: .type)
+            try container.encode(command, forKey: .command)
+        case .dispatch(.command(let command, let dispatchResult, let warning)):
+            try container.encode(EvidenceType.dispatch, forKey: .type)
+            try container.encode(command, forKey: .command)
+            try container.encode(dispatchResult, forKey: .dispatchResult)
+            try container.encodeIfPresent(warning, forKey: .warning)
+        case .dispatch(.commandless(let dispatchResult)):
+            try container.encode(EvidenceType.commandlessDispatch, forKey: .type)
+            try container.encode(dispatchResult, forKey: .dispatchResult)
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation, let warning):
+            try container.encode(EvidenceType.expectation, forKey: .type)
+            try container.encode(command, forKey: .command)
+            try container.encode(dispatchResult, forKey: .dispatchResult)
+            try container.encode(expectationResult, forKey: .expectationResult)
+            try container.encode(expectation, forKey: .expectation)
+            try container.encodeIfPresent(warning, forKey: .warning)
+        }
     }
 
-    private static func evidenceError(_ message: String, codingPath: [CodingKey]) -> DecodingError {
-        .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
+    private static func rejectFields(
+        except allowed: Set<CodingKeys>,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        typeName: String
+    ) throws {
+        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "\(typeName) heist action evidence cannot include \(key.stringValue)"
+            )
+        }
     }
 }
 

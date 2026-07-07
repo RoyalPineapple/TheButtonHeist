@@ -426,7 +426,7 @@ final class PostActionObservation {
     private func firstResponderTarget(in screen: Screen) -> ElementTarget? {
         guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
         let elements = screen.orderedElements.map {
-            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return minimumUniquePredicate(
             for: firstResponderHeistId.predicateSelectionElementId,

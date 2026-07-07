@@ -14,19 +14,107 @@ public enum HeistCatalogDetail: String, Codable, CaseIterable, Sendable, Equatab
     case detailed
 }
 
-public struct HeistCatalogEntry: Codable, Sendable, Equatable {
+public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
+    case entry
+    case capability
+    case parameterized
+    case composed
+    case assertion
+    case textInput = "text-input"
+    case viewport
+    case gesture
+    case semanticAction = "semantic-action"
+}
+
+public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
+    case predicate(ElementPredicate)
+    case template(ElementPredicateTemplate)
+    case targetReference(HeistReferenceName)
+}
+
+public enum HeistSemanticSurfaceFact: Sendable, Equatable, Hashable {
+    case label(HeistSemanticStringMatch)
+    case identifier(HeistSemanticStringMatch)
+    case value(HeistSemanticStringMatch)
+    case hint(HeistSemanticStringMatch)
+    case traits([HeistTrait])
+    case actions([ElementAction])
+    case customContent(HeistSemanticCustomContentMatch)
+    case rotors([HeistSemanticStringMatch])
+    indirect case exclude(HeistSemanticSurfaceFact)
+}
+
+public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
+    public let label: HeistSemanticStringMatch?
+    public let value: HeistSemanticStringMatch?
+    public let isImportant: Bool?
+
+    public init(label: HeistSemanticStringMatch? = nil, value: HeistSemanticStringMatch? = nil, isImportant: Bool? = nil) {
+        self.label = label
+        self.value = value
+        self.isImportant = isImportant
+    }
+
+    init(_ match: CustomContentMatch<String>) {
+        self.label = match.label.map(HeistSemanticStringMatch.init)
+        self.value = match.value.map(HeistSemanticStringMatch.init)
+        self.isImportant = match.isImportant
+    }
+
+    init(_ match: CustomContentMatch<StringExpr>) {
+        self.label = match.label.map(HeistSemanticStringMatch.init)
+        self.value = match.value.map(HeistSemanticStringMatch.init)
+        self.isImportant = match.isImportant
+    }
+}
+
+public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
+    public let mode: StringMatch<String>.Mode
+    public let value: HeistSemanticStringValue?
+
+    public init(mode: StringMatch<String>.Mode, value: HeistSemanticStringValue?) {
+        self.mode = mode
+        self.value = value
+    }
+
+    public init(_ match: StringMatch<String>) {
+        self.mode = match.mode
+        self.value = match.valueIfPresent.map(HeistSemanticStringValue.literal)
+    }
+
+    init(_ match: StringMatch<StringExpr>) {
+        self.mode = StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact
+        self.value = match.valueIfPresent.map(HeistSemanticStringValue.init)
+    }
+}
+
+public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
+    case literal(String)
+    case reference(HeistReferenceName)
+
+    init(_ expression: StringExpr) {
+        switch expression {
+        case .literal(let literal):
+            self = .literal(literal)
+        case .ref(let reference):
+            self = .reference(reference)
+        }
+    }
+}
+
+public struct HeistCatalogEntry: Sendable, Equatable {
     public let name: String
     public let role: HeistCatalogRole
     public let parameterKind: HeistParameterKind
     public let requiresArgument: Bool
     public let summary: String?
-    public let tags: [String]
+    public let tags: [HeistCatalogTag]
     public let parameterName: HeistReferenceName?
-    public let nestedRunHeists: [String]?
-    public let actionCommands: [String]?
+    public let nestedRunHeists: [HeistInvocationPath]?
+    public let actionCommands: [HeistActionCommandType]?
     public let waitCount: Int?
     public let expectationCount: Int?
-    public let semanticSurfaces: [String]?
+    public let semanticSurfaces: [HeistSemanticSurfaceFact]?
     public let validationStatus: HeistValidationStatus?
 
     public init(
@@ -35,13 +123,13 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
         parameterKind: HeistParameterKind,
         requiresArgument: Bool,
         summary: String? = nil,
-        tags: [String] = [],
+        tags: [HeistCatalogTag] = [],
         parameterName: HeistReferenceName? = nil,
-        nestedRunHeists: [String]? = nil,
-        actionCommands: [String]? = nil,
+        nestedRunHeists: [HeistInvocationPath]? = nil,
+        actionCommands: [HeistActionCommandType]? = nil,
         waitCount: Int? = nil,
         expectationCount: Int? = nil,
-        semanticSurfaces: [String]? = nil,
+        semanticSurfaces: [HeistSemanticSurfaceFact]? = nil,
         validationStatus: HeistValidationStatus? = nil
     ) {
         self.name = name
@@ -60,7 +148,7 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
     }
 }
 
-public struct HeistDiscoveryCatalog: Codable, Sendable, Equatable {
+public struct HeistDiscoveryCatalog: Sendable, Equatable {
     public let heists: [HeistCatalogEntry]
 
     public init(heists: [HeistCatalogEntry]) {
@@ -86,23 +174,23 @@ public struct HeistCatalog: Codable, Sendable, Equatable {
     }
 }
 
-public struct HeistSemanticSurface: Codable, Sendable, Equatable {
-    public let actionCommands: [String]
-    public let targetPredicates: [String]
-    public let waits: [String]
-    public let expectations: [String]
-    public let nestedRunHeists: [String]
-    public let expectedEffects: [String]
-    public let semanticSurfaces: [String]
+public struct HeistSemanticSurface: Sendable, Equatable {
+    public let actionCommands: [HeistActionCommandType]
+    public let targetPredicates: [HeistTargetPredicateFact]
+    public let waits: [AccessibilityPredicateExpr]
+    public let expectations: [AccessibilityPredicateExpr]
+    public let nestedRunHeists: [HeistInvocationPath]
+    public let expectedEffects: [AccessibilityPredicateExpr]
+    public let semanticSurfaces: [HeistSemanticSurfaceFact]
 
     public init(
-        actionCommands: [String] = [],
-        targetPredicates: [String] = [],
-        waits: [String] = [],
-        expectations: [String] = [],
-        nestedRunHeists: [String] = [],
-        expectedEffects: [String] = [],
-        semanticSurfaces: [String] = []
+        actionCommands: [HeistActionCommandType] = [],
+        targetPredicates: [HeistTargetPredicateFact] = [],
+        waits: [AccessibilityPredicateExpr] = [],
+        expectations: [AccessibilityPredicateExpr] = [],
+        nestedRunHeists: [HeistInvocationPath] = [],
+        expectedEffects: [AccessibilityPredicateExpr] = [],
+        semanticSurfaces: [HeistSemanticSurfaceFact] = []
     ) {
         self.actionCommands = actionCommands
         self.targetPredicates = targetPredicates
@@ -114,7 +202,7 @@ public struct HeistSemanticSurface: Codable, Sendable, Equatable {
     }
 }
 
-public struct HeistDescription: Codable, Sendable, Equatable {
+public struct HeistDescription: Sendable, Equatable {
     public let name: String
     public let role: HeistCatalogRole
     public let parameterKind: HeistParameterKind
@@ -205,7 +293,7 @@ private extension HeistPlan {
             requiresArgument: heist.entry.requiresArgument,
             summary: nil,
             validationStatus: .validated,
-            semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist).projectedSurface
+            semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist)
         )
     }
 
@@ -325,10 +413,10 @@ private extension HeistPlan {
             tags: tags,
             parameterName: base.parameterName,
             nestedRunHeists: surface.nestedRunHeists.isEmpty ? nil : surface.nestedRunHeists,
-            actionCommands: surface.actionCommands.isEmpty ? nil : surface.catalogActionCommands,
+            actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
             waitCount: surface.waits.count,
             expectationCount: surface.expectations.count,
-            semanticSurfaces: surface.semanticFacets.isEmpty ? nil : surface.catalogSemanticSurfaces,
+            semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
             validationStatus: .validated
         )
     }
@@ -341,29 +429,29 @@ private extension HeistPlan {
         return summary
     }
 
-    func catalogTags(for entry: HeistCatalogEntry, surface: HeistCollectedSemanticSurface) -> [String] {
-        var tags: [String] = []
-        appendUnique(entry.role.rawValue, to: &tags)
+    func catalogTags(for entry: HeistCatalogEntry, surface: HeistSemanticSurface) -> [HeistCatalogTag] {
+        var tags: [HeistCatalogTag] = []
+        appendUnique(entry.role == .entry ? .entry : .capability, to: &tags)
         if entry.requiresArgument {
-            appendUnique("parameterized", to: &tags)
+            appendUnique(.parameterized, to: &tags)
         }
         if !surface.nestedRunHeists.isEmpty {
-            appendUnique("composed", to: &tags)
+            appendUnique(.composed, to: &tags)
         }
         if !surface.waits.isEmpty || !surface.expectations.isEmpty {
-            appendUnique("assertion", to: &tags)
+            appendUnique(.assertion, to: &tags)
         }
         for command in surface.actionCommands {
             switch command {
             case .typeText:
-                appendUnique("text-input", to: &tags)
+                appendUnique(.textInput, to: &tags)
             case .scroll, .scrollToVisible, .scrollToEdge:
-                appendUnique("viewport", to: &tags)
+                appendUnique(.viewport, to: &tags)
             case .oneFingerTap, .longPress, .swipe, .drag:
-                appendUnique("gesture", to: &tags)
+                appendUnique(.gesture, to: &tags)
             case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
                     .editAction, .setPasteboard, .resignFirstResponder:
-                appendUnique("semantic-action", to: &tags)
+                appendUnique(.semanticAction, to: &tags)
             case .takeScreenshot:
                 break
             }
@@ -381,217 +469,16 @@ struct ResolvedCatalogHeist {
     let invocationStack: [HeistCallGraph.Node]
 }
 
-private struct HeistCollectedSemanticSurface {
-    let actionCommands: [HeistActionCommandType]
-    let targetPredicates: [HeistTargetPredicateFact]
-    let waits: [AccessibilityPredicateExpr]
-    let expectations: [AccessibilityPredicateExpr]
-    let nestedRunHeists: [String]
-    let expectedEffects: [AccessibilityPredicateExpr]
-    let semanticFacets: [HeistSemanticSurfaceFacet]
-
-    var catalogActionCommands: [String] {
-        actionCommands.map(\.rawValue)
-    }
-
-    var catalogTargetPredicates: [String] {
-        targetPredicates.map(\.catalogValue)
-    }
-
-    var catalogWaits: [String] {
-        waits.map(\.description)
-    }
-
-    var catalogExpectations: [String] {
-        expectations.map(\.description)
-    }
-
-    var catalogExpectedEffects: [String] {
-        expectedEffects.map(\.description)
-    }
-
-    var catalogSemanticSurfaces: [String] {
-        semanticFacets.map(\.catalogValue)
-    }
-
-    var projectedSurface: HeistSemanticSurface {
-        HeistSemanticSurface(
-            actionCommands: catalogActionCommands,
-            targetPredicates: catalogTargetPredicates,
-            waits: catalogWaits,
-            expectations: catalogExpectations,
-            nestedRunHeists: nestedRunHeists,
-            expectedEffects: catalogExpectedEffects,
-            semanticSurfaces: catalogSemanticSurfaces
-        )
-    }
-}
-
-private enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
-    case predicate(ElementPredicate)
-    case template(ElementPredicateTemplate)
-    case targetReference(HeistReferenceName)
-
-    var catalogValue: String {
-        switch self {
-        case .predicate(let predicate):
-            return predicate.description
-        case .template(let predicate):
-            return predicate.description
-        case .targetReference(let reference):
-            return "target_ref(\(reference))"
-        }
-    }
-}
-
-private enum HeistSemanticSurfaceFacet: Sendable, Equatable, Hashable {
-    case label(HeistSemanticStringMatch)
-    case identifier(HeistSemanticStringMatch)
-    case value(HeistSemanticStringMatch)
-    case hint(HeistSemanticStringMatch)
-    case traits(Set<HeistTrait>)
-    case actions(Set<ElementAction>)
-    case customContent(HeistSemanticCustomContentMatch)
-    case rotors([HeistSemanticStringMatch])
-    indirect case exclude(HeistSemanticSurfaceFacet)
-
-    var catalogValue: String {
-        switch self {
-        case .label(let match):
-            return "label=\(match.catalogValue)"
-        case .identifier(let match):
-            return "identifier=\(match.catalogValue)"
-        case .value(let match):
-            return "value=\(match.catalogValue)"
-        case .hint(let match):
-            return "hint=\(match.catalogValue)"
-        case .traits(let traits):
-            return "traits=\(traits.catalogValue)"
-        case .actions(let actions):
-            return "actions=\(actions.catalogValue)"
-        case .customContent(let match):
-            return "customContent=\(match.catalogValue)"
-        case .rotors(let matches):
-            return "rotors=\(matches.catalogValue)"
-        case .exclude(let facet):
-            return "exclude(\(facet.catalogValue))"
-        }
-    }
-}
-
-private struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
-    let label: HeistSemanticStringMatch?
-    let value: HeistSemanticStringMatch?
-    let isImportant: Bool?
-
-    init(_ match: CustomContentMatch<String>) {
-        self.label = match.label.map(HeistSemanticStringMatch.init)
-        self.value = match.value.map(HeistSemanticStringMatch.init)
-        self.isImportant = match.isImportant
-    }
-
-    init(_ match: CustomContentMatch<StringExpr>) {
-        self.label = match.label.map(HeistSemanticStringMatch.init)
-        self.value = match.value.map(HeistSemanticStringMatch.init)
-        self.isImportant = match.isImportant
-    }
-
-    var catalogValue: String {
-        [
-            label.map { "label=\($0.catalogValue)" },
-            value.map { "value=\($0.catalogValue)" },
-            isImportant.map { "isImportant=\($0)" },
-        ].compactMap { $0 }.joined(separator: ",")
-    }
-}
-
-private struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
-    let mode: StringMatch<String>.Mode
-    let value: HeistSemanticStringValue?
-
-    init(_ match: StringMatch<String>) {
-        self.mode = match.mode
-        self.value = match.valueIfPresent.map(HeistSemanticStringValue.literal)
-    }
-
-    init(_ match: StringMatch<StringExpr>) {
-        self.mode = StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact
-        self.value = match.valueIfPresent.map(HeistSemanticStringValue.init)
-    }
-
-    var catalogValue: String {
-        guard let value else { return mode.rawValue }
-        guard mode != .exact else { return value.catalogValue }
-        return "\(mode.rawValue)(\(value.catalogValue))"
-    }
-}
-
-private enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
-    case literal(String)
-    case reference(HeistReferenceName)
-
-    init(_ expression: StringExpr) {
-        switch expression {
-        case .literal(let literal):
-            self = .literal(literal)
-        case .ref(let reference):
-            self = .reference(reference)
-        }
-    }
-
-    var catalogValue: String {
-        switch self {
-        case .literal(let literal):
-            return literal
-        case .reference(let reference):
-            return "\(reference.rawValue)_ref"
-        }
-    }
-}
-
-private extension Set where Element == HeistTrait {
-    var catalogValue: String {
-        canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|")
-    }
-}
-
-private extension Array where Element == HeistSemanticStringMatch {
-    var catalogValue: String {
-        map(\.catalogValue).joined(separator: "|")
-    }
-}
-
-private extension Set where Element == ElementAction {
-    var catalogValue: String {
-        canonicalElementActionArray.map(\.catalogValue).joined(separator: "|")
-    }
-}
-
-private extension ElementAction {
-    var catalogValue: String {
-        switch self {
-        case .activate:
-            return "activate"
-        case .increment:
-            return "increment"
-        case .decrement:
-            return "decrement"
-        case .custom(let name):
-            return "custom(\(name))"
-        }
-    }
-}
-
 private struct HeistSemanticSurfaceBuilder {
     var actionCommands: [HeistActionCommandType] = []
     var targetPredicates: [HeistTargetPredicateFact] = []
     var waits: [AccessibilityPredicateExpr] = []
     var expectations: [AccessibilityPredicateExpr] = []
-    var nestedRunHeists: [String] = []
+    var nestedRunHeists: [HeistInvocationPath] = []
     var expectedEffects: [AccessibilityPredicateExpr] = []
-    var semanticFacets: [HeistSemanticSurfaceFacet] = []
+    var semanticFacets: [HeistSemanticSurfaceFact] = []
 
-    static func surface(for resolved: ResolvedCatalogHeist) -> HeistCollectedSemanticSurface {
+    static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var builder = Self()
         builder.collect(
             steps: resolved.plan.body,
@@ -600,14 +487,14 @@ private struct HeistSemanticSurfaceBuilder {
             environment: resolved.environment,
             invocationStack: resolved.invocationStack
         )
-        return HeistCollectedSemanticSurface(
+        return HeistSemanticSurface(
             actionCommands: builder.actionCommands,
             targetPredicates: builder.targetPredicates,
             waits: builder.waits,
             expectations: builder.expectations,
             nestedRunHeists: builder.nestedRunHeists,
             expectedEffects: builder.expectedEffects,
-            semanticFacets: builder.semanticFacets
+            semanticSurfaces: builder.semanticFacets
         )
     }
 
@@ -752,7 +639,7 @@ private struct HeistSemanticSurfaceBuilder {
             rootScope: rootDefinitionScope
         ) else { return }
         let resolvedNode = resolved.callGraphNode
-        appendUnique(resolvedNode.name, to: &nestedRunHeists)
+        appendUnique(HeistInvocationPath.preconditionValidated(dottedName: resolvedNode.name), to: &nestedRunHeists)
         guard HeistCallGraph.nodeCycle(closing: resolvedNode, in: invocationStack) == nil,
               let nestedEnvironment = try? environment.binding(
                 argument: invocation.argument,
@@ -838,7 +725,7 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
-    func semanticSurfaceFacet(for check: ElementPredicateCheck<String>) -> HeistSemanticSurfaceFacet? {
+    func semanticSurfaceFacet(for check: ElementPredicateCheck<String>) -> HeistSemanticSurfaceFact? {
         switch check {
         case .label(let label) where label.hasPredicateLiteral:
             return .label(HeistSemanticStringMatch(label))
@@ -849,21 +736,21 @@ private struct HeistSemanticSurfaceBuilder {
         case .hint(let hint) where hint.hasPredicateLiteral:
             return .hint(HeistSemanticStringMatch(hint))
         case .traits(let traits) where !traits.isEmpty:
-            return .traits(traits)
+            return .traits(traits.canonicalHeistTraitArray)
         case .actions(let actions) where !actions.isEmpty:
-            return .actions(actions)
+            return .actions(actions.canonicalElementActionArray)
         case .customContent(let match) where match.hasPredicateLiteral:
             return .customContent(HeistSemanticCustomContentMatch(match))
         case .rotors(let matches) where matches.contains(where: \.hasPredicateLiteral):
             return .rotors(matches.map(HeistSemanticStringMatch.init))
         case .exclude(let check):
-            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFacet.exclude)
+            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFact.exclude)
         case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
             return nil
         }
     }
 
-    func semanticSurfaceFacet(for check: ElementPredicateCheck<StringExpr>) -> HeistSemanticSurfaceFacet? {
+    func semanticSurfaceFacet(for check: ElementPredicateCheck<StringExpr>) -> HeistSemanticSurfaceFact? {
         switch check {
         case .label(let label) where label.hasPredicateLiteral:
             return .label(HeistSemanticStringMatch(label))
@@ -874,15 +761,15 @@ private struct HeistSemanticSurfaceBuilder {
         case .hint(let hint) where hint.hasPredicateLiteral:
             return .hint(HeistSemanticStringMatch(hint))
         case .traits(let traits) where !traits.isEmpty:
-            return .traits(traits)
+            return .traits(traits.canonicalHeistTraitArray)
         case .actions(let actions) where !actions.isEmpty:
-            return .actions(actions)
+            return .actions(actions.canonicalElementActionArray)
         case .customContent(let match) where match.hasPredicateLiteral:
             return .customContent(HeistSemanticCustomContentMatch(match))
         case .rotors(let matches) where matches.contains(where: \.hasPredicateLiteral):
             return .rotors(matches.map(HeistSemanticStringMatch.init))
         case .exclude(let check):
-            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFacet.exclude)
+            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFact.exclude)
         case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
             return nil
         }

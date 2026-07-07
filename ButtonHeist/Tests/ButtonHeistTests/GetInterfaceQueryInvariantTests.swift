@@ -11,16 +11,10 @@ final class GetInterfaceQueryInvariantTests: XCTestCase {
         let response = try await fence.execute(command: .getInterface, values: [
             "subtree": .object([
                 "element": .object([
-                    "label": .object([
-                        "mode": .string("exact"),
-                        "value": .string("Save"),
-                    ]),
+                    "checks": .array([Self.exactStringCheck(kind: "label", value: "Save")]),
                 ]),
             ]),
-            "label": .object([
-                "mode": .string("exact"),
-                "value": .string("Pay"),
-            ]),
+            "checks": .array([Self.exactStringCheck(kind: "label", value: "Pay")]),
         ])
 
         guard case .error(let failure) = response else {
@@ -30,5 +24,15 @@ final class GetInterfaceQueryInvariantTests: XCTestCase {
             failure.message.contains("use subtree or element matcher fields, not both"),
             failure.message
         )
+    }
+
+    private static func exactStringCheck(kind: String, value: String) -> HeistValue {
+        .object([
+            "kind": .string(kind),
+            "match": .object([
+                "mode": .string("exact"),
+                "value": .string(value),
+            ]),
+        ])
     }
 }

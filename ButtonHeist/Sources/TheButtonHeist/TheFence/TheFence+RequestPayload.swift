@@ -16,9 +16,9 @@ extension TheFence {
         let command: String
     }
 
-    typealias ParsedRequestHandler = @ButtonHeistActor (TheFence) async throws -> FenceResponse
+    typealias ParsedRequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
 
-    struct DurableHeistActionCommands {
+    struct DurableHeistActionCommands: Sendable {
         private let actions: NonEmptyArray<HeistActionCommand>
 
         init?(_ actions: NonEmptyArray<HeistActionCommand>) {
@@ -41,17 +41,17 @@ extension TheFence {
         }
     }
 
-    enum SingleStepHeistRequest {
+    enum SingleStepHeistRequest: Sendable {
         case actions(DurableHeistActionCommands, expectation: ExpectationPayload)
         case wait(WaitStep)
     }
 
-    struct DirectActionRequest {
+    struct DirectActionRequest: Sendable {
         let command: Command
         let action: HeistActionCommand
     }
 
-    enum DecodedRequestDispatch {
+    enum DecodedRequestDispatch: Sendable {
         case singleStepHeist(SingleStepHeistRequest)
         case directAction(DirectActionRequest)
         case handler(ParsedRequestHandler)
@@ -61,7 +61,7 @@ extension TheFence {
         }
     }
 
-    struct ParsedRequest {
+    struct ParsedRequest: Sendable {
         let command: Command
         let requestId: String
         let dispatch: DecodedRequestDispatch
@@ -120,15 +120,7 @@ extension TheFence {
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        guard command.descriptor.isPublicRequestContract else {
-            throw SchemaValidationError(
-                field: "command",
-                observed: "string \"\(command.rawValue)\"",
-                expected: "public command for The Button Heist"
-            )
-        }
-        try validateRequestKeys(command: command, arguments: arguments)
-        try command.descriptor.validatePublicRequestArguments(arguments)
+        try FenceCommandInput(command: command, arguments: arguments).validatePublicContract()
         let requestId = arguments.string(.requestId) ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch = try command.descriptor.requestDecoder(self, arguments, requestId, expectationPayload)
@@ -138,20 +130,6 @@ extension TheFence {
             requestId: requestId,
             dispatch: dispatch,
             expectationPayload: expectationPayload
-        )
-    }
-
-    private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
-        let metadataKeys = Set([FenceParameterKey.requestId.rawValue])
-        let parameterKeys = command.descriptor.topLevelParameterKeys
-        let allowedKeys = metadataKeys.union(parameterKeys)
-        guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: arguments.field(forUnknownKey: unexpectedKey),
-            observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
-            expected: "valid \(command.rawValue) parameter"
         )
     }
 

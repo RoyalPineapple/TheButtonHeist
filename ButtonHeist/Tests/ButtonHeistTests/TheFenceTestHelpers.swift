@@ -41,12 +41,24 @@ extension TheFence {
 
     @ButtonHeistActor
     func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
-        try await execute(FenceOperationRequest(command: command, arguments: arguments))
+        let request: FenceOperationRequest
+        do {
+            request = try admit(command: command, arguments: arguments)
+        } catch {
+            return .failure(error)
+        }
+        return try await execute(request)
     }
 
     @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        try await execute(FenceOperationRequest(command: command, arguments: CommandArgumentEnvelope(values: values)))
+        let request: FenceOperationRequest
+        do {
+            request = try admit(command: command, arguments: CommandArgumentEnvelope(values: values))
+        } catch {
+            return .failure(error)
+        }
+        return try await execute(request)
     }
 }
 
@@ -158,11 +170,12 @@ func targetArgumentValue(
     traits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
-    var target: [String: HeistValue] = [:]
-    if let label { target["label"] = stringMatchArgumentValue(label) }
-    if let identifier { target["identifier"] = stringMatchArgumentValue(identifier) }
-    if let value { target["value"] = stringMatchArgumentValue(value) }
-    if let traits { target["traits"] = .array(traits.map { .string($0) }) }
+    var checks: [HeistValue] = []
+    if let label { checks.append(predicateCheckArgumentValue(kind: "label", match: stringMatchArgumentValue(label))) }
+    if let identifier { checks.append(predicateCheckArgumentValue(kind: "identifier", match: stringMatchArgumentValue(identifier))) }
+    if let value { checks.append(predicateCheckArgumentValue(kind: "value", match: stringMatchArgumentValue(value))) }
+    if let traits { checks.append(predicateCheckArgumentValue(kind: "traits", values: traits.map { .string($0) })) }
+    var target: [String: HeistValue] = ["checks": .array(checks)]
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return .object(target)
 }
@@ -172,6 +185,17 @@ func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistV
         "mode": .string(mode),
         "value": .string(value),
     ])
+}
+
+private func predicateCheckArgumentValue(
+    kind: String,
+    match: HeistValue? = nil,
+    values: [HeistValue]? = nil
+) -> HeistValue {
+    var object: [String: HeistValue] = ["kind": .string(kind)]
+    if let match { object["match"] = match }
+    if let values { object["values"] = .array(values) }
+    return .object(object)
 }
 
 struct TestHeistElementBuilder {

@@ -591,7 +591,7 @@ private extension HeistExecutionResult {
 
 private extension HeistExecutionStepResult {
     var actionMethods: [ActionMethod] {
-        (dispatchedActionResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
+        (actionEvidence?.dispatchResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
     }
 
     var repeatUntilSteps: [HeistExecutionStepResult] {

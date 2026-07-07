@@ -44,20 +44,20 @@ public struct SessionDevicePayload: Sendable, Equatable {
 }
 
 public struct SessionFailurePayload: Sendable, Equatable {
-    public let errorCode: String
+    public let code: String
     public let phase: FailurePhase
     public let retryable: Bool
     public let message: String?
     public let hint: String?
 
     public init(
-        errorCode: String,
+        code: String,
         phase: FailurePhase,
         retryable: Bool,
         message: String?,
         hint: String?
     ) {
-        self.errorCode = errorCode
+        self.code = code
         self.phase = phase
         self.retryable = retryable
         self.message = message
@@ -201,16 +201,9 @@ enum DiagnosticFailureMapper {
     }
 
     private static func missingElementTargetFailure(command: String) -> DiagnosticFailure {
-        let contract = "requires target object with predicate fields"
+        let contract = "requires target object with checks"
         let next = "get_interface()"
-        let matcherFields = ElementTarget.predicateFieldNames.map { "target.\($0)" }
-        let matcherHint: String
-        if let last = matcherFields.last {
-            matcherHint = matcherFields.dropLast().joined(separator: ", ") + ", or \(last)"
-        } else {
-            matcherHint = ""
-        }
-        let targetHint = matcherHint
+        let targetHint = "target.checks"
         let message = "\(command) request contract failed: missing target; \(contract). " +
             "Next: \(next) to inspect the current app accessibility state, then retry \(command) with \(targetHint)."
         return DiagnosticFailure(

@@ -179,10 +179,9 @@ final class PublicActionResultJSONTests: XCTestCase {
 
         XCTAssertEqual(failure.code, "request.element_not_found")
         XCTAssertEqual(failure.kind, "request")
-        XCTAssertEqual(failure.errorCode, "request.element_not_found")
         XCTAssertEqual(failure.phase, "request")
         XCTAssertEqual(failure.retryable, false)
-        XCTAssertEqual(action.errorCode, failure.errorCode)
+        XCTAssertEqual(action.code, failure.code)
         XCTAssertEqual(action.kind, failure.kind)
         XCTAssertEqual(action.phase, failure.phase)
         XCTAssertEqual(action.retryable, failure.retryable)
@@ -436,7 +435,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertNil(result.rotor, file: file, line: line)
         XCTAssertEqual(result.errorClass, "accessibilityTreeUnavailable", file: file, line: line)
         XCTAssertEqual(
-            result.errorCode,
+            result.code,
             "request.accessibility_tree_unavailable",
             file: file,
             line: line

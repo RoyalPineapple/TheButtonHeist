@@ -96,7 +96,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "elementNotFound")
-        XCTAssertEqual(try json.string("errorCode"), "request.element_not_found")
+        XCTAssertEqual(try json.string("code"), "request.element_not_found")
         XCTAssertEqual(try json.string("kind"), "request")
         XCTAssertEqual(try json.string("phase"), "request")
         XCTAssertEqual(try json.bool("retryable"), false)
@@ -121,7 +121,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "timeout")
-        XCTAssertEqual(try json.string("errorCode"), "request.timeout")
+        XCTAssertEqual(try json.string("code"), "request.timeout")
         XCTAssertEqual(try json.string("kind"), "request")
         XCTAssertEqual(try json.string("phase"), "request")
         XCTAssertEqual(try json.bool("retryable"), true)
@@ -144,7 +144,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "accessibilityTreeUnavailable")
-        XCTAssertEqual(try json.string("errorCode"), "request.accessibility_tree_unavailable")
+        XCTAssertEqual(try json.string("code"), "request.accessibility_tree_unavailable")
         XCTAssertEqual(try json.string("kind"), "request")
         XCTAssertEqual(try json.string("phase"), "request")
         XCTAssertEqual(try json.bool("retryable"), true)

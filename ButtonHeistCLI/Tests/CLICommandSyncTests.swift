@@ -698,6 +698,6 @@ final class CLICommandSyncTests: XCTestCase {
 
 private extension CLIParsedRequest {
     func argument(_ key: FenceParameterKey) -> HeistValue? {
-        arguments.value(for: key)
+        input.arguments.value(for: key)
     }
 }

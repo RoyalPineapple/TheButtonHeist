@@ -26,8 +26,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.expectationsChecked, 1)
         XCTAssertEqual(result.expectationsMet, 1)
         XCTAssertEqual(result.steps.map(\.path), ["$.body[0]"])
-        XCTAssertEqual(result.steps.first?.reportStepName, "action")
-        XCTAssertEqual(result.steps.first?.reportCommandName, "activate")
+        XCTAssertEqual(result.steps.first?.reportFacts.kind, "action")
+        XCTAssertEqual(result.steps.first?.reportFacts.commandName, "activate")
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
@@ -194,7 +194,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = try XCTUnwrap(result.steps.first)
-        let actionEvidence = try XCTUnwrap(node.actionEvidence)
+        guard case .action(let actionEvidence)? = node.evidence else {
+            return XCTFail("Expected action evidence")
+        }
         let reportFacts = node.reportFacts
         let reportResults = reportFacts.results
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
@@ -214,14 +216,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectation: actionEvidence.expectation,
             actionErrorKind: .timeout
         ))
-        XCTAssertEqual(reportFacts.dispatchedActionResult, reportResults.dispatchedActionResult)
-        XCTAssertEqual(reportFacts.actionResult, reportResults.actionResult)
-        XCTAssertEqual(reportFacts.traceEvidenceResult, reportResults.traceEvidenceResult)
-        XCTAssertEqual(reportFacts.expectation, reportResults.expectation)
-        XCTAssertEqual(reportFacts.actionErrorKind, reportResults.actionErrorKind)
-        XCTAssertEqual(node.dispatchedActionResult?.method, .activate)
-        XCTAssertEqual(node.reportedActionResult?.errorKind, .timeout)
-        XCTAssertEqual(node.traceEvidenceResult?.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(reportFacts.results.dispatchedActionResult, reportResults.dispatchedActionResult)
+        XCTAssertEqual(reportFacts.results.actionResult, reportResults.actionResult)
+        XCTAssertEqual(reportFacts.results.traceEvidenceResult, reportResults.traceEvidenceResult)
+        XCTAssertEqual(reportFacts.results.expectation, reportResults.expectation)
+        XCTAssertEqual(reportFacts.results.actionErrorKind, reportResults.actionErrorKind)
+        XCTAssertEqual(reportFacts.results.dispatchedActionResult?.method, .activate)
+        XCTAssertEqual(reportFacts.results.actionResult?.errorKind, .timeout)
+        XCTAssertEqual(reportFacts.results.traceEvidenceResult?.accessibilityTrace?.endpointScreenId, "settled")
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
         XCTAssertEqual(result.traceResultsInExecutionOrder.map(\.method), [.wait])
@@ -280,9 +282,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         XCTAssertEqual(result.steps.map(\.path), ["$.body[9]"])
-        XCTAssertEqual(result.steps.first?.reportStepName, "action")
-        XCTAssertEqual(result.steps.first?.reportCommandName, "activate")
-        XCTAssertEqual(result.steps.first?.reportTarget, .predicate(ElementPredicate(label: "Delete")))
+        XCTAssertEqual(result.steps.first?.reportFacts.kind, "action")
+        XCTAssertEqual(result.steps.first?.reportFacts.commandName, "activate")
+        XCTAssertEqual(result.steps.first?.reportFacts.target, .predicate(ElementPredicate(label: "Delete")))
     }
 
     func testReportFactsCarryStepStoryForProjectionAdapters() {
@@ -321,7 +323,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(report.message, "Delete not found")
         XCTAssertEqual(report.failureMessage, "Delete not found")
         XCTAssertEqual(report.failureCategory, .targetResolution)
-        XCTAssertEqual(report.actionErrorKind, .elementNotFound)
+        XCTAssertEqual(report.results.actionErrorKind, .elementNotFound)
     }
 
     func testAbortedResultContainsOnlyExecutedSteps() {
@@ -349,10 +351,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")
         XCTAssertEqual(result.outputReceiptNodes.count, 1)
         XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
-        XCTAssertEqual(result.steps.map(\.reportStatus), [.failed])
+        XCTAssertEqual(result.steps.map(\.reportFacts.status), [.failed])
         XCTAssertEqual(result.expectationsChecked, 0)
         XCTAssertEqual(result.expectationsMet, 0)
-        XCTAssertEqual(result.steps.first?.reportActionResult?.message, "Delete failed")
+        XCTAssertEqual(result.steps.first?.reportFacts.results.actionResult?.message, "Delete failed")
     }
 
     func testWaitReportsWaitEvidenceWithoutDispatchedActionResult() {
@@ -368,10 +370,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         let node = result.steps[0]
         XCTAssertEqual(node.path, "$.body[0]")
-        XCTAssertEqual(node.reportStepName, "wait")
-        XCTAssertEqual(node.reportStatus, .passed)
-        XCTAssertEqual(node.reportExpectation?.met, true)
-        XCTAssertEqual(node.reportActionResult?.method, .wait)
+        XCTAssertEqual(node.reportFacts.kind, "wait")
+        XCTAssertEqual(node.reportFacts.status, .passed)
+        XCTAssertEqual(node.reportFacts.results.expectation?.met, true)
+        XCTAssertEqual(node.reportFacts.results.actionResult?.method, .wait)
         XCTAssertEqual(result.dispatchedActionResults, [])
         XCTAssertEqual(result.reportedActionResults, [])
     }
@@ -487,10 +489,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let node = result.steps[0]
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(result.failedStepPath, "$.body[0]")
-        XCTAssertEqual(node.reportStatus, .failed)
-        XCTAssertEqual(node.reportMessage, "screen did not change")
-        XCTAssertEqual(node.reportFailureMessage, "screen did not change")
-        XCTAssertEqual(node.reportActionResult?.success, true)
+        XCTAssertEqual(node.reportFacts.status, .failed)
+        XCTAssertEqual(node.reportFacts.message, "screen did not change")
+        XCTAssertEqual(node.reportFacts.failureMessage, "screen did not change")
+        XCTAssertEqual(node.reportFacts.results.actionResult?.success, true)
         guard case .failed(let outcome) = node.outcome else {
             return XCTFail("Expected failed typed outcome")
         }
@@ -527,9 +529,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "if")
+        XCTAssertEqual(node.reportFacts.kind, "if")
         XCTAssertEqual(node.children.map(\.path), ["$.body[0].conditional.cases[0].body[0]"])
-        XCTAssertEqual(node.children.first?.reportCommandName, "activate")
+        XCTAssertEqual(node.children.first?.reportFacts.commandName, "activate")
     }
 
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
@@ -553,10 +555,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "wait")
-        XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(node.reportFacts.kind, "wait")
+        XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(node.children.count, 0)
-        XCTAssertEqual(node.waitEvidence?.expectation.met, false)
+        XCTAssertEqual(node.reportFacts.results.expectation?.met, false)
     }
 
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
@@ -587,9 +589,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportStatus, .passed)
+        XCTAssertEqual(node.reportFacts.status, .passed)
         XCTAssertEqual(node.children.map(\.path), ["$.body[0].wait.else_body[0]"])
-        XCTAssertEqual(node.children.first?.reportStatus, .passed)
+        XCTAssertEqual(node.children.first?.reportFacts.status, .passed)
         XCTAssertEqual(result.warnings.map(\.path), ["$.body[0].wait.else_body[0]"])
     }
 
@@ -598,12 +600,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let node = result.steps[0]
 
         XCTAssertEqual(result.abortedAtPath, "$.body[0].for_each_string.iterations[1].body[0]")
-        XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(node.abortedAtChildPath, "$.body[0].for_each_string.iterations[1].body[0]")
-        XCTAssertEqual(node.children.map(\.reportStatus), [.passed, .failed])
+        XCTAssertEqual(node.children.map(\.reportFacts.status), [.passed, .failed])
         XCTAssertEqual(node.children[1].abortedAtChildPath, "$.body[0].for_each_string.iterations[1].body[0]")
-        XCTAssertEqual(node.children[1].children.first?.reportActionResult?.message, "field missing")
-        XCTAssertEqual(node.forEachStringEvidence?.failureReason, "iteration 1 failed for value \"Eggs\"")
+        XCTAssertEqual(node.children[1].children.first?.reportFacts.results.actionResult?.message, "field missing")
+        XCTAssertEqual(node.reportFacts.message, "iteration 1 failed for value \"Eggs\"")
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
         XCTAssertEqual(result.outputReceiptNodes.count, 5)
@@ -613,8 +615,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = forEachStringSuccessResult()
         let node = result.steps[0]
 
-        XCTAssertEqual(node.reportStatus, .passed)
-        XCTAssertEqual(node.children.map(\.reportStatus), [.passed, .passed])
+        XCTAssertEqual(node.reportFacts.status, .passed)
+        XCTAssertEqual(node.children.map(\.reportFacts.status), [.passed, .passed])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
         XCTAssertEqual(result.outputReceiptNodes.map(\.path), [
@@ -646,8 +648,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             abortedAtPath: "$.body[1]"
         )
 
-        XCTAssertEqual(result.steps.map(\.reportStepName), ["warn", "fail"])
-        XCTAssertEqual(result.steps.map(\.reportStatus), [.passed, .failed])
+        XCTAssertEqual(result.steps.map(\.reportFacts.kind), ["warn", "fail"])
+        XCTAssertEqual(result.steps.map(\.reportFacts.status), [.passed, .failed])
         XCTAssertEqual(result.warnings.map(\.message), ["Heads up"])
         XCTAssertEqual(result.executedTopLevelStepCount, 2)
         XCTAssertEqual(result.executedNodeCount, 2)
@@ -701,11 +703,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "invoke")
-        XCTAssertEqual(node.invocationEvidence?.invocation?.capabilityName, "LibraryScreen.addToCart")
-        XCTAssertEqual(node.reportDisplayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
+        XCTAssertEqual(node.reportFacts.kind, "invoke")
+        XCTAssertEqual(node.reportFacts.capabilityName, "LibraryScreen.addToCart")
+        XCTAssertEqual(node.reportFacts.displayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
         XCTAssertTrue(result.isFailure)
-        XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(result.failedStepPath, child.path)
         XCTAssertEqual(result.failedStepKind, .action)
     }
@@ -801,8 +803,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             abortedAtPath: childPath
         )
         let wrapper = result.outputReceiptNodes[0]
-        XCTAssertEqual(wrapper.reportStatus, .failed)
-        XCTAssertNil(wrapper.reportFailureMessage)
+        XCTAssertEqual(wrapper.reportFacts.status, .failed)
+        XCTAssertNil(wrapper.reportFacts.failureMessage)
 
         let rows = await Task { @ButtonHeistActor in
             TheFence(configuration: .init()).junitSteps(result: result)
@@ -955,17 +957,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertNil(skipped.intent)
         XCTAssertNil(skipped.evidence)
         XCTAssertNil(skipped.failure)
-        XCTAssertNil(skipped.reportActionResult)
-        XCTAssertNil(skipped.reportExpectation)
+        XCTAssertNil(skipped.reportFacts.results.actionResult)
+        XCTAssertNil(skipped.reportFacts.results.expectation)
     }
 
     func testPublicHeistEvidenceProjectionEncodesExactlyOneVariantPerEvidenceCase() throws {
         let plan = try evidenceProjectionPlan()
         for testCase in evidenceProjectionCases() {
-            let evidenceNode = try XCTUnwrap(HeistExecutionEvidenceRollup(steps: [testCase.step]).rootNodes.first)
-            let projection = HeistReportNodeProjection(node: evidenceNode, profile: .mcp)
-            XCTAssertEqual(projectedEvidenceKey(projection.evidence), testCase.expectedKey, testCase.name)
-
             let response = FenceResponse.heistExecution(
                 plan: plan,
                 result: HeistExecutionResult(steps: [testCase.step], durationMs: testCase.step.durationMs)
@@ -1266,28 +1264,6 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 XCTAssertEqual(warning.message, "Heads up")
             }
         )
-    }
-
-    private func projectedEvidenceKey(_ evidence: HeistReportEvidenceProjection?) -> String? {
-        guard let evidence else { return nil }
-        switch evidence {
-        case .action:
-            return "action"
-        case .wait:
-            return "wait"
-        case .caseSelection:
-            return "caseSelection"
-        case .forEachString:
-            return "forEachString"
-        case .forEachElement:
-            return "forEachElement"
-        case .repeatUntil:
-            return "repeatUntil"
-        case .invocation:
-            return "invocation"
-        case .warning:
-            return "warning"
-        }
     }
 
     private func actionStep(

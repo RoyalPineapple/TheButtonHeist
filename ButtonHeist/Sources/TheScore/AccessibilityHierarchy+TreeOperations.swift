@@ -1,5 +1,15 @@
 import AccessibilitySnapshotModel
 
+package struct AccessibilityElementTraversalRecord: Equatable, Sendable {
+    package let element: AccessibilityElement
+    package let traversalIndex: Int
+
+    package init(element: AccessibilityElement, traversalIndex: Int) {
+        self.element = element
+        self.traversalIndex = traversalIndex
+    }
+}
+
 // MARK: - Fold
 
 package extension AccessibilityHierarchy {
@@ -123,9 +133,9 @@ package extension AccessibilityHierarchy {
     /// The accessibility elements in this subtree, preserving traversal index.
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
-    var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+    var elements: [AccessibilityElementTraversalRecord] {
         [self].compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
-            (element, traversalIndex)
+            AccessibilityElementTraversalRecord(element: element, traversalIndex: traversalIndex)
         })
     }
 
@@ -169,11 +179,11 @@ package extension AccessibilityHierarchy {
 
 package extension Array where Element == AccessibilityHierarchy {
     /// The accessibility elements across all roots, sorted by traversal index.
-    var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+    var elements: [AccessibilityElementTraversalRecord] {
         flatMap(\.elements).sorted { $0.traversalIndex < $1.traversalIndex }
     }
 
-    /// The accessibility elements across all roots, sorted by traversal index, without the index tuple.
+    /// The accessibility elements across all roots, sorted by traversal index, without traversal metadata.
     /// Convenience for `.elements.map(\.element)` when you only need the elements in traversal order.
     var sortedElements: [AccessibilityElement] {
         elements.map(\.element)

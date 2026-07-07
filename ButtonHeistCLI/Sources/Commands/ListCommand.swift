@@ -19,7 +19,7 @@ struct ListCommand: AsyncParsableCommand, CLICommandContract {
         defer { fence.stop() }
 
         logStatus("Discovering devices...")
-        let response = try await fence.execute(FenceOperationRequest(
+        let response = try await fence.execute(try fence.admit(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments()
         ))

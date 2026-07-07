@@ -159,7 +159,7 @@ package enum FenceCommandReference {
                 "custom actions use `{ \"custom\": \"Sub\" }`; a custom-content check item is " +
                 "`{ \"kind\": \"customContent\", \"match\": { \"label\": StringMatch, \"value\": StringMatch } }`; " +
                 "exclusions wrap another check as `{ \"kind\": \"exclude\", \"check\": { ... } }`. " +
-                "Updated element predicates use full `before` and `after` element matcher objects.",
+                "Updated element predicates use `before` and `after` objects for the selected `property`.",
         ]
     }
 

@@ -55,7 +55,7 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
         }
         defer { fence.stop() }
 
-        let response = try await fence.execute(FenceOperationRequest(
+        let response = try await fence.execute(try fence.admit(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments()
         ))

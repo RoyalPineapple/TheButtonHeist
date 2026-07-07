@@ -65,7 +65,7 @@ func `JSONDecoder decode of nested collection loops is rejected by runtime safet
                 "for_each_element": {
                   "matching": {
                     "checks": [
-                      { "kind": "label", "match": "Row" }
+                      { "kind": "label", "match": { "mode": "exact", "value": "Row" } }
                     ]
                   },
                   "limit": 1,
@@ -108,7 +108,7 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
                 "type": "appeared",
                 "element": {
                   "checks": [
-                    { "kind": "label", "match": "Receipt" }
+                    { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
                   ]
                 }
               }
@@ -132,7 +132,7 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
         "type": "exists",
         "element": {
           "checks": [
-            { "kind": "label", "match": "Receipt" }
+            { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
           ]
         }
       },
@@ -157,7 +157,7 @@ func `durable element predicate JSON requires canonical checks`() throws {
     let predicate = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
     {
       "checks": [
-        { "kind": "label", "match": "Receipt" }
+        { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
       ]
     }
     """.utf8))
@@ -261,7 +261,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
                 "type" : "exists",
                 "element": {
                   "checks": [
-                    { "kind": "label", "match": "Home" }
+                    { "kind": "label", "match": { "mode": "exact", "value": "Home" } }
                   ]
                 }
               },
@@ -279,7 +279,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
                     "type" : "exists",
                     "element": {
                       "checks": [
-                        { "kind": "label", "match": "Promo" }
+                        { "kind": "label", "match": { "mode": "exact", "value": "Promo" } }
                       ]
                     }
                   },
@@ -297,7 +297,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
                 "type" : "exists",
                 "element": {
                   "checks": [
-                    { "kind": "label", "match": "Promo" }
+                    { "kind": "label", "match": { "mode": "exact", "value": "Promo" } }
                   ]
                 }
               },
@@ -316,7 +316,7 @@ private func unknownCollectionStepPayloadCases() -> [UnknownFieldCase] {
             {
               "matching": {
                 "checks": [
-                  { "kind": "label", "match": "Delete" }
+                  { "kind": "label", "match": { "mode": "exact", "value": "Delete" } }
                 ]
               },
               "limit": 1,
@@ -343,7 +343,7 @@ private func unknownCollectionStepPayloadCases() -> [UnknownFieldCase] {
                 "type" : "exists",
                 "element": {
                   "checks": [
-                    { "kind": "label", "match": "Ready" }
+                    { "kind": "label", "match": { "mode": "exact", "value": "Ready" } }
                   ]
                 }
               },
@@ -499,12 +499,17 @@ private let expectedAllStepKindsPlanJSON = """
       "action" : {
         "command" : {
           "payload" : {
-            "checks" : [
-              {
-                "kind" : "label",
-                "match" : "Pay"
-              }
-            ]
+            "target" : {
+              "checks" : [
+                {
+                  "kind" : "label",
+                  "match" : {
+                    "mode" : "exact",
+                    "value" : "Pay"
+                  }
+                }
+              ]
+            }
           },
           "type" : "activate"
         },
@@ -530,7 +535,10 @@ private let expectedAllStepKindsPlanJSON = """
             "checks" : [
               {
                 "kind" : "label",
-                "match" : "Home"
+                "match" : {
+                  "mode" : "exact",
+                  "value" : "Home"
+                }
               }
             ]
           },
@@ -556,7 +564,10 @@ private let expectedAllStepKindsPlanJSON = """
                 "checks" : [
                   {
                     "kind" : "label",
-                    "match" : "Promo"
+                    "match" : {
+                      "mode" : "exact",
+                      "value" : "Promo"
+                    }
                   }
                 ]
               },
@@ -602,7 +613,10 @@ private let expectedAllStepKindsPlanJSON = """
           "checks" : [
             {
               "kind" : "label",
-              "match" : "Delete"
+              "match" : {
+                "mode" : "exact",
+                "value" : "Delete"
+              }
             },
             {
               "kind" : "traits",
@@ -627,7 +641,10 @@ private let expectedAllStepKindsPlanJSON = """
                     "checks" : [
                       {
                         "kind" : "label",
-                        "match" : "Search"
+                        "match" : {
+                          "mode" : "exact",
+                          "value" : "Search"
+                        }
                       }
                     ]
                   },
@@ -670,7 +687,10 @@ private let expectedAllStepKindsPlanJSON = """
             "checks" : [
               {
                 "kind" : "label",
-                "match" : "Ready"
+                "match" : {
+                  "mode" : "exact",
+                  "value" : "Ready"
+                }
               }
             ]
           },
@@ -730,7 +750,10 @@ private let expectedAllStepKindsPlanJSON = """
                   "checks" : [
                     {
                       "kind" : "label",
-                      "match" : "Search"
+                      "match" : {
+                        "mode" : "exact",
+                        "value" : "Search"
+                      }
                     }
                   ]
                 },

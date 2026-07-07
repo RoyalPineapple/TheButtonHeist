@@ -123,7 +123,7 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testElementTargetRejectsEmptyPredicateSelector() throws {
-        let data = Data(#"{"traits":[]}"#.utf8)
+        let data = Data(#"{"checks":[]}"#.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: data)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
@@ -146,7 +146,7 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testElementTargetRejectsHeistIdAlongsidePredicate() {
-        let json = #"{"heistId":"save_button","label":"Save"}"#
+        let json = #"{"heistId":"save_button","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
@@ -183,7 +183,7 @@ final class ElementPredicateTests: XCTestCase {
         let json = """
         {
           "checks": [
-            { "kind": "label", "match": "Settings" },
+            { "kind": "label", "match": { "mode": "exact", "value": "Settings" } },
             { "kind": "traits", "values": ["header", "button"] },
             { "kind": "exclude", "check": { "kind": "traits", "values": ["notEnabled"] } }
           ]

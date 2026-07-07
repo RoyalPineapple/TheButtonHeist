@@ -56,7 +56,7 @@ struct ToolSyncTests {
 
     @Test("StringMatch command schemas advertise object form without combinators")
     func stringMatchCommandSchemasAdvertiseObjectFormWithoutCombinators() throws {
-        let fields = ["label", "identifier", "value"]
+        let removedFlatFields = ["label", "identifier", "value"]
         let schemaCases: [(command: TheFence.Command, basePath: [String], label: String)] = [
             (.activate, ["properties", "target", "properties"], "target"),
             (.oneFingerTap, ["properties", "element", "properties"], "gesture element"),
@@ -68,17 +68,40 @@ struct ToolSyncTests {
 
         for schemaCase in schemaCases {
             let inputSchema = try inputSchemaValue(for: schemaCase.command)
-            for field in fields {
-                let path = schemaCase.basePath + [field]
-                let fieldSchema = try #require(
-                    schemaValue(at: path, in: inputSchema),
-                    "\(schemaCase.command.rawValue) \(schemaCase.label).\(field) missing from input schema"
-                )
-                assertStringMatchSchema(
-                    fieldSchema,
-                    path: "\(schemaCase.command.rawValue).inputSchema.\(path.joined(separator: "."))"
+            for field in removedFlatFields {
+                #expect(
+                    schemaValue(at: schemaCase.basePath + [field], in: inputSchema) == nil,
+                    "\(schemaCase.command.rawValue) \(schemaCase.label).\(field) must not expose flat matcher aliases"
                 )
             }
+
+            let checksPath = schemaCase.basePath + ["checks"]
+            let checksSchema = try #require(
+                schemaValue(at: checksPath, in: inputSchema),
+                "\(schemaCase.command.rawValue) \(schemaCase.label).checks missing from input schema"
+            )
+            #expect(checksSchema.objectValue?["type"] == .string("array"))
+            #expect(
+                schemaValue(at: checksPath + ["items", "properties", "kind", "enum"], in: inputSchema) == .array([
+                    .string("label"),
+                    .string("identifier"),
+                    .string("value"),
+                    .string("hint"),
+                    .string("traits"),
+                    .string("actions"),
+                    .string("customContent"),
+                    .string("rotors"),
+                    .string("exclude"),
+                ])
+            )
+            let matchSchema = try #require(
+                schemaValue(at: checksPath + ["items", "properties", "match"], in: inputSchema),
+                "\(schemaCase.command.rawValue) \(schemaCase.label).checks[].match missing from input schema"
+            )
+            assertStringMatchSchema(
+                matchSchema,
+                path: "\(schemaCase.command.rawValue).inputSchema.\((checksPath + ["items", "properties", "match"]).joined(separator: "."))"
+            )
         }
     }
 
@@ -173,7 +196,8 @@ struct ToolSyncTests {
             schemaValue(at: ["properties", "argument", "properties", "target", "additionalProperties"], in: tool.inputSchema)
                 == .bool(false)
         )
-        #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "label"], in: tool.inputSchema) != nil)
+        #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "checks"], in: tool.inputSchema) != nil)
+        #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "label"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "unexpected"], in: tool.inputSchema) == nil)
 
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)

@@ -224,7 +224,14 @@ private enum GesturePayloadDecodingTestError: Error {
 }
 
 private func targetValue(identifier: String) -> HeistValue {
-    .object(["identifier": stringMatchValue(identifier)])
+    .object([
+        "checks": .array([
+            .object([
+                "kind": .string("identifier"),
+                "match": stringMatchValue(identifier),
+            ]),
+        ]),
+    ])
 }
 
 private func stringMatchValue(_ value: String) -> HeistValue {

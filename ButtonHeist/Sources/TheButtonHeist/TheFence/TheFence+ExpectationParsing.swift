@@ -4,7 +4,7 @@ import TheScore
 
 extension TheFence {
 
-    struct ExpectationPayload {
+    struct ExpectationPayload: Sendable {
         let expectation: AccessibilityPredicate?
         let timeout: Double?
 
@@ -75,12 +75,6 @@ extension TheFence {
             }
             if let target = object["target"] {
                 try validateElementPredicateStringMatchObjects(target, path: path + ["target"])
-            }
-            if let before = object["before"] {
-                try validateElementPredicateStringMatchObjects(before, path: path + ["before"])
-            }
-            if let after = object["after"] {
-                try validateElementPredicateStringMatchObjects(after, path: path + ["after"])
             }
             if let match = object["match"] {
                 try TheFence.validateStringMatchObject(match, field: (path + ["match"]).joined(separator: "."))
