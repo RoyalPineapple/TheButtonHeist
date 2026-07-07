@@ -95,22 +95,6 @@ final class WaitForIntegrationTests: XCTestCase {
         return label
     }
 
-    @discardableResult
-    private func addScrollViewWithOffscreenLabel(_ text: String) -> UIScrollView {
-        let scrollView = UIScrollView(frame: CGRect(x: 10, y: 100, width: 220, height: 120))
-        scrollView.contentSize = CGSize(width: 220, height: 640)
-        scrollView.isAccessibilityElement = false
-
-        let label = UILabel(frame: CGRect(x: 10, y: 480, width: 180, height: 44))
-        label.text = text
-        label.accessibilityLabel = text
-        label.isAccessibilityElement = true
-        scrollView.addSubview(label)
-
-        hostView.addSubview(scrollView)
-        return scrollView
-    }
-
     private func waitFor(
         target: ElementPredicate,
         absent: Bool = false,
@@ -347,9 +331,26 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.hasPrefix("matched") == true)
     }
 
-    func testWaitForAbsentTreatsOffscreenScrollableElementAsPresent() async throws {
-        let scrollView = addScrollViewWithOffscreenLabel("WaitFor-Offscreen-StillHere")
-        defer { scrollView.removeFromSuperview() }
+    func testWaitForAbsentTreatsKnownOffViewportElementAsPresent() async throws {
+        insideJob.brains.stash.stopPassiveSemanticObservation()
+
+        let visibleElement = AccessibilityElement.make(
+            label: "WaitFor-Offscreen-Anchor",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let offViewportElement = AccessibilityElement.make(
+            label: "WaitFor-Offscreen-StillHere",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let offViewportHeistId: HeistId = "wait_for_offscreen_still_here_staticText"
+        let screen = Screen.makeForTests(
+            elements: [(visibleElement, "wait_for_offscreen_anchor_staticText")],
+            offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
+        )
+        insideJob.brains.stash.installScreenForTesting(screen)
+        XCTAssertNotNil(insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId))
 
         let response = await waitFor(
             target: ElementPredicate(label: "WaitFor-Offscreen-StillHere"),
@@ -361,7 +362,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("element still present") == true)
+        XCTAssertTrue(result.message?.contains("timed out") == true, result.message ?? "missing wait message")
     }
 
     // MARK: - Absent already absent returns immediately

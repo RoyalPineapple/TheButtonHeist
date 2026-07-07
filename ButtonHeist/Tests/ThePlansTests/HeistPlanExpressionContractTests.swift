@@ -169,6 +169,34 @@ func `target backed predicates equal predicate templates`() throws {
     #expect(predicateBacked == stateTemplate)
 }
 
+@Test
+func `target expression refinement appends checks and preserves ordinal`() throws {
+    let target = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Search"), ordinal: 1))
+    let refined = target
+        .and(.traits([.isEditing]))
+        .excluding(.traits([.textEntry]))
+
+    let expected = ElementTargetExpr.predicate(ElementPredicateTemplate([
+        .label(.exact(.literal("Search"))),
+        .traits([.isEditing]),
+        .exclude(.traits([.textEntry])),
+    ]), ordinal: 1)
+    #expect(refined == expected)
+    #expect(try refined.resolve(in: .empty) == .predicate(ElementPredicate([
+        .label(.exact("Search")),
+        .traits([.isEditing]),
+        .exclude(.traits([.textEntry])),
+    ]), ordinal: 1))
+}
+
+@Test
+func `target expression refinement leaves refs unresolved`() throws {
+    let target = ElementTargetExpr.ref("row")
+
+    #expect(target.and(.traits([.isEditing])) == target)
+    #expect(target.excluding(.traits([.textEntry])) == target)
+}
+
 private func expectExpressionError<T>(
     _ expected: HeistExpressionError,
     _ operation: () throws -> T

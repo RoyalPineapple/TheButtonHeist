@@ -109,6 +109,25 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
 }
 
 public extension ElementTargetExpr {
+    func and(_ checks: ElementPredicateCheck<StringExpr>...) -> ElementTargetExpr {
+        appending(checks)
+    }
+
+    func excluding(_ checks: ElementPredicateCheck<StringExpr>...) -> ElementTargetExpr {
+        appending(checks.map(ElementPredicateCheck.exclude))
+    }
+
+    private func appending(_ checks: [ElementPredicateCheck<StringExpr>]) -> ElementTargetExpr {
+        switch self {
+        case .target(.predicate(let predicate, let ordinal)):
+            return .predicate(ElementPredicateTemplate(predicate).appending(checks), ordinal: ordinal)
+        case .predicate(let predicate, let ordinal):
+            return .predicate(predicate.appending(checks), ordinal: ordinal)
+        case .ref:
+            return self
+        }
+    }
+
     // Keep target-backed predicates equal to their canonical predicate-template form
     // so Swift-authored targets and decoded inline predicate targets compare as the
     // same heist intent.
@@ -145,6 +164,12 @@ public extension ElementTargetExpr {
             hasher.combine(predicate)
             hasher.combine(ordinal)
         }
+    }
+}
+
+private extension ElementPredicateTemplate {
+    func appending(_ checks: [ElementPredicateCheck<StringExpr>]) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(self.checks + checks)
     }
 }
 

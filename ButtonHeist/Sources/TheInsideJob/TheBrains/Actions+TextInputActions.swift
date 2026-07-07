@@ -169,22 +169,45 @@ extension Actions {
             return .alreadyFocused
         }
 
-        let liveTarget: TheStash.LiveActionTarget
-        let subjectEvidence: ActionSubjectEvidence
-        let resolvedElementId: HeistId
+        let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: elementTarget,
             method: .typeText,
             deallocatedBoundary: "text input focus"
         ) {
-        case .inflated(let inflatedTarget):
-            liveTarget = inflatedTarget.liveTarget
-            subjectEvidence = inflatedTarget.subjectEvidence(source: .textInputTarget)
-            resolvedElementId = inflatedTarget.screenElement.heistId
+        case .inflated(let target):
+            inflatedTarget = target
         case .failed(let failure):
             return .failed(failure.interactionResult(commandMethod: .typeText))
         }
-        let point = liveTarget.activationPoint
+
+        if isResolvedTextInputFocused(inflatedTarget) {
+            return .focused(focusedTextInput(from: inflatedTarget))
+        }
+
+        return await activateTextInputTarget(inflatedTarget.target)
+    }
+
+    private func activateTextInputTarget(
+        _ target: ElementTarget
+    ) async -> TextInputFocusResult {
+        let refreshedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflateAfterActivationRefresh(for: target) {
+        case .inflated(let target):
+            refreshedTarget = target
+        case .failed(let failure):
+            return .failed(failure.interactionResult(commandMethod: .typeText))
+        }
+
+        let activateOutcome = accessibilityActions.activate(refreshedTarget.liveTarget)
+        if activateOutcome == .success {
+            safecracker.showFingerprint(at: refreshedTarget.liveTarget.activationPoint)
+        }
+        if await textInputIsFocused(refreshedTarget) {
+            return .focused(focusedTextInput(from: refreshedTarget))
+        }
+
+        let point = refreshedTarget.liveTarget.activationPoint
         guard await safecracker.tap(at: point) else {
             return .failed(.failure(
                 .typeText,
@@ -196,23 +219,52 @@ extension Actions {
             ))
         }
 
-        guard await safecracker.waitForActiveTextInput() else {
+        guard await textInputIsFocused(refreshedTarget) else {
             return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
-                    operation: "post-tap keyboard readiness",
+                    operation: "post-activation keyboard readiness",
                     stash: stash,
                     safecracker: safecracker,
                     suggestion: "target an editable text field"
                 )
             ))
         }
-        return .focused(FocusedTextInput(
-            subjectEvidence: subjectEvidence,
-            resolvedElementId: resolvedElementId,
-            resolvedObject: liveTarget.object,
-            currentValue: liveTarget.element.value
-        ))
+        return .focused(focusedTextInput(from: refreshedTarget))
+    }
+
+    private func isResolvedTextInputFocused(
+        _ inflatedTarget: ElementInflation.InflatedElementTarget
+    ) -> Bool {
+        guard safecracker.hasActiveTextInput() else { return false }
+        if stash.firstResponderHeistId == inflatedTarget.screenElement.heistId {
+            return true
+        }
+        if let searchBar = inflatedTarget.liveTarget.object as? UISearchBar {
+            return searchBar.searchTextField.isFirstResponder
+        }
+        return (inflatedTarget.liveTarget.object as? UIResponder)?.isFirstResponder == true
+    }
+
+    private func textInputIsFocused(
+        _ inflatedTarget: ElementInflation.InflatedElementTarget
+    ) async -> Bool {
+        if isResolvedTextInputFocused(inflatedTarget) { return true }
+        if !safecracker.hasActiveTextInput() {
+            guard await safecracker.waitForActiveTextInput() else { return false }
+        }
+        return !(inflatedTarget.liveTarget.object is UIResponder)
+    }
+
+    private func focusedTextInput(
+        from inflatedTarget: ElementInflation.InflatedElementTarget
+    ) -> FocusedTextInput {
+        FocusedTextInput(
+            subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
+            resolvedElementId: inflatedTarget.screenElement.heistId,
+            resolvedObject: inflatedTarget.liveTarget.object,
+            currentValue: inflatedTarget.liveTarget.element.value
+        )
     }
 
     private static func textInputValue(for target: ElementTarget, in elements: [HeistElement]) -> String? {

@@ -25,6 +25,15 @@ private final class RefusingActivationView: UIView {
     }
 }
 
+private final class ActionActivatingTextField: UITextField {
+    private(set) var activationCount = 0
+
+    override func accessibilityActivate() -> Bool {
+        activationCount += 1
+        return becomeFirstResponder()
+    }
+}
+
 @MainActor
 private final class ActionTextInputKeyboardImpl: NSObject {
     @MainActor
@@ -69,7 +78,7 @@ private final class ActionTextInputKeyboardImpl: NSObject {
 
     @objc(delegate)
     func delegate() -> AnyObject? {
-        inputDelegate
+        textField?.isFirstResponder == true ? inputDelegate : nil
     }
 
     @objc(addInputString:)
@@ -3122,6 +3131,47 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(liveObject.activationCount, 1)
         XCTAssertEqual(staleObject.activationCount, 0)
+    }
+
+    func testExecuteTypeTextIntoTargetFocusesWithAccessibilityActivateBeforeTyping() async throws {
+        brains.tripwire.startPulse()
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let textField = ActionActivatingTextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        textField.borderStyle = .roundedRect
+        textField.isAccessibilityElement = true
+        textField.accessibilityLabel = "Message"
+        textField.accessibilityIdentifier = "message_field"
+        textField.accessibilityValue = ""
+        rootView.addSubview(textField)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [stash = brains.stash] in
+            stash.invalidateSettledObservationFromTripwire()
+        }
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        await brains.tripwire.yieldFrames(3)
+
+        XCTAssertFalse(textField.isFirstResponder)
+
+        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
+            text: "hello",
+            elementTarget: .predicate(ElementPredicate(identifier: "message_field"))
+        )))
+
+        XCTAssertTrue(result.success, result.message ?? "type_text failed")
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(textField.activationCount, 1)
+        XCTAssertTrue(textField.isFirstResponder)
+        XCTAssertEqual(textField.text, "hello")
     }
 
     func testExecuteTypeTextReportsFinalValueFromInteractionAfterState() async throws {

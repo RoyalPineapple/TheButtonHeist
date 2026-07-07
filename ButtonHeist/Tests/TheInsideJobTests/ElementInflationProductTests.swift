@@ -477,7 +477,7 @@ final class ElementInflationProductTests: XCTestCase {
         anchor.isAccessibilityElement = true
         scrollView.addSubview(anchor)
 
-        let target = UITextField(frame: CGRect(x: 40, y: 900, width: 220, height: 44))
+        let target = ActivatingTextField(frame: CGRect(x: 40, y: 900, width: 220, height: 44))
         target.borderStyle = .roundedRect
         target.accessibilityLabel = label
         target.accessibilityIdentifier = identifier
@@ -746,8 +746,11 @@ final class ElementInflationProductTests: XCTestCase {
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
             "Expected nested fixture to expose the live outer scroll view. \(scrollContainerDiagnostics(in: screen))"
         )
-        let innerContainerPath = try liveScrollableContainerPath(for: fixture.innerScrollView, in: screen)
-            ?? outerContainerPath.appending(innerScrollViewChildIndex(in: fixture))
+        let innerContainerPath = nestedInnerScrollContainerPath(
+            for: fixture.innerScrollView,
+            below: outerContainerPath,
+            in: screen
+        )
         let capturedInnerContainer = screen.semantic.containers[innerContainerPath]
         let innerContainer = capturedInnerContainer?.container ?? AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(fixture.innerScrollView.contentSize)),
@@ -830,11 +833,18 @@ final class ElementInflationProductTests: XCTestCase {
         } ?? matchingPaths.first
     }
 
-    private func innerScrollViewChildIndex(in fixture: NestedScrollRevealFixture) throws -> Int {
-        try XCTUnwrap(
-            fixture.outerScrollView.subviews.firstIndex { $0 === fixture.innerScrollView },
-            "Expected nested fixture inner scroll view to be a direct child of the outer scroll view"
-        )
+    private func nestedInnerScrollContainerPath(
+        for scrollView: UIScrollView,
+        below outerContainerPath: TreePath,
+        in screen: Screen
+    ) -> TreePath {
+        if let path = liveScrollableContainerPath(for: scrollView, in: screen) {
+            return path
+        }
+
+        // Hidden nested scroll views are absent before reveal; the parser assigns
+        // the revealed inner scroll view as the first child container.
+        return outerContainerPath.appending(0)
     }
 
     private func scrollContainerDiagnostics(in screen: Screen) -> String {
@@ -983,6 +993,12 @@ private final class SemanticActivationView: UIView {
 private final class RefusingActivationTextField: UITextField {
     override func accessibilityActivate() -> Bool {
         false
+    }
+}
+
+private final class ActivatingTextField: UITextField {
+    override func accessibilityActivate() -> Bool {
+        becomeFirstResponder()
     }
 }
 
