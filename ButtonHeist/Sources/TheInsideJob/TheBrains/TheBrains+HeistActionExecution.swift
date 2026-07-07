@@ -595,16 +595,8 @@ extension TheBrains {
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
             expected: command.reportTarget.map(String.init(describing:)),
-            activationTrace: activationFailureTrace(command: command, result: result)
+            activationTrace: command.wireType == .activate ? result.activationTrace : nil
         )
-    }
-
-    private func activationFailureTrace(
-        command: HeistActionCommand,
-        result: ActionResult
-    ) -> ActivationTrace? {
-        guard case .activate = command else { return nil }
-        return result.activationTrace
     }
 
     private func waitEvaluation(
