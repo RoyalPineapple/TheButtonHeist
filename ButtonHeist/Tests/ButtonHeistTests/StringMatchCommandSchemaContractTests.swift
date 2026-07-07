@@ -23,6 +23,43 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         XCTAssertEqual(match, .isEmpty)
     }
 
+    func testCommandArgumentEnvelopeRejectsUnknownStringMatchFieldAtBoundary() throws {
+        let envelope = TheFence.CommandArgumentEnvelope(values: [
+            FenceParameterKey.label.rawValue: .object([
+                "mode": .string("exact"),
+                "value": .string("Pay"),
+                "caseSensitive": .bool(true),
+            ]),
+        ])
+
+        XCTAssertThrowsError(try envelope.schemaStringMatch(.label)) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "label.caseSensitive")
+            XCTAssertEqual(error.observed, "boolean true")
+            XCTAssertTrue(error.expected.contains("Unknown StringMatch field"), error.expected)
+        }
+    }
+
+    func testCommandArgumentEnvelopeRejectsInvalidStringMatchArrayItemAtBoundary() throws {
+        let envelope = TheFence.CommandArgumentEnvelope(values: [
+            FenceParameterKey.label.rawValue: .array([
+                stringMatchValue(mode: "prefix", value: "Pay"),
+                stringMatchValue(mode: "contains", value: ""),
+            ]),
+        ])
+
+        XCTAssertThrowsError(try envelope.schemaStringMatches(.label)) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "label[1].value")
+            XCTAssertEqual(error.observed, #"string """#)
+            XCTAssertEqual(error.expected, "contains string match value must not be empty")
+        }
+    }
+
     @ButtonHeistActor
     func testElementTargetAcceptsContainsStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([

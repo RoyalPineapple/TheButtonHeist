@@ -175,8 +175,8 @@ final class SemanticObservationCycles {
         let completed = waiters.removeAll { key in
             scope.canFulfill(key.scope) && phase.baseline > key.afterCycle
         }
-        for (_, waiter) in completed {
-            waiter.resolve(returning: ())
+        for removal in completed {
+            removal.waiter.resolve(returning: ())
         }
     }
 

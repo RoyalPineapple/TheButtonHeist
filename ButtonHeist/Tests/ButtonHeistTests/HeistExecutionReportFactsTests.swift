@@ -195,6 +195,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         let node = try XCTUnwrap(result.steps.first)
         let actionEvidence = try XCTUnwrap(node.actionEvidence)
+        let reportFacts = node.reportFacts
+        let reportResults = reportFacts.results
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
         let projectedNode = try XCTUnwrap(projection.outputNodes.first)
         guard case .action(let projectedAction)? = projectedNode.evidence else {
@@ -205,6 +207,18 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(actionEvidence.expectationResult?.method, .wait)
         XCTAssertEqual(actionEvidence.reportedResult?.method, .wait)
         XCTAssertEqual(actionEvidence.traceResult?.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(reportResults, HeistExecutionStepReportResults(
+            dispatchedActionResult: actionEvidence.dispatchResult,
+            actionResult: actionEvidence.reportedResult,
+            traceEvidenceResult: actionEvidence.traceResult,
+            expectation: actionEvidence.expectation,
+            actionErrorKind: .timeout
+        ))
+        XCTAssertEqual(reportFacts.dispatchedActionResult, reportResults.dispatchedActionResult)
+        XCTAssertEqual(reportFacts.actionResult, reportResults.actionResult)
+        XCTAssertEqual(reportFacts.traceEvidenceResult, reportResults.traceEvidenceResult)
+        XCTAssertEqual(reportFacts.expectation, reportResults.expectation)
+        XCTAssertEqual(reportFacts.actionErrorKind, reportResults.actionErrorKind)
         XCTAssertEqual(node.dispatchedActionResult?.method, .activate)
         XCTAssertEqual(node.reportedActionResult?.errorKind, .timeout)
         XCTAssertEqual(node.traceEvidenceResult?.accessibilityTrace?.endpointScreenId, "settled")

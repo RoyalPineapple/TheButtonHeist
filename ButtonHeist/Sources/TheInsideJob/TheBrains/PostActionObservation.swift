@@ -544,9 +544,7 @@ extension ActionResult {
 private struct PostActionResultReceipt {
     let projection: PostActionResultProjection
     let message: String?
-    let accessibilityTrace: AccessibilityTrace
-    let settled: Bool
-    let settleTimeMs: Int
+    let evidence: PostActionReceiptEvidence
     let subjectEvidence: ActionSubjectEvidence?
     let activationTrace: ActivationTrace?
 
@@ -558,70 +556,16 @@ private struct PostActionResultReceipt {
         settleEvidence: PostActionObservation.SettleEvidence,
         observationOutcome: PostActionObservation.ObservationOutcome
     ) {
-        switch observationOutcome {
-        case .cancelled(let cancelMs):
-            self.init(
-                projection: PostActionResultProjection(
-                    method: method,
-                    payload: outcome.immediatePayload,
-                    failure: .actionFailed
-                ),
-                message: "cancelled after \(cancelMs)ms",
-                accessibilityTrace: AccessibilityTrace(capture: before.capture),
-                settled: false,
-                settleTimeMs: cancelMs,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace
-            )
-
-        case .parseFailed:
-            self.init(
-                projection: PostActionResultProjection(
-                    method: method,
-                    payload: outcome.immediatePayload,
-                    failure: .actionFailed
-                ),
-                message: "Could not parse post-action accessibility tree",
-                accessibilityTrace: AccessibilityTrace(capture: before.capture),
-                settled: settleEvidence.didSettleCleanly,
-                settleTimeMs: settleEvidence.timeMs,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace
-            )
-
-        case .observed(let finalEvidence):
-            self.init(
-                projection: PostActionResultProjection(
-                    method: method,
-                    outcome: outcome,
-                    payload: outcome.resolvedPayload(after: finalEvidence.state)
-                ),
-                message: message,
-                accessibilityTrace: finalEvidence.trace,
-                settled: settleEvidence.didSettleCleanly,
-                settleTimeMs: settleEvidence.timeMs,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace
-            )
-        }
-    }
-
-    init(
-        projection: PostActionResultProjection,
-        message: String?,
-        accessibilityTrace: AccessibilityTrace,
-        settled: Bool,
-        settleTimeMs: Int,
-        subjectEvidence: ActionSubjectEvidence?,
-        activationTrace: ActivationTrace?
-    ) {
-        self.projection = projection
-        self.message = message
-        self.accessibilityTrace = accessibilityTrace
-        self.settled = settled
-        self.settleTimeMs = settleTimeMs
-        self.subjectEvidence = subjectEvidence
-        self.activationTrace = activationTrace
+        let evidence = PostActionReceiptEvidence(
+            before: before,
+            settleEvidence: settleEvidence,
+            observationOutcome: observationOutcome
+        )
+        self.projection = evidence.projection(method: method, outcome: outcome)
+        self.message = evidence.message(explicit: message)
+        self.evidence = evidence
+        self.subjectEvidence = outcome.subjectEvidence
+        self.activationTrace = outcome.activationTrace
     }
 
     var actionResult: ActionResult {
@@ -630,9 +574,9 @@ private struct PostActionResultReceipt {
             return .success(
                 method: method,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                settled: settled,
-                settleTimeMs: settleTimeMs,
+                accessibilityTrace: evidence.accessibilityTrace,
+                settled: evidence.settled,
+                settleTimeMs: evidence.settleTimeMs,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
@@ -640,9 +584,9 @@ private struct PostActionResultReceipt {
             return .success(
                 payload: payload,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                settled: settled,
-                settleTimeMs: settleTimeMs,
+                accessibilityTrace: evidence.accessibilityTrace,
+                settled: evidence.settled,
+                settleTimeMs: evidence.settleTimeMs,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
@@ -651,9 +595,9 @@ private struct PostActionResultReceipt {
                 method: method,
                 errorKind: errorKind,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                settled: settled,
-                settleTimeMs: settleTimeMs,
+                accessibilityTrace: evidence.accessibilityTrace,
+                settled: evidence.settled,
+                settleTimeMs: evidence.settleTimeMs,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
@@ -662,12 +606,109 @@ private struct PostActionResultReceipt {
                 payload: payload,
                 errorKind: errorKind,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                settled: settled,
-                settleTimeMs: settleTimeMs,
+                accessibilityTrace: evidence.accessibilityTrace,
+                settled: evidence.settled,
+                settleTimeMs: evidence.settleTimeMs,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace
             )
+        }
+    }
+}
+
+private enum PostActionReceiptEvidence {
+    case observed(
+        finalEvidence: PostActionObservation.FinalEvidence,
+        settleEvidence: PostActionObservation.SettleEvidence
+    )
+    case fallback(
+        message: String,
+        accessibilityTrace: AccessibilityTrace,
+        settled: Bool,
+        settleTimeMs: Int
+    )
+
+    init(
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence,
+        observationOutcome: PostActionObservation.ObservationOutcome
+    ) {
+        switch observationOutcome {
+        case .observed(let finalEvidence):
+            self = .observed(
+                finalEvidence: finalEvidence,
+                settleEvidence: settleEvidence
+            )
+        case .cancelled(let cancelMs):
+            self = .fallback(
+                message: "cancelled after \(cancelMs)ms",
+                accessibilityTrace: AccessibilityTrace(capture: before.capture),
+                settled: false,
+                settleTimeMs: cancelMs
+            )
+        case .parseFailed:
+            self = .fallback(
+                message: "Could not parse post-action accessibility tree",
+                accessibilityTrace: AccessibilityTrace(capture: before.capture),
+                settled: settleEvidence.didSettleCleanly,
+                settleTimeMs: settleEvidence.timeMs
+            )
+        }
+    }
+
+    var accessibilityTrace: AccessibilityTrace {
+        switch self {
+        case .observed(let finalEvidence, _):
+            return finalEvidence.trace
+        case .fallback(_, let accessibilityTrace, _, _):
+            return accessibilityTrace
+        }
+    }
+
+    var settled: Bool {
+        switch self {
+        case .observed(_, let settleEvidence):
+            return settleEvidence.didSettleCleanly
+        case .fallback(_, _, let settled, _):
+            return settled
+        }
+    }
+
+    var settleTimeMs: Int {
+        switch self {
+        case .observed(_, let settleEvidence):
+            return settleEvidence.timeMs
+        case .fallback(_, _, _, let settleTimeMs):
+            return settleTimeMs
+        }
+    }
+
+    func projection(
+        method: ActionMethod,
+        outcome: PostActionObservation.ActionOutcome
+    ) -> PostActionResultProjection {
+        switch self {
+        case .observed(let finalEvidence, _):
+            return PostActionResultProjection(
+                method: method,
+                outcome: outcome,
+                payload: outcome.resolvedPayload(after: finalEvidence.state)
+            )
+        case .fallback:
+            return PostActionResultProjection(
+                method: method,
+                payload: outcome.immediatePayload,
+                failure: .actionFailed
+            )
+        }
+    }
+
+    func message(explicit message: String?) -> String? {
+        switch self {
+        case .observed:
+            return message
+        case .fallback(let fallbackMessage, _, _, _):
+            return fallbackMessage
         }
     }
 }

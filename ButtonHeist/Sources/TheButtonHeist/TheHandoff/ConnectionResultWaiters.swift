@@ -48,8 +48,8 @@ final class ConnectionResultWaiters {
 
     func resolve(attemptID: UUID, with result: HandoffConnectionAttemptResult) {
         let matchingWaiters = waiters.removeAll { _, waiter in waiter.attemptID == attemptID }
-        for (_, waiter) in matchingWaiters {
-            waiter.resolve(with: result)
+        for removal in matchingWaiters {
+            removal.waiter.resolve(with: result)
         }
     }
 }
