@@ -2619,8 +2619,23 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
         category: HeistFailureCategory,
         contract: String,
         observed: String,
+        expected: String? = nil
+    ) {
+        self.init(
+            category: category,
+            contract: contract,
+            observed: observed,
+            expected: expected,
+            activationTrace: nil
+        )
+    }
+
+    public init(
+        category: HeistFailureCategory,
+        contract: String,
+        observed: String,
         expected: String? = nil,
-        activationTrace: ActivationTrace? = nil
+        activationTrace: ActivationTrace?
     ) {
         self.category = category
         self.contract = contract
