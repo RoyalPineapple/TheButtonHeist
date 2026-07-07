@@ -279,6 +279,8 @@ private extension TheStash {
         in screen: Screen,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
+        let screenElements = selectElements(in: screen)
+        let matches = screenElementMatchGraph(screenElements).resolve(predicate).subjects
         if let ordinal {
             guard ordinal >= 0 else {
                 return .notFound(TargetNotFoundFacts(
@@ -286,11 +288,10 @@ private extension TheStash {
                     ordinal: ordinal,
                     reason: .ordinalNegative(ordinal),
                     resolutionScope: resolutionScope,
-                    screenElements: selectElements(in: screen),
+                    screenElements: screenElements,
                     visibleHeistIds: screen.visibleIds
                 ))
             }
-            let matches = matchScreenElements(predicate, limit: ordinal + 1, in: screen)
             guard ordinal < matches.count else {
                 return .notFound(TargetNotFoundFacts(
                     predicate: predicate,
@@ -303,7 +304,6 @@ private extension TheStash {
             }
             return .resolved(matches[ordinal])
         }
-        let matches = matchScreenElements(predicate, in: screen)
         switch matches.count {
         case 0:
             return .notFound(TargetNotFoundFacts(
@@ -311,7 +311,7 @@ private extension TheStash {
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
-                screenElements: selectElements(in: screen),
+                screenElements: screenElements,
                 visibleHeistIds: screen.visibleIds
             ))
         case 1:

@@ -57,14 +57,13 @@ enum EvidenceMinimumMatcher {
     }
 
     static func index(of target: ElementTarget, in elements: [HeistElement]) -> Int? {
+        let matches = ElementMatchGraph(elements: elements).resolve(target).matches
         switch target {
-        case .predicate(let predicate, let ordinal):
-            let matches = elements.indices.filter { predicate.matches(elements[$0]) }
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal]
+        case .predicate(_, let ordinal):
+            if ordinal != nil {
+                return matches.first?.traversalOrder
             }
-            return matches.count == 1 ? matches[0] : nil
+            return matches.count == 1 ? matches[0].traversalOrder : nil
         }
     }
 }

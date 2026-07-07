@@ -70,7 +70,10 @@ struct RepairScreen {
     func resolve(_ target: ElementTarget) -> RepairTargetResolution {
         switch target {
         case .predicate(let predicate, let ordinal):
-            let matches = elements.filter { $0.element.matches(predicate) }
+            let matches = ElementMatchGraph(elements: elements.map(\.element))
+                .resolve(predicate)
+                .matches
+                .map { elements[$0.traversalOrder] }
             if let ordinal {
                 guard matches.indices.contains(ordinal) else {
                     return .notFound(matchCount: matches.count)

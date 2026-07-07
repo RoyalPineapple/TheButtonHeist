@@ -861,7 +861,7 @@ final class ElementInflation {
         sample: LiveGeometrySample
     ) -> InflatedElementTarget {
         if case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement),
-           liveTarget.screenElement.matches(target) {
+           retainedScreenElement(liveTarget.screenElement, matches: target) {
             return InflatedElementTarget(
                 target: target,
                 screenElement: liveTarget.screenElement,
@@ -1029,7 +1029,7 @@ final class ElementInflation {
     ) -> FreshElementTargetResolution {
         switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
-            guard liveTarget.screenElement.matches(target) else {
+            guard retainedScreenElement(liveTarget.screenElement, matches: target) else {
                 if let currentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
                     target: target,
                     method: method
@@ -1090,7 +1090,7 @@ final class ElementInflation {
             }
             switch stash.resolveLiveActionTarget(for: screenElement) {
             case .resolved(let liveTarget):
-                guard liveTarget.screenElement.matches(target) else {
+                guard retainedScreenElement(liveTarget.screenElement, matches: target) else {
                     return resolveCurrentVisibleLiveCaptureTarget(
                         target: target,
                         method: method
@@ -1150,16 +1150,33 @@ final class ElementInflation {
     private func currentVisibleLiveCaptureEntry(
         matching target: ElementTarget
     ) -> LiveCapture.LiveElementEntry? {
+        let matches = ElementPredicateGraph(
+            subjects: stash.currentLiveCapture.orderedElementEntries(),
+            identity: \.path
+        )
+            .resolve(target)
+            .subjects
         switch target {
-        case .predicate(let predicate, let ordinal):
-            let matches = stash.currentLiveCapture.orderedElementEntries()
-                .filter { predicate.matches($0.element) }
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal]
+        case .predicate(_, let ordinal):
+            if ordinal != nil {
+                return matches.first
             }
-            guard matches.count == 1 else { return nil }
-            return matches[0]
+            return matches.count == 1 ? matches[0] : nil
+        }
+    }
+
+    private func retainedScreenElement(
+        _ screenElement: TheStash.ScreenElement,
+        matches target: ElementTarget
+    ) -> Bool {
+        switch target {
+        case .predicate(let predicate, _):
+            return !ElementPredicateGraph<HeistId, TheStash.ScreenElement>(
+                subjects: [screenElement],
+                identity: \.heistId
+            )
+            .resolve(predicate)
+            .isEmpty
         }
     }
 
@@ -1271,15 +1288,6 @@ extension ElementInflation.InflatedElementTarget {
             target: target,
             element: TheStash.WireConversion.convert(screenElement.element)
         )
-    }
-}
-
-private extension TheStash.ScreenElement {
-    func matches(_ target: ElementTarget) -> Bool {
-        switch target {
-        case .predicate(let predicate, _):
-            return predicate.matches(element)
-        }
     }
 }
 

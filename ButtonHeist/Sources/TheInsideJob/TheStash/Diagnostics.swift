@@ -228,7 +228,10 @@ extension TheStash {
         limit: Int = 3
     ) -> String? {
         guard limit > 0, let diagnosticPredicate = diagnosticContainsPredicate(from: predicate) else { return nil }
-        let hits = elements.filter { diagnosticPredicate.matches($0) }.prefix(limit + 1)
+        let hits = ElementMatchGraph(elements: elements)
+            .resolve(diagnosticPredicate)
+            .elements
+            .prefix(limit + 1)
         guard !hits.isEmpty else { return nil }
         let deduped = dedupedPreservingOrder(hits.map {
             failureInterfaceSuggestionValue(
@@ -357,13 +360,12 @@ extension TheStash {
         limit: Int
     ) -> [Screen.ScreenElement] {
         guard limit > 0 else { return [] }
-        var hits: [Screen.ScreenElement] = []
-        hits.reserveCapacity(limit)
-        for entry in screenElements where predicate.matches(entry.element) {
-            hits.append(entry)
-            if hits.count == limit { break }
-        }
-        return hits
+        return Array(
+            ElementPredicateGraph(subjects: screenElements, identity: \.heistId)
+                .resolve(predicate)
+                .subjects
+                .prefix(limit)
+        )
     }
 
     private static func suggestionValue(

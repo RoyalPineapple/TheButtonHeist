@@ -105,7 +105,7 @@ extension ElementInflation {
               let observedActivationPoint = container.observedScrollContentActivationPoint
         else { return false }
         guard await revealScrollContainer(at: membership.containerPath, depth: depth + 1),
-              let parentScrollView = stash.capturedLiveScrollView(forContainerPath: membership.containerPath)
+              let parentScrollView = liveScrollView(forScrollContainerPath: membership.containerPath)
         else { return false }
 
         parentScrollView.setContentOffset(
