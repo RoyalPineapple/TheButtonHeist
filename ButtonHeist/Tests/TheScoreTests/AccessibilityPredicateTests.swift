@@ -100,6 +100,24 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(matches.orderedPaths, [TreePath([0])])
     }
 
+    func testPredicateResolutionSubtractsExcludedMatchSet() {
+        let elements = [
+            makeElement(label: "Coke", traits: [.staticText], actions: [.activate, .custom("Modify")]),
+            makeElement(label: "Coke", traits: [.staticText], actions: [.custom("Sub")]),
+            makeElement(label: "Coke", traits: [.staticText], actions: []),
+            makeElement(label: "Sprite", traits: [.staticText], actions: [.custom("Sub")]),
+        ]
+        let predicate = ElementPredicate([
+            .label("Coke"),
+            .exclude(.actions([.custom("Sub")])),
+        ])
+
+        let matches = ElementMatchGraph(elements: elements).resolve(predicate)
+
+        XCTAssertEqual(matches.elements, [elements[0], elements[2]])
+        XCTAssertEqual(matches.orderedPaths, [TreePath([0]), TreePath([2])])
+    }
+
     func testElementMatchSetUnionUsesPathIdentityAndTraversalOrder() {
         let elements = [
             makeElement(label: "Save"),
@@ -111,6 +129,24 @@ final class AccessibilityPredicateTests: XCTestCase {
         let saveMatches = graph.resolve(ElementPredicate(label: "Save"))
 
         XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
+    }
+
+    func testElementMatchGraphPreservesTraversalOrderFromMatches() {
+        let later = ElementMatch(
+            path: TreePath([9]),
+            traversalOrder: 9,
+            element: makeElement(label: "Row", actions: [.activate])
+        )
+        let earlier = ElementMatch(
+            path: TreePath([1]),
+            traversalOrder: 1,
+            element: makeElement(label: "Row", actions: [.activate])
+        )
+        let graph = ElementMatchGraph(ElementMatchSet([later, earlier]))
+
+        let matches = graph.resolve(ElementPredicate(label: "Row"))
+
+        XCTAssertEqual(matches.orderedPaths, [TreePath([1]), TreePath([9])])
     }
 
     func testTargetOrdinalSelectsFromNarrowedMatchSet() {

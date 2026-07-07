@@ -61,6 +61,10 @@ package struct ElementMatch: Sendable, Hashable {
     }
 }
 
+extension ElementMatch: ElementPredicateSubjectBacked {
+    package var predicateSubject: HeistElement { element }
+}
+
 package struct ElementMatchSet: Sendable, Equatable {
     package static let empty = ElementMatchSet([])
 
@@ -122,12 +126,7 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 
     private func orderedByTraversal() -> ElementMatchSet {
-        ElementMatchSet(matches.sorted {
-            if $0.traversalOrder != $1.traversalOrder {
-                return $0.traversalOrder < $1.traversalOrder
-            }
-            return $0.path < $1.path
-        })
+        ElementMatchSet(matches.sorted { $0.traversalOrder < $1.traversalOrder })
     }
 }
 
@@ -147,26 +146,19 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package func resolve(_ predicate: ElementPredicate) -> ElementMatchSet {
-        guard predicate.hasPredicates else { return .empty }
-        guard let firstCheck = predicate.checks.first else { return .empty }
-
-        let firstMatches = resolve(firstCheck)
-        return predicate.checks.dropFirst().reduce(firstMatches) { narrowedMatches, check in
-            narrowedMatches.intersection(resolve(check))
-        }
+        ElementMatchSet(predicateGraph.resolve(predicate).matches.map(\.subject))
     }
 
     package func resolve(_ target: ElementTarget) -> ElementMatchSet {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let predicateMatches = resolve(predicate)
-            guard let ordinal else { return predicateMatches }
-            guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
-            return ElementMatchSet([predicateMatches.matches[ordinal]])
-        }
+        let resolved = predicateGraph.resolve(target)
+        return ElementMatchSet(resolved.matches.map(\.subject))
     }
 
-    private func resolve(_ check: ElementPredicateCheck<String>) -> ElementMatchSet {
-        ElementMatchSet(all.matches.filter { check.matches($0.element) })
+    private var predicateGraph: ElementPredicateGraph<TreePath, ElementMatch> {
+        ElementPredicateGraph(
+            subjects: all.matches,
+            identity: \.path,
+            traversalOrder: \.traversalOrder
+        )
     }
 }

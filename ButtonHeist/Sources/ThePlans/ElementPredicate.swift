@@ -577,13 +577,167 @@ package protocol ElementPredicateSubject {
     func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool
 }
 
-package extension ElementPredicate {
-    /// The single source of truth for predicate evaluation.
-    func matches(_ subject: some ElementPredicateSubject) -> Bool {
-        guard hasPredicates else { return false }
-        return checks.allSatisfy { $0.matches(subject) }
+package protocol ElementPredicateSubjectBacked: ElementPredicateSubject {
+    associatedtype BackingSubject: ElementPredicateSubject
+    var predicateSubject: BackingSubject { get }
+}
+
+package extension ElementPredicateSubjectBacked {
+    var predicateLabel: String? { predicateSubject.predicateLabel }
+    var predicateIdentifier: String? { predicateSubject.predicateIdentifier }
+    var predicateValue: String? { predicateSubject.predicateValue }
+    var predicateHint: String? { predicateSubject.predicateHint }
+
+    func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool {
+        predicateSubject.satisfiesRequiredTraits(required)
     }
 
+    func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool {
+        predicateSubject.satisfiesRequiredActions(required)
+    }
+
+    func containsCustomContent(matching match: CustomContentMatch<String>) -> Bool {
+        predicateSubject.containsCustomContent(matching: match)
+    }
+
+    func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool {
+        predicateSubject.satisfiesRequiredRotors(required)
+    }
+}
+
+package extension ElementPredicate {
+    /// The single source of truth for predicate evaluation.
+    func matches<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
+        ElementPredicateGraph(matches: [
+            ElementPredicateMatch(identity: 0, traversalOrder: 0, subject: subject),
+        ])
+            .resolve(self)
+            .count == 1
+    }
+
+}
+
+// MARK: - Predicate Match Graph
+
+package struct ElementPredicateMatch<Identity: Hashable, Subject: ElementPredicateSubject> {
+    package let identity: Identity
+    package let traversalOrder: Int
+    package let subject: Subject
+
+    package init(identity: Identity, traversalOrder: Int, subject: Subject) {
+        self.identity = identity
+        self.traversalOrder = traversalOrder
+        self.subject = subject
+    }
+}
+
+package struct ElementPredicateMatchSet<Identity: Hashable, Subject: ElementPredicateSubject> {
+    package static var empty: ElementPredicateMatchSet<Identity, Subject> {
+        ElementPredicateMatchSet([])
+    }
+
+    package let matches: [ElementPredicateMatch<Identity, Subject>]
+
+    private let identities: Set<Identity>
+
+    package init(_ matches: [ElementPredicateMatch<Identity, Subject>]) {
+        var identities = Set<Identity>()
+        var uniqueMatches: [ElementPredicateMatch<Identity, Subject>] = []
+        uniqueMatches.reserveCapacity(matches.count)
+
+        for match in matches where identities.insert(match.identity).inserted {
+            uniqueMatches.append(match)
+        }
+
+        self.matches = uniqueMatches.sorted { $0.traversalOrder < $1.traversalOrder }
+        self.identities = identities
+    }
+
+    package var isEmpty: Bool {
+        matches.isEmpty
+    }
+
+    package var count: Int {
+        matches.count
+    }
+
+    package var subjects: [Subject] {
+        matches.map(\.subject)
+    }
+
+    package func intersection(
+        _ other: ElementPredicateMatchSet<Identity, Subject>
+    ) -> ElementPredicateMatchSet<Identity, Subject> {
+        ElementPredicateMatchSet(matches.filter { other.identities.contains($0.identity) })
+    }
+
+    package func subtracting(
+        _ other: ElementPredicateMatchSet<Identity, Subject>
+    ) -> ElementPredicateMatchSet<Identity, Subject> {
+        ElementPredicateMatchSet(matches.filter { !other.identities.contains($0.identity) })
+    }
+
+}
+
+package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredicateSubject> {
+    private let all: ElementPredicateMatchSet<Identity, Subject>
+
+    package init(matches: [ElementPredicateMatch<Identity, Subject>]) {
+        all = ElementPredicateMatchSet(matches)
+    }
+
+    package init<Subjects: Sequence>(
+        subjects: Subjects,
+        identity: KeyPath<Subject, Identity>
+    ) where Subjects.Element == Subject {
+        self.init(matches: subjects.enumerated().map { offset, subject in
+            ElementPredicateMatch(
+                identity: subject[keyPath: identity],
+                traversalOrder: offset,
+                subject: subject
+            )
+        })
+    }
+
+    package init<Subjects: Sequence>(
+        subjects: Subjects,
+        identity: KeyPath<Subject, Identity>,
+        traversalOrder: KeyPath<Subject, Int>
+    ) where Subjects.Element == Subject {
+        self.init(matches: subjects.map { subject in
+            ElementPredicateMatch(
+                identity: subject[keyPath: identity],
+                traversalOrder: subject[keyPath: traversalOrder],
+                subject: subject
+            )
+        })
+    }
+
+    package func resolve(_ predicate: ElementPredicate) -> ElementPredicateMatchSet<Identity, Subject> {
+        guard predicate.hasPredicates else { return .empty }
+        return predicate.checks.reduce(all) { narrowed, check in
+            narrowed.intersection(resolve(check))
+        }
+    }
+
+    package func resolve(_ target: ElementTarget) -> ElementPredicateMatchSet<Identity, Subject> {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let predicateMatches = resolve(predicate)
+            guard let ordinal else { return predicateMatches }
+            guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
+            return ElementPredicateMatchSet([predicateMatches.matches[ordinal]])
+        }
+    }
+
+    package func resolve(_ check: ElementPredicateCheck<String>) -> ElementPredicateMatchSet<Identity, Subject> {
+        switch check {
+        case .exclude(let excluded):
+            return all.subtracting(resolve(excluded))
+        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
+            return ElementPredicateMatchSet(all.matches.filter { check.matchesSubject($0.subject) })
+        }
+    }
 }
 
 // MARK: - Codable
@@ -726,7 +880,16 @@ extension ElementPredicateCheck: Codable where Text: Codable {
 }
 
 package extension ElementPredicateCheck where Text == String {
-    func matches(_ subject: some ElementPredicateSubject) -> Bool {
+    func matches<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
+        switch self {
+        case .exclude(let check):
+            return !check.matches(subject)
+        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
+            return matchesSubject(subject)
+        }
+    }
+
+    fileprivate func matchesSubject<Subject: ElementPredicateSubject>(_ subject: Subject) -> Bool {
         switch self {
         case .label(let match):
             return match.matches(optional: subject.predicateLabel)
@@ -744,8 +907,8 @@ package extension ElementPredicateCheck where Text == String {
             return !match.hasPredicateLiteral || subject.containsCustomContent(matching: match)
         case .rotors(let matches):
             return matches.isEmpty || subject.satisfiesRequiredRotors(matches)
-        case .exclude(let check):
-            return !check.hasPredicateLiteral || !check.matches(subject)
+        case .exclude:
+            preconditionFailure("ElementPredicateGraph resolves exclude checks as set subtraction")
         }
     }
 }

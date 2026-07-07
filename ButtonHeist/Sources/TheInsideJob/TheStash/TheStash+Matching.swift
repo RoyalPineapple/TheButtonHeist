@@ -115,6 +115,14 @@ extension AccessibilityElement: PredicateSelectionSubject {
     }
 }
 
+extension SemanticScreen.Element: ElementPredicateSubjectBacked {
+    package var predicateSubject: AccessibilityElement { element }
+}
+
+extension LiveCapture.LiveElementEntry: ElementPredicateSubjectBacked {
+    package var predicateSubject: AccessibilityElement { element }
+}
+
 // MARK: - TheStash Match Pipeline
 
 extension TheStash {
@@ -138,28 +146,24 @@ extension TheStash {
         in screen: Screen
     ) -> [ScreenElement] {
         guard limit > 0, predicate.hasPredicates else { return [] }
-        var matches: [ScreenElement] = []
-        matches.reserveCapacity(limit)
-        for entry in selectElements(in: screen) where entry.matches(predicate) {
-            matches.append(entry)
-            if matches.count == limit { break }
-        }
-        return matches
+        return Array(screenElementMatchGraph(in: screen).resolve(predicate).subjects.prefix(limit))
     }
 
     /// All matching screen elements in traversal order. Use when diagnostics
     /// need the exact match-set size rather than an early-exit prefix.
     func matchScreenElements(_ predicate: ElementPredicate, in screen: Screen) -> [ScreenElement] {
         guard predicate.hasPredicates else { return [] }
-        return selectElements(in: screen).filter { $0.matches(predicate) }
+        return screenElementMatchGraph(in: screen).resolve(predicate).subjects
     }
 
-}
-
-private extension Screen.ScreenElement {
-    func matches(_ predicate: ElementPredicate) -> Bool {
-        predicate.matches(element)
+    func screenElementMatchGraph(_ elements: [ScreenElement]) -> ElementPredicateGraph<HeistId, ScreenElement> {
+        ElementPredicateGraph(subjects: elements, identity: \.heistId)
     }
+
+    func screenElementMatchGraph(in screen: Screen) -> ElementPredicateGraph<HeistId, ScreenElement> {
+        screenElementMatchGraph(selectElements(in: screen))
+    }
+
 }
 
 struct AccessibilityElementPairingKey: Hashable {

@@ -262,12 +262,19 @@ public enum MinimumPredicateSelector {
         }
 
         let candidates = predicateCandidates(forSubject: targetElement.element)
+        let graph = ElementPredicateGraph(matches: elements.enumerated().map { offset, candidate in
+            ElementPredicateMatch(
+                identity: candidate.id,
+                traversalOrder: offset,
+                subject: candidate.element
+            )
+        })
         var bestAmbiguousCandidate: PredicateCandidate?
         var bestAmbiguousRank: PredicateCandidate.OrdinalBaseRank?
 
         for candidate in candidates {
-            let matches = elements.filter { candidate.predicate.matches($0.element) }
-            guard matches.contains(where: { $0.id == contextElementId }) else { continue }
+            let matches = graph.resolve(candidate.predicate).matches
+            guard matches.contains(where: { $0.identity == contextElementId }) else { continue }
             if matches.count == 1 {
                 return MinimumPredicateSelection(
                     contextElementId: contextElementId,
@@ -283,8 +290,8 @@ public enum MinimumPredicateSelector {
         }
 
         guard let strongestSemanticCandidate = bestAmbiguousCandidate else { return nil }
-        let matches = elements.filter { strongestSemanticCandidate.predicate.matches($0.element) }
-        guard let ordinal = matches.firstIndex(where: { $0.id == contextElementId }) else { return nil }
+        let matches = graph.resolve(strongestSemanticCandidate.predicate).matches
+        guard let ordinal = matches.firstIndex(where: { $0.identity == contextElementId }) else { return nil }
 
         let ordinalCandidate = PredicateCandidate(
             predicate: strongestSemanticCandidate.predicate,
