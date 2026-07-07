@@ -14,39 +14,65 @@ lab = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(lab)
 
 
-ACTION_TIMING = {
-    "targetResolutionMs": 1,
-    "actionDispatchMs": 2,
-    "settleMs": 3,
-    "beforeObservationMs": 4,
-    "finalSemanticEvidenceMs": 5,
-    "totalMs": 15,
-}
-
 RECEIPT = {
     "report": {
-        "summary": {"durationMs": 1234},
-        "nodes": [
-            {
-                "evidence": {
-                    "action": {
-                        "result": {
-                            "method": "activate",
-                            "timing": ACTION_TIMING,
-                        }
-                    }
-                }
-            }
-        ],
+        "metrics": {
+            "samples": [
+                {"name": "heistDurationMs", "valueMs": 1234},
+                {"name": "actionPipeline.targetResolutionMs", "valueMs": 1, "path": "$.body[0]"},
+                {"name": "actionPipeline.actionDispatchMs", "valueMs": 2, "path": "$.body[0]"},
+                {"name": "actionPipeline.settleMs", "valueMs": 3, "path": "$.body[0]"},
+                {"name": "actionPipeline.beforeObservationMs", "valueMs": 4, "path": "$.body[0]"},
+                {"name": "actionPipeline.finalSemanticEvidenceMs", "valueMs": 5, "path": "$.body[0]"},
+                {"name": "actionPipeline.totalMs", "valueMs": 15, "path": "$.body[0]"},
+                {"name": "waitPipeline.totalMs", "valueMs": 20, "path": "$.body[0]"},
+                {"name": "expectationWaitMs", "valueMs": 20, "path": "$.body[0]"},
+            ],
+            "ceilings": [
+                {
+                    "source": "intent.wait.timeout",
+                    "budgetMs": 1000,
+                    "elapsedMs": 800,
+                    "path": "$.body[1]",
+                    "kind": "wait",
+                    "status": "passed",
+                },
+                {
+                    "source": "caseSelection.timeout",
+                    "budgetMs": 500,
+                    "elapsedMs": 490,
+                    "path": "$.body[2]",
+                    "kind": "if",
+                    "status": "failed",
+                },
+            ],
+        }
     }
 }
 
 
-samples, _ = lab.receipt_metrics(RECEIPT)
+samples, ceiling_hits = lab.receipt_metrics(RECEIPT)
 summary = lab.summarize_receipt_timing(samples)
 
 assert samples["heistDurationMs"] == [1234]
 assert summary["heistDurationMs"]["total"] == 1234
-for bucket, value in ACTION_TIMING.items():
-    assert samples[f"actionPipeline.{bucket}"] == [value]
-assert summary["actionPipeline.totalMs"]["total"] == ACTION_TIMING["totalMs"]
+assert samples["actionPipeline.targetResolutionMs"] == [1]
+assert samples["actionPipeline.actionDispatchMs"] == [2]
+assert samples["actionPipeline.settleMs"] == [3]
+assert samples["actionPipeline.beforeObservationMs"] == [4]
+assert samples["actionPipeline.finalSemanticEvidenceMs"] == [5]
+assert samples["actionPipeline.totalMs"] == [15]
+assert samples["waitPipeline.totalMs"] == [20]
+assert samples["expectationWaitMs"] == [20]
+assert summary["actionPipeline.totalMs"]["total"] == 15
+assert summary["waitPipeline.totalMs"]["total"] == 20
+assert ceiling_hits == [
+    {
+        "path": "$.body[2]",
+        "kind": "if",
+        "status": "failed",
+        "source": "caseSelection.timeout",
+        "budgetMs": 500,
+        "elapsedMs": 490,
+    }
+]

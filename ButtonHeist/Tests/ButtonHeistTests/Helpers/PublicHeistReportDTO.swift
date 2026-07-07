@@ -8,15 +8,18 @@ struct PublicHeistReportResponseDTO: Decodable, Equatable {
 
 struct PublicHeistReportDTO: Decodable, Equatable {
     let summary: PublicHeistReportSummaryDTO
+    let metrics: PublicHeistReportMetricsDTO
     let nodes: [PublicHeistReportNodeDTO]
     let netDelta: PublicHeistDeltaDTO?
 
     init(
         summary: PublicHeistReportSummaryDTO,
+        metrics: PublicHeistReportMetricsDTO,
         nodes: [PublicHeistReportNodeDTO],
         netDelta: PublicHeistDeltaDTO? = nil
     ) {
         self.summary = summary
+        self.metrics = metrics
         self.nodes = nodes
         self.netDelta = netDelta
     }
@@ -28,6 +31,28 @@ struct PublicHeistReportSummaryDTO: Decodable, Equatable {
     let outputReceiptNodeCount: Int
     let durationMs: Int
     let abortedAtPath: String?
+}
+
+struct PublicHeistReportMetricsDTO: Decodable, Equatable {
+    let samples: [PublicHeistReportMetricSampleDTO]
+    let ceilings: [PublicHeistReportCeilingMetricDTO]
+}
+
+struct PublicHeistReportMetricSampleDTO: Decodable, Equatable {
+    let name: String
+    let valueMs: Int
+    let path: String?
+    let kind: String?
+    let status: String?
+}
+
+struct PublicHeistReportCeilingMetricDTO: Decodable, Equatable {
+    let source: String
+    let budgetMs: Int
+    let elapsedMs: Int
+    let path: String
+    let kind: String
+    let status: String
 }
 
 struct PublicHeistReportNodeDTO: Decodable, Equatable {
