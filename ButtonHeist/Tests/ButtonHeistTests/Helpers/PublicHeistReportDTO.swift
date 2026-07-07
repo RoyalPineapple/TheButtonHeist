@@ -134,6 +134,7 @@ struct PublicHeistFailureDetailDTO: Decodable, Equatable {
     let contract: String
     let observed: String
     let expected: String?
+    let activationTrace: ActivationTrace?
     let code: String
     let kind: String
     let errorCode: String

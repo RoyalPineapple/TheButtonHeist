@@ -456,6 +456,7 @@ struct PublicHeistFailureDetail: Encodable {
     let contract: String
     let observed: String
     let expected: String?
+    let activationTrace: ActivationTrace?
     let code: String
     let kind: String
     let errorCode: String
@@ -468,6 +469,7 @@ struct PublicHeistFailureDetail: Encodable {
         contract = projection.detail.contract
         observed = projection.detail.observed
         expected = projection.detail.expected
+        activationTrace = projection.detail.activationTrace
         code = projection.diagnosticFailure.code
         kind = projection.diagnosticFailure.kind.rawValue
         errorCode = projection.diagnosticFailure.code

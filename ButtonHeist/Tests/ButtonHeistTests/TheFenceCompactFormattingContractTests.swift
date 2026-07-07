@@ -600,6 +600,54 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
     }
 
+    func testFailedHeistActionFailureDetailReportsActivationTrace() throws {
+        let activationTrace = ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 195, y: 139),
+            tapActivationSucceeded: true
+        ))
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Search all items"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            result: HeistExecutionResult(
+                steps: [
+                    actionReceiptStep(
+                        command: command,
+                        result: ActionResult.failure(
+                            method: .activate,
+                            errorKind: .actionFailed,
+                            message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
+                            activationTrace: activationTrace
+                        ),
+                        failure: HeistFailureDetail(
+                            category: .action,
+                            contract: "action dispatch succeeds",
+                            observed: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
+                            activationTrace: activationTrace
+                        )
+                    ),
+                ],
+                durationMs: 8,
+                abortedAtPath: "$.body[0]"
+            )
+        )
+
+        let compact = response.compactFormatted()
+        let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
+        let failureTrace = try node.object("failure").object("activationTrace")
+
+        XCTAssertEqual(try failureTrace.bool("axActivateReturned"), false)
+        XCTAssertEqual(try failureTrace.bool("tapActivationDispatched"), true)
+        XCTAssertEqual(try failureTrace.bool("tapActivationSucceeded"), true)
+        XCTAssertEqual(try failureTrace.object("tapActivationPoint").double("x"), 195)
+        XCTAssertEqual(try failureTrace.object("tapActivationPoint").double("y"), 139)
+        XCTAssertTrue(compact.contains("activation: axActivateReturned=false"), compact)
+        XCTAssertTrue(compact.contains("tapActivationDispatched=true"), compact)
+        XCTAssertTrue(compact.contains("tapActivationSucceeded=true"), compact)
+        XCTAssertTrue(compact.contains("tapActivationPoint=point(195,139)"), compact)
+    }
+
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,

@@ -594,8 +594,17 @@ extension TheBrains {
             category: result.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
-            expected: command.reportTarget.map(String.init(describing:))
+            expected: command.reportTarget.map(String.init(describing:)),
+            activationTrace: activationFailureTrace(command: command, result: result)
         )
+    }
+
+    private func activationFailureTrace(
+        command: HeistActionCommand,
+        result: ActionResult
+    ) -> ActivationTrace? {
+        guard case .activate = command else { return nil }
+        return result.activationTrace
     }
 
     private func waitEvaluation(
