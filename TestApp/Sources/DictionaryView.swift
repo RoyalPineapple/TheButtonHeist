@@ -78,7 +78,7 @@ enum DictionaryFilter: String, CaseIterable, Identifiable {
 // MARK: - Data
 
 enum DictionaryData {
-    static let entries: [DictionaryEntry] = loadEntries()
+    static let entries: [DictionaryEntry] = makeEntries()
     static let sections: [DictionarySection] = makeSections(from: entries)
     static let phraseCount = entries.filter(\.isPhrase).count
 
@@ -101,18 +101,13 @@ enum DictionaryData {
         return entries[lowerBound..<upperBound].filter { $0.id != entry.id }
     }
 
-    private static func loadEntries() -> [DictionaryEntry] {
-        guard
-            let url = Bundle.main.url(forResource: "web2a", withExtension: "txt"),
-            let text = try? String(contentsOf: url, encoding: .utf8)
-        else {
-            return fallbackTerms.enumerated().map { DictionaryEntry(id: $0.offset, term: $0.element) }
-        }
-
-        return text
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+    private static func makeEntries() -> [DictionaryEntry] {
+        seedTerms
+            .flatMap { seed in
+                [seed] + (1...24).map { index in
+                    index.isMultiple(of: 5) ? "\(seed) phrase \(index)" : "\(seed)-\(index)"
+                }
+            }
             .enumerated()
             .map { DictionaryEntry(id: $0.offset, term: $0.element) }
     }
@@ -127,8 +122,33 @@ enum DictionaryData {
             }
     }
 
-    private static let fallbackTerms = [
+    private static let seedTerms = [
         "abacus",
+        "blueprint",
+        "cipher",
+        "drift",
+        "ember",
+        "fable",
+        "glyph",
+        "harbor",
+        "index",
+        "jigsaw",
+        "keystone",
+        "lantern",
+        "matrix",
+        "notebook",
+        "oracle",
+        "puzzle",
+        "quartz",
+        "ribbon",
+        "signal",
+        "tangent",
+        "utopia",
+        "vector",
+        "waypoint",
+        "xylophone",
+        "yonder",
+        "zymurgy",
         "able",
         "button",
         "calculator",

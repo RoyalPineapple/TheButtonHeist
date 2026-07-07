@@ -1,4 +1,5 @@
 import XCTest
+import ButtonHeistTestSupport
 import TheScore
 
 final class SnapshotTests: XCTestCase {
