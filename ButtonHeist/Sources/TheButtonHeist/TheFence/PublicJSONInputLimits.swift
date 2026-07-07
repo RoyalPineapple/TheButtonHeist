@@ -254,18 +254,68 @@ public enum PublicJSONInputPreflight {
             makeError: publicJSONInputErrorFactory(context: context)
         )
 
-        var scanner = PublicJSONInputScanner(
-            bytes: Array(data),
-            context: context,
+        try validateRootPrefix(data, root: root, context: context, rootMismatchMessage: rootMismatchMessage)
+
+        let value: Any
+        do {
+            value = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+        } catch {
+            throw PublicJSONInputError("\(context) is not valid JSON")
+        }
+
+        switch root {
+        case .any:
+            break
+        case .array:
+            guard value is [Any] else {
+                throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
+            }
+        case .object:
+            guard value is [String: Any] else {
+                throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
+            }
+        }
+
+        var traversal = PublicJSONParsedInputTraversal(
             policy: policy,
-            rootMismatchMessage: rootMismatchMessage,
             makeError: publicJSONInputErrorFactory(context: context)
         )
-        try scanner.parseRoot(root)
+        try traversal.validate(value, depth: 1)
     }
 
     private static func publicJSONInputErrorFactory(context: String) -> PublicJSONValuePreflight.ErrorFactory {
         { PublicJSONInputError($0.publicJSONInputMessage(context: context)) }
+    }
+
+    private static func validateRootPrefix(
+        _ data: Data,
+        root: PublicJSONRoot,
+        context: String,
+        rootMismatchMessage: String?
+    ) throws {
+        guard let expected = openingByte(for: root) else {
+            return
+        }
+        guard firstNonWhitespaceByte(in: data) == expected else {
+            throw PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
+        }
+    }
+
+    private static func openingByte(for root: PublicJSONRoot) -> UInt8? {
+        switch root {
+        case .any:
+            return nil
+        case .array:
+            return UInt8(ascii: "[")
+        case .object:
+            return UInt8(ascii: "{")
+        }
+    }
+
+    private static func firstNonWhitespaceByte(in data: Data) -> UInt8? {
+        data.first { byte in
+            byte != 0x20 && byte != 0x0A && byte != 0x0D && byte != 0x09
+        }
     }
 }
 
@@ -435,282 +485,59 @@ private struct PublicJSONInputTraversalState {
     }
 }
 
-private struct PublicJSONInputScanner {
-    private let bytes: [UInt8]
-    private let context: String
+private struct PublicJSONParsedInputTraversal {
     private let policy: PublicJSONInputPolicy
-    private let rootMismatchMessage: String?
     private let makeError: PublicJSONValuePreflight.ErrorFactory
-    private var index = 0
     private var state = PublicJSONInputTraversalState()
 
     init(
-        bytes: [UInt8],
-        context: String,
         policy: PublicJSONInputPolicy,
-        rootMismatchMessage: String?,
         makeError: @escaping PublicJSONValuePreflight.ErrorFactory
     ) {
-        self.bytes = bytes
-        self.context = context
         self.policy = policy
-        self.rootMismatchMessage = rootMismatchMessage
         self.makeError = makeError
     }
 
-    mutating func parseRoot(_ root: PublicJSONRoot) throws {
-        skipWhitespace()
-        switch root {
-        case .any:
-            guard peek != nil else { throw invalidJSON() }
-        case .array:
-            guard peek == Self.leftBracket else { throw rootMismatch() }
-        case .object:
-            guard peek == Self.leftBrace else { throw rootMismatch() }
-        }
-        try parseValue(depth: 1)
-        skipWhitespace()
-        guard index == bytes.count else {
-            throw invalidJSON()
-        }
-    }
-
-    private mutating func parseValue(depth: Int) throws {
-        try validateDepth(depth)
-        skipWhitespace()
-        guard let byte = peek else {
-            throw invalidJSON()
-        }
-
-        switch byte {
-        case Self.leftBrace:
-            try parseObject(depth: depth)
-        case Self.leftBracket:
-            try parseArray(depth: depth)
-        case Self.quote:
-            try parseString()
-        case Self.t:
-            try consumeLiteral("true")
-        case Self.f:
-            try consumeLiteral("false")
-        case Self.n:
-            try consumeLiteral("null")
-            try state.validateNull(policy: policy, makeError: makeError)
-        case Self.minus, Self.zero...Self.nine:
-            try parseNumber()
-        default:
-            throw invalidJSON()
-        }
-    }
-
-    private mutating func parseObject(depth: Int) throws {
-        try validateDepth(depth)
-        try consume(Self.leftBrace)
-        skipWhitespace()
-        if consumeIfPresent(Self.rightBrace) {
-            return
-        }
-
-        while true {
-            skipWhitespace()
-            guard peek == Self.quote else {
-                throw invalidJSON()
-            }
-            try parseString()
-            try state.countObjectKeys(1, policy: policy, makeError: makeError)
-            skipWhitespace()
-            try consume(Self.colon)
-            try parseValue(depth: depth + 1)
-            skipWhitespace()
-            if consumeIfPresent(Self.rightBrace) {
-                return
-            }
-            try consume(Self.comma)
-        }
-    }
-
-    private mutating func parseArray(depth: Int) throws {
-        try validateDepth(depth)
-        try consume(Self.leftBracket)
-        skipWhitespace()
-        if consumeIfPresent(Self.rightBracket) {
-            return
-        }
-
-        while true {
-            try state.countArrayValues(1, policy: policy, makeError: makeError)
-            try parseValue(depth: depth + 1)
-            skipWhitespace()
-            if consumeIfPresent(Self.rightBracket) {
-                return
-            }
-            try consume(Self.comma)
-        }
-    }
-
-    private mutating func parseString() throws {
-        var encodedByteCount = 2
-        try consume(Self.quote)
-        while index < bytes.count {
-            let byte = bytes[index]
-            index += 1
-            switch byte {
-            case Self.quote:
-                try state.validateStringBytes(encodedByteCount, policy: policy, makeError: makeError)
-                return
-            case Self.backslash:
-                encodedByteCount += try parseStringEscapeByteCount()
-            case 0x00...0x1F:
-                throw invalidJSON()
-            default:
-                encodedByteCount += 1
-                continue
-            }
-        }
-        throw invalidJSON()
-    }
-
-    private mutating func parseStringEscapeByteCount() throws -> Int {
-        guard index < bytes.count else {
-            throw invalidJSON()
-        }
-        let escaped = bytes[index]
-        index += 1
-        switch escaped {
-        case Self.quote, Self.backslash, Self.slash, Self.b, Self.f, Self.n, Self.r, Self.t:
-            return 2
-        case Self.u:
-            guard index + 4 <= bytes.count else {
-                throw invalidJSON()
-            }
-            for _ in 0..<4 {
-                guard Self.isHexDigit(bytes[index]) else {
-                    throw invalidJSON()
-                }
-                index += 1
-            }
-            return 6
-        default:
-            throw invalidJSON()
-        }
-    }
-
-    private mutating func parseNumber() throws {
-        if consumeIfPresent(Self.minus), peek == nil {
-            throw invalidJSON()
-        }
-
-        if consumeIfPresent(Self.zero) {
-            if let byte = peek, Self.isDigit(byte) {
-                throw invalidJSON()
-            }
-        } else {
-            try consumeDigit()
-            while let byte = peek, Self.isDigit(byte) {
-                index += 1
-            }
-        }
-
-        if consumeIfPresent(Self.period) {
-            try consumeDigit()
-            while let byte = peek, Self.isDigit(byte) {
-                index += 1
-            }
-        }
-
-        if consumeIfPresent(Self.e) || consumeIfPresent(Self.capitalE) {
-            _ = consumeIfPresent(Self.plus) || consumeIfPresent(Self.minus)
-            try consumeDigit()
-            while let byte = peek, Self.isDigit(byte) {
-                index += 1
-            }
-        }
-    }
-
-    private mutating func consumeDigit() throws {
-        guard let byte = peek, Self.isDigit(byte) else {
-            throw invalidJSON()
-        }
-        index += 1
-    }
-
-    private mutating func consumeLiteral(_ literal: String) throws {
-        for byte in literal.utf8 {
-            try consume(byte)
-        }
-    }
-
-    private mutating func consume(_ byte: UInt8) throws {
-        guard consumeIfPresent(byte) else {
-            throw invalidJSON()
-        }
-    }
-
-    private mutating func consumeIfPresent(_ byte: UInt8) -> Bool {
-        guard peek == byte else {
-            return false
-        }
-        index += 1
-        return true
-    }
-
-    private mutating func skipWhitespace() {
-        while let byte = peek, Self.isWhitespace(byte) {
-            index += 1
-        }
-    }
-
-    private func validateDepth(_ depth: Int) throws {
+    mutating func validate(_ value: Any, depth: Int) throws {
         try state.validateDepth(depth, policy: policy, makeError: makeError)
+
+        switch value {
+        case is NSNull:
+            try state.validateNull(policy: policy, makeError: makeError)
+        case let string as String:
+            try state.validateStringBytes(jsonStringEncodedSize(string), policy: policy, makeError: makeError)
+        case let number as NSNumber:
+            guard Double(truncating: number).isFinite else {
+                throw makeError(.nonFiniteNumber(Double(truncating: number)))
+            }
+        case let array as [Any]:
+            try state.countArrayValues(array.count, policy: policy, makeError: makeError)
+            for element in array {
+                try validate(element, depth: depth + 1)
+            }
+        case let object as [String: Any]:
+            try state.countObjectKeys(object.count, policy: policy, makeError: makeError)
+            for (key, nested) in object {
+                try state.validateStringBytes(jsonStringEncodedSize(key), policy: policy, makeError: makeError)
+                try validate(nested, depth: depth + 1)
+            }
+        default:
+            break
+        }
     }
 
-    private var peek: UInt8? {
-        index < bytes.count ? bytes[index] : nil
+    private func jsonStringEncodedSize(_ value: String) -> Int {
+        var size = 2
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x22, 0x5C:
+                size += 2
+            case 0x00...0x1F:
+                size += 6
+            default:
+                size += scalar.utf8.count
+            }
+        }
+        return size
     }
-
-    private func invalidJSON() -> PublicJSONInputError {
-        PublicJSONInputError("\(context) is not valid JSON")
-    }
-
-    private func rootMismatch() -> PublicJSONInputError {
-        PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
-    }
-
-    private static func isWhitespace(_ byte: UInt8) -> Bool {
-        byte == 0x20 || byte == 0x0A || byte == 0x0D || byte == 0x09
-    }
-
-    private static func isDigit(_ byte: UInt8) -> Bool {
-        zero...nine ~= byte
-    }
-
-    private static func isHexDigit(_ byte: UInt8) -> Bool {
-        (zero...nine ~= byte) || (capitalA...capitalF ~= byte) || (a...f ~= byte)
-    }
-
-    private static let quote = UInt8(ascii: "\"")
-    private static let backslash = UInt8(ascii: "\\")
-    private static let slash = UInt8(ascii: "/")
-    private static let leftBrace = UInt8(ascii: "{")
-    private static let rightBrace = UInt8(ascii: "}")
-    private static let leftBracket = UInt8(ascii: "[")
-    private static let rightBracket = UInt8(ascii: "]")
-    private static let colon = UInt8(ascii: ":")
-    private static let comma = UInt8(ascii: ",")
-    private static let minus = UInt8(ascii: "-")
-    private static let plus = UInt8(ascii: "+")
-    private static let period = UInt8(ascii: ".")
-    private static let zero = UInt8(ascii: "0")
-    private static let nine = UInt8(ascii: "9")
-    private static let a = UInt8(ascii: "a")
-    private static let b = UInt8(ascii: "b")
-    private static let capitalA = UInt8(ascii: "A")
-    private static let capitalE = UInt8(ascii: "E")
-    private static let capitalF = UInt8(ascii: "F")
-    private static let e = UInt8(ascii: "e")
-    private static let f = UInt8(ascii: "f")
-    private static let n = UInt8(ascii: "n")
-    private static let r = UInt8(ascii: "r")
-    private static let t = UInt8(ascii: "t")
-    private static let u = UInt8(ascii: "u")
 }

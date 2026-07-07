@@ -1,4 +1,5 @@
 import AccessibilitySnapshotModel
+import ButtonHeistTestSupport
 import XCTest
 @testable import TheScore
 

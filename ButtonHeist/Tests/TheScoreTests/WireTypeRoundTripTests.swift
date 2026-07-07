@@ -1311,7 +1311,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertTrue(ElementProperty.frame.isGeometry)
         XCTAssertTrue(ElementProperty.activationPoint.isGeometry)
         XCTAssertFalse(ElementProperty.value.isGeometry)
-        XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)
         XCTAssertFalse(ElementProperty.actions.isGeometry)

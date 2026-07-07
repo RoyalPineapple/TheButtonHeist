@@ -236,113 +236,95 @@ public struct HeistDef<Input>: Sendable {
     public let parameter: HeistParameter
     private let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
-    private struct DottedPathDefinitionBuild: Sendable, Equatable {
-        let pathComponents: [String]
-        let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            guard lhs.pathComponents == rhs.pathComponents else { return false }
-            switch (lhs.definitionResult, rhs.definitionResult) {
-            case let (.success(lhsPlan, lhsDiagnostics), .success(rhsPlan, rhsDiagnostics)):
-                return lhsPlan == rhsPlan && lhsDiagnostics == rhsDiagnostics
-            case let (.failure(lhsDiagnostics), .failure(rhsDiagnostics)):
-                return lhsDiagnostics == rhsDiagnostics
-            case (.success, .failure), (.failure, .success):
-                return false
-            }
-        }
-    }
-
     public init<Content: HeistContent>(
         _ path: String,
         @HeistBuilder _ content: @escaping () throws -> Content
     ) where Input == Void {
         self.parameter = .none
-        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
-            try content()
-        }
-        self.path = result.pathComponents
-        self.definitionResult = result.definitionResult
-    }
-
-    public init<Content: HeistContent>(
-        _ path: HeistDefinitionPath,
-        @HeistBuilder _ content: @escaping () throws -> Content
-    ) where Input == Void {
-        self.parameter = .none
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
-            try content()
-        }
-    }
-
-    public init<Content: HeistContent>(
-        _ path: String,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
-    ) where Input == String {
-        let reference = parameter
-        self.parameter = .string(name: reference)
-        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
-            try content(try StringExpr(ref: reference))
-        }
-        self.path = result.pathComponents
-        self.definitionResult = result.definitionResult
-    }
-
-    public init<Content: HeistContent>(
-        _ path: HeistDefinitionPath,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
-    ) where Input == String {
-        let reference = parameter
-        self.parameter = .string(name: reference)
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
-            try content(try StringExpr(ref: reference))
-        }
-    }
-
-    public init<Content: HeistContent>(
-        _ path: String,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
-    ) where Input == ElementTarget {
-        let reference = parameter
-        self.parameter = .elementTarget(name: reference)
-        let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
-            try content(try ElementTargetExpr(ref: reference))
-        }
-        self.path = result.pathComponents
-        self.definitionResult = result.definitionResult
-    }
-
-    public init<Content: HeistContent>(
-        _ path: HeistDefinitionPath,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
-    ) where Input == ElementTarget {
-        let reference = parameter
-        self.parameter = .elementTarget(name: reference)
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
-            try content(try ElementTargetExpr(ref: reference))
-        }
-    }
-
-    private static func buildDefinitionFromDottedPath(
-        path: String,
-        parameter: HeistParameter,
-        _ content: () throws -> any HeistContent
-    ) -> DottedPathDefinitionBuild {
-        switch pathComponents(path) {
+        switch Self.pathComponents(path) {
         case .success(let components, _):
-            return DottedPathDefinitionBuild(
-                pathComponents: components,
-                definitionResult: buildDefinition(path: components, parameter: parameter, content)
-            )
+            self.path = components
+            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+                try content()
+            }
         case .failure(let diagnostics):
-            return DottedPathDefinitionBuild(pathComponents: [], definitionResult: .failure(diagnostics))
+            self.path = []
+            self.definitionResult = .failure(diagnostics)
+        }
+    }
+
+    public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        @HeistBuilder _ content: @escaping () throws -> Content
+    ) where Input == Void {
+        self.parameter = .none
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content()
+        }
+    }
+
+    public init<Content: HeistContent>(
+        _ path: String,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    ) where Input == String {
+        let reference = parameter
+        self.parameter = .string(name: reference)
+        switch Self.pathComponents(path) {
+        case .success(let components, _):
+            self.path = components
+            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+                try content(try StringExpr(ref: reference))
+            }
+        case .failure(let diagnostics):
+            self.path = []
+            self.definitionResult = .failure(diagnostics)
+        }
+    }
+
+    public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    ) where Input == String {
+        let reference = parameter
+        self.parameter = .string(name: reference)
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content(try StringExpr(ref: reference))
+        }
+    }
+
+    public init<Content: HeistContent>(
+        _ path: String,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    ) where Input == ElementTarget {
+        let reference = parameter
+        self.parameter = .elementTarget(name: reference)
+        switch Self.pathComponents(path) {
+        case .success(let components, _):
+            self.path = components
+            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
+                try content(try ElementTargetExpr(ref: reference))
+            }
+        case .failure(let diagnostics):
+            self.path = []
+            self.definitionResult = .failure(diagnostics)
+        }
+    }
+
+    public init<Content: HeistContent>(
+        _ path: HeistDefinitionPath,
+        parameter: HeistReferenceName = "input",
+        @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    ) where Input == ElementTarget {
+        let reference = parameter
+        self.parameter = .elementTarget(name: reference)
+        self.path = path.components
+        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+            try content(try ElementTargetExpr(ref: reference))
         }
     }
 
