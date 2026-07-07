@@ -78,7 +78,7 @@ extension ElementInflation {
 
     private func moveToObservedContentActivationPoint(_ screenElement: TheStash.ScreenElement) async -> Bool {
         guard let observedActivationPoint = screenElement.observedScrollContentActivationPoint,
-              let scrollView = stash.liveScrollView(for: screenElement)
+              let scrollView = liveScrollView(for: screenElement)
         else { return false }
 
         scrollView.setContentOffset(
@@ -96,7 +96,7 @@ extension ElementInflation {
     }
 
     private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        if stash.capturedLiveScrollView(forContainerPath: path) != nil {
+        if liveScrollView(forScrollContainerPath: path) != nil {
             return true
         }
         guard depth < Self.maxNestedRevealDepth else { return false }
@@ -114,12 +114,68 @@ extension ElementInflation {
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         guard stash.refreshTreeAfterViewportMove() != nil else { return false }
-        return stash.capturedLiveScrollView(forContainerPath: path) != nil
+        return liveScrollView(forScrollContainerPath: path) != nil
+    }
+
+    private func liveScrollView(for screenElement: TheStash.ScreenElement) -> UIScrollView? {
+        guard let scrollContainerPath = screenElement.scrollContainerPath else {
+            return stash.liveScrollView(for: screenElement)
+        }
+        return liveScrollView(forScrollContainerPath: scrollContainerPath)
+            ?? stash.liveScrollView(for: screenElement)
+    }
+
+    private func liveScrollView(forScrollContainerPath path: TreePath) -> UIScrollView? {
+        if let scrollView = stash.capturedLiveScrollView(forContainerPath: path) {
+            return scrollView
+        }
+        guard let remappedPath = remappedLiveScrollContainerPath(for: path) else {
+            return nil
+        }
+        return stash.capturedLiveScrollView(forContainerPath: remappedPath)
+    }
+
+    private func remappedLiveScrollContainerPath(for path: TreePath) -> TreePath? {
+        guard let expectedContainer = semanticContainer(at: path),
+              expectedContainer.scrollMembership != nil,
+              expectedContainer.container.isSemanticRevealScrollable
+        else { return nil }
+
+        let matches = stash.scrollableContainerViewsByPath.keys
+            .sorted()
+            .filter { candidatePath in
+                guard candidatePath != path,
+                      candidatePath.parent == path.parent,
+                      let candidate = semanticContainer(at: candidatePath),
+                      candidate.scrollMembership == expectedContainer.scrollMembership,
+                      candidate.matchesScrollIdentity(of: expectedContainer)
+                else { return false }
+                return true
+            }
+        return matches.count == 1 ? matches[0] : nil
     }
 
     private func semanticContainer(at path: TreePath) -> SemanticScreen.Container? {
         stash.settledSemanticScreen.semantic.containers[path]
             ?? stash.latestObservedSemanticWorld.containers[path]
+    }
+}
+
+private extension SemanticScreen.Container {
+    func matchesScrollIdentity(of other: SemanticScreen.Container) -> Bool {
+        container.semanticRevealScrollContentSize == other.container.semanticRevealScrollContentSize
+            && contentFrame == other.contentFrame
+    }
+}
+
+private extension AccessibilityContainer {
+    var isSemanticRevealScrollable: Bool {
+        semanticRevealScrollContentSize != nil
+    }
+
+    var semanticRevealScrollContentSize: AccessibilitySize? {
+        guard case .scrollable(let contentSize) = type else { return nil }
+        return contentSize
     }
 }
 

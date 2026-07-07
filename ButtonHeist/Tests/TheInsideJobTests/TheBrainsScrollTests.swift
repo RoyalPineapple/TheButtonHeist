@@ -556,6 +556,102 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
     }
 
+    func testSemanticRevealUsesRemappedNestedLiveScrollContainerPath() async throws {
+        let parentPath = TreePath([0])
+        let oldChildPath = TreePath([0, 0])
+        let liveChildPath = TreePath([0, 1])
+        let parentScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        parentScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let childScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
+        childScrollView.contentSize = CGSize(width: 280, height: 900)
+        let parentContainer = makeScrollableContainer(
+            contentSize: parentScrollView.contentSize,
+            frame: parentScrollView.frame
+        )
+        let childContainer = makeScrollableContainer(
+            contentSize: childScrollView.contentSize,
+            frame: childScrollView.frame
+        )
+        let targetActivationPoint = CGPoint(x: 130, y: 662)
+        let target = makeElement(label: "Nested Target", traits: .button)
+        let entry = Screen.ScreenElement(
+            heistId: "nested_target",
+            scrollMembership: Screen.ScrollMembership(containerPath: oldChildPath, index: nil),
+            observedScrollContentActivationPoint: observedContentActivationPoint(targetActivationPoint),
+            element: target
+        )
+        let childMembership = Screen.ScrollMembership(containerPath: parentPath, index: nil)
+        let childContentFrame = ContentRect(CGRect(origin: .zero, size: childScrollView.frame.size))
+        let semantic = SemanticScreen(
+            elements: [entry.heistId: entry],
+            containers: [
+                parentPath: SemanticScreen.Container(
+                    container: parentContainer,
+                    path: parentPath,
+                    containerName: "parent_scroll",
+                    contentFrame: parentScrollView.frame
+                ),
+                oldChildPath: SemanticScreen.Container(
+                    container: childContainer,
+                    path: oldChildPath,
+                    containerName: "child_scroll",
+                    contentRect: childContentFrame,
+                    scrollMembership: childMembership
+                ),
+                liveChildPath: SemanticScreen.Container(
+                    container: childContainer,
+                    path: liveChildPath,
+                    containerName: "child_scroll",
+                    contentRect: childContentFrame,
+                    scrollMembership: childMembership
+                ),
+            ]
+        )
+        let liveCapture = LiveCapture(
+            hierarchy: [
+                .container(parentContainer, children: [
+                    .element(makeElement(label: "Visible"), traversalIndex: 0),
+                    .container(childContainer, children: []),
+                ])
+            ],
+            containerNamesByPath: [
+                parentPath: "parent_scroll",
+                liveChildPath: "child_scroll",
+            ],
+            elementRefs: [:],
+            containerContentFramesByPath: [
+                parentPath: ContentRect(parentScrollView.frame),
+                liveChildPath: childContentFrame,
+            ],
+            containerScrollMembershipsByPath: [
+                liveChildPath: childMembership,
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [
+                parentPath: .init(view: parentScrollView),
+                liveChildPath: .init(view: childScrollView),
+            ]
+        )
+        brains.stash.installScreenForTesting(Screen(
+            semantic: semantic,
+            liveCapture: liveCapture
+        ))
+
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+
+        guard case .revealed = result else {
+            return XCTFail("Expected semantic reveal to use remapped live child path, got \(result)")
+        }
+        XCTAssertEqual(parentScrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(childScrollView.setContentOffsetAnimations, [false])
+        let expectedOffset = ElementInflation.semanticRevealTargetOffset(
+            for: observedContentActivationPoint(targetActivationPoint),
+            in: childScrollView
+        )
+        XCTAssertEqual(childScrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
+        XCTAssertEqual(childScrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
+    }
+
     func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
