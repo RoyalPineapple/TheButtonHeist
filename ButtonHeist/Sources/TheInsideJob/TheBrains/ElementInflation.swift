@@ -23,8 +23,9 @@ final class ElementInflation {
     var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
     var revealKnownTarget: (@MainActor (HeistId) async -> Screen?)?
 
-    /// Bounded window inflation waits for a target whose reveal failed to
-    /// become resolvable before failing `noRevealPath`.
+    /// Bounded window inflation waits for a target whose reveal failed, or
+    /// whose visible live object was recycled, to become resolvable before
+    /// failing the active recovery path.
     ///
     /// Async-loaded destinations can produce a settled world that knows the
     /// target before its live scroll geometry is wired, so a reveal failure at
@@ -165,6 +166,31 @@ final class ElementInflation {
         case resolved(TheStash.ScreenElement, didReveal: Bool)
         case failed(ElementInflationFailure)
         case timedOut
+    }
+
+    private enum TargetRefreshGraceMode {
+        case revealPath
+        case liveTarget(method: ActionMethod)
+    }
+
+    private enum TargetRefreshGraceResolution {
+        case screenElement(TheStash.ScreenElement, didReveal: Bool)
+        case liveTarget(InflatedElementTarget)
+        case failed(ElementInflationFailure)
+        case missing
+    }
+
+    private enum TargetRefreshGraceOutcome {
+        case resolved(TheStash.ScreenElement, didReveal: Bool)
+        case inflated(InflatedElementTarget)
+        case failed(ElementInflationFailure)
+        case timedOut
+    }
+
+    private enum StaleLiveTargetGraceResult {
+        case success(InflatedElementTarget)
+        case failure(ElementInflationFailure)
+        case retry
     }
 
     enum ElementInflationFailureStep: String {
@@ -383,6 +409,22 @@ final class ElementInflation {
     /// one-frame real-time floor — so the window can never starve the main
     /// actor, and task cancellation exits promptly.
     private func awaitRevealPathGrace(for target: ElementTarget) async -> RevealPathGraceOutcome {
+        switch await awaitTargetRefreshGrace(for: target, mode: .revealPath) {
+        case .resolved(let resolved, let didReveal):
+            return .resolved(resolved, didReveal: didReveal)
+        case .inflated(let inflatedTarget):
+            return .resolved(inflatedTarget.screenElement, didReveal: false)
+        case .failed(let failure):
+            return .failed(failure)
+        case .timedOut:
+            return .timedOut
+        }
+    }
+
+    private func awaitTargetRefreshGrace(
+        for target: ElementTarget,
+        mode: TargetRefreshGraceMode
+    ) async -> TargetRefreshGraceOutcome {
         let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
         var driver = StateDriver(
             initial: RevealPathGraceState.idle,
@@ -411,56 +453,69 @@ final class ElementInflation {
                 effect = driver.send(Task.isCancelled ? .cancelled : .frameYielded).revealPathGraceEffect
 
             case .refreshVisibleTree:
-                let refreshResult: RevealPathGraceVisibleTreeRefreshResult = stash.refreshCurrentVisibleTree() == nil
-                    ? .unavailable
-                    : .refreshed
+                let refreshResult = targetRefreshGraceRefreshResult(mode: mode)
                 effect = driver.send(.visibleTreeRefreshCompleted(
                     refreshResult,
                     remaining: revealPathGraceRemainingTime(until: deadline)
                 )).revealPathGraceEffect
 
             case .resolveVisibleTarget:
-                switch visibleTargetResolution(target) {
-                case .success(let visible)?:
+                switch targetRefreshGraceResolution(target: target, mode: mode) {
+                case .screenElement(let visible, let didReveal):
                     guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
                     else {
                         preconditionFailure("Reveal path grace visible resolution did not finish as resolved.")
                     }
-                    return .resolved(visible, didReveal: false)
-                case .failure(let failure)?:
+                    return .resolved(visible, didReveal: didReveal)
+                case .liveTarget(let inflatedTarget):
+                    guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
+                    else {
+                        preconditionFailure("Target refresh grace live resolution did not finish as resolved.")
+                    }
+                    return .inflated(inflatedTarget)
+                case .failed(let failure):
                     guard case .finish(.failedVisibleTarget) = driver.send(.visibleTargetFailed).revealPathGraceEffect
                     else {
                         preconditionFailure("Reveal path grace visible failure did not finish as failed.")
                     }
                     return .failed(failure)
-                case nil:
+                case .missing:
                     effect = driver.send(.visibleTargetMissing(
                         remaining: revealPathGraceRemainingTime(until: deadline)
                     )).revealPathGraceEffect
                 }
 
             case .attemptKnownTargetReveal:
-                switch await attemptRevealPathGraceKnownTarget(for: target) {
-                case .unavailable:
+                switch mode {
+                case .revealPath:
+                    switch await attemptRevealPathGraceKnownTarget(for: target) {
+                    case .unavailable:
+                        effect = driver.send(.knownTargetRevealAttempted(
+                            .unavailable,
+                            remaining: revealPathGraceRemainingTime(until: deadline)
+                        )).revealPathGraceEffect
+                    case .failed:
+                        effect = driver.send(.knownTargetRevealAttempted(
+                            .failed,
+                            remaining: revealPathGraceRemainingTime(until: deadline)
+                        )).revealPathGraceEffect
+                    case .revealed(let fresh, let didReveal):
+                        guard case .finish(.resolvedAfterKnownReveal(let effectDidReveal)) = driver.send(
+                            .knownTargetRevealAttempted(
+                                .revealed(didReveal: didReveal),
+                                remaining: revealPathGraceRemainingTime(until: deadline)
+                            )
+                        ).revealPathGraceEffect else {
+                            preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
+                        }
+                        return .resolved(fresh, didReveal: effectDidReveal)
+                    }
+
+                case .liveTarget:
                     effect = driver.send(.knownTargetRevealAttempted(
                         .unavailable,
                         remaining: revealPathGraceRemainingTime(until: deadline)
                     )).revealPathGraceEffect
-                case .failed:
-                    effect = driver.send(.knownTargetRevealAttempted(
-                        .failed,
-                        remaining: revealPathGraceRemainingTime(until: deadline)
-                    )).revealPathGraceEffect
-                case .revealed(let fresh, let didReveal):
-                    guard case .finish(.resolvedAfterKnownReveal(let effectDidReveal)) = driver.send(
-                        .knownTargetRevealAttempted(
-                            .revealed(didReveal: didReveal),
-                            remaining: revealPathGraceRemainingTime(until: deadline)
-                        )
-                    ).revealPathGraceEffect else {
-                        preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
-                    }
-                    return .resolved(fresh, didReveal: effectDidReveal)
                 }
 
             case .finish(.timedOut), .finish(.cancelled):
@@ -471,6 +526,82 @@ final class ElementInflation {
                  .finish(.resolvedAfterKnownReveal):
                 preconditionFailure("Reveal path grace terminal effect must be consumed with boundary payload.")
             }
+        }
+    }
+
+    private func targetRefreshGraceRefreshResult(
+        mode: TargetRefreshGraceMode
+    ) -> RevealPathGraceVisibleTreeRefreshResult {
+        let refreshedScreen: Screen?
+        switch mode {
+        case .revealPath:
+            refreshedScreen = stash.refreshCurrentVisibleTree()
+        case .liveTarget:
+            refreshedScreen = stash.refreshLiveCapture()
+        }
+        return refreshedScreen == nil ? .unavailable : .refreshed
+    }
+
+    private func targetRefreshGraceResolution(
+        target: ElementTarget,
+        mode: TargetRefreshGraceMode
+    ) -> TargetRefreshGraceResolution {
+        switch mode {
+        case .revealPath:
+            switch visibleTargetResolution(target) {
+            case .success(let visible)?:
+                return .screenElement(visible, didReveal: false)
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                return .missing
+            }
+
+        case .liveTarget(let method):
+            switch visibleTargetResolution(target) {
+            case .success(_)?:
+                guard let resolution = resolveCurrentVisibleLiveElementTarget(
+                    target: target,
+                    method: method
+                ) else {
+                    return .missing
+                }
+                switch resolution {
+                case .success(let inflatedTarget):
+                    return .liveTarget(inflatedTarget)
+                case .failure(let failure):
+                    return .failed(failure)
+                case .retry:
+                    return .missing
+                }
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                return .missing
+            }
+        }
+    }
+
+    private func awaitStaleLiveTargetGrace(
+        for target: ElementTarget,
+        method: ActionMethod,
+        reason: RetryReason
+    ) async -> StaleLiveTargetGraceResult {
+        switch reason {
+        case .objectDeallocated, .staleTarget:
+            break
+        case .activationPointOffscreen:
+            return .retry
+        }
+
+        switch await awaitTargetRefreshGrace(for: target, mode: .liveTarget(method: method)) {
+        case .inflated(let inflatedTarget):
+            return .success(inflatedTarget)
+        case .failed(let failure):
+            return .failure(failure)
+        case .resolved,
+             .timedOut:
+            return .retry
         }
     }
 
@@ -514,20 +645,53 @@ final class ElementInflation {
             deallocatedBoundary: deallocatedBoundary
         ) {
         case .success(let inflatedTarget):
-            if activationPointPolicy == .liveObjectOnly {
-                return await stateAfterStableLiveGeometry(
+            return await stateAfterResolvedFreshTarget(
+                inflatedTarget,
+                attempt: attempt,
+                didReveal: didReveal,
+                method: method,
+                activationPointPolicy: activationPointPolicy
+            )
+        case .retry(let reason):
+            switch await awaitStaleLiveTargetGrace(
+                for: target,
+                method: method,
+                reason: reason
+            ) {
+            case .success(let inflatedTarget):
+                return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
                     attempt: attempt,
+                    didReveal: didReveal,
                     method: method,
-                    requireOnscreenActivationPoint: false
+                    activationPointPolicy: activationPointPolicy
                 )
+            case .failure(let failure):
+                return .failed(failure)
+            case .retry:
+                return .retrying(failedAttempt: attempt, reason: reason)
             }
-            return .placing(inflatedTarget: inflatedTarget, attempt: attempt, didReveal: didReveal)
-        case .retry(let reason):
-            return .retrying(failedAttempt: attempt, reason: reason)
         case .failure(let failure):
             return .failed(failure)
         }
+    }
+
+    private func stateAfterResolvedFreshTarget(
+        _ inflatedTarget: InflatedElementTarget,
+        attempt: Int,
+        didReveal: Bool,
+        method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy
+    ) async -> InflationState {
+        if activationPointPolicy == .liveObjectOnly {
+            return await stateAfterStableLiveGeometry(
+                inflatedTarget,
+                attempt: attempt,
+                method: method,
+                requireOnscreenActivationPoint: false
+            )
+        }
+        return .placing(inflatedTarget: inflatedTarget, attempt: attempt, didReveal: didReveal)
     }
 
     private func stateAfterPlacement(

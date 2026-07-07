@@ -883,6 +883,57 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(failure.message.contains("target was not found in fresh live geometry"))
     }
 
+    func testStaleLiveObjectGraceRecoversDelayedVisibleLiveTarget() async {
+        let targetId = HeistId(rawValue: "recycled_target")
+        let staleFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
+        let staleTarget = AccessibilityElement.make(
+            label: "Recycled Target",
+            traits: .button,
+            frame: staleFrame
+        )
+        brains.stash.installScreenForTesting(Screen.makeForTests(
+            elements: [(staleTarget, targetId)],
+            objects: [targetId: nil]
+        ))
+
+        let recoveredFrame = CGRect(x: 48, y: 136, width: 260, height: 44)
+        let recoveredTarget = AccessibilityElement.make(
+            label: "Recycled Target",
+            traits: .button,
+            frame: recoveredFrame
+        )
+        let recoveredObject = retainedLiveObject()
+        let recoveredScreen = Screen.makeForTests([
+            Screen.TestEntry(
+                recoveredTarget,
+                heistId: targetId,
+                object: recoveredObject
+            )
+        ])
+        brains.navigation.elementInflation.revealPathGraceTimeout = 0.3
+        brains.navigation.elementInflation.revealPathSilentReparseInterval = 0.01
+
+        let liveObjectArrival = Task { @MainActor in
+            guard await Task.cancellableSleep(for: .milliseconds(40)) else { return }
+            self.brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+        }
+        defer { liveObjectArrival.cancel() }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Recycled Target", traits: [.button])),
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected stale live-object grace to recover target, got \(result)")
+        }
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, targetId)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
+        XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
+    }
+
     func testKnownOffscreenTargetWithoutLiveScrollParentFailsNoRevealPath() async {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
