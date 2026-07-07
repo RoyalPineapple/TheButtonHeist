@@ -586,6 +586,26 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
         return evidence.invocation?.runHeistSummary
     }
 
+    package var dispatchedActionResult: ActionResult? {
+        results.dispatchedActionResult
+    }
+
+    package var actionResult: ActionResult? {
+        results.actionResult
+    }
+
+    package var traceEvidenceResult: ActionResult? {
+        results.traceEvidenceResult
+    }
+
+    package var expectation: ExpectationResult? {
+        results.expectation
+    }
+
+    package var actionErrorKind: ErrorKind? {
+        results.actionErrorKind
+    }
+
     package var results: HeistExecutionStepReportResults {
         switch self {
         case .action(let evidence):
