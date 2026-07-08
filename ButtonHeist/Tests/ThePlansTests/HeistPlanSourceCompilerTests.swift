@@ -58,12 +58,12 @@ import Testing
 
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.exists(container: .identifier("CheckoutScreen")), timeout: .seconds(2))
-    Activate(.within(container: .identifier("CheckoutScreen"), .label("Pay")))
+    WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))
+    Activate(.within(container: .label("Checkout"), .label("Pay")))
     """))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .exists(container: .identifier("CheckoutScreen")), timeout: 2)),
-        .action(try ActionStep(command: .activate(.within(container: .identifier("CheckoutScreen"), .label("Pay"))))),
+        .wait(WaitStep(predicate: .exists(container: .label("Checkout")), timeout: 2)),
+        .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ])
 
     #expect(plan == expected)

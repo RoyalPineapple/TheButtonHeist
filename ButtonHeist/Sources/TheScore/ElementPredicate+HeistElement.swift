@@ -134,7 +134,7 @@ package struct ElementMatchSet: Sendable, Equatable {
 package struct ContainerMatch: Sendable, Hashable {
     package let path: TreePath
     package let traversalOrder: Int
-    package let identifier: String?
+    package let facts: ContainerPredicateFacts
 
     package static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
         lhs.path == rhs.path
@@ -168,7 +168,7 @@ package struct ContainerMatchSet: Sendable, Equatable {
             return ContainerMatch(
                 path: container.path,
                 traversalOrder: offset,
-                identifier: container.container.containerIdentifier
+                facts: container.container.containerPredicateFacts
             )
         })
     }
@@ -218,12 +218,12 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package func containsContainer(matching predicate: ContainerPredicate) -> Bool {
-        containers.matches.contains { predicate.matches(identifier: $0.identifier) }
+        containers.matches.contains { predicate.matches($0.facts) }
     }
 
     private func scoped(to predicate: ContainerPredicate) -> ElementMatchGraph {
         let containerPaths = containers.matches
-            .filter { predicate.matches(identifier: $0.identifier) }
+            .filter { predicate.matches($0.facts) }
             .map(\.path)
         guard !containerPaths.isEmpty else {
             return ElementMatchGraph(all: .empty, containers: .empty)
@@ -244,12 +244,5 @@ package struct ElementMatchGraph: Sendable, Equatable {
             identity: \.path,
             traversalOrder: \.traversalOrder
         )
-    }
-}
-
-private extension AccessibilityContainer {
-    var containerIdentifier: String? {
-        guard case .semanticGroup(_, _, let identifier) = type else { return nil }
-        return identifier
     }
 }

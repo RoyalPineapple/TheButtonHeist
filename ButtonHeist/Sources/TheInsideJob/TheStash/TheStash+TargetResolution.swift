@@ -66,7 +66,7 @@ extension TheStash {
 
     struct ContainerCandidateFacts {
         let containerName: ContainerName?
-        let type: ContainerTypeName
+        let type: AccessibilityContainerKind
         let label: String?
         let value: String?
         let identifier: String?
@@ -75,29 +75,30 @@ extension TheStash {
         init(container: SemanticScreen.Container) {
             let accessibilityContainer = container.container
             containerName = container.containerName
-            type = accessibilityContainer.typeName
-            label = accessibilityContainer.containerLabel
-            value = accessibilityContainer.containerValue
-            identifier = accessibilityContainer.containerIdentifier
+            let facts = accessibilityContainer.containerPredicateFacts
+            type = facts.type
+            label = facts.label
+            value = facts.value
+            identifier = facts.identifier
             isModalBoundary = accessibilityContainer.isModalBoundary
         }
     }
 
     enum ContainerNotFoundReason: Equatable {
-        case emptyMatcher
+        case emptyPredicate
         case ordinalOutOfRange(requested: Int, matchCount: Int)
         case noMatches
     }
 
     struct ContainerNotFoundFacts {
-        let matcher: ContainerMatcher
+        let predicate: ContainerPredicate
         let ordinal: Int?
         let reason: ContainerNotFoundReason
         let resolutionScope: ResolutionScope
     }
 
     struct ContainerAmbiguityFacts {
-        let matcher: ContainerMatcher
+        let predicate: ContainerPredicate
         let candidates: [ContainerCandidateFacts]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
@@ -163,28 +164,24 @@ extension TheStash {
         resolveTarget(target, in: liveVisibleScreen.visibleOnly, resolutionScope: .visible)
     }
 
-    func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
-        guard matcher.hasPredicates else {
+    func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
+        guard predicate.hasPredicates else {
             return .notFound(ContainerNotFoundFacts(
-                matcher: matcher,
+                predicate: predicate,
                 ordinal: ordinal,
-                reason: .emptyMatcher,
+                reason: .emptyPredicate,
                 resolutionScope: .known
             ))
         }
         let matches = semanticContainersInTraversalOrder
             .compactMap { item -> SemanticScreen.Container? in
-                let annotation = InterfaceContainerAnnotation(
-                    path: item.path,
-                    containerName: item.containerName
-                )
-                guard item.container.matches(matcher, annotation: annotation) else { return nil }
+                guard predicate.matches(item.container.containerPredicateFacts) else { return nil }
                 return item
             }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
-                    matcher: matcher,
+                    predicate: predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: .known
@@ -197,14 +194,14 @@ extension TheStash {
             return .resolved(matches[0])
         case 0:
             return .notFound(ContainerNotFoundFacts(
-                matcher: matcher,
+                predicate: predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: .known
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
-                matcher: matcher,
+                predicate: predicate,
                 candidates: matches.map(ContainerCandidateFacts.init),
                 matchedCount: matches.count,
                 resolutionScope: .known
@@ -344,7 +341,7 @@ private extension ElementTarget {
 private extension Screen {
     func scoped(to predicate: ContainerPredicate) -> Screen {
         let containerPaths = orderedContainers
-            .filter { predicate.matches(identifier: $0.container.containerIdentifier) }
+            .filter { predicate.matches($0.container.containerPredicateFacts) }
             .map(\.path)
         guard !containerPaths.isEmpty else {
             return Screen(

@@ -327,14 +327,20 @@ an observed transition. Use snapshot predicates for destination state after an
 action when the transition itself does not matter.
 
 Use container predicates when the assertion is "the current settled hierarchy
-contains this semantic container", not "a navigation just happened". They match
+contains this matching container", not "a navigation just happened". They match
 settled accessibility structure without requiring a previous transition:
 
 ```swift
-WaitFor(.exists(container: .identifier("CheckoutScreen")), timeout: .seconds(2))
-WaitFor(.missing(container: .identifier("LoadingOverlay")), timeout: .seconds(2))
-Activate(.within(container: .identifier("CheckoutScreen"), .label("Pay")))
+WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))
+WaitFor(.missing(container: .label("Loading")), timeout: .seconds(2))
+Activate(.within(container: .label("Checkout"), .label("Pay")))
+Activate(.within(container: .scrollable, .label("Load more")))
 ```
+
+Container predicates can match semantic `.label(...)`, `.value(...)`, and
+`.identifier(...)`, type shorthands such as `.scrollable`, `.list`, `.tabBar`,
+and `.dataTable(rowCount:columnCount:)`, or explicit `.matching(...)` check
+chains.
 
 Use `.screenChanged(...)` for navigation. Assertions inside `screenChanged` are
 destination snapshot assertions, not element-delta predicates:
@@ -438,10 +444,9 @@ same DSL concept: `Activate(.label("Pay"))` is shorthand for a target built from
 the `.label("Pay")` predicate, `WaitFor(.label("Pay"))` is shorthand for an
 element existence predicate, and `.expect(.appeared(.label("Toast")))` is
 shorthand for an element-change assertion. Sugar must stay local and
-unambiguous; write `.exists(container: .identifier("CheckoutScreen"))` for
-settled container presence, write
-`.within(container: .identifier("CheckoutScreen"), .label("Pay"))` for scoped
-targeting, write `.screenChanged` or
+unambiguous; write `.exists(container: .label("Checkout"))` for settled
+container presence, write `.within(container: .label("Checkout"), .label("Pay"))`
+for scoped targeting, write `.screenChanged` or
 `.screenChanged(.exists(.label("Receipt")))` for navigation, and use
 `.appeared(...)`, `.disappeared(...)`, or `.updated(...)` only for same-screen
 element deltas.

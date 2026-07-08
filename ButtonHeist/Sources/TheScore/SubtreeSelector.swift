@@ -6,11 +6,11 @@ import Foundation
 /// Selector for projecting an `Interface` to one matched node.
 ///
 /// `.element` searches leaf `HeistElement` nodes by `ElementPredicate`.
-/// `.container` searches parser container nodes with `ContainerMatcher`.
+/// `.container` searches parser container nodes with `ContainerPredicate`.
 /// `ordinal` is applied only after semantic narrowing.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementTarget)
-    case container(ContainerMatcher, ordinal: Int? = nil)
+    case container(ContainerPredicate, ordinal: Int? = nil)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case element
@@ -45,7 +45,7 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             ))
         } else {
             let containerDecoder = try container.superDecoder(forKey: .container)
-            self = .container(try ContainerMatcher(from: containerDecoder), ordinal: ordinal)
+            self = .container(try ContainerPredicate(from: containerDecoder), ordinal: ordinal)
         }
     }
 

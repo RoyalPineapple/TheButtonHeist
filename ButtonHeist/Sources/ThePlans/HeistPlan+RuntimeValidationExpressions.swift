@@ -82,7 +82,9 @@ extension HeistPlanRuntimeSafetyValidator {
         _ predicate: ContainerPredicate,
         path: String
     ) {
-        addString(predicate.identifier.rawValue, path: "\(path).identifier", role: "container identifier")
+        for (index, check) in predicate.checks.enumerated() {
+            validateContainerPredicateCheck(check, path: "\(path).checks[\(index)]")
+        }
     }
 
     mutating func validateContainerPredicate(
@@ -90,13 +92,90 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        validateString(predicate.identifier, path: "\(path).identifier", scope: scope)
-        if predicate.identifier.stringMatchLiteralIsEmpty == true {
+        for (index, check) in predicate.checks.enumerated() {
+            validateContainerPredicateCheck(check, path: "\(path).checks[\(index)]", scope: scope)
+        }
+    }
+
+    mutating func validateContainerPredicateCheck(
+        _ check: ContainerPredicateCheck<String>,
+        path: String
+    ) {
+        switch check {
+        case .type, .modalBoundary:
+            return
+        case .semantic(let predicate):
+            validateSemanticContainerPredicate(predicate, path: "\(path).semantic")
+        case .rowCount(let rowCount):
+            validateNonNegative(rowCount, path: "\(path).rowCount", role: "container rowCount")
+        case .columnCount(let columnCount):
+            validateNonNegative(columnCount, path: "\(path).columnCount", role: "container columnCount")
+        }
+    }
+
+    mutating func validateContainerPredicateCheck(
+        _ check: ContainerPredicateCheck<StringExpr>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        switch check {
+        case .type, .modalBoundary:
+            return
+        case .semantic(let predicate):
+            validateSemanticContainerPredicate(predicate, path: "\(path).semantic", scope: scope)
+        case .rowCount(let rowCount):
+            validateNonNegative(rowCount, path: "\(path).rowCount", role: "container rowCount")
+        case .columnCount(let columnCount):
+            validateNonNegative(columnCount, path: "\(path).columnCount", role: "container columnCount")
+        }
+    }
+
+    mutating func validateSemanticContainerPredicate(
+        _ predicate: SemanticContainerPredicate<String>,
+        path: String
+    ) {
+        switch predicate {
+        case .label(let match):
+            validateString(match, path: "\(path).label", role: "container label")
+        case .value(let match):
+            validateString(match, path: "\(path).value", role: "container value")
+        case .identifier(let match):
+            validateString(match, path: "\(path).identifier", role: "container identifier")
+        }
+    }
+
+    mutating func validateSemanticContainerPredicate(
+        _ predicate: SemanticContainerPredicate<StringExpr>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        switch predicate {
+        case .label(let match):
+            validateString(match, path: "\(path).label", scope: scope)
+        case .value(let match):
+            validateString(match, path: "\(path).value", scope: scope)
+        case .identifier(let match):
+            validateString(match, path: "\(path).identifier", scope: scope)
+        }
+    }
+
+    mutating func validateNonNegative(_ value: Int, path: String, role: String) {
+        guard value < 0 else { return }
+        fail(
+            path: path,
+            contract: "\(role) must be non-negative",
+            observed: "\(value)",
+            correction: "Use a value of 0 or greater."
+        )
+    }
+
+    mutating func validateRequiredContainerPredicate(_ predicate: ContainerPredicate, path: String) {
+        if !predicate.hasPredicates {
             fail(
-                path: "\(path).identifier",
-                contract: "container identifier must not be empty",
-                observed: "empty container identifier",
-                correction: "Use a non-empty accessibility container identifier."
+                path: path,
+                contract: "container predicate must include at least one field",
+                observed: "empty container predicate",
+                correction: "Use a semantic, type, table, or modal-boundary container check."
             )
         }
     }

@@ -136,12 +136,12 @@ func `expression codable shapes remain stable`() throws {
 
     #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
     #expect(
-        try sortedJSON(StatePredicateExpr.exists(container: .identifier("CheckoutScreen"))) ==
-        #"{"container":{"identifier":"CheckoutScreen"},"type":"exists"}"#
+        try sortedJSON(StatePredicateExpr.exists(container: .label("Checkout"))) ==
+        #"{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]},"type":"exists"}"#
     )
     #expect(
-        try sortedJSON(StatePredicateExpr.missing(container: .identifier("CheckoutScreen"))) ==
-        #"{"container":{"identifier":"CheckoutScreen"},"type":"missing"}"#
+        try sortedJSON(StatePredicateExpr.missing(container: .label("Checkout"))) ==
+        #"{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]},"type":"missing"}"#
     )
 
     let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(

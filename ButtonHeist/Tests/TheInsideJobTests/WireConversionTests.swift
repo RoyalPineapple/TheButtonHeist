@@ -430,7 +430,7 @@ final class WireConverterTests: XCTestCase {
         let interface = WireConversion.toInterface(from: screen)
 
         let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
-            subtree: .container(ContainerMatcher(containerName: "actions"))
+            subtree: .container(.label("Actions"))
         ))
         let records = selected.projectedElementRecords
 

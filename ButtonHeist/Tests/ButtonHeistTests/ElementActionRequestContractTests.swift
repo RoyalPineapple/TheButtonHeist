@@ -276,11 +276,56 @@ private func assertContainerPredicateSchema(
         return XCTFail("Expected container predicate object schema", file: file, line: line)
     }
     XCTAssertEqual(schema["type"], .string("object"), file: file, line: line)
-    XCTAssertEqual(schema["required"], .array([.string("identifier")]), file: file, line: line)
+    XCTAssertEqual(schema["required"], .array([.string("checks")]), file: file, line: line)
     guard case .object(let properties)? = schema["properties"] else {
         return XCTFail("Expected container predicate properties", file: file, line: line)
     }
-    XCTAssertEqual(properties["identifier"], .object(["type": .string("string")]), file: file, line: line)
+    guard case .object(let checksSchema)? = properties["checks"] else {
+        return XCTFail("Expected container checks array schema", file: file, line: line)
+    }
+    XCTAssertEqual(checksSchema["type"], .string("array"), file: file, line: line)
+    XCTAssertEqual(checksSchema["minItems"], .int(1), file: file, line: line)
+    guard case .object(let items)? = checksSchema["items"] else {
+        return XCTFail("Expected container check item schema", file: file, line: line)
+    }
+    XCTAssertEqual(items["additionalProperties"], .bool(false), file: file, line: line)
+    guard case .object(let checkProperties)? = items["properties"] else {
+        return XCTFail("Expected container check item properties", file: file, line: line)
+    }
+    XCTAssertEqual(checkProperties["kind"], .object([
+        "type": .string("string"),
+        "enum": .array([
+            .string("type"),
+            .string("semantic"),
+            .string("rowCount"),
+            .string("columnCount"),
+            .string("modalBoundary"),
+        ]),
+    ]), file: file, line: line)
+    XCTAssertEqual(checkProperties["type"], .object([
+        "type": .string("string"),
+        "enum": .array([
+            .string("semanticGroup"),
+            .string("list"),
+            .string("landmark"),
+            .string("dataTable"),
+            .string("tabBar"),
+            .string("scrollable"),
+        ]),
+    ]), file: file, line: line)
+    guard case .object(let semantic)? = checkProperties["semantic"],
+          case .object(let semanticProperties)? = semantic["properties"] else {
+        return XCTFail("Expected semantic container predicate schema", file: file, line: line)
+    }
+    XCTAssertEqual(semantic["required"], .array([.string("kind"), .string("match")]), file: file, line: line)
+    XCTAssertEqual(semanticProperties["kind"], .object([
+        "type": .string("string"),
+        "enum": .array([.string("label"), .string("value"), .string("identifier")]),
+    ]), file: file, line: line)
+    guard case .object? = semanticProperties["match"] else {
+        return XCTFail("Expected semantic match StringMatch object schema", file: file, line: line)
+    }
+    XCTAssertNotNil(checkProperties["value"], file: file, line: line)
 }
 
 private func assertArraySchema(

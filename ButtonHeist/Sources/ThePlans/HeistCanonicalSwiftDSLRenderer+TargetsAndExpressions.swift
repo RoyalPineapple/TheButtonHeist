@@ -30,11 +30,191 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(container: ContainerPredicate) -> String {
-        ".identifier(\(quote(container.identifier.rawValue)))"
+        if let shorthand = renderSingleContainerCheck(container.checks) { return shorthand }
+        if let dataTable = renderDataTable(container.checks) { return dataTable }
+        return ".matching(\(container.checks.map(renderContainerCheck).joined(separator: ", ")))"
     }
 
     func render(container: ContainerPredicateExpr, environment: RenderEnvironment) throws -> String {
-        try ".identifier(\(render(string: container.identifier, environment: environment)))"
+        if let shorthand = try renderSingleContainerCheck(container.checks, environment: environment) { return shorthand }
+        if let dataTable = renderDataTable(container.checks) { return dataTable }
+        return try ".matching(\(container.checks.map { try renderContainerCheck($0, environment: environment) }.joined(separator: ", ")))"
+    }
+
+    func renderSingleContainerCheck(_ checks: [ContainerPredicateCheck<String>]) -> String? {
+        guard checks.count == 1 else { return nil }
+        switch checks[0] {
+        case .type(.semanticGroup):
+            return ".semanticGroup"
+        case .type(.list):
+            return ".list"
+        case .type(.landmark):
+            return ".landmark"
+        case .type(.dataTable):
+            return ".dataTable()"
+        case .type(.tabBar):
+            return ".tabBar"
+        case .type(.scrollable):
+            return ".scrollable"
+        case .semantic(let predicate):
+            return renderSemanticContainerPredicate(predicate)
+        case .rowCount, .columnCount, .modalBoundary:
+            return nil
+        }
+    }
+
+    func renderSingleContainerCheck(
+        _ checks: [ContainerPredicateCheck<StringExpr>],
+        environment: RenderEnvironment
+    ) throws -> String? {
+        guard checks.count == 1 else { return nil }
+        switch checks[0] {
+        case .type(.semanticGroup):
+            return ".semanticGroup"
+        case .type(.list):
+            return ".list"
+        case .type(.landmark):
+            return ".landmark"
+        case .type(.dataTable):
+            return ".dataTable()"
+        case .type(.tabBar):
+            return ".tabBar"
+        case .type(.scrollable):
+            return ".scrollable"
+        case .semantic(let predicate):
+            return try renderSemanticContainerPredicate(predicate, environment: environment)
+        case .rowCount, .columnCount, .modalBoundary:
+            return nil
+        }
+    }
+
+    func renderDataTable(_ checks: [ContainerPredicateCheck<String>]) -> String? {
+        renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
+    }
+
+    func renderDataTable(_ checks: [ContainerPredicateCheck<StringExpr>]) -> String? {
+        renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
+    }
+
+    private func renderDataTable(rowCount: Int?, columnCount: Int?, hasOnlyTableChecks: Bool) -> String? {
+        guard hasOnlyTableChecks else { return nil }
+        var arguments: [String] = []
+        if let rowCount { arguments.append("rowCount: \(rowCount)") }
+        if let columnCount { arguments.append("columnCount: \(columnCount)") }
+        return ".dataTable(\(arguments.joined(separator: ", ")))"
+    }
+
+    private func hasOnlyDataTableChecks<Value: StringMatchPayload>(_ checks: [ContainerPredicateCheck<Value>]) -> Bool {
+        let hasDataTableType = checks.contains { check in
+            if case .type(.dataTable) = check { return true }
+            return false
+        }
+        let containsOnlyDataTableChecks = checks.allSatisfy { check in
+            switch check {
+            case .type(.dataTable), .rowCount, .columnCount:
+                return true
+            case .type, .semantic, .modalBoundary:
+                return false
+            }
+        }
+        return hasDataTableType && containsOnlyDataTableChecks
+    }
+
+    private func rowCount<Value: StringMatchPayload>(in checks: [ContainerPredicateCheck<Value>]) -> Int? {
+        checks.compactMap {
+            if case .rowCount(let count) = $0 { return count }
+            return nil
+        }.first
+    }
+
+    private func columnCount<Value: StringMatchPayload>(in checks: [ContainerPredicateCheck<Value>]) -> Int? {
+        checks.compactMap {
+            if case .columnCount(let count) = $0 { return count }
+            return nil
+        }.first
+    }
+
+    func renderContainerCheck(_ check: ContainerPredicateCheck<String>) -> String {
+        switch check {
+        case .type(let type):
+            return ".type(.\(type.rawValue))"
+        case .semantic(let predicate):
+            return ".semantic(\(renderSemanticContainerPredicateCheck(predicate)))"
+        case .rowCount(let count):
+            return ".rowCount(\(count))"
+        case .columnCount(let count):
+            return ".columnCount(\(count))"
+        case .modalBoundary(let required):
+            return ".modalBoundary(\(required))"
+        }
+    }
+
+    func renderContainerCheck(
+        _ check: ContainerPredicateCheck<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch check {
+        case .type(let type):
+            return ".type(.\(type.rawValue))"
+        case .semantic(let predicate):
+            return try ".semantic(\(renderSemanticContainerPredicateCheck(predicate, environment: environment)))"
+        case .rowCount(let count):
+            return ".rowCount(\(count))"
+        case .columnCount(let count):
+            return ".columnCount(\(count))"
+        case .modalBoundary(let required):
+            return ".modalBoundary(\(required))"
+        }
+    }
+
+    func renderSemanticContainerPredicate(_ predicate: SemanticContainerPredicate<String>) -> String {
+        switch predicate {
+        case .label(let match):
+            return ".label(\(renderCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderCallArgument(match)))"
+        }
+    }
+
+    func renderSemanticContainerPredicate(
+        _ predicate: SemanticContainerPredicate<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch predicate {
+        case .label(let match):
+            return try ".label(\(renderCallArgument(match, environment: environment)))"
+        case .value(let match):
+            return try ".value(\(renderCallArgument(match, environment: environment)))"
+        case .identifier(let match):
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+        }
+    }
+
+    func renderSemanticContainerPredicateCheck(_ predicate: SemanticContainerPredicate<String>) -> String {
+        switch predicate {
+        case .label(let match):
+            return ".label(\(renderCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderCallArgument(match)))"
+        }
+    }
+
+    func renderSemanticContainerPredicateCheck(
+        _ predicate: SemanticContainerPredicate<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch predicate {
+        case .label(let match):
+            return try ".label(\(renderCallArgument(match, environment: environment)))"
+        case .value(let match):
+            return try ".value(\(renderCallArgument(match, environment: environment)))"
+        case .identifier(let match):
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
+        }
     }
 
     func renderTargetPredicate(_ predicate: ElementPredicate) -> String {

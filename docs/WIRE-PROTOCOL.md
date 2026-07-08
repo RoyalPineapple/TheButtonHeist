@@ -321,10 +321,10 @@ a single wait.
 
 To assert current settled container presence without requiring a transition,
 use the container state predicate in the wait plan:
-`{"type":"exists","container":{"identifier":"CheckoutScreen"}}`. Scoped element
-targets use `{"container":{"identifier":"CheckoutScreen"},"target":{...}}` so
-resolution is limited to descendants of the matching container. `change` with a
-`screen` scope remains the screen-change predicate and requires before/after
+`{"type":"exists","container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]}}`.
+Scoped element targets use `{"container":{"checks":[...]},"target":{...}}` so
+resolution is limited to descendants of the matching container. `change` with
+a `screen` scope remains the screen-change predicate and requires before/after
 settled evidence.
 
 ## Action Results

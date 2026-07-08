@@ -1929,7 +1929,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try subtree.schemaInteger(.ordinal), 2)
         XCTAssertEqual(try element.schemaString(.label), "Pay")
         XCTAssertEqual(try element.schemaStringArray(.traits), ["button", "selected"])
-        XCTAssertEqual(try container.schemaEnum(.type, as: ContainerTypeName.self), .scrollable)
+        XCTAssertEqual(try container.schemaEnum(.type, as: AccessibilityContainerKind.self), .scrollable)
         XCTAssertEqual(try container.schemaBoolean(.isModalBoundary), true)
         XCTAssertEqual(try container.schemaNumber(.scale), 0.5)
     }
@@ -3897,7 +3897,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .getInterface, values: [
             "subtree": .object([
-                "container": .object(["containerName": .string("semantic_actions__actions")]),
+                "container": .object([
+                    "checks": .array([
+                        containerPredicateCheckValue(
+                            kind: "semantic",
+                            semanticKind: "identifier",
+                            match: stringMatchValue(mode: "exact", value: "actions")
+                        ),
+                    ]),
+                ]),
             ]),
             "maxScrollsPerContainer": .int(25),
             "maxScrollsPerDiscovery": .int(40),
@@ -4113,6 +4121,25 @@ private func predicateCheckValue(
     if let match { object["match"] = match }
     if let values { object["values"] = .array(values) }
     if let check { object["check"] = check }
+    return .object(object)
+}
+
+private func containerPredicateCheckValue(
+    kind: String,
+    semanticKind: String? = nil,
+    match: HeistValue? = nil,
+    type: String? = nil,
+    value: HeistValue? = nil
+) -> HeistValue {
+    var object: [String: HeistValue] = ["kind": .string(kind)]
+    if let semanticKind, let match {
+        object["semantic"] = .object([
+            "kind": .string(semanticKind),
+            "match": match,
+        ])
+    }
+    if let type { object["type"] = .string(type) }
+    if let value { object["value"] = value }
     return .object(object)
 }
 

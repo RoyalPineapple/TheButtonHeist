@@ -15,7 +15,7 @@ enum InterfaceSelectionError: Error, Equatable {
         case .subtreeNotFound:
             return """
                 get_interface subtree matched no nodes; refine subtree using a container \
-                containerName/type/label/identifier or a leaf matcher from get_interface.
+                predicate or a leaf matcher from get_interface.
                 """
         case .subtreeOrdinalOutOfRange(let ordinal, let candidateCount, let candidates):
             let range = candidateCount == 1 ? "0" : "0...\(candidateCount - 1)"
@@ -95,8 +95,8 @@ struct InterfaceSelector {
                 )
 
             case .container(let containerRecord):
-                guard case .container(let matcher, _) = subtree,
-                      containerRecord.container.matches(matcher, annotation: containerRecord.annotation)
+                guard case .container(let predicate, _) = subtree,
+                      predicate.matches(containerRecord.container.containerPredicateFacts)
                 else { return nil }
                 return InterfaceSubtreeCandidate(
                     node: record.node,
@@ -215,11 +215,11 @@ private extension AccessibilityContainer {
     func subtreeCandidateSummary(annotation: InterfaceContainerAnnotation?) -> String {
         [
             "container",
-            subtreeSummaryRequiredField("type", typeName.rawValue),
+            subtreeSummaryRequiredField("type", accessibilityContainerKind.rawValue),
             subtreeSummaryField("containerName", annotation?.containerName?.rawValue),
-            subtreeSummaryField("identifier", containerIdentifier),
-            subtreeSummaryField("label", containerLabel),
-            subtreeSummaryField("value", containerValue),
+            subtreeSummaryField("identifier", containerPredicateIdentifier),
+            subtreeSummaryField("label", containerPredicateLabel),
+            subtreeSummaryField("value", containerPredicateValue),
             isModalBoundary ? "isModalBoundary=true" : nil,
         ].compactMap { $0 }.joined(separator: " ")
     }

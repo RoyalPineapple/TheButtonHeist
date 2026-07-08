@@ -35,13 +35,18 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testContainerIdentifierEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.exists(container: .identifier("CheckoutScreen"))
+    func testContainerSemanticIdentifierEncodeDecode() throws {
+        let predicate = AccessibilityPredicate.exists(container: .identifier("checkout-container"))
         let data = try JSONEncoder().encode(predicate)
         let object = try JSONProbe(data: data)
 
         XCTAssertEqual(try object.string("type"), "exists")
-        XCTAssertEqual(try object.object("container").string("identifier"), "CheckoutScreen")
+        let checks = try object.object("container").array("checks")
+        XCTAssertEqual(checks.count, 1)
+        XCTAssertEqual(try checks[0].string("kind"), "semantic")
+        let semantic = try checks[0].object("semantic")
+        XCTAssertEqual(try semantic.string("kind"), "identifier")
+        XCTAssertEqual(try semantic.object("match").string("value"), "checkout-container")
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
     }
 
@@ -60,15 +65,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
     }
 
-    func testContainerIdentifierMatchesCurrentInterfaceWithoutTransition() {
+    func testContainerLabelMatchesCurrentInterfaceWithoutTransition() {
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: nil, value: nil, identifier: "CheckoutScreen")
+                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
             ), children: [
                 testElement(makeElement(label: "Pay", traits: [.button])),
             ]),
         ])
-        let predicate = AccessibilityPredicate.exists(container: .identifier("CheckoutScreen"))
+        let predicate = AccessibilityPredicate.exists(container: .label("Checkout"))
 
         let result = predicate.evaluate(in: PredicateEvaluationEvidence(
             currentInterface: interface,
@@ -79,13 +84,13 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
     }
 
-    func testContainerIdentifierFailureReportsMissingContainer() {
+    func testContainerLabelFailureReportsMissingContainer() {
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(), children: [
                 testElement(makeElement(label: "Pay", traits: [.button])),
             ]),
         ])
-        let predicate = AccessibilityPredicate.exists(container: .identifier("CheckoutScreen"))
+        let predicate = AccessibilityPredicate.exists(container: .label("Checkout"))
 
         let result = predicate.evaluate(in: PredicateEvaluationEvidence(
             currentInterface: interface,
@@ -95,7 +100,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.predicate, predicate)
-        XCTAssertEqual(result.actual, #"container not present: container(identifier="CheckoutScreen")"#)
+        XCTAssertEqual(result.actual, "container not present: container(semantic=semantic(label=Checkout))")
     }
 
     func testPresentNarrowsByIdentifierAndValue() {
@@ -219,19 +224,19 @@ final class AccessibilityPredicateTests: XCTestCase {
         let otherPay = makeElement(label: "Pay", traits: [.button])
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: nil, value: nil, identifier: "CheckoutScreen")
+                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
             ), children: [
                 testElement(pay),
             ]),
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: nil, value: nil, identifier: "CartScreen")
+                type: .semanticGroup(label: "Cart", value: nil, identifier: nil)
             ), children: [
                 testElement(otherPay),
             ]),
         ])
 
         let selected = ElementMatchGraph(interface: interface)
-            .resolve(.within(.identifier("CheckoutScreen"), .label("Pay")))
+            .resolve(.within(.label("Checkout"), .label("Pay")))
 
         XCTAssertEqual(selected.elements, [pay])
         XCTAssertEqual(selected.orderedPaths, [TreePath([0, 0])])

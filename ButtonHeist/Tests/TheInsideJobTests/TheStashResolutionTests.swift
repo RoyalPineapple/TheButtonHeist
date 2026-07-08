@@ -1260,7 +1260,7 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let result = bagman.resolveContainerTarget(
-            ContainerMatcher(containerName: "semantic_actions__actions"),
+            .identifier("actions"),
             ordinal: nil
         )
         switch result {
@@ -1304,7 +1304,7 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let ambiguous = bagman.resolveContainerTarget(
-            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
             ordinal: nil
         )
         guard case .ambiguous(let facts) = ambiguous else {
@@ -1319,7 +1319,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
 
         let outOfRange = bagman.resolveContainerTarget(
-            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
             ordinal: 3
         )
         guard case .notFound(let notFoundFacts) = outOfRange else {
@@ -1545,7 +1545,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.recordParsedObservedEvidence(liveScreen)
 
-        let resolved = bagman.resolveContainerTarget(ContainerMatcher(containerName: "actions"), ordinal: nil)
+        let resolved = bagman.resolveContainerTarget(.identifier("actions"), ordinal: nil)
         guard case .resolved(let semanticTarget) = resolved else {
             return XCTFail("Expected semantic container, got \(resolved.diagnostics)")
         }
@@ -1674,13 +1674,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
-    func testScopedTargetResolvesDescendantOfContainerIdentifier() {
+    func testScopedTargetResolvesDescendantOfContainerLabel() {
         let checkoutContainer = AccessibilityContainer(
-            type: .semanticGroup(label: nil, value: nil, identifier: "CheckoutScreen"),
+            type: .semanticGroup(label: "Checkout", value: nil, identifier: nil),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let cartContainer = AccessibilityContainer(
-            type: .semanticGroup(label: nil, value: nil, identifier: "CartScreen"),
+            type: .semanticGroup(label: "Cart", value: nil, identifier: nil),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let checkoutPay = element(label: "Pay", traits: .button)
@@ -1713,7 +1713,7 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: nil
         ))
 
-        let result = bagman.resolveTarget(.within(.identifier("CheckoutScreen"), .label("Pay")))
+        let result = bagman.resolveTarget(.within(.label("Checkout"), .label("Pay")))
 
         XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
     }

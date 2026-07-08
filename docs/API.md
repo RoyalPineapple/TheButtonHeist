@@ -402,10 +402,10 @@ Expectations use object form with a `type` discriminator, for example
 `{"type":"change","scopes":[{"type":"screen"}]}` or
 `{"type":"exists","element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Success"}}]}}`.
 Current semantic container presence is a state expectation:
-`{"type":"exists","container":{"identifier":"CheckoutScreen"}}`. It does not
-require a prior `screenChanged` delta. Scoped element targets use
-`{"container":{"identifier":"CheckoutScreen"},"target":{...}}` so resolution is
-limited to descendants of the matching container.
+`{"type":"exists","container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]}}`.
+It does not require a prior `screenChanged` delta. Scoped element targets use
+`{"container":{"checks":[...]},"target":{...}}` so resolution is limited to
+descendants of the matching container.
 
 Expectations use the current object grammar at every public boundary. Element
 expectations select subjects with predicate checks, not flat matcher fields or
