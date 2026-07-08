@@ -42,8 +42,7 @@ extension HeistPlanSourceParser {
             let container = try parseContainerPredicateExpr()
             try expectSymbol(",")
             if lookaheadLabel("target") {
-                try expectIdentifier("target")
-                try expectSymbol(":")
+                throw error(currentToken, ".within(...) target argument is unlabeled")
             }
             let target = try parseTargetExpr()
             try expectSymbol(")")

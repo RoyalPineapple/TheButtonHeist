@@ -21,11 +21,11 @@ extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
-        if let containerName = try optionalContainerName(.container) {
+        if let containerName = try optionalContainerName(.containerName) {
             if try decodedElementTarget() != nil {
                 throw SchemaValidationError(
-                    field: field(.container),
-                    observed: observedDescription(for: .container) ?? "string",
+                    field: field(.containerName),
+                    observed: observedDescription(for: .containerName) ?? "string",
                     expected: "not present when an element target is provided"
                 )
             }

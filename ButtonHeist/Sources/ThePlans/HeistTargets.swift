@@ -256,12 +256,6 @@ public extension ElementTargetExpr {
     }
 }
 
-public extension ElementTargetExpr {
-    func within(container: ContainerPredicateExpr) -> ElementTargetExpr {
-        .within(container: container, target: self)
-    }
-}
-
 public extension AccessibilityPredicate {
     static func change(_ scopes: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate {
         switch scopes.count {

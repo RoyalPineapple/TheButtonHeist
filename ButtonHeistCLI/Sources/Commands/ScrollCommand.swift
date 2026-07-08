@@ -8,19 +8,19 @@ struct ScrollSelectionInput: ParsableArguments {
     @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Current-capture containerName from get_interface")
-    var container: String?
+    var containerName: String?
 
     mutating func validate() throws {
         _ = try scrollSelection()
     }
 
     func scrollSelection() throws -> ScrollSelection {
-        if let container {
-            guard let containerName = ContainerName(parsing: container) else {
-                throw ValidationError("--container must not be empty")
+        if let containerName {
+            guard let containerName = ContainerName(parsing: containerName) else {
+                throw ValidationError("--container-name must not be empty")
             }
             if try element.hasTarget {
-                throw ValidationError("--container cannot be combined with element target options")
+                throw ValidationError("--container-name cannot be combined with element target options")
             }
             return .container(containerName)
         }
@@ -92,7 +92,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             target: scrollSelection.cliTarget,
             CommandArgumentWriter.value(FenceParameters.scrollDirection, scrollDirection),
             CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
+            CommandArgumentWriter.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }

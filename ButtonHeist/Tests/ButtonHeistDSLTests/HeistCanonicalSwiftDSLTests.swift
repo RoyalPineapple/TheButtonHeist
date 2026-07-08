@@ -527,7 +527,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
             "command": {
               "type": "scroll",
               "payload": {
-                "container": "scrollable_0_0_40_50",
+                "containerName": "scrollable_0_0_40_50",
                 "direction": "down"
               }
             }

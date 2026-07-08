@@ -51,7 +51,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
             target: scrollSelection.cliTarget,
             CommandArgumentWriter.value(FenceParameters.scrollEdge, scrollEdge),
             CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.container, scrollSelection.cliContainerName?.rawValue)
+            CommandArgumentWriter.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }
