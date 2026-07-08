@@ -14,7 +14,7 @@ extension TheFence.CommandArgumentEnvelope {
     @ButtonHeistActor
     func requiredElementTarget(command: TheFence.Command) throws -> ElementTarget {
         guard let target = try decodedElementTarget() else {
-            throw TheFence.MissingElementTarget(command: command.rawValue)
+            throw TheFence.MissingElementTarget(command: command)
         }
         return target
     }

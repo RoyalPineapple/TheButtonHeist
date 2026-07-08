@@ -27,7 +27,6 @@ struct PresentationObscuringHarnessView: UIViewControllerRepresentable {
 ///   6. `buttonheist get_interface` — full exploration resumes
 final class ObscuringHarnessViewController: UIViewController {
 
-    private let sectionPrefixes = ["catalog", "inventory", "history"]
     private let sectionTitles = ["Catalog", "Inventory", "History"]
     private let rowCount = 5000
 
@@ -40,7 +39,6 @@ final class ObscuringHarnessViewController: UIViewController {
         presentButton.setTitle("Present Modal", for: .normal)
         presentButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         presentButton.addTarget(self, action: #selector(presentModalTapped), for: .touchUpInside)
-        presentButton.accessibilityIdentifier = "obscuringHarness.presentModal"
         presentButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(presentButton)
 
@@ -65,25 +63,23 @@ final class ObscuringHarnessViewController: UIViewController {
         instructions.font = .preferredFont(forTextStyle: .caption1)
         instructions.textColor = .secondaryLabel
         instructions.numberOfLines = 0
-        instructions.accessibilityIdentifier = "obscuringHarness.instructions"
         contentStack.addArrangedSubview(instructions)
 
         for (index, title) in sectionTitles.enumerated() {
             contentStack.addArrangedSubview(
-                makeTableSection(title: title, prefix: sectionPrefixes[index], tag: index)
+                makeTableSection(title: title, tag: index)
             )
         }
     }
 
     // MARK: - Table View Section Builder
 
-    private func makeTableSection(title: String, prefix: String, tag: Int) -> UIView {
+    private func makeTableSection(title: String, tag: Int) -> UIView {
         let container = UIView()
 
         let header = UILabel()
         header.text = title
         header.font = .preferredFont(forTextStyle: .headline)
-        header.accessibilityIdentifier = "obscuringHarness.\(prefix).header"
         header.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(header)
 
@@ -127,10 +123,8 @@ extension ObscuringHarnessViewController: UITableViewDataSource {
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let prefix = sectionPrefixes[tableView.tag]
         let title = sectionTitles[tableView.tag]
         cell.textLabel?.text = "\(title) \(indexPath.row)"
-        cell.accessibilityIdentifier = "obscuringHarness.\(prefix).item\(indexPath.row)"
         return cell
     }
 }
@@ -156,20 +150,17 @@ private final class ModalContentViewController: UIViewController {
         let titleLabel = UILabel()
         titleLabel.text = "Modal Over Scroll Containers"
         titleLabel.font = .preferredFont(forTextStyle: .headline)
-        titleLabel.accessibilityIdentifier = "obscuringHarness.modal.title"
 
         let descriptionLabel = UILabel()
         descriptionLabel.text = "The 3 table views behind this modal should be skipped during exploration."
         descriptionLabel.font = .preferredFont(forTextStyle: .body)
         descriptionLabel.numberOfLines = 0
         descriptionLabel.textAlignment = .center
-        descriptionLabel.accessibilityIdentifier = "obscuringHarness.modal.description"
 
         let dismissButton = UIButton(type: .system)
         dismissButton.setTitle("Dismiss Modal", for: .normal)
         dismissButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
-        dismissButton.accessibilityIdentifier = "obscuringHarness.modal.dismiss"
 
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(descriptionLabel)

@@ -40,12 +40,11 @@ struct HeistReportSummaryProjection: Sendable {
 struct HeistExpectationsProjection: Sendable {
     let checked: Int
     let met: Int
-    let allMet: Bool
+    var allMet: Bool { checked == met }
 
     init(checked: Int, met: Int) {
         self.checked = checked
         self.met = met
-        allMet = checked == met
     }
 }
 

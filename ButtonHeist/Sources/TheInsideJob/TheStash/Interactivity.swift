@@ -33,7 +33,7 @@ extension TheStash {
 
     private static func hasActivationBlock(_ object: NSObject) -> Bool {
         if #available(iOS 17.0, tvOS 17.0, *) {
-            guard object.responds(to: NSSelectorFromString("accessibilityActivateBlock")) else {
+            guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
                 return false
             }
             return object.accessibilityActivateBlock != nil

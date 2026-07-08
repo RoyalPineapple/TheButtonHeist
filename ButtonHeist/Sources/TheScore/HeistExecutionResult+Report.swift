@@ -508,22 +508,24 @@ private struct HeistExecutionMetricProjectionBuilder {
 package struct HeistExecutionStepReportResults: Sendable, Equatable {
     package let dispatchedActionResult: ActionResult?
     package let actionResult: ActionResult?
-    package let traceEvidenceResult: ActionResult?
     package let expectation: ExpectationResult?
-    package let actionErrorKind: ErrorKind?
+
+    package var traceEvidenceResult: ActionResult? {
+        actionResult
+    }
+
+    package var actionErrorKind: ErrorKind? {
+        actionResult?.success == false ? actionResult?.errorKind : nil
+    }
 
     package init(
         dispatchedActionResult: ActionResult? = nil,
         actionResult: ActionResult? = nil,
-        traceEvidenceResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
-        actionErrorKind: ErrorKind? = nil
+        expectation: ExpectationResult? = nil
     ) {
         self.dispatchedActionResult = dispatchedActionResult
         self.actionResult = actionResult
-        self.traceEvidenceResult = traceEvidenceResult
         self.expectation = expectation
-        self.actionErrorKind = actionErrorKind
     }
 
     package static let none = HeistExecutionStepReportResults()
@@ -593,26 +595,21 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
             return HeistExecutionStepReportResults(
                 dispatchedActionResult: evidence.dispatchResult,
                 actionResult: actionResult,
-                traceEvidenceResult: evidence.traceResult,
-                expectation: evidence.dispatchResult?.success == false ? nil : evidence.expectation,
-                actionErrorKind: actionResult?.success == false ? actionResult?.errorKind : nil
+                expectation: evidence.dispatchResult?.success == false ? nil : evidence.expectation
             )
         case .wait(let evidence):
             return HeistExecutionStepReportResults(
                 actionResult: evidence.actionResult,
-                traceEvidenceResult: evidence.actionResult,
                 expectation: evidence.expectation
             )
         case .repeatUntil(let evidence):
             return HeistExecutionStepReportResults(
                 actionResult: evidence.actionResult,
-                traceEvidenceResult: evidence.actionResult,
                 expectation: evidence.expectation
             )
         case .invocation(let evidence):
             return HeistExecutionStepReportResults(
                 actionResult: evidence.expectationActionResult,
-                traceEvidenceResult: evidence.expectationActionResult,
                 expectation: evidence.expectation
             )
         case .caseSelection, .forEachString, .forEachElement, .warning, .none:

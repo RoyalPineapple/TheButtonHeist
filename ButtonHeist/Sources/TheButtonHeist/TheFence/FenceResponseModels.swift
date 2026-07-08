@@ -200,12 +200,13 @@ enum DiagnosticFailureMapper {
         }
     }
 
-    private static func missingElementTargetFailure(command: String) -> DiagnosticFailure {
+    private static func missingElementTargetFailure(command: TheFence.Command) -> DiagnosticFailure {
+        let commandName = command.rawValue
         let contract = "requires target object with checks"
         let next = "get_interface()"
         let targetHint = "target.checks"
-        let message = "\(command) request contract failed: missing target; \(contract). " +
-            "Next: \(next) to inspect the current app accessibility state, then retry \(command) with \(targetHint)."
+        let message = "\(commandName) request contract failed: missing target; \(contract). " +
+            "Next: \(next) to inspect the current app accessibility state, then retry \(commandName) with \(targetHint)."
         return DiagnosticFailure(
             message: message,
             details: FailureDetails(

@@ -318,7 +318,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         intent: HeistStepIntent? = nil,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        passedWithEvidence(
+        passed(
             path: path,
             kind: kind,
             durationMs: durationMs,
@@ -336,7 +336,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         evidence: Evidence,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        passedWithEvidence(
+        passed(
             path: path,
             kind: receiptKind.stepKind,
             durationMs: durationMs,
@@ -346,7 +346,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    private static func passedWithEvidence(
+    package static func passed(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int,
@@ -374,7 +374,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         failure: HeistFailureDetail,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        failedWithEvidence(
+        failed(
             path: path,
             kind: kind,
             durationMs: durationMs,
@@ -394,7 +394,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         failure: HeistFailureDetail,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        failedWithEvidence(
+        failed(
             path: path,
             kind: receiptKind.stepKind,
             durationMs: durationMs,
@@ -405,7 +405,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    private static func failedWithEvidence(
+    package static func failed(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int,
@@ -422,6 +422,30 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             outcome: .failed(HeistExecutionStepFailedOutcome(
                 evidence: evidence,
                 failure: failure,
+                children: children
+            ))
+        )
+    }
+
+    package static func childAborted(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence,
+        failure: HeistFailureDetail,
+        abortedAtChildPath: String,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            durationMs: durationMs,
+            intent: intent,
+            outcome: .childAborted(HeistExecutionStepChildAbortedOutcome(
+                evidence: evidence,
+                failure: failure,
+                abortedAtChildPath: abortedAtChildPath,
                 children: children
             ))
         )

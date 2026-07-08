@@ -216,6 +216,7 @@ extension ObjCRuntime.ObjectGetter where Value == UIEvent {
 extension ObjCRuntime.ObjectGetter where Value == NSObject {
     static let keyboardDelegate = ObjCRuntime.ObjectGetter<Value>("delegate")
     static let keyboardTaskQueue = ObjCRuntime.ObjectGetter<Value>("taskQueue")
+    static let accessibilityContainer = ObjCRuntime.ObjectGetter<Value>("accessibilityContainer")
 }
 
 extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.NoArguments {
