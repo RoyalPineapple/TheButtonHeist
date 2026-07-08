@@ -22,6 +22,9 @@ extension HeistPlanRuntimeSafetyValidator {
                     correction: "Use target_ref only inside the for_each_element body that defines it."
                 )
             }
+        case .within(let container, let target):
+            validateContainerPredicate(container, path: "\(path).container", scope: scope)
+            validateTarget(target, path: "\(path).target", scope: scope)
         }
     }
 
@@ -69,6 +72,32 @@ extension HeistPlanRuntimeSafetyValidator {
         case .predicate(let predicate, let ordinal):
             validateOrdinal(ordinal, path: "\(path).ordinal")
             validateElementPredicate(predicate, path: path)
+        case .within(let container, let target):
+            validateContainerPredicate(container, path: "\(path).container")
+            validateElementTarget(target, path: "\(path).target")
+        }
+    }
+
+    mutating func validateContainerPredicate(
+        _ predicate: ContainerPredicate,
+        path: String
+    ) {
+        addString(predicate.identifier.rawValue, path: "\(path).identifier", role: "container identifier")
+    }
+
+    mutating func validateContainerPredicate(
+        _ predicate: ContainerPredicateExpr,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        validateString(predicate.identifier, path: "\(path).identifier", scope: scope)
+        if predicate.identifier.stringMatchLiteralIsEmpty == true {
+            fail(
+                path: "\(path).identifier",
+                contract: "container identifier must not be empty",
+                observed: "empty container identifier",
+                correction: "Use a non-empty accessibility container identifier."
+            )
         }
     }
 

@@ -213,6 +213,9 @@ extension TheStash {
     /// they are absent from the latest live parser hierarchy.
     static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         let entries = screen.orderedElements
+        if let pathKeyed = pathKeyedSemanticInterface(entries: entries, screen: screen, timestamp: timestamp) {
+            return pathKeyed
+        }
         let tree = entries.enumerated().map { index, entry in
             AccessibilityHierarchy.element(
                 entry.element,
@@ -234,6 +237,64 @@ extension TheStash {
             annotations: InterfaceAnnotations(elements: annotations),
             traceIdentities: InterfaceTraceIdentities(traceIdentities)
         )
+    }
+
+    private static func pathKeyedSemanticInterface(
+        entries: [SemanticScreen.Element],
+        screen: Screen,
+        timestamp: Date
+    ) -> Interface? {
+        guard entries.allSatisfy({ $0.path != .root }) else { return nil }
+        let elementPaths = entries.map(\.path)
+        guard Set(elementPaths).count == elementPaths.count else { return nil }
+
+        let elementsByPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
+        let containersByPath = screen.semantic.containers
+        let childPathsByParent = Dictionary(grouping: (Array(elementsByPath.keys) + Array(containersByPath.keys))) { path in
+            path.parent ?? .root
+        }.mapValues { paths in
+            Array(Set(paths)).sorted()
+        }
+
+        var traversalIndex = 0
+        var elementAnnotations: [InterfaceElementAnnotation] = []
+        var containerAnnotations: [InterfaceContainerAnnotation] = []
+        var traceIdentities: [TreePath: TraceElementIdentity] = [:]
+
+        func buildNode(path: TreePath) -> AccessibilityHierarchy? {
+            if let entry = elementsByPath[path] {
+                let index = traversalIndex
+                traversalIndex += 1
+                elementAnnotations.append(InterfaceElementAnnotation(
+                    path: path,
+                    actions: buildActions(for: entry.element)
+                ))
+                traceIdentities[path] = entry.heistId.traceElementIdentity
+                return .element(entry.element, traversalIndex: index)
+            }
+            guard let entry = containersByPath[path] else { return nil }
+            containerAnnotations.append(InterfaceContainerAnnotation(
+                path: path,
+                containerName: entry.containerName,
+                scrollInventory: entry.scrollInventory
+            ))
+            let children = (childPathsByParent[path] ?? []).compactMap(buildNode)
+            return .container(entry.container, children: children)
+        }
+
+        let roots = (childPathsByParent[.root] ?? []).compactMap(buildNode)
+        guard !roots.isEmpty || !entries.isEmpty || !screen.semantic.containers.isEmpty else { return nil }
+        let interface = Interface(
+            timestamp: timestamp,
+            tree: roots,
+            annotations: InterfaceAnnotations(
+                elements: elementAnnotations,
+                containers: containerAnnotations
+            ),
+            traceIdentities: InterfaceTraceIdentities(traceIdentities)
+        )
+        guard (try? InterfaceGraph(interface: interface)) != nil else { return nil }
+        return interface
     }
 
     // MARK: - Private Helpers

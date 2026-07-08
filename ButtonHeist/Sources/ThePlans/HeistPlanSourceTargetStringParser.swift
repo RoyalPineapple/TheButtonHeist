@@ -85,6 +85,19 @@ extension HeistPlanSourceParser {
             }
             try expectSymbol(")")
             return .predicate(predicate, ordinal: ordinal)
+        case "within":
+            try expectSymbol("(")
+            try expectIdentifier("container")
+            try expectSymbol(":")
+            let container = try parseContainerPredicateExpr()
+            try expectSymbol(",")
+            if lookaheadLabel("target") {
+                try expectIdentifier("target")
+                try expectSymbol(":")
+            }
+            let target = try parseTargetExpr()
+            try expectSymbol(")")
+            return .within(container: container, target: target)
         default:
             throw error(previous, "unsupported element target '.\(name)'")
         }
@@ -243,6 +256,22 @@ extension HeistPlanSourceParser {
             return .exclude(check)
         default:
             throw error(token, "element predicate checks accept .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors, and .exclude")
+        }
+    }
+
+    mutating func parseContainerPredicateExpr() throws -> ContainerPredicateExpr {
+        let token = currentToken
+        switch try parseDotCallName(allowedPrefixes: []) {
+        case "identifier":
+            try expectSymbol("(")
+            let identifier = try parseStringExpr()
+            if identifier.stringMatchLiteralIsEmpty == true {
+                throw error(previous, "container identifier must not be empty")
+            }
+            try expectSymbol(")")
+            return .identifier(identifier)
+        default:
+            throw error(token, "container predicates accept .identifier")
         }
     }
 
@@ -477,7 +506,7 @@ extension HeistPlanSourceParser {
             return true
         }
         if currentToken.isSymbol(".") {
-            return lookaheadIdentifier(in: ["target"])
+            return lookaheadIdentifier(in: ["target", "within"])
         }
         return false
     }

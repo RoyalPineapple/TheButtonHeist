@@ -53,11 +53,13 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .element(let target):
-            var element = container.nestedContainer(keyedBy: ElementTarget.CodingKeys.self, forKey: .element)
             switch target {
             case .predicate(let predicate, let ordinal):
+                var element = container.nestedContainer(keyedBy: ElementTarget.CodingKeys.self, forKey: .element)
                 if !predicate.checks.isEmpty { try element.encode(predicate.checks, forKey: .checks) }
                 try container.encodeIfPresent(ordinal, forKey: .ordinal)
+            case .within:
+                try target.encode(to: container.superEncoder(forKey: .element))
             }
         case .container(let matcher, let ordinal):
             try container.encode(matcher, forKey: .container)
@@ -69,6 +71,8 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         switch self {
         case .element(.predicate(_, let ordinal)), .container(_, let ordinal):
             return ordinal
+        case .element(.within):
+            return nil
         }
     }
 
@@ -76,6 +80,8 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         switch self {
         case .element(.predicate(let predicate, _)):
             return predicate.hasPredicates
+        case .element(.within):
+            return true
         case .container(let matcher, _):
             return matcher.hasPredicates
         }

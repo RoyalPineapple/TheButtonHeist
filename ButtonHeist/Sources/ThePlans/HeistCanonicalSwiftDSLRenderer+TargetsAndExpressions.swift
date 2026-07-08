@@ -14,6 +14,8 @@ extension HeistCanonicalSwiftDSLRenderer {
                 throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference.rawValue)
             }
             return reference.rawValue
+        case .within(let container, let target):
+            return try ".within(container: \(render(container: container, environment: environment)), \(render(target: target, environment: environment)))"
         }
     }
 
@@ -22,7 +24,17 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .predicate(let predicate, let ordinal):
             guard let ordinal else { return renderTargetPredicate(predicate) }
             return ".target(\(render(predicate: predicate)), ordinal: \(ordinal))"
+        case .within(let container, let target):
+            return ".within(container: \(render(container: container)), \(render(target: target)))"
         }
+    }
+
+    func render(container: ContainerPredicate) -> String {
+        ".identifier(\(quote(container.identifier.rawValue)))"
+    }
+
+    func render(container: ContainerPredicateExpr, environment: RenderEnvironment) throws -> String {
+        try ".identifier(\(render(string: container.identifier, environment: environment)))"
     }
 
     func renderTargetPredicate(_ predicate: ElementPredicate) -> String {

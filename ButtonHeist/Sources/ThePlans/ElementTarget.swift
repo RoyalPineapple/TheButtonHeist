@@ -18,6 +18,10 @@ public enum ElementTarget: Sendable, Equatable, Hashable {
     /// This is a disambiguator for match results, NOT durable identity.
     case predicate(ElementPredicate, ordinal: Int? = nil)
 
+    /// Resolve the nested target only against descendants of a settled
+    /// accessibility container with the requested identifier.
+    indirect case within(ContainerPredicate, ElementTarget)
+
 }
 
 public extension ElementTarget {
@@ -30,6 +34,8 @@ public extension ElementTarget {
         case actionArray
         case customContentMatch
         case nonNegativeInteger
+        case containerPredicate
+        case nestedElementTarget
     }
 
     struct SchemaField: Sendable, Equatable {
@@ -46,7 +52,10 @@ public extension ElementTarget {
     }
 
     static var inlineSchemaFields: [SchemaField] {
-        predicateSchemaFields + disambiguatorSchemaFields
+        predicateSchemaFields + disambiguatorSchemaFields + [
+            schemaField(for: .container),
+            schemaField(for: .target),
+        ]
     }
 
     static var predicateFieldNames: [String] {
@@ -67,6 +76,10 @@ public extension ElementTarget {
             return SchemaField(name: key.stringValue, kind: .predicateChecks)
         case .ordinal:
             return SchemaField(name: key.stringValue, kind: .nonNegativeInteger)
+        case .container:
+            return SchemaField(name: key.stringValue, kind: .containerPredicate)
+        case .target:
+            return SchemaField(name: key.stringValue, kind: .nestedElementTarget)
         }
     }
 }
@@ -79,6 +92,11 @@ extension ElementTarget: CustomStringConvertible {
                 predicate.description,
                 ScoreDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
+        case .within(let container, let target):
+            return ScoreDescription.call("within", [
+                container.description,
+                target.description,
+            ])
         }
     }
 }
@@ -89,8 +107,11 @@ extension ElementTarget: Codable {
     public enum CodingKeys: String, CodingKey {
         case checks
         case ordinal
+        case container
+        case target
 
-        static let allInlineKeys: [CodingKeys] = [.checks, .ordinal]
+        static let allInlineKeys: [CodingKeys] = [.checks, .ordinal, .container, .target]
+        static let predicateInlineKeys: [CodingKeys] = [.checks, .ordinal]
     }
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
@@ -99,7 +120,8 @@ extension ElementTarget: Codable {
     /// resulting target fails ElementTarget's own validation.
     public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTarget? {
         let probe = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetFields = CodingKeys.allInlineKeys.contains { probe.contains($0) }
+        let hasTargetFields = CodingKeys.predicateInlineKeys.contains { probe.contains($0) }
+            || (probe.contains(.container) && probe.contains(.target))
         guard hasTargetFields else { return nil }
         return try decodeCanonical(from: decoder, shouldRejectUnknownKeys: false)
     }
@@ -129,11 +151,18 @@ extension ElementTarget: Codable {
         allowsInlineOrdinal: Bool = true,
         shouldRejectUnknownKeys: Bool
     ) throws -> ElementTarget {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.container) || container.contains(.target) {
+            return try decodeScopedTarget(
+                from: decoder,
+                container: container,
+                allowsInlineOrdinal: allowsInlineOrdinal,
+                shouldRejectUnknownKeys: shouldRejectUnknownKeys
+            )
+        }
         if shouldRejectUnknownKeys {
             try rejectUnknownKeys(from: decoder, allowsInlineOrdinal: allowsInlineOrdinal)
         }
-
-        let container = try decoder.container(keyedBy: CodingKeys.self)
         let ordinal = allowsInlineOrdinal
             ? try container.decodeIfPresent(Int.self, forKey: .ordinal)
             : externalOrdinal
@@ -154,6 +183,45 @@ extension ElementTarget: Codable {
             predicateWasProvided: hasChecks,
             ordinal: ordinal,
             codingPath: container.codingPath
+        )
+    }
+
+    private static func decodeScopedTarget(
+        from decoder: Decoder,
+        container: KeyedDecodingContainer<CodingKeys>,
+        allowsInlineOrdinal: Bool,
+        shouldRejectUnknownKeys: Bool
+    ) throws -> ElementTarget {
+        if shouldRejectUnknownKeys {
+            try decoder.rejectUnknownKeys(
+                allowed: [CodingKeys.container.stringValue, CodingKeys.target.stringValue],
+                typeName: "scoped element target"
+            )
+        }
+        if !allowsInlineOrdinal, container.contains(.ordinal) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: "scoped element target does not accept an inline ordinal"
+            )
+        }
+        guard container.contains(.container) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "scoped element target requires container"
+            )
+        }
+        guard container.contains(.target) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .target,
+                in: container,
+                debugDescription: "scoped element target requires target"
+            )
+        }
+        return .within(
+            try container.decode(ContainerPredicate.self, forKey: .container),
+            try container.decode(ElementTarget.self, forKey: .target)
         )
     }
 
@@ -190,6 +258,9 @@ extension ElementTarget: Codable {
         case .predicate(let predicate, let ordinal):
             if !predicate.checks.isEmpty { try container.encode(predicate.checks, forKey: .checks) }
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        case .within(let containerPredicate, let target):
+            try container.encode(containerPredicate, forKey: .container)
+            try container.encode(target, forKey: .target)
         }
     }
 }

@@ -685,6 +685,8 @@ private struct HeistSemanticSurfaceBuilder {
             appendSemanticSurfaces(predicate)
         case .ref(let reference):
             appendUnique(.targetReference(reference), to: &targetPredicates)
+        case .within(_, let target):
+            appendTargetPredicate(target)
         }
     }
 
@@ -692,6 +694,8 @@ private struct HeistSemanticSurfaceBuilder {
         switch target {
         case .predicate(let predicate, _):
             appendTargetPredicate(predicate)
+        case .within(_, let target):
+            appendTargetPredicate(target)
         }
     }
 
@@ -805,7 +809,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendTargetPredicate(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
-        case .screen:
+        case .existsContainer, .missingContainer:
             break
         case .all(let states):
             for state in states {
@@ -821,7 +825,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendSemanticSurfaces(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
-        case .screen:
+        case .existsContainer, .missingContainer:
             break
         case .all(let states):
             for state in states {

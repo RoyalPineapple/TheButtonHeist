@@ -319,11 +319,13 @@ predicates can pass with a warning when the implied final state is true but the
 transition was not observed. The response is a heist execution receipt, even for
 a single wait.
 
-To assert the current settled screen identity without requiring a transition,
-use the screen state predicate in the wait plan:
-`{"type":"screen","header":{"mode":"exact","value":"Checkout"}}` or
-`{"type":"screen","id":"checkout"}`. `change` with a `screen` scope remains the
-screen-change predicate and requires before/after settled evidence.
+To assert current settled container presence without requiring a transition,
+use the container state predicate in the wait plan:
+`{"type":"exists","container":{"identifier":"CheckoutScreen"}}`. Scoped element
+targets use `{"container":{"identifier":"CheckoutScreen"},"target":{...}}` so
+resolution is limited to descendants of the matching container. `change` with a
+`screen` scope remains the screen-change predicate and requires before/after
+settled evidence.
 
 ## Action Results
 

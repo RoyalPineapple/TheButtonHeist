@@ -708,6 +708,8 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
             guard let ordinal else { return predicateMatches }
             guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
             return ElementPredicateMatchSet([predicateMatches.matches[ordinal]])
+        case .within:
+            return .empty
         }
     }
 

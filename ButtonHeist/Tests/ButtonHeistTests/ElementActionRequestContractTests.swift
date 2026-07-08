@@ -5,7 +5,9 @@ import TheScore
 final class ElementActionRequestContractTests: XCTestCase {
 
     func testElementTargetFenceSchemaFollowsCanonicalMetadata() throws {
-        let targetSpec = try XCTUnwrap(TheFence.Command.activate.descriptor.parameter(named: .target))
+        let targetSpec = try XCTUnwrap(
+            TheFence.Command.activate.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue }
+        )
         let schemaFields = ElementTarget.inlineSchemaFields
 
         XCTAssertEqual(targetSpec.objectProperties.map(\.key), schemaFields.map(\.name))
@@ -35,6 +37,12 @@ final class ElementActionRequestContractTests: XCTestCase {
             case .nonNegativeInteger:
                 XCTAssertEqual(spec.type, .integer)
                 XCTAssertEqual(projectedJSONSchemaProperty("minimum", in: spec), .int(0))
+            case .containerPredicate:
+                XCTAssertEqual(spec.type, .object)
+                assertContainerPredicateSchema(spec, file: #filePath, line: #line)
+            case .nestedElementTarget:
+                XCTAssertEqual(spec.type, .object)
+                XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: spec), .bool(true))
             }
         }
     }
@@ -257,6 +265,22 @@ private func assertPredicateChecksSchema(
     guard case .object? = properties["check"] else {
         return XCTFail("Expected nested check object schema", file: file, line: line)
     }
+}
+
+private func assertContainerPredicateSchema(
+    _ spec: FenceParameterSpec,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .object(let schema) = spec.schema.heistValue else {
+        return XCTFail("Expected container predicate object schema", file: file, line: line)
+    }
+    XCTAssertEqual(schema["type"], .string("object"), file: file, line: line)
+    XCTAssertEqual(schema["required"], .array([.string("identifier")]), file: file, line: line)
+    guard case .object(let properties)? = schema["properties"] else {
+        return XCTFail("Expected container predicate properties", file: file, line: line)
+    }
+    XCTAssertEqual(properties["identifier"], .object(["type": .string("string")]), file: file, line: line)
 }
 
 private func assertArraySchema(

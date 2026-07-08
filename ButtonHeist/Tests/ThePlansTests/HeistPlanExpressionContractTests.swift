@@ -55,9 +55,9 @@ func `broad string matches reject refs that resolve empty`() throws {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
 
-    let screen = StatePredicateExpr.onScreen(header: .contains(.ref("titlePart")))
+    let scopedTarget = ElementTargetExpr.within(container: .identifier("Screen"), .label(.contains(.ref("titlePart"))))
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
-        try screen.resolve(in: HeistExecutionEnvironment(strings: ["titlePart": ""]))
+        _ = try scopedTarget.resolve(in: HeistExecutionEnvironment(strings: ["titlePart": ""]))
     }
 
     let update = ElementUpdatePredicateExpr(change: .value(before: .contains(.ref("fromPart"))))
@@ -98,12 +98,12 @@ func `nested predicate resolution preserves state and change semantics`() throws
         .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
         .missingTarget(.ref("ctaTarget")),
         .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
-        .onScreen(header: .exact(.ref("title")))
+        .existsContainer(.identifier(.ref("screenId")))
     )))
 
     let environment = HeistExecutionEnvironment(
         targets: ["ctaTarget": target],
-        strings: ["title": "Dashboard", "valuePart": "Ready"]
+        strings: ["title": "Dashboard", "valuePart": "Ready", "screenId": "DashboardScreen"]
     )
 
     let resolved = try expression.resolve(in: environment)
@@ -111,7 +111,7 @@ func `nested predicate resolution preserves state and change semantics`() throws
         .exists(ElementPredicate(label: "Dashboard")),
         .missingTarget(target),
         .exists(ElementPredicate(value: .contains("Ready"))),
-        .onScreen(header: "Dashboard")
+        .existsContainer(.identifier("DashboardScreen"))
     )))
 
     #expect(resolved == expected)
@@ -136,12 +136,12 @@ func `expression codable shapes remain stable`() throws {
 
     #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
     #expect(
-        try sortedJSON(StatePredicateExpr.onScreen(id: "checkout")) ==
-        #"{"id":"checkout","type":"screen"}"#
+        try sortedJSON(StatePredicateExpr.exists(container: .identifier("CheckoutScreen"))) ==
+        #"{"container":{"identifier":"CheckoutScreen"},"type":"exists"}"#
     )
     #expect(
-        try sortedJSON(StatePredicateExpr.onScreen(header: "Checkout")) ==
-        #"{"header":{"mode":"exact","value":"Checkout"},"type":"screen"}"#
+        try sortedJSON(StatePredicateExpr.missing(container: .identifier("CheckoutScreen"))) ==
+        #"{"container":{"identifier":"CheckoutScreen"},"type":"missing"}"#
     )
 
     let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(

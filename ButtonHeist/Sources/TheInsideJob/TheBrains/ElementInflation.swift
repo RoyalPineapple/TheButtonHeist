@@ -1162,6 +1162,8 @@ final class ElementInflation {
                 return matches.first
             }
             return matches.count == 1 ? matches[0] : nil
+        case .within:
+            return nil
         }
     }
 
@@ -1177,6 +1179,8 @@ final class ElementInflation {
             )
             .resolve(predicate)
             .isEmpty
+        case .within:
+            return false
         }
     }
 

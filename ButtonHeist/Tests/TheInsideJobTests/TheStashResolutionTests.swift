@@ -1674,6 +1674,50 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
+    func testScopedTargetResolvesDescendantOfContainerIdentifier() {
+        let checkoutContainer = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: nil, identifier: "CheckoutScreen"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let cartContainer = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: nil, identifier: "CartScreen"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let checkoutPay = element(label: "Pay", traits: .button)
+        let cartPay = element(label: "Pay", traits: .button)
+        let checkoutPath = TreePath([0, 0])
+        let cartPath = TreePath([1, 0])
+        bagman.installScreenForTesting(Screen(
+            elements: [
+                "checkout_pay": Screen.ScreenElement(
+                    heistId: "checkout_pay",
+                    path: checkoutPath,
+                    scrollMembership: nil,
+                    element: checkoutPay
+                ),
+                "cart_pay": Screen.ScreenElement(
+                    heistId: "cart_pay",
+                    path: cartPath,
+                    scrollMembership: nil,
+                    element: cartPay
+                ),
+            ],
+            hierarchy: [
+                .container(checkoutContainer, children: [.element(checkoutPay, traversalIndex: 0)]),
+                .container(cartContainer, children: [.element(cartPay, traversalIndex: 1)]),
+            ],
+            heistIdsByPath: [
+                checkoutPath: "checkout_pay",
+                cartPath: "cart_pay",
+            ],
+            firstResponderHeistId: nil
+        ))
+
+        let result = bagman.resolveTarget(.within(.identifier("CheckoutScreen"), .label("Pay")))
+
+        XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
+    }
+
     func testMatcherAmbiguousReturnsCandidates() {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")

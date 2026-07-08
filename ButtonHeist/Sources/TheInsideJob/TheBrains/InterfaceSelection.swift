@@ -69,6 +69,13 @@ struct InterfaceSelector {
 
     private func select(_ subtree: SubtreeSelector) throws(InterfaceSelectionError) -> Interface {
         let graph = interface.graph
+        let selectedElementPaths: Set<TreePath>?
+        switch subtree {
+        case .element(let target):
+            selectedElementPaths = Set(ElementMatchGraph(interface: interface).resolve(target).orderedPaths)
+        case .container:
+            selectedElementPaths = nil
+        }
         let candidates = graph.nodesInPathOrder.compactMap { record -> InterfaceSubtreeCandidate? in
             switch record.kind {
             case .element(let elementRecord):
@@ -77,6 +84,8 @@ struct InterfaceSelector {
                 switch target {
                 case .predicate(let predicate, _):
                     guard projected.matches(predicate) else { return nil }
+                case .within:
+                    guard selectedElementPaths?.contains(record.path) == true else { return nil }
                 }
                 return InterfaceSubtreeCandidate(
                     node: record.node,

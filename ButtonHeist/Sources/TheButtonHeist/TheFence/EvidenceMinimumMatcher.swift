@@ -64,6 +64,8 @@ enum EvidenceMinimumMatcher {
                 return matches.first?.traversalOrder
             }
             return matches.count == 1 ? matches[0].traversalOrder : nil
+        case .within:
+            return nil
         }
     }
 }

@@ -56,14 +56,14 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `runtime parser accepts current screen identity predicates`() throws {
+@Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))
-    WaitFor(.onScreen(id: "checkout"), timeout: .seconds(1))
+    WaitFor(.exists(container: .identifier("CheckoutScreen")), timeout: .seconds(2))
+    Activate(.within(container: .identifier("CheckoutScreen"), .label("Pay")))
     """))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .onScreen(header: "Checkout"), timeout: 2)),
-        .wait(WaitStep(predicate: .onScreen(id: "checkout"), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(container: .identifier("CheckoutScreen")), timeout: 2)),
+        .action(try ActionStep(command: .activate(.within(container: .identifier("CheckoutScreen"), .label("Pay"))))),
     ])
 
     #expect(plan == expected)

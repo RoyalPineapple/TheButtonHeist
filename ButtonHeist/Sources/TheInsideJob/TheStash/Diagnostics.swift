@@ -73,6 +73,8 @@ extension TheStash {
                 description += " ordinal=\(ordinal)"
             }
             return description
+        case .within(let container, let target):
+            return "\(waitForTargetDescription(target)) within \(container)"
         }
     }
 

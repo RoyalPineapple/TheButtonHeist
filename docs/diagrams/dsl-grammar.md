@@ -55,7 +55,7 @@ The predicate split:
 ```mermaid
 flowchart LR
     subgraph statep["State predicates"]
-        STATE["AccessibilityPredicate.state(State)<br/>exists · missing · screen identity ·<br/>existsTarget · missingTarget · all"]
+        STATE["AccessibilityPredicate.state(State)<br/>exists · missing · container presence ·<br/>existsTarget · missingTarget · all"]
         NOTE1["evaluated against one settled capture —<br/>answers 'is the screen like this now?'"]
         STATE --- NOTE1
     end

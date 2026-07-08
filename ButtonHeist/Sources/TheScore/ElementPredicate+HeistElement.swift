@@ -1,3 +1,4 @@
+import AccessibilitySnapshotModel
 import ThePlans
 
 extension HeistElement: PredicateSelectionSubject {
@@ -130,11 +131,65 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 }
 
+package struct ContainerMatch: Sendable, Hashable {
+    package let path: TreePath
+    package let traversalOrder: Int
+    package let identifier: String?
+
+    package static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
+        lhs.path == rhs.path
+    }
+
+    package func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+    }
+}
+
+package struct ContainerMatchSet: Sendable, Equatable {
+    package static let empty = ContainerMatchSet([])
+
+    package let matches: [ContainerMatch]
+
+    package init(_ matches: [ContainerMatch]) {
+        var paths = Set<TreePath>()
+        var uniqueMatches: [ContainerMatch] = []
+        uniqueMatches.reserveCapacity(matches.count)
+
+        for match in matches where paths.insert(match.path).inserted {
+            uniqueMatches.append(match)
+        }
+
+        self.matches = uniqueMatches
+    }
+
+    package init(interface: Interface) {
+        self.init(interface.graph.nodesInPathOrder.enumerated().compactMap { offset, record in
+            guard case .container(let container) = record.kind else { return nil }
+            return ContainerMatch(
+                path: container.path,
+                traversalOrder: offset,
+                identifier: container.container.containerIdentifier
+            )
+        })
+    }
+
+    package var isEmpty: Bool {
+        matches.isEmpty
+    }
+}
+
 package struct ElementMatchGraph: Sendable, Equatable {
     package let all: ElementMatchSet
+    package let containers: ContainerMatchSet
 
     package init(_ all: ElementMatchSet) {
         self.all = all
+        self.containers = .empty
+    }
+
+    private init(all: ElementMatchSet, containers: ContainerMatchSet) {
+        self.all = all
+        self.containers = containers
     }
 
     package init(elements: [HeistElement]) {
@@ -142,7 +197,10 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package init(interface: Interface) {
-        self.init(ElementMatchSet(interface: interface))
+        self.init(
+            all: ElementMatchSet(interface: interface),
+            containers: ContainerMatchSet(interface: interface)
+        )
     }
 
     package func resolve(_ predicate: ElementPredicate) -> ElementMatchSet {
@@ -150,8 +208,34 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package func resolve(_ target: ElementTarget) -> ElementMatchSet {
-        let resolved = predicateGraph.resolve(target)
-        return ElementMatchSet(resolved.matches.map(\.subject))
+        switch target {
+        case .predicate:
+            let resolved = predicateGraph.resolve(target)
+            return ElementMatchSet(resolved.matches.map(\.subject))
+        case .within(let container, let nestedTarget):
+            return scoped(to: container).resolve(nestedTarget)
+        }
+    }
+
+    package func containsContainer(matching predicate: ContainerPredicate) -> Bool {
+        containers.matches.contains { predicate.matches(identifier: $0.identifier) }
+    }
+
+    private func scoped(to predicate: ContainerPredicate) -> ElementMatchGraph {
+        let containerPaths = containers.matches
+            .filter { predicate.matches(identifier: $0.identifier) }
+            .map(\.path)
+        guard !containerPaths.isEmpty else {
+            return ElementMatchGraph(all: .empty, containers: .empty)
+        }
+        return ElementMatchGraph(
+            all: ElementMatchSet(all.matches.filter { match in
+                containerPaths.contains { match.path.hasPrefix($0) }
+            }),
+            containers: ContainerMatchSet(containers.matches.filter { match in
+                containerPaths.contains { match.path.hasPrefix($0) }
+            })
+        )
     }
 
     private var predicateGraph: ElementPredicateGraph<TreePath, ElementMatch> {
@@ -160,5 +244,12 @@ package struct ElementMatchGraph: Sendable, Equatable {
             identity: \.path,
             traversalOrder: \.traversalOrder
         )
+    }
+}
+
+private extension AccessibilityContainer {
+    var containerIdentifier: String? {
+        guard case .semanticGroup(_, _, let identifier) = type else { return nil }
+        return identifier
     }
 }

@@ -957,26 +957,24 @@ enum FenceParameterBlocks: Sendable {
     )
 
     /// Documented fields of an `AccessibilityPredicate.State` object (`exists`,
-    /// `missing`, `screen`, `all`). A `State` is recursive — `all` nests further states —
+    /// `missing`, `all`). A `State` is recursive — `all` nests further states —
     /// so item objects allow additional keys and the decoder enforces the
     /// per-type required-field rules.
     private static let stateProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "screen", "all"]),
+        param(.type, .string, enumValues: ["exists", "missing", "all"]),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        objectParam(.container, properties: [param(.identifier, .string, required: true)], validation: .customPayload),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "screen", "all", "appeared", "disappeared", "updated"]),
+        param(.type, .string, enumValues: ["exists", "missing", "all", "appeared", "disappeared", "updated"]),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        objectParam(.container, properties: [param(.identifier, .string, required: true)], validation: .customPayload),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields, validation: .customPayload),
         objectParam(.after, properties: matcherFields, validation: .customPayload),
@@ -997,15 +995,14 @@ enum FenceParameterBlocks: Sendable {
 
     /// Object properties for an `AccessibilityPredicate` (the `expect` slot and
     /// the `wait` `predicate` field). State predicates use `element`, `target`,
-    /// `target_ref`, `id`/`header`, or `states`; change predicates use `scopes`,
+    /// `target_ref`, `container`, or `states`; change predicates use `scopes`,
     /// whose children carry `screen` state assertions or `elements` delta assertions.
     private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
         predicateType,
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        objectParam(.container, properties: [param(.identifier, .string, required: true)], validation: .customPayload),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields, validation: .customPayload),
         objectParam(.after, properties: matcherFields, validation: .customPayload),
@@ -1084,6 +1081,19 @@ enum FenceParameterBlocks: Sendable {
             return customContentMatchParam(key)
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
+        case .containerPredicate:
+            return objectParam(
+                key,
+                properties: [param(.identifier, .string, required: true)],
+                validation: .customPayload
+            )
+        case .nestedElementTarget:
+            return objectParam(
+                key,
+                properties: [],
+                additionalProperties: true,
+                validation: .customPayload
+            )
         }
     }
 

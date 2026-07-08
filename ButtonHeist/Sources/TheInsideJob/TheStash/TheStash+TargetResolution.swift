@@ -238,12 +238,7 @@ extension TheStash {
 
     /// Resolve a target using first-match semantics against only the live hierarchy.
     func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
-        let effectiveTarget: ElementTarget
-        switch target {
-        case .predicate(let predicate, _):
-            effectiveTarget = .predicate(predicate, ordinal: 0)
-        }
-        return resolveVisibleTarget(effectiveTarget).resolved
+        resolveVisibleTarget(target.firstMatchTarget).resolved
     }
 
     /// All elements in the supplied screen, or in settled world when omitted.
@@ -270,6 +265,12 @@ private extension TheStash {
         switch target {
         case .predicate(let predicate, let ordinal):
             return resolveMatcher(predicate, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
+        case .within(let container, let target):
+            return resolveTarget(
+                target,
+                in: screen.scoped(to: container),
+                resolutionScope: resolutionScope
+            )
         }
     }
 
@@ -326,6 +327,42 @@ private extension TheStash {
                 resolutionScope: resolutionScope
             ))
         }
+    }
+}
+
+private extension ElementTarget {
+    var firstMatchTarget: ElementTarget {
+        switch self {
+        case .predicate(let predicate, _):
+            return .predicate(predicate, ordinal: 0)
+        case .within(let container, let target):
+            return .within(container, target.firstMatchTarget)
+        }
+    }
+}
+
+private extension Screen {
+    func scoped(to predicate: ContainerPredicate) -> Screen {
+        let containerPaths = orderedContainers
+            .filter { predicate.matches(identifier: $0.container.containerIdentifier) }
+            .map(\.path)
+        guard !containerPaths.isEmpty else {
+            return Screen(
+                semantic: SemanticScreen(elements: [:], containers: [:]),
+                liveCapture: liveCapture
+            )
+        }
+        return Screen(
+            semantic: SemanticScreen(
+                elements: semantic.elements.filter { _, element in
+                    containerPaths.contains { element.path.hasPrefix($0) }
+                },
+                containers: semantic.containers.filter { path, _ in
+                    containerPaths.contains { path.hasPrefix($0) }
+                }
+            ),
+            liveCapture: liveCapture
+        )
     }
 }
 

@@ -196,7 +196,8 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 
 The public predicate layer is intentionally one tree language:
 
-- State predicates: `.exists(...)`, `.missing(...)`, `.onScreen(...)`.
+- State predicates: `.exists(...)`, `.missing(...)`,
+  `.exists(container: ...)`, `.missing(container: ...)`.
 - Change predicates: `.screenChanged(...)`, `.change(.elements(...))`, `.noChange`.
 - Element delta assertions: `.appeared(...)`, `.disappeared(...)`,
   `.updated(...)`.
@@ -226,8 +227,9 @@ The public predicate layer is intentionally one tree language:
 `wait` is a one-step heist. TheInsideJob checks the current settled state first,
 then watches later settled captures until the requested accessibility predicate
 matches or the timeout expires. Snapshot predicates are direct final-state
-checks, including current screen identity through `.onScreen(...)`. Element
-transition waits such as `.appeared(...)`, `.disappeared(...)`, and
+checks, including semantic container presence through
+`.exists(container: ...)`. Element transition waits such as `.appeared(...)`,
+`.disappeared(...)`, and
 `.updated(...)` first try to observe the transition; if the implied final state
 is already true, or becomes true without transition evidence, standalone
 `WaitFor(...)` passes with a warning. Action expectations and

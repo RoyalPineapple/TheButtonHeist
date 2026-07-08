@@ -90,6 +90,7 @@ struct SemanticScreen: Sendable, Equatable {
 
     struct Element: Sendable, Equatable {
         let heistId: HeistId
+        let path: TreePath
         let scrollMembership: ScrollMembership?
         let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
         /// Parsed accessibility identity/value retained in the settled world.
@@ -106,11 +107,13 @@ struct SemanticScreen: Sendable, Equatable {
 
         init(
             heistId: HeistId,
+            path: TreePath = .root,
             scrollMembership: ScrollMembership?,
             observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
             element: AccessibilityElement
         ) {
             self.heistId = heistId
+            self.path = path
             self.scrollMembership = scrollMembership
             self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
             self.element = element
