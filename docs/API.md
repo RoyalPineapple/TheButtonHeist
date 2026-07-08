@@ -401,6 +401,10 @@ available.
 Expectations use object form with a `type` discriminator, for example
 `{"type":"change","scopes":[{"type":"screen"}]}` or
 `{"type":"exists","element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Success"}}]}}`.
+Current settled screen identity is a state expectation:
+`{"type":"screen","header":{"mode":"exact","value":"Checkout"}}` or
+`{"type":"screen","id":"checkout"}`. It does not require a prior
+`screenChanged` delta.
 
 Expectations use the current object grammar at every public boundary. Element
 expectations select subjects with predicate checks, not flat matcher fields or

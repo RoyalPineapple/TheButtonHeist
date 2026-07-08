@@ -359,7 +359,7 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: PredicateProbeKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
         switch typeString {
-        case "exists", "missing", "all":
+        case "exists", "missing", "screen", "all":
             self = .state(try StatePredicateExpr(from: decoder))
         case "change":
             self = .changePredicate(try ChangePredicateExpr(from: decoder))

@@ -17,6 +17,8 @@ import Foundation
 /// {"type": "missing", "element": { ...ElementPredicate... }}
 /// {"type": "exists",  "target": { ...ElementTarget... }}
 /// {"type": "missing", "target": { ...ElementTarget... }}
+/// {"type": "screen",  "header": { ...StringMatch... }}
+/// {"type": "screen",  "id": "checkout"}
 /// {"type": "all",     "states": [ <State object>, ... ]}
 /// {"type": "no_change"}
 /// {"type": "change"}
@@ -47,6 +49,8 @@ public enum AccessibilityPredicate: Sendable, Equatable {
         case existsTarget(ElementTarget)
         /// A selected element target does not exist in the observed interface.
         case missingTarget(ElementTarget)
+        /// The current settled screen identity matches accessibility-derived screen facts.
+        case screen(ScreenIdentityPredicate)
         /// Every child state holds against the same observed interface.
         case all(NonEmptyArray<State>)
     }
@@ -87,6 +91,7 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     public enum PredicateWireType: String, CaseIterable, Sendable {
         case exists
         case missing
+        case screen
         case all
         case noChange = "no_change"
         case change
@@ -104,6 +109,7 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     public enum StateWireType: String, CaseIterable, Sendable {
         case exists
         case missing
+        case screen
         case all
 
         public static var values: [String] {
@@ -120,6 +126,8 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
                 return .exists
             case .missing:
                 return .missing
+            case .screen:
+                return .screen
             case .all:
                 return .all
             }
@@ -184,12 +192,15 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     public enum State: Sendable, Equatable {
         case element(PresenceRequirement, ElementPredicate)
         case target(PresenceRequirement, ElementTarget)
+        case screen(ScreenIdentityPredicate)
         case all(NonEmptyArray<AccessibilityPredicate.State>)
 
         public var wireType: StateWireType {
             switch self {
             case .element(let requirement, _), .target(let requirement, _):
                 return requirement.stateWireType
+            case .screen:
+                return .screen
             case .all:
                 return .all
             }
@@ -265,6 +276,8 @@ public extension AccessibilityPredicate.State {
             return .target(.present, target)
         case .missingTarget(let target):
             return .target(.absent, target)
+        case .screen(let identity):
+            return .screen(identity)
         case .all(let states):
             return .all(states)
         }
@@ -320,7 +333,7 @@ extension AccessibilityPredicate: Codable {
             )
         }
         switch wireType {
-        case .exists, .missing, .all:
+        case .exists, .missing, .screen, .all:
             self = .state(try State(from: decoder))
         case .noChange:
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate")
@@ -396,7 +409,7 @@ extension AccessibilityPredicate: Codable {
 
 extension AccessibilityPredicate.State: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, target, states
+        case type, element, target, id, header, states
     }
 
     public init(from decoder: Decoder) throws {
@@ -426,6 +439,8 @@ extension AccessibilityPredicate.State: Codable {
                 predicateState: Self.missing,
                 targetState: Self.missingTarget
             )
+        case .screen:
+            self = .screen(try ScreenIdentityPredicate(from: decoder))
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate")
             let states = try container.decode([AccessibilityPredicate.State].self, forKey: .states)
@@ -449,6 +464,14 @@ extension AccessibilityPredicate.State: Codable {
         case .target(let requirement, let target):
             try container.encode(requirement.stateWireType.rawValue, forKey: .type)
             try container.encode(target, forKey: .target)
+        case .screen(let identity):
+            try container.encode(AccessibilityPredicateContract.StateWireType.screen.rawValue, forKey: .type)
+            switch identity {
+            case .id(let id):
+                try container.encode(id, forKey: .id)
+            case .header(let header):
+                try container.encode(header, forKey: .header)
+            }
         case .all(let states):
             try container.encode(AccessibilityPredicateContract.StateWireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
@@ -611,6 +634,7 @@ extension AccessibilityPredicate.State: CustomStringConvertible {
         case .missing(let predicate): return ScoreDescription.call("missing", [predicate.description])
         case .existsTarget(let target): return ScoreDescription.call("exists", [target.description])
         case .missingTarget(let target): return ScoreDescription.call("missing", [target.description])
+        case .screen(let identity): return identity.description
         case .all(let states): return ScoreDescription.call("all", states.map(\.description))
         }
     }

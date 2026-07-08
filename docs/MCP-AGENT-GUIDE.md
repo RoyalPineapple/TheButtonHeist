@@ -87,11 +87,16 @@ Activate(.label("Pay"), ordinal: 0)
 
 ```swift
 WaitFor(.screenChanged, timeout: .seconds(10))
+WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(5))
 WaitFor(.label("Receipt"), timeout: .seconds(5))
 WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
+
+Use `.onScreen(...)` when you need to assert the current settled screen identity
+without proving that navigation just happened. Use `.screenChanged(...)` when
+the preceding action itself must prove a screen transition.
 
 Standalone `WaitFor(...)` is final-state oriented. If you write
 `WaitFor(.appeared(...))`, `WaitFor(.disappeared(...))`, or

@@ -476,6 +476,18 @@ func waitForBuildsWaitStep() throws {
 }
 
 @Test
+func `wait for on screen builds screen identity state predicate`() throws {
+    let heist = try HeistPlan {
+        WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .wait(WaitStep(predicate: .onScreen(header: "Checkout"), timeout: 2)),
+    ]))
+    #expect(try heist.canonicalSwiftDSL().contains(#"WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))"#))
+}
+
+@Test
 func singleIfBuildsConditionalStep() throws {
     let heist = try HeistPlan {
         If {
@@ -1323,6 +1335,13 @@ private enum EncodedJSONValue: Decodable, Equatable {
 
     func containsLabelCheckReference(_ reference: String) -> Bool {
         containsCheck(kind: "label", match: .object(["ref": .string(reference)]))
+            || containsCheck(
+                kind: "label",
+                match: .object([
+                    "mode": .string("exact"),
+                    "value": .object(["ref": .string(reference)]),
+                ])
+            )
     }
 
     func assertRecursivelyMissingKeys(_ keys: [String]) throws {

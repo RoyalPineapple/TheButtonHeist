@@ -141,6 +141,11 @@ extension StringMatch: Codable where Value: Codable {
     }
 
     public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(Value.self) {
+            self = .exact(value)
+            return
+        }
+
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let mode = try container.decode(Mode.self, forKey: .mode)

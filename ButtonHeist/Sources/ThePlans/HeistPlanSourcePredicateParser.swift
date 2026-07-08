@@ -39,6 +39,8 @@ extension HeistPlanSourceParser {
             return .state(try parseExistsMissingState(name: name))
         case "all":
             return .state(try parseAllState())
+        case "onScreen":
+            return .state(try parseScreenIdentityState())
         case "label", "identifier", "value", "hint", "traits",
              "actions", "customContent", "rotors", "exclude",
              "element":
@@ -149,6 +151,8 @@ extension HeistPlanSourceParser {
             return try parseExistsMissingState(name: name)
         case "all":
             return try parseAllState()
+        case "onScreen", "screen":
+            return try parseScreenIdentityState()
         case "label", "identifier", "value", "hint", "traits",
              "actions", "customContent", "rotors", "exclude",
              "element":
@@ -175,6 +179,28 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         return state
+    }
+
+    mutating func parseScreenIdentityState() throws -> StatePredicateExpr {
+        try expectSymbol("(")
+        let identity: ScreenIdentityPredicateExpr
+        if lookaheadLabel("id") {
+            try expectIdentifier("id")
+            try expectSymbol(":")
+            let id = try parseStringExpr()
+            if id.stringMatchLiteralIsEmpty == true {
+                throw error(previous, "screen identity id must not be empty")
+            }
+            identity = .id(id)
+        } else if lookaheadLabel("header") {
+            try expectIdentifier("header")
+            try expectSymbol(":")
+            identity = .header(try parseStringMatchFieldValue(field: "screen header"))
+        } else {
+            throw error(currentToken, ".onScreen requires id: or header:")
+        }
+        try expectSymbol(")")
+        return .screen(identity)
     }
 
     mutating func parseAllState() throws -> StatePredicateExpr {

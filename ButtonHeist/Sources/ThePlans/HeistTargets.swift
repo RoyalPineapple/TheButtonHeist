@@ -298,12 +298,36 @@ public extension AccessibilityPredicate {
         .state(.missingTarget(target))
     }
 
+    static func onScreen(id: String) -> AccessibilityPredicate {
+        .state(.onScreen(id: id))
+    }
+
+    static func onScreen(header: StringMatch<String>) -> AccessibilityPredicate {
+        .state(.onScreen(header: header))
+    }
+
+    static func onScreen(header: String) -> AccessibilityPredicate {
+        .state(.onScreen(header: header))
+    }
+
     static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate {
         .state(.all(NonEmptyArray(first, rest: rest)))
     }
 }
 
 public extension AccessibilityPredicate.State {
+    static func onScreen(id: String) -> AccessibilityPredicate.State {
+        .screen(ScreenIdentityPredicate(id: id))
+    }
+
+    static func onScreen(header: StringMatch<String>) -> AccessibilityPredicate.State {
+        .screen(ScreenIdentityPredicate(header: header))
+    }
+
+    static func onScreen(header: String) -> AccessibilityPredicate.State {
+        .screen(ScreenIdentityPredicate(header: header))
+    }
+
     static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.State {
         .all(NonEmptyArray(first, rest: rest))
     }
@@ -326,6 +350,27 @@ public extension AccessibilityPredicateExpr {
     @_disfavoredOverload
     static func missing(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
         .state(.missingTarget(target))
+    }
+
+    static func onScreen(id: StringExpr) -> AccessibilityPredicateExpr {
+        .state(.onScreen(id: id))
+    }
+
+    static func onScreen(id: String) -> AccessibilityPredicateExpr {
+        .state(.onScreen(id: id))
+    }
+
+    @_disfavoredOverload
+    static func onScreen(header: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .state(.onScreen(header: header))
+    }
+
+    static func onScreen(header: StringExpr) -> AccessibilityPredicateExpr {
+        .state(.onScreen(header: header))
+    }
+
+    static func onScreen(header: String) -> AccessibilityPredicateExpr {
+        .state(.onScreen(header: header))
     }
 
     static func change(_ scopes: ChangeScopePredicateExpr...) -> AccessibilityPredicateExpr {
@@ -485,6 +530,27 @@ public extension StatePredicateExpr {
 
     static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> StatePredicateExpr {
         .all(NonEmptyArray(first, rest: rest))
+    }
+
+    static func onScreen(id: StringExpr) -> StatePredicateExpr {
+        .screen(ScreenIdentityPredicateExpr(id: id))
+    }
+
+    static func onScreen(id: String) -> StatePredicateExpr {
+        .screen(ScreenIdentityPredicateExpr(id: id))
+    }
+
+    @_disfavoredOverload
+    static func onScreen(header: StringMatch<StringExpr>) -> StatePredicateExpr {
+        .screen(ScreenIdentityPredicateExpr(header: header))
+    }
+
+    static func onScreen(header: StringExpr) -> StatePredicateExpr {
+        .screen(ScreenIdentityPredicateExpr(header: header))
+    }
+
+    static func onScreen(header: String) -> StatePredicateExpr {
+        .screen(ScreenIdentityPredicateExpr(header: header))
     }
 
     @_disfavoredOverload

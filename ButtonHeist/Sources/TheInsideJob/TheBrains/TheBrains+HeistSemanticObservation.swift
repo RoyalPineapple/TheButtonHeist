@@ -29,6 +29,8 @@ private extension AccessibilityPredicate.State {
         switch self {
         case .exists, .missing, .existsTarget, .missingTarget:
             return .visible
+        case .screen:
+            return .discovery
         case .all(let states):
             return states
                 .map(\.observationScope)

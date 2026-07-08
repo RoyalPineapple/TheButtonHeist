@@ -319,6 +319,12 @@ predicates can pass with a warning when the implied final state is true but the
 transition was not observed. The response is a heist execution receipt, even for
 a single wait.
 
+To assert the current settled screen identity without requiring a transition,
+use the screen state predicate in the wait plan:
+`{"type":"screen","header":{"mode":"exact","value":"Checkout"}}` or
+`{"type":"screen","id":"checkout"}`. `change` with a `screen` scope remains the
+screen-change predicate and requires before/after settled evidence.
+
 ## Action Results
 
 Action responses use `actionResult`:
