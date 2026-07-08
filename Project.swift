@@ -129,7 +129,10 @@ let project = Project(
             dependencies: [
                 .target(name: "ButtonHeistDSL"),
                 .target(name: "TheInsideJob"),
-            ]
+            ],
+            settings: .settings(base: [
+                "ENABLE_TESTING_SEARCH_PATHS": "YES",
+            ])
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)

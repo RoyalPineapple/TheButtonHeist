@@ -111,7 +111,7 @@ public final class TheFence {
 
     private func sessionFailurePayload(for failure: HandoffConnectionError) -> SessionFailurePayload {
         SessionFailurePayload(
-            errorCode: failure.failureCode,
+            code: failure.failureCode,
             phase: failure.phase,
             retryable: failure.retryable,
             message: failure.errorDescription,
@@ -143,15 +143,21 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    /// Execute a routed command request.
+    /// Admit a routed public command input into TheFence's typed runtime.
+    @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
+        FenceOperationRequest(parsed: try parseRequest(command: input.command, arguments: input.arguments))
+    }
+
+    @_spi(ButtonHeistTooling) public func admit(
+        command: Command,
+        arguments: CommandArgumentEnvelope
+    ) throws -> FenceOperationRequest {
+        try admit(FenceCommandInput(command: command, arguments: arguments))
+    }
+
+    /// Execute an admitted command request.
     @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {
-        let parsed: ParsedRequest
-        do {
-            parsed = try parseRequest(command: request.command, arguments: request.arguments)
-        } catch {
-            return .failure(error)
-        }
-        return try await execute(parsed: parsed)
+        try await execute(parsed: request.parsed)
     }
 
     // MARK: - Command Dispatch (thin router)

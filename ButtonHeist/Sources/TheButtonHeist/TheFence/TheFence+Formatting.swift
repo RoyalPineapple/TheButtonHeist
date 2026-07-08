@@ -133,12 +133,12 @@ extension FenceResponse {
     private static func sessionStateFailureSummary(_ failure: SessionFailurePayload?) -> String? {
         guard let failure else { return nil }
         if let hint = failure.hint {
-            return "\(failure.errorCode): \(hint)"
+            return "\(failure.code): \(hint)"
         }
         if let message = failure.message {
-            return "\(failure.errorCode): \(message)"
+            return "\(failure.code): \(message)"
         }
-        return failure.errorCode
+        return failure.code
     }
 
     private func formatTargetList(_ targets: [TargetName: TargetConfig], defaultTarget: TargetName?) -> String {

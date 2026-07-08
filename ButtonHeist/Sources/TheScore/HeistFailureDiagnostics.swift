@@ -118,7 +118,7 @@ public extension HeistExecutionResult {
 
 public extension HeistExecutionStepResult {
     var settledInterfaceAtStep: Interface? {
-        traceEvidenceResult?.accessibilityTrace?.captures.last?.interface
+        reportFacts.results.traceEvidenceResult?.accessibilityTrace?.captures.last?.interface
     }
 
     var screenshotPayload: ScreenPayload? {

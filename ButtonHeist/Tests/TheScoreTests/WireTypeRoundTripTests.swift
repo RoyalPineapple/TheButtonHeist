@@ -336,12 +336,12 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testTapAndLongPressRejectMixedPointAndElementIntents() {
-        let tapJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20}}"#
+        let tapJSON = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"point":{"x":10,"y":20}}"#
         XCTAssertThrowsError(try decoder.decode(TapTarget.self, from: Data(tapJSON.utf8))) { error in
             assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
 
-        let longPressJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20},"duration":1}"#
+        let longPressJSON = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"point":{"x":10,"y":20},"duration":1}"#
         XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(longPressJSON.utf8))) { error in
             assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
@@ -422,7 +422,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testDragTargetRejectsMixedIntentFields() {
         let json = #"""
         {
-          "elementToPoint": {"element": {"label": "Card"}, "end": {"x": 30, "y": 40}},
+          "elementToPoint": {
+            "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Card"}}]},
+            "end": {"x": 30, "y": 40}
+          },
           "pointToPoint": {"start": {"x": 10, "y": 20}, "end": {"x": 30, "y": 40}}
         }
         """#
@@ -433,7 +436,8 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testDragTargetRejectsUnknownNestedIntentField() {
-        let json = #"{"elementToPoint":{"element":{"label":"Handle"},"end":{"x":30,"y":40},"offset":{"x":10,"y":20}}}"#
+        let json = #"{"elementToPoint":{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Handle"}}]},"# +
+            #""end":{"x":30,"y":40},"offset":{"x":10,"y":20}}}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
             assertDecodingError(error, contains: ["Unknown element-to-point drag field", "offset"])
         }
@@ -645,13 +649,13 @@ final class WireTypeRoundTripTests: XCTestCase {
           "subtree": {
             "element": {
               "checks": [
-                { "kind": "label", "match": "Save" }
+                { "kind": "label", "match": { "mode": "exact", "value": "Save" } }
               ]
             }
           },
           "matcher": {
             "checks": [
-              { "kind": "identifier", "match": "save" }
+              { "kind": "identifier", "match": { "mode": "exact", "value": "save" } }
             ]
           }
         }
@@ -678,7 +682,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let checks = try element.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "label")
-        XCTAssertEqual(try checks[0].string("match"), "Save")
+        let labelMatch = try checks[0].object("match")
+        XCTAssertEqual(try labelMatch.string("mode"), "exact")
+        XCTAssertEqual(try labelMatch.string("value"), "Save")
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
@@ -695,7 +701,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let checks = try element.array("checks")
         XCTAssertEqual(checks.count, 1)
         XCTAssertEqual(try checks[0].string("kind"), "label")
-        XCTAssertEqual(try checks[0].string("match"), "Save")
+        let labelMatch = try checks[0].object("match")
+        XCTAssertEqual(try labelMatch.string("mode"), "exact")
+        XCTAssertEqual(try labelMatch.string("value"), "Save")
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
@@ -733,7 +741,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorElementRejectsHeistIdField() {
         // heistId is no longer a targeting field — it is an unknown element key.
-        let json = #"{"element":{"heistId":"button_save","label":"Save"}}"#
+        let json = #"{"element":{"heistId":"button_save","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}"#
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
@@ -747,7 +755,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testSubtreeSelectorElementRejectsUnknownTargetField() {
-        let json = #"{"element":{"label":"Save","unexpectedTargetField":"button_save"}}"#
+        let json = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"unexpectedTargetField":"button_save"}}"#
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
@@ -840,12 +848,14 @@ final class WireTypeRoundTripTests: XCTestCase {
         let action = try body[0].object("action")
         let command = try action.object("command")
         XCTAssertEqual(try command.string("type"), "activate")
-        let target = try command.object("payload")
+        let target = try command.object("payload").object("target")
         XCTAssertEqual(try target.int("ordinal"), 1)
         let checks = try target.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "label")
-        XCTAssertEqual(try checks[0].string("match"), "Settings")
+        let labelMatch = try checks[0].object("match")
+        XCTAssertEqual(try labelMatch.string("mode"), "exact")
+        XCTAssertEqual(try labelMatch.string("value"), "Settings")
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
         let expectation = try action.object("expectation")
@@ -919,7 +929,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let payload = try JSONProbe(data: data)
         let step = try payload.array("steps")[0]
         let intent = try step.object("intent")
-        let failureTrace = try step.object("failure").object("activationTrace")
+        let failureTrace = try step.object("outcome").object("failure").object("activationTrace")
         XCTAssertEqual(try intent.string("type"), "action")
         XCTAssertEqual(try intent.object("command").string("type"), "activate")
         try intent.assertMissing("target")
@@ -976,7 +986,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try intent.string("type"), "for_each_element")
         XCTAssertEqual(try intent.object("matching").array("checks")[0].string("kind"), "label")
         try stepPayload.assertMissing("childResults")
-        _ = try stepPayload.array("children")
+        _ = try stepPayload.object("outcome").array("children")
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachFailure() throws {
@@ -1106,7 +1116,8 @@ final class WireTypeRoundTripTests: XCTestCase {
 
         let invalid = """
         {
-          "actionResult": { "success": true, "method": "activate" },
+          "type": "commandless_dispatch",
+          "dispatchResult": { "success": true, "method": "activate" },
           "warning": {
             "code": "activation_weak_affordance_evidence",
             "message": "activate succeeded"
@@ -1115,7 +1126,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try decoder.decode(HeistActionEvidence.self, from: Data(invalid.utf8))) { error in
-            assertDecodingError(error, contains: ["heist action warning evidence requires command"])
+            assertDecodingError(error, contains: ["commandless_dispatch heist action evidence cannot include warning"])
         }
     }
 
@@ -1200,7 +1211,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let missingTargetSummary = """
         {
           "parameter": "item",
-          "matching": { "checks": [{ "kind": "label", "match": "Cell" }] },
+          "matching": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Cell" } }] },
           "limit": 10,
           "matchedCount": 2,
           "iterationCount": 1,

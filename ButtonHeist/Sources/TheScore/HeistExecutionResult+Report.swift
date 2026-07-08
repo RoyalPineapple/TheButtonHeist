@@ -586,26 +586,6 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
         return evidence.invocation?.runHeistSummary
     }
 
-    package var dispatchedActionResult: ActionResult? {
-        results.dispatchedActionResult
-    }
-
-    package var actionResult: ActionResult? {
-        results.actionResult
-    }
-
-    package var traceEvidenceResult: ActionResult? {
-        results.traceEvidenceResult
-    }
-
-    package var expectation: ExpectationResult? {
-        results.expectation
-    }
-
-    package var actionErrorKind: ErrorKind? {
-        results.actionErrorKind
-    }
-
     package var results: HeistExecutionStepReportResults {
         switch self {
         case .action(let evidence):
@@ -639,7 +619,6 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
             return .none
         }
     }
-
     package var message: String? {
         switch self {
         case .caseSelection(let evidence):
@@ -707,26 +686,6 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let failureMessage: String?
     package let failureCategory: HeistFailureCategory?
     package let results: HeistExecutionStepReportResults
-
-    package var actionResult: ActionResult? {
-        results.actionResult
-    }
-
-    package var expectation: ExpectationResult? {
-        results.expectation
-    }
-
-    package var actionErrorKind: ErrorKind? {
-        results.actionErrorKind
-    }
-
-    package var dispatchedActionResult: ActionResult? {
-        results.dispatchedActionResult
-    }
-
-    package var traceEvidenceResult: ActionResult? {
-        results.traceEvidenceResult
-    }
 
     package init(step: HeistExecutionStepResult) {
         let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)
@@ -829,10 +788,6 @@ public extension HeistExecutionStepResult {
         HeistExecutionEvidenceRollup(steps: [self]).firstFailedStep
     }
 
-    var reportStatus: HeistExecutionStepStatus {
-        outcome.status
-    }
-
     var actionEvidence: HeistActionEvidence? {
         guard case .action(let evidence) = evidence else { return nil }
         return evidence
@@ -873,11 +828,6 @@ public extension HeistExecutionStepResult {
         return warning
     }
 
-    /// Wire-format step name. Renames `conditional` -> `if`.
-    var reportStepName: String {
-        reportFacts.kind
-    }
-
     /// Human-facing display label for a step. Invoke steps surface the product
     /// capability that ran rather than the bare `invoke` kind.
     var reportDisplayName: String {
@@ -903,24 +853,13 @@ public extension HeistExecutionStepResult {
     /// Action result surfaced to human/report adapters. For an action with an
     /// expectation, the expectation wait result wins over the dispatch result.
     var reportActionResult: ActionResult? {
-        reportFacts.actionResult
-    }
-
-    /// Runtime dispatch evidence for actual action steps.
-    var dispatchedActionResult: ActionResult? {
-        reportFacts.dispatchedActionResult
-    }
-
-    /// Human/report-facing result for actual action steps.
-    var reportedActionResult: ActionResult? {
-        guard kind == .action else { return nil }
-        return reportFacts.actionResult
+        reportFacts.results.actionResult
     }
 
     /// Expectation to surface for this step. Action dispatch failure suppresses
     /// expectation details so the dispatch failure remains the headline.
     var reportExpectation: ExpectationResult? {
-        reportFacts.expectation
+        reportFacts.results.expectation
     }
 
     /// Number of expectations evaluated in this subtree.
@@ -931,11 +870,6 @@ public extension HeistExecutionStepResult {
     /// Number of evaluated expectations that were met in this subtree.
     var expectationsMet: Int {
         HeistExecutionEvidenceRollup(steps: [self]).summary.expectationsMet
-    }
-
-    /// Action result that contributes accessibility-trace evidence for this step.
-    var traceEvidenceResult: ActionResult? {
-        reportFacts.traceEvidenceResult
     }
 
     /// Trace-contributing results in execution order across this subtree.

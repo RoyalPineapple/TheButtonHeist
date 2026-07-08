@@ -3950,7 +3950,7 @@ final class TheBrainsActionTests: XCTestCase {
     ) throws -> ElementTarget {
         let screenElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
         let elements = screen.orderedElements.map {
-            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return try XCTUnwrap(
             minimumUniquePredicate(for: screenElement.heistId.predicateSelectionElementId, in: elements)

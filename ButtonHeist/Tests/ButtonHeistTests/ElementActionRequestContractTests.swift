@@ -177,10 +177,6 @@ private func schemaValidationDescriptor(parameter: FenceParameterSpec) -> FenceC
     )
 }
 
-private func targetValue(identifier: String) -> HeistValue {
-    .object(["identifier": .string(identifier)])
-}
-
 private func projectedJSONSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
     guard case .object(let schema) = spec.schema.heistValue else { return nil }
     return schema[key]

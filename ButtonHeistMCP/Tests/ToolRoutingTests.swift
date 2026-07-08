@@ -6,7 +6,7 @@ import Testing
 
 struct ToolRoutingTests {
     private typealias Argument = Value
-    private typealias RoutedCommand = FenceOperationRequest
+    private typealias RoutedCommand = FenceCommandInput
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {

@@ -237,9 +237,11 @@ contract.
 ```
 
 `heistId` is a current-capture annotation for correlation and diagnostics.
-Public action messages identify elements with `ElementTarget` predicate checks
-such as `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
-`customContent`, `rotors`, and optional `ordinal`. Durable replay uses the same
+Public action messages identify elements with the canonical `ElementTarget`
+shape: `target` carries an ordered predicate `checks` chain, and `target_ref`
+refers to a scoped heist parameter. Checks include `label`, `identifier`,
+`value`, `hint`, `traits`, `actions`, `customContent`, and `rotors`; predicate
+targets may also carry an optional `ordinal`. Durable replay uses the same
 semantic target shape.
 The string predicate fields may carry one StringMatch value or an array of
 StringMatch values; arrays require every check against that property to match.
@@ -251,7 +253,36 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
 ### One-Step Semantic Action
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]},"argument":{"type":"none"}}}
+{
+  "buttonHeistVersion": "<semver>",
+  "requestId": "act-1",
+  "type": "heistPlan",
+  "payload": {
+    "plan": {
+      "version": 1,
+      "parameter": { "type": "none" },
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "activate",
+              "payload": {
+                "target": {
+                  "checks": [
+                    { "kind": "label", "match": { "mode": "exact", "value": "Sign In" } },
+                    { "kind": "traits", "values": ["button"] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "argument": { "type": "none" }
+  }
+}
 ```
 
 Semantic action steps identify elements semantically. The host resolves the

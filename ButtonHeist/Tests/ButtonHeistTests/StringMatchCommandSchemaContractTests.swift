@@ -63,7 +63,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetAcceptsContainsStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
-            "label": stringMatchValue(mode: "contains", value: "Pay"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "Pay")),
+            ]),
         ])),
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
@@ -75,7 +77,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetAcceptsIsEmptyStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
-            "value": stringMatchIsEmptyValue(),
+            "checks": .array([
+                predicateCheckValue(kind: "value", match: stringMatchIsEmptyValue()),
+            ]),
         ])),
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
@@ -87,7 +91,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetAcceptsExactStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
-            "label": stringMatchValue(mode: "exact", value: "Pay"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Pay")),
+            ]),
         ])),
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
@@ -99,15 +105,17 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetReportsNestedStringMatchValueMismatch() async {
         XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
-            "label": .object([
-                "mode": .string("contains"),
-                "value": .int(7),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: .object([
+                    "mode": .string("contains"),
+                    "value": .int(7),
+                ])),
             ]),
         ]))) { error in
             guard let error = error as? SchemaValidationError else {
                 return XCTFail("Expected SchemaValidationError, got \(error)")
             }
-            XCTAssertEqual(error.field, "target.label.value")
+            XCTAssertEqual(error.field, "target.checks[0].match.value")
             XCTAssertEqual(error.observed, "integer 7")
             XCTAssertEqual(error.expected, "string")
         }
@@ -116,15 +124,17 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetReportsInvalidStringMatchModeField() async {
         XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
-            "label": .object([
-                "mode": .string("regex"),
-                "value": .string("Pay"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: .object([
+                    "mode": .string("regex"),
+                    "value": .string("Pay"),
+                ])),
             ]),
         ]))) { error in
             guard let error = error as? SchemaValidationError else {
                 return XCTFail("Expected SchemaValidationError, got \(error)")
             }
-            XCTAssertEqual(error.field, "target.label.mode")
+            XCTAssertEqual(error.field, "target.checks[0].match.mode")
             XCTAssertEqual(error.observed, #"string "regex""#)
             XCTAssertTrue(error.expected.contains("Cannot initialize Mode"), error.expected)
         }
@@ -133,28 +143,30 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetRejectsUnknownStringMatchField() async {
         XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
-            "label": .object([
-                "mode": .string("exact"),
-                "value": .string("Pay"),
-                "caseSensitive": .bool(true),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: .object([
+                    "mode": .string("exact"),
+                    "value": .string("Pay"),
+                    "caseSensitive": .bool(true),
+                ])),
             ]),
         ]))) { error in
             guard let error = error as? SchemaValidationError else {
                 return XCTFail("Expected SchemaValidationError, got \(error)")
             }
-            XCTAssertEqual(error.field, "target.label.caseSensitive")
+            XCTAssertEqual(error.field, "target.checks[0].match.caseSensitive")
             XCTAssertEqual(error.observed, "boolean true")
             XCTAssertTrue(error.expected.contains("Unknown StringMatch field"), error.expected)
         }
     }
 
     @ButtonHeistActor
-    func testElementTargetAcceptsStringMatchArrayForRepeatedField() async throws {
+    func testElementTargetAcceptsRepeatedStringChecks() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
-            "label": .array([
-                stringMatchValue(mode: "prefix", value: "foo"),
-                stringMatchValue(mode: "contains", value: "bar"),
-                stringMatchValue(mode: "suffix", value: "baz"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "bar")),
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "suffix", value: "baz")),
             ]),
         ])),
               case .predicate(let matcher, _) = target else {
@@ -194,14 +206,18 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetRejectsRawStringMatcherField() async throws {
-        XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
-            "label": .string("Pay"),
-        ]))) { error in
-            XCTAssertTrue(
-                String(describing: error).contains("StringMatch object with mode and optional value"),
-                "Unexpected error: \(error)"
-            )
+    func testElementTargetRejectsFlatMatcherFields() async throws {
+        let cases: [(String, HeistValue)] = [
+            ("object", stringMatchValue(mode: "exact", value: "Pay")),
+            ("array", .array([stringMatchValue(mode: "exact", value: "Pay")])),
+            ("raw", .string("Pay")),
+        ]
+        for (name, value) in cases {
+            XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
+                "label": value,
+            ])), name) { error in
+                XCTAssertTrue(String(describing: error).contains("label"), "Unexpected error: \(error)")
+            }
         }
     }
 
@@ -210,7 +226,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         _ = try await fence.execute(command: .getInterface, values: [
-            "label": stringMatchValue(mode: "contains", value: "Pay"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "Pay")),
+            ]),
         ])
 
         guard let (message, _) = mockConn.sent.last,
@@ -222,14 +240,14 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceAcceptsStringMatchArrayInMatcherField() async throws {
+    func testGetInterfaceAcceptsRepeatedStringChecksInMatcherField() async throws {
         let (fence, mockConn) = makeConnectedFence()
 
         _ = try await fence.execute(command: .getInterface, values: [
-            "label": .array([
-                stringMatchValue(mode: "prefix", value: "foo"),
-                stringMatchValue(mode: "contains", value: "bar"),
-                stringMatchValue(mode: "suffix", value: "baz"),
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "bar")),
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "suffix", value: "baz")),
             ]),
         ])
 
@@ -315,18 +333,18 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceRejectsRawStringMatcherField() async throws {
+    func testGetInterfaceRejectsFlatMatcherFields() async throws {
         let (fence, _) = makeConnectedFence()
 
-        let response = try await fence.execute(command: .getInterface, values: [
-            "label": .string("Pay"),
-        ])
-
-        guard case .error(let failure) = response else {
-            return XCTFail("Expected error response")
+        let cases: [(String, HeistValue)] = [
+            ("object", stringMatchValue(mode: "exact", value: "Pay")),
+            ("array", .array([stringMatchValue(mode: "exact", value: "Pay")])),
+            ("raw", .string("Pay")),
+        ]
+        for (_, value) in cases {
+            let response = try await fence.execute(command: .getInterface, values: ["label": value])
+            assertError(response, contains: "valid get_interface parameter")
         }
-        let message = failure.message
-        XCTAssertTrue(message.contains("expected StringMatch object with mode and optional value"), message)
     }
 
     @ButtonHeistActor
@@ -336,7 +354,9 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         _ = try await fence.execute(command: .getInterface, values: [
             "subtree": .object([
                 "element": elementTargetValue([
-                    "label": stringMatchValue(mode: "contains", value: "Pay"),
+                    "checks": .array([
+                        predicateCheckValue(kind: "label", match: stringMatchValue(mode: "contains", value: "Pay")),
+                    ]),
                 ]),
             ]),
         ])
@@ -367,7 +387,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
         let message = failure.message
         XCTAssertTrue(message.contains("subtree.element.label"), message)
-        XCTAssertTrue(message.contains("expected StringMatch object with mode and optional value"), message)
+        XCTAssertTrue(message.contains("label"), message)
     }
 
     func testPredicateAcceptsStringMatchObjectInElementField() throws {
@@ -467,8 +487,8 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
         XCTAssertEqual(specsByKey["before"]?.type, .object)
         XCTAssertEqual(specsByKey["after"]?.type, .object)
-        XCTAssertEqual(specsByKey["before"]?.objectProperties.map(\.key).contains("value"), true)
-        XCTAssertEqual(specsByKey["after"]?.objectProperties.map(\.key).contains("traits"), true)
+        XCTAssertEqual(specsByKey["before"]?.objectProperties.map(\.key), ["checks"])
+        XCTAssertEqual(specsByKey["after"]?.objectProperties.map(\.key), ["checks"])
     }
 
     func testPredicateRejectsRawStringMatcherField() throws {
@@ -483,7 +503,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
                 "Unexpected error: \(error)"
             )
             XCTAssertTrue(
-                String(describing: error).contains("StringMatch object with mode and optional value"),
+                String(describing: error).contains("label"),
                 "Unexpected error: \(error)"
             )
         }

@@ -118,7 +118,7 @@ struct RenderResponseTests {
                 parameterKind: .string,
                 requiresArgument: true,
                 summary: "Reusable heist capability requiring string argument",
-                tags: ["capability", "parameterized", "semantic-action"]
+                tags: [.capability, .parameterized, .semanticAction]
             ),
         ]))
 
@@ -138,7 +138,7 @@ struct RenderResponseTests {
     }
 
     @Test("detailed heist catalog render includes safe derived fields")
-    func detailedHeistCatalogRenderIncludesSafeDerivedFields() {
+    func detailedHeistCatalogRenderIncludesSafeDerivedFields() throws {
         let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
             HeistCatalogEntry(
                 name: "checkout",
@@ -146,12 +146,16 @@ struct RenderResponseTests {
                 parameterKind: .none,
                 requiresArgument: false,
                 summary: "Reusable heist capability",
-                tags: ["capability", "composed", "assertion", "semantic-action"],
-                nestedRunHeists: ["checkout.confirm"],
-                actionCommands: ["activate"],
+                tags: [.capability, .composed, .assertion, .semanticAction],
+                nestedRunHeists: [try HeistInvocationPath(dottedName: "checkout.confirm")],
+                actionCommands: [.activate],
                 waitCount: 1,
                 expectationCount: 1,
-                semanticSurfaces: ["label=Checkout", "identifier=confirm_button", "traits=button"],
+                semanticSurfaces: [
+                    .label(HeistSemanticStringMatch(mode: .exact, value: .literal("Checkout"))),
+                    .identifier(HeistSemanticStringMatch(mode: .exact, value: .literal("confirm_button"))),
+                    .traits([.button]),
+                ],
                 validationStatus: .validated
             ),
         ]))
@@ -186,7 +190,7 @@ struct RenderResponseTests {
         #expect(root["message"]?.stringValue == expected.message)
         #expect(root["code"]?.stringValue == expected.code)
         #expect(root["kind"]?.stringValue == expected.kind.rawValue)
-        #expect(root["errorCode"]?.stringValue == expected.code)
+        #expect(root["errorCode"] == nil)
         #expect(root["phase"]?.stringValue == expected.details.phase.rawValue)
         #expect(root["retryable"] == Value.bool(expected.details.retryable))
         #expect(root["hint"]?.stringValue == expected.details.hint)
@@ -207,7 +211,7 @@ struct RenderResponseTests {
         #expect(root["status"]?.stringValue == "error")
         #expect(root["code"]?.stringValue == "formatting.json_encoding_failed")
         #expect(root["kind"]?.stringValue == "client")
-        #expect(root["errorCode"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["errorCode"] == nil)
         #expect(root["phase"]?.stringValue == "client")
         #expect(root["retryable"] == Value.bool(false))
         #expect(details["code"]?.stringValue == "formatting.json_encoding_failed")

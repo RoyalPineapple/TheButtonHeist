@@ -595,8 +595,8 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(ordinal, 2)
     }
 
-    func testElementTargetOrdinalFlatWireFormat() throws {
-        let json = #"{"label":"Save","ordinal":2}"#
+    func testElementTargetOrdinalWireFormat() throws {
+        let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"ordinal":2}"#
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
 
         guard case .predicate(let matcher, let ordinal) = decoded else {
@@ -607,7 +607,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetOrdinalOmittedInWireFormat() throws {
-        let json = #"{"label":"Save"}"#
+        let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
 
         guard case .predicate(_, let ordinal) = decoded else {
@@ -617,7 +617,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetNegativeOrdinalThrows() {
-        let json = #"{"label":"Save","ordinal":-1}"#
+        let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"ordinal":-1}"#
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
@@ -628,7 +628,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testElementTargetRejectsHeistIdWithMatcherFieldsAtCodableBoundary() {
         // heistId is no longer a targeting field — it is rejected as unknown.
-        let json = #"{"heistId":"button_save","label":"Save"}"#
+        let json = #"{"heistId":"button_save","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
@@ -648,7 +648,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetRejectsUnknownFieldAtCodableBoundary() {
-        let json = #"{"label":"Save","unexpectedTargetField":"button_save"}"#
+        let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"unexpectedTargetField":"button_save"}"#
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")

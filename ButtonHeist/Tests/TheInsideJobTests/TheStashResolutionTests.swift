@@ -647,7 +647,7 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        XCTAssertEqual(bagman.accessibilityNotifications.claimPendingEvents().count, 0)
+        XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().count, 0)
     }
 
     func testCleanPostActionSettleRequiresActionWindowToClaimAccessibilityNotifications() async {
@@ -1389,7 +1389,7 @@ final class TheStashResolutionTests: XCTestCase {
             $0.element.identifier == "quantity_stepper"
         })
         let sourceElements = sourceScreen.orderedElements.map {
-            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         let executableTarget = try XCTUnwrap(
             minimumUniquePredicate(

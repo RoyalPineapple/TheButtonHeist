@@ -158,7 +158,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("status"), "error")
-        XCTAssertEqual(try json.string("errorCode"), "screen.inline_payload_too_large")
+        XCTAssertEqual(try json.string("code"), "screen.inline_payload_too_large")
         try json.assertMissing("pngData")
         try json.assertMissing("path")
     }

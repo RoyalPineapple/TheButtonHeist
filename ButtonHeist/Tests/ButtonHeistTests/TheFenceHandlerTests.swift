@@ -18,6 +18,18 @@ private extension AccessibilityTrace.Delta {
     }
 }
 
+private func invocationPath(_ dottedName: String) -> HeistInvocationPath {
+    .preconditionValidated(dottedName: dottedName)
+}
+
+private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
+    HeistSemanticStringMatch(mode: .exact, value: .literal(value))
+}
+
+private func existsLabel(_ label: String) -> AccessibilityPredicateExpr {
+    .state(.exists(.label(label)))
+}
+
 private struct FailureClassificationExpectation {
     let kind: DiagnosticFailureKind
     let phase: FailurePhase
@@ -256,7 +268,7 @@ final class TheFenceHandlerTests: XCTestCase {
         command: TheFence.Command,
         arguments: [String: HeistValue] = [:],
         contains expectedSubstrings: [String],
-        errorCode: KnownFailureCode,
+        code: KnownFailureCode,
         nextCommand: String,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -274,7 +286,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     file: file, line: line
                 )
             }
-            XCTAssertEqual(failure.details.code, errorCode, file: file, line: line)
+            XCTAssertEqual(failure.details.code, code, file: file, line: line)
             XCTAssertEqual(failure.details.phase, .request, file: file, line: line)
             XCTAssertEqual(failure.details.retryable, false, file: file, line: line)
             XCTAssertEqual(failure.details.hint, nextCommand, file: file, line: line)
@@ -481,7 +493,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try json.string("message"), failure.displayMessage)
         XCTAssertEqual(try json.string("code"), failure.code)
         XCTAssertEqual(try json.string("kind"), failure.kind.rawValue)
-        XCTAssertEqual(try json.string("errorCode"), failure.code)
+        try json.assertMissing("errorCode")
         XCTAssertEqual(try json.string("phase"), failure.phase.rawValue)
         XCTAssertEqual(try json.bool("retryable"), failure.retryable)
         XCTAssertEqual(try json.string("hint"), failure.hint)
@@ -533,7 +545,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("code"), expectedFailureCode)
-        XCTAssertEqual(try json.string("errorCode"), expectedFailureCode)
+        try json.assertMissing("errorCode")
         XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.request.rawValue)
         XCTAssertEqual(try json.string("phase"), FailurePhase.request.rawValue)
         XCTAssertFalse(try json.bool("retryable"))
@@ -588,7 +600,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertEqual(code.retryable, expectation.retryable)
             XCTAssertEqual(code.defaultHint, expectation.hint)
             XCTAssertEqual(details.code, code)
-            XCTAssertEqual(details.errorCode, knownCode.rawValue)
+            XCTAssertEqual(details.code.rawValue, knownCode.rawValue)
             XCTAssertEqual(details.phase, expectation.phase)
             XCTAssertEqual(details.retryable, expectation.retryable)
             XCTAssertEqual(details.hint, expectation.hint)
@@ -653,7 +665,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertEqual(failure.kind, kind, name)
             XCTAssertEqual(failure.phase, phase, name)
             XCTAssertEqual(try json.string("code"), knownCode.rawValue, name)
-            XCTAssertEqual(try json.string("errorCode"), knownCode.rawValue, name)
+            XCTAssertNoThrow(try json.assertMissing("errorCode"), name)
             XCTAssertEqual(try json.string("kind"), kind.rawValue, name)
             XCTAssertEqual(try json.string("phase"), phase.rawValue, name)
             XCTAssertEqual(try detailsJSON.string("code"), knownCode.rawValue, name)
@@ -825,7 +837,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("code"), KnownFailureCode.transportNetworkError.rawValue)
-        XCTAssertEqual(try json.string("errorCode"), KnownFailureCode.transportNetworkError.rawValue)
+        try json.assertMissing("errorCode")
         XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.connection.rawValue)
         XCTAssertEqual(try json.string("phase"), FailurePhase.transport.rawValue)
         XCTAssertTrue(try json.bool("retryable"))
@@ -1374,7 +1386,9 @@ final class TheFenceHandlerTests: XCTestCase {
         arguments["argument"] = .object([
             "type": .string("element_target"),
             "target": .object([
-                "label": stringMatchValue(mode: "exact", value: "Row 1"),
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Row 1")),
+                ]),
                 "unexpected": .string("ignored before"),
             ]),
         ])
@@ -1471,7 +1485,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(catalog.heists[1].parameterKind, .string)
         XCTAssertTrue(catalog.heists[1].requiresArgument)
         XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring string argument")
-        XCTAssertEqual(catalog.heists[1].tags, ["capability", "parameterized", "semantic-action"])
+        XCTAssertEqual(catalog.heists[1].tags, [.capability, .parameterized, .semanticAction])
         XCTAssertNil(catalog.heists[1].parameterName)
         XCTAssertNil(catalog.heists[1].actionCommands)
         XCTAssertNil(catalog.heists[1].nestedRunHeists)
@@ -1522,7 +1536,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(catalog.heists.map(\.name), ["agentFlow", "Cart", "Cart.addItem"])
         let addItem = try XCTUnwrap(catalog.heists.first { $0.name == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
-        XCTAssertEqual(addItem.actionCommands, ["activate"])
+        XCTAssertEqual(addItem.actionCommands, [.activate])
         XCTAssertEqual(addItem.validationStatus, .validated)
 
         let describeResponse = try await fence.execute(
@@ -1537,8 +1551,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(description.name, "Cart.addItem")
         XCTAssertEqual(description.parameterKind, .string)
-        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
-        XCTAssertEqual(description.semanticSurface.targetPredicates, [#"predicate(label=stringRef("item"))"#])
+        XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
+        XCTAssertEqual(description.semanticSurface.targetPredicates, [.template(.label(.ref("item")))])
     }
 
     @ButtonHeistActor
@@ -1601,19 +1615,17 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
         let checkout = try XCTUnwrap(catalog.heists.first { $0.name == "checkout" })
-        XCTAssertEqual(checkout.nestedRunHeists, ["checkout.confirm"])
-        XCTAssertEqual(checkout.actionCommands, ["activate"])
+        XCTAssertEqual(checkout.nestedRunHeists, [invocationPath("checkout.confirm")])
+        XCTAssertEqual(checkout.actionCommands, [.activate])
         XCTAssertEqual(checkout.waitCount, 1)
         XCTAssertEqual(checkout.expectationCount, 1)
         XCTAssertEqual(checkout.semanticSurfaces, [
-            "label=Checkout",
-            "label=Done",
-            "label=Receipt",
-            "identifier=confirm_button",
+            .label(exactSemanticString("Checkout")),
+            .label(exactSemanticString("Done")),
+            .label(exactSemanticString("Receipt")),
+            .identifier(exactSemanticString("confirm_button")),
         ])
         XCTAssertEqual(checkout.validationStatus, .validated)
-        XCTAssertFalse((checkout.semanticSurfaces ?? []).contains { $0.contains("predicate(") })
-        XCTAssertFalse((checkout.semanticSurfaces ?? []).contains { $0.contains("target_ref") })
     }
 
     @ButtonHeistActor
@@ -1699,11 +1711,11 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(description.name, "checkout")
         XCTAssertEqual(description.role, .capability)
-        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
-        XCTAssertEqual(description.semanticSurface.expectations, [#"exists(predicate(label="Done"))"#])
+        XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
+        XCTAssertEqual(description.semanticSurface.expectations, [existsLabel("Done")])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
-            #"predicate(label="Checkout")"#,
-            #"predicate(label="Done")"#,
+            .template(.label("Checkout")),
+            .template(.label("Done")),
         ])
     }
 
@@ -1731,10 +1743,10 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistDescription response, got \(response)")
         }
         XCTAssertEqual(description.name, "checkout")
-        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
+        XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
-            #"predicate(label="Checkout")"#,
-            #"predicate(label="Done")"#,
+            .template(.label("Checkout")),
+            .template(.label("Done")),
         ])
     }
 
@@ -2070,7 +2082,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(
             try decodedElementTarget(
                 target: elementTargetValue([
-                    "label": stringMatchValue(mode: "exact", value: "Save"),
+                    "checks": .array([
+                        predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
+                    ]),
                     "unexpectedTargetField": .string("button_save"),
                 ])
             )
@@ -2218,13 +2232,12 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGestureTargetRejectsHeistIdAndMatcher() async {
+    func testGestureTargetRejectsHeistId() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
             arguments: [
                 "element": elementTargetValue([
                     "heistId": .string("button_save"),
-                    "label": stringMatchValue(mode: "exact", value: "Save"),
                 ]),
             ],
             contains: "Unknown element target field \"heistId\""
@@ -2627,7 +2640,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: .requestMissingTarget,
+            code: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -2692,7 +2705,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: .requestMissingTarget,
+            code: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -2715,7 +2728,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: .requestMissingTarget,
+            code: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -3525,8 +3538,8 @@ final class TheFenceHandlerTests: XCTestCase {
                     "assertions": .array([.object([
                         "type": .string("updated"),
                         "element": elementPredicateValue(identifier: "slider"),
-                        "before": .string("0"),
-                        "after": .string("50"),
+                        "before": stringMatchValue(mode: "exact", value: "0"),
+                        "after": stringMatchValue(mode: "exact", value: "50"),
                         "property": .string("value"),
                 ])]),
             ])]),
@@ -3931,7 +3944,9 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: [
                 "subtree": .object([
                     "element": .object([
-                        "label": stringMatchValue(mode: "exact", value: "Save"),
+                        "checks": .array([
+                            predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
+                        ]),
                         "unexpectedTargetField": .string("button_save"),
                     ]),
                 ]),
@@ -3973,7 +3988,11 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(
             command: .getInterface,
-            values: ["label": stringMatchValue(mode: "exact", value: "Submit")]
+            values: [
+                "checks": .array([
+                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Submit")),
+                ]),
+            ]
         )
 
         guard let (message, _) = mockConn.sent.last,
@@ -4033,11 +4052,20 @@ private func targetValue(
     traits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
-    var target: [String: HeistValue] = [:]
-    if let label { target["label"] = stringMatchValue(mode: "exact", value: label) }
-    if let identifier { target["identifier"] = stringMatchValue(mode: "exact", value: identifier) }
-    if let value { target["value"] = stringMatchValue(mode: "exact", value: value) }
-    if let traits { target["traits"] = .array(traits.map { .string($0) }) }
+    var checks: [HeistValue] = []
+    if let label {
+        checks.append(predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: label)))
+    }
+    if let identifier {
+        checks.append(predicateCheckValue(kind: "identifier", match: stringMatchValue(mode: "exact", value: identifier)))
+    }
+    if let value {
+        checks.append(predicateCheckValue(kind: "value", match: stringMatchValue(mode: "exact", value: value)))
+    }
+    if let traits {
+        checks.append(predicateCheckValue(kind: "traits", values: traits.map { .string($0) }))
+    }
+    var target: [String: HeistValue] = ["checks": .array(checks)]
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return elementTargetValue(target)
 }

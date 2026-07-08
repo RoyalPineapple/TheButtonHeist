@@ -205,7 +205,7 @@ import Testing
             "type": "exists",
             "element": {
               "checks": [
-                { "kind": "label", "match": "Home" }
+                { "kind": "label", "match": { "mode": "exact", "value": "Home" } }
               ]
             }
           },
@@ -222,7 +222,11 @@ import Testing
           "type": "performCustomAction",
           "payload": {
             "actionName": "",
-            "target": { "label": "Message" }
+            "target": {
+              "checks": [
+                { "kind": "label", "match": { "mode": "exact", "value": "Message" } }
+              ]
+            }
           }
         }
         """.utf8))
@@ -231,7 +235,11 @@ import Testing
     expectDataCorrupted("runtime action payload", contains: "custom action name must not be empty") {
         _ = try JSONDecoder().decode(CustomActionTarget.self, from: Data("""
         {
-          "elementTarget": { "label": "Message" },
+          "elementTarget": {
+            "checks": [
+              { "kind": "label", "match": { "mode": "exact", "value": "Message" } }
+            ]
+          },
           "actionName": ""
         }
         """.utf8))
@@ -253,13 +261,13 @@ import Testing
     }
 }
 
-@Test func `action command payloads reject old nested and inline target aliases`() throws {
-    expectDataCorrupted("activate nested target alias", contains: #"Unknown heist action command payload field "target""#) {
+@Test func `action command payloads reject old inline target aliases`() throws {
+    expectDataCorrupted("activate inline target alias", contains: #"Unknown heist action command payload field "label""#) {
         _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
         {
           "type": "activate",
           "payload": {
-            "target": { "label": "Pay" }
+            "label": "Pay"
           }
         }
         """.utf8))

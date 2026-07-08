@@ -341,20 +341,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return bufferedEvents.filter { $0.sequence > cursor.sequence }
     }
 
-    /// Legacy whole-buffer claim for direct test and fallback paths.
-    ///
-    /// Normal action dispatch should prefer `AccessibilityNotificationActionWindow`.
-    func claimPendingEvents() -> [PendingAccessibilityNotificationEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let events = bufferedEvents
-        if activeHeistScopes == 0 {
-            bufferedEvents.removeAll()
-        }
-        return events
-    }
-
     func clearPendingEvents() {
         lock.lock()
         defer { lock.unlock() }

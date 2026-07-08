@@ -30,10 +30,14 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.ref) {
-            try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element target expression")
+            try decoder.rejectUnknownKeys(allowed: Set([CodingKeys.ref.stringValue]), typeName: "element target expression")
             self = try .ref(Self.decodeReference(from: container, key: .ref))
             return
         }
+        try decoder.rejectUnknownKeys(
+            allowed: Set(ElementTarget.inlineFieldNames + ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue)),
+            typeName: "element target expression"
+        )
         let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
         if predicate.hasPredicates {
             let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)

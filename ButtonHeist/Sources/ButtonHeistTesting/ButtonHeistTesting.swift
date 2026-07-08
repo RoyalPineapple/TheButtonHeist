@@ -1,12 +1,12 @@
 #if canImport(UIKit)
 #if DEBUG
+import Foundation
+import XCTest
+
 // Package contract: app-hosted tests import ButtonHeistTesting and author
 // heists directly. Re-exporting the DSL here is intentional and allowlisted by
 // scripts/check-buttonheist-import-contract.sh.
 @_exported import ButtonHeistDSL
-import Darwin
-import Foundation
-import ObjectiveC
 import ThePlans
 import TheInsideJob
 
@@ -386,7 +386,7 @@ func stopJoinedHeistSession(
     line: UInt
 ) {
     guard Thread.isMainThread else {
-        XCTestRuntimeBridge.recordFailure(
+        XCTFail(
             "Joined heist sessions must stop on the main thread so the main run loop can be pumped.",
             file: file,
             line: line
@@ -410,12 +410,12 @@ private func runHeistSyncRequest(
     do {
         request = try makeRequest()
     } catch {
-        XCTestRuntimeBridge.recordFailure("Heist failed before execution: \(error)", file: file, line: line)
+        XCTFail("Heist failed before execution: \(error)", file: file, line: line)
         return nil
     }
 
     guard Thread.isMainThread else {
-        XCTestRuntimeBridge.recordFailure(
+        XCTFail(
             "runHeistSync must be called on the main thread so it can pump the main run loop.",
             file: file,
             line: line
@@ -459,7 +459,7 @@ func runHeistSyncOperation<Value>(
     _ operation: @escaping @Sendable () async throws -> Value
 ) -> Value? {
     guard Thread.isMainThread else {
-        XCTestRuntimeBridge.recordFailure(
+        XCTFail(
             "runHeistSyncOperation must be called on the main thread so it can pump the main run loop.",
             file: file,
             line: line
@@ -493,7 +493,7 @@ private func waitForSynchronousResult<Value>(
     case .success(let value):
         return value
     case .failure(let error):
-        XCTestRuntimeBridge.recordFailure(String(describing: error), file: file, line: line)
+        XCTFail(String(describing: error), file: file, line: line)
         return nil
     case nil:
         return nil
@@ -556,10 +556,9 @@ private struct HeistXCTestFailure: Error, CustomStringConvertible {
     }
 }
 
-/// `@unchecked Sendable` justification: the public state is immutable Sendable
-/// connection metadata. The private `job` is a main-actor runtime handle and
-/// this module only touches it through main-actor stop/start paths.
-public struct JoinedHeistSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+/// Scoped join session metadata plus the main-actor runtime handle that owns the
+/// temporary in-process server.
+public struct JoinedHeistSession: Sendable {
     let job: TheInsideJob
     public let token: String
     public let requestedPort: UInt16
@@ -613,152 +612,6 @@ private enum JoinHeistError: Error, CustomStringConvertible {
         case .listenerDidNotReportPort:
             return "TheInsideJob started, but no listening port was reported."
         }
-    }
-}
-
-private enum XCTestRuntimeBridge {
-    private typealias CurrentTestCaseFunction = @convention(c) () -> AnyObject?
-    private typealias CurrentIssueHandlerFunction = @convention(c) () -> AnyObject?
-    private typealias ObjCNoArgumentFunction = @convention(c) (AnyObject, Selector) -> AnyObject
-    private typealias SourceCodeLocationInitializerFunction = @convention(c) (AnyObject, Selector, NSString, Int) -> AnyObject
-    private typealias SourceCodeContextInitializerFunction = @convention(c) (AnyObject, Selector, AnyObject) -> AnyObject
-    private typealias IssueInitializerFunction = @convention(c) (
-        AnyObject,
-        Selector,
-        Int,
-        NSString,
-        NSString?,
-        AnyObject,
-        AnyObject?,
-        NSArray
-    ) -> AnyObject
-    private typealias RecordFailureFunction = @convention(c) (
-        AnyObject,
-        Selector,
-        NSString,
-        NSString,
-        UInt,
-        Bool
-    ) -> Void
-    private typealias HandleIssueFunction = @convention(c) (AnyObject, Selector, AnyObject) -> Void
-
-    static func recordFailure(_ message: String, file: StaticString, line: UInt) {
-        if recordFailureOnCurrentTestCase(message, file: file, line: line) {
-            return
-        }
-        if recordFailureOnCurrentIssueHandler(message, file: file, line: line) {
-            return
-        }
-        fputs("ButtonHeist XCTest failure bridge unavailable: \(message)\n", stderr)
-    }
-
-    private static func recordFailureOnCurrentTestCase(_ message: String, file: StaticString, line: UInt) -> Bool {
-        guard let testCase = currentTestCase() else {
-            return false
-        }
-
-        let selector = NSSelectorFromString("recordFailureWithDescription:inFile:atLine:expected:")
-        guard testCase.responds(to: selector) else {
-            return false
-        }
-
-        guard let messageSend = symbol(named: "objc_msgSend") else {
-            return false
-        }
-        let recordFailure = unsafeBitCast(messageSend, to: RecordFailureFunction.self)
-        recordFailure(
-            testCase,
-            selector,
-            message as NSString,
-            String(describing: file) as NSString,
-            line,
-            true
-        )
-        return true
-    }
-
-    private static func recordFailureOnCurrentIssueHandler(_ message: String, file: StaticString, line: UInt) -> Bool {
-        guard let handler = currentIssueHandler(),
-              let issue = makeAssertionFailureIssue(message, file: file, line: line),
-              let messageSend = symbol(named: "objc_msgSend") else {
-            return false
-        }
-
-        let handleIssue = unsafeBitCast(messageSend, to: HandleIssueFunction.self)
-        for selectorName in ["handle:", "handleIssue:", "recordIssue:"] {
-            let selector = NSSelectorFromString(selectorName)
-            guard handler.responds(to: selector) else { continue }
-            handleIssue(handler, selector, issue)
-            return true
-        }
-        return false
-    }
-
-    private static func makeAssertionFailureIssue(_ message: String, file: StaticString, line: UInt) -> AnyObject? {
-        guard let issueClass = NSClassFromString("XCTIssue"),
-              let sourceCodeContext = makeSourceCodeContext(file: file, line: line),
-              let messageSend = symbol(named: "objc_msgSend") else {
-            return nil
-        }
-        let allocate = unsafeBitCast(messageSend, to: ObjCNoArgumentFunction.self)
-        let initialize = unsafeBitCast(messageSend, to: IssueInitializerFunction.self)
-        let allocatedIssue = allocate(issueClass, NSSelectorFromString("alloc"))
-        return initialize(
-            allocatedIssue,
-            NSSelectorFromString("initWithType:compactDescription:detailedDescription:sourceCodeContext:associatedError:attachments:"),
-            0,
-            message as NSString,
-            nil,
-            sourceCodeContext,
-            nil,
-            NSArray()
-        )
-    }
-
-    private static func makeSourceCodeContext(file: StaticString, line: UInt) -> AnyObject? {
-        guard let locationClass = NSClassFromString("XCTSourceCodeLocation"),
-              let contextClass = NSClassFromString("XCTSourceCodeContext"),
-              let messageSend = symbol(named: "objc_msgSend") else {
-            return nil
-        }
-
-        let allocate = unsafeBitCast(messageSend, to: ObjCNoArgumentFunction.self)
-        let initializeLocation = unsafeBitCast(messageSend, to: SourceCodeLocationInitializerFunction.self)
-        let allocatedLocation = allocate(locationClass, NSSelectorFromString("alloc"))
-        let location = initializeLocation(
-            allocatedLocation,
-            NSSelectorFromString("initWithFilePath:lineNumber:"),
-            String(describing: file) as NSString,
-            Int(line)
-        )
-
-        let initializeContext = unsafeBitCast(messageSend, to: SourceCodeContextInitializerFunction.self)
-        let allocatedContext = allocate(contextClass, NSSelectorFromString("alloc"))
-        return initializeContext(
-            allocatedContext,
-            NSSelectorFromString("initWithLocation:"),
-            location
-        )
-    }
-
-    private static func currentIssueHandler() -> AnyObject? {
-        guard let symbol = symbol(named: "_XCTCurrentIssueHandler") else {
-            return nil
-        }
-        let function = unsafeBitCast(symbol, to: CurrentIssueHandlerFunction.self)
-        return function()
-    }
-
-    private static func currentTestCase() -> AnyObject? {
-        guard let symbol = symbol(named: "_XCTCurrentTestCase") else {
-            return nil
-        }
-        let function = unsafeBitCast(symbol, to: CurrentTestCaseFunction.self)
-        return function()
-    }
-
-    private static func symbol(named name: String) -> UnsafeMutableRawPointer? {
-        dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)
     }
 }
 #endif // DEBUG

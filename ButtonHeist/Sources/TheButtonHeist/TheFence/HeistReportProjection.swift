@@ -123,6 +123,7 @@ struct HeistReportNodeProjection: Sendable {
     init(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
         let step = node.step
         let report = node.reportFacts
+        let results = report.results
         path = report.path
         kind = report.kind
         capability = report.capabilityName
@@ -139,14 +140,14 @@ struct HeistReportNodeProjection: Sendable {
             HeistReportFailureProjection(
                 detail: $0,
                 message: report.failureMessage ?? $0.observed,
-                actionErrorKind: report.actionErrorKind
+                actionErrorKind: results.actionErrorKind
             )
         }
         failureCategory = report.failureCategory
         abortedAtChildPath = step.abortedAtChildPath
-        expectation = report.expectation.map { ExpectationProjection(result: $0) }
-        actionErrorKind = report.actionErrorKind
-        traceDelta = report.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
+        expectation = results.expectation.map { ExpectationProjection(result: $0) }
+        actionErrorKind = results.actionErrorKind
+        traceDelta = results.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }
         children = node.children.map { HeistReportNodeProjection(node: $0, profile: profile) }

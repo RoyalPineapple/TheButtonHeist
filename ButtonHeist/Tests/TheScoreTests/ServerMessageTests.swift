@@ -315,7 +315,9 @@ final class ServerMessageTests: XCTestCase {
         let checks = try encodedTarget.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "label")
-        XCTAssertEqual(try checks[0].string("match"), "Delete")
+        let labelMatch = try checks[0].object("match")
+        XCTAssertEqual(try labelMatch.string("mode"), "exact")
+        XCTAssertEqual(try labelMatch.string("value"), "Delete")
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
         let encodedElement = try subjectEvidence.object("element")
@@ -331,7 +333,7 @@ final class ServerMessageTests: XCTestCase {
         {
           "source": "resolvedSemanticTarget",
           "phase": "resolvedBeforeDispatch",
-          "target": { "label": "Delete" },
+          "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
           "element": {
             "description": "Delete",
             "label": "Delete",

@@ -17,7 +17,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case screenName
     case screenId
     case errorClass
-    case errorCode
+    case code
     case kind
     case phase
     case retryable
@@ -106,7 +106,7 @@ private struct PublicActionResultModel {
         try container.encodeIfPresent(screenName, forKey: .screenName)
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try container.encodeIfPresent(failure?.errorClass, forKey: .errorClass)
-        try container.encodeIfPresent(failure?.errorCode, forKey: .errorCode)
+        try container.encodeIfPresent(failure?.code, forKey: .code)
         try container.encodeIfPresent(failure?.kind, forKey: .kind)
         try container.encodeIfPresent(failure?.phase, forKey: .phase)
         try container.encodeIfPresent(failure?.retryable, forKey: .retryable)
@@ -168,7 +168,7 @@ struct PublicHeistExecutionActionResult: Encodable {
 
 private struct PublicActionFailure {
     let errorClass: String
-    let errorCode: String
+    let code: String
     let kind: String
     let phase: String
     let retryable: Bool
@@ -176,7 +176,7 @@ private struct PublicActionFailure {
 
     init(projection: ActionFailureProjection) {
         self.errorClass = projection.errorClass
-        self.errorCode = projection.errorCode
+        self.code = projection.code
         self.kind = projection.kind
         self.phase = projection.phase
         self.retryable = projection.retryable
@@ -221,12 +221,12 @@ struct ActionFailureProjection {
     let errorClass: String
     let diagnosticFailure: DiagnosticFailure
 
-    var errorCode: String { diagnosticFailure.code }
+    var code: String { diagnosticFailure.code }
     var kind: String { diagnosticFailure.kind.rawValue }
     var phase: String { diagnosticFailure.phase.rawValue }
     var retryable: Bool { diagnosticFailure.retryable }
     var hint: String? { diagnosticFailure.hint }
-    var compactCode: String { errorCode }
+    var compactCode: String { code }
 }
 
 struct PublicRotorResult: Encodable {
@@ -459,7 +459,6 @@ struct PublicHeistFailureDetail: Encodable {
     let activationTrace: ActivationTrace?
     let code: String
     let kind: String
-    let errorCode: String
     let phase: String
     let retryable: Bool
     let hint: String?
@@ -472,7 +471,6 @@ struct PublicHeistFailureDetail: Encodable {
         activationTrace = projection.detail.activationTrace
         code = projection.diagnosticFailure.code
         kind = projection.diagnosticFailure.kind.rawValue
-        errorCode = projection.diagnosticFailure.code
         phase = projection.diagnosticFailure.phase.rawValue
         retryable = projection.diagnosticFailure.retryable
         hint = projection.diagnosticFailure.hint

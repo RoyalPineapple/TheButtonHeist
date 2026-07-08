@@ -7,7 +7,7 @@ import ThePlans
 extension TheStash {
     func minimumUniqueTarget(for screenElement: ScreenElement) -> ElementTarget? {
         let elements = orderedSemanticElements.map {
-            (id: $0.heistId.predicateSelectionElementId, element: $0.element)
+            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return minimumUniquePredicate(
             for: screenElement.heistId.predicateSelectionElementId,

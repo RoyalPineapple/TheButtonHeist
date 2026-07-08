@@ -137,7 +137,6 @@ struct PublicHeistFailureDetailDTO: Decodable, Equatable {
     let activationTrace: ActivationTrace?
     let code: String
     let kind: String
-    let errorCode: String
     let phase: String
     let retryable: Bool
     let hint: String?
@@ -359,7 +358,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
     let heistExecution: PublicHeistExecutionActionResultDTO?
     let screenId: String?
     let errorClass: String?
-    let errorCode: String?
+    let code: String?
     let kind: String?
     let phase: String?
     let retryable: Bool?
@@ -378,7 +377,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         heistExecution: PublicHeistExecutionActionResultDTO? = nil,
         screenId: String? = nil,
         errorClass: String? = nil,
-        errorCode: String? = nil,
+        code: String? = nil,
         kind: String? = nil,
         phase: String? = nil,
         retryable: Bool? = nil,
@@ -396,7 +395,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         self.heistExecution = heistExecution
         self.screenId = screenId
         self.errorClass = errorClass
-        self.errorCode = errorCode
+        self.code = code
         self.kind = kind
         self.phase = phase
         self.retryable = retryable

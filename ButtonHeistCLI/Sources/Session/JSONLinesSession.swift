@@ -83,7 +83,8 @@ final class JSONLinesSession {
         }
 
         do {
-            let response = try await fence.execute(parsedRequest.operation)
+            let operation = try fence.admit(parsedRequest.input)
+            let response = try await fence.execute(operation)
             return CLIRunner.ResponseEnvelope(response: response, requestId: parsedRequest.requestId)
         } catch {
             return CLIRunner.ResponseEnvelope(response: .failure(error), requestId: parsedRequest.requestId)

@@ -50,14 +50,14 @@ final class ScrollToVisibleTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {
-        let data = Data(#"{"label":"Settings","foo":"bar"}"#.utf8)
+        let data = Data(#"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}],"foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "foo""#])
         }
     }
 
     func testScrollToVisibleTargetRejectsPublicContainerName() throws {
-        let data = Data(#"{"label":"Settings","containerName":"main_scroll"}"#.utf8)
+        let data = Data(#"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}],"containerName":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "containerName""#])
         }

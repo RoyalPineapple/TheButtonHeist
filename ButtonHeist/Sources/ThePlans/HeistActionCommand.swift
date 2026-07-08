@@ -249,6 +249,7 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
     let target: ElementTargetExpr
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
+        case target
         case targetRef = "target_ref"
     }
 
@@ -257,34 +258,14 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
-        try rejectUnknownInlineTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetRef = container.contains(.targetRef)
-        let inlineTarget = try ElementTargetExpr.decodeInlineIfPresent(from: decoder)
-        let intentCount = [hasTargetRef, inlineTarget != nil].filter { $0 }.count
-        guard intentCount == 1 else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "target payload requires exactly one of target_ref or inline target fields"
-            ))
-        }
-        if let inlineTarget {
-            target = inlineTarget
-        } else {
-            target = .ref(try HeistReferenceName.decode(from: container, forKey: .targetRef))
-        }
+        target = try Self.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
     }
 
     func encode(to encoder: Encoder) throws {
-        switch target {
-        case .target(let target):
-            try target.encode(to: encoder)
-        case .predicate:
-            try target.encode(to: encoder)
-        case .ref(let reference):
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(reference, forKey: .targetRef)
-        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try Self.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
     }
 }
 
@@ -472,7 +453,7 @@ private extension TargetExprPayload {
         ) else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
-                debugDescription: "target payload requires target, target_ref, or inline target fields"
+                debugDescription: "target payload requires target or target_ref"
             ))
         }
         return target
@@ -516,12 +497,4 @@ private extension TargetExprPayload {
             try container.encode(reference, forKey: refKey)
         }
     }
-}
-
-private func rejectUnknownInlineTargetExprPayloadKeys(
-    from decoder: Decoder,
-    commandFields: [String]
-) throws {
-    let allowed = Set(commandFields + ElementTargetExpr.inlineFieldNames)
-    try decoder.rejectUnknownKeys(allowed: allowed, typeName: "heist action command payload")
 }

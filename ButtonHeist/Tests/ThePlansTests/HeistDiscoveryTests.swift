@@ -7,6 +7,20 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private func invocation(_ dottedName: String) -> HeistInvocationPath {
+    .preconditionValidated(dottedName: dottedName)
+}
+
+private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
+    HeistSemanticStringMatch(mode: .exact, value: .literal(value))
+}
+
+private func existsLabel(_ label: String) -> AccessibilityPredicateExpr {
+    .state(.exists(.label(label)))
+}
+
+private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.screenScope())
+
 @Test func `list heists includes root only entry`() throws {
     let catalog = try HeistPlan(
         name: "checkout",
@@ -18,7 +32,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(catalog.heists[0].parameterKind == .none)
     #expect(catalog.heists[0].requiresArgument == false)
     #expect(catalog.heists[0].summary == "Root entry heist")
-    #expect(catalog.heists[0].tags == ["entry"])
+    #expect(catalog.heists[0].tags == [.entry])
     #expect(catalog.heists[0].parameterName == nil)
     #expect(catalog.heists[0].nestedRunHeists == nil)
     #expect(catalog.heists[0].actionCommands == nil)
@@ -43,7 +57,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(catalog.heists[1].parameterKind == .none)
     #expect(catalog.heists[1].requiresArgument == false)
     #expect(catalog.heists[1].summary == "Reusable heist capability")
-    #expect(catalog.heists[1].tags == ["capability"])
+    #expect(catalog.heists[1].tags == [.capability])
     #expect(catalog.heists[1].parameterName == nil)
 }
 
@@ -67,7 +81,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(catalog.heists[1].parameterKind == .string)
     #expect(catalog.heists[1].requiresArgument == true)
     #expect(catalog.heists[1].summary == "Reusable heist capability requiring string argument")
-    #expect(catalog.heists[1].tags == ["capability", "parameterized", "semantic-action"])
+    #expect(catalog.heists[1].tags == [.capability, .parameterized, .semanticAction])
     #expect(catalog.heists[1].parameterName == nil)
 }
 
@@ -91,7 +105,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(catalog.heists[1].parameterKind == .elementTarget)
     #expect(catalog.heists[1].requiresArgument == true)
     #expect(catalog.heists[1].summary == "Reusable heist capability requiring element_target argument")
-    #expect(catalog.heists[1].tags == ["capability", "parameterized", "semantic-action"])
+    #expect(catalog.heists[1].tags == [.capability, .parameterized, .semanticAction])
     #expect(catalog.heists[1].parameterName == nil)
 }
 
@@ -100,7 +114,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
 
     #expect(checkout.summary == "Reusable heist capability")
-    #expect(checkout.tags == ["capability", "composed", "assertion", "semantic-action"])
+    #expect(checkout.tags == [.capability, .composed, .assertion, .semanticAction])
     #expect(checkout.parameterName == nil)
     #expect(checkout.nestedRunHeists == nil)
     #expect(checkout.actionCommands == nil)
@@ -115,21 +129,18 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
 
     #expect(checkout.parameterName == nil)
-    #expect(checkout.nestedRunHeists == ["checkout.confirm"])
-    #expect(checkout.actionCommands == ["activate"])
+    #expect(checkout.nestedRunHeists == [invocation("checkout.confirm")])
+    #expect(checkout.actionCommands == [.activate])
     #expect(checkout.waitCount == 1)
     #expect(checkout.expectationCount == 1)
     #expect(checkout.semanticSurfaces == [
-        "label=Checkout",
-        "label=Done",
-        "label=Confirm",
-        "identifier=confirmation_button",
-        "traits=button",
+        .label(exactSemanticString("Checkout")),
+        .label(exactSemanticString("Done")),
+        .label(exactSemanticString("Confirm")),
+        .identifier(exactSemanticString("confirmation_button")),
+        .traits([.button]),
     ])
     #expect(checkout.validationStatus == .validated)
-    #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("predicate(") }) == false)
-    #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("point") }) == false)
-    #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("target_ref") }) == false)
 }
 
 @Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
@@ -170,12 +181,12 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     ).heistCatalog(detail: .detailed)
 
     let pay = try #require(catalog.heists.first)
-    #expect(pay.actionCommands == ["activate"])
+    #expect(pay.actionCommands == [.activate])
     #expect(pay.semanticSurfaces == [
-        "label=Pay",
-        "traits=button|link",
+        .label(exactSemanticString("Pay")),
+        .traits([.button, .link]),
     ])
-    #expect(pay.tags == ["entry", "semantic-action"])
+    #expect(pay.tags == [.entry, .semanticAction])
 }
 
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
@@ -212,7 +223,7 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     #expect(root.requiresArgument)
     #expect(root.parameterName == nil)
     #expect(root.summary == "Root entry heist requiring string argument")
-    #expect(root.tags == ["entry", "parameterized", "text-input"])
+    #expect(root.tags == [.entry, .parameterized, .textInput])
 }
 
 @Test func `describe root entry`() throws {
@@ -271,9 +282,9 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         body: [.warn(WarnStep(message: "ready"))]
     ).describeHeist(named: "checkout")
 
-    #expect(description.semanticSurface.nestedRunHeists == ["checkout.confirm"])
-    #expect(description.semanticSurface.actionCommands == ["activate"])
-    #expect(description.semanticSurface.targetPredicates.contains(#"predicate(label="Confirm")"#))
+    #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
+    #expect(description.semanticSurface.actionCommands == [.activate])
+    #expect(description.semanticSurface.targetPredicates.contains(.template(.label("Confirm"))))
 }
 
 @Test func `describe action targets and predicates`() throws {
@@ -284,8 +295,8 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         ]
     ).describeHeist(named: "activateSave")
 
-    #expect(description.semanticSurface.actionCommands == ["activate"])
-    #expect(description.semanticSurface.targetPredicates == [#"predicate(identifier="save_button")"#])
+    #expect(description.semanticSurface.actionCommands == [.activate])
+    #expect(description.semanticSurface.targetPredicates == [.template(.identifier(.literal("save_button")))])
 }
 
 @Test func `describe waits expectations and expected effects`() throws {
@@ -299,11 +310,11 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         ]
     ).describeHeist(named: "submit")
 
-    #expect(description.semanticSurface.expectations == [#"exists(predicate(label="Done"))"#])
-    #expect(description.semanticSurface.waits == ["change(screen(*))"])
+    #expect(description.semanticSurface.expectations == [existsLabel("Done")])
+    #expect(description.semanticSurface.waits == [screenChangePredicate])
     #expect(description.semanticSurface.expectedEffects == [
-        #"exists(predicate(label="Done"))"#,
-        "change(screen(*))",
+        existsLabel("Done"),
+        screenChangePredicate,
     ])
 }
 
@@ -318,9 +329,9 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         ]
     ).describeHeist(named: "submit")
 
-    #expect(description.semanticSurface.expectations == [#"exists(predicate(label="Done"))"#])
-    #expect(description.semanticSurface.waits == [#"exists(predicate(label="Done"))"#])
-    #expect(description.semanticSurface.expectedEffects == [#"exists(predicate(label="Done"))"#])
+    #expect(description.semanticSurface.expectations == [existsLabel("Done")])
+    #expect(description.semanticSurface.waits == [existsLabel("Done")])
+    #expect(description.semanticSurface.expectedEffects == [existsLabel("Done")])
 }
 
 @Test func `describe missing name reports available names`() throws {
