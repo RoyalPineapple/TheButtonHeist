@@ -56,6 +56,20 @@ import Testing
     #expect(plan == expected)
 }
 
+@Test func `runtime parser accepts current screen identity predicates`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))
+    WaitFor(.onScreen(id: "checkout"), timeout: .seconds(1))
+    """))
+    let expected = try HeistPlan(body: [
+        .wait(WaitStep(predicate: .onScreen(header: "Checkout"), timeout: 2)),
+        .wait(WaitStep(predicate: .onScreen(id: "checkout"), timeout: 1)),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `runtime parser rejects exact StringMatch source spelling`() {
     #expect(throws: HeistPlanSourceCompilerError.self) {
         _ = try HeistPlanSourceCompiler().compile(root("""

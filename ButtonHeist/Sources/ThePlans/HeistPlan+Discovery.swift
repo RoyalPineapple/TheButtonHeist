@@ -805,6 +805,8 @@ private struct HeistSemanticSurfaceBuilder {
             appendTargetPredicate(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
+        case .screen:
+            break
         case .all(let states):
             for state in states {
                 appendPredicateTargets(state)
@@ -819,6 +821,8 @@ private struct HeistSemanticSurfaceBuilder {
             appendSemanticSurfaces(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
+        case .screen:
+            break
         case .all(let states):
             for state in states {
                 appendPredicateTargets(state)

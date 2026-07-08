@@ -55,6 +55,11 @@ func `broad string matches reject refs that resolve empty`() throws {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
 
+    let screen = StatePredicateExpr.onScreen(header: .contains(.ref("titlePart")))
+    expectExpressionError(.invalidStringMatch(mode: "contains")) {
+        try screen.resolve(in: HeistExecutionEnvironment(strings: ["titlePart": ""]))
+    }
+
     let update = ElementUpdatePredicateExpr(change: .value(before: .contains(.ref("fromPart"))))
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
         try update.resolve(in: HeistExecutionEnvironment(strings: ["fromPart": ""]))
@@ -92,7 +97,8 @@ func `nested predicate resolution preserves state and change semantics`() throws
     let expression = AccessibilityPredicateExpr.change(.screen(.all(
         .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
         .missingTarget(.ref("ctaTarget")),
-        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart"))))
+        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
+        .onScreen(header: .exact(.ref("title")))
     )))
 
     let environment = HeistExecutionEnvironment(
@@ -104,7 +110,8 @@ func `nested predicate resolution preserves state and change semantics`() throws
     let expected = AccessibilityPredicate.change(.screen(.all(
         .exists(ElementPredicate(label: "Dashboard")),
         .missingTarget(target),
-        .exists(ElementPredicate(value: .contains("Ready")))
+        .exists(ElementPredicate(value: .contains("Ready"))),
+        .onScreen(header: "Dashboard")
     )))
 
     #expect(resolved == expected)
@@ -128,6 +135,14 @@ func `expression codable shapes remain stable`() throws {
     #expect(try sortedJSON(template) == expectedTemplateJSON)
 
     #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
+    #expect(
+        try sortedJSON(StatePredicateExpr.onScreen(id: "checkout")) ==
+        #"{"id":"checkout","type":"screen"}"#
+    )
+    #expect(
+        try sortedJSON(StatePredicateExpr.onScreen(header: "Checkout")) ==
+        #"{"header":{"mode":"exact","value":"Checkout"},"type":"screen"}"#
+    )
 
     let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
         element: ElementPredicateTemplate(label: .exact(.ref("item"))),

@@ -7,14 +7,15 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     case missing(ElementPredicateTemplate)
     case existsTarget(ElementTargetExpr)
     case missingTarget(ElementTargetExpr)
+    case screen(ScreenIdentityPredicateExpr)
     case all(NonEmptyArray<StatePredicateExpr>)
 
     private enum WireType: String {
-        case exists, missing, all
+        case exists, missing, screen, all
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, target, targetRef = "target_ref", states
+        case type, element, target, targetRef = "target_ref", id, header, states
     }
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.State {
@@ -27,6 +28,8 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             return .existsTarget(try target.resolve(in: environment))
         case .missingTarget(let target):
             return .missingTarget(try target.resolve(in: environment))
+        case .screen(let identity):
+            return .screen(try identity.resolve(in: environment))
         case .all(let states):
             return .all(try states.mapNonEmpty { try $0.resolve(in: environment) })
         }
@@ -39,7 +42,7 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, all"
+                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, screen, all"
             )
         }
         switch wireType {
@@ -47,6 +50,8 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             self = try Self.decodeElementState(decoder, container, predicateState: Self.exists, targetState: Self.existsTarget)
         case .missing:
             self = try Self.decodeElementState(decoder, container, predicateState: Self.missing, targetState: Self.missingTarget)
+        case .screen:
+            self = .screen(try ScreenIdentityPredicateExpr(from: decoder))
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate expression")
             let states = try container.decode([StatePredicateExpr].self, forKey: .states)
@@ -76,6 +81,14 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         case .missingTarget(let target):
             try container.encode(WireType.missing.rawValue, forKey: .type)
             try Self.encode(target, into: &container)
+        case .screen(let identity):
+            try container.encode(WireType.screen.rawValue, forKey: .type)
+            switch identity {
+            case .id(let id):
+                try container.encode(id, forKey: .id)
+            case .header(let header):
+                try container.encode(header, forKey: .header)
+            }
         case .all(let states):
             try container.encode(WireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
@@ -134,6 +147,7 @@ extension StatePredicateExpr: CustomStringConvertible {
         case .missing(let predicate): return ScoreDescription.call("missing", [predicate.description])
         case .existsTarget(let target): return ScoreDescription.call("exists", [target.description])
         case .missingTarget(let target): return ScoreDescription.call("missing", [target.description])
+        case .screen(let identity): return identity.description
         case .all(let states): return ScoreDescription.call("all", states.map(\.description))
         }
     }
@@ -150,6 +164,8 @@ public extension StatePredicateExpr {
             self = .existsTarget(ElementTargetExpr(target))
         case .missingTarget(let target):
             self = .missingTarget(ElementTargetExpr(target))
+        case .screen(let identity):
+            self = .screen(ScreenIdentityPredicateExpr(identity))
         case .all(let states):
             self = .all(states.mapNonEmpty(StatePredicateExpr.init))
         }

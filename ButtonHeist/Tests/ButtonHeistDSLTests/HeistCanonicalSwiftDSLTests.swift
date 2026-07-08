@@ -608,7 +608,9 @@ private let fullASTJSON = """
       "action": {
         "command": {
           "type": "activate",
-          "payload": { "label": "Sign In" }
+          "payload": {
+            "target": { "checks": [{ "kind": "label", "match": "Sign In" }] }
+          }
         },
         "expectation": {
           "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Home" }] } },
@@ -689,7 +691,7 @@ private let fullASTJSON = """
                 "type": "typeText",
                 "payload": {
                   "text_ref": "item",
-                  "target": { "label": "Add item" }
+                  "target": { "checks": [{ "kind": "label", "match": "Add item" }] }
                 }
               },
               "expectation": {
@@ -751,7 +753,7 @@ private let invalidStringLoopParameterJSON = """
                 "type": "typeText",
                 "payload": {
                   "text_ref": "target-name",
-                  "target": { "label": "Add item" }
+                  "target": { "checks": [{ "kind": "label", "match": "Add item" }] }
                 }
               }
             }

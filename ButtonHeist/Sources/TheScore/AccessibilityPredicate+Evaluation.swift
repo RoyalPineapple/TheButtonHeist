@@ -172,6 +172,15 @@ package extension AccessibilityPredicate.State {
                 met: met,
                 actual: met ? nil : requirement.failureDescription(for: target)
             )
+        case .screen(let identity):
+            let elements = graph.all.elements
+            let screenId = InterfaceSummary.screenId(forProjectedElements: elements)
+            let header = InterfaceSummary.screenTitle(forProjectedElements: elements)
+            let met = identity.matches(screenId: screenId, header: header)
+            return PredicateEvaluationResult(
+                met: met,
+                actual: met ? nil : identity.failureDescription(screenId: screenId, header: header)
+            )
         case .all(let states):
             let failures = states.compactMap { state -> String? in
                 let outcome = state.evaluate(in: graph)
@@ -182,6 +191,21 @@ package extension AccessibilityPredicate.State {
                 actual: failures.isEmpty ? nil : failures.joined(separator: "; ")
             )
         }
+    }
+}
+
+private extension ScreenIdentityPredicate {
+    func failureDescription(screenId: String?, header: String?) -> String {
+        let current = [
+            screenId.map { "id=\(ScoreDescription.quoted($0))" },
+            header.map { "header=\(ScoreDescription.quoted($0))" },
+        ].compactMap { $0 }
+
+        guard !current.isEmpty else {
+            return "current screen has no accessibility identity; expected \(description)"
+        }
+
+        return "current screen \(current.joined(separator: ", ")) does not match \(description)"
     }
 }
 

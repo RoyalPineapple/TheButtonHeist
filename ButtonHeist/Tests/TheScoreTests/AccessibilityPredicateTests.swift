@@ -35,6 +35,27 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(decoded, predicate)
     }
 
+    func testScreenHeaderEncodeDecode() throws {
+        let predicate = AccessibilityPredicate.state(.onScreen(header: "Checkout"))
+        let data = try JSONEncoder().encode(predicate)
+        let object = try JSONProbe(data: data)
+
+        XCTAssertEqual(try object.string("type"), "screen")
+        XCTAssertEqual(try object.object("header").string("mode"), "exact")
+        XCTAssertEqual(try object.object("header").string("value"), "Checkout")
+        XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
+    }
+
+    func testScreenIdEncodeDecode() throws {
+        let predicate = AccessibilityPredicate.state(.onScreen(id: "checkout"))
+        let data = try JSONEncoder().encode(predicate)
+        let object = try JSONProbe(data: data)
+
+        XCTAssertEqual(try object.string("type"), "screen")
+        XCTAssertEqual(try object.string("id"), "checkout")
+        XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
+    }
+
     // MARK: - Presence Evaluation
 
     func testPresentMatchesAnyValueFour() {
@@ -48,6 +69,51 @@ final class AccessibilityPredicateTests: XCTestCase {
             .evaluate(in: [makeElement(label: "Ready")])
 
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
+    }
+
+    func testScreenHeaderMatchesCurrentScreenWithoutTransition() {
+        let elements = [
+            makeElement(label: "Checkout", traits: [.header]),
+            makeElement(label: "Pay", traits: [.button]),
+        ]
+        let result = AccessibilityPredicate
+            .onScreen(header: "Checkout")
+            .evaluate(currentElements: elements)
+
+        XCTAssertEqual(result, ExpectationResult(met: true, predicate: .onScreen(header: "Checkout")))
+    }
+
+    func testScreenIdMatchesDerivedCurrentScreenIdWithoutTransition() {
+        let elements = [
+            makeElement(label: "Checkout", traits: [.header]),
+            makeElement(label: "Pay", traits: [.button]),
+        ]
+        let result = AccessibilityPredicate
+            .onScreen(id: "checkout")
+            .evaluate(currentElements: elements)
+
+        XCTAssertEqual(result, ExpectationResult(met: true, predicate: .onScreen(id: "checkout")))
+    }
+
+    func testScreenIdentityFailureReportsMissingAccessibilityIdentity() {
+        let elements = [makeElement(label: "Pay", traits: [.button])]
+        let result = AccessibilityPredicate
+            .onScreen(header: "Checkout")
+            .evaluate(currentElements: elements)
+
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.predicate, .onScreen(header: "Checkout"))
+        XCTAssertEqual(result.actual, #"current screen has no accessibility identity; expected screen(header="Checkout")"#)
+    }
+
+    func testScreenIdentityFailureReportsCurrentScreenIdentity() {
+        let elements = [makeElement(label: "Cart", traits: [.header])]
+        let result = AccessibilityPredicate
+            .onScreen(header: "Checkout")
+            .evaluate(currentElements: elements)
+
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, #"current screen id="cart", header="Cart" does not match screen(header="Checkout")"#)
     }
 
     func testPresentNarrowsByIdentifierAndValue() {

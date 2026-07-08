@@ -73,6 +73,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".exists(\(try render(target: target, environment: environment)))"
         case .missingTarget(let target):
             return ".missing(\(try render(target: target, environment: environment)))"
+        case .screen(let identity):
+            return try render(screenIdentity: identity, environment: environment)
         case .all(let states):
             return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
         }
@@ -88,8 +90,28 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".exists(\(render(target: target)))"
         case .missingTarget(let target):
             return ".missing(\(render(target: target)))"
+        case .screen(let identity):
+            return render(screenIdentity: identity)
         case .all(let states):
             return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
+        }
+    }
+
+    func render(screenIdentity identity: ScreenIdentityPredicateExpr, environment: RenderEnvironment) throws -> String {
+        switch identity {
+        case .id(let id):
+            return try ".onScreen(id: \(render(string: id, environment: environment)))"
+        case .header(let header):
+            return try ".onScreen(header: \(renderCallArgument(header, environment: environment)))"
+        }
+    }
+
+    func render(screenIdentity identity: ScreenIdentityPredicate) -> String {
+        switch identity {
+        case .id(let id):
+            return ".onScreen(id: \(ScoreDescription.quoted(id.rawValue)))"
+        case .header(let header):
+            return ".onScreen(header: \(renderCallArgument(header)))"
         }
     }
 
@@ -231,6 +253,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try ".exists(\(render(target: target, environment: environment)))"
         case .missingTarget(let target):
             return try ".missing(\(render(target: target, environment: environment)))"
+        case .screen(let identity):
+            return try render(screenIdentity: identity, environment: environment)
         case .all(let states):
             return try ".all(\(states.map { try renderScreenAssertion($0, environment: environment) }.joined(separator: ", ")))"
         }
@@ -246,6 +270,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".exists(\(render(target: target)))"
         case .missingTarget(let target):
             return ".missing(\(render(target: target)))"
+        case .screen(let identity):
+            return render(screenIdentity: identity)
         case .all(let states):
             return ".all(\(states.map(renderScreenAssertion).joined(separator: ", ")))"
         }
