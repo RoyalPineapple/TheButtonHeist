@@ -215,11 +215,14 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
-        let demand = stash.beginSemanticObservationDemand(scope: target.predicate.observationScope)
+        let step = ResolvedWaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
+        let observationPlan = WaitObservationPlan(step: step)
+        let demand = stash.beginSemanticObservationDemand(scope: observationPlan.scope)
         defer { demand.cancel() }
 
         let receipt = await interactionObservation.waitForPredicate(
-            WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
+            step,
+            observationPlan: observationPlan
         )
         return receipt.actionResult
     }

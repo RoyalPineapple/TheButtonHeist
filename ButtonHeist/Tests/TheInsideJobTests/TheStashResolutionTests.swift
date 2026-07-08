@@ -577,8 +577,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            code: 1001,
-            name: "layoutChanged",
+            kind: .elementChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(identity),
             associatedElement: .none
@@ -604,8 +603,7 @@ final class TheStashResolutionTests: XCTestCase {
         ])
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            code: 1001,
-            name: "screenChanged",
+            kind: .elementChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(AccessibilityNotificationObjectIdentity(
                 object: payloadObject,
@@ -673,7 +671,7 @@ final class TheStashResolutionTests: XCTestCase {
             return XCTFail("Expected clean settle to commit")
         }
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
-        XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().map(\.code), [1008])
+        XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().map(\.kind), [.announcement])
     }
 
     func testPostActionFailedSettlePreservesPendingAccessibilityNotificationsDuringHeistScope() async {
@@ -701,8 +699,8 @@ final class TheStashResolutionTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            bagman.accessibilityNotifications.pendingEvents().map(\.code),
-            [1008],
+            bagman.accessibilityNotifications.pendingEvents().map(\.kind),
+            [.announcement],
             "The action window may claim attribution, but the heist owns the stream lifetime."
         )
     }

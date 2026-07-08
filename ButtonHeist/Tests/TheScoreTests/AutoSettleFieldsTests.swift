@@ -49,8 +49,7 @@ final class AutoSettleFieldsTests: XCTestCase {
                 accessibilityNotifications: [
                     AccessibilityNotificationEvidence(
                         sequence: 7,
-                        code: 1000,
-                        name: "screenChanged",
+                        kind: .screenChanged,
                         timestamp: Date(timeIntervalSince1970: 7),
                         notificationData: .string("Checkout"),
                         associatedElement: .none
@@ -66,7 +65,7 @@ final class AutoSettleFieldsTests: XCTestCase {
 
         XCTAssertEqual(result.announcement, "Checkout")
         XCTAssertEqual(decoded.announcement, "Checkout")
-        XCTAssertEqual(trace.capturedAnnouncements.first?.notificationName, "screenChanged")
+        XCTAssertEqual(trace.capturedAnnouncements.first?.kind, .screenChanged)
     }
 
     // MARK: - Delta transient payload

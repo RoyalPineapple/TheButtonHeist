@@ -12,6 +12,147 @@ import XCTest
 @MainActor
 final class HeistReceiptTests: XCTestCase {
 
+    func testReceiptFolderBuildsPassedOutcome() {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let intent = receiptActionIntent()
+        let evidence = receiptActionEvidence()
+
+        let receipt = brains.heistActionReceipt(
+            path: "$.body[0]",
+            durationMs: 12,
+            intent: intent,
+            outcome: .passed(evidence: .action(evidence))
+        )
+
+        XCTAssertEqual(
+            receipt,
+            .passed(
+                path: "$.body[0]",
+                receiptKind: .action,
+                durationMs: 12,
+                intent: intent,
+                evidence: evidence
+            )
+        )
+    }
+
+    func testReceiptFolderBuildsFailedOutcome() {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let evidence = receiptActionEvidence(success: false)
+        let failure = receiptFailure(observed: "expected failure")
+        let intent = receiptActionIntent()
+
+        let receipt = brains.heistActionReceipt(
+            path: "$.body[0]",
+            durationMs: 7,
+            intent: intent,
+            outcome: .failed(evidence: .action(evidence), failure: failure)
+        )
+
+        XCTAssertEqual(
+            receipt,
+            .failed(
+                path: "$.body[0]",
+                receiptKind: .action,
+                durationMs: 7,
+                intent: intent,
+                evidence: evidence,
+                failure: failure
+            )
+        )
+    }
+
+    func testReceiptFolderBuildsChildAbortedOutcome() throws {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let evidence = receiptActionEvidence()
+        let failure = receiptFailure(observed: "child failed")
+        let intent = receiptActionIntent()
+        let child = HeistExecutionStepResult.failed(
+            path: "$.body[0].children[0]",
+            kind: .fail,
+            durationMs: 3,
+            intent: .fail(message: "stop"),
+            failure: receiptFailure(observed: "stop")
+        )
+        let children = TheBrains.HeistReceiptChildren([child])
+        let abortedChildren = try XCTUnwrap(children.aborted)
+
+        let receipt = brains.heistActionReceipt(
+            path: "$.body[0]",
+            durationMs: 9,
+            intent: intent,
+            outcome: .childAborted(
+                evidence: .action(evidence),
+                failure: failure,
+                abortedChildren: abortedChildren
+            )
+        )
+
+        XCTAssertEqual(
+            receipt,
+            .childAborted(
+                path: "$.body[0]",
+                receiptKind: .action,
+                durationMs: 9,
+                intent: intent,
+                evidence: evidence,
+                failure: failure,
+                abortedAtChildPath: child.path,
+                children: [child]
+            )
+        )
+    }
+
+    func testReceiptFolderBuildsSkippedOutcome() {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let child = HeistExecutionStepResult.skipped(
+            path: "$.body[0].children[0]",
+            kind: .warn,
+            durationMs: 1
+        )
+
+        let receipt = brains.heistSkippedReceipt(
+            path: "$.body[0]",
+            kind: .conditional,
+            children: [child]
+        )
+
+        XCTAssertEqual(
+            receipt,
+            .skipped(
+                path: "$.body[0]",
+                kind: .conditional,
+                children: [child]
+            )
+        )
+    }
+
+    private func receiptActionIntent() -> HeistStepIntent {
+        .action(command: .activate(.label("Receipt Target")))
+    }
+
+    private func receiptActionEvidence(success: Bool = true) -> HeistActionEvidence {
+        let result: ActionResult
+        if success {
+            result = ActionResult.success(method: .activate)
+        } else {
+            result = ActionResult.failure(
+                method: .activate,
+                errorKind: .actionFailed,
+                message: "failed"
+            )
+        }
+        return .dispatch(dispatchResult: result)
+    }
+
+    private func receiptFailure(observed: String) -> HeistFailureDetail {
+        HeistFailureDetail(
+            category: .explicitFailure,
+            contract: "test receipt construction",
+            observed: observed
+        )
+    }
+
     func testRunHeistFacadeWarnRunsInAppProcess() async throws {
         let heist = try await runHeist("publicFacadeWarn") {
             Warn("ok")

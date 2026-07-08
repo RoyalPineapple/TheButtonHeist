@@ -1,5 +1,11 @@
 import Foundation
 
+public enum AccessibilityNotificationKind: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
+    case screenChanged
+    case elementChanged
+    case announcement
+}
+
 /// Ordered accessibility-notification evidence observed while moving between
 /// two accessibility snapshots.
 ///
@@ -11,23 +17,20 @@ import Foundation
 /// these payloads into logs.
 public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64
-    public let code: UInt32
-    public let name: String
+    public let kind: AccessibilityNotificationKind
     public let timestamp: Date
     public let notificationData: AccessibilityNotificationPayload
     public let associatedElement: AccessibilityNotificationPayload
 
     public init(
         sequence: UInt64,
-        code: UInt32,
-        name: String,
+        kind: AccessibilityNotificationKind,
         timestamp: Date,
         notificationData: AccessibilityNotificationPayload,
         associatedElement: AccessibilityNotificationPayload
     ) {
         self.sequence = sequence
-        self.code = code
-        self.name = name
+        self.kind = kind
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
@@ -36,29 +39,26 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
 
 /// Normalized spoken accessibility text observed from UIKit accessibility
 /// notifications. The source notification may be `announcement`,
-/// `layoutChanged`, or `screenChanged`; the text is exposed uniformly because
+/// `elementChanged`, or `screenChanged`; the text is exposed uniformly because
 /// VoiceOver presents all three string payloads as spoken output.
 public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64
     public let text: String
     public let timestamp: Date
-    public let notificationCode: UInt32
-    public let notificationName: String
+    public let kind: AccessibilityNotificationKind
     public let associatedElement: AccessibilityNotificationPayload
 
     public init(
         sequence: UInt64,
         text: String,
         timestamp: Date,
-        notificationCode: UInt32,
-        notificationName: String,
+        kind: AccessibilityNotificationKind,
         associatedElement: AccessibilityNotificationPayload = .none
     ) {
         self.sequence = sequence
         self.text = text
         self.timestamp = timestamp
-        self.notificationCode = notificationCode
-        self.notificationName = notificationName
+        self.kind = kind
         self.associatedElement = associatedElement
     }
 }
@@ -166,8 +166,7 @@ public extension AccessibilityNotificationEvidence {
             sequence: sequence,
             text: text,
             timestamp: timestamp,
-            notificationCode: code,
-            notificationName: name,
+            kind: kind,
             associatedElement: associatedElement
         )
     }

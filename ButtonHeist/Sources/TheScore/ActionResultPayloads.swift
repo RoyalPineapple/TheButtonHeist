@@ -542,7 +542,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var method: ActionMethod { methodAndPayload.method }
     public let message: String?
     /// First spoken accessibility text observed during this action, sourced
-    /// from string payloads on announcement, layoutChanged, or screenChanged.
+    /// from string payloads on announcement, element-changed, or screen-changed notifications.
     public let announcement: String?
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind? { outcome.errorKind }

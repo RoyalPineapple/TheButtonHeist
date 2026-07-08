@@ -109,10 +109,12 @@ extension TheBrains {
                     case .actionEndpoint, .immediate, .afterObservation, .baselineTraceOnly:
                         allowsTransitionFinalStateWarning = false
                     }
+                    let observationPlan = WaitObservationPlan(step: request.step)
                     return await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         after: request.afterSequence,
+                        observationPlan: observationPlan,
                         allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
                         announcementCursorStrategy: request.announcementCursorStrategy
                     )

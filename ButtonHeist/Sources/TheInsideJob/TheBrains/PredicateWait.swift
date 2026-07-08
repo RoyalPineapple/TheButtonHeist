@@ -15,6 +15,18 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
     case heistScoped
 }
 
+struct WaitObservationPlan: Sendable, Equatable {
+    let scope: SemanticObservationScope
+
+    init(predicate _: AccessibilityPredicate) {
+        scope = .discovery
+    }
+
+    init(step: ResolvedWaitStep) {
+        self.init(predicate: step.predicate)
+    }
+}
+
 // PredicateWait stores main-actor closures and is constructed/used from main-actor observation code.
 @MainActor struct PredicateWait { // swiftlint:disable:this agent_main_actor_value_type
     typealias ObserveEvent = @MainActor (
@@ -63,14 +75,17 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
+        observationPlan: WaitObservationPlan? = nil,
         allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         do {
+            let resolvedStep = try step.resolve(in: .empty)
             return await wait(
-                for: try step.resolve(in: .empty),
+                for: resolvedStep,
                 initialTrace: initialTrace,
                 after: sequence,
+                observationPlan: observationPlan ?? WaitObservationPlan(step: resolvedStep),
                 allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
                 announcementCursorStrategy: announcementCursorStrategy
             )
@@ -97,6 +112,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
+        observationPlan: WaitObservationPlan? = nil,
         allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
@@ -113,10 +129,10 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
             )
         }
 
-        let scope = SemanticObservationScope.discovery
+        let plan = observationPlan ?? WaitObservationPlan(step: step)
 
         let initialEntry = await observeSemanticState(
-            scope: scope,
+            scope: plan.scope,
             after: sequence,
             timeout: sequence == nil ? 0 : timeout
         )
@@ -126,7 +142,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
                 initialTrace: initialTrace,
                 start: start,
                 shouldPoll: timeout > 0 && sequence == nil,
-                observationScope: scope,
+                observationScope: plan.scope,
                 allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
             )
         }
@@ -167,7 +183,7 @@ enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
 
         if let decision = await pollDecision(
             for: step,
-            scope: scope,
+            scope: plan.scope,
             start: start,
             reducer: reducer,
             state: &state,

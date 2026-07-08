@@ -1389,6 +1389,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
+    func testWaitObservationPlanUsesDiscoveryForElementAndContainerPredicates() {
+        XCTAssertEqual(
+            WaitObservationPlan(predicate: .state(.exists(ElementPredicate(label: "Ready")))).scope,
+            .discovery
+        )
+        XCTAssertEqual(
+            WaitObservationPlan(predicate: .state(.existsContainer(.identifier("CheckoutList")))).scope,
+            .discovery
+        )
+    }
+
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
         let before = brains.postActionObservation.captureSemanticState()
