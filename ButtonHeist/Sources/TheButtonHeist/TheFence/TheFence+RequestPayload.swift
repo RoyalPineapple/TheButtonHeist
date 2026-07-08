@@ -13,7 +13,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch
 
     struct MissingElementTarget: Error {
-        let command: String
+        let command: Command
     }
 
     typealias ParsedRequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse

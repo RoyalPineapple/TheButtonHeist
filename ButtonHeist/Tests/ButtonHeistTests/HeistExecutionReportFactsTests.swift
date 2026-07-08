@@ -212,9 +212,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportResults, HeistExecutionStepReportResults(
             dispatchedActionResult: actionEvidence.dispatchResult,
             actionResult: actionEvidence.reportedResult,
-            traceEvidenceResult: actionEvidence.traceResult,
-            expectation: actionEvidence.expectation,
-            actionErrorKind: .timeout
+            expectation: actionEvidence.expectation
         ))
         XCTAssertEqual(reportFacts.results.dispatchedActionResult, reportResults.dispatchedActionResult)
         XCTAssertEqual(reportFacts.results.actionResult, reportResults.actionResult)

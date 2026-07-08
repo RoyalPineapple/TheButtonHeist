@@ -41,8 +41,7 @@ final class InteractivityTests: XCTestCase {
             throw XCTSkip("accessibilityActivateBlock requires iOS 17")
         }
         let object = UIView()
-        guard object.responds(to: NSSelectorFromString("accessibilityActivateBlock")),
-              object.responds(to: NSSelectorFromString("setAccessibilityActivateBlock:")) else {
+        guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
             throw XCTSkip("accessibilityActivateBlock is not available on this UIKit runtime")
         }
         object.accessibilityActivateBlock = { true }

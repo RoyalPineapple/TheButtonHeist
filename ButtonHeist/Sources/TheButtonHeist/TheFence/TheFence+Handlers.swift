@@ -41,10 +41,6 @@ extension TheFence {
         return .action(command: request.command, result: result)
     }
 
-    func missingElementTargetResponse(command: String) -> FenceResponse {
-        .failure(MissingElementTarget(command: command))
-    }
-
     private func directActionTimeout(for command: HeistActionCommand) -> TimeInterval {
         switch command {
         case .typeText:

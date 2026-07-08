@@ -180,31 +180,13 @@ extension TheBrains {
         case ready
         case aborted(failedPath: String)
         case completed(abortedPath: String?)
-    }
-
-    private enum HeistExecutionEffect: Equatable, Sendable {
-        case captureFailureScreenshot(failedPath: String)
-    }
-
-    private enum HeistExecutionTerminal: Equatable, Sendable {
-        case passed
-        case failed(abortedPath: String, effects: [HeistExecutionEffect])
 
         var abortedPath: String? {
             switch self {
-            case .passed:
-                return nil
-            case .failed(let abortedPath, _):
+            case .completed(let abortedPath):
                 return abortedPath
-            }
-        }
-
-        var effects: [HeistExecutionEffect] {
-            switch self {
-            case .passed:
-                return []
-            case .failed(_, let effects):
-                return effects
+            case .ready, .aborted:
+                return nil
             }
         }
     }
@@ -331,25 +313,7 @@ extension TheBrains {
         }
 
         var abortedPath: String? {
-            terminal?.abortedPath
-        }
-
-        var terminalEffects: [HeistExecutionEffect] {
-            terminal?.effects ?? []
-        }
-
-        private var terminal: HeistExecutionTerminal? {
-            switch phase {
-            case .completed(nil):
-                return .passed
-            case .completed(.some(let abortedPath)):
-                return .failed(
-                    abortedPath: abortedPath,
-                    effects: [.captureFailureScreenshot(failedPath: abortedPath)]
-                )
-            case .ready, .aborted:
-                return nil
-            }
+            phase.abortedPath
         }
 
         func decision(for path: String) -> HeistExecutionStepDecision {
@@ -449,17 +413,14 @@ extension TheBrains {
         )
         var stepResults = execution.steps
         let abortedAtPath = execution.abortedPath
-        for effect in execution.terminalEffects {
-            switch effect {
-            case .captureFailureScreenshot(let failedPath):
-                guard let mode = failureEvidencePolicy.captureMode else { continue }
-                guard let failureScreenshotStep = await failureScreenshotStep(
-                    runtime: runtime,
-                    failedPath: failedPath,
-                    mode: mode
-                ) else { continue }
-                stepResults.append(failureScreenshotStep)
-            }
+        if let failedPath = abortedAtPath,
+           let mode = failureEvidencePolicy.captureMode,
+           let failureScreenshotStep = await failureScreenshotStep(
+            runtime: runtime,
+            failedPath: failedPath,
+            mode: mode
+           ) {
+            stepResults.append(failureScreenshotStep)
         }
         let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
         let heistResult: HeistExecutionResult

@@ -139,6 +139,7 @@ INTENTIONAL_BREAKAGES=(
     "var HeistExecutionStepReportDetail.traceEvidenceResult has been removed"
     "var HeistExecutionStepReportDetail.expectation has been removed"
     "var HeistExecutionStepReportDetail.actionErrorKind has been removed"
+    "constructor HeistExecutionStepReportResults.init(dispatchedActionResult:actionResult:traceEvidenceResult:expectation:actionErrorKind:) has been removed"
     "var HeistExecutionStepReportFacts.actionResult has been removed"
     "var HeistExecutionStepReportFacts.expectation has been removed"
     "var HeistExecutionStepReportFacts.actionErrorKind has been removed"

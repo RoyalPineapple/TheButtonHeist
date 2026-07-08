@@ -145,10 +145,7 @@ final class AccessibilityActionDispatcher {
         if let element = object as? UIAccessibilityElement {
             return element.accessibilityContainer as? NSObject
         }
-        guard object.responds(to: NSSelectorFromString("accessibilityContainer")) else {
-            return nil
-        }
-        return object.value(forKey: "accessibilityContainer") as? NSObject
+        return ObjCRuntime.get(.accessibilityContainer, from: object)
     }
 
     private static func canHandle(_ action: ResponderAction, object: NSObject) -> Bool {
