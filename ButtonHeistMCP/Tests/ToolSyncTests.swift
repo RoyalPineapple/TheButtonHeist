@@ -105,7 +105,7 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface subtree container is an object-only matcher")
+    @Test("get_interface subtree container is an object-only predicate")
     func getInterfaceSubtreeContainerSchemaIsObjectOnly() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
         let containerPath = ["properties", "subtree", "properties", "container"]
@@ -114,7 +114,17 @@ struct ToolSyncTests {
         #expect(container.objectValue?["type"] == .string("object"))
 
         let properties = try #require(schemaValue(at: containerPath + ["properties"], in: tool.inputSchema)?.objectValue)
-        #expect(properties["containerName"] != nil)
+        #expect(properties["containerName"] == nil)
+        #expect(properties["checks"] != nil)
+        #expect(
+            schemaValue(at: containerPath + ["properties", "checks", "items", "properties", "kind", "enum"], in: tool.inputSchema) == .array([
+                .string("type"),
+                .string("semantic"),
+                .string("rowCount"),
+                .string("columnCount"),
+                .string("modalBoundary"),
+            ])
+        )
 
         // No schema combinator anywhere under the container subschema.
         #expect(schemaValue(at: containerPath + ["oneOf"], in: tool.inputSchema) == nil)
