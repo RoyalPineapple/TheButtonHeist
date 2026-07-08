@@ -79,11 +79,7 @@ extension Navigation {
         exploration.manifest.pendingScrollPaths
             .compactMap { exploration.screen.semantic.containers[$0] }
             .map { PendingContainer(container: $0, overflow: totalOverflow(of: $0.container)) }
-            .sorted {
-                $0.overflow == $1.overflow
-                    ? $0.container.path.indices.lexicographicallyPrecedes($1.container.path.indices)
-                    : $0.overflow > $1.overflow
-            }
+            .sorted { $0.overflow > $1.overflow }
             .map(\.container)
     }
 
