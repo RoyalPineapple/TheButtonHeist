@@ -476,15 +476,19 @@ func waitForBuildsWaitStep() throws {
 }
 
 @Test
-func `wait for on screen builds screen identity state predicate`() throws {
+func `container predicates and scoped targets render canonically`() throws {
     let heist = try HeistPlan {
-        WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))
+        WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))
+        Activate(.within(container: .label("Checkout"), .label("Pay")))
     }
 
     #expect(try heist == HeistPlan(body: [
-        .wait(WaitStep(predicate: .onScreen(header: "Checkout"), timeout: 2)),
+        .wait(WaitStep(predicate: .exists(container: .label("Checkout")), timeout: 2)),
+        .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ]))
-    #expect(try heist.canonicalSwiftDSL().contains(#"WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(2))"#))
+    let canonical = try heist.canonicalSwiftDSL()
+    #expect(canonical.contains(#"WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))"#))
+    #expect(canonical.contains(#"Activate(.within(container: .label("Checkout"), .label("Pay")))"#))
 }
 
 @Test

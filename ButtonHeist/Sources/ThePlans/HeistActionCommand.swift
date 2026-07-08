@@ -495,6 +495,8 @@ private extension TargetExprPayload {
             try container.encode(target, forKey: nestedKey)
         case .ref(let reference):
             try container.encode(reference, forKey: refKey)
+        case .within:
+            try container.encode(target, forKey: nestedKey)
         }
     }
 }

@@ -1,3 +1,4 @@
+import AccessibilitySnapshotModel
 import ThePlans
 
 extension HeistElement: PredicateSelectionSubject {
@@ -130,11 +131,65 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 }
 
+private struct ContainerMatch: Sendable, Hashable {
+    let path: TreePath
+    let traversalOrder: Int
+    let facts: ContainerPredicateFacts
+
+    static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
+        lhs.path == rhs.path
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+    }
+}
+
+private struct ContainerMatchSet: Sendable, Equatable {
+    static let empty = ContainerMatchSet([])
+
+    let matches: [ContainerMatch]
+
+    init(_ matches: [ContainerMatch]) {
+        var paths = Set<TreePath>()
+        var uniqueMatches: [ContainerMatch] = []
+        uniqueMatches.reserveCapacity(matches.count)
+
+        for match in matches where paths.insert(match.path).inserted {
+            uniqueMatches.append(match)
+        }
+
+        self.matches = uniqueMatches
+    }
+
+    init(interface: Interface) {
+        self.init(interface.graph.nodesInPathOrder.enumerated().compactMap { offset, record in
+            guard case .container(let container) = record.kind else { return nil }
+            return ContainerMatch(
+                path: container.path,
+                traversalOrder: offset,
+                facts: container.container.containerPredicateFacts
+            )
+        })
+    }
+
+    var isEmpty: Bool {
+        matches.isEmpty
+    }
+}
+
 package struct ElementMatchGraph: Sendable, Equatable {
     package let all: ElementMatchSet
+    private let containers: ContainerMatchSet
 
     package init(_ all: ElementMatchSet) {
         self.all = all
+        self.containers = .empty
+    }
+
+    private init(all: ElementMatchSet, containers: ContainerMatchSet) {
+        self.all = all
+        self.containers = containers
     }
 
     package init(elements: [HeistElement]) {
@@ -142,7 +197,10 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package init(interface: Interface) {
-        self.init(ElementMatchSet(interface: interface))
+        self.init(
+            all: ElementMatchSet(interface: interface),
+            containers: ContainerMatchSet(interface: interface)
+        )
     }
 
     package func resolve(_ predicate: ElementPredicate) -> ElementMatchSet {
@@ -150,8 +208,34 @@ package struct ElementMatchGraph: Sendable, Equatable {
     }
 
     package func resolve(_ target: ElementTarget) -> ElementMatchSet {
-        let resolved = predicateGraph.resolve(target)
-        return ElementMatchSet(resolved.matches.map(\.subject))
+        switch target {
+        case .predicate:
+            let resolved = predicateGraph.resolve(target)
+            return ElementMatchSet(resolved.matches.map(\.subject))
+        case .within(let container, let nestedTarget):
+            return scoped(to: container).resolve(nestedTarget)
+        }
+    }
+
+    package func containsContainer(matching predicate: ContainerPredicate) -> Bool {
+        containers.matches.contains { predicate.matches($0.facts) }
+    }
+
+    private func scoped(to predicate: ContainerPredicate) -> ElementMatchGraph {
+        let containerPaths = containers.matches
+            .filter { predicate.matches($0.facts) }
+            .map(\.path)
+        guard !containerPaths.isEmpty else {
+            return ElementMatchGraph(all: .empty, containers: .empty)
+        }
+        return ElementMatchGraph(
+            all: ElementMatchSet(all.matches.filter { match in
+                containerPaths.contains { match.path.hasPrefix($0) }
+            }),
+            containers: ContainerMatchSet(containers.matches.filter { match in
+                containerPaths.contains { match.path.hasPrefix($0) }
+            })
+        )
     }
 
     private var predicateGraph: ElementPredicateGraph<TreePath, ElementMatch> {

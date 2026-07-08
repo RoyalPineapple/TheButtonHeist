@@ -17,8 +17,8 @@ import Foundation
 /// {"type": "missing", "element": { ...ElementPredicate... }}
 /// {"type": "exists",  "target": { ...ElementTarget... }}
 /// {"type": "missing", "target": { ...ElementTarget... }}
-/// {"type": "screen",  "header": { ...StringMatch... }}
-/// {"type": "screen",  "id": "checkout"}
+/// {"type": "exists",  "container": { "identifier": "SettingsIndexScreen" }}
+/// {"type": "missing", "container": { "identifier": "SettingsIndexScreen" }}
 /// {"type": "all",     "states": [ <State object>, ... ]}
 /// {"type": "no_change"}
 /// {"type": "change"}
@@ -49,8 +49,10 @@ public enum AccessibilityPredicate: Sendable, Equatable {
         case existsTarget(ElementTarget)
         /// A selected element target does not exist in the observed interface.
         case missingTarget(ElementTarget)
-        /// The current settled screen identity matches accessibility-derived screen facts.
-        case screen(ScreenIdentityPredicate)
+        /// A container matching the predicate exists in the observed interface.
+        case existsContainer(ContainerPredicate)
+        /// No container matching the predicate exists in the observed interface.
+        case missingContainer(ContainerPredicate)
         /// Every child state holds against the same observed interface.
         case all(NonEmptyArray<State>)
     }
@@ -91,7 +93,6 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     public enum PredicateWireType: String, CaseIterable, Sendable {
         case exists
         case missing
-        case screen
         case all
         case noChange = "no_change"
         case change
@@ -109,7 +110,6 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
     public enum StateWireType: String, CaseIterable, Sendable {
         case exists
         case missing
-        case screen
         case all
 
         public static var values: [String] {
@@ -126,8 +126,6 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
                 return .exists
             case .missing:
                 return .missing
-            case .screen:
-                return .screen
             case .all:
                 return .all
             }
@@ -187,20 +185,27 @@ public enum AccessibilityPredicateContract: Sendable, Equatable {
                 return "target still present: \(target)"
             }
         }
+
+        public func failureDescription(for container: ContainerPredicate) -> String {
+            switch self {
+            case .present:
+                return "container not present: \(container)"
+            case .absent:
+                return "container still present: \(container)"
+            }
+        }
     }
 
     public enum State: Sendable, Equatable {
         case element(PresenceRequirement, ElementPredicate)
         case target(PresenceRequirement, ElementTarget)
-        case screen(ScreenIdentityPredicate)
+        case container(PresenceRequirement, ContainerPredicate)
         case all(NonEmptyArray<AccessibilityPredicate.State>)
 
         public var wireType: StateWireType {
             switch self {
-            case .element(let requirement, _), .target(let requirement, _):
+            case .element(let requirement, _), .target(let requirement, _), .container(let requirement, _):
                 return requirement.stateWireType
-            case .screen:
-                return .screen
             case .all:
                 return .all
             }
@@ -276,8 +281,10 @@ public extension AccessibilityPredicate.State {
             return .target(.present, target)
         case .missingTarget(let target):
             return .target(.absent, target)
-        case .screen(let identity):
-            return .screen(identity)
+        case .existsContainer(let container):
+            return .container(.present, container)
+        case .missingContainer(let container):
+            return .container(.absent, container)
         case .all(let states):
             return .all(states)
         }
@@ -333,7 +340,7 @@ extension AccessibilityPredicate: Codable {
             )
         }
         switch wireType {
-        case .exists, .missing, .screen, .all:
+        case .exists, .missing, .all:
             self = .state(try State(from: decoder))
         case .noChange:
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate")
@@ -409,7 +416,7 @@ extension AccessibilityPredicate: Codable {
 
 extension AccessibilityPredicate.State: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, target, id, header, states
+        case type, element, target, container, states
     }
 
     public init(from decoder: Decoder) throws {
@@ -429,7 +436,8 @@ extension AccessibilityPredicate.State: Codable {
                 container,
                 typeName: "exists predicate",
                 predicateState: Self.exists,
-                targetState: Self.existsTarget
+                targetState: Self.existsTarget,
+                containerState: Self.existsContainer
             )
         case .missing:
             self = try Self.decodeElementState(
@@ -437,10 +445,9 @@ extension AccessibilityPredicate.State: Codable {
                 container,
                 typeName: "missing predicate",
                 predicateState: Self.missing,
-                targetState: Self.missingTarget
+                targetState: Self.missingTarget,
+                containerState: Self.missingContainer
             )
-        case .screen:
-            self = .screen(try ScreenIdentityPredicate(from: decoder))
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate")
             let states = try container.decode([AccessibilityPredicate.State].self, forKey: .states)
@@ -464,14 +471,9 @@ extension AccessibilityPredicate.State: Codable {
         case .target(let requirement, let target):
             try container.encode(requirement.stateWireType.rawValue, forKey: .type)
             try container.encode(target, forKey: .target)
-        case .screen(let identity):
-            try container.encode(AccessibilityPredicateContract.StateWireType.screen.rawValue, forKey: .type)
-            switch identity {
-            case .id(let id):
-                try container.encode(id, forKey: .id)
-            case .header(let header):
-                try container.encode(header, forKey: .header)
-            }
+        case .container(let requirement, let containerPredicate):
+            try container.encode(requirement.stateWireType.rawValue, forKey: .type)
+            try container.encode(containerPredicate, forKey: .container)
         case .all(let states):
             try container.encode(AccessibilityPredicateContract.StateWireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
@@ -483,29 +485,28 @@ extension AccessibilityPredicate.State: Codable {
         _ container: KeyedDecodingContainer<CodingKeys>,
         typeName: String,
         predicateState: (ElementPredicate) -> Self,
-        targetState: (ElementTarget) -> Self
+        targetState: (ElementTarget) -> Self,
+        containerState: (ContainerPredicate) -> Self
     ) throws -> Self {
-        try decoder.rejectUnknownKeys(allowed: ["type", "element", "target"], typeName: typeName)
+        try decoder.rejectUnknownKeys(allowed: ["type", "element", "target", "container"], typeName: typeName)
         let hasElement = container.contains(.element)
         let hasTarget = container.contains(.target)
-        switch (hasElement, hasTarget) {
-        case (true, false):
-            return predicateState(try container.decode(ElementPredicate.self, forKey: .element))
-        case (false, true):
-            return targetState(try container.decode(ElementTarget.self, forKey: .target))
-        case (true, true):
-            throw DecodingError.dataCorruptedError(
-                forKey: .target,
-                in: container,
-                debugDescription: "\(typeName) accepts either element or target, not both"
-            )
-        case (false, false):
+        let hasContainer = container.contains(.container)
+        let intentCount = [hasElement, hasTarget, hasContainer].filter { $0 }.count
+        guard intentCount == 1 else {
             throw DecodingError.dataCorruptedError(
                 forKey: .element,
                 in: container,
-                debugDescription: "\(typeName) requires element or target"
+                debugDescription: "\(typeName) requires exactly one of element, target, or container"
             )
         }
+        if hasElement {
+            return predicateState(try container.decode(ElementPredicate.self, forKey: .element))
+        }
+        if hasTarget {
+            return targetState(try container.decode(ElementTarget.self, forKey: .target))
+        }
+        return containerState(try container.decode(ContainerPredicate.self, forKey: .container))
     }
 }
 
@@ -634,7 +635,8 @@ extension AccessibilityPredicate.State: CustomStringConvertible {
         case .missing(let predicate): return ScoreDescription.call("missing", [predicate.description])
         case .existsTarget(let target): return ScoreDescription.call("exists", [target.description])
         case .missingTarget(let target): return ScoreDescription.call("missing", [target.description])
-        case .screen(let identity): return identity.description
+        case .existsContainer(let container): return ScoreDescription.call("exists", [container.description])
+        case .missingContainer(let container): return ScoreDescription.call("missing", [container.description])
         case .all(let states): return ScoreDescription.call("all", states.map(\.description))
         }
     }

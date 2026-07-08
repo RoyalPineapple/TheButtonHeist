@@ -100,13 +100,13 @@ enum TargetResolutionDiagnostics {
 
     private static func containerNotFoundMessage(_ facts: TheStash.ContainerNotFoundFacts) -> String {
         switch facts.reason {
-        case .emptyMatcher:
+        case .emptyPredicate:
             return "container target needs semantic scope: use type, label, value, identifier, or target an element inside the intended region"
         case .ordinalOutOfRange(let requested, let matchCount):
             return "container target ordinal \(requested) is outside \(matchCount) matching container(s); "
-                + "narrow the container matcher or target an element inside the intended region"
+                + "narrow the container predicate or target an element inside the intended region"
         case .noMatches:
-            return "no semantic container matched \(facts.matcher); target an element inside the intended region or inspect the current interface"
+            return "no semantic container matched \(facts.predicate); target an element inside the intended region or inspect the current interface"
         }
     }
 

@@ -66,7 +66,7 @@ extension TheStash {
 
     struct ContainerCandidateFacts {
         let containerName: ContainerName?
-        let type: ContainerTypeName
+        let type: AccessibilityContainerKind
         let label: String?
         let value: String?
         let identifier: String?
@@ -75,29 +75,30 @@ extension TheStash {
         init(container: SemanticScreen.Container) {
             let accessibilityContainer = container.container
             containerName = container.containerName
-            type = accessibilityContainer.typeName
-            label = accessibilityContainer.containerLabel
-            value = accessibilityContainer.containerValue
-            identifier = accessibilityContainer.containerIdentifier
+            let facts = accessibilityContainer.containerPredicateFacts
+            type = facts.type
+            label = facts.label
+            value = facts.value
+            identifier = facts.identifier
             isModalBoundary = accessibilityContainer.isModalBoundary
         }
     }
 
     enum ContainerNotFoundReason: Equatable {
-        case emptyMatcher
+        case emptyPredicate
         case ordinalOutOfRange(requested: Int, matchCount: Int)
         case noMatches
     }
 
     struct ContainerNotFoundFacts {
-        let matcher: ContainerMatcher
+        let predicate: ContainerPredicate
         let ordinal: Int?
         let reason: ContainerNotFoundReason
         let resolutionScope: ResolutionScope
     }
 
     struct ContainerAmbiguityFacts {
-        let matcher: ContainerMatcher
+        let predicate: ContainerPredicate
         let candidates: [ContainerCandidateFacts]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
@@ -163,28 +164,24 @@ extension TheStash {
         resolveTarget(target, in: liveVisibleScreen.visibleOnly, resolutionScope: .visible)
     }
 
-    func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
-        guard matcher.hasPredicates else {
+    func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
+        guard predicate.hasPredicates else {
             return .notFound(ContainerNotFoundFacts(
-                matcher: matcher,
+                predicate: predicate,
                 ordinal: ordinal,
-                reason: .emptyMatcher,
+                reason: .emptyPredicate,
                 resolutionScope: .known
             ))
         }
         let matches = semanticContainersInTraversalOrder
             .compactMap { item -> SemanticScreen.Container? in
-                let annotation = InterfaceContainerAnnotation(
-                    path: item.path,
-                    containerName: item.containerName
-                )
-                guard item.container.matches(matcher, annotation: annotation) else { return nil }
+                guard predicate.matches(item.container.containerPredicateFacts) else { return nil }
                 return item
             }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
-                    matcher: matcher,
+                    predicate: predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: .known
@@ -197,14 +194,14 @@ extension TheStash {
             return .resolved(matches[0])
         case 0:
             return .notFound(ContainerNotFoundFacts(
-                matcher: matcher,
+                predicate: predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: .known
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
-                matcher: matcher,
+                predicate: predicate,
                 candidates: matches.map(ContainerCandidateFacts.init),
                 matchedCount: matches.count,
                 resolutionScope: .known
@@ -238,12 +235,7 @@ extension TheStash {
 
     /// Resolve a target using first-match semantics against only the live hierarchy.
     func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
-        let effectiveTarget: ElementTarget
-        switch target {
-        case .predicate(let predicate, _):
-            effectiveTarget = .predicate(predicate, ordinal: 0)
-        }
-        return resolveVisibleTarget(effectiveTarget).resolved
+        resolveVisibleTarget(target.firstMatchTarget).resolved
     }
 
     /// All elements in the supplied screen, or in settled world when omitted.
@@ -270,6 +262,12 @@ private extension TheStash {
         switch target {
         case .predicate(let predicate, let ordinal):
             return resolveMatcher(predicate, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
+        case .within(let container, let target):
+            return resolveTarget(
+                target,
+                in: screen.scoped(to: container),
+                resolutionScope: resolutionScope
+            )
         }
     }
 
@@ -326,6 +324,42 @@ private extension TheStash {
                 resolutionScope: resolutionScope
             ))
         }
+    }
+}
+
+private extension ElementTarget {
+    var firstMatchTarget: ElementTarget {
+        switch self {
+        case .predicate(let predicate, _):
+            return .predicate(predicate, ordinal: 0)
+        case .within(let container, let target):
+            return .within(container, target.firstMatchTarget)
+        }
+    }
+}
+
+private extension Screen {
+    func scoped(to predicate: ContainerPredicate) -> Screen {
+        let containerPaths = orderedContainers
+            .filter { predicate.matches($0.container.containerPredicateFacts) }
+            .map(\.path)
+        guard !containerPaths.isEmpty else {
+            return Screen(
+                semantic: SemanticScreen(elements: [:], containers: [:]),
+                liveCapture: liveCapture
+            )
+        }
+        return Screen(
+            semantic: SemanticScreen(
+                elements: semantic.elements.filter { _, element in
+                    containerPaths.contains { element.path.hasPrefix($0) }
+                },
+                containers: semantic.containers.filter { path, _ in
+                    containerPaths.contains { path.hasPrefix($0) }
+                }
+            ),
+            liveCapture: liveCapture
+        )
     }
 }
 

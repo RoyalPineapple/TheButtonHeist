@@ -456,6 +456,7 @@ struct LiveCapture: Equatable {
                     path: item.path,
                     screenElement: SemanticScreen.Element(
                         heistId: heistId,
+                        path: item.path,
                         scrollMembership: nil,
                         element: item.element
                     ),

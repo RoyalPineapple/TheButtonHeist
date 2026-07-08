@@ -277,6 +277,8 @@ extension Actions {
             }
             guard matches.count == 1 else { return nil }
             return matches[0].value
+        case .within:
+            return nil
         }
     }
 

@@ -14,9 +14,9 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - AccessibilityPredicate
 
     func testAccessibilityPredicateWireContractValuesStayStable() {
-        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "screen", "all", "no_change", "change", "announcement"])
+        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "all", "no_change", "change", "announcement"])
         XCTAssertEqual(AccessibilityPredicate.wireTypeValues, AccessibilityPredicateContract.PredicateWireType.values)
-        XCTAssertEqual(AccessibilityPredicateContract.StateWireType.values, ["exists", "missing", "screen", "all"])
+        XCTAssertEqual(AccessibilityPredicateContract.StateWireType.values, ["exists", "missing", "all"])
         XCTAssertEqual(AccessibilityPredicateContract.ChangeScopeWireType.values, ["screen", "elements", "all"])
     }
 
@@ -709,7 +709,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorContainerUsesToolSchemaShape() throws {
         let selector = SubtreeSelector.container(
-            ContainerMatcher(containerName: "semantic_actions", type: .semanticGroup, label: "Actions"),
+            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
             ordinal: 1
         )
 
@@ -718,25 +718,32 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try payload.int("ordinal"), 1)
         let container = try payload.object("container")
         try payload.assertMissing("element")
-        XCTAssertEqual(try container.string("containerName"), "semantic_actions")
-        XCTAssertEqual(try container.string("type"), "semanticGroup")
-        XCTAssertEqual(try container.string("label"), "Actions")
+        let checks = try container.array("checks")
+        XCTAssertEqual(checks.count, 2)
+        XCTAssertEqual(try checks[0].string("kind"), "type")
+        XCTAssertEqual(try checks[0].string("type"), "semanticGroup")
+        XCTAssertEqual(try checks[1].string("kind"), "semantic")
+        let semantic = try checks[1].object("semantic")
+        XCTAssertEqual(try semantic.string("kind"), "label")
+        let label = try semantic.object("match")
+        XCTAssertEqual(try label.string("mode"), "exact")
+        XCTAssertEqual(try label.string("value"), "Actions")
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
-    func testSubtreeSelectorContainerRequiresMatcherObject() throws {
-        // The MCP schema advertises subtree.container as an object-only matcher
+    func testSubtreeSelectorContainerRequiresPredicateObject() throws {
+        // The MCP schema advertises subtree.container as an object-only predicate
         // (no oneOf string/object adapter), so a bare string container name is
         // no longer accepted at the wire boundary.
         let data = Data(#"{"container":"semantic_actions"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: data))
     }
 
-    func testSubtreeSelectorContainerAcceptsMatcherObject() throws {
-        let data = Data(#"{"container":{"containerName":"semantic_actions"}}"#.utf8)
+    func testSubtreeSelectorContainerAcceptsPredicateObject() throws {
+        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]}}"#.utf8)
         let decoded = try decoder.decode(SubtreeSelector.self, from: data)
 
-        XCTAssertEqual(decoded, .container(ContainerMatcher(containerName: "semantic_actions")))
+        XCTAssertEqual(decoded, .container(.scrollable))
     }
 
     func testSubtreeSelectorElementRejectsHeistIdField() {

@@ -40,8 +40,11 @@ public extension AccessibilityPredicate {
         let accumulatedDelta = deltaProjection == .geometryAware
             ? evidence.geometryAccumulatedDelta ?? evidence.accumulatedDelta
             : evidence.accumulatedDelta
+        let currentGraph = evidence.currentInterface
+            .map(ElementMatchGraph.init(interface:))
+            ?? ElementMatchGraph(elements: evidence.currentElements)
         return evaluate(
-            currentGraph: ElementMatchGraph(elements: evidence.currentElements),
+            currentGraph: currentGraph,
             changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta)
         )
     }
@@ -172,14 +175,12 @@ package extension AccessibilityPredicate.State {
                 met: met,
                 actual: met ? nil : requirement.failureDescription(for: target)
             )
-        case .screen(let identity):
-            let elements = graph.all.elements
-            let screenId = InterfaceSummary.screenId(forProjectedElements: elements)
-            let header = InterfaceSummary.screenTitle(forProjectedElements: elements)
-            let met = identity.matches(screenId: screenId, header: header)
+        case .container(let requirement, let container):
+            let isPresent = graph.containsContainer(matching: container)
+            let met = requirement.isMet(isPresent: isPresent)
             return PredicateEvaluationResult(
                 met: met,
-                actual: met ? nil : identity.failureDescription(screenId: screenId, header: header)
+                actual: met ? nil : requirement.failureDescription(for: container)
             )
         case .all(let states):
             let failures = states.compactMap { state -> String? in
@@ -191,21 +192,6 @@ package extension AccessibilityPredicate.State {
                 actual: failures.isEmpty ? nil : failures.joined(separator: "; ")
             )
         }
-    }
-}
-
-private extension ScreenIdentityPredicate {
-    func failureDescription(screenId: String?, header: String?) -> String {
-        let current = [
-            screenId.map { "id=\(ScoreDescription.quoted($0))" },
-            header.map { "header=\(ScoreDescription.quoted($0))" },
-        ].compactMap { $0 }
-
-        guard !current.isEmpty else {
-            return "current screen has no accessibility identity; expected \(description)"
-        }
-
-        return "current screen \(current.joined(separator: ", ")) does not match \(description)"
     }
 }
 

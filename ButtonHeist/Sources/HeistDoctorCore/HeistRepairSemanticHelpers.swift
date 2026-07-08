@@ -4,10 +4,12 @@ import TheScore
 
 extension ElementTarget {
     var hasOrdinal: Bool {
-        if case .predicate(_, let ordinal) = self {
+        switch self {
+        case .predicate(_, let ordinal):
             return ordinal != nil
+        case .within(_, let target):
+            return target.hasOrdinal
         }
-        return false
     }
 }
 

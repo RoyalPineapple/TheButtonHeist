@@ -4,7 +4,7 @@ import AccessibilitySnapshotModel
 import TheScore
 
 struct PublicContainer: Encodable {
-    let type: ContainerTypeName
+    let type: AccessibilityContainerKind
     let label: String?
     let value: String?
     let identifier: String?
@@ -133,7 +133,7 @@ struct PublicContainer: Encodable {
     }
 
     private struct Fields {
-        let type: ContainerTypeName
+        let type: AccessibilityContainerKind
         var label: String?
         var value: String?
         var identifier: String?
@@ -147,7 +147,7 @@ struct PublicContainer: Encodable {
         var observedElementCount: Int?
 
         init(
-            type: ContainerTypeName,
+            type: AccessibilityContainerKind,
             label: String? = nil,
             value: String? = nil,
             identifier: String? = nil,

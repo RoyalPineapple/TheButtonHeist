@@ -88,6 +88,8 @@ struct RepairScreen {
             default:
                 return .ambiguous(matches, matchCount: matches.count)
             }
+        case .within:
+            return .notFound(matchCount: 0)
         }
     }
 

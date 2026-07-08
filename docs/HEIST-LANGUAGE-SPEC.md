@@ -251,11 +251,15 @@ implied final state is already true or becomes true without transition evidence.
 Action `.expect(...)` and `RunHeist(...).expect(...)` remain strict transition
 assertions.
 
-Current screen identity is a snapshot predicate, not a transition predicate.
-Use `.onScreen(header: "Checkout")` or `.onScreen(id: "checkout")` when a heist
-needs to assert the current settled screen without requiring a preceding
-screen-change delta. Use `.screenChanged(...)` when the action itself must prove
-navigation occurred.
+Container presence is a snapshot predicate, not a transition predicate. Use
+`.exists(container: .label("Checkout"))` when a heist needs to assert that the
+current settled hierarchy contains a matching semantic container without
+requiring a preceding screen-change delta. Container predicates can match
+semantic label, value, or identifier; container type such as `.scrollable` or
+`.dataTable(rowCount:columnCount:)`; modal boundary; or `.matching(...)`
+combinations. Use `.within(container: .label("Checkout"), .label("Pay"))` when
+an element target must resolve inside that container. Use `.screenChanged(...)`
+when the action itself must prove navigation occurred.
 
 Use `RepeatUntil` for bounded repetition toward a settled outcome. The body
 repeats until the predicate holds against settled state or the mandatory

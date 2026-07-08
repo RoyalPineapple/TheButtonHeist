@@ -418,6 +418,7 @@ extension TheFence {
     static let before = Self("before")
     static let check = Self("check"), checks = Self("checks")
     static let command = Self("command")
+    static let columnCount = Self("columnCount")
     static let container = Self("container")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
@@ -440,7 +441,8 @@ extension TheFence {
     static let replacingExisting = Self("replacingExisting")
     static let requestId = Self("requestId")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), rotors = Self("rotors")
-    static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
+    static let rowCount = Self("rowCount")
+    static let scale = Self("scale"), semantic = Self("semantic"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
     static let step = Self("step")
     static let containerName = Self("containerName"), custom = Self("custom"), customContent = Self("customContent")
@@ -668,7 +670,7 @@ func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawR
         exclusiveMinimum: 0
     )
     public static let token = FenceParameter<String>.string(.token)
-    public static let containerType = FenceParameter<ContainerTypeName>.enumValue(.type)
+    public static let containerType = FenceParameter<AccessibilityContainerKind>.enumValue(.type)
 }
 
 func param(
@@ -926,21 +928,7 @@ enum FenceParameterBlocks: Sendable {
 
     private static let subtreeElementProperties = matcherFields
 
-    private static let subtreeContainerProperties: [FenceParameterSpec] = [
-        param(.containerName, .string),
-        FenceParameters.containerType.spec,
-        param(.label, .string), param(.value, .string), param(.identifier, .string),
-        param(.isModalBoundary, .boolean),
-    ]
-
-    // `subtree.container` is a plain object matcher in the public schema — MCP
-    // (OpenAI) tool input schemas reject JSON Schema combinators, so this must
-    // never emit `oneOf`/`anyOf`/`allOf`. Pass the container name as
-    // `{ "container": { "containerName": "main_scroll" } }`.
-    private static let subtreeContainer = objectParam(
-        .container,
-        properties: subtreeContainerProperties
-    )
+    private static let subtreeContainer = containerPredicateParam(.container)
 
     static let interfaceSubtree: FenceParameterSpec = objectParam(
         .subtree,
@@ -957,26 +945,24 @@ enum FenceParameterBlocks: Sendable {
     )
 
     /// Documented fields of an `AccessibilityPredicate.State` object (`exists`,
-    /// `missing`, `screen`, `all`). A `State` is recursive — `all` nests further states —
+    /// `missing`, `all`). A `State` is recursive — `all` nests further states —
     /// so item objects allow additional keys and the decoder enforces the
     /// per-type required-field rules.
     private static let stateProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "screen", "all"]),
+        param(.type, .string, enumValues: ["exists", "missing", "all"]),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        containerPredicateParam(.container),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "screen", "all", "appeared", "disappeared", "updated"]),
+        param(.type, .string, enumValues: ["exists", "missing", "all", "appeared", "disappeared", "updated"]),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        containerPredicateParam(.container),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields, validation: .customPayload),
         objectParam(.after, properties: matcherFields, validation: .customPayload),
@@ -997,15 +983,14 @@ enum FenceParameterBlocks: Sendable {
 
     /// Object properties for an `AccessibilityPredicate` (the `expect` slot and
     /// the `wait` `predicate` field). State predicates use `element`, `target`,
-    /// `target_ref`, `id`/`header`, or `states`; change predicates use `scopes`,
+    /// `target_ref`, `container`, or `states`; change predicates use `scopes`,
     /// whose children carry `screen` state assertions or `elements` delta assertions.
     private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
         predicateType,
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+        containerPredicateParam(.container),
         param(.targetRef, .string),
-        param(.id, .string),
-        stringMatchParam(.header),
         FenceParameters.elementProperty.spec,
         objectParam(.before, properties: matcherFields, validation: .customPayload),
         objectParam(.after, properties: matcherFields, validation: .customPayload),
@@ -1048,7 +1033,11 @@ enum FenceParameterBlocks: Sendable {
         exclusiveMinimum: 0
     )
 
-    private static func stringMatchParam(_ key: FenceParameterKey, allowsArray: Bool = false) -> FenceParameterSpec {
+    private static func stringMatchParam(
+        _ key: FenceParameterKey,
+        required: Bool = false,
+        allowsArray: Bool = false
+    ) -> FenceParameterSpec {
         let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
         let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and optional value. " +
             "Use mode exact for exact matching. Broad modes require a non-empty value; isEmpty must omit value." +
@@ -1058,10 +1047,52 @@ enum FenceParameterBlocks: Sendable {
         return FenceParameterSpec(
             key: key.rawValue,
             schema: .scalar(.stringMatch(modeValues: modeValues, description: description)),
-            required: false,
+            required: required,
             validation: .customPayload
         )
     }
+
+    private static func containerPredicateParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        objectParam(
+            key,
+            properties: [
+                arrayParam(
+                    .checks,
+                    required: true,
+                    items: .object(
+                        properties: containerPredicateCheckProperties,
+                        additionalProperties: false
+                    ),
+                    minItems: 1
+                ),
+            ],
+            validation: .customPayload
+        )
+    }
+
+    private static let containerPredicateCheckProperties: [FenceParameterSpec] = [
+        param(
+            .kind, .string, required: true,
+            enumValues: ["type", "semantic", "rowCount", "columnCount", "modalBoundary"]
+        ),
+        param(.type, .string, enumValues: AccessibilityContainerKind.allCases.map(\.rawValue)),
+        objectParam(
+            .semantic,
+            properties: semanticContainerPredicateProperties,
+            validation: .customPayload
+        ),
+        FenceParameterSpec(
+            key: FenceParameterKey.value.rawValue,
+            schema: .unconstrained,
+            required: false,
+            validation: .customPayload
+        ),
+    ]
+
+    private static let semanticContainerPredicateProperties: [FenceParameterSpec] = [
+        param(.kind, .string, required: true, enumValues: ["label", "value", "identifier"]),
+        stringMatchParam(.match, required: true),
+    ]
 
     private static func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> FenceParameterSpec {
         guard let key = FenceParameterKey(rawValue: field.name) else {
@@ -1084,6 +1115,15 @@ enum FenceParameterBlocks: Sendable {
             return customContentMatchParam(key)
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
+        case .containerPredicate:
+            return containerPredicateParam(key)
+        case .nestedElementTarget:
+            return objectParam(
+                key,
+                properties: [],
+                additionalProperties: true,
+                validation: .customPayload
+            )
         }
     }
 

@@ -37,6 +37,8 @@ extension HeistPlanSourceParser {
             return renderConcreteTargetCorrection(target)
         case .ref(let reference):
             return reference.rawValue
+        case .within(let container, let target):
+            return ".within(container: \(container), \(renderTargetCorrection(target)))"
         }
     }
 
@@ -44,6 +46,8 @@ extension HeistPlanSourceParser {
         switch target {
         case .predicate(let predicate, _):
             return renderPredicateCorrection(ElementPredicateTemplate(predicate))
+        case .within(let container, let target):
+            return ".within(container: \(container), \(renderConcreteTargetCorrection(target)))"
         }
     }
 
@@ -402,6 +406,27 @@ extension HeistPlanSourceParser {
             return .predicate(try concretePredicate(from: predicate), ordinal: ordinal)
         case .ref(let reference):
             throw error(previous, "mechanical actions require a concrete ElementTarget, not target ref '\(reference)'")
+        case .within(let container, let target):
+            return .within(
+                try container.resolve(in: .empty),
+                try concreteElementTarget(from: target)
+            )
+        }
+    }
+
+    mutating func concreteElementTarget(from expr: ElementTargetExpr) throws -> ElementTarget {
+        switch expr {
+        case .target(let target):
+            return target
+        case .predicate(let predicate, let ordinal):
+            return .predicate(try concretePredicate(from: predicate), ordinal: ordinal)
+        case .ref(let reference):
+            throw error(previous, "mechanical actions require a concrete ElementTarget, not target ref '\(reference)'")
+        case .within(let container, let target):
+            return .within(
+                try container.resolve(in: .empty),
+                try concreteElementTarget(from: target)
+            )
         }
     }
 

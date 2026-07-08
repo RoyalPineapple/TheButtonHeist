@@ -35,14 +35,14 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testContainerSubtreeSelectsMatchingContainer() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .container(ContainerMatcher(containerName: "semantic_actions__actions"))
+            subtree: .container(.identifier("actions"))
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
     }
 
     func testAmbiguousSubtreeReportsTypedCandidates() {
         XCTAssertThrowsError(try select(
-            InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"))),
+            InterfaceQuery(subtree: .container(.label("Actions"))),
             in: Self.makeInterface(includeDuplicateGroup: true)
         )) { error in
             guard case InterfaceSelectionError.ambiguousSubtree(let count, let candidates) = error else {
@@ -58,7 +58,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testOrdinalDisambiguatesSubtreeCandidates() throws {
         let interface = try select(
-            InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"), ordinal: 1)),
+            InterfaceQuery(subtree: .container(.label("Actions"), ordinal: 1)),
             in: Self.makeInterface(includeDuplicateGroup: true)
         )
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Archive"])
@@ -66,7 +66,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testMissingSubtreeReportsTypedError() {
         XCTAssertThrowsError(try select(InterfaceQuery(
-            subtree: .container(ContainerMatcher(containerName: "missing"))
+            subtree: .container(.identifier("missing"))
         ))) { error in
             XCTAssertEqual(error as? InterfaceSelectionError, .subtreeNotFound)
         }

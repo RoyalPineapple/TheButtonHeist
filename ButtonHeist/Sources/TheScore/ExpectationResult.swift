@@ -20,23 +20,41 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
 /// Predicate evidence derived from an observed trace before any lossy endpoint
 /// projection is chosen for reporting.
 public struct PredicateEvaluationEvidence: Sendable, Equatable {
+    public let currentInterface: Interface?
     public let currentElements: [HeistElement]
     public let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     public let geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+
+    public init(
+        currentInterface: Interface? = nil,
+        currentElements: [HeistElement],
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
+        geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil
+    ) {
+        self.currentInterface = currentInterface
+        self.currentElements = currentElements
+        self.accumulatedDelta = accumulatedDelta
+        self.geometryAccumulatedDelta = geometryAccumulatedDelta
+    }
 
     public init(
         currentElements: [HeistElement],
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
         geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil
     ) {
-        self.currentElements = currentElements
-        self.accumulatedDelta = accumulatedDelta
-        self.geometryAccumulatedDelta = geometryAccumulatedDelta
+        self.init(
+            currentInterface: nil,
+            currentElements: currentElements,
+            accumulatedDelta: accumulatedDelta,
+            geometryAccumulatedDelta: geometryAccumulatedDelta
+        )
     }
 
     public init(trace: AccessibilityTrace) {
+        let interface = trace.captures.last?.interface
         self.init(
-            currentElements: trace.captures.last?.interface.projectedElements ?? [],
+            currentInterface: interface,
+            currentElements: interface?.projectedElements ?? [],
             accumulatedDelta: trace.accumulatedDelta,
             geometryAccumulatedDelta: trace.accumulatedDelta(projection: .geometryAware)
         )

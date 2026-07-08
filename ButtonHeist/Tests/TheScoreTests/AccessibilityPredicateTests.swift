@@ -35,24 +35,18 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testScreenHeaderEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.state(.onScreen(header: "Checkout"))
+    func testContainerSemanticIdentifierEncodeDecode() throws {
+        let predicate = AccessibilityPredicate.exists(container: .identifier("checkout-container"))
         let data = try JSONEncoder().encode(predicate)
         let object = try JSONProbe(data: data)
 
-        XCTAssertEqual(try object.string("type"), "screen")
-        XCTAssertEqual(try object.object("header").string("mode"), "exact")
-        XCTAssertEqual(try object.object("header").string("value"), "Checkout")
-        XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
-    }
-
-    func testScreenIdEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.state(.onScreen(id: "checkout"))
-        let data = try JSONEncoder().encode(predicate)
-        let object = try JSONProbe(data: data)
-
-        XCTAssertEqual(try object.string("type"), "screen")
-        XCTAssertEqual(try object.string("id"), "checkout")
+        XCTAssertEqual(try object.string("type"), "exists")
+        let checks = try object.object("container").array("checks")
+        XCTAssertEqual(checks.count, 1)
+        XCTAssertEqual(try checks[0].string("kind"), "semantic")
+        let semantic = try checks[0].object("semantic")
+        XCTAssertEqual(try semantic.string("kind"), "identifier")
+        XCTAssertEqual(try semantic.object("match").string("value"), "checkout-container")
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
     }
 
@@ -71,49 +65,42 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(result, PredicateEvaluationResult(met: true))
     }
 
-    func testScreenHeaderMatchesCurrentScreenWithoutTransition() {
-        let elements = [
-            makeElement(label: "Checkout", traits: [.header]),
-            makeElement(label: "Pay", traits: [.button]),
-        ]
-        let result = AccessibilityPredicate
-            .onScreen(header: "Checkout")
-            .evaluate(currentElements: elements)
+    func testContainerLabelMatchesCurrentInterfaceWithoutTransition() {
+        let interface = makeTestInterface(nodes: [
+            testContainer(makeTestAccessibilityContainer(
+                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
+            ), children: [
+                testElement(makeElement(label: "Pay", traits: [.button])),
+            ]),
+        ])
+        let predicate = AccessibilityPredicate.exists(container: .label("Checkout"))
 
-        XCTAssertEqual(result, ExpectationResult(met: true, predicate: .onScreen(header: "Checkout")))
+        let result = predicate.evaluate(in: PredicateEvaluationEvidence(
+            currentInterface: interface,
+            currentElements: interface.projectedElements,
+            accumulatedDelta: nil
+        ))
+
+        XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
     }
 
-    func testScreenIdMatchesDerivedCurrentScreenIdWithoutTransition() {
-        let elements = [
-            makeElement(label: "Checkout", traits: [.header]),
-            makeElement(label: "Pay", traits: [.button]),
-        ]
-        let result = AccessibilityPredicate
-            .onScreen(id: "checkout")
-            .evaluate(currentElements: elements)
+    func testContainerLabelFailureReportsMissingContainer() {
+        let interface = makeTestInterface(nodes: [
+            testContainer(makeTestAccessibilityContainer(), children: [
+                testElement(makeElement(label: "Pay", traits: [.button])),
+            ]),
+        ])
+        let predicate = AccessibilityPredicate.exists(container: .label("Checkout"))
 
-        XCTAssertEqual(result, ExpectationResult(met: true, predicate: .onScreen(id: "checkout")))
-    }
-
-    func testScreenIdentityFailureReportsMissingAccessibilityIdentity() {
-        let elements = [makeElement(label: "Pay", traits: [.button])]
-        let result = AccessibilityPredicate
-            .onScreen(header: "Checkout")
-            .evaluate(currentElements: elements)
+        let result = predicate.evaluate(in: PredicateEvaluationEvidence(
+            currentInterface: interface,
+            currentElements: interface.projectedElements,
+            accumulatedDelta: nil
+        ))
 
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.predicate, .onScreen(header: "Checkout"))
-        XCTAssertEqual(result.actual, #"current screen has no accessibility identity; expected screen(header="Checkout")"#)
-    }
-
-    func testScreenIdentityFailureReportsCurrentScreenIdentity() {
-        let elements = [makeElement(label: "Cart", traits: [.header])]
-        let result = AccessibilityPredicate
-            .onScreen(header: "Checkout")
-            .evaluate(currentElements: elements)
-
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, #"current screen id="cart", header="Cart" does not match screen(header="Checkout")"#)
+        XCTAssertEqual(result.predicate, predicate)
+        XCTAssertEqual(result.actual, "container not present: container(semantic=semantic(label=Checkout))")
     }
 
     func testPresentNarrowsByIdentifierAndValue() {
@@ -230,6 +217,29 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertTrue(AccessibilityPredicate.State.existsTarget(
             .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
         ).evaluate(in: graph).met)
+    }
+
+    func testTargetWithinContainerSelectsOnlyDescendants() {
+        let pay = makeElement(label: "Pay", traits: [.button])
+        let otherPay = makeElement(label: "Pay", traits: [.button])
+        let interface = makeTestInterface(nodes: [
+            testContainer(makeTestAccessibilityContainer(
+                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
+            ), children: [
+                testElement(pay),
+            ]),
+            testContainer(makeTestAccessibilityContainer(
+                type: .semanticGroup(label: "Cart", value: nil, identifier: nil)
+            ), children: [
+                testElement(otherPay),
+            ]),
+        ])
+
+        let selected = ElementMatchGraph(interface: interface)
+            .resolve(.within(.label("Checkout"), .label("Pay")))
+
+        XCTAssertEqual(selected.elements, [pay])
+        XCTAssertEqual(selected.orderedPaths, [TreePath([0, 0])])
     }
 
     func testStatePredicateRequiresObservedTraceForActionResultValidation() {

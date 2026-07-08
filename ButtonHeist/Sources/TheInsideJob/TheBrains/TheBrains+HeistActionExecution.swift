@@ -650,6 +650,13 @@ extension TheBrains {
         switch target {
         case .predicate(let predicate, _):
             return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+        case .within(_, let target):
+            switch target {
+            case .predicate(let predicate, _):
+                return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+            case .within:
+                return nil
+            }
         }
     }
 

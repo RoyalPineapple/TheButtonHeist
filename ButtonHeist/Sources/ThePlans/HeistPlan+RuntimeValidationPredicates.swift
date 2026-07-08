@@ -67,8 +67,8 @@ extension HeistPlanRuntimeSafetyValidator {
             validateElementPredicate(predicate, path: "\(path).element")
         case .target(_, let target):
             validateElementTarget(target, path: "\(path).target")
-        case .screen(let identity):
-            validateScreenIdentity(identity, path: path)
+        case .container(_, let container):
+            validateContainerPredicate(container, path: "\(path).container")
         case .all(let states):
             validateAllChildCount(states.count, path: "\(path).states")
             for (index, child) in states.enumerated() {
@@ -89,46 +89,13 @@ extension HeistPlanRuntimeSafetyValidator {
             validateElementPredicate(predicate, path: "\(path).element", scope: scope)
         case .target(_, let target):
             validateTarget(target, path: "\(path).target", scope: scope)
-        case .screen(let identity):
-            validateScreenIdentity(identity, path: path, scope: scope)
+        case .container(_, let container):
+            validateContainerPredicate(container, path: "\(path).container", scope: scope)
         case .all(let states):
             validateAllChildCount(states.count, path: "\(path).states")
             for (index, child) in states.enumerated() {
                 validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1, scope: scope)
             }
-        }
-    }
-
-    mutating func validateScreenIdentity(
-        _ identity: ScreenIdentityPredicate,
-        path: String
-    ) {
-        switch identity {
-        case .id:
-            break
-        case .header(let header):
-            validateString(header, path: "\(path).header", role: "screen header")
-        }
-    }
-
-    mutating func validateScreenIdentity(
-        _ identity: ScreenIdentityPredicateExpr,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        switch identity {
-        case .id(let id):
-            validateString(id, path: "\(path).id", scope: scope)
-            if id.stringMatchLiteralIsEmpty == true {
-                fail(
-                    path: "\(path).id",
-                    contract: "screen identity id must not be empty",
-                    observed: "empty screen identity id",
-                    correction: "Use a non-empty screen id, or assert the screen header instead."
-                )
-            }
-        case .header(let header):
-            validateString(header, path: "\(path).header", scope: scope)
         }
     }
 
@@ -404,7 +371,7 @@ extension HeistPlanRuntimeSafetyValidator {
 private enum StatePredicateExprContract {
     case element(AccessibilityPredicateContract.PresenceRequirement, ElementPredicateTemplate)
     case target(AccessibilityPredicateContract.PresenceRequirement, ElementTargetExpr)
-    case screen(ScreenIdentityPredicateExpr)
+    case container(AccessibilityPredicateContract.PresenceRequirement, ContainerPredicateExpr)
     case all(NonEmptyArray<StatePredicateExpr>)
 }
 
@@ -432,8 +399,10 @@ private extension StatePredicateExpr {
             return .target(.present, target)
         case .missingTarget(let target):
             return .target(.absent, target)
-        case .screen(let identity):
-            return .screen(identity)
+        case .existsContainer(let container):
+            return .container(.present, container)
+        case .missingContainer(let container):
+            return .container(.absent, container)
         case .all(let states):
             return .all(states)
         }

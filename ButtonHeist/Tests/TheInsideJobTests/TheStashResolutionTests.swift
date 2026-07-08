@@ -1260,7 +1260,7 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let result = bagman.resolveContainerTarget(
-            ContainerMatcher(containerName: "semantic_actions__actions"),
+            .identifier("actions"),
             ordinal: nil
         )
         switch result {
@@ -1304,7 +1304,7 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let ambiguous = bagman.resolveContainerTarget(
-            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
             ordinal: nil
         )
         guard case .ambiguous(let facts) = ambiguous else {
@@ -1319,7 +1319,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
 
         let outOfRange = bagman.resolveContainerTarget(
-            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
             ordinal: 3
         )
         guard case .notFound(let notFoundFacts) = outOfRange else {
@@ -1545,7 +1545,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.recordParsedObservedEvidence(liveScreen)
 
-        let resolved = bagman.resolveContainerTarget(ContainerMatcher(containerName: "actions"), ordinal: nil)
+        let resolved = bagman.resolveContainerTarget(.identifier("actions"), ordinal: nil)
         guard case .resolved(let semanticTarget) = resolved else {
             return XCTFail("Expected semantic container, got \(resolved.diagnostics)")
         }
@@ -1672,6 +1672,50 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(resolved.heistId, "button_cancel")
         XCTAssertEqual(resolved.element.label, "Cancel")
+    }
+
+    func testScopedTargetResolvesDescendantOfContainerLabel() {
+        let checkoutContainer = AccessibilityContainer(
+            type: .semanticGroup(label: "Checkout", value: nil, identifier: nil),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let cartContainer = AccessibilityContainer(
+            type: .semanticGroup(label: "Cart", value: nil, identifier: nil),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let checkoutPay = element(label: "Pay", traits: .button)
+        let cartPay = element(label: "Pay", traits: .button)
+        let checkoutPath = TreePath([0, 0])
+        let cartPath = TreePath([1, 0])
+        bagman.installScreenForTesting(Screen(
+            elements: [
+                "checkout_pay": Screen.ScreenElement(
+                    heistId: "checkout_pay",
+                    path: checkoutPath,
+                    scrollMembership: nil,
+                    element: checkoutPay
+                ),
+                "cart_pay": Screen.ScreenElement(
+                    heistId: "cart_pay",
+                    path: cartPath,
+                    scrollMembership: nil,
+                    element: cartPay
+                ),
+            ],
+            hierarchy: [
+                .container(checkoutContainer, children: [.element(checkoutPay, traversalIndex: 0)]),
+                .container(cartContainer, children: [.element(cartPay, traversalIndex: 1)]),
+            ],
+            heistIdsByPath: [
+                checkoutPath: "checkout_pay",
+                cartPath: "cart_pay",
+            ],
+            firstResponderHeistId: nil
+        ))
+
+        let result = bagman.resolveTarget(.within(.label("Checkout"), .label("Pay")))
+
+        XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
     }
 
     func testMatcherAmbiguousReturnsCandidates() {

@@ -509,7 +509,7 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
 
 public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
     public let containerName: ContainerName?
-    public let type: ContainerTypeName
+    public let type: AccessibilityContainerKind
     public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let scrollAxis: ScrollContainerAxis?
     public let viewportWidth: Double?
@@ -519,7 +519,7 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
 
     public init(
         containerName: ContainerName? = nil,
-        type: ContainerTypeName,
+        type: AccessibilityContainerKind,
         reasonCodes: [InterfaceDiscoveryReasonCode],
         scrollAxis: ScrollContainerAxis? = nil,
         viewportWidth: Double? = nil,

@@ -7,15 +7,16 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     case missing(ElementPredicateTemplate)
     case existsTarget(ElementTargetExpr)
     case missingTarget(ElementTargetExpr)
-    case screen(ScreenIdentityPredicateExpr)
+    case existsContainer(ContainerPredicateExpr)
+    case missingContainer(ContainerPredicateExpr)
     case all(NonEmptyArray<StatePredicateExpr>)
 
     private enum WireType: String {
-        case exists, missing, screen, all
+        case exists, missing, all
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, target, targetRef = "target_ref", id, header, states
+        case type, element, target, targetRef = "target_ref", container, states
     }
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.State {
@@ -28,8 +29,10 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             return .existsTarget(try target.resolve(in: environment))
         case .missingTarget(let target):
             return .missingTarget(try target.resolve(in: environment))
-        case .screen(let identity):
-            return .screen(try identity.resolve(in: environment))
+        case .existsContainer(let container):
+            return .existsContainer(try container.resolve(in: environment))
+        case .missingContainer(let container):
+            return .missingContainer(try container.resolve(in: environment))
         case .all(let states):
             return .all(try states.mapNonEmpty { try $0.resolve(in: environment) })
         }
@@ -42,16 +45,26 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, screen, all"
+                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, all"
             )
         }
         switch wireType {
         case .exists:
-            self = try Self.decodeElementState(decoder, container, predicateState: Self.exists, targetState: Self.existsTarget)
+            self = try Self.decodeElementState(
+                decoder,
+                container,
+                predicateState: Self.exists,
+                targetState: Self.existsTarget,
+                containerState: Self.existsContainer
+            )
         case .missing:
-            self = try Self.decodeElementState(decoder, container, predicateState: Self.missing, targetState: Self.missingTarget)
-        case .screen:
-            self = .screen(try ScreenIdentityPredicateExpr(from: decoder))
+            self = try Self.decodeElementState(
+                decoder,
+                container,
+                predicateState: Self.missing,
+                targetState: Self.missingTarget,
+                containerState: Self.missingContainer
+            )
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate expression")
             let states = try container.decode([StatePredicateExpr].self, forKey: .states)
@@ -81,14 +94,12 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         case .missingTarget(let target):
             try container.encode(WireType.missing.rawValue, forKey: .type)
             try Self.encode(target, into: &container)
-        case .screen(let identity):
-            try container.encode(WireType.screen.rawValue, forKey: .type)
-            switch identity {
-            case .id(let id):
-                try container.encode(id, forKey: .id)
-            case .header(let header):
-                try container.encode(header, forKey: .header)
-            }
+        case .existsContainer(let containerPredicate):
+            try container.encode(WireType.exists.rawValue, forKey: .type)
+            try container.encode(containerPredicate, forKey: .container)
+        case .missingContainer(let containerPredicate):
+            try container.encode(WireType.missing.rawValue, forKey: .type)
+            try container.encode(containerPredicate, forKey: .container)
         case .all(let states):
             try container.encode(WireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
@@ -99,21 +110,23 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         _ decoder: Decoder,
         _ container: KeyedDecodingContainer<CodingKeys>,
         predicateState: (ElementPredicateTemplate) -> Self,
-        targetState: (ElementTargetExpr) -> Self
+        targetState: (ElementTargetExpr) -> Self,
+        containerState: (ContainerPredicateExpr) -> Self
     ) throws -> Self {
         try decoder.rejectUnknownKeys(
-            allowed: ["type", "element", "target", "target_ref"],
+            allowed: ["type", "element", "target", "target_ref", "container"],
             typeName: "state predicate expression"
         )
         let hasElement = container.contains(.element)
         let hasTarget = container.contains(.target)
         let hasTargetRef = container.contains(.targetRef)
-        let intentCount = [hasElement, hasTarget, hasTargetRef].filter { $0 }.count
+        let hasContainer = container.contains(.container)
+        let intentCount = [hasElement, hasTarget, hasTargetRef, hasContainer].filter { $0 }.count
         guard intentCount == 1 else {
             throw DecodingError.dataCorruptedError(
                 forKey: .element,
                 in: container,
-                debugDescription: "state predicate expression requires exactly one of element, target, or target_ref"
+                debugDescription: "state predicate expression requires exactly one of element, target, target_ref, or container"
             )
         }
         if hasElement {
@@ -122,7 +135,10 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         if hasTarget {
             return targetState(try container.decode(ElementTargetExpr.self, forKey: .target))
         }
-        return targetState(.ref(try HeistReferenceName.decode(from: container, forKey: .targetRef)))
+        if hasTargetRef {
+            return targetState(.ref(try HeistReferenceName.decode(from: container, forKey: .targetRef)))
+        }
+        return containerState(try container.decode(ContainerPredicateExpr.self, forKey: .container))
     }
 
     private static func encode(
@@ -136,6 +152,8 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             try container.encode(target, forKey: .target)
         case .ref(let reference):
             try container.encode(reference, forKey: .targetRef)
+        case .within:
+            try container.encode(target, forKey: .target)
         }
     }
 }
@@ -147,7 +165,8 @@ extension StatePredicateExpr: CustomStringConvertible {
         case .missing(let predicate): return ScoreDescription.call("missing", [predicate.description])
         case .existsTarget(let target): return ScoreDescription.call("exists", [target.description])
         case .missingTarget(let target): return ScoreDescription.call("missing", [target.description])
-        case .screen(let identity): return identity.description
+        case .existsContainer(let container): return ScoreDescription.call("exists", [container.description])
+        case .missingContainer(let container): return ScoreDescription.call("missing", [container.description])
         case .all(let states): return ScoreDescription.call("all", states.map(\.description))
         }
     }
@@ -164,8 +183,10 @@ public extension StatePredicateExpr {
             self = .existsTarget(ElementTargetExpr(target))
         case .missingTarget(let target):
             self = .missingTarget(ElementTargetExpr(target))
-        case .screen(let identity):
-            self = .screen(ScreenIdentityPredicateExpr(identity))
+        case .existsContainer(let container):
+            self = .existsContainer(ContainerPredicateExpr(container))
+        case .missingContainer(let container):
+            self = .missingContainer(ContainerPredicateExpr(container))
         case .all(let states):
             self = .all(states.mapNonEmpty(StatePredicateExpr.init))
         }

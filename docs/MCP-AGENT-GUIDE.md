@@ -27,7 +27,7 @@ MAY inspect or control the current live session, but they MUST NOT appear inside
 
 ## Choosing tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. These are direct client commands, not DSL. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is The Button Heist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. These are direct client commands, not DSL. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a container predicate such as type, label, value, identifier, table dimensions, or modal boundary. `containerName` is The Button Heist's generated diagnostic name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `perform(step:)` runs one durable ButtonHeist DSL instruction. Use it when one line is enough: one action, or one `WaitFor(...)` statement.
 
@@ -87,16 +87,21 @@ Activate(.label("Pay"), ordinal: 0)
 
 ```swift
 WaitFor(.screenChanged, timeout: .seconds(10))
-WaitFor(.onScreen(header: "Checkout"), timeout: .seconds(5))
+WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(5))
 WaitFor(.label("Receipt"), timeout: .seconds(5))
 WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
 
-Use `.onScreen(...)` when you need to assert the current settled screen identity
-without proving that navigation just happened. Use `.screenChanged(...)` when
-the preceding action itself must prove a screen transition.
+Use `.exists(container: ...)` when you need to assert that the current settled
+hierarchy contains a matching container without proving that navigation just
+happened. Container predicates can match `.label(...)`, `.value(...)`,
+`.identifier(...)`, `.scrollable`, `.dataTable(rowCount:columnCount:)`, or
+`.matching(...)` combinations. Use `.within(container: .label("Checkout"), ...)`
+when an element target must resolve inside that container. Use
+`.screenChanged(...)` when the preceding action itself must prove a screen
+transition.
 
 Standalone `WaitFor(...)` is final-state oriented. If you write
 `WaitFor(.appeared(...))`, `WaitFor(.disappeared(...))`, or

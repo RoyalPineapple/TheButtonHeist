@@ -85,6 +85,19 @@ extension HeistPlanSourceParser {
             }
             try expectSymbol(")")
             return .predicate(predicate, ordinal: ordinal)
+        case "within":
+            try expectSymbol("(")
+            try expectIdentifier("container")
+            try expectSymbol(":")
+            let container = try parseContainerPredicateExpr()
+            try expectSymbol(",")
+            if lookaheadLabel("target") {
+                try expectIdentifier("target")
+                try expectSymbol(":")
+            }
+            let target = try parseTargetExpr()
+            try expectSymbol(")")
+            return .within(container: container, target: target)
         default:
             throw error(previous, "unsupported element target '.\(name)'")
         }
@@ -244,6 +257,147 @@ extension HeistPlanSourceParser {
         default:
             throw error(token, "element predicate checks accept .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors, and .exclude")
         }
+    }
+
+    mutating func parseContainerPredicateExpr() throws -> ContainerPredicateExpr {
+        let token = currentToken
+        switch try parseDotCallName(allowedPrefixes: []) {
+        case "label":
+            try expectSymbol("(")
+            let label = try parseStringMatchCallArgument(field: "container label")
+            try expectSymbol(")")
+            return .label(label)
+        case "value":
+            try expectSymbol("(")
+            let value = try parseStringMatchCallArgument(field: "container value")
+            try expectSymbol(")")
+            return .value(value)
+        case "identifier":
+            try expectSymbol("(")
+            let identifier = try parseStringMatchCallArgument(field: "container identifier")
+            try expectSymbol(")")
+            return .identifier(identifier)
+        case "type":
+            try expectSymbol("(")
+            let type = try parseEnumCase(AccessibilityContainerKind.self, role: "container kind")
+            try expectSymbol(")")
+            return .type(type)
+        case "semantic":
+            try expectSymbol("(")
+            let predicate = try parseSemanticContainerPredicateExpr()
+            try expectSymbol(")")
+            return .semantic(predicate)
+        case "semanticGroup":
+            return .semanticGroup
+        case "list":
+            return .list
+        case "landmark":
+            return .landmark
+        case "tabBar":
+            return .tabBar
+        case "scrollable":
+            return .scrollable
+        case "dataTable":
+            return try parseDataTableContainerPredicateExpr()
+        case "modalBoundary":
+            if consumeSymbol("(") {
+                let required = try parseBoolLiteral()
+                try expectSymbol(")")
+                return ContainerPredicateExpr(.modalBoundary(required))
+            }
+            return .modalBoundary
+        case "matching":
+            try expectSymbol("(")
+            var checks: [ContainerPredicateCheck<StringExpr>] = []
+            if !consumeSymbol(")") {
+                repeat {
+                    checks.append(try parseContainerPredicateCheckExpr())
+                } while consumeSymbol(",")
+                try expectSymbol(")")
+            }
+            return ContainerPredicateExpr(checks)
+        default:
+            throw error(token, "container predicates accept .label, .value, .identifier, .type, .semantic, .dataTable, .scrollable, and .matching")
+        }
+    }
+
+    mutating func parseSemanticContainerPredicateExpr() throws -> SemanticContainerPredicate<StringExpr> {
+        let token = currentToken
+        switch try parseDotCallName(allowedPrefixes: []) {
+        case "label":
+            try expectSymbol("(")
+            let label = try parseStringMatchCallArgument(field: "container label")
+            try expectSymbol(")")
+            return .label(label)
+        case "value":
+            try expectSymbol("(")
+            let value = try parseStringMatchCallArgument(field: "container value")
+            try expectSymbol(")")
+            return .value(value)
+        case "identifier":
+            try expectSymbol("(")
+            let identifier = try parseStringMatchCallArgument(field: "container identifier")
+            try expectSymbol(")")
+            return .identifier(identifier)
+        default:
+            throw error(token, "semantic container predicates accept .label, .value, and .identifier")
+        }
+    }
+
+    mutating func parseContainerPredicateCheckExpr() throws -> ContainerPredicateCheck<StringExpr> {
+        let token = currentToken
+        switch try parseDotCallName(allowedPrefixes: []) {
+        case "type":
+            try expectSymbol("(")
+            let type = try parseEnumCase(AccessibilityContainerKind.self, role: "container kind")
+            try expectSymbol(")")
+            return .type(type)
+        case "semantic":
+            try expectSymbol("(")
+            let predicate = try parseSemanticContainerPredicateExpr()
+            try expectSymbol(")")
+            return .semantic(predicate)
+        case "rowCount":
+            try expectSymbol("(")
+            let rowCount = try parseInteger()
+            try expectSymbol(")")
+            return .rowCount(rowCount)
+        case "columnCount":
+            try expectSymbol("(")
+            let columnCount = try parseInteger()
+            try expectSymbol(")")
+            return .columnCount(columnCount)
+        case "modalBoundary":
+            try expectSymbol("(")
+            let required = try parseBoolLiteral()
+            try expectSymbol(")")
+            return .modalBoundary(required)
+        default:
+            throw error(token, "container predicate checks accept .type, .semantic, .rowCount, .columnCount, and .modalBoundary")
+        }
+    }
+
+    mutating func parseDataTableContainerPredicateExpr() throws -> ContainerPredicateExpr {
+        guard consumeSymbol("(") else { return .dataTable() }
+        var rowCount: Int?
+        var columnCount: Int?
+        if !consumeSymbol(")") {
+            repeat {
+                if lookaheadLabel("rowCount") {
+                    try expectIdentifier("rowCount")
+                    try expectSymbol(":")
+                    rowCount = try parseInteger()
+                } else if lookaheadLabel("columnCount") {
+                    try expectIdentifier("columnCount")
+                    try expectSymbol(":")
+                    columnCount = try parseInteger()
+                } else {
+                    throw error(currentToken, "dataTable accepts rowCount and columnCount")
+                }
+            } while consumeSymbol(",")
+            try expectSymbol(")")
+        }
+        return .dataTable(rowCount: rowCount, columnCount: columnCount)
     }
 
     mutating func parseTraitArray(role: String) throws -> [HeistTrait] {
@@ -477,7 +631,7 @@ extension HeistPlanSourceParser {
             return true
         }
         if currentToken.isSymbol(".") {
-            return lookaheadIdentifier(in: ["target"])
+            return lookaheadIdentifier(in: ["target", "within"])
         }
         return false
     }

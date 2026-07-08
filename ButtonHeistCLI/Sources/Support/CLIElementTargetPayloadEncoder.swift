@@ -10,6 +10,11 @@ enum CLIElementTargetPayloadEncoder {
         switch target {
         case .predicate(let predicate, let ordinal):
             return object(predicate).adding(CommandArgumentWriter.optional(.ordinal, ordinal))
+        case .within(let container, let target):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.container, object(container)),
+                CommandArgumentWriter.value(.target, object(target))
+            )
         }
     }
 
@@ -110,6 +115,60 @@ enum CLIElementTargetPayloadEncoder {
             CommandArgumentWriter.optional(.label, match.label.map(stringMatchValue)),
             CommandArgumentWriter.optional(.value, match.value.map(stringMatchValue)),
             CommandArgumentWriter.optional(.isImportant, match.isImportant)
+        ).heistValue
+    }
+
+    private static func object(_ predicate: ContainerPredicate) -> CLIRequestObject {
+        CommandArgumentWriter.object(
+            CommandArgumentWriter.value(.checks, .array(predicate.checks.map(containerCheckValue)))
+        )
+    }
+
+    private static func containerCheckValue(_ check: ContainerPredicateCheck<String>) -> HeistValue {
+        switch check {
+        case .type(let type):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "type"),
+                CommandArgumentWriter.value(.type, type.rawValue)
+            ).heistValue
+        case .semantic(let predicate):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "semantic"),
+                CommandArgumentWriter.value(.semantic, semanticContainerPredicateValue(predicate))
+            ).heistValue
+        case .rowCount(let count):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "rowCount"),
+                CommandArgumentWriter.value(.value, count)
+            ).heistValue
+        case .columnCount(let count):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "columnCount"),
+                CommandArgumentWriter.value(.value, count)
+            ).heistValue
+        case .modalBoundary(let required):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "modalBoundary"),
+                CommandArgumentWriter.value(.value, required)
+            ).heistValue
+        }
+    }
+
+    private static func semanticContainerPredicateValue(_ predicate: SemanticContainerPredicate<String>) -> HeistValue {
+        switch predicate {
+        case .label(let match):
+            return semanticContainerPredicateObject(kind: "label", match: match)
+        case .value(let match):
+            return semanticContainerPredicateObject(kind: "value", match: match)
+        case .identifier(let match):
+            return semanticContainerPredicateObject(kind: "identifier", match: match)
+        }
+    }
+
+    private static func semanticContainerPredicateObject(kind: String, match: StringMatch<String>) -> HeistValue {
+        CommandArgumentWriter.object(
+            CommandArgumentWriter.value(.kind, kind),
+            CommandArgumentWriter.value(.match, stringMatchValue(match))
         ).heistValue
     }
 }
