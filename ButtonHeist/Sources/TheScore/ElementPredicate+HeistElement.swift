@@ -131,26 +131,26 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 }
 
-package struct ContainerMatch: Sendable, Hashable {
-    package let path: TreePath
-    package let traversalOrder: Int
-    package let facts: ContainerPredicateFacts
+private struct ContainerMatch: Sendable, Hashable {
+    let path: TreePath
+    let traversalOrder: Int
+    let facts: ContainerPredicateFacts
 
-    package static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
+    static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
         lhs.path == rhs.path
     }
 
-    package func hash(into hasher: inout Hasher) {
+    func hash(into hasher: inout Hasher) {
         hasher.combine(path)
     }
 }
 
-package struct ContainerMatchSet: Sendable, Equatable {
-    package static let empty = ContainerMatchSet([])
+private struct ContainerMatchSet: Sendable, Equatable {
+    static let empty = ContainerMatchSet([])
 
-    package let matches: [ContainerMatch]
+    let matches: [ContainerMatch]
 
-    package init(_ matches: [ContainerMatch]) {
+    init(_ matches: [ContainerMatch]) {
         var paths = Set<TreePath>()
         var uniqueMatches: [ContainerMatch] = []
         uniqueMatches.reserveCapacity(matches.count)
@@ -162,7 +162,7 @@ package struct ContainerMatchSet: Sendable, Equatable {
         self.matches = uniqueMatches
     }
 
-    package init(interface: Interface) {
+    init(interface: Interface) {
         self.init(interface.graph.nodesInPathOrder.enumerated().compactMap { offset, record in
             guard case .container(let container) = record.kind else { return nil }
             return ContainerMatch(
@@ -173,14 +173,14 @@ package struct ContainerMatchSet: Sendable, Equatable {
         })
     }
 
-    package var isEmpty: Bool {
+    var isEmpty: Bool {
         matches.isEmpty
     }
 }
 
 package struct ElementMatchGraph: Sendable, Equatable {
     package let all: ElementMatchSet
-    package let containers: ContainerMatchSet
+    private let containers: ContainerMatchSet
 
     package init(_ all: ElementMatchSet) {
         self.all = all
