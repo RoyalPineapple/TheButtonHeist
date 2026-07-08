@@ -63,6 +63,18 @@ final class ScrollToVisibleTests: XCTestCase {
         }
     }
 
+    func testScrollToVisibleTargetRejectsPartialScopedTarget() throws {
+        let containerOnly = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: containerOnly)) { error in
+            assertDecodingError(error, contains: ["scoped element target requires target"])
+        }
+
+        let targetOnly = Data(#"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}]}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: targetOnly)) { error in
+            assertDecodingError(error, contains: ["scoped element target requires container"])
+        }
+    }
+
     func testScrollToVisiblePrimitiveRequestEnvelopeIsRejected() throws {
         let data = Data("""
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","unexpected":"main_scroll"}}

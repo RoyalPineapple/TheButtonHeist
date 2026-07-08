@@ -42,31 +42,22 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderSingleContainerCheck(_ checks: [ContainerPredicateCheck<String>]) -> String? {
-        guard checks.count == 1 else { return nil }
-        switch checks[0] {
-        case .type(.semanticGroup):
-            return ".semanticGroup"
-        case .type(.list):
-            return ".list"
-        case .type(.landmark):
-            return ".landmark"
-        case .type(.dataTable):
-            return ".dataTable()"
-        case .type(.tabBar):
-            return ".tabBar"
-        case .type(.scrollable):
-            return ".scrollable"
-        case .semantic(let predicate):
-            return renderSemanticContainerPredicate(predicate)
-        case .rowCount, .columnCount, .modalBoundary:
-            return nil
-        }
+        renderSingleContainerCheck(checks) { renderSemanticContainerPredicate($0) }
     }
 
     func renderSingleContainerCheck(
         _ checks: [ContainerPredicateCheck<StringExpr>],
         environment: RenderEnvironment
     ) throws -> String? {
+        try renderSingleContainerCheck(checks) {
+            try renderSemanticContainerPredicate($0, environment: environment)
+        }
+    }
+
+    private func renderSingleContainerCheck<Value: StringMatchPayload>(
+        _ checks: [ContainerPredicateCheck<Value>],
+        renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
+    ) rethrows -> String? {
         guard checks.count == 1 else { return nil }
         switch checks[0] {
         case .type(.semanticGroup):
@@ -82,7 +73,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .type(.scrollable):
             return ".scrollable"
         case .semantic(let predicate):
-            return try renderSemanticContainerPredicate(predicate, environment: environment)
+            return try renderSemantic(predicate)
         case .rowCount, .columnCount, .modalBoundary:
             return nil
         }
@@ -135,29 +126,27 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderContainerCheck(_ check: ContainerPredicateCheck<String>) -> String {
-        switch check {
-        case .type(let type):
-            return ".type(.\(type.rawValue))"
-        case .semantic(let predicate):
-            return ".semantic(\(renderSemanticContainerPredicateCheck(predicate)))"
-        case .rowCount(let count):
-            return ".rowCount(\(count))"
-        case .columnCount(let count):
-            return ".columnCount(\(count))"
-        case .modalBoundary(let required):
-            return ".modalBoundary(\(required))"
-        }
+        renderContainerCheck(check) { renderSemanticContainerPredicate($0) }
     }
 
     func renderContainerCheck(
         _ check: ContainerPredicateCheck<StringExpr>,
         environment: RenderEnvironment
     ) throws -> String {
+        try renderContainerCheck(check) {
+            try renderSemanticContainerPredicate($0, environment: environment)
+        }
+    }
+
+    private func renderContainerCheck<Value: StringMatchPayload>(
+        _ check: ContainerPredicateCheck<Value>,
+        renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
+    ) rethrows -> String {
         switch check {
         case .type(let type):
             return ".type(.\(type.rawValue))"
         case .semantic(let predicate):
-            return try ".semantic(\(renderSemanticContainerPredicateCheck(predicate, environment: environment)))"
+            return try ".semantic(\(renderSemantic(predicate)))"
         case .rowCount(let count):
             return ".rowCount(\(count))"
         case .columnCount(let count):
@@ -179,31 +168,6 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicate<StringExpr>,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch predicate {
-        case .label(let match):
-            return try ".label(\(renderCallArgument(match, environment: environment)))"
-        case .value(let match):
-            return try ".value(\(renderCallArgument(match, environment: environment)))"
-        case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
-        }
-    }
-
-    func renderSemanticContainerPredicateCheck(_ predicate: SemanticContainerPredicate<String>) -> String {
-        switch predicate {
-        case .label(let match):
-            return ".label(\(renderCallArgument(match)))"
-        case .value(let match):
-            return ".value(\(renderCallArgument(match)))"
-        case .identifier(let match):
-            return ".identifier(\(renderCallArgument(match)))"
-        }
-    }
-
-    func renderSemanticContainerPredicateCheck(
         _ predicate: SemanticContainerPredicate<StringExpr>,
         environment: RenderEnvironment
     ) throws -> String {

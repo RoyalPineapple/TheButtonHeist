@@ -73,7 +73,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
-                    param(.container, .string),
+                    param(.containerName, .string),
                     FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction],
@@ -99,7 +99,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
-                    param(.container, .string),
+                    param(.containerName, .string),
                     FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction],

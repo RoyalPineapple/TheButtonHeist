@@ -121,7 +121,8 @@ extension ElementTarget: Codable {
     public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTarget? {
         let probe = try decoder.container(keyedBy: CodingKeys.self)
         let hasTargetFields = CodingKeys.predicateInlineKeys.contains { probe.contains($0) }
-            || (probe.contains(.container) && probe.contains(.target))
+            || probe.contains(.container)
+            || probe.contains(.target)
         guard hasTargetFields else { return nil }
         return try decodeCanonical(from: decoder, shouldRejectUnknownKeys: false)
     }

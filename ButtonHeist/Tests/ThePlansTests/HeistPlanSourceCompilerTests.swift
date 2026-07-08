@@ -1548,6 +1548,10 @@ import Testing
             "expected a timeout duration such as .seconds(1)"
         ),
         (
+            root(#"Activate(.within(container: .label("Checkout"), target: .label("Pay")))"#),
+            ".within(...) target argument is unlabeled"
+        ),
+        (
             root(#"WaitFor(.change(.updated(.title())))"#),
             "unsupported element predicate '.title'"
         ),

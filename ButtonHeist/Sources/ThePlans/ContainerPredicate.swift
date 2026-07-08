@@ -2,78 +2,6 @@ import Foundation
 
 // MARK: - Container Predicates
 
-public struct ContainerIdentifier: RawRepresentable, Codable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        guard let normalized = Self.normalized(rawValue) else {
-            preconditionFailure("ContainerIdentifier must not be empty")
-        }
-        self = normalized
-    }
-
-    public init(stringLiteral value: String) {
-        self.init(rawValue: value)
-    }
-
-    public init(validating value: String) throws {
-        guard let normalized = Self.normalized(value) else {
-            throw HeistExpressionError.emptyReference("container identifier")
-        }
-        self = normalized
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(String.self)
-        guard let normalized = Self.normalized(value) else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "container identifier must not be empty"
-            )
-        }
-        self = normalized
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-
-    public static func normalized(_ value: String) -> ContainerIdentifier? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return ContainerIdentifier(unchecked: trimmed)
-    }
-
-    private init(unchecked rawValue: String) {
-        self.rawValue = rawValue
-    }
-}
-
-extension ContainerIdentifier: CustomStringConvertible {
-    public var description: String {
-        rawValue
-    }
-}
-
-extension ContainerIdentifier {
-    static func decode<K: CodingKey>(
-        from container: KeyedDecodingContainer<K>,
-        forKey key: K
-    ) throws -> ContainerIdentifier {
-        let value = try container.decode(String.self, forKey: key)
-        guard let normalized = normalized(value) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "container identifier must not be empty"
-            )
-        }
-        return normalized
-    }
-}
-
 public enum AccessibilityContainerKind: String, Codable, CaseIterable, Sendable {
     case semanticGroup
     case list
@@ -373,6 +301,46 @@ extension ContainerPredicateCheck: CustomStringConvertible {
     }
 }
 
+private enum ContainerPredicateChecks {
+    static func hasPredicates<Value: StringMatchPayload>(_ checks: [ContainerPredicateCheck<Value>]) -> Bool {
+        checks.contains { $0.hasPredicates }
+    }
+
+    static func invalidPayloadDescription<Value: StringMatchPayload>(
+        for checks: [ContainerPredicateCheck<Value>]
+    ) -> String? {
+        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
+            return description
+        }
+        return hasPredicates(checks) ? nil : "container predicate must include at least one field"
+    }
+
+    static func semantic<Value: StringMatchPayload>(
+        _ predicate: SemanticContainerPredicate<Value>
+    ) -> [ContainerPredicateCheck<Value>] {
+        [.semantic(predicate)]
+    }
+
+    static func type<Value: StringMatchPayload>(
+        _ type: AccessibilityContainerKind
+    ) -> [ContainerPredicateCheck<Value>] {
+        [.type(type)]
+    }
+
+    static func dataTable<Value: StringMatchPayload>(
+        rowCount: Int?,
+        columnCount: Int?
+    ) -> [ContainerPredicateCheck<Value>] {
+        [.type(.dataTable)]
+            + (rowCount.map { [.rowCount($0)] } ?? [])
+            + (columnCount.map { [.columnCount($0)] } ?? [])
+    }
+
+    static func modalBoundary<Value: StringMatchPayload>() -> [ContainerPredicateCheck<Value>] {
+        [.modalBoundary(true)]
+    }
+}
+
 public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     public let checks: [ContainerPredicateCheck<String>]
 
@@ -389,10 +357,6 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
         self.init(checks)
     }
 
-    public init(identifier: ContainerIdentifier) {
-        self.init(.semantic(.identifier(identifier.rawValue)))
-    }
-
     public init(identifier: String) {
         self.init(.semantic(.identifier(identifier)))
     }
@@ -402,14 +366,11 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     public var hasPredicates: Bool {
-        checks.contains { $0.hasPredicates }
+        ContainerPredicateChecks.hasPredicates(checks)
     }
 
     public var invalidEmptyPayloadDescription: String? {
-        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
-            return description
-        }
-        return hasPredicates ? nil : "container predicate must include at least one field"
+        ContainerPredicateChecks.invalidPayloadDescription(for: checks)
     }
 
     public func matches(_ facts: ContainerPredicateFacts) -> Bool {
@@ -417,35 +378,35 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     public static func identifier(_ identifier: String) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.identifier(identifier)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.identifier(identifier)))
     }
 
     public static func identifier(_ identifier: StringMatch<String>) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.identifier(identifier)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.identifier(identifier)))
     }
 
     public static func label(_ label: String) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.label(label)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.label(label)))
     }
 
     public static func label(_ label: StringMatch<String>) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.label(label)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.label(label)))
     }
 
     public static func value(_ value: String) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.value(value)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.value(value)))
     }
 
     public static func value(_ value: StringMatch<String>) -> ContainerPredicate {
-        ContainerPredicate(.semantic(.value(value)))
+        ContainerPredicate(ContainerPredicateChecks.semantic(.value(value)))
     }
 
     public static func type(_ type: AccessibilityContainerKind) -> ContainerPredicate {
-        ContainerPredicate(.type(type))
+        ContainerPredicate(ContainerPredicateChecks.type(type))
     }
 
     public static func semantic(_ predicate: SemanticContainerPredicate<String>) -> ContainerPredicate {
-        ContainerPredicate(.semantic(predicate))
+        ContainerPredicate(ContainerPredicateChecks.semantic(predicate))
     }
 
     public static var semanticGroup: ContainerPredicate { .type(.semanticGroup) }
@@ -455,14 +416,11 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     public static var scrollable: ContainerPredicate { .type(.scrollable) }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicate {
-        var checks: [ContainerPredicateCheck<String>] = [.type(.dataTable)]
-        if let rowCount { checks.append(.rowCount(rowCount)) }
-        if let columnCount { checks.append(.columnCount(columnCount)) }
-        return ContainerPredicate(checks)
+        ContainerPredicate(ContainerPredicateChecks.dataTable(rowCount: rowCount, columnCount: columnCount))
     }
 
     public static var modalBoundary: ContainerPredicate {
-        ContainerPredicate(.modalBoundary(true))
+        ContainerPredicate(ContainerPredicateChecks.modalBoundary())
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<String>...) -> ContainerPredicate {
@@ -520,14 +478,11 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public var hasPredicates: Bool {
-        checks.contains { $0.hasPredicates }
+        ContainerPredicateChecks.hasPredicates(checks)
     }
 
     public var invalidEmptyPayloadDescription: String? {
-        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
-            return description
-        }
-        return hasPredicates ? nil : "container predicate must include at least one field"
+        ContainerPredicateChecks.invalidPayloadDescription(for: checks)
     }
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> ContainerPredicate {
@@ -535,47 +490,47 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public static func identifier(_ identifier: StringExpr) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.identifier(identifier)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.identifier(identifier)))
     }
 
     public static func identifier(_ identifier: StringMatch<StringExpr>) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.identifier(identifier)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.identifier(identifier)))
     }
 
     public static func identifier(_ identifier: String) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.identifier(identifier)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.identifier(identifier)))
     }
 
     public static func label(_ label: StringExpr) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.label(label)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.label(label)))
     }
 
     public static func label(_ label: StringMatch<StringExpr>) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.label(label)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.label(label)))
     }
 
     public static func label(_ label: String) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.label(label)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.label(label)))
     }
 
     public static func value(_ value: StringExpr) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.value(value)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.value(value)))
     }
 
     public static func value(_ value: StringMatch<StringExpr>) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.value(value)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.value(value)))
     }
 
     public static func value(_ value: String) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(.value(value)))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(.value(value)))
     }
 
     public static func type(_ type: AccessibilityContainerKind) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.type(type))
+        ContainerPredicateExpr(ContainerPredicateChecks.type(type))
     }
 
     public static func semantic(_ predicate: SemanticContainerPredicate<StringExpr>) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(.semantic(predicate))
+        ContainerPredicateExpr(ContainerPredicateChecks.semantic(predicate))
     }
 
     public static var semanticGroup: ContainerPredicateExpr { .type(.semanticGroup) }
@@ -585,14 +540,11 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     public static var scrollable: ContainerPredicateExpr { .type(.scrollable) }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicateExpr {
-        var checks: [ContainerPredicateCheck<StringExpr>] = [.type(.dataTable)]
-        if let rowCount { checks.append(.rowCount(rowCount)) }
-        if let columnCount { checks.append(.columnCount(columnCount)) }
-        return ContainerPredicateExpr(checks)
+        ContainerPredicateExpr(ContainerPredicateChecks.dataTable(rowCount: rowCount, columnCount: columnCount))
     }
 
     public static var modalBoundary: ContainerPredicateExpr {
-        ContainerPredicateExpr(.modalBoundary(true))
+        ContainerPredicateExpr(ContainerPredicateChecks.modalBoundary())
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<StringExpr>...) -> ContainerPredicateExpr {

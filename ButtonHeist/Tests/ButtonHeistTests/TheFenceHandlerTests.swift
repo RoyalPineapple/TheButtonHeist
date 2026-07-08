@@ -2591,36 +2591,36 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testScrollRejectsPublicContainerName() async {
-        await assertValidationError(
-            command: .scroll,
-            arguments: ["containerName": .string("main_scroll")],
-            contains: "schema validation failed for containerName"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollAllowsContainerArgument() async {
+    func testScrollAllowsContainerNameArgument() async {
         await assertPassesValidation(
             command: .scroll,
-            arguments: ["direction": .string("down"), "container": .string("main_scroll")]
+            arguments: ["direction": .string("down"), "containerName": .string("main_scroll")]
         )
     }
 
     @ButtonHeistActor
-    func testScrollToEdgeRejectsPublicContainerName() async {
-        await assertValidationError(
-            command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "containerName": .string("main_scroll")],
-            contains: "schema validation failed for containerName"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeAllowsContainerArgument() async {
+    func testScrollToEdgeAllowsContainerNameArgument() async {
         await assertPassesValidation(
             command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "container": .string("main_scroll")]
+            arguments: ["edge": .string("bottom"), "containerName": .string("main_scroll")]
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollRejectsLegacyContainerArgument() async {
+        await assertValidationError(
+            command: .scroll,
+            arguments: ["container": .string("main_scroll")],
+            contains: "schema validation failed for container"
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToEdgeRejectsLegacyContainerArgument() async {
+        await assertValidationError(
+            command: .scrollToEdge,
+            arguments: ["edge": .string("bottom"), "container": .string("main_scroll")],
+            contains: "schema validation failed for container"
         )
     }
 

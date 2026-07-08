@@ -467,6 +467,16 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.direction, .down)
     }
 
+    func testScrollTargetRoundTripsScopedElementTarget() throws {
+        let elementTarget = ElementTarget.within(container: .scrollable, .label("Pay"))
+        let target = ScrollTarget(selection: .element(elementTarget), direction: .down)
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(ScrollTarget.self, from: data)
+
+        XCTAssertEqual(decoded.selection, .element(elementTarget))
+        XCTAssertEqual(decoded.direction, .down)
+    }
+
     func testScrollTargetAllDirections() throws {
         for direction in ScrollDirection.allCases {
             let target = ScrollTarget(direction: direction)
@@ -477,17 +487,24 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollTargetAcceptsContainerNameString() throws {
-        let data = Data(#"{"container":"main_scroll","direction":"up"}"#.utf8)
+        let data = Data(#"{"containerName":"main_scroll","direction":"up"}"#.utf8)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
 
         XCTAssertEqual(decoded.selection, .container("main_scroll"))
         XCTAssertEqual(decoded.direction, .up)
     }
 
-    func testScrollTargetRejectsContainerObject() throws {
-        let data = Data(#"{"container":{"containerName":"main_scroll"},"direction":"up"}"#.utf8)
+    func testScrollTargetRejectsLegacyContainerNameStringKey() throws {
+        let data = Data(#"{"container":"main_scroll","direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("Expected to decode String"), "\(error)")
+            assertDecodingError(error, contains: ["scoped element target requires target"])
+        }
+    }
+
+    func testScrollTargetRejectsPartialScopedTargetContainer() throws {
+        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]},"direction":"up"}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
+            assertDecodingError(error, contains: ["scoped element target requires target"])
         }
     }
 
@@ -495,13 +512,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = Data(#"{"direction":"down","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll target field "foo""#])
-        }
-    }
-
-    func testScrollTargetRejectsContainerNamePayloadKey() throws {
-        let data = Data(#"{"direction":"down","containerName":"main_scroll"}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll target field "containerName""#])
         }
     }
 
@@ -529,18 +539,35 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testScrollToEdgeTargetRoundTripsScopedElementTarget() throws {
+        let elementTarget = ElementTarget.within(container: .scrollable, .label("Pay"))
+        let target = ScrollToEdgeTarget(selection: .element(elementTarget), edge: .bottom)
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
+
+        XCTAssertEqual(decoded.selection, .element(elementTarget))
+        XCTAssertEqual(decoded.edge, .bottom)
+    }
+
     func testScrollToEdgeTargetAcceptsContainerNameString() throws {
-        let data = Data(#"{"container":"main_scroll","edge":"bottom"}"#.utf8)
+        let data = Data(#"{"containerName":"main_scroll","edge":"bottom"}"#.utf8)
         let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
 
         XCTAssertEqual(decoded.selection, .container("main_scroll"))
         XCTAssertEqual(decoded.edge, .bottom)
     }
 
-    func testScrollToEdgeTargetRejectsContainerObject() throws {
-        let data = Data(#"{"container":{"containerName":"main_scroll"},"edge":"bottom"}"#.utf8)
+    func testScrollToEdgeTargetRejectsLegacyContainerNameStringKey() throws {
+        let data = Data(#"{"container":"main_scroll","edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("Expected to decode String"), "\(error)")
+            assertDecodingError(error, contains: ["scoped element target requires target"])
+        }
+    }
+
+    func testScrollToEdgeTargetRejectsPartialScopedTargetContainer() throws {
+        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]},"edge":"bottom"}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
+            assertDecodingError(error, contains: ["scoped element target requires target"])
         }
     }
 
@@ -548,13 +575,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = Data(#"{"edge":"bottom","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "foo""#])
-        }
-    }
-
-    func testScrollToEdgeTargetRejectsContainerNamePayloadKey() throws {
-        let data = Data(#"{"edge":"bottom","containerName":"main_scroll"}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "containerName""#])
         }
     }
 

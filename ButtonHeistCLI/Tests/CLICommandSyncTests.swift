@@ -636,15 +636,15 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testScrollCLIAcceptsContainerName() throws {
-        let command = try ScrollCommand.parse(["--container", "main_scroll", "--direction", "up"])
+        let command = try ScrollCommand.parse(["--container-name", "main_scroll", "--direction", "up"])
 
-        XCTAssertEqual(command.selection.container, "main_scroll")
+        XCTAssertEqual(command.selection.containerName, "main_scroll")
         XCTAssertEqual(command.direction, "up")
         XCTAssertFalse(try command.selection.element.hasTarget)
     }
 
     func testScrollCLIRejectsContainerNameWithElementTarget() {
-        XCTAssertThrowsError(try ScrollCommand.parse(["--container", "main_scroll", "--label", "Item"]))
+        XCTAssertThrowsError(try ScrollCommand.parse(["--container-name", "main_scroll", "--label", "Item"]))
     }
 
     func testScrollCLIParsesDirection() throws {
@@ -661,9 +661,9 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testScrollToEdgeCLIAcceptsContainerName() throws {
-        let command = try ScrollToEdgeCommand.parse(["--container", "main_scroll", "--edge", "bottom"])
+        let command = try ScrollToEdgeCommand.parse(["--container-name", "main_scroll", "--edge", "bottom"])
 
-        XCTAssertEqual(command.selection.container, "main_scroll")
+        XCTAssertEqual(command.selection.containerName, "main_scroll")
         XCTAssertEqual(command.edge, "bottom")
         XCTAssertFalse(try command.selection.element.hasTarget)
     }

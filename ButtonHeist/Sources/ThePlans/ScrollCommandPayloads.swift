@@ -80,24 +80,24 @@ extension ScrollTarget: CustomStringConvertible {
 extension ScrollTarget: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case direction
-        case container
+        case containerName
     }
 
     public init(from decoder: Decoder) throws {
         try rejectUnknownScrollPayloadKeys(
             from: decoder,
             commandFields: [CodingKeys.direction.stringValue],
-            allowsContainerKey: true,
+            allowsContainerNameKey: true,
             typeName: "scroll target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
+        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .containerName)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         if containerName != nil, elementTarget != nil {
             throw DecodingError.dataCorruptedError(
-                forKey: .container,
+                forKey: .containerName,
                 in: container,
-                debugDescription: "ScrollTarget requires either container or element target fields, not both"
+                debugDescription: "ScrollTarget requires either containerName or element target fields, not both"
             )
         }
         switch elementTarget {
@@ -112,7 +112,7 @@ extension ScrollTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(containerName, forKey: .container)
+        try container.encodeIfPresent(containerName, forKey: .containerName)
         try container.encode(direction, forKey: .direction)
     }
 }
@@ -217,24 +217,24 @@ extension ScrollToEdgeTarget: CustomStringConvertible {
 extension ScrollToEdgeTarget: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case edge
-        case container
+        case containerName
     }
 
     public init(from decoder: Decoder) throws {
         try rejectUnknownScrollPayloadKeys(
             from: decoder,
             commandFields: [CodingKeys.edge.stringValue],
-            allowsContainerKey: true,
+            allowsContainerNameKey: true,
             typeName: "scroll_to_edge target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
+        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .containerName)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         if containerName != nil, elementTarget != nil {
             throw DecodingError.dataCorruptedError(
-                forKey: .container,
+                forKey: .containerName,
                 in: container,
-                debugDescription: "ScrollToEdgeTarget requires either container or element target fields, not both"
+                debugDescription: "ScrollToEdgeTarget requires either containerName or element target fields, not both"
             )
         }
         switch elementTarget {
@@ -249,7 +249,7 @@ extension ScrollToEdgeTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(containerName, forKey: .container)
+        try container.encodeIfPresent(containerName, forKey: .containerName)
         try container.encode(edge, forKey: .edge)
     }
 }
@@ -257,10 +257,10 @@ extension ScrollToEdgeTarget: Codable {
 private func rejectUnknownScrollPayloadKeys(
     from decoder: Decoder,
     commandFields: [String] = [],
-    allowsContainerKey: Bool = false,
+    allowsContainerNameKey: Bool = false,
     typeName: String
 ) throws {
-    let containerKeys = allowsContainerKey ? ["container"] : []
-    let allowed = Set(ElementTarget.inlineFieldNames + commandFields + containerKeys)
+    let containerNameKeys = allowsContainerNameKey ? ["containerName"] : []
+    let allowed = Set(ElementTarget.inlineFieldNames + commandFields + containerNameKeys)
     try decoder.rejectUnknownKeys(allowed: allowed, typeName: typeName)
 }
