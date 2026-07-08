@@ -275,7 +275,7 @@ public enum FenceResponse {
         case .error:
             return true
         case .action(_, let result, let expectation):
-            if !result.success { return true }
+            if !result.outcome.isSuccess { return true }
             if let expectation, !expectation.met { return true }
             return false
         case .heistExecution(_, let result, _):

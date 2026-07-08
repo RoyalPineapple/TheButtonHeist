@@ -150,7 +150,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
         }
 
         let dispatch = try XCTUnwrap(heist.result.steps.last?.actionEvidence?.dispatchResult)
-        XCTAssertTrue(dispatch.success, dispatch.message ?? "type text failed")
+        XCTAssertTrue(dispatch.outcome.isSuccess, dispatch.message ?? "type text failed")
         XCTAssertEqual(dispatch.method, .typeText)
     }
 

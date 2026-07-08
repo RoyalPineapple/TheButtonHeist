@@ -515,7 +515,7 @@ package struct HeistExecutionStepReportResults: Sendable, Equatable {
     }
 
     package var actionErrorKind: ErrorKind? {
-        actionResult?.success == false ? actionResult?.errorKind : nil
+        actionResult?.outcome.isSuccess == false ? actionResult?.outcome.errorKind : nil
     }
 
     package init(
@@ -595,7 +595,7 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
             return HeistExecutionStepReportResults(
                 dispatchedActionResult: evidence.dispatchResult,
                 actionResult: actionResult,
-                expectation: evidence.dispatchResult?.success == false ? nil : evidence.expectation
+                expectation: evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.expectation
             )
         case .wait(let evidence):
             return HeistExecutionStepReportResults(

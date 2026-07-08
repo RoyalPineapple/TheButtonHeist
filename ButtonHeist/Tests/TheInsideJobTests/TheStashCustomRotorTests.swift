@@ -226,7 +226,7 @@ final class TheStashRotorTests: XCTestCase {
             )
         ))
 
-        XCTAssertFalse(searchResult.success)
+        XCTAssertFalse(searchResult.outcome.isSuccess)
         XCTAssertEqual(searchResult.method, .rotor)
         XCTAssertTrue(
             searchResult.message?.contains("returned a target outside the parsed hierarchy") == true,

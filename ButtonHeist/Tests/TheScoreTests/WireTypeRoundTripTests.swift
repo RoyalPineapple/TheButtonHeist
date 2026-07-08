@@ -945,7 +945,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.wireType, .activate)
         XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.reportTarget, .predicate(ElementPredicate(label: "Save")))
         XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.method, .activate)
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.errorKind, .elementNotFound)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.outcome.errorKind, .elementNotFound)
         XCTAssertEqual(
             decoded.steps[0].actionEvidence?.dispatchResult?.message,
             "No element matching label \"Save\""
@@ -1113,7 +1113,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             decodedStep.caseSelectionEvidence?.selection.outcome,
             HeistCaseSelectionOutcome.matchedCase(index: 0)
         )
-        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.dispatchResult?.errorKind, .actionFailed)
+        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.dispatchResult?.outcome.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
     }
 
@@ -1144,7 +1144,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let invalid = """
         {
           "type": "commandless_dispatch",
-          "dispatchResult": { "success": true, "method": "activate" },
+          "dispatchResult": { "outcome": { "kind": "success" }, "method": "activate" },
           "warning": {
             "code": "activation_weak_affordance_evidence",
             "message": "activate succeeded"
@@ -1286,7 +1286,7 @@ final class WireTypeRoundTripTests: XCTestCase {
           "name": "LibraryScreen.addToCart",
           "childFailedPath": "$.body[0].invoke.body[0]",
           "expectationActionResult": {
-            "success": true,
+            "outcome": { "kind": "success" },
             "method": "wait"
           },
           "expectation": {

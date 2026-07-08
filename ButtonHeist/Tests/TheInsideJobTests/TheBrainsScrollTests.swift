@@ -1196,9 +1196,9 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,

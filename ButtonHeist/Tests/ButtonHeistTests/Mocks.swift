@@ -340,7 +340,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             )
         }
         let actionResult = actionResult(for: command, handler: handler)
-        let expectation = actionResult.success
+        let expectation = actionResult.outcome.isSuccess
             ? heistExpectation(for: action.expectationPolicy.expectedStep, handler: handler)
             : nil
         let failure = mockActionFailure(command: action.command, actionResult: actionResult, expectation: expectation?.result)
@@ -396,7 +396,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             handler: handler
         )
         let expectation = resolved.predicate.validate(against: result)
-        let failure = (!result.success || !expectation.met)
+        let failure = (!result.outcome.isSuccess || !expectation.met)
             ? HeistFailureDetail(
                 category: .wait,
                 contract: "wait predicate is met before timeout",
@@ -571,11 +571,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         actionResult: ActionResult,
         expectation: ExpectationResult?
     ) -> HeistFailureDetail? {
-        if !actionResult.success {
+        if !actionResult.outcome.isSuccess {
             return HeistFailureDetail(
-                category: actionResult.errorKind == .elementNotFound ? .targetResolution : .action,
+                category: actionResult.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
                 contract: "action dispatch succeeds",
-                observed: actionResult.message ?? actionResult.errorKind?.rawValue ?? "action failed",
+                observed: actionResult.message ?? actionResult.outcome.errorKind?.rawValue ?? "action failed",
                 expected: command.reportTarget.map(String.init(describing:))
             )
         }

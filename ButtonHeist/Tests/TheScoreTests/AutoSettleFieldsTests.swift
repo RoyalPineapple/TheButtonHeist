@@ -30,8 +30,8 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertFalse(decoded.success)
-        XCTAssertEqual(decoded.errorKind, .timeout)
+        XCTAssertFalse(decoded.outcome.isSuccess)
+        XCTAssertEqual(decoded.outcome.errorKind, .timeout)
         XCTAssertEqual(decoded.settled, false)
         XCTAssertEqual(decoded.settleTimeMs, 750)
     }

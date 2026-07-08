@@ -47,10 +47,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 44))
         )
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "target disappeared")
-        XCTAssertEqual(result.errorKind, .actionFailed,
+        XCTAssertEqual(result.outcome.errorKind, .actionFailed,
                        "Without explicit errorKind, failures default to actionFailed")
         XCTAssertEqual(result.settled, true)
         XCTAssertEqual(result.settleTimeMs, 44)
@@ -155,7 +155,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(
             result.accessibilityTrace?.captures.last?.transition.screenChangeReason,
             "navigationMarkerChanged"
@@ -265,7 +265,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
 
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.outcome.errorKind, .actionFailed)
     }
 
     func testPostActionObservationFailureRespectsExplicitErrorKind() async {
@@ -278,7 +278,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
 
-        XCTAssertEqual(result.errorKind, .timeout,
+        XCTAssertEqual(result.outcome.errorKind, .timeout,
                        "An explicit errorKind must override the method-based inference")
     }
 
@@ -330,9 +330,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: screen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "activate unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "activate unexpectedly failed")
         XCTAssertEqual(result.method, .activate)
-        XCTAssertNil(result.errorKind)
+        XCTAssertNil(result.outcome.errorKind)
         XCTAssertNil(result.message)
         XCTAssertNotNil(result.accessibilityTrace)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
@@ -363,7 +363,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let labels = Set(brains.stash.settledSemanticScreen.semantic.elements.values.compactMap(\.element.label))
-        XCTAssertTrue(result.success)
+        XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertTrue(labels.contains("Widget 0, Hardware"), "Discovery commit should retain the previously observed page")
         XCTAssertTrue(labels.contains("Widget 90, Hardware"), "Discovery commit should include the newly observed page")
     }
@@ -380,9 +380,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: beforeScreen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "tap unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "tap unexpectedly failed")
         XCTAssertEqual(result.method, .syntheticTap)
-        XCTAssertNil(result.errorKind)
+        XCTAssertNil(result.outcome.errorKind)
         guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
             return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
@@ -421,8 +421,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: screen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "activate unexpectedly failed")
-        XCTAssertNil(result.errorKind)
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "activate unexpectedly failed")
+        XCTAssertNil(result.outcome.errorKind)
         XCTAssertNil(result.message)
         XCTAssertEqual(result.activationTrace, activationTrace)
         guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
@@ -443,7 +443,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .settled(timeMs: 87))
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(result.settled, true)
         XCTAssertEqual(result.settleTimeMs, 87)
         XCTAssertNotNil(result.accessibilityTrace)
@@ -479,7 +479,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: beforeScreen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(result.subjectEvidence, evidence)
     }
 
@@ -496,7 +496,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         guard case .screenChanged? = result.accessibilityTrace?.endpointDelta else {
             return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
@@ -536,7 +536,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         guard case .screenChanged(let payload)? = result.accessibilityTrace?.endpointDelta else {
             return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
@@ -728,7 +728,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(discoveryAfter)
 
         let result = await resultTask.value
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
 
         let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last)
             .interface
@@ -752,7 +752,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .timedOut(timeMs: 250))
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertNil(result.message)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 250)
@@ -798,9 +798,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: beforeScreen, outcome: .cancelled(timeMs: 125))
         )
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.message, "cancelled after 125ms")
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.outcome.errorKind, .actionFailed)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 125)
         XCTAssertEqual(brains.stash.latestSettledSemanticObservationEvent?.sequence, settledSequence)
@@ -822,9 +822,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleOutcome: settledOutcome(finalScreen: nil, outcome: .timedOut(timeMs: 300))
         )
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.message, "Could not parse post-action accessibility tree")
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.outcome.errorKind, .actionFailed)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 300)
         XCTAssertEqual(result.accessibilityTrace?.captures.count, 1)
@@ -853,7 +853,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Home"])
         XCTAssertEqual(receipt.expectation.met, true)
     }
@@ -867,8 +867,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             timeout: 0.01
         ))
 
-        XCTAssertFalse(receipt.actionResult.success)
-        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(receipt.expectation.met, false)
         XCTAssertTrue(receipt.actionResult.message?.contains("no settled semantic observation available") == true)
     }
@@ -899,7 +899,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
         guard case .elementsChanged? = trace.endpointDelta else {
@@ -927,8 +927,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
-        XCTAssertFalse(receipt.actionResult.success)
-        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
         XCTAssertTrue(receipt.actionResult.message?.contains("known: 1 elements") == true)
         XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
@@ -951,7 +951,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
         XCTAssertTrue(receipt.warning?.message.contains("already absent") == true)
@@ -977,7 +977,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
         XCTAssertEqual(receipt.warning?.evidence, "label=Ready")
@@ -1009,7 +1009,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertEqual(receipt.warning?.code, "transition_not_observed_final_state_satisfied")
         XCTAssertEqual(receipt.warning?.finalStateTiming, "baseline")
@@ -1043,8 +1043,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertFalse(receipt.actionResult.success)
-        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(receipt.expectation.met, false)
         XCTAssertNil(receipt.warning)
     }
@@ -1077,7 +1077,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, false)
         XCTAssertNil(receipt.warning)
     }
@@ -1102,7 +1102,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, false)
         XCTAssertNil(receipt.warning)
     }
@@ -1129,7 +1129,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = await receiptTask.value
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
         XCTAssertNil(receipt.warning)
     }
@@ -1351,7 +1351,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             for: WaitStep(predicate: predicate, timeout: 1)
         )
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(Array(observedScopes.prefix(2)), [.discovery, .visible])
     }
@@ -1384,7 +1384,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             for: WaitStep(predicate: predicate, timeout: 1)
         )
 
-        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(observedScopes, [.discovery])
     }

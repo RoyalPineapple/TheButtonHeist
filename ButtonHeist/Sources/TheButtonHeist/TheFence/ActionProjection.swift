@@ -65,7 +65,7 @@ struct ActionProjection: Sendable {
         profile: ProjectionProfile,
         includeOmissions: Bool = false
     ) {
-        let surfacedExpectation = result.success ? expectation : nil
+        let surfacedExpectation = result.outcome.isSuccess ? expectation : nil
         status = result.publicStatus(expectation: surfacedExpectation)
         self.actionMethod = actionMethod
         message = result.message

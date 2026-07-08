@@ -29,7 +29,7 @@ extension FenceResponse {
             return formatAnnouncements(announcements)
         case .action(let command, let result, let expectation):
             var text = formatActionResult(command: command, result: result)
-            if result.success, let expectation {
+            if result.outcome.isSuccess, let expectation {
                 if expectation.met {
                     text += "  [expectation met]"
                 } else {

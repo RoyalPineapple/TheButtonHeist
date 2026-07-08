@@ -205,7 +205,7 @@ extension TheBrains {
 
         case .resolved(let resolvedCommand):
             let actionResult = await runtime.execute(resolvedCommand)
-            guard actionResult.success, let expectation else {
+            guard actionResult.outcome.isSuccess, let expectation else {
                 return actionResultNode(
                     command: command,
                     actionResult: actionResult,
@@ -397,7 +397,7 @@ extension TheBrains {
     private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
         .wait(waitEvidencePayload(
             receipt,
-            outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed
+            outcome: receipt.actionResult.outcome.isSuccess && receipt.expectation.met ? .matched : .failed
         ))
     }
 
@@ -558,7 +558,7 @@ extension TheBrains {
         actionResult: ActionResult
     ) -> HeistActionWarning? {
         guard case .activate = command,
-              actionResult.success,
+              actionResult.outcome.isSuccess,
               let subject = actionResult.subjectEvidence,
               !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits)
         else { return nil }
@@ -589,9 +589,9 @@ extension TheBrains {
         command: HeistActionCommand,
         result: ActionResult
     ) -> HeistFailureDetail? {
-        guard !result.success else { return nil }
+        guard !result.outcome.isSuccess else { return nil }
         return HeistFailureDetail(
-            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
             expected: command.reportTarget.map(String.init(describing:)),
@@ -604,7 +604,7 @@ extension TheBrains {
         receipt: HeistWaitReceipt,
         purpose: HeistWaitEvaluationPurpose
     ) -> HeistWaitEvaluation {
-        guard !receipt.actionResult.success || !receipt.expectation.met else {
+        guard !receipt.actionResult.outcome.isSuccess || !receipt.expectation.met else {
             return .matched(receipt)
         }
         return .failed(FailedHeistWaitEvaluation(
@@ -632,7 +632,7 @@ extension TheBrains {
     private func actionObserved(_ result: ActionResult, command: HeistActionCommand) -> String {
         [
             result.message,
-            result.errorKind.map { "errorKind=\($0.rawValue)" },
+            result.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
             result.settled.map { "settled=\($0)" },
             failureInterfaceSuggestion(for: command, result: result),
         ].compactMap { $0 }.joined(separator: "; ")
@@ -642,7 +642,7 @@ extension TheBrains {
         for command: HeistActionCommand,
         result: ActionResult
     ) -> String? {
-        guard result.errorKind == .elementNotFound,
+        guard result.outcome.errorKind == .elementNotFound,
               let target = command.reportTarget,
               let elements = result.accessibilityTrace?.captures.last?.interface.projectedElements else {
             return nil
@@ -664,7 +664,7 @@ extension TheBrains {
         [
             receipt.expectation.actual,
             receipt.actionResult.message,
-            receipt.actionResult.errorKind.map { "errorKind=\($0.rawValue)" },
+            receipt.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
             receipt.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
