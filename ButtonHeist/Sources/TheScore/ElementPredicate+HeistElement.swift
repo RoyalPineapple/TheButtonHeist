@@ -131,17 +131,13 @@ package struct ElementMatchSet: Sendable, Equatable {
     }
 }
 
-private struct ContainerMatch: Sendable, Hashable {
+private struct ContainerMatch: Sendable, Equatable {
     let path: TreePath
     let traversalOrder: Int
     let facts: ContainerPredicateFacts
 
     static func == (lhs: ContainerMatch, rhs: ContainerMatch) -> Bool {
         lhs.path == rhs.path
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(path)
     }
 }
 
@@ -173,9 +169,6 @@ private struct ContainerMatchSet: Sendable, Equatable {
         })
     }
 
-    var isEmpty: Bool {
-        matches.isEmpty
-    }
 }
 
 package struct ElementMatchGraph: Sendable, Equatable {

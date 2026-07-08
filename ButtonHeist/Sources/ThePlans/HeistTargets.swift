@@ -262,12 +262,6 @@ public extension ElementTargetExpr {
     }
 }
 
-public extension ContainerPredicate {
-    static func identifier(_ identifier: ContainerIdentifier) -> ContainerPredicate {
-        ContainerPredicate(identifier: identifier)
-    }
-}
-
 public extension AccessibilityPredicate {
     static func change(_ scopes: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate {
         switch scopes.count {

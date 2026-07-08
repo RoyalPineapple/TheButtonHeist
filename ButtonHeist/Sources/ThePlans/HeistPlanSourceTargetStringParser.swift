@@ -20,59 +20,9 @@ extension HeistPlanSourceParser {
         }
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
-        case "label":
-            try expectSymbol("(")
-            let label = try parseStringMatchCallArgument(field: "label")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(label: label))
-        case "identifier":
-            try expectSymbol("(")
-            let identifier = try parseStringMatchCallArgument(field: "identifier")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(identifier: identifier))
-        case "value":
-            try expectSymbol("(")
-            let value = try parseStringMatchCallArgument(field: "value")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(value: value))
-        case "hint":
-            try expectSymbol("(")
-            let hint = try parseStringMatchCallArgument(field: "hint")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(hint: hint))
-        case "traits":
-            try expectSymbol("(")
-            let traits = try parseTraitArray(role: "traits")
-            try rejectEmptyPredicateCollection(traits, role: "traits")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(traits: traits))
-        case "actions":
-            try expectSymbol("(")
-            let actions = try parseActionArray(role: "actions")
-            try rejectEmptyPredicateCollection(actions, role: "actions")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(actions: actions))
-        case "customContent":
-            try expectSymbol("(")
-            let match = try parseCustomContentMatchArgument(role: "customContent")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(customContent: match))
-        case "rotors":
-            try expectSymbol("(")
-            let matches = try parseStringMatchArray(role: "rotors")
-            try rejectEmptyPredicateCollection(matches, role: "rotors")
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate(rotors: matches))
-        case "exclude":
-            try expectSymbol("(")
-            let check = try parseElementPredicateCheck()
-            try expectSymbol(")")
-            return .predicate(ElementPredicateTemplate([.exclude(check)]))
-        case "element":
-            try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplateFields()
-            try expectSymbol(")")
-            return .predicate(predicate)
+        case "label", "identifier", "value", "hint", "traits",
+             "actions", "customContent", "rotors", "exclude", "element":
+            return .predicate(try parseElementPredicateTemplate(named: name))
         case "target":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplate()

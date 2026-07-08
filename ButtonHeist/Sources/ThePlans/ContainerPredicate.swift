@@ -2,78 +2,6 @@ import Foundation
 
 // MARK: - Container Predicates
 
-public struct ContainerIdentifier: RawRepresentable, Codable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        guard let normalized = Self.normalized(rawValue) else {
-            preconditionFailure("ContainerIdentifier must not be empty")
-        }
-        self = normalized
-    }
-
-    public init(stringLiteral value: String) {
-        self.init(rawValue: value)
-    }
-
-    public init(validating value: String) throws {
-        guard let normalized = Self.normalized(value) else {
-            throw HeistExpressionError.emptyReference("container identifier")
-        }
-        self = normalized
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(String.self)
-        guard let normalized = Self.normalized(value) else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "container identifier must not be empty"
-            )
-        }
-        self = normalized
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-
-    public static func normalized(_ value: String) -> ContainerIdentifier? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return ContainerIdentifier(unchecked: trimmed)
-    }
-
-    private init(unchecked rawValue: String) {
-        self.rawValue = rawValue
-    }
-}
-
-extension ContainerIdentifier: CustomStringConvertible {
-    public var description: String {
-        rawValue
-    }
-}
-
-extension ContainerIdentifier {
-    static func decode<K: CodingKey>(
-        from container: KeyedDecodingContainer<K>,
-        forKey key: K
-    ) throws -> ContainerIdentifier {
-        let value = try container.decode(String.self, forKey: key)
-        guard let normalized = normalized(value) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "container identifier must not be empty"
-            )
-        }
-        return normalized
-    }
-}
-
 public enum AccessibilityContainerKind: String, Codable, CaseIterable, Sendable {
     case semanticGroup
     case list
@@ -387,10 +315,6 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
         _ checks: ContainerPredicateCheck<String>...
     ) {
         self.init(checks)
-    }
-
-    public init(identifier: ContainerIdentifier) {
-        self.init(.semantic(.identifier(identifier.rawValue)))
     }
 
     public init(identifier: String) {
