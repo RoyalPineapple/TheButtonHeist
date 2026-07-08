@@ -12,20 +12,21 @@ import TheScore
 /// tasks reference the bus weakly.
 final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     /// Closed notification domain. UIKit spells element-change notifications
-    /// `layoutChanged`; evidence keeps that platform name at the boundary.
+    /// `layoutChanged`; evidence maps that boundary code to Button Heist's
+    /// product-level `elementChanged` kind.
     private enum SupportedNotification: UInt32 {
         case screenChanged = 1000
         case elementChanged = 1001
         case announcement = 1008
 
-        var name: String {
+        var kind: AccessibilityNotificationKind {
             switch self {
             case .screenChanged:
-                return "screenChanged"
+                return .screenChanged
             case .elementChanged:
-                return "layoutChanged"
+                return .elementChanged
             case .announcement:
-                return "announcement"
+                return .announcement
             }
         }
 
@@ -306,14 +307,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         notificationData data: CapturedAccessibilityNotificationPayload,
         associatedElement element: CapturedAccessibilityNotificationPayload
     ) {
-        guard let kind = SupportedNotification(rawValue: code) else { return }
+        guard let notification = SupportedNotification(rawValue: code) else { return }
 
         lock.lock()
         latestSequenceStorage += 1
         let event = PendingAccessibilityNotificationEvent(
             sequence: latestSequenceStorage,
-            code: kind.rawValue,
-            name: kind.name,
+            kind: notification.kind,
             timestamp: Date(),
             notificationData: data.pendingPayload,
             associatedElement: element.pendingPayload
@@ -322,7 +322,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         if bufferedEvents.count > maxBufferedEvents {
             bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
         }
-        let resumedTransitionWaiters = recordTransitionEventLocked(kind: kind, sequence: event.sequence)
+        let resumedTransitionWaiters = recordTransitionEventLocked(kind: notification, sequence: event.sequence)
         let resumedAnnouncementWaiters = recordAnnouncementEventLocked(event)
         lock.unlock()
 
@@ -557,8 +557,7 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
 
 struct PendingAccessibilityNotificationEvent {
     let sequence: UInt64
-    let code: UInt32
-    let name: String
+    let kind: AccessibilityNotificationKind
     let timestamp: Date
     let notificationData: PendingAccessibilityNotificationPayload
     let associatedElement: PendingAccessibilityNotificationPayload
@@ -569,8 +568,7 @@ struct PendingAccessibilityNotificationEvent {
             sequence: sequence,
             text: text,
             timestamp: timestamp,
-            notificationCode: code,
-            notificationName: name,
+            kind: kind,
             associatedElement: associatedElement.publicPayload
         )
     }

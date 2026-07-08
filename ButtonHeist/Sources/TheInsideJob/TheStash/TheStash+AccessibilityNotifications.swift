@@ -26,8 +26,7 @@ extension TheStash {
             autoreleasepool {
                 AccessibilityNotificationEvidence(
                     sequence: event.sequence,
-                    code: event.code,
-                    name: event.name,
+                    kind: event.kind,
                     timestamp: event.timestamp,
                     notificationData: resolveAccessibilityNotificationPayload(
                         event.notificationData,

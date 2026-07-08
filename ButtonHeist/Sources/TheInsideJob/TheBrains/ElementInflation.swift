@@ -794,8 +794,7 @@ final class ElementInflation {
         var stableTarget = inflatedTarget
         var previous = LiveGeometrySample(inflatedTarget.liveTarget)
         var quietFrames = 1
-        let shouldRefreshLiveCapture = shouldRefreshLiveCaptureForStableGeometry(inflatedTarget.liveTarget)
-        if !shouldRefreshLiveCapture {
+        if !canRefreshLiveGeometryThroughWindow(inflatedTarget.liveTarget.object) {
             await tripwire.yieldRealFrames(1)
             if requireOnscreenActivationPoint,
                !ScreenMetrics.current.bounds.contains(stableTarget.liveTarget.activationPoint) {
@@ -823,12 +822,15 @@ final class ElementInflation {
                    !ScreenMetrics.current.bounds.contains(current.activationPoint) {
                     return .retrying(failedAttempt: attempt, reason: .activationPointOffscreen)
                 }
-                let currentTarget = stableActionTarget(
+                guard let currentTarget = stableActionTarget(
                     target: inflatedTarget.target,
-                    retainedTarget: stableTarget,
-                    screenElement: currentScreenElement,
-                    sample: current
-                )
+                    screenElement: currentScreenElement
+                ) else {
+                    return .failed(.staleRefresh(
+                        "target \(Navigation.ScrollTargetDescription(currentScreenElement).description) "
+                            + "could not be proven against the current live capture"
+                    ))
+                }
                 if current.matches(previous) {
                     quietFrames += 1
                     stableTarget = currentTarget
@@ -856,36 +858,23 @@ final class ElementInflation {
 
     private func stableActionTarget(
         target: ElementTarget,
-        retainedTarget: InflatedElementTarget,
-        screenElement: TheStash.ScreenElement,
-        sample: LiveGeometrySample
-    ) -> InflatedElementTarget {
-        if case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement),
-           retainedScreenElement(liveTarget.screenElement, matches: target) {
-            return InflatedElementTarget(
-                target: target,
-                screenElement: liveTarget.screenElement,
-                liveTarget: liveTarget
-            )
-        }
-        let liveTarget = TheStash.LiveActionTarget(
-            screenElement: screenElement,
-            object: retainedTarget.liveTarget.object,
-            frame: sample.frame,
-            activationPoint: sample.activationPoint
-        )
+        screenElement: TheStash.ScreenElement
+    ) -> InflatedElementTarget? {
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement),
+              retainedScreenElement(liveTarget.screenElement, matches: target)
+        else { return nil }
         return InflatedElementTarget(
             target: target,
-            screenElement: screenElement,
+            screenElement: liveTarget.screenElement,
             liveTarget: liveTarget
         )
     }
 
-    private func shouldRefreshLiveCaptureForStableGeometry(_ target: TheStash.LiveActionTarget) -> Bool {
-        if let view = target.object as? UIView {
+    private func canRefreshLiveGeometryThroughWindow(_ object: NSObject) -> Bool {
+        if let view = object as? UIView {
             return view.window != nil
         }
-        if let element = target.object as? UIAccessibilityElement,
+        if let element = object as? UIAccessibilityElement,
            let view = element.accessibilityContainer as? UIView {
             return view.window != nil
         }
@@ -1082,19 +1071,10 @@ final class ElementInflation {
     ) -> FreshElementTargetResolution? {
         switch visibleTargetResolution(target) {
         case .success(let screenElement)?:
-            if let liveCaptureTarget = resolveCurrentVisibleLiveCaptureTarget(
-                target: target,
-                method: method
-            ) {
-                return liveCaptureTarget
-            }
             switch stash.resolveLiveActionTarget(for: screenElement) {
             case .resolved(let liveTarget):
                 guard retainedScreenElement(liveTarget.screenElement, matches: target) else {
-                    return resolveCurrentVisibleLiveCaptureTarget(
-                        target: target,
-                        method: method
-                    ) ?? .retry(.staleTarget)
+                    return .retry(.staleTarget)
                 }
                 return .success(InflatedElementTarget(
                     target: target,
@@ -1119,54 +1099,6 @@ final class ElementInflation {
         }
     }
 
-    private func resolveCurrentVisibleLiveCaptureTarget(
-        target: ElementTarget,
-        method: ActionMethod
-    ) -> FreshElementTargetResolution? {
-        guard let entry = currentVisibleLiveCaptureEntry(matching: target) else { return nil }
-        guard let object = entry.ref?.object else { return nil }
-        guard let sample = LiveGeometrySample(entry.screenElement) else {
-            return .failure(.geometryNotActionable(
-                ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: entry.screenElement,
-                    isVisible: stash.visibleIds.contains(entry.heistId)
-                )
-            ))
-        }
-        let liveTarget = TheStash.LiveActionTarget(
-            screenElement: entry.screenElement,
-            object: object,
-            frame: sample.frame,
-            activationPoint: sample.activationPoint
-        )
-        return .success(InflatedElementTarget(
-            target: target,
-            screenElement: entry.screenElement,
-            liveTarget: liveTarget
-        ))
-    }
-
-    private func currentVisibleLiveCaptureEntry(
-        matching target: ElementTarget
-    ) -> LiveCapture.LiveElementEntry? {
-        let matches = ElementPredicateGraph(
-            subjects: stash.currentLiveCapture.orderedElementEntries(),
-            identity: \.path
-        )
-            .resolve(target)
-            .subjects
-        switch target {
-        case .predicate(_, let ordinal):
-            if ordinal != nil {
-                return matches.first
-            }
-            return matches.count == 1 ? matches[0] : nil
-        case .within:
-            return nil
-        }
-    }
-
     private func retainedScreenElement(
         _ screenElement: TheStash.ScreenElement,
         matches target: ElementTarget
@@ -1180,7 +1112,9 @@ final class ElementInflation {
             .resolve(predicate)
             .isEmpty
         case .within:
-            return false
+            guard let resolved = stash.resolveVisibleTarget(target).resolved else { return false }
+            return resolved.heistId == screenElement.heistId
+                && resolved.path == screenElement.path
         }
     }
 

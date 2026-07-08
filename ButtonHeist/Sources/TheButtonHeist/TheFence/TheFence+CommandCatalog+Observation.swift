@@ -63,7 +63,7 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetAnnouncementsRequest,
                 projection: .cliAndMCP(
-                    "Read recent spoken accessibility text captured from announcement, layoutChanged, or screenChanged notifications.",
+                    "Read recent spoken accessibility text captured from announcement, elementChanged, or screenChanged notifications.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )

@@ -169,8 +169,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let notifications = [
             AccessibilityNotificationEvidence(
                 sequence: 7,
-                code: 1001,
-                name: "layoutChanged",
+                kind: .elementChanged,
                 timestamp: Date(timeIntervalSince1970: 7),
                 notificationData: .unresolvedObject(AccessibilityNotificationObjectPayload(
                     className: "UICollectionView",
@@ -180,8 +179,7 @@ final class AccessibilityTraceTests: XCTestCase {
             ),
             AccessibilityNotificationEvidence(
                 sequence: 8,
-                code: 1000,
-                name: "screenChanged",
+                kind: .screenChanged,
                 timestamp: Date(timeIntervalSince1970: 8),
                 notificationData: .string("Checkout"),
                 associatedElement: .none
@@ -203,9 +201,30 @@ final class AccessibilityTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: data)
         XCTAssertEqual(decoded.transition.accessibilityNotifications, notifications)
         XCTAssertEqual(
-            decoded.transition.accessibilityNotifications.map(\.name),
-            ["layoutChanged", "screenChanged"]
+            decoded.transition.accessibilityNotifications.map(\.kind),
+            [.elementChanged, .screenChanged]
         )
+    }
+
+    func testNotificationEvidenceEncodesProductKindsWithoutUIKitCodeOrName() throws {
+        let notifications = AccessibilityNotificationKind.allCases.enumerated().map { offset, kind in
+            AccessibilityNotificationEvidence(
+                sequence: UInt64(offset + 1),
+                kind: kind,
+                timestamp: Date(timeIntervalSince1970: TimeInterval(offset + 1)),
+                notificationData: .none,
+                associatedElement: .none
+            )
+        }
+
+        let data = try JSONEncoder().encode(notifications)
+        let decoded = try JSONDecoder().decode([AccessibilityNotificationEvidence].self, from: data)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+
+        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .elementChanged, .announcement])
+        XCTAssertEqual(json.compactMap { $0["kind"] as? String }, ["screenChanged", "elementChanged", "announcement"])
+        XCTAssertTrue(json.allSatisfy { $0["code"] == nil })
+        XCTAssertTrue(json.allSatisfy { $0["name"] == nil })
     }
 
     func testNotificationPayloadRejectsFieldsFromOtherVariants() {

@@ -157,6 +157,7 @@ final class InteractionObservation {
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
+        observationPlan: WaitObservationPlan? = nil,
         allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
@@ -164,6 +165,7 @@ final class InteractionObservation {
             for: step,
             initialTrace: initialTrace,
             after: sequence,
+            observationPlan: observationPlan,
             allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
             announcementCursorStrategy: announcementCursorStrategy
         )
@@ -173,6 +175,7 @@ final class InteractionObservation {
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
+        observationPlan: WaitObservationPlan? = nil,
         allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
@@ -180,6 +183,7 @@ final class InteractionObservation {
             for: step,
             initialTrace: initialTrace,
             after: sequence,
+            observationPlan: observationPlan,
             allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
             announcementCursorStrategy: announcementCursorStrategy
         )

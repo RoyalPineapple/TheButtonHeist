@@ -5,23 +5,107 @@ import Foundation
 import TheScore
 
 extension TheBrains {
-    struct HeistReceiptChildren: Equatable {
+    struct HeistReceiptAbortedChildren: Equatable {
+        let firstFailedPath: String
         let children: [HeistExecutionStepResult]
-        let abortedAtChildPath: String?
+    }
+
+    private enum HeistReceiptChildrenState: Equatable {
+        case completed([HeistExecutionStepResult])
+        case aborted(HeistReceiptAbortedChildren)
+    }
+
+    struct HeistReceiptChildren: Equatable {
+        private let state: HeistReceiptChildrenState
 
         static let empty = HeistReceiptChildren([])
 
         init(_ children: [HeistExecutionStepResult]) {
-            self.children = children
-            abortedAtChildPath = children.firstFailedStep?.path
+            if let firstFailedPath = children.firstFailedStep?.path {
+                state = .aborted(HeistReceiptAbortedChildren(firstFailedPath: firstFailedPath, children: children))
+            } else {
+                state = .completed(children)
+            }
+        }
+
+        var children: [HeistExecutionStepResult] {
+            switch state {
+            case .completed(let children):
+                return children
+            case .aborted(let aborted):
+                return aborted.children
+            }
+        }
+
+        var aborted: HeistReceiptAbortedChildren? {
+            switch state {
+            case .completed:
+                return nil
+            case .aborted(let aborted):
+                return aborted
+            }
+        }
+
+        var abortedAtChildPath: String? {
+            aborted?.firstFailedPath
         }
     }
 
     enum HeistStepReceiptOutcome {
         case passed(evidence: HeistStepEvidence? = nil, children: HeistReceiptChildren = .empty)
         case failed(evidence: HeistStepEvidence? = nil, failure: HeistFailureDetail, children: HeistReceiptChildren = .empty)
-        case childAborted(evidence: HeistStepEvidence, failure: HeistFailureDetail, abortedAtChildPath: String, children: HeistReceiptChildren)
+        case childAborted(evidence: HeistStepEvidence, failure: HeistFailureDetail, abortedChildren: HeistReceiptAbortedChildren)
         case skipped(children: HeistReceiptChildren = .empty)
+    }
+
+    private struct HeistStepReceiptFolder {
+        let path: String
+        let kind: HeistExecutionStepKind
+        let durationMs: Int
+        let intent: HeistStepIntent?
+
+        func fold(_ outcome: HeistStepReceiptOutcome) -> HeistExecutionStepResult {
+            switch outcome {
+            case .passed(let evidence, let children):
+                return .passed(
+                    path: path,
+                    kind: kind,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: evidence,
+                    children: children.children
+                )
+            case .failed(let evidence, let failure, let children):
+                return .failed(
+                    path: path,
+                    kind: kind,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: evidence,
+                    failure: failure,
+                    children: children.children
+                )
+            case .childAborted(let evidence, let failure, let abortedChildren):
+                return .childAborted(
+                    path: path,
+                    kind: kind,
+                    durationMs: durationMs,
+                    intent: intent,
+                    evidence: evidence,
+                    failure: failure,
+                    abortedAtChildPath: abortedChildren.firstFailedPath,
+                    children: abortedChildren.children
+                )
+            case .skipped(let children):
+                return .skipped(
+                    path: path,
+                    kind: kind,
+                    durationMs: durationMs,
+                    intent: intent,
+                    children: children.children
+                )
+            }
+        }
     }
 
     func heistActionReceipt(
@@ -194,14 +278,13 @@ extension TheBrains {
         children: HeistReceiptChildren,
         childFailure: (String) -> HeistFailureDetail
     ) -> HeistStepReceiptOutcome {
-        guard let abortedAtChildPath = children.abortedAtChildPath else {
+        guard let abortedChildren = children.aborted else {
             return .passed(evidence: evidence, children: children)
         }
         return .childAborted(
             evidence: evidence,
-            failure: childFailure(abortedAtChildPath),
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            failure: childFailure(abortedChildren.firstFailedPath),
+            abortedChildren: abortedChildren
         )
     }
 
@@ -211,14 +294,13 @@ extension TheBrains {
         children: HeistReceiptChildren,
         childFailure: (String) -> HeistFailureDetail
     ) -> HeistStepReceiptOutcome {
-        guard let abortedAtChildPath = children.abortedAtChildPath else {
+        guard let abortedChildren = children.aborted else {
             return .failed(evidence: evidence, failure: failure, children: children)
         }
         return .childAborted(
             evidence: evidence,
-            failure: childFailure(abortedAtChildPath),
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            failure: childFailure(abortedChildren.firstFailedPath),
+            abortedChildren: abortedChildren
         )
     }
 
@@ -229,46 +311,12 @@ extension TheBrains {
         intent: HeistStepIntent? = nil,
         outcome: HeistStepReceiptOutcome
     ) -> HeistExecutionStepResult {
-        switch outcome {
-        case .passed(let evidence, let children):
-            return .passed(
-                path: path,
-                kind: kind,
-                durationMs: durationMs,
-                intent: intent,
-                evidence: evidence,
-                children: children.children
-            )
-        case .failed(let evidence, let failure, let children):
-            return .failed(
-                path: path,
-                kind: kind,
-                durationMs: durationMs,
-                intent: intent,
-                evidence: evidence,
-                failure: failure,
-                children: children.children
-            )
-        case .childAborted(let evidence, let failure, let abortedAtChildPath, let children):
-            return .childAborted(
-                path: path,
-                kind: kind,
-                durationMs: durationMs,
-                intent: intent,
-                evidence: evidence,
-                failure: failure,
-                abortedAtChildPath: abortedAtChildPath,
-                children: children.children
-            )
-        case .skipped(let children):
-            return .skipped(
-                path: path,
-                kind: kind,
-                durationMs: durationMs,
-                intent: intent,
-                children: children.children
-            )
-        }
+        HeistStepReceiptFolder(
+            path: path,
+            kind: kind,
+            durationMs: durationMs,
+            intent: intent
+        ).fold(outcome)
     }
 
 }

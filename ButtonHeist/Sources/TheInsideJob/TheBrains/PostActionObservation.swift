@@ -337,8 +337,7 @@ final class PostActionObservation {
         notifications.map { notification in
             AccessibilityNotificationEvidence(
                 sequence: notification.sequence,
-                code: notification.code,
-                name: notification.name,
+                kind: notification.kind,
                 timestamp: notification.timestamp,
                 notificationData: remapAccessibilityNotificationPayload(
                     notification.notificationData,
