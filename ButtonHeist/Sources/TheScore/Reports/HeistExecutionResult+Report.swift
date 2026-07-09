@@ -40,7 +40,7 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         events = accumulator.events
         summary = HeistExecutionEvidenceSummary(
             executedTopLevelStepCount: accumulator.nodes.count {
-                $0.isExecuted && $0.step.isRootBodyStep
+                $0.isExecuted && $0.isRootBodyStep
             },
             executedNodeCount: accumulator.executedNodeCount,
             outputReceiptNodeCount: accumulator.nodes.count,
@@ -75,7 +75,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             ?? (step.status == .failed ? step : nil)
         return HeistExecutionEvidenceNode(
             step: step,
-            reportFacts: HeistExecutionStepReportFacts(step: step),
             children: childNodes,
             firstFailedStepInSubtree: firstFailedStep
         )
@@ -98,8 +97,23 @@ package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     package let children: [HeistExecutionEvidenceNode]
     package let firstFailedStepInSubtree: HeistExecutionStepResult?
 
+    package init(
+        step: HeistExecutionStepResult,
+        children: [HeistExecutionEvidenceNode] = [],
+        firstFailedStepInSubtree: HeistExecutionStepResult?
+    ) {
+        self.step = step
+        reportFacts = HeistExecutionStepReportFacts(step: step)
+        self.children = children
+        self.firstFailedStepInSubtree = firstFailedStepInSubtree
+    }
+
     package var isExecuted: Bool {
         step.status != .skipped
+    }
+
+    package var isRootBodyStep: Bool {
+        step.isRootBodyStep
     }
 }
 
@@ -213,6 +227,26 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
     package let expectationsChecked: Int
     package let expectationsMet: Int
     package let finalScreenId: String?
+
+    package init(
+        executedTopLevelStepCount: Int,
+        executedNodeCount: Int,
+        outputReceiptNodeCount: Int,
+        abortedAtPath: String?,
+        durationMs: Int,
+        expectationsChecked: Int,
+        expectationsMet: Int,
+        finalScreenId: String?
+    ) {
+        self.executedTopLevelStepCount = executedTopLevelStepCount
+        self.executedNodeCount = executedNodeCount
+        self.outputReceiptNodeCount = outputReceiptNodeCount
+        self.abortedAtPath = abortedAtPath
+        self.durationMs = durationMs
+        self.expectationsChecked = expectationsChecked
+        self.expectationsMet = expectationsMet
+        self.finalScreenId = finalScreenId
+    }
 }
 
 package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
@@ -220,11 +254,28 @@ package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
     package let reportedResults: [ActionResult]
     package let traceResultsInExecutionOrder: [ActionResult]
     package let finalScreenId: String?
+
+    package init(
+        dispatchedResults: [ActionResult],
+        reportedResults: [ActionResult],
+        traceResultsInExecutionOrder: [ActionResult],
+        finalScreenId: String?
+    ) {
+        self.dispatchedResults = dispatchedResults
+        self.reportedResults = reportedResults
+        self.traceResultsInExecutionOrder = traceResultsInExecutionOrder
+        self.finalScreenId = finalScreenId
+    }
 }
 
 package struct HeistExecutionWarningEvidenceRollup: Sendable, Equatable {
     package let all: [HeistExecutionEvidenceWarning]
     package let explicit: [HeistExecutionWarning]
+
+    package init(all: [HeistExecutionEvidenceWarning], explicit: [HeistExecutionWarning]) {
+        self.all = all
+        self.explicit = explicit
+    }
 }
 
 package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
