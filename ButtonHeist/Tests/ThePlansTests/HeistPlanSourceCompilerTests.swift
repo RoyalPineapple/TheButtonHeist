@@ -165,7 +165,7 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
         .action(try ActionStep(
             command: .magicTap,
             expectationPolicy: .waived(try ActionExpectationWaiver("Magic tap toggles process-local playback state")))),
@@ -235,7 +235,7 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
     ])
 
     #expect(plan == expected)
@@ -313,7 +313,7 @@ import Testing
             .invoke(HeistInvocationStep(
                 path: ["Checkout", "pay"],
                 expectation: WaitStep(
-                    predicate: .change(.screen(.exists(.label("Receipt")))),
+                    predicate: .change(.screenChanged(.exists(.label("Receipt")))),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -570,7 +570,7 @@ import Testing
         .action(try ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.screen(.exists(.label("Details")))),
+                predicate: .change(.screenChanged(.exists(.label("Details")))),
                 timeout: 1
             )))),
         .conditional(try ConditionalStep(cases: [
@@ -1107,7 +1107,7 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 0)))),
         .action(try ActionStep(
             command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
@@ -1218,7 +1218,7 @@ import Testing
             elseBody: [.fail(FailStep(message: "Pay button missing"))]
         )),
         .wait(WaitStep(
-            predicate: .change(.screen()),
+            predicate: .change(.screenChanged),
             timeout: 3,
             elseBody: [.fail(FailStep(message: "screen did not change"))]
         )),

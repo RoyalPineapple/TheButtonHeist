@@ -319,7 +319,7 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
-            .wait(WaitStep(predicate: .change(.screen()), timeout: 2)),
+            .wait(WaitStep(predicate: .change(.screenChanged), timeout: 2)),
         ]
     ).describeHeist(named: "submit")
 

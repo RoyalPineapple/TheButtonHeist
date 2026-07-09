@@ -640,13 +640,13 @@ private func composeScreenChangeAndState(
     if let screenChange = screenChangeExpectation(lhs),
        let state = stateExpression(rhs),
        let assertion = allState([screenChange.state, state].compactMap { $0 }) {
-        return .change(.screen(assertion))
+        return .change(.screenChanged(assertion))
     }
 
     if let state = stateExpression(lhs),
        let screenChange = screenChangeExpectation(rhs),
        let assertion = allState([screenChange.state, state].compactMap { $0 }) {
-        return .change(.screen(assertion))
+        return .change(.screenChanged(assertion))
     }
 
     return nil

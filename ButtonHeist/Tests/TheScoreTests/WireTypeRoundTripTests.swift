@@ -856,7 +856,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Settings")), traits: [.button]), ordinal: 1)),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 2.5)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 2.5)))),
                 .action(try ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
                 )),

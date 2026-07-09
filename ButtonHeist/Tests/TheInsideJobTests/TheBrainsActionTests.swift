@@ -1779,7 +1779,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
             WaitStep(
-                predicate: .change(.screen(.exists(ElementPredicate(label: "Controls Demo", traits: [.header])))),
+                predicate: .change(.screenChanged(.exists(ElementPredicate(label: "Controls Demo", traits: [.header])))),
                 timeout: 1
             ),
             initialTrace: initialTrace
@@ -2137,7 +2137,7 @@ final class TheBrainsActionTests: XCTestCase {
                 .invoke(HeistInvocationStep(
                     path: ["Checkout", "pay"],
                     expectation: WaitStep(
-                        predicate: .change(.screen(.exists(.label("Receipt")))),
+                        predicate: .change(.screenChanged(.exists(.label("Receipt")))),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -2381,7 +2381,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
-        let expectation = WaitStep(predicate: .change(.screen()), timeout: 0)
+        let expectation = WaitStep(predicate: .change(.screenChanged), timeout: 0)
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(

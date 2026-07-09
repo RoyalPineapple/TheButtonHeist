@@ -814,7 +814,7 @@ private let expectedRepairJSONReportJSON = """
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
         let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
-        let predicate = AccessibilityPredicate.change(.screen())
+        let predicate = AccessibilityPredicate.change(.screenChanged)
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",

@@ -586,7 +586,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .change(.screen()),
+            expectation: .change(.screenChanged),
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)

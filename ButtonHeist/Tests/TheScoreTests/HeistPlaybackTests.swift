@@ -333,7 +333,7 @@ final class HeistPlanTests: XCTestCase {
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 2)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 2)))
 
         XCTAssertEqual(
             step.description,

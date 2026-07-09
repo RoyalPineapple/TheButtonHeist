@@ -27,7 +27,7 @@ enum DemoNavigation {
         try backToRootIfNeeded()
 
         Activate(.label("Menu"))
-            .expect(.change(.screen(.exists(.label("Menu")))), timeout: .seconds(8))
+            .expect(.change(.screenChanged(.exists(.label("Menu")))), timeout: .seconds(8))
     }
 
     static let openAdversarialScenario = HeistDef<String>("DemoNavigation.openAdversarialScenario", parameter: "scenario") { scenario in
@@ -58,11 +58,11 @@ enum DemoNavigation {
         If {
             Case(.exists(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screenChanged), timeout: .seconds(8))
             }
             Case(.exists(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
-                    .expect(.change(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screenChanged), timeout: .seconds(8))
             }
             Else {}
         }

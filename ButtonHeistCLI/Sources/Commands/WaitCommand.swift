@@ -144,7 +144,7 @@ private extension WaitChangeKind {
     func predicate(element: ElementTargetOptions) throws -> AccessibilityPredicate {
         switch self {
         case .screen:
-            return .change(.screen())
+            return .change(.screenChanged)
         case .elements:
             return .change(.elements())
         case .updated:

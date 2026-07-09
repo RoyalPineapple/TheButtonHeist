@@ -394,7 +394,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 0)))),
             .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
