@@ -15,6 +15,7 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let summary: HeistExecutionEvidenceSummary
     package let actions: HeistExecutionActionEvidenceRollup
     package let warnings: HeistExecutionWarningEvidenceRollup
+    package let metrics: HeistExecutionMetricProjection
     package let outputNodes: [HeistExecutionEvidenceNode]
     package let outputReceiptNodes: [HeistExecutionStepResult]
     package let firstFailedStep: HeistExecutionStepResult?
@@ -29,39 +30,53 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     ) {
         self.durationMs = durationMs
         let rootNodes = steps.map(Self.node(from:))
-        var accumulator = HeistExecutionEvidenceAccumulator(durationMs: durationMs)
+        var accumulator = HeistExecutionEvidenceAccumulator()
+        accumulator.metricBuilder.append(.heistDurationMs, valueMs: durationMs)
         for node in rootNodes {
             accumulator.visit(node)
         }
         self.rootNodes = rootNodes
         nodes = accumulator.nodes
         events = accumulator.events
-        summary = accumulator.summary
-        actions = accumulator.actions
-        warnings = accumulator.warnings
-        outputNodes = accumulator.outputNodes
-        outputReceiptNodes = accumulator.outputReceiptNodes
+        summary = HeistExecutionEvidenceSummary(
+            executedTopLevelStepCount: rootNodes.count(where: \.isExecuted),
+            executedNodeCount: accumulator.executedNodeCount,
+            outputReceiptNodeCount: accumulator.nodes.count,
+            abortedAtPath: accumulator.firstFailedStep?.path,
+            durationMs: durationMs,
+            expectationsChecked: accumulator.expectationsChecked,
+            expectationsMet: accumulator.expectationsMet,
+            finalScreenId: accumulator.finalScreenId
+        )
+        actions = HeistExecutionActionEvidenceRollup(
+            dispatchedResults: accumulator.dispatchedResults,
+            reportedResults: accumulator.reportedResults,
+            traceResultsInExecutionOrder: accumulator.traceResultsInExecutionOrder,
+            finalScreenId: accumulator.finalScreenId
+        )
+        warnings = HeistExecutionWarningEvidenceRollup(
+            all: accumulator.allWarnings,
+            explicit: accumulator.explicitWarnings
+        )
+        metrics = HeistExecutionMetricProjection(
+            samples: accumulator.metricBuilder.samples,
+            ceilings: accumulator.metricBuilder.ceilings
+        )
+        outputNodes = accumulator.nodes
+        outputReceiptNodes = accumulator.nodes.map(\.step)
         firstFailedStep = accumulator.firstFailedStep
     }
 
     private static func node(from step: HeistExecutionStepResult) -> HeistExecutionEvidenceNode {
         let childNodes = step.children.map(Self.node(from:))
-        let firstFailedStep = Self.firstFailedStep(in: childNodes)
+        let firstFailedStep = childNodes.lazy.compactMap(\.firstFailedStepInSubtree).first
             ?? (step.status == .failed ? step : nil)
         return HeistExecutionEvidenceNode(
             step: step,
+            reportFacts: HeistExecutionStepReportFacts(step: step),
             children: childNodes,
             firstFailedStepInSubtree: firstFailedStep
         )
-    }
-
-    private static func firstFailedStep(in nodes: [HeistExecutionEvidenceNode]) -> HeistExecutionStepResult? {
-        for node in nodes {
-            if let failedStep = node.firstFailedStepInSubtree {
-                return failedStep
-            }
-        }
-        return nil
     }
 }
 
@@ -71,23 +86,8 @@ package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     package let children: [HeistExecutionEvidenceNode]
     package let firstFailedStepInSubtree: HeistExecutionStepResult?
 
-    package init(
-        step: HeistExecutionStepResult,
-        children: [HeistExecutionEvidenceNode] = [],
-        firstFailedStepInSubtree: HeistExecutionStepResult?
-    ) {
-        self.step = step
-        self.reportFacts = HeistExecutionStepReportFacts(step: step)
-        self.children = children
-        self.firstFailedStepInSubtree = firstFailedStepInSubtree
-    }
-
     package var isExecuted: Bool {
         step.status != .skipped
-    }
-
-    package var isRootBodyStep: Bool {
-        step.isRootBodyStep
     }
 }
 
@@ -104,16 +104,10 @@ package enum HeistExecutionEvidenceEvent: Sendable, Equatable {
 }
 
 private struct HeistExecutionEvidenceAccumulator {
-    let durationMs: Int
     var nodes: [HeistExecutionEvidenceNode] = []
     var events: [HeistExecutionEvidenceEvent] = []
-    var outputNodes: [HeistExecutionEvidenceNode] = []
-    var outputReceiptNodes: [HeistExecutionStepResult] = []
     var firstFailedStep: HeistExecutionStepResult?
-    var executedTopLevelStepCount = 0
     var executedNodeCount = 0
-    var outputReceiptNodeCount = 0
-    var abortedAtPath: String?
     var expectationsChecked = 0
     var expectationsMet = 0
     var finalScreenId: String?
@@ -122,54 +116,45 @@ private struct HeistExecutionEvidenceAccumulator {
     var traceResultsInExecutionOrder: [ActionResult] = []
     var allWarnings: [HeistExecutionEvidenceWarning] = []
     var explicitWarnings: [HeistExecutionWarning] = []
-    var didEmitFirstFailure = false
-
-    var summary: HeistExecutionEvidenceSummary {
-        HeistExecutionEvidenceSummary(
-            executedTopLevelStepCount: executedTopLevelStepCount,
-            executedNodeCount: executedNodeCount,
-            outputReceiptNodeCount: outputReceiptNodeCount,
-            abortedAtPath: abortedAtPath,
-            durationMs: durationMs,
-            expectationsChecked: expectationsChecked,
-            expectationsMet: expectationsMet,
-            finalScreenId: finalScreenId
-        )
-    }
-
-    var actions: HeistExecutionActionEvidenceRollup {
-        HeistExecutionActionEvidenceRollup(
-            dispatchedResults: dispatchedResults,
-            reportedResults: reportedResults,
-            traceResultsInExecutionOrder: traceResultsInExecutionOrder,
-            finalScreenId: finalScreenId
-        )
-    }
-
-    var warnings: HeistExecutionWarningEvidenceRollup {
-        HeistExecutionWarningEvidenceRollup(all: allWarnings, explicit: explicitWarnings)
-    }
+    var metricBuilder = HeistExecutionMetricProjectionBuilder()
 
     mutating func visit(_ node: HeistExecutionEvidenceNode) {
-        nodes.append(node)
-        outputNodes.append(node)
-        outputReceiptNodes.append(node.step)
-        events.append(.nodeVisited(node))
-        outputReceiptNodeCount += 1
-        if node.isExecuted {
-            executedNodeCount += 1
-            if node.isRootBodyStep {
-                executedTopLevelStepCount += 1
+        record(.nodeVisited(node))
+        let results = node.reportFacts.results
+        if let dispatchResult = results.dispatchedActionResult {
+            record(.dispatchedActionResult(path: node.step.path, result: dispatchResult))
+        }
+        if node.step.kind == .action, let reportedResult = results.actionResult {
+            record(.reportedActionResult(path: node.step.path, result: reportedResult))
+        }
+        if let traceResult = results.traceEvidenceResult {
+            record(.traceResult(path: node.step.path, result: traceResult))
+            if let screenId = traceResult.accessibilityTrace?.endpointScreenId {
+                record(.finalScreen(path: node.step.path, screenId: screenId))
             }
         }
-
-        appendNodeEvidenceEvents(for: node)
-
-        if !didEmitFirstFailure, node.firstFailedStepInSubtree?.path == node.step.path {
-            firstFailedStep = node.step
-            abortedAtPath = node.step.path
-            events.append(.firstFailure(node.step))
-            didEmitFirstFailure = true
+        if let expectation = results.expectation {
+            record(.expectationChecked(path: node.step.path, result: expectation))
+            if expectation.met {
+                record(.expectationMet(path: node.step.path, result: expectation))
+            }
+        }
+        switch node.step.evidence {
+        case .action(let evidence):
+            if let warning = evidence.warning {
+                record(.warning(.action(path: node.step.path, warning: warning)))
+            }
+        case .wait(let evidence):
+            if let warning = evidence.warning {
+                record(.warning(.wait(path: node.step.path, warning: warning)))
+            }
+        case .warning(let warning):
+            record(.warning(.explicit(warning)))
+        case .caseSelection, .forEachString, .forEachElement, .repeatUntil, .invocation, .none:
+            break
+        }
+        if firstFailedStep == nil, node.firstFailedStepInSubtree?.path == node.step.path {
+            record(.firstFailure(node.step))
         }
 
         for child in node.children {
@@ -177,53 +162,32 @@ private struct HeistExecutionEvidenceAccumulator {
         }
     }
 
-    private mutating func appendNodeEvidenceEvents(for node: HeistExecutionEvidenceNode) {
-        let path = node.step.path
-        let results = node.reportFacts.results
-        if let dispatchResult = results.dispatchedActionResult {
-            dispatchedResults.append(dispatchResult)
-            events.append(.dispatchedActionResult(path: path, result: dispatchResult))
-        }
-        if node.step.kind == .action, let reportedResult = results.actionResult {
-            reportedResults.append(reportedResult)
-            events.append(.reportedActionResult(path: path, result: reportedResult))
-        }
-        if let traceResult = results.traceEvidenceResult {
+    private mutating func record(_ event: HeistExecutionEvidenceEvent) {
+        events.append(event)
+        switch event {
+        case .nodeVisited(let node):
+            nodes.append(node)
+            executedNodeCount += node.isExecuted ? 1 : 0
+            metricBuilder.appendMetrics(for: node)
+        case .dispatchedActionResult(_, let result):
+            dispatchedResults.append(result)
+        case .reportedActionResult(_, let result):
+            reportedResults.append(result)
+        case .traceResult(_, let traceResult):
             traceResultsInExecutionOrder.append(traceResult)
-            events.append(.traceResult(path: path, result: traceResult))
-            if let finalScreenId = traceResult.accessibilityTrace?.endpointScreenId {
-                self.finalScreenId = finalScreenId
-                events.append(.finalScreen(path: path, screenId: finalScreenId))
-            }
-        }
-        if let expectation = results.expectation {
+        case .expectationChecked:
             expectationsChecked += 1
-            events.append(.expectationChecked(path: path, result: expectation))
-            if expectation.met {
-                expectationsMet += 1
-                events.append(.expectationMet(path: path, result: expectation))
-            }
-        }
-        if let warning = Self.warningEvent(for: node) {
+        case .expectationMet:
+            expectationsMet += 1
+        case .warning(let warning):
             allWarnings.append(warning)
             if let explicitWarning = warning.explicitWarning {
                 explicitWarnings.append(explicitWarning)
             }
-            events.append(.warning(warning))
-        }
-    }
-
-    private static func warningEvent(for node: HeistExecutionEvidenceNode) -> HeistExecutionEvidenceWarning? {
-        let path = node.step.path
-        switch node.step.evidence {
-        case .action(let evidence):
-            return evidence.warning.map { .action(path: path, warning: $0) }
-        case .wait(let evidence):
-            return evidence.warning.map { .wait(path: path, warning: $0) }
-        case .warning(let warning):
-            return .explicit(warning)
-        case .caseSelection, .forEachString, .forEachElement, .repeatUntil, .invocation, .none:
-            return nil
+        case .firstFailure(let step):
+            firstFailedStep = step
+        case .finalScreen(_, let screenId):
+            finalScreenId = screenId
         }
     }
 }
@@ -237,26 +201,6 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
     package let expectationsChecked: Int
     package let expectationsMet: Int
     package let finalScreenId: String?
-
-    package init(
-        executedTopLevelStepCount: Int,
-        executedNodeCount: Int,
-        outputReceiptNodeCount: Int,
-        abortedAtPath: String?,
-        durationMs: Int,
-        expectationsChecked: Int,
-        expectationsMet: Int,
-        finalScreenId: String?
-    ) {
-        self.executedTopLevelStepCount = executedTopLevelStepCount
-        self.executedNodeCount = executedNodeCount
-        self.outputReceiptNodeCount = outputReceiptNodeCount
-        self.abortedAtPath = abortedAtPath
-        self.durationMs = durationMs
-        self.expectationsChecked = expectationsChecked
-        self.expectationsMet = expectationsMet
-        self.finalScreenId = finalScreenId
-    }
 }
 
 package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
@@ -264,28 +208,11 @@ package struct HeistExecutionActionEvidenceRollup: Sendable, Equatable {
     package let reportedResults: [ActionResult]
     package let traceResultsInExecutionOrder: [ActionResult]
     package let finalScreenId: String?
-
-    package init(
-        dispatchedResults: [ActionResult],
-        reportedResults: [ActionResult],
-        traceResultsInExecutionOrder: [ActionResult],
-        finalScreenId: String?
-    ) {
-        self.dispatchedResults = dispatchedResults
-        self.reportedResults = reportedResults
-        self.traceResultsInExecutionOrder = traceResultsInExecutionOrder
-        self.finalScreenId = finalScreenId
-    }
 }
 
 package struct HeistExecutionWarningEvidenceRollup: Sendable, Equatable {
     package let all: [HeistExecutionEvidenceWarning]
     package let explicit: [HeistExecutionWarning]
-
-    package init(all: [HeistExecutionEvidenceWarning], explicit: [HeistExecutionWarning]) {
-        self.all = all
-        self.explicit = explicit
-    }
 }
 
 package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
@@ -308,13 +235,15 @@ package struct HeistExecutionMetricProjection: Codable, Sendable, Equatable {
     }
 
     package init(rollup: HeistExecutionEvidenceRollup) {
-        var builder = HeistExecutionMetricProjectionBuilder()
-        builder.append(.heistDurationMs, valueMs: rollup.summary.durationMs)
-        for node in rollup.nodes {
-            builder.appendMetrics(for: node)
-        }
-        samples = builder.samples
-        ceilings = builder.ceilings
+        self = rollup.metrics
+    }
+
+    fileprivate init(
+        samples: [HeistExecutionMetricSample],
+        ceilings: [HeistExecutionCeilingMetric]
+    ) {
+        self.samples = samples
+        self.ceilings = ceilings
     }
 }
 
@@ -393,8 +322,44 @@ private struct HeistExecutionMetricProjectionBuilder {
     var ceilings: [HeistExecutionCeilingMetric] = []
 
     mutating func appendMetrics(for node: HeistExecutionEvidenceNode) {
-        appendTimingMetrics(for: node)
-        appendCeilingMetrics(for: node)
+        switch node.step.evidence {
+        case .action(let evidence):
+            appendActionTiming(evidence.dispatchResult?.timing, node: node)
+            if let expectationResult = evidence.expectationResult {
+                appendWaitTiming(expectationResult.timing, node: node)
+                append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
+            }
+        case .wait(let evidence):
+            appendWaitTiming(evidence.actionResult.timing, node: node)
+            guard case .wait(_, let timeout) = node.step.intent else { return }
+            appendCeiling(
+                .intentWaitTimeout,
+                budgetMs: Self.milliseconds(seconds: timeout),
+                elapsedMs: evidence.actionResult.timing?.totalMs ?? node.step.durationMs,
+                node: node
+            )
+        case .repeatUntil(let evidence):
+            appendWaitTiming(evidence.actionResult?.timing, node: node)
+            appendCeiling(
+                .repeatUntilTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.timeout),
+                elapsedMs: node.step.durationMs,
+                node: node
+            )
+        case .invocation(let evidence):
+            let expectationResult = evidence.expectationEvidence?.actionResult ?? evidence.expectationActionResult
+            appendWaitTiming(expectationResult?.timing, node: node)
+            append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
+        case .caseSelection(let evidence):
+            appendCeiling(
+                .caseSelectionTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.selection.timeout),
+                elapsedMs: evidence.selection.elapsedMs,
+                node: node
+            )
+        case .forEachString, .forEachElement, .warning, .none:
+            break
+        }
     }
 
     mutating func append(
@@ -410,27 +375,6 @@ private struct HeistExecutionMetricProjectionBuilder {
             kind: node?.reportFacts.kind,
             status: node?.reportFacts.status
         ))
-    }
-
-    private mutating func appendTimingMetrics(for node: HeistExecutionEvidenceNode) {
-        switch node.step.evidence {
-        case .action(let evidence):
-            appendActionTiming(evidence.dispatchResult?.timing, node: node)
-            if let expectationResult = evidence.expectationResult {
-                appendWaitTiming(expectationResult.timing, node: node)
-                append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
-            }
-        case .wait(let evidence):
-            appendWaitTiming(evidence.actionResult.timing, node: node)
-        case .repeatUntil(let evidence):
-            appendWaitTiming(evidence.actionResult?.timing, node: node)
-        case .invocation(let evidence):
-            let expectationResult = evidence.expectationEvidence?.actionResult ?? evidence.expectationActionResult
-            appendWaitTiming(expectationResult?.timing, node: node)
-            append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
-        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
-            break
-        }
     }
 
     private mutating func appendActionTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
@@ -451,35 +395,6 @@ private struct HeistExecutionMetricProjectionBuilder {
         append(.waitPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
         append(.waitPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
         append(.waitPipelineTotalMs, valueMs: timing.totalMs, node: node)
-    }
-
-    private mutating func appendCeilingMetrics(for node: HeistExecutionEvidenceNode) {
-        switch node.step.evidence {
-        case .wait(let evidence):
-            guard case .wait(_, let timeout) = node.step.intent else { return }
-            appendCeiling(
-                .intentWaitTimeout,
-                budgetMs: Self.milliseconds(seconds: timeout),
-                elapsedMs: evidence.actionResult.timing?.totalMs ?? node.step.durationMs,
-                node: node
-            )
-        case .repeatUntil(let evidence):
-            appendCeiling(
-                .repeatUntilTimeout,
-                budgetMs: Self.milliseconds(seconds: evidence.timeout),
-                elapsedMs: node.step.durationMs,
-                node: node
-            )
-        case .caseSelection(let evidence):
-            appendCeiling(
-                .caseSelectionTimeout,
-                budgetMs: Self.milliseconds(seconds: evidence.selection.timeout),
-                elapsedMs: evidence.selection.elapsedMs,
-                node: node
-            )
-        case .action, .forEachString, .forEachElement, .invocation, .warning, .none:
-            break
-        }
     }
 
     private mutating func appendCeiling(
@@ -543,27 +458,24 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
     case none
 
     package init(kind: HeistExecutionStepKind, evidence: HeistStepEvidence?) {
-        switch (kind, evidence) {
-        case (.action, .some(.action(let evidence))):
+        switch evidence {
+        case .action(let evidence):
             self = .action(evidence)
-        case (.wait, .some(.wait(let evidence))):
+        case .wait(let evidence):
             self = .wait(evidence)
-        case (.conditional, .some(.caseSelection(let evidence))):
+        case .caseSelection(let evidence):
             self = .caseSelection(evidence)
-        case (.forEachString, .some(.forEachString(let evidence))),
-             (.forEachIteration, .some(.forEachString(let evidence))):
+        case .forEachString(let evidence):
             self = .forEachString(evidence)
-        case (.forEachElement, .some(.forEachElement(let evidence))),
-             (.forEachIteration, .some(.forEachElement(let evidence))):
+        case .forEachElement(let evidence):
             self = .forEachElement(evidence)
-        case (.repeatUntil, .some(.repeatUntil(let evidence))),
-             (.repeatUntilIteration, .some(.repeatUntil(let evidence))):
+        case .repeatUntil(let evidence):
             self = .repeatUntil(evidence)
-        case (.invoke, .some(.invocation(let evidence))):
-            self = .invocation(evidence)
-        case (.warn, .some(.warning(let warning))):
+        case .invocation(let evidence):
+            self = kind == .invoke ? .invocation(evidence) : .none
+        case .warning(let warning):
             self = .warning(warning)
-        default:
+        case .none:
             self = .none
         }
     }
@@ -969,23 +881,5 @@ public extension HeistExecutionResult {
     /// Warnings emitted by executed `Warn(...)` steps, in execution order.
     var warnings: [HeistExecutionWarning] {
         evidenceRollup.warnings.explicit
-    }
-}
-
-private extension HeistExecutionStepResult {
-    var isRootBodyStep: Bool {
-        let prefix = "$.body["
-        guard path.hasPrefix(prefix) else { return false }
-        let suffix = path.dropFirst(prefix.count)
-        guard let closeBracket = suffix.firstIndex(of: "]") else { return false }
-        return suffix.index(after: closeBracket) == suffix.endIndex
-    }
-
-    var dispatchedActionResults: [ActionResult] {
-        HeistExecutionEvidenceRollup(steps: [self]).actions.dispatchedResults
-    }
-
-    var reportedActionResults: [ActionResult] {
-        HeistExecutionEvidenceRollup(steps: [self]).actions.reportedResults
     }
 }

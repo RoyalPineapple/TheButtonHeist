@@ -28,8 +28,11 @@ import TheScore
     }
 
     @Test func `metric projection derives samples and ceilings from typed report facts`() throws {
-        let projection = try HeistExecutionMetricProjection(result: metricProjectionFixture())
+        let result = try metricProjectionFixture()
+        let rollup = result.evidenceRollup
+        let projection = HeistExecutionMetricProjection(rollup: rollup)
 
+        #expect(projection == rollup.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])
@@ -65,6 +68,32 @@ import TheScore
                 status: .passed
             ),
         ])
+    }
+
+    @Test func `summary counts receipt roots without parsing their paths`() {
+        let nestedBodyPath = HeistExecutionStepResult.passed(
+            path: "$.body[0]",
+            kind: .wait,
+            durationMs: 1
+        )
+        let result = HeistExecutionResult.passed(
+            steps: [
+                HeistExecutionStepResult.passed(
+                    path: "$.capability",
+                    kind: .invoke,
+                    durationMs: 1,
+                    children: [nestedBodyPath]
+                ),
+                HeistExecutionStepResult.passed(
+                    path: "$.renamed[1]",
+                    kind: .action,
+                    durationMs: 1
+                ),
+            ],
+            durationMs: 2
+        )
+
+        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 2)
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {
