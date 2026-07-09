@@ -31,6 +31,50 @@ declaration_name_pattern = re.compile(r"\b(?:func|var|let|typealias)\s+`?([A-Za-
 compatibility_name_pattern = re.compile(
     r"(^legacy|^compat(?!ible)|^compatibility|^deprecated|Legacy|Compat(?!ible)|Compatibility|Deprecated)"
 )
+explicit_access_required_files = {
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter.swift",
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Schema.swift",
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Decoding.swift",
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Factories.swift",
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameterBlocks.swift",
+    repo_root / "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementPropertyKind.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementPropertyMatches.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementPropertyChange.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+AnyChange.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+Codable.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+Description.swift",
+    repo_root / "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+State.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Resolution.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Reveal.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Geometry.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Failures.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+FirstResponder.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Reducer.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+ObservationStream.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Polling.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Evidence.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Receipts.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecutionAccumulator.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistInvocationExecution.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecutionReceipts.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecutionFailures.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistRepeatUntilExecution.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilState.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilPredicateEvaluation.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilReceipts.swift",
+    repo_root / "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilFailures.swift",
+}
+explicit_access_declaration_pattern = re.compile(
+    r"^\s*(?:@MainActor\s+)?(?:static\s+)?(?:final\s+)?(?:struct|enum|class|actor|protocol|func)\b"
+)
+explicit_access_pattern = re.compile(
+    r"^\s*(?:@MainActor\s+)?(?:public|package|internal|private|fileprivate)\b"
+)
 
 
 def strip_comments(lines):
@@ -157,18 +201,39 @@ for source_root in source_roots:
         raw_lines = path.read_text().splitlines()
         lines = strip_comments(raw_lines)
         depth = 0
+        protocol_depths = []
+        access_qualified_extension_depths = []
         pending_deprecated = None
 
         for index, line in enumerate(lines):
             stripped = line.strip()
             line_number = index + 1
             display_line = raw_lines[index].strip()
+            protocol_depths = [protocol_depth for protocol_depth in protocol_depths if depth > protocol_depth]
+            access_qualified_extension_depths = [
+                extension_depth for extension_depth in access_qualified_extension_depths if depth > extension_depth
+            ]
+            inside_protocol = bool(protocol_depths)
+            inside_access_qualified_extension = bool(access_qualified_extension_depths)
 
             if stripped.startswith("@available") and "deprecated" in stripped:
                 pending_deprecated = (line_number, display_line)
                 continue
-            if stripped.startswith("@"):
+            if stripped.startswith("@") and not re.match(
+                r"^\s*@_spi\([^)]*\)\s+(?:public|package|internal|private|fileprivate)\s+extension\b",
+                line,
+            ):
                 continue
+
+            if (
+                path in explicit_access_required_files
+                and depth <= 1
+                and not inside_protocol
+                and not inside_access_qualified_extension
+                and explicit_access_declaration_pattern.match(line)
+                and not explicit_access_pattern.match(line)
+            ):
+                violations.append((path, line_number, "implicit access in owner-scoped pipeline file", display_line))
 
             if depth == 0 and top_level_typealias_pattern.match(line) and path not in top_level_typealias_allowlist:
                 violations.append((path, line_number, "exported top-level typealias outside ButtonHeistDSL facade", display_line))
@@ -193,6 +258,10 @@ for source_root in source_roots:
             elif stripped:
                 pending_deprecated = None
 
+            if re.match(r"^\s*(?:public|package|internal|private|fileprivate)?\s*protocol\b", line):
+                protocol_depths.append(depth)
+            if re.match(r"^\s*(?:@_spi\([^)]*\)\s+)?(?:public|package|internal|private|fileprivate)\s+extension\b", line):
+                access_qualified_extension_depths.append(depth)
             depth += line.count("{") - line.count("}")
             depth = max(0, depth)
 
