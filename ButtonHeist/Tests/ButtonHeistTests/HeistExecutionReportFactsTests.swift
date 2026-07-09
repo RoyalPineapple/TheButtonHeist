@@ -220,7 +220,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportFacts.results.expectation, reportResults.expectation)
         XCTAssertEqual(reportFacts.results.actionErrorKind, reportResults.actionErrorKind)
         XCTAssertEqual(reportFacts.results.dispatchedActionResult?.method, .activate)
-        XCTAssertEqual(reportFacts.results.actionResult?.errorKind, .timeout)
+        XCTAssertEqual(reportFacts.results.actionResult?.outcome.errorKind, .timeout)
         XCTAssertEqual(reportFacts.results.traceEvidenceResult?.accessibilityTrace?.endpointScreenId, "settled")
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
@@ -250,13 +250,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(decoded, evidence)
         XCTAssertThrowsError(try JSONDecoder().decode(
             HeistActionEvidence.self,
-            from: Data(#"{"actionResult":{"success":true,"method":"activate"},"warning":"loose"}"#.utf8)
+            from: Data(#"{"actionResult":{"outcome":{"kind":"success"},"method":"activate"},"warning":"loose"}"#.utf8)
         ))
         XCTAssertThrowsError(try JSONDecoder().decode(
             HeistActionEvidence.self,
             from: Data("""
             {
-              "actionResult": { "success": true, "method": "activate" },
+              "actionResult": { "outcome": { "kind": "success" }, "method": "activate" },
               "warning": {
                 "code": "activation_weak_affordance_evidence",
                 "message": "activate succeeded",
@@ -490,7 +490,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(node.reportFacts.message, "screen did not change")
         XCTAssertEqual(node.reportFacts.failureMessage, "screen did not change")
-        XCTAssertEqual(node.reportFacts.results.actionResult?.success, true)
+        XCTAssertEqual(node.reportFacts.results.actionResult?.outcome.isSuccess, true)
         guard case .failed(let outcome) = node.outcome else {
             return XCTFail("Expected failed typed outcome")
         }

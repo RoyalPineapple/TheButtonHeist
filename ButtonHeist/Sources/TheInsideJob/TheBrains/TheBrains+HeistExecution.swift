@@ -477,7 +477,7 @@ extension TheBrains {
     }
 
     private func failureScreenshotDetail(for result: ActionResult) -> HeistFailureDetail? {
-        guard !result.success else { return nil }
+        guard !result.outcome.isSuccess else { return nil }
         return HeistFailureDetail(
             category: .action,
             contract: "failure screenshot action captures visible screen",
@@ -1144,7 +1144,7 @@ extension TheBrains {
         expectation: WaitStep,
         receipt: HeistWaitReceipt
     ) -> HeistFailureDetail? {
-        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
+        guard !receipt.actionResult.outcome.isSuccess || !receipt.expectation.met else { return nil }
         return HeistFailureDetail(
             category: .expectation,
             contract: "heist invocation expectation is met",
@@ -1157,7 +1157,7 @@ extension TheBrains {
         [
             receipt.expectation.actual,
             receipt.actionResult.message,
-            receipt.actionResult.errorKind.map { "errorKind=\($0.rawValue)" },
+            receipt.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
             receipt.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }

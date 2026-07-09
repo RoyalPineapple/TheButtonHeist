@@ -55,8 +55,8 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "semantic activate failed")
-        guard result.success else { return }
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic activate failed")
+        guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
@@ -75,8 +75,8 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "nested semantic activate failed")
-        guard result.success else { return }
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested semantic activate failed")
+        guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
@@ -103,8 +103,8 @@ final class ElementInflationProductTests: XCTestCase {
             elementTarget: .predicate(ElementPredicate(identifier: .exact(fixture.identifier)))
         )))
 
-        XCTAssertTrue(result.success, result.message ?? "semantic type_text failed")
-        guard result.success else { return }
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
+        guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(fixture.target.text, "leave at desk")
         XCTAssertTrue(fixture.target.isFirstResponder)
@@ -129,7 +129,7 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.textEntry]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "visible text field activate failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertEqual(fixture.scrollView.revealRequestCount, 0)
         XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
@@ -152,8 +152,8 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "nested scroll semantic activate failed")
-        guard result.success else { return }
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed")
+        guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
@@ -174,8 +174,8 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "nested scroll semantic activate failed with decoy")
-        guard result.success else { return }
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed with decoy")
+        guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
@@ -190,9 +190,9 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(label: "Duplicate", traits: [.button]))
         ))
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
         XCTAssertEqual(fixture.first.activationCount, 0)
         XCTAssertEqual(fixture.second.activationCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
@@ -218,9 +218,9 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
         ))
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
         XCTAssertEqual(fixture.target.activationCount, 0)
         XCTAssertFalse(fixture.scrollView.didReceiveRevealRequest)
         XCTAssertDiagnostic(result.message, contains: [
@@ -246,7 +246,7 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
         ))
 
-        XCTAssertFalse(result.success)
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
             "element inflation failed [noRevealPath]",
@@ -275,18 +275,18 @@ final class ElementInflationProductTests: XCTestCase {
         }
         let stepResult = try XCTUnwrap(actionEvidence.dispatchResult)
 
-        XCTAssertTrue(single.result.success, single.result.message ?? "single activate failed")
-        XCTAssertTrue(heist.result.success, heistFailureDescription(heist.result))
-        guard single.result.success, heist.result.success else { return }
+        XCTAssertTrue(single.result.outcome.isSuccess, single.result.message ?? "single activate failed")
+        XCTAssertTrue(heist.result.outcome.isSuccess, heistFailureDescription(heist.result))
+        guard single.result.outcome.isSuccess, heist.result.outcome.isSuccess else { return }
         XCTAssertEqual(single.activationCount, 1)
         XCTAssertEqual(heist.activationCount, 1)
         XCTAssertEqual(step.kind, .action)
         XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(single.result.method, .activate)
         XCTAssertEqual(stepResult.method, .activate)
-        XCTAssertEqual(stepResult.success, single.result.success)
+        XCTAssertEqual(stepResult.outcome.isSuccess, single.result.outcome.isSuccess)
         XCTAssertEqual(stepResult.method, single.result.method)
-        XCTAssertEqual(stepResult.errorKind, single.result.errorKind)
+        XCTAssertEqual(stepResult.outcome.errorKind, single.result.outcome.errorKind)
     }
 
     func testExplicitViewportScrollCommandReportsViewportState() async throws {
@@ -301,7 +301,7 @@ final class ElementInflationProductTests: XCTestCase {
             direction: .down
         )))
 
-        XCTAssertTrue(result.success, result.message ?? "explicit scroll failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "explicit scroll failed")
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)

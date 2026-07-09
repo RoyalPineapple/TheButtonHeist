@@ -332,7 +332,7 @@ settled evidence.
 Action responses use `actionResult`:
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"success":true,"method":"activate"}}
+{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate"}}
 ```
 
 `ActionResult.payload` is a tagged union when command-specific data is needed,
@@ -345,10 +345,10 @@ for example:
 Returned elements may include capture-local annotations. Compose follow-up
 commands from their semantic fields, not from `heistId`.
 
-Errors use typed `errorKind` on action results when the error belongs to the
-action. Server-level failures use the `error` message with `kind` and
-`message`. Where each receipt field is produced during an action is drawn in
-the [action pipeline diagram](diagrams/action-pipeline.md).
+Action failures use `{"outcome":{"kind":"failure","errorKind":"..."}}`
+when the error belongs to the action. Server-level failures use the `error`
+message with `kind` and `message`. Where each receipt field is produced during
+an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ## Traces and Deltas
 

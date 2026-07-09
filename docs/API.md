@@ -383,9 +383,10 @@ heist fixtures, scripts, and replay.
 
 ### ActionResult
 
-`ActionResult` reports delivery, the action method used, optional typed error
-kind, optional command payload, trace-derived accessibility delta, and
-expectation result when one was requested.
+`ActionResult` reports a typed `outcome`, the action method used, optional
+command payload, trace-derived accessibility delta, and expectation result
+when one was requested. Failures carry their typed action error inside
+`outcome.errorKind`.
 
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when

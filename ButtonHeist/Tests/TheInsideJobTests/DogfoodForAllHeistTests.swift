@@ -478,19 +478,19 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(results.count, 4)
 
         let topResult = results[0]
-        XCTAssertTrue(topResult.success, topResult.message ?? "scroll_to_edge top failed")
+        XCTAssertTrue(topResult.outcome.isSuccess, topResult.message ?? "scroll_to_edge top failed")
         XCTAssertEqual(topResult.method, .scrollToEdge)
 
         let scrollResult = results[1]
-        XCTAssertTrue(scrollResult.success, scrollResult.message ?? "scroll failed")
+        XCTAssertTrue(scrollResult.outcome.isSuccess, scrollResult.message ?? "scroll failed")
         XCTAssertEqual(scrollResult.method, .scroll)
 
         let bottomResult = results[2]
-        XCTAssertTrue(bottomResult.success, bottomResult.message ?? "scroll_to_edge bottom failed")
+        XCTAssertTrue(bottomResult.outcome.isSuccess, bottomResult.message ?? "scroll_to_edge bottom failed")
         XCTAssertEqual(bottomResult.method, .scrollToEdge)
 
         let visibleResult = results[3]
-        XCTAssertTrue(visibleResult.success, visibleResult.message ?? "scroll_to_visible failed")
+        XCTAssertTrue(visibleResult.outcome.isSuccess, visibleResult.message ?? "scroll_to_visible failed")
         XCTAssertEqual(visibleResult.method, .scrollToVisible)
 
         let cleanupHeist = try await runHeist("DogfoodViewportRuntimeCleanup") {

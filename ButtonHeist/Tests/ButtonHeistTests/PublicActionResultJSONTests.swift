@@ -361,7 +361,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                 durationMs: 7,
                 evidence: evidence,
                 failure: failure ?? HeistFailureDetail(
-                    category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+                    category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
                     contract: "action dispatch succeeds",
                     observed: result.message ?? "action failed"
                 )

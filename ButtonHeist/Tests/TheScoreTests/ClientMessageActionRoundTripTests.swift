@@ -110,10 +110,35 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertFalse(decoded.success)
+        XCTAssertFalse(decoded.outcome.isSuccess)
         XCTAssertEqual(decoded.method, .activate)
         XCTAssertEqual(decoded.message, "Element not found")
-        XCTAssertEqual(decoded.errorKind, .elementNotFound)
+        XCTAssertEqual(decoded.outcome.errorKind, .elementNotFound)
+    }
+
+    func testActionResultEncodesCanonicalOutcomeObject() throws {
+        let result = ActionResult.failure(
+            method: .activate,
+            errorKind: .elementNotFound,
+            message: "Element not found",
+        )
+        let data = try JSONEncoder().encode(result)
+        let encoded = try JSONDecoder().decode(EncodedActionResultProbe.self, from: data)
+
+        XCTAssertEqual(encoded.outcome.kind, "failure")
+        XCTAssertEqual(encoded.outcome.errorKind, .elementNotFound)
+        XCTAssertNil(encoded.success)
+        XCTAssertNil(encoded.errorKind)
+    }
+
+    func testActionResultRejectsLegacySuccessErrorKindFields() throws {
+        let json = """
+        {"success":false,"method":"activate","errorKind":"elementNotFound","message":"Element not found"}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown ActionResult field"), "\(error)")
+        }
     }
 
     func testActionResultWithValueField() throws {
@@ -121,7 +146,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertTrue(decoded.success)
+        XCTAssertTrue(decoded.outcome.isSuccess)
         XCTAssertEqual(decoded.method, .typeText)
         guard case .value(let text) = decoded.payload else {
             return XCTFail("Expected .value payload, got \(String(describing: decoded.payload))")
@@ -136,7 +161,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.success)
+            XCTAssertTrue(decodedResult.outcome.isSuccess)
             XCTAssertEqual(decodedResult.method, .syntheticTap)
         } else {
             XCTFail("Expected actionResult message")
@@ -153,4 +178,15 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
         return run.plan
     }
+}
+
+private struct EncodedActionResultProbe: Decodable {
+    let outcome: EncodedActionResultOutcomeProbe
+    let success: Bool?
+    let errorKind: ErrorKind?
+}
+
+private struct EncodedActionResultOutcomeProbe: Decodable {
+    let kind: String
+    let errorKind: ErrorKind?
 }

@@ -207,7 +207,7 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.success)
+            XCTAssertTrue(decodedResult.outcome.isSuccess)
             XCTAssertEqual(decodedResult.method, .typeText)
             guard case .value(let string) = decodedResult.payload else {
                 XCTFail("Expected .value payload")
@@ -227,7 +227,7 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.success)
+            XCTAssertTrue(decodedResult.outcome.isSuccess)
             XCTAssertEqual(decodedResult.method, .syntheticTap)
             XCTAssertNil(decodedResult.payload)
         } else {
@@ -499,7 +499,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultRejectsStoredScreenContextFields() {
-        let data = Data(#"{"success":true,"method":"activate","screenName":"stored screen"}"#.utf8)
+        let data = Data(#"{"outcome":{"kind":"success"},"method":"activate","screenName":"stored screen"}"#.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: data)) { error in
             XCTAssertTrue("\(error)".contains("screenName"), "\(error)")
@@ -508,7 +508,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
-        {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}
+        {"type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"typeText","payload":{"kind":"value","data":"Hello"}}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -523,13 +523,13 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultWithoutOptionalFieldsFromExplicitJSON() throws {
         let json = """
-        {"type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
+        {"type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"syntheticTap"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .actionResult(let result) = decoded {
-            XCTAssertTrue(result.success)
+            XCTAssertTrue(result.outcome.isSuccess)
             XCTAssertEqual(result.method, .syntheticTap)
             XCTAssertNil(result.payload)
             XCTAssertNil(result.message)
@@ -540,11 +540,11 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultRejectsSuccessWithErrorKind() throws {
         let json = """
-        {"success":true,"method":"activate","errorKind":"actionFailed"}
+        {"outcome":{"kind":"success","errorKind":"actionFailed"},"method":"activate"}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("successful ActionResult must not include errorKind"), "\(error)")
+            XCTAssertTrue("\(error)".contains("successful ActionResult outcome must not include errorKind"), "\(error)")
         }
     }
 
@@ -559,8 +559,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .actionResult(let decodedResult) = decoded {
-            XCTAssertFalse(decodedResult.success)
-            XCTAssertEqual(decodedResult.errorKind, .elementNotFound)
+            XCTAssertFalse(decodedResult.outcome.isSuccess)
+            XCTAssertEqual(decodedResult.outcome.errorKind, .elementNotFound)
             XCTAssertEqual(decodedResult.message, "Element not found")
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
@@ -572,23 +572,23 @@ final class ServerMessageTests: XCTestCase {
             let result = ActionResult.failure(method: .syntheticTap, errorKind: kind)
             let data = try JSONEncoder().encode(result)
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-            XCTAssertEqual(decoded.errorKind, kind, "Round-trip failed for \(kind)")
+            XCTAssertEqual(decoded.outcome.errorKind, kind, "Round-trip failed for \(kind)")
         }
     }
 
     func testActionResultRejectsFailureWithoutErrorKind() throws {
         let json = """
-        {"type":"actionResult","payload":{"success":false,"method":"syntheticTap","message":"fail"}}
+        {"type":"actionResult","payload":{"outcome":{"kind":"failure"},"method":"syntheticTap","message":"fail"}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("failed ActionResult requires errorKind"), "\(error)")
+            XCTAssertTrue("\(error)".contains("failed ActionResult outcome requires errorKind"), "\(error)")
         }
     }
 
     func testActionResultRejectsTakeScreenshotPayloadMismatch() throws {
         let json = """
-        {"success":true,"method":"takeScreenshot","payload":{"kind":"value","data":"not a screenshot"}}
+        {"outcome":{"kind":"success"},"method":"takeScreenshot","payload":{"kind":"value","data":"not a screenshot"}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
@@ -598,7 +598,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultRejectsHeistPlanPayloadMismatch() throws {
         let json = """
-        {"success":true,"method":"heistPlan","payload":{"kind":"value","data":"not a heist result"}}
+        {"outcome":{"kind":"success"},"method":"heistPlan","payload":{"kind":"value","data":"not a heist result"}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
@@ -608,7 +608,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultRejectsHeistExecutionPayloadForActivate() throws {
         let json = """
-        {"success":true,"method":"activate","payload":{"kind":"heistExecution","data":{"steps":[],"durationMs":42}}}
+        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"heistExecution","data":{"steps":[],"durationMs":42}}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
@@ -621,7 +621,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultRejectsValuePayloadForNonValueCarryingMethod() throws {
         let json = """
-        {"success":true,"method":"activate","payload":{"kind":"value","data":"Hello"}}
+        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"value","data":"Hello"}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
@@ -673,7 +673,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     private struct StoredActionResultScreenContextFixture: Encodable {
-        let success = true
+        let outcome = ActionResultOutcome.success
         let method = ActionMethod.activate
         let accessibilityTrace: AccessibilityTrace
     }

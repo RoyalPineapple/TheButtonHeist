@@ -28,7 +28,7 @@ sequenceDiagram
     Note over Brains: delta = BeforeState vs settled after-capture<br/>Delta: noChange / elementsChanged /<br/>screenChanged
     Brains-->>Muscle: ActionResult
     Muscle-->>Fence: actionResult message<br/>(same wire back)
-    Fence-->>Client: receipt (success, method, settled,<br/>settleTimeMs, accessibilityTrace,<br/>activationTrace, errorKind)
+    Fence-->>Client: receipt (outcome, method, settled,<br/>settleTimeMs, accessibilityTrace,<br/>activationTrace)
 ```
 
 Notes:

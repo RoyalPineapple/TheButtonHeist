@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Action Results
 
-/// Typed error classification used by both `ActionResult.errorKind` and the
+/// Typed error classification used by action-result outcomes and the
 /// server-broadcast `ServerError` payload.
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case accessibilityTreeUnavailable
@@ -448,41 +448,72 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
     }
 }
 
+/// The delivered outcome of an action command.
+public enum ActionResultOutcome: Codable, Sendable, Equatable {
+    case success
+    case failure(ErrorKind)
+
+    private enum Kind: String, Codable {
+        case success
+        case failure
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind
+        case errorKind
+    }
+
+    public var isSuccess: Bool {
+        if case .success = self { return true }
+        return false
+    }
+
+    public var errorKind: ErrorKind? {
+        if case .failure(let kind) = self { return kind }
+        return nil
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResultOutcome")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .success:
+            if let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .errorKind,
+                    in: container,
+                    debugDescription: "successful ActionResult outcome must not include errorKind \(errorKind.rawValue)"
+                )
+            }
+            self = .success
+        case .failure:
+            guard let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .errorKind,
+                    in: container,
+                    debugDescription: "failed ActionResult outcome requires errorKind"
+                )
+            }
+            self = .failure(errorKind)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .success:
+            try container.encode(Kind.success, forKey: .kind)
+        case .failure(let errorKind):
+            try container.encode(Kind.failure, forKey: .kind)
+            try container.encode(errorKind, forKey: .errorKind)
+        }
+    }
+}
+
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     // MARK: - Nested Types
-
-    package enum Outcome: Sendable, Equatable {
-        case success
-        case failure(ErrorKind)
-
-        private init?(decodedSuccess success: Bool, errorKind: ErrorKind?) {
-            switch (success, errorKind) {
-            case (true, nil):
-                self = .success
-            case (false, .some(let kind)):
-                self = .failure(kind)
-            case (true, .some), (false, nil):
-                return nil
-            }
-        }
-
-        /// Boundary-only adapter for external JSON where success/errorKind
-        /// arrive as separate wire fields.
-        fileprivate static func decoded(success: Bool, errorKind: ErrorKind?) -> Outcome? {
-            Outcome(decodedSuccess: success, errorKind: errorKind)
-        }
-
-        var success: Bool {
-            if case .success = self { return true }
-            return false
-        }
-
-        var errorKind: ErrorKind? {
-            if case .failure(let kind) = self { return kind }
-            return nil
-        }
-    }
 
     private enum MethodAndPayload: Sendable, Equatable {
         case methodOnly(ActionMethod)
@@ -529,13 +560,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     // MARK: - Properties
 
-    private let outcome: Outcome
+    public let outcome: ActionResultOutcome
     private let methodAndPayload: MethodAndPayload
 
-    /// Whether the action was delivered and completed normally. `false` means
-    /// the action reached the server but the handler reported failure — it is
-    /// not a transport-level error (those surface as thrown errors).
-    public var success: Bool { outcome.success }
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
@@ -544,8 +571,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// First spoken accessibility text observed during this action, sourced
     /// from string payloads on announcement, element-changed, or screen-changed notifications.
     public let announcement: String?
-    /// Typed error classification (nil on success)
-    public var errorKind: ErrorKind? { outcome.errorKind }
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload? { methodAndPayload.resultPayload }
     /// Source-of-truth accessibility capture receipt for this action.
@@ -768,7 +793,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        outcome: Outcome,
+        outcome: ActionResultOutcome,
         method: ActionMethod,
         message: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
@@ -793,7 +818,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        outcome: Outcome,
+        outcome: ActionResultOutcome,
         method: ActionMethod,
         message: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
@@ -819,7 +844,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        outcome: Outcome,
+        outcome: ActionResultOutcome,
         payload: ActionResultPayload,
         message: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
@@ -844,7 +869,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     package init(
-        outcome: Outcome,
+        outcome: ActionResultOutcome,
         payload: ActionResultPayload,
         message: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
@@ -870,7 +895,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     private init(
-        outcome: Outcome,
+        outcome: ActionResultOutcome,
         methodAndPayload: MethodAndPayload,
         message: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
@@ -896,11 +921,10 @@ public struct ActionResult: Codable, Sendable, Equatable {
     // MARK: - Coding
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case success
+        case outcome
         case method
         case message
         case announcement
-        case errorKind
         case payload
         case accessibilityTrace
         case settled
@@ -913,23 +937,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResult")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let success = try container.decode(Bool.self, forKey: .success)
+        let outcome = try container.decode(ActionResultOutcome.self, forKey: .outcome)
         let method = try container.decode(ActionMethod.self, forKey: .method)
-        let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind)
         let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
         let methodAndPayload = try MethodAndPayload(
             decodedMethod: method,
             decodedPayload: payload,
             codingPath: container.codingPath + [CodingKeys.payload]
         )
-
-        guard let outcome = Outcome.decoded(success: success, errorKind: errorKind) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .errorKind,
-                in: container,
-                debugDescription: Self.outcomeValidationMessage(success: success, errorKind: errorKind)
-            )
-        }
 
         self.init(
             outcome: outcome,
@@ -947,11 +962,10 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(success, forKey: .success)
+        try container.encode(outcome, forKey: .outcome)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
         try container.encodeIfPresent(announcement, forKey: .announcement)
-        try container.encodeIfPresent(errorKind, forKey: .errorKind)
         try container.encodeIfPresent(payload, forKey: .payload)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
         try container.encodeIfPresent(settled, forKey: .settled)
@@ -977,14 +991,5 @@ public struct ActionResult: Codable, Sendable, Equatable {
             timing: self.timing?.merging(timing) ?? timing,
             announcement: announcement
         )
-    }
-
-    // MARK: - Private Helpers
-
-    private static func outcomeValidationMessage(success: Bool, errorKind: ErrorKind?) -> String {
-        if success, let errorKind {
-            return "successful ActionResult must not include errorKind \(errorKind.rawValue)"
-        }
-        return "failed ActionResult requires errorKind"
     }
 }

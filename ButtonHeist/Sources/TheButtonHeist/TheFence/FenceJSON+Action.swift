@@ -196,15 +196,15 @@ extension ActionResult {
     /// Status for this action result and its optional expectation. The
     /// expectation only influences status on an otherwise successful action.
     func publicStatus(expectation: ExpectationResult?) -> PublicResponseStatus {
-        if !success { return .error }
+        if !outcome.isSuccess { return .error }
         if let expectation, !expectation.met { return .expectationFailed }
         return .ok
     }
 
     /// Canonical public failure projection shared by JSON and compact renderers.
     func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
-        guard !success else { return nil }
-        let resolvedErrorKind = self.errorKind ?? .actionFailed
+        guard !outcome.isSuccess else { return nil }
+        let resolvedErrorKind = outcome.errorKind ?? .actionFailed
         return ActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,

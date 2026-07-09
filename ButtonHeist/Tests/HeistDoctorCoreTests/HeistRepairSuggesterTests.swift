@@ -843,7 +843,7 @@ private let expectedRepairJSONReportJSON = """
         #expect(repairEvidence.beforeSnapshot == before)
         #expect(repairEvidence.afterSnapshot == dispatchAfter)
         #expect(repairEvidence.result.method == .activate)
-        #expect(repairEvidence.result.errorKind == .timeout)
+        #expect(repairEvidence.result.outcome.errorKind == .timeout)
         #expect(repairEvidence.result.message == "timed out waiting for checkout")
         #expect(repairEvidence.result.expectation?.met == false)
     }

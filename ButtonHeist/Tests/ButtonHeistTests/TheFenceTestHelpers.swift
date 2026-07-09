@@ -573,7 +573,7 @@ func makeTestHeistActionStep(
         } ?? .dispatch(dispatchResult: result)
     }
 
-    guard !result.success else {
+    guard !result.outcome.isSuccess else {
         return .passed(
             path: path,
             receiptKind: .action,
@@ -587,7 +587,7 @@ func makeTestHeistActionStep(
         durationMs: durationMs,
         evidence: evidence,
         failure: HeistFailureDetail(
-            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: result.message ?? "action failed"
         )

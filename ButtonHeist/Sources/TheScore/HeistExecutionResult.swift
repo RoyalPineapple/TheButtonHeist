@@ -745,7 +745,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     ) throws {
         switch evidence.outcome {
         case .matched:
-            guard evidence.actionResult.success && evidence.expectation.met else {
+            guard evidence.actionResult.outcome.isSuccess && evidence.expectation.met else {
                 throw receiptError(
                     "passed matched wait step must include successful wait evidence",
                     codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
@@ -765,13 +765,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         _ evidence: HeistActionEvidence,
         codingPath: [CodingKey]
     ) throws {
-        if evidence.dispatchResult?.success == false {
+        if evidence.dispatchResult?.outcome.isSuccess == false {
             throw receiptError(
                 "passed action heist execution step must not include failed action evidence",
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
-        if evidence.expectationResult?.success == false || evidence.expectation?.met == false {
+        if evidence.expectationResult?.outcome.isSuccess == false || evidence.expectation?.met == false {
             throw receiptError(
                 "passed action heist execution step must not include failed expectation evidence",
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
@@ -1614,7 +1614,7 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
             actionResult: ActionResult,
             expectation: MetExpectationResult
         ) {
-            guard actionResult.success else { return nil }
+            guard actionResult.outcome.isSuccess else { return nil }
             self.actionResult = actionResult
             self.expectation = expectation
         }
@@ -1628,7 +1628,7 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
             actionResult: ActionResult,
             expectation: PredicateExpectationCheck
         ) {
-            guard !actionResult.success || !expectation.result.met else { return nil }
+            guard !actionResult.outcome.isSuccess || !expectation.result.met else { return nil }
             self.actionResult = actionResult
             self.expectation = expectation
         }

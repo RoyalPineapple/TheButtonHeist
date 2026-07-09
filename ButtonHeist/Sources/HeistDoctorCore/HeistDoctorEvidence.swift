@@ -75,7 +75,7 @@ extension HeistDoctor {
     }
 
     private static func repairErrorKind(_ evidence: HeistActionEvidence) -> ErrorKind? {
-        evidence.reportedResult?.errorKind
+        evidence.reportedResult?.outcome.errorKind
     }
 
     private static func repairMessage(

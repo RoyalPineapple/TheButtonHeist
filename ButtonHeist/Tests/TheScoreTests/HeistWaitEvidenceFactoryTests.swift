@@ -14,7 +14,7 @@ import TheScore
         let matchedCheck = try #require(HeistWaitEvidence.MatchedCheck(actionResult: success, expectation: met))
         let matched = HeistWaitEvidence.matched(matchedCheck)
         #expect(matched.outcome == .matched)
-        #expect(matched.actionResult.success)
+        #expect(matched.actionResult.outcome.isSuccess)
         #expect(matched.expectation.met)
 
         let failedCheck = try #require(HeistWaitEvidence.UnmatchedCheck(
@@ -26,7 +26,7 @@ import TheScore
             finalSummary: "not found"
         )
         #expect(failed.outcome == .failed)
-        #expect(failed.actionResult.success)
+        #expect(failed.actionResult.outcome.isSuccess)
         #expect(!failed.expectation.met)
         #expect(failed.finalSummary == "not found")
 
@@ -36,7 +36,7 @@ import TheScore
         ))
         let handledElse = HeistWaitEvidence.handledElse(handledElseCheck)
         #expect(handledElse.outcome == .handledElse)
-        #expect(!handledElse.actionResult.success)
+        #expect(!handledElse.actionResult.outcome.isSuccess)
     }
 
     @Test func `decode rejects invalid wait evidence polarity at boundary`() throws {

@@ -397,7 +397,7 @@ final class HeistReceiptTests: XCTestCase {
         let evidence = try XCTUnwrap(step.repeatUntilEvidence)
         let iterationEvidence = try XCTUnwrap(step.children.first?.repeatUntilEvidence)
 
-        XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(evidence.iterationCount, 1)
         XCTAssertTrue(evidence.expectation.met)
@@ -436,7 +436,7 @@ final class HeistReceiptTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
         let evidence = try XCTUnwrap(step.repeatUntilEvidence)
 
-        XCTAssertTrue(result.success, result.message ?? "repeat_until else failed")
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until else failed")
         XCTAssertEqual(incrementCount, 0)
         XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(step.children.map(\.kind), [.warn])

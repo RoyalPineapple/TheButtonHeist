@@ -792,10 +792,10 @@ extension TheBrains {
         guard iterationResults.contains(where: { $0.path == failedStep.path }) else { return false }
         guard failedStep.kind == .action,
               failedStep.failure?.category == .action,
-              failedStep.actionEvidence?.dispatchResult?.success == false else {
+              failedStep.actionEvidence?.dispatchResult?.outcome.isSuccess == false else {
             return false
         }
-        switch failedStep.actionEvidence?.dispatchResult?.errorKind {
+        switch failedStep.actionEvidence?.dispatchResult?.outcome.errorKind {
         case nil, .some(.actionFailed):
             return true
         case .some(.accessibilityTreeUnavailable),

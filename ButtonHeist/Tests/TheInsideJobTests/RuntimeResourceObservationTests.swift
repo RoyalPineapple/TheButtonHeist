@@ -125,8 +125,8 @@ final class RuntimeResourceObservationTests: XCTestCase {
     func testInactiveCommandFailsWithoutStartingObservation() async {
         let result = await job.brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Save"))))
 
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertFalse(result.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.errorKind, .actionFailed)
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
