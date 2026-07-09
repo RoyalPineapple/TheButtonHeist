@@ -234,7 +234,7 @@ final class ServerTransport {
         guard let token = token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ServerTransportError.tlsTokenRequired
         }
-        let params = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
+        let params = ServerTLSParameters.make(token: token)
         let attempt = ServerTransportStartAttempt(id: UUID())
         lifecycle.send(.beginStarting(attempt))
 
