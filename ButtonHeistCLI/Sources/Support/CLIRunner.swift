@@ -129,7 +129,7 @@ enum CLIRunner {
     ) async throws -> CommandExecution {
         let fence = try await connect(connection: connection, statusMessage: statusMessage)
         do {
-            let response = try await fence.execute(try fence.admit(command: command, arguments: arguments))
+            let response = try await fence.execute(try fence.admit(FenceCommandInput(command: command, arguments: arguments)))
             return CommandExecution(fence: fence, response: response)
         } catch {
             fence.stop()

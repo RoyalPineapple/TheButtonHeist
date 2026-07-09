@@ -87,8 +87,32 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testPrimitiveActionClientMessageJSONIsRejected() throws {
         let primitiveMessages = [
-            #"{"type":"activate","payload":{"identifier":"btn"}}"#,
-            #"{"type":"rotor","payload":{"elementTarget":{"identifier":"btn"},"selection":{"type":"named","name":"Errors"},"direction":"previous"}}"#,
+            """
+            {
+              "type": "activate",
+              "payload": {
+                "target": {
+                  "checks": [
+                    { "kind": "identifier", "match": { "mode": "exact", "value": "btn" } }
+                  ]
+                }
+              }
+            }
+            """,
+            """
+            {
+              "type": "rotor",
+              "payload": {
+                "elementTarget": {
+                  "checks": [
+                    { "kind": "identifier", "match": { "mode": "exact", "value": "btn" } }
+                  ]
+                },
+                "selection": { "type": "named", "name": "Errors" },
+                "direction": "previous"
+              }
+            }
+            """,
             #"{"type":"oneFingerTap","payload":{"point":{"x":100,"y":200}}}"#,
             #"{"type":"editAction","payload":{"action":"paste"}}"#,
             #"{"type":"resignFirstResponder"}"#,

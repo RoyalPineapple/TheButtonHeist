@@ -43,7 +43,7 @@ extension TheFence {
     func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
         let request: FenceOperationRequest
         do {
-            request = try admit(command: command, arguments: arguments)
+            request = try admit(FenceCommandInput(command: command, arguments: arguments))
         } catch {
             return .failure(error)
         }
@@ -54,7 +54,7 @@ extension TheFence {
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
         let request: FenceOperationRequest
         do {
-            request = try admit(command: command, arguments: CommandArgumentEnvelope(values: values))
+            request = try admit(FenceCommandInput(command: command, arguments: CommandArgumentEnvelope(values: values)))
         } catch {
             return .failure(error)
         }

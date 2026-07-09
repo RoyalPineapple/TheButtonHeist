@@ -50,11 +50,13 @@ import TheScore
         try object.assertMissing("abortedAtPath")
         #expect(try step.string("path") == "$.body[0]")
         #expect(try step.string("kind") == "action")
-        #expect(try step.string("status") == "passed")
-        try step.assertMissing("outcome")
+        try step.assertMissing("status")
+        let outcome = try step.object("outcome")
+        #expect(try outcome.string("type") == "passed")
         try step.assertMissing("failure")
-        try step.assertPresent("evidence")
-        #expect(try step.array("children").isEmpty)
+        try step.assertMissing("evidence")
+        try outcome.assertPresent("evidence")
+        #expect(try outcome.array("children").isEmpty)
     }
 
     @Test func `valid failure receipt decodes with required failure facts`() throws {
@@ -70,11 +72,14 @@ import TheScore
         #expect(decoded.abortedAtPath == "$.body[0]")
         #expect(decoded.steps.first?.failure?.observed == "stop")
         #expect(try object.string("abortedAtPath") == "$.body[0]")
-        #expect(try step.string("status") == "failed")
-        try step.assertPresent("failure")
+        try step.assertMissing("status")
+        try step.assertMissing("failure")
+        let outcome = try step.object("outcome")
+        #expect(try outcome.string("type") == "failed")
+        try outcome.assertPresent("failure")
     }
 
-    @Test func `decode rejects passed step with failure facts`() throws {
+    @Test func `decode rejects old status evidence failure step bag`() throws {
         let json = """
         {
           "steps": [
@@ -97,7 +102,7 @@ import TheScore
 
         try expectReceiptDecodeError(
             json,
-            containing: "passed heist execution step must not include failure"
+            containing: "Unknown heist execution step result field"
         )
     }
 
@@ -108,9 +113,11 @@ import TheScore
             {
               "path": "$.body[0]",
               "kind": "fail",
-              "status": "failed",
               "durationMs": 1,
-              "children": []
+              "outcome": {
+                "type": "failed",
+                "children": []
+              }
             }
           ],
           "durationMs": 1,
@@ -120,7 +127,7 @@ import TheScore
 
         try expectReceiptDecodeError(
             json,
-            containing: "failed heist execution step must include failure"
+            containing: "failed heist execution step outcome must include failure"
         )
     }
 
@@ -131,14 +138,16 @@ import TheScore
             {
               "path": "$.body[0]",
               "kind": "fail",
-              "status": "failed",
               "durationMs": 1,
-              "failure": {
-                "category": "explicitFailure",
-                "contract": "Fail",
-                "observed": "stop"
-              },
-              "children": []
+              "outcome": {
+                "type": "failed",
+                "failure": {
+                  "category": "explicitFailure",
+                  "contract": "Fail",
+                  "observed": "stop"
+                },
+                "children": []
+              }
             }
           ],
           "durationMs": 1
@@ -158,14 +167,16 @@ import TheScore
             {
               "path": "$.body[0]",
               "kind": "fail",
-              "status": "failed",
               "durationMs": 1,
-              "failure": {
-                "category": "explicitFailure",
-                "contract": "Fail",
-                "observed": "stop"
-              },
-              "children": []
+              "outcome": {
+                "type": "failed",
+                "failure": {
+                  "category": "explicitFailure",
+                  "contract": "Fail",
+                  "observed": "stop"
+                },
+                "children": []
+              }
             }
           ],
           "durationMs": 1,

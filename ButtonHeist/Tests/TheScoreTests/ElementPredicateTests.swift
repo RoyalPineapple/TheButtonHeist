@@ -248,6 +248,45 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertEqual(StringMatch<String>("Save"), .exact("Save"))
     }
 
+    func testStringMatchStringLiteralSugarStillCreatesExactMatch() {
+        let match: StringMatch<String> = "Save"
+
+        XCTAssertEqual(match, .exact("Save"))
+    }
+
+    func testStringMatchCanonicalObjectJSONRoundTrips() throws {
+        let cases: [(json: String, match: StringMatch<String>)] = [
+            (#"{"mode":"exact","value":"Save"}"#, .exact("Save")),
+            (#"{"mode":"contains","value":"Save"}"#, .contains("Save")),
+            (#"{"mode":"prefix","value":"Save"}"#, .prefix("Save")),
+            (#"{"mode":"suffix","value":"Save"}"#, .suffix("Save")),
+            (#"{"mode":"isEmpty"}"#, .isEmpty),
+        ]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+
+        for testCase in cases {
+            let decoded = try JSONDecoder().decode(
+                StringMatch<String>.self,
+                from: Data(testCase.json.utf8)
+            )
+            XCTAssertEqual(decoded, testCase.match)
+
+            let encoded = try XCTUnwrap(String(data: encoder.encode(decoded), encoding: .utf8))
+            XCTAssertEqual(encoded, testCase.json)
+            XCTAssertEqual(
+                try JSONDecoder().decode(StringMatch<String>.self, from: Data(encoded.utf8)),
+                testCase.match
+            )
+        }
+    }
+
+    func testStringMatchRejectsRawStringJSON() {
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(StringMatch<String>.self, from: Data(#""Save""#.utf8))
+        )
+    }
+
     func testCaseInsensitiveLabelMatches() {
         let element = HeistElement.stub(label: "Save")
         XCTAssertTrue(element.matches(ElementPredicate(label: "save")))

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import os
 import XCTest
 
 // Package contract: app-hosted tests import ButtonHeistTesting and author
@@ -453,7 +454,7 @@ private func runHeistSyncRequest(
 }
 
 @discardableResult
-func runHeistSyncOperation<Value>(
+func runHeistSyncOperation<Value: Sendable>(
     file: StaticString = #filePath,
     line: UInt = #line,
     _ operation: @escaping @Sendable () async throws -> Value
@@ -480,7 +481,7 @@ func runHeistSyncOperation<Value>(
     return waitForSynchronousResult(state, file: file, line: line)
 }
 
-private func waitForSynchronousResult<Value>(
+private func waitForSynchronousResult<Value: Sendable>(
     _ state: HeistSyncState<Value>,
     file: StaticString,
     line: UInt
@@ -519,31 +520,31 @@ private func recordReceiptIfRequested(
     )
 }
 
-/// `@unchecked Sendable` justification: the synchronous XCTest thread polls the
-/// result while the retained main-actor task finishes it; `lock` protects all
-/// mutable state shared across those isolation domains.
-private final class HeistSyncState<Value>: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let lock = NSLock()
-    private var storage: Result<Value, Error>?
-    private var task: Task<Void, Never>?
+private final class HeistSyncState<Value: Sendable>: Sendable {
+    private struct State: Sendable {
+        var result: Result<Value, Error>?
+        var task: Task<Void, Never>?
+    }
+
+    private let state = OSAllocatedUnfairLock(initialState: State())
 
     var result: Result<Value, Error>? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
+        state.withLock { current in
+            current.result
+        }
     }
 
     func finish(_ result: Result<Value, Error>) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard storage == nil else { return }
-        storage = result
+        state.withLock { current in
+            guard case nil = current.result else { return }
+            current.result = result
+        }
     }
 
     func retain(_ task: Task<Void, Never>) {
-        lock.lock()
-        defer { lock.unlock() }
-        self.task = task
+        state.withLock { current in
+            current.task = task
+        }
     }
 }
 

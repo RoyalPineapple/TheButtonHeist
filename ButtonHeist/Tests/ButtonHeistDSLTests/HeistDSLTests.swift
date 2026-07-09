@@ -1341,14 +1341,13 @@ private enum EncodedJSONValue: Decodable, Equatable {
     }
 
     func containsLabelCheckReference(_ reference: String) -> Bool {
-        containsCheck(kind: "label", match: .object(["ref": .string(reference)]))
-            || containsCheck(
-                kind: "label",
-                match: .object([
-                    "mode": .string("exact"),
-                    "value": .object(["ref": .string(reference)]),
-                ])
-            )
+        containsCheck(
+            kind: "label",
+            match: .object([
+                "mode": .string("exact"),
+                "value": .object(["ref": .string(reference)]),
+            ])
+        )
     }
 
     func assertRecursivelyMissingKeys(_ keys: [String]) throws {

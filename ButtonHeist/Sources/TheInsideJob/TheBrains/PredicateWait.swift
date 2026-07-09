@@ -1420,7 +1420,7 @@ struct PredicatePollingEngine<Evaluation> {
         isMatched: (Evaluation) -> Bool
     ) async -> PredicatePollingResult<Evaluation> {
         let timeout = PredicateWait.clampedWaitTimeout(rawTimeout)
-        let deadline = start + timeout
+        let deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
         var cursor = PredicatePollingCursor<Evaluation>(
             observedSequence: initialObservedSequence,
             changeBaselineSequence: initialChangeBaselineSequence,
@@ -1450,7 +1450,11 @@ struct PredicatePollingEngine<Evaluation> {
                     cursor: &cursor,
                     evaluate: evaluate
                 )
-                let timing = Self.tickTiming(deadline: deadline, tickStart: tickStart)
+                let now = CFAbsoluteTimeGetCurrent()
+                let timing = PredicatePollingTickTiming(
+                    remaining: deadline.remainingSeconds(at: now),
+                    elapsed: max(0, now - tickStart)
+                )
                 let event = pollingEvent(
                     for: request,
                     observed: observed,
@@ -1466,13 +1470,13 @@ struct PredicatePollingEngine<Evaluation> {
                 }
                 reduction = reducer.reduce(
                     reduction.state,
-                    event: .sleepCompleted(remaining: Self.remaining(deadline: deadline))
+                    event: .sleepCompleted(remaining: deadline.remainingSeconds())
                 )
 
             case .finish:
                 return PredicatePollingResult(
                     last: cursor.last,
-                    elapsedMs: Self.elapsedMilliseconds(since: start)
+                    elapsedMs: deadline.elapsedMilliseconds()
                 )
             }
         }
@@ -1541,29 +1545,6 @@ struct PredicatePollingEngine<Evaluation> {
         guard sleep.duration > 0 else { return true }
         let nanoseconds = UInt64((sleep.duration * 1_000_000_000).rounded(.up))
         return await Task.cancellableSleep(for: .nanoseconds(nanoseconds))
-    }
-
-    private static func tickTiming(
-        deadline: CFAbsoluteTime,
-        tickStart: CFAbsoluteTime
-    ) -> PredicatePollingTickTiming {
-        let now = CFAbsoluteTimeGetCurrent()
-        return PredicatePollingTickTiming(
-            remaining: remaining(deadline: deadline, now: now),
-            elapsed: max(0, now - tickStart)
-        )
-    }
-
-    private static func remaining(deadline: CFAbsoluteTime) -> Double {
-        remaining(deadline: deadline, now: CFAbsoluteTimeGetCurrent())
-    }
-
-    private static func remaining(deadline: CFAbsoluteTime, now: CFAbsoluteTime) -> Double {
-        max(0, deadline - now)
-    }
-
-    private static func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 }
 

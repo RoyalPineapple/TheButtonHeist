@@ -532,7 +532,7 @@ private struct SettleLoopRunner {
 
     @MainActor
     func run(start: CFAbsoluteTime) async -> SettleSession.Outcome {
-        let deadline = start + Double(timeoutMs) / 1_000
+        let deadline = SemanticObservationDeadline(start: start, timeoutMs: timeoutMs)
         var observations = SettleObservationLedger()
         var driver = StateDriver(
             initial: initial,
@@ -542,24 +542,24 @@ private struct SettleLoopRunner {
         if let initial = parseProvider() {
             let observation = observations.record(initial)
             let transition = driver.send(
-                .observation(observation.sample, elapsedMs: elapsedMs(since: start)),
+                .observation(observation.sample, elapsedMs: deadline.elapsedMilliseconds(at: clock())),
             )
             if let outcome = SettleSession.outcome(for: transition, observations: observations) {
                 return outcome
             }
         }
 
-        while clock() < deadline {
+        while deadline.hasTimeRemaining(at: clock()) {
             do {
                 try await observationYield()
             } catch is CancellationError {
                 let transition = driver.send(
-                    .yieldFailed(.cancellation, elapsedMs: elapsedMs(since: start))
+                    .yieldFailed(.cancellation, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
                 )
                 return SettleSession.outcome(for: transition, observations: observations)!
             } catch {
                 let transition = driver.send(
-                    .yieldFailed(.error, elapsedMs: elapsedMs(since: start))
+                    .yieldFailed(.error, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
                 )
                 return SettleSession.outcome(for: transition, observations: observations)!
             }
@@ -577,20 +577,15 @@ private struct SettleLoopRunner {
             guard let parse = parseProvider() else { continue }
             let observation = observations.record(parse)
             let observationTransition = driver.send(
-                .observation(observation.sample, elapsedMs: elapsedMs(since: start))
+                .observation(observation.sample, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
             )
             if let outcome = SettleSession.outcome(for: observationTransition, observations: observations) {
                 return outcome
             }
         }
 
-        let transition = driver.send(.timeout(elapsedMs: elapsedMs(since: start)))
+        let transition = driver.send(.timeout(elapsedMs: deadline.elapsedMilliseconds(at: clock())))
         return SettleSession.outcome(for: transition, observations: observations)!
-    }
-
-    @MainActor
-    private func elapsedMs(since start: CFAbsoluteTime) -> Int {
-        max(0, Int((clock() - start) * 1_000))
     }
 }
 

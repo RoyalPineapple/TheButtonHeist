@@ -3953,7 +3953,10 @@ final class TheBrainsActionTests: XCTestCase {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return try XCTUnwrap(
-            minimumUniquePredicate(for: screenElement.heistId.predicateSelectionElementId, in: elements)
+            MinimumPredicateSelector.minimumUniquePredicate(
+                for: screenElement.heistId.predicateSelectionElementId,
+                in: elements
+            )
         ).target
     }
 

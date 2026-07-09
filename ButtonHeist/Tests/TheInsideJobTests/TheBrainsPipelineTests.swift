@@ -1196,7 +1196,10 @@ final class TheBrainsPipelineTests: XCTestCase {
                 timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0.01)
             )
         )
-        XCTAssertEqual(reduction.effect, .observe(.visibleSettled(after: 11, timeout: 0.1)))
+        XCTAssertEqual(
+            reduction.effect,
+            .observe(.visibleSettled(after: 11, timeout: SemanticObservationTiming.visibleTickIntervalSeconds))
+        )
 
         reduction = reducer.reduce(
             reduction.state,

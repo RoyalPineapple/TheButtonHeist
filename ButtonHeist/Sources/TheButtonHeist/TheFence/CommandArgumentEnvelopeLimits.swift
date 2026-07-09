@@ -80,18 +80,6 @@ enum CommandArgumentEnvelopeLimits {
                 observed: "object key count \(observed)",
                 expected: "object key count <= \(max)"
             )
-        case .arrayValueCount(let max, let observed):
-            return SchemaValidationError(
-                field: field,
-                observed: "array value count \(observed)",
-                expected: "array value count <= \(max)"
-            )
-        case .stringBytes(let max, let observed):
-            return SchemaValidationError(
-                field: field,
-                observed: "\(observed) string bytes",
-                expected: "string bytes <= \(max)"
-            )
         case .nullValue(let expected):
             return SchemaValidationError(field: field, observed: "null", expected: expected)
         case .nonFiniteNumber(let observed):

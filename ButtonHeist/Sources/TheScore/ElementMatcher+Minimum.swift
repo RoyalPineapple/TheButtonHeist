@@ -209,24 +209,6 @@ public struct MinimumPredicateSelection: Sendable, Equatable {
     }
 }
 
-public func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
-    MinimumPredicateSelector.predicateCandidates(for: element)
-}
-
-public func minimumUniquePredicate(
-    for contextElementId: PredicateSelectionElementId,
-    in context: PredicateSelectionContext
-) -> MinimumPredicateSelection? {
-    MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: context)
-}
-
-package func minimumUniquePredicate<Subject: PredicateSelectionSubject>(
-    for contextElementId: PredicateSelectionElementId,
-    in elements: [PredicateSelectionSubjectElement<Subject>]
-) -> MinimumPredicateSelection? {
-    MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: elements)
-}
-
 public enum MinimumPredicateSelector {
     public static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
         predicateCandidates(forSubject: element)

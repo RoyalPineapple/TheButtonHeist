@@ -1390,7 +1390,7 @@ final class TheStashResolutionTests: XCTestCase {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         let executableTarget = try XCTUnwrap(
-            minimumUniquePredicate(
+            MinimumPredicateSelector.minimumUniquePredicate(
                 for: sourceScreenElement.heistId.predicateSelectionElementId,
                 in: sourceElements
             )

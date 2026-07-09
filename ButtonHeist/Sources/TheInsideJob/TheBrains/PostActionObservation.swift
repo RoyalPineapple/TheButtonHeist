@@ -17,6 +17,37 @@ struct HeistSemanticObservation {
 
 enum SemanticObservationTiming {
     static let defaultTimeout: Double = 1
+    static let visibleTickIntervalSeconds: Double = 0.1
+}
+
+struct SemanticObservationDeadline: Sendable, Equatable {
+    let start: CFAbsoluteTime
+    let timeoutSeconds: Double
+
+    init(start: CFAbsoluteTime, timeoutSeconds: Double) {
+        self.start = start
+        self.timeoutSeconds = max(0, timeoutSeconds)
+    }
+
+    init(start: CFAbsoluteTime, timeoutMs: Int) {
+        self.init(start: start, timeoutSeconds: Double(max(0, timeoutMs)) / 1_000)
+    }
+
+    func hasTimeRemaining(at now: CFAbsoluteTime) -> Bool {
+        now < deadline
+    }
+
+    func remainingSeconds(at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Double {
+        max(0, deadline - now)
+    }
+
+    func elapsedMilliseconds(at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Int {
+        max(0, Int((now - start) * 1_000))
+    }
+
+    private var deadline: CFAbsoluteTime {
+        start + timeoutSeconds
+    }
 }
 
 /// Builds traces, captures, deltas, and action receipts from supplied semantic
@@ -427,7 +458,7 @@ final class PostActionObservation {
         let elements = screen.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
-        return minimumUniquePredicate(
+        return MinimumPredicateSelector.minimumUniquePredicate(
             for: firstResponderHeistId.predicateSelectionElementId,
             in: elements
         )?.target
