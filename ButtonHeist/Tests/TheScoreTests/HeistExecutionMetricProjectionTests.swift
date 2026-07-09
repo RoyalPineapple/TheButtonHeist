@@ -70,30 +70,23 @@ import TheScore
         ])
     }
 
-    @Test func `summary counts receipt roots without parsing their paths`() {
-        let nestedBodyPath = HeistExecutionStepResult.passed(
+    @Test func `summary excludes flattened failure actions from top level count`() {
+        let bodyStep = HeistExecutionStepResult.passed(
             path: "$.body[0]",
             kind: .wait,
             durationMs: 1
         )
+        let failureScreenshot = HeistExecutionStepResult.passed(
+            path: "$.body[0].failure.actions[0]",
+            kind: .action,
+            durationMs: 1
+        )
         let result = HeistExecutionResult.passed(
-            steps: [
-                HeistExecutionStepResult.passed(
-                    path: "$.capability",
-                    kind: .invoke,
-                    durationMs: 1,
-                    children: [nestedBodyPath]
-                ),
-                HeistExecutionStepResult.passed(
-                    path: "$.renamed[1]",
-                    kind: .action,
-                    durationMs: 1
-                ),
-            ],
+            steps: [bodyStep, failureScreenshot],
             durationMs: 2
         )
 
-        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 2)
+        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 1)
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {

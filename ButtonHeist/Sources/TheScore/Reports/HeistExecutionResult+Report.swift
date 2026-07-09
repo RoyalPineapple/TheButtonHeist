@@ -39,7 +39,9 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         nodes = accumulator.nodes
         events = accumulator.events
         summary = HeistExecutionEvidenceSummary(
-            executedTopLevelStepCount: rootNodes.count(where: \.isExecuted),
+            executedTopLevelStepCount: accumulator.nodes.count {
+                $0.isExecuted && $0.step.isRootBodyStep
+            },
             executedNodeCount: accumulator.executedNodeCount,
             outputReceiptNodeCount: accumulator.nodes.count,
             abortedAtPath: accumulator.firstFailedStep?.path,
@@ -77,6 +79,16 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             children: childNodes,
             firstFailedStepInSubtree: firstFailedStep
         )
+    }
+}
+
+private extension HeistExecutionStepResult {
+    var isRootBodyStep: Bool {
+        let prefix = "$.body["
+        guard path.hasPrefix(prefix) else { return false }
+        let suffix = path.dropFirst(prefix.count)
+        guard let closeBracket = suffix.firstIndex(of: "]") else { return false }
+        return suffix.index(after: closeBracket) == suffix.endIndex
     }
 }
 

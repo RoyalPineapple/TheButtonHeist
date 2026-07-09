@@ -65,11 +65,8 @@ final class PostActionObservation {
         let tripwireSignal: TheTripwire.TripwireSignal
         let settledObservationSequence: SettledObservationSequence?
 
-        var snapshot: [Screen.ScreenElement] { screen.orderedElements }
-        var elements: [AccessibilityElement] { snapshot.map(\.element) }
-        var hierarchy: [AccessibilityHierarchy] { screen.liveCapture.hierarchy }
+        var elements: [AccessibilityElement] { screen.orderedElements.map(\.element) }
         var interface: Interface { capture.interface }
-        var interfaceHash: String { AccessibilityTrace.Capture.hash(interface) }
         var semanticHash: String { screen.semantic.semanticHash }
         @MainActor var screenSnapshot: ScreenClassifier.Snapshot { ScreenClassifier.snapshot(of: screen) }
         var screenId: String? { screen.id }

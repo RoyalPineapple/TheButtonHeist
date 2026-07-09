@@ -1494,7 +1494,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Semantic Capture
 
-    func testCaptureSemanticStateKeepsKnownElementsWithCanonicalInterfaceHash() {
+    func testCaptureSemanticStateKeepsKnownElementsInCanonicalInterface() {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -1512,21 +1512,16 @@ final class TheBrainsPipelineTests: XCTestCase {
         let state = brains.postActionObservation.captureSemanticState()
 
         XCTAssertEqual(
-            Set(state.snapshot.map(\.heistId)),
+            Set(state.screen.orderedElements.map(\.heistId)),
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
             Set(state.interface.projectedElements.compactMap { $0.label }),
             ["Visible", "Below fold"]
         )
-        XCTAssertEqual(
-            state.interfaceHash,
-            AccessibilityTrace.Capture.hash(state.interface),
-            "Semantic captures hash the explored targetable interface, including known off-viewport entries"
-        )
     }
 
-    func testBeforeStateDerivesSemanticProjectionsFromCanonicalSnapshotInputs() {
+    func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() {
         let screen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(screen)
         let captured = brains.postActionObservation.captureSemanticState()
@@ -1538,11 +1533,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             settledObservationSequence: captured.settledObservationSequence
         )
 
-        XCTAssertEqual(state.snapshot.map(\.heistId), screen.orderedElements.map(\.heistId))
         XCTAssertEqual(state.elements, screen.orderedElements.map(\.element))
-        XCTAssertEqual(state.hierarchy, screen.liveCapture.hierarchy)
         XCTAssertEqual(state.interface, captured.capture.interface)
-        XCTAssertEqual(state.interfaceHash, AccessibilityTrace.Capture.hash(captured.capture.interface))
         XCTAssertEqual(state.semanticHash, screen.semantic.semanticHash)
         XCTAssertEqual(state.screenSnapshot, ScreenClassifier.snapshot(of: screen))
         XCTAssertEqual(state.screenId, screen.id)
