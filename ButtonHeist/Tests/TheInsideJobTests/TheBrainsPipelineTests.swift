@@ -483,6 +483,42 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.subjectEvidence, evidence)
     }
 
+    func testPostActionReceiptResolvesDeferredPayloadFromFinalSemanticState() async {
+        let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let afterScreen = Screen.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Status",
+                    value: "Saved",
+                    traits: .staticText,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "status")
+            ),
+        ])
+        let outcome = PostActionObservation.ActionOutcome.success(.init(
+            payload: .afterState { state in
+                guard let value = state.screen.findElement(heistId: "status")?.element.value else {
+                    return .none
+                }
+                return .payload(.typeText(value))
+            }
+        ))
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .typeText,
+            outcome: outcome,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
+        )
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.payload, .value("Saved"))
+    }
+
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
@@ -1488,6 +1524,28 @@ final class TheBrainsPipelineTests: XCTestCase {
             AccessibilityTrace.Capture.hash(state.interface),
             "Semantic captures hash the explored targetable interface, including known off-viewport entries"
         )
+    }
+
+    func testBeforeStateDerivesSemanticProjectionsFromCanonicalSnapshotInputs() {
+        let screen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.installScreenForTesting(screen)
+        let captured = brains.postActionObservation.captureSemanticState()
+
+        let state = PostActionObservation.BeforeState(
+            screen: captured.screen,
+            capture: captured.capture,
+            tripwireSignal: captured.tripwireSignal,
+            settledObservationSequence: captured.settledObservationSequence
+        )
+
+        XCTAssertEqual(state.snapshot.map(\.heistId), screen.orderedElements.map(\.heistId))
+        XCTAssertEqual(state.elements, screen.orderedElements.map(\.element))
+        XCTAssertEqual(state.hierarchy, screen.liveCapture.hierarchy)
+        XCTAssertEqual(state.interface, captured.capture.interface)
+        XCTAssertEqual(state.interfaceHash, AccessibilityTrace.Capture.hash(captured.capture.interface))
+        XCTAssertEqual(state.semanticHash, screen.semantic.semanticHash)
+        XCTAssertEqual(state.screenSnapshot, ScreenClassifier.snapshot(of: screen))
+        XCTAssertEqual(state.screenId, screen.id)
     }
 
     func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {

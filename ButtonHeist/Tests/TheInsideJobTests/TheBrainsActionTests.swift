@@ -4117,16 +4117,8 @@ final class TheBrainsActionTests: XCTestCase {
         )
         return PostActionObservation.BeforeState(
             screen: state.screen,
-            snapshot: state.snapshot,
-            elements: state.elements,
-            hierarchy: state.hierarchy,
-            interface: state.interface,
-            interfaceHash: AccessibilityTrace.Capture.hash(interface: state.interface, context: context),
-            semanticHash: state.semanticHash,
             capture: capture,
             tripwireSignal: state.tripwireSignal,
-            screenSnapshot: state.screenSnapshot,
-            screenId: screenId,
             settledObservationSequence: state.settledObservationSequence
         )
     }
