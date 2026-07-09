@@ -3,7 +3,7 @@
 Author-to-replay: how a heist written in Swift (or in the canonical DSL source form) becomes a validated plan, a portable `.heist` artifact, and finally a replayed run with a receipt. This diagram answers "where does my heist live at each stage, and where can it be rejected?"
 
 **Illustrates:** [HEIST-FORMAT.md](../HEIST-FORMAT.md), [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/HeistPlan.swift`, `ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift`, `ButtonHeist/Sources/ThePlans/HeistPlanSourceProgramParser.swift`, `ButtonHeist/Sources/ThePlans/HeistArtifact.swift`, `ButtonHeist/Sources/ThePlans/HeistArtifactCodec.swift`, `ButtonHeist/Sources/ThePlans/HeistPlan+Validation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift`, `ButtonHeist/Sources/TheScore/HeistExecutionResult.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistPlan.swift`, `ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftFileCompiler.swift`, `ButtonHeist/Sources/ThePlans/Parsing/HeistPlanSourceProgramParser.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistArtifact.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistArtifactCodec.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+Validation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift`, `ButtonHeist/Sources/TheScore/Receipts/HeistExecutionResult.swift`
 
 ```mermaid
 flowchart TD

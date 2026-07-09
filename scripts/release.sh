@@ -372,9 +372,9 @@ escape_sed_replacement() {
 CURRENT_ESC=$(escape_sed_pattern "$CURRENT_VERSION")
 NEW_ESC=$(escape_sed_replacement "$NEW_VERSION")
 
-# 1. TheScore/Messages.swift (canonical source of truth)
+# 1. TheScore/Wire/Messages.swift (canonical source of truth)
 sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_ESC\"/" \
-    ButtonHeist/Sources/TheScore/Messages.swift
+    ButtonHeist/Sources/TheScore/Wire/Messages.swift
 echo "  ✓ Messages.swift"
 
 # 2. RELEASE_VERSION file
@@ -508,7 +508,7 @@ else
     echo "==> Phase 5: Committing release source"
 
     git add \
-        ButtonHeist/Sources/TheScore/Messages.swift \
+        ButtonHeist/Sources/TheScore/Wire/Messages.swift \
         "$BUTTONHEIST_RELEASE_VERSION_FILE" \
         "$BUTTONHEIST_FORMULA_TEMPLATE"
 

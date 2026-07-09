@@ -3,7 +3,7 @@
 The whole machine in one frame: an agent on the host drives the app through the wire, and everything that runs inside the app process is compiled out of release builds. This diagram answers "what talks to what, and where does each piece live?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md)
-**Source of truth:** `ButtonHeist/Sources/TheScore/Messages.swift`, `ButtonHeist/Sources/TheScore/TLSPreSharedKeyMaterial.swift`, `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift`, `ButtonHeist/Sources/TheInsideJob/Server/SocketListenerStartup.swift`, `ButtonHeist/Sources/TheInsideJob/Server/BonjourAdvertisement.swift`, `ButtonHeistCLI/Package.swift`, `ButtonHeistMCP/Package.swift`
+**Source of truth:** `ButtonHeist/Sources/TheScore/Wire/Messages.swift`, `ButtonHeist/Sources/TheScore/Core/TLSPreSharedKeyMaterial.swift`, `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift`, `ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SocketListenerStartup.swift`, `ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/BonjourAdvertisement.swift`, `ButtonHeistCLI/Package.swift`, `ButtonHeistMCP/Package.swift`
 
 ```mermaid
 flowchart TD

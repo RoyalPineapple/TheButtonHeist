@@ -3,7 +3,7 @@
 The client connection as a state machine (`HandoffConnectionPhase`) plus the message-level handshake that runs inside the `connecting` phase: TLS-PSK, hello exchange, exact version equality, token auth, session claim. This diagram answers "what state is my connection in, and which step rejected me?"
 
 **Illustrates:** [AUTH.md](../AUTH.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
-**Source of truth:** `ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffConnectionState.swift`, `ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffConnectionLifecycle.swift`, `ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnectionFailures.swift`, `ButtonHeist/Sources/TheInsideJob/Server/MuscleHandshakePhase.swift`, `ButtonHeist/Sources/TheScore/TLSPreSharedKeyMaterial.swift`, `ButtonHeist/Sources/TheScore/Messages.swift`
+**Source of truth:** `ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffConnectionState.swift`, `ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffConnectionLifecycle.swift`, `ButtonHeist/Sources/TheButtonHeist/TheHandoff/NetworkBoundary/DeviceConnectionFailures.swift`, `ButtonHeist/Sources/TheInsideJob/Server/MuscleHandshakePhase.swift`, `ButtonHeist/Sources/TheScore/Core/TLSPreSharedKeyMaterial.swift`, `ButtonHeist/Sources/TheScore/Wire/Messages.swift`
 
 ## Connection phases
 

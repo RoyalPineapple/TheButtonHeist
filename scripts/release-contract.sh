@@ -6,7 +6,7 @@ BUTTONHEIST_GITHUB_REPO="RoyalPineapple/TheButtonHeist"
 BUTTONHEIST_TAP_REPO="RoyalPineapple/homebrew-tap"
 
 BUTTONHEIST_RELEASE_VERSION_FILE="RELEASE_VERSION"
-BUTTONHEIST_CODE_VERSION_FILE="ButtonHeist/Sources/TheScore/Messages.swift"
+BUTTONHEIST_CODE_VERSION_FILE="ButtonHeist/Sources/TheScore/Wire/Messages.swift"
 BUTTONHEIST_FORMULA_TEMPLATE="Formula/buttonheist.rb"
 BUTTONHEIST_API_DOCS_FILE="docs/API.md"
 BUTTONHEIST_DEMO_VERSION_FILE="TestApp/Sources/DisclosureGroupingDemo.swift"

@@ -3,7 +3,7 @@
 The type families that carry UI state through the system, and the hard border between internal types and wire types. This diagram answers "which type do I pass here, and which types are allowed to cross the network?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md)
-**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheInsideJob/TheStash/Screen.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/ElementModels.swift`, `ButtonHeist/Sources/ThePlans/ElementTarget.swift`
+**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheInsideJob/TheStash/Screen.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/Wire/ElementModels.swift`, `ButtonHeist/Sources/ThePlans/Model/ElementTarget.swift`
 
 ```mermaid
 flowchart TD
