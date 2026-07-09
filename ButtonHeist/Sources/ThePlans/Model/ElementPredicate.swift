@@ -105,13 +105,18 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
     public func map<NewValue: StringMatchPayload>(
         _ transform: (Value) throws -> NewValue
     ) rethrows -> StringMatch<NewValue> {
-        if case .isEmpty = self {
+        switch self {
+        case .exact(let value):
+            return try .exact(transform(value))
+        case .contains(let value):
+            return try .contains(transform(value))
+        case .prefix(let value):
+            return try .prefix(transform(value))
+        case .suffix(let value):
+            return try .suffix(transform(value))
+        case .isEmpty:
             return .isEmpty
         }
-        return try StringMatch<NewValue>(
-            mode: StringMatch<NewValue>.Mode(rawValue: self.mode.rawValue) ?? .exact,
-            value: transform(value)
-        )
     }
 }
 

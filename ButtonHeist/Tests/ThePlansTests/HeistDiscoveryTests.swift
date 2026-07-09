@@ -189,6 +189,19 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
     #expect(pay.tags == [.entry, .semanticAction])
 }
 
+@Test func `target discovery dedupes resolved and template predicates structurally`() throws {
+    let description = try HeistPlan(
+        name: "pay",
+        body: [
+            .action(try ActionStep(command: .activate(.target(.predicate(.label("Pay")))))),
+            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+        ]
+    ).describeHeist(named: "pay")
+
+    #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
+    #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
+}
+
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
     let raw = HeistPlanAdmissionCandidate(
         name: "root",

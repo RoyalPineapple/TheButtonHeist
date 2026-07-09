@@ -30,7 +30,15 @@ extension HeistPlanSourceParser {
             case 0:
                 return .changePredicate(.any)
             case 1:
-                return .changePredicate(changes[0].change)
+                let change = changes[0].change
+                switch change {
+                case .screenScope:
+                    throw error(previous, "single screen change must use .screenChanged")
+                case .elementsScope(let assertions) where assertions.count == 1:
+                    throw error(previous, "single element change must use .appeared, .disappeared, or .updated")
+                case .any, .elementsScope, .allScopes:
+                    return .changePredicate(change)
+                }
             default:
                 return .changePredicate(.allScopes(NonEmptyArray(changes[0], rest: Array(changes.dropFirst()))))
             }
@@ -66,50 +74,16 @@ extension HeistPlanSourceParser {
             return AnnouncementPredicateExpr()
         }
         if consumeSymbol(")") {
-            return AnnouncementPredicateExpr()
+            throw error(previous, "empty announcement predicate must use .announcement")
         }
-        let match: StringMatch<StringExpr>
-        if lookaheadLabel("containing") {
-            try expectIdentifier("containing")
-            try expectSymbol(":")
-            let token = currentToken
-            match = try validatedAnnouncementStringMatch(.contains, value: try parseStringExpr(), token: token)
-        } else {
-            match = try parseStringMatchCallArgument(field: "announcement")
-        }
+        let match = try parseStringMatchCallArgument(field: "announcement")
         try expectSymbol(")")
         return AnnouncementPredicateExpr(match: match)
-    }
-
-    private func validatedAnnouncementStringMatch(
-        _ mode: StringMatch<StringExpr>.Mode,
-        value: StringExpr,
-        token: HeistPlanSourceToken
-    ) throws -> StringMatch<StringExpr> {
-        let match = StringMatch(mode: mode, value: value)
-        if match.valueIfPresent?.stringMatchLiteralIsEmpty == true {
-            throw error(token, "announcement match value must not be empty")
-        }
-        return match
-    }
-
-    mutating func parseChangePredicateExpr() throws -> ChangePredicateExpr {
-        try parseChangeScopePredicateExpr().change
     }
 
     mutating func parseChangeScopePredicateExpr() throws -> ChangeScopePredicateExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
-        case "screen":
-            try expectSymbol("(")
-            var assertions: [StatePredicateExpr] = []
-            if !consumeSymbol(")") {
-                repeat {
-                    assertions.append(try parseStatePredicateExpr())
-                } while consumeSymbol(",")
-                try expectSymbol(")")
-            }
-            return .screen(assertions)
         case "screenChanged":
             return try parseScreenChangedPredicateExpr()
         case "elements":
@@ -129,7 +103,7 @@ extension HeistPlanSourceParser {
         case "updated":
             return .elements([try parseUpdatedElementDeltaPredicateExpr()])
         default:
-            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screenChanged, screen, elements, appeared, disappeared, updated")
+            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screenChanged, elements, appeared, disappeared, updated")
         }
     }
 
@@ -137,13 +111,14 @@ extension HeistPlanSourceParser {
         guard consumeSymbol("(") else {
             return .screen([])
         }
-        var assertions: [StatePredicateExpr] = []
-        if !consumeSymbol(")") {
-            repeat {
-                assertions.append(try parseStatePredicateExpr())
-            } while consumeSymbol(",")
-            try expectSymbol(")")
+        if consumeSymbol(")") {
+            throw error(previous, "empty screen change must use .screenChanged")
         }
+        var assertions: [StatePredicateExpr] = []
+        repeat {
+            assertions.append(try parseStatePredicateExpr())
+        } while consumeSymbol(",")
+        try expectSymbol(")")
         return .screen(assertions)
     }
 
@@ -503,8 +478,7 @@ extension HeistPlanSourceParser {
         try expectContextualInitializer(role: "frame match")
         let fields = try parseIntegerMatchFields(
             role: role,
-            allowed: ["x", "y", "width", "height"],
-            required: []
+            allowed: ["x", "y", "width", "height"]
         )
         try expectSymbol(")")
         return ElementFrameMatch(
@@ -519,8 +493,7 @@ extension HeistPlanSourceParser {
         try expectContextualInitializer(role: "activation point match")
         let fields = try parseIntegerMatchFields(
             role: role,
-            allowed: ["x", "y"],
-            required: []
+            allowed: ["x", "y"]
         )
         try expectSymbol(")")
         return ElementPointMatch(x: fields["x"], y: fields["y"])
@@ -528,8 +501,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseIntegerMatchFields(
         role: String,
-        allowed: Set<String>,
-        required: Set<String>
+        allowed: Set<String>
     ) throws -> [String: Int] {
         var fields: [String: Int] = [:]
         if !currentToken.isSymbol(")") {
@@ -546,9 +518,6 @@ extension HeistPlanSourceParser {
                 fields[name] = try parseSignedInteger()
                 guard consumeSymbol(",") else { break }
             }
-        }
-        for name in required where fields[name] == nil {
-            throw error(currentToken, "\(role) requires \(name)")
         }
         return fields
     }
