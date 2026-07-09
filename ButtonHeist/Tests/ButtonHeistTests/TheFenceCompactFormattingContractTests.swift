@@ -1210,7 +1210,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             [2] "Home" tabBarItem
           ── /main_tabs ──
         ── /semantic_actions__actions ──
-        ── list "main_scroll" 1 elements modal ──
+        ── container "main_scroll" 1 elements modal ──
           390×400 view, 390×1200 content (4 pages), vertical
           [3] "Bottom" staticText
         ── /main_scroll ──
@@ -1279,12 +1279,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let bothOutput = FenceResponse.compactInterface(both, detail: .summary)
         let expectedHorizontalSummary =
             """
-            ── list "horizontal_scroll" 1 elements ──
+            ── container "horizontal_scroll" 1 elements ──
               390×400 view, 1200×400 content (4 pages), horizontal
             """
         let expectedBothSummary =
             """
-            ── list "both_axis_scroll" 1 elements ──
+            ── container "both_axis_scroll" 1 elements ──
               390×400 view, 1200×1200 content (4 pages), both
             """
 
@@ -1325,7 +1325,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(output, """
         5 elements
-        ── list "long_scroll" 4 elements ──
+        ── container "long_scroll" 4 elements ──
           390×400 view, 390×1200 content (4 pages), vertical
           [0] "Row 0" staticText
           [1] "Row 1" staticText
@@ -1461,8 +1461,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertFalse(output.contains("Row 2"), output)
         XCTAssertFalse(output.contains("Row 3"), output)
         XCTAssertFalse(output.contains("Row 4"), output)
-        XCTAssertTrue(output.contains(#"── list "outer_scroll" 5 elements ──"#), output)
-        XCTAssertTrue(output.contains(#"── list "inner_scroll" 3 elements ──"#), output)
+        XCTAssertTrue(output.contains(#"── container "outer_scroll" 5 elements ──"#), output)
+        XCTAssertTrue(output.contains(#"── container "inner_scroll" 3 elements ──"#), output)
         XCTAssertTrue(output.contains("⋮ 2 more"), output)
         XCTAssertTrue(output.contains("⋮ 3 more"), output)
     }
@@ -1482,7 +1482,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try rendering.int("omittedElementCount"), 0)
         try rendering.assertMissing("visibleElementBudget")
         try rendering.assertMissing("totalNodeBudget")
-        XCTAssertEqual(try scrollContainer.string("type"), "scrollable")
+        XCTAssertEqual(try scrollContainer.string("type"), "none")
         XCTAssertEqual(try scrollContainer.double("contentWidth"), 390)
         XCTAssertEqual(try scrollContainer.double("contentHeight"), 1200)
         XCTAssertEqual(try scrollContainer.string("scrollAxis"), "vertical")
@@ -1505,7 +1505,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             omittedContainers: [
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
-                    type: .scrollable,
+                    type: .none,
                     reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 390,
@@ -1544,7 +1544,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ),
             compact
         )
-        XCTAssertTrue(compact.contains(#"omitted: scrollable containerName="main_scroll""#), compact)
+        XCTAssertTrue(compact.contains(#"omitted: none containerName="main_scroll""#), compact)
         XCTAssertTrue(compact.contains("next: Retry get_interface"), compact)
         XCTAssertEqual(try discovery.string("state"), "limited")
         XCTAssertEqual(try discovery.strings("reasonCodes"), ["scroll-attempt-budget"])
@@ -1577,8 +1577,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let dto = try publicInterfaceContractDTO(interface)
         let container = try XCTUnwrap(dto.topLevelContainers.first)
 
-        XCTAssertEqual(container.type, "scrollable")
-        XCTAssertNotEqual(container.type, "list")
+        XCTAssertEqual(container.type, "none")
+        XCTAssertNotEqual(container.type, "scrollable")
         XCTAssertEqual(container.containerName, "main_scroll")
         XCTAssertEqual(container.contentWidth, 390)
         XCTAssertEqual(container.contentHeight, 1_200)
@@ -1630,6 +1630,27 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(containers[1].containerName, "rows_list")
         XCTAssertEqual(containers[3].rowCount, 3)
         XCTAssertEqual(containers[3].columnCount, 2)
+    }
+
+    func testPublicInterfaceOutputRendersContainerCustomActions() throws {
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestContainer(
+                    type: .none,
+                    customActions: [AccessibilityElement.CustomAction(name: "Archive")]
+                ),
+                containerName: "archive_container",
+                children: []
+            ),
+        ])
+
+        let compact = FenceResponse.compactInterface(interface, detail: .summary)
+        let human = FenceResponse.interface(interface, detail: .summary).humanFormatted()
+        let container = try XCTUnwrap(try publicInterfaceContractDTO(interface).topLevelContainers.first)
+
+        XCTAssertTrue(compact.contains(#"── container "archive_container" actions="Archive" ──"#), compact)
+        XCTAssertTrue(human.contains(#"container containerName: archive_container actions="Archive""#), human)
+        XCTAssertEqual(container.actions, ["Archive"])
     }
 
     func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
@@ -1814,7 +1835,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             full.contains(#"── group "Actions" id="actions" "semantic_actions__actions" frame=(0,40,200,100) ──"#),
             full
         )
-        XCTAssertTrue(summary.contains(#"── list "main_scroll" 1 elements modal ──"#), summary)
+        XCTAssertTrue(summary.contains(#"── container "main_scroll" 1 elements modal ──"#), summary)
         XCTAssertTrue(summary.contains("390×400 view, 390×1200 content (4 pages), vertical"), summary)
     }
 
@@ -1827,10 +1848,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(summary.contains(#"group "Actions" id="actions" containerName: semantic_actions__actions"#), summary)
         XCTAssertTrue(summary.contains(#"  [ 0] "Submit" traits=button actions=activate"#), summary)
         XCTAssertTrue(summary.contains(#"  table rows=3 columns=4 containerName: orders_table"#), summary)
-        XCTAssertTrue(summary.contains(#"scrollable"#), summary)
-        XCTAssertTrue(summary.contains(#"  containerName: main_scroll"#), summary)
-        XCTAssertTrue(summary.contains(#"  viewport: 390x400"#), summary)
-        XCTAssertTrue(summary.contains(#"  content: 390x1200"#), summary)
+        XCTAssertTrue(summary.contains(#"container containerName: main_scroll viewport=390x400 content=390x1200 modal=true"#), summary)
         XCTAssertFalse(summary.contains("frame="), summary)
         XCTAssertFalse(summary.contains("stableId"), summary)
         XCTAssertTrue(full.contains(#"group "Actions" id="actions" containerName: semantic_actions__actions frame=(0,40,200,100)"#), full)
@@ -2148,6 +2166,7 @@ private struct PublicInterfaceContainerContractDTO: Decodable {
     let identifier: String?
     let rowCount: Int?
     let columnCount: Int?
+    let actions: [String]?
     let contentWidth: Double?
     let contentHeight: Double?
     let scrollAxis: String?

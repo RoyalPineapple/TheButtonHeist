@@ -19,30 +19,60 @@ public extension AccessibilityContainer {
     }
 
     var containerPredicateFacts: ContainerPredicateFacts {
+        let actions = Set(customActions.lazy.map(\.name).filter { !$0.isEmpty }.map(ElementAction.custom))
+        let kind: AccessibilityContainerKind
+        let label: String?
+        let value: String?
+        let rowCount: Int?
+        let columnCount: Int?
         switch type {
-        case .semanticGroup(let label, let value, let identifier):
-            return ContainerPredicateFacts(
-                type: .semanticGroup,
-                label: label,
-                value: value,
-                identifier: identifier,
-                isModalBoundary: isModalBoundary
-            )
+        case .none:
+            kind = .none
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
+        case .semanticGroup(let semanticLabel, let semanticValue):
+            kind = .semanticGroup
+            label = semanticLabel
+            value = semanticValue
+            rowCount = nil
+            columnCount = nil
         case .list:
-            return ContainerPredicateFacts(type: .list, isModalBoundary: isModalBoundary)
+            kind = .list
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
         case .landmark:
-            return ContainerPredicateFacts(type: .landmark, isModalBoundary: isModalBoundary)
-        case .dataTable(let rowCount, let columnCount):
-            return ContainerPredicateFacts(
-                type: .dataTable,
-                rowCount: rowCount,
-                columnCount: columnCount,
-                isModalBoundary: isModalBoundary
-            )
+            kind = .landmark
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
+        case .dataTable(let tableRowCount, let tableColumnCount):
+            kind = .dataTable
+            label = nil
+            value = nil
+            rowCount = tableRowCount
+            columnCount = tableColumnCount
         case .tabBar:
-            return ContainerPredicateFacts(type: .tabBar, isModalBoundary: isModalBoundary)
-        case .scrollable:
-            return ContainerPredicateFacts(type: .scrollable, isModalBoundary: isModalBoundary)
+            kind = .tabBar
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
         }
+        return ContainerPredicateFacts(
+            type: kind,
+            label: label,
+            value: value,
+            identifier: identifier,
+            rowCount: rowCount,
+            columnCount: columnCount,
+            isModalBoundary: isModalBoundary,
+            isScrollable: isScrollable,
+            actions: actions
+        )
     }
 }

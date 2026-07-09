@@ -446,7 +446,7 @@ final class Navigation {
             let frame = container.frame
             let containerName = semanticContainer.containerName
 
-            guard case .scrollable(let contentSize) = container.type else {
+            guard let contentSize = container.scrollableContentSize else {
                 return InterfaceDiscoveryOmittedContainer(
                     containerName: containerName,
                     type: container.accessibilityContainerKind,

@@ -502,7 +502,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollTargetRejectsPartialScopedTargetContainer() throws {
-        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]},"direction":"up"}"#.utf8)
+        let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]},"direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
             assertDecodingError(error, contains: ["scoped element target requires target"])
         }
@@ -565,7 +565,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollToEdgeTargetRejectsPartialScopedTargetContainer() throws {
-        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]},"edge":"bottom"}"#.utf8)
+        let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]},"edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
             assertDecodingError(error, contains: ["scoped element target requires target"])
         }
@@ -604,7 +604,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testAccessibilityContainerRoundTrip() throws {
         let container = makeTestAccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 390, height: 1000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 390, height: 1000),
             frameY: 100,
             frameWidth: 390,
             frameHeight: 700
@@ -616,7 +616,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testAccessibilityContainerSemanticGroupRoundTrip() throws {
         let container = makeTestAccessibilityContainer(
-            type: .semanticGroup(label: "Settings", value: nil, identifier: "settings"),
+            type: .semanticGroup(label: "Settings", value: nil), identifier: "settings",
             frameWidth: 390,
             frameHeight: 100
         )
@@ -627,7 +627,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testAccessibilityContainerModalBoundaryRoundTrip() throws {
         let container = makeTestAccessibilityContainer(
-            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
             frameWidth: 390,
             frameHeight: 300,
             isModalBoundary: true
@@ -760,7 +760,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testSubtreeSelectorContainerAcceptsPredicateObject() throws {
-        let data = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]}}"#.utf8)
+        let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]}}"#.utf8)
         let decoded = try decoder.decode(SubtreeSelector.self, from: data)
 
         XCTAssertEqual(decoded, .container(.scrollable))
@@ -816,7 +816,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             frameHeight: 600
         )
         let inner = makeTestAccessibilityContainer(
-            type: .semanticGroup(label: nil, value: nil, identifier: nil),
+            type: .semanticGroup(label: nil, value: nil), identifier: nil,
             frameWidth: 390,
             frameHeight: 44
         )

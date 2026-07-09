@@ -1319,7 +1319,7 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
         }
         guard let scrollContainerPath = visibleScreen.orderedContainers.compactMap({ container -> TreePath? in
-            guard case .scrollable = container.container.type else { return nil }
+            guard container.container.isScrollable else { return nil }
             return container.path
         }).first else {
             throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
@@ -2235,7 +2235,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let captureFrame = CGRect(x: 40, y: 120, width: 240, height: 360)
         let contentSize = AccessibilitySize(width: 320, height: 2000)
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: contentSize),
+            type: .none, scrollableContentSize: contentSize,
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
@@ -2370,7 +2370,7 @@ final class TheBrainsScrollTests: XCTestCase {
         frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 400)
     ) -> AccessibilityContainer {
         AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(contentSize)),
+            type: .none, scrollableContentSize: AccessibilitySize(contentSize),
             frame: AccessibilityRect(frame)
         )
     }

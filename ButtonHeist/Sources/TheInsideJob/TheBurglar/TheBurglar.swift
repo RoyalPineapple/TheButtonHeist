@@ -114,8 +114,7 @@ final class TheBurglar {
                     let wrapper = AccessibilityContainer(
                         type: .semanticGroup(
                             label: windowName,
-                            value: "windowLevel: \(window.windowLevel.rawValue)",
-                            identifier: nil
+                            value: "windowLevel: \(window.windowLevel.rawValue)"
                         ),
                         frame: AccessibilityRect(window.frame)
                     )
@@ -214,7 +213,7 @@ final class TheBurglar {
         for container: AccessibilityContainer,
         source: NSObject
     ) -> UIScrollView? {
-        guard case .scrollable(let contentSize) = container.type,
+        guard let contentSize = container.scrollableContentSize,
               let sourceView = source as? UIView
         else { return nil }
         if let scrollView = sourceView as? UIScrollView {

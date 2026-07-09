@@ -26,7 +26,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .semanticGroup(label: label, value: nil, identifier: nil),
+                type: .semanticGroup(label: label, value: nil), identifier: nil,
                 frame: .zero
             ),
             children: children
@@ -38,7 +38,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
+                type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1000),
                 frame: .zero
             ),
             children: children
@@ -256,7 +256,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         let result: [String] = [tree].compactMap(
             context: "",
             container: { context, container in
-                if case let .semanticGroup(label, _, _) = container.type {
+                if case let .semanticGroup(label, _) = container.type {
                     return context.isEmpty ? (label ?? "") : context + "/" + (label ?? "")
                 }
                 return context

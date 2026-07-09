@@ -102,8 +102,10 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String
     ) {
         switch check {
-        case .type, .modalBoundary:
+        case .type, .modalBoundary, .scrollable:
             return
+        case .actions(let actions):
+            validateContainerActions(actions, path: "\(path).actions")
         case .semantic(let predicate):
             validateSemanticContainerPredicate(predicate, path: "\(path).semantic")
         case .rowCount(let rowCount):
@@ -119,8 +121,10 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch check {
-        case .type, .modalBoundary:
+        case .type, .modalBoundary, .scrollable:
             return
+        case .actions(let actions):
+            validateContainerActions(actions, path: "\(path).actions")
         case .semantic(let predicate):
             validateSemanticContainerPredicate(predicate, path: "\(path).semantic", scope: scope)
         case .rowCount(let rowCount):
@@ -141,6 +145,28 @@ extension HeistPlanRuntimeSafetyValidator {
             validateString(match, path: "\(path).value", role: "container value")
         case .identifier(let match):
             validateString(match, path: "\(path).identifier", role: "container identifier")
+        }
+    }
+
+    mutating func validateContainerActions(_ actions: Set<ElementAction>, path: String) {
+        guard !actions.isEmpty else {
+            fail(
+                path: path,
+                contract: "container actions check must not be empty",
+                observed: "[]",
+                correction: "Use at least one action."
+            )
+            return
+        }
+        for action in actions {
+            if case .custom(let name) = action, name.isEmpty {
+                fail(
+                    path: path,
+                    contract: "container custom action name must not be empty",
+                    observed: #""""#,
+                    correction: "Use a named custom action."
+                )
+            }
         }
     }
 

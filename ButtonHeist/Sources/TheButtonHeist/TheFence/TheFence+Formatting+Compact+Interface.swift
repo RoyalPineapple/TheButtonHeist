@@ -188,48 +188,45 @@ extension FenceResponse {
         observedElementCount: Int? = nil,
         scrollInventory: ScrollInventory? = nil
     ) -> String {
+        let identifier = nonEmpty(container.identifier)
+        let containerName = nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
         switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
+        case .none:
+            parts = ["container"]
+        case .semanticGroup(let label, let value):
             parts = ["group"]
             if let label = nonEmpty(label) { parts.append(quotedString(label)) }
             if let value = nonEmpty(value) { parts.append("value=\(quotedString(value))") }
-            if let identifier = nonEmpty(identifier) { parts.append("id=\(quotedString(identifier))") }
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
+            if let identifier {
+                parts.append("id=\(quotedString(identifier))")
             }
         case .list:
             parts = ["list"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
-        case .scrollable:
-            parts = ["list"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
-            if let observedElementCount {
-                let totalElementCount = scrollInventory?.totalElementCount
-                if let totalElementCount, totalElementCount > observedElementCount {
-                    parts.append("\(totalElementCount) elements, showing \(observedElementCount)")
-                } else {
-                    parts.append("\(totalElementCount ?? observedElementCount) elements")
-                }
+        }
+        if let containerName {
+            parts.append(quotedString(containerName))
+        }
+        if case .semanticGroup = container.type {
+        } else if let identifier {
+            parts.append("id=\(quotedString(identifier))")
+        }
+        let actionNames = container.customActions.map(\.name).filter { !$0.isEmpty }
+        if !actionNames.isEmpty {
+            parts.append("actions=\(actionNames.map(quotedString).joined(separator: ","))")
+        }
+        if container.scrollableContentSize != nil, let observedElementCount {
+            let totalElementCount = scrollInventory?.totalElementCount
+            if let totalElementCount, totalElementCount > observedElementCount {
+                parts.append("\(totalElementCount) elements, showing \(observedElementCount)")
+            } else {
+                parts.append("\(totalElementCount ?? observedElementCount) elements")
             }
         }
         if container.isModalBoundary {
@@ -270,7 +267,7 @@ extension FenceResponse {
     }
 
     private static func compactScrollMetadataLine(_ projection: InterfaceContainerProjection) -> [String] {
-        guard case .scrollable(let contentSize) = projection.container.type else { return [] }
+        guard let contentSize = projection.container.scrollableContentSize else { return [] }
         let frame = projection.container.frame
         let axis = ScrollContainerMetrics.axis(
             contentWidth: Double(contentSize.width),
@@ -303,9 +300,11 @@ extension FenceResponse {
 
     private static func semanticContainerType(_ container: AccessibilityContainer) -> String {
         switch container.type {
+        case .none:
+            return "container"
         case .semanticGroup:
             return "group"
-        case .list, .scrollable:
+        case .list:
             return "list"
         case .landmark:
             return "landmark"
@@ -317,7 +316,7 @@ extension FenceResponse {
     }
 
     private static func semanticContainerLabel(_ container: AccessibilityContainer) -> String? {
-        if case .semanticGroup(let label, _, _) = container.type {
+        if case .semanticGroup(let label, _) = container.type {
             return nonEmpty(label)
         }
         return nil

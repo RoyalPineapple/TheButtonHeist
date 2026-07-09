@@ -189,7 +189,7 @@ extension FenceResponse {
         }
         output += String(repeating: "-", count: 60) + "\n"
 
-        if projection.elementCount == 0 {
+        if projection.tree.isEmpty {
             output += "  (no elements)\n"
         } else {
             output += formatTreeLines(projection).joined(separator: "\n")
@@ -294,53 +294,43 @@ extension FenceResponse {
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail
     ) -> [String] {
+        let identifier = Self.nonEmpty(container.identifier)
+        let containerName = Self.nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
         switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
+        case .none:
+            parts = ["container"]
+        case .semanticGroup(let label, let value):
             parts = ["group"]
             if let label = Self.nonEmpty(label) { parts.append(Self.quotedString(label)) }
             if let value = Self.nonEmpty(value) { parts.append("value=\(Self.quotedString(value))") }
-            if let identifier = Self.nonEmpty(identifier) { parts.append("id=\(Self.quotedString(identifier))") }
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
+            if let identifier {
+                parts.append("id=\(Self.quotedString(identifier))")
             }
         case .list:
             parts = ["list"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
-        case .scrollable(let contentSize):
+        }
+        if let containerName {
+            parts.append("containerName: \(containerName)")
+        }
+        if case .semanticGroup = container.type {
+        } else if let identifier {
+            parts.append("id=\(Self.quotedString(identifier))")
+        }
+        let actionNames = container.customActions.map(\.name).filter { !$0.isEmpty }
+        if !actionNames.isEmpty {
+            parts.append("actions=\(actionNames.map(Self.quotedString).joined(separator: ", "))")
+        }
+        if let contentSize = container.scrollableContentSize {
             let frame = container.frame
-            var lines = ["scrollable"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                lines.append("  containerName: \(containerName)")
-            }
-            lines.append("  viewport: \(Int(frame.size.width))x\(Int(frame.size.height))")
-            lines.append("  content: \(Int(contentSize.width))x\(Int(contentSize.height))")
-            if container.isModalBoundary {
-                lines.append("  modal: true")
-            }
-            if detail == .full {
-                lines.append(
-                    "  frame: (\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
-                )
-            }
-            return lines
+            parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
+            parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
         }
         if container.isModalBoundary {
             parts.append("modal=true")

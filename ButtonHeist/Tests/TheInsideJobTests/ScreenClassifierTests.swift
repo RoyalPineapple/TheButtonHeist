@@ -65,7 +65,7 @@ final class ScreenClassifierTests: XCTestCase {
 
     func testModalBoundaryChangeIsScreenChange() {
         let modal = AccessibilityContainer(
-            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
             frame: .zero,
             isModalBoundary: true
         )
@@ -152,11 +152,11 @@ final class ScreenClassifierTests: XCTestCase {
 
     func testDelimiterLikeContainerIdentifierDoesNotCollideWithModalState() {
         let nonModal = AccessibilityContainer(
-            type: .semanticGroup(label: "Panel", value: nil, identifier: "dialog:modal"),
+            type: .semanticGroup(label: "Panel", value: nil), identifier: "dialog:modal",
             frame: .zero
         )
         let modal = AccessibilityContainer(
-            type: .semanticGroup(label: "Panel", value: nil, identifier: "dialog"),
+            type: .semanticGroup(label: "Panel", value: nil), identifier: "dialog",
             frame: .zero,
             isModalBoundary: true
         )
@@ -177,11 +177,11 @@ final class ScreenClassifierTests: XCTestCase {
             element(label: "Total", value: "$1.00", traits: .staticText),
         ])
         let overlayWindow = AccessibilityContainer(
-            type: .semanticGroup(label: "OverlayWindow", value: "debug wrapper", identifier: nil),
+            type: .semanticGroup(label: "OverlayWindow", value: "debug wrapper"), identifier: nil,
             frame: .zero
         )
         let appWindow = AccessibilityContainer(
-            type: .semanticGroup(label: "UIWindow", value: "debug wrapper", identifier: nil),
+            type: .semanticGroup(label: "UIWindow", value: "debug wrapper"), identifier: nil,
             frame: .zero
         )
         let after = screen(hierarchy: [
@@ -202,7 +202,7 @@ final class ScreenClassifierTests: XCTestCase {
             element(label: "Checkout", traits: .header),
         ])
         let group = AccessibilityContainer(
-            type: .semanticGroup(label: "Content", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Content", value: nil), identifier: nil,
             frame: .zero
         )
         let after = screen(hierarchy: [

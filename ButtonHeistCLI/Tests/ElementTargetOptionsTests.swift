@@ -78,6 +78,31 @@ final class ElementTargetOptionsTests: XCTestCase {
         ]))
     }
 
+    func testScopedTargetEncoderIncludesContainerScrollableAndActionsChecks() {
+        let target = ElementTarget.within(
+            container: .matching(.scrollable(true), .actions([.custom("Sub"), .activate])),
+            .predicate(ElementPredicate(label: "Checkout"))
+        )
+
+        let object = CLIRequestBuilder.targetObject(target)
+
+        XCTAssertEqual(object[.container], .object([
+            "checks": .array([
+                .object([
+                    "kind": .string("scrollable"),
+                    "value": .bool(true),
+                ]),
+                .object([
+                    "kind": .string("actions"),
+                    "values": .array([
+                        .string("activate"),
+                        .object(["custom": .string("Sub")]),
+                    ]),
+                ]),
+            ]),
+        ]))
+    }
+
     func testCLIRequestObjectsAccumulateRepeatedTypedKeysBeforeWireRendering() {
         var object = CLIRequestObject()
 

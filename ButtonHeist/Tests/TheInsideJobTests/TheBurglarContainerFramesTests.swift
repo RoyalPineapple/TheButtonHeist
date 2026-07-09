@@ -37,7 +37,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     func testNestedContainerExpressedInParentScrollableContentSpace() {
         let scrollContainerPath = TreePath([0])
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 5000),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
         let inner = AccessibilityContainer(
@@ -76,7 +76,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let scrollContainerPath = TreePath([0])
 
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 5000),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
@@ -157,11 +157,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     func testDuplicateReadableContainerIdsGetCaptureLocalHashes() {
         let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         let firstContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
             frame: AccessibilityRect(frame)
         )
         let secondContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2_000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 2_000),
             frame: AccessibilityRect(frame)
         )
         let firstElement = makeElement(label: "First")
@@ -222,19 +222,19 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let pagerFrame = CGRect(x: 0, y: 0, width: 960, height: 400)
         let repeatedContentSize = AccessibilitySize(width: 320, height: 800)
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: repeatedContentSize),
+            type: .none, scrollableContentSize: repeatedContentSize,
             frame: AccessibilityRect(frame)
         )
         let pager = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 960, height: 400)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 960, height: 400),
             frame: AccessibilityRect(pagerFrame)
         )
         let page = AccessibilityContainer(
-            type: .scrollable(contentSize: repeatedContentSize),
+            type: .none, scrollableContentSize: repeatedContentSize,
             frame: AccessibilityRect(frame)
         )
         let list = AccessibilityContainer(
-            type: .scrollable(contentSize: repeatedContentSize),
+            type: .none, scrollableContentSize: repeatedContentSize,
             frame: AccessibilityRect(frame)
         )
         let outerScrollView = UIScrollView(frame: frame)

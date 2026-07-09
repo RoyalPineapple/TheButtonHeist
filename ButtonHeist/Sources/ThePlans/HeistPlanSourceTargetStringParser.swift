@@ -238,6 +238,8 @@ extension HeistPlanSourceParser {
             return .semantic(predicate)
         case "semanticGroup":
             return .semanticGroup
+        case "none":
+            return .type(.none)
         case "list":
             return .list
         case "landmark":
@@ -246,6 +248,11 @@ extension HeistPlanSourceParser {
             return .tabBar
         case "scrollable":
             return .scrollable
+        case "actions":
+            try expectSymbol("(")
+            let actions = try parseActionArray(role: "container actions")
+            try expectSymbol(")")
+            return .actions(actions)
         case "dataTable":
             return try parseDataTableContainerPredicateExpr()
         case "modalBoundary":
@@ -266,7 +273,11 @@ extension HeistPlanSourceParser {
             }
             return ContainerPredicateExpr(checks)
         default:
-            throw error(token, "container predicates accept .label, .value, .identifier, .type, .semantic, .dataTable, .scrollable, and .matching")
+            throw error(
+                token,
+                "container predicates accept .none, .label, .value, .identifier, .type, .semantic, " +
+                ".dataTable, .scrollable, .actions, and .matching"
+            )
         }
     }
 
@@ -321,8 +332,18 @@ extension HeistPlanSourceParser {
             let required = try parseBoolLiteral()
             try expectSymbol(")")
             return .modalBoundary(required)
+        case "scrollable":
+            try expectSymbol("(")
+            let required = try parseBoolLiteral()
+            try expectSymbol(")")
+            return .scrollable(required)
+        case "actions":
+            try expectSymbol("(")
+            let actions = try parseActionArray(role: "container actions")
+            try expectSymbol(")")
+            return .actions(Set(actions))
         default:
-            throw error(token, "container predicate checks accept .type, .semantic, .rowCount, .columnCount, and .modalBoundary")
+            throw error(token, "container predicate checks accept .type, .semantic, .rowCount, .columnCount, .modalBoundary, .scrollable, and .actions")
         }
     }
 

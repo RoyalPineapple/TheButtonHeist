@@ -1915,7 +1915,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
                 ]),
                 FenceParameterKey.container.rawValue: .object([
-                    FenceParameterKey.type.rawValue: .string("scrollable"),
+                    FenceParameterKey.type.rawValue: .string("list"),
                     FenceParameterKey.isModalBoundary.rawValue: .bool(true),
                     FenceParameterKey.scale.rawValue: .double(0.5),
                 ]),
@@ -1929,7 +1929,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try subtree.schemaInteger(.ordinal), 2)
         XCTAssertEqual(try element.schemaString(.label), "Pay")
         XCTAssertEqual(try element.schemaStringArray(.traits), ["button", "selected"])
-        XCTAssertEqual(try container.schemaEnum(.type, as: AccessibilityContainerKind.self), .scrollable)
+        XCTAssertEqual(try container.schemaEnum(.type, as: AccessibilityContainerKind.self), .list)
         XCTAssertEqual(try container.schemaBoolean(.isModalBoundary), true)
         XCTAssertEqual(try container.schemaNumber(.scale), 0.5)
     }

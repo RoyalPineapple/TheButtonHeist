@@ -338,6 +338,46 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(translated.bhResolvedActivationPoint, CGPoint(x: 50, y: 60))
     }
 
+    func testBuildScreenTranslationPreservesContainerFacts() throws {
+        let parseRootOffset = CGPoint(x: 12, y: 34)
+        let containerPath = TreePath([0])
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 80, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1200)
+        let containerFrame = CGRect(x: 0, y: 80, width: 320, height: 400)
+        let container = AccessibilityContainer(
+            type: .none,
+            identifier: "checkout-scroll",
+            scrollableContentSize: AccessibilitySize(scrollView.contentSize),
+            frame: AccessibilityRect(containerFrame),
+            isModalBoundary: true,
+            customActions: [AccessibilityElement.CustomAction(name: "Archive")]
+        )
+        let child = makeElement(
+            label: "Checkout",
+            traits: .button,
+            frame: CGRect(x: 24, y: 160, width: 140, height: 44)
+        )
+        let result = TheBurglar.ParseResult(
+            hierarchy: [.container(container, children: [.element(child, traversalIndex: 0)])],
+            scrollViewsByPath: [containerPath: scrollView],
+            screenCoordinateOffsetsByPath: [containerPath: parseRootOffset]
+        )
+
+        let screen = TheBurglar.buildScreen(from: result)
+        let translated = try XCTUnwrap(screen.liveCapture.hierarchy.first)
+        guard case .container(let translatedContainer, _) = translated else {
+            return XCTFail("Expected translated container")
+        }
+
+        XCTAssertEqual(translatedContainer.type, .none)
+        XCTAssertEqual(translatedContainer.identifier, "checkout-scroll")
+        XCTAssertEqual(translatedContainer.scrollableContentSize, AccessibilitySize(scrollView.contentSize))
+        XCTAssertEqual(translatedContainer.isModalBoundary, true)
+        XCTAssertEqual(translatedContainer.customActions, [AccessibilityElement.CustomAction(name: "Archive")])
+        XCTAssertEqual(translatedContainer.frame.cgRect, containerFrame.offsetBy(dx: 12, dy: 34))
+        XCTAssertNotNil(screen.liveCapture.scrollView(forContainerPath: containerPath))
+    }
+
     // MARK: - Scroll membership
 
     func testPropagatesScrollMembershipForScrollableContainerChild() {
@@ -345,7 +385,7 @@ final class TheBurglarApplyTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 2000)
 
         let scrollableContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
+            type: .none, scrollableContentSize: AccessibilitySize(scrollView.contentSize),
             frame: AccessibilityRect(scrollView.frame)
         )
         let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)
@@ -386,7 +426,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let nestedContainerPath = TreePath([0, 0])
         let childPath = TreePath([0, 0, 0])
         let scrollableContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 2000),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 500)
         )
         let nestedContainer = AccessibilityContainer(

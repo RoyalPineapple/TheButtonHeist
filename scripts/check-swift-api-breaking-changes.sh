@@ -236,6 +236,11 @@ INTENTIONAL_BREAKAGES=(
     "func HeistDescription.encode(to:) has been removed"
     "constructor HeistDescription.init(from:) has been removed"
     "constructor ResolvedRepeatUntilStep.init(predicate:timeout:body:elseBody:) has been removed"
+    "enumelement AccessibilityContainerKind.none has been added as a new enum case"
+    "enumelement ContainerPredicateCheck.scrollable has been added as a new enum case"
+    "enumelement ContainerPredicateCheck.actions has been added as a new enum case"
+    "enumelement AccessibilityContainerKind.scrollable has been removed"
+    "constructor ContainerPredicateFacts.init(type:label:value:identifier:rowCount:columnCount:isModalBoundary:) has been removed"
 )
 
 PUBLIC_PRODUCTS=()

@@ -113,7 +113,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     private static func makeActionsContainer(containerName _: String, y: Double = 40) -> AccessibilityContainer {
         AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(x: 0, y: y, width: 200, height: 100)
         )
     }

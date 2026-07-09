@@ -319,8 +319,7 @@ private struct ScrollSubtreeProjectionPolicy {
     }
 
     private static func isScrollable(_ container: AccessibilityContainer) -> Bool {
-        if case .scrollable = container.type { return true }
-        return false
+        container.scrollableContentSize != nil
     }
 }
 

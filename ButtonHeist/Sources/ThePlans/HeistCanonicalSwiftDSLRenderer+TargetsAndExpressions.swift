@@ -60,6 +60,8 @@ extension HeistCanonicalSwiftDSLRenderer {
     ) rethrows -> String? {
         guard checks.count == 1 else { return nil }
         switch checks[0] {
+        case .type(.none):
+            return ".none"
         case .type(.semanticGroup):
             return ".semanticGroup"
         case .type(.list):
@@ -70,11 +72,15 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".dataTable()"
         case .type(.tabBar):
             return ".tabBar"
-        case .type(.scrollable):
-            return ".scrollable"
         case .semantic(let predicate):
             return try renderSemantic(predicate)
+        case .scrollable(true):
+            return ".scrollable"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
         case .rowCount, .columnCount, .modalBoundary:
+            return nil
+        case .scrollable(false):
             return nil
         }
     }
@@ -104,7 +110,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             switch check {
             case .type(.dataTable), .rowCount, .columnCount:
                 return true
-            case .type, .semantic, .modalBoundary:
+            case .type, .semantic, .modalBoundary, .scrollable, .actions:
                 return false
             }
         }
@@ -153,6 +159,10 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".columnCount(\(count))"
         case .modalBoundary(let required):
             return ".modalBoundary(\(required))"
+        case .scrollable(let required):
+            return ".scrollable(\(required))"
+        case .actions(let actions):
+            return ".actions(\(renderActionArray(actions)))"
         }
     }
 

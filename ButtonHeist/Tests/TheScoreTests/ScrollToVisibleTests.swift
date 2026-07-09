@@ -64,7 +64,7 @@ final class ScrollToVisibleTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetRejectsPartialScopedTarget() throws {
-        let containerOnly = Data(#"{"container":{"checks":[{"kind":"type","type":"scrollable"}]}}"#.utf8)
+        let containerOnly = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]}}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: containerOnly)) { error in
             assertDecodingError(error, contains: ["scoped element target requires target"])
         }

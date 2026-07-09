@@ -1844,7 +1844,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     private func makeScrollableContainer(frame: CGRect, contentSize: CGSize) -> AccessibilityContainer {
         AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(contentSize)),
+            type: .none, scrollableContentSize: AccessibilitySize(contentSize),
             frame: AccessibilityRect(frame)
         )
     }

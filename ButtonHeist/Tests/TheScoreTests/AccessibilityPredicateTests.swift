@@ -1,4 +1,5 @@
 import ButtonHeistTestSupport
+import AccessibilitySnapshotModel
 import XCTest
 import ThePlans
 @testable import TheScore
@@ -50,6 +51,50 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate.self, from: data), predicate)
     }
 
+    func testContainerIdentifierPredicatesMatchEveryContainerRole() {
+        let cases: [(AccessibilityContainer.ContainerType, String)] = [
+            (.none, "roleless-container"),
+            (.semanticGroup(label: "Checkout", value: nil), "checkout-group"),
+            (.list, "checkout-list"),
+            (.landmark, "checkout-landmark"),
+            (.dataTable(rowCount: 3, columnCount: 2), "checkout-table"),
+            (.tabBar, "checkout-tabs"),
+        ]
+
+        for (type, identifier) in cases {
+            let facts = makeTestAccessibilityContainer(type: type, identifier: identifier).containerPredicateFacts
+
+            XCTAssertEqual(facts.identifier, identifier)
+            XCTAssertTrue(ContainerPredicate.identifier(identifier).matches(facts), "\(type)")
+            XCTAssertFalse(ContainerPredicate.identifier("other").matches(facts), "\(type)")
+        }
+    }
+
+    func testContainerScrollablePredicateMatchesScrollFactIndependentOfRole() {
+        let scrollableListFacts = makeTestAccessibilityContainer(
+            type: .list,
+            identifier: "orders-list",
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1200)
+        ).containerPredicateFacts
+        let plainListFacts = makeTestAccessibilityContainer(type: .list, identifier: "orders-list").containerPredicateFacts
+
+        XCTAssertTrue(ContainerPredicate.scrollable.matches(scrollableListFacts))
+        XCTAssertTrue(ContainerPredicate.matching(.type(.list), .scrollable(true)).matches(scrollableListFacts))
+        XCTAssertFalse(ContainerPredicate.scrollable.matches(plainListFacts))
+    }
+
+    func testContainerActionPredicateMatchesCustomActionsIndependentOfRole() {
+        let actions = [AccessibilityElement.CustomAction(name: "Archive")]
+        let rolelessFacts = makeTestAccessibilityContainer(type: .none, customActions: actions).containerPredicateFacts
+        let listFacts = makeTestAccessibilityContainer(type: .list, customActions: actions).containerPredicateFacts
+        let plainFacts = makeTestAccessibilityContainer(type: .list).containerPredicateFacts
+
+        XCTAssertEqual(rolelessFacts.actions, [.custom("Archive")])
+        XCTAssertTrue(ContainerPredicate.actions([.custom("Archive")]).matches(rolelessFacts))
+        XCTAssertTrue(ContainerPredicate.matching(.type(.list), .actions([.custom("Archive")])).matches(listFacts))
+        XCTAssertFalse(ContainerPredicate.actions([.custom("Archive")]).matches(plainFacts))
+    }
+
     // MARK: - Presence Evaluation
 
     func testPresentMatchesAnyValueFour() {
@@ -68,7 +113,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testContainerLabelMatchesCurrentInterfaceWithoutTransition() {
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
+                type: .semanticGroup(label: "Checkout", value: nil), identifier: nil
             ), children: [
                 testElement(makeElement(label: "Pay", traits: [.button])),
             ]),
@@ -224,12 +269,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let otherPay = makeElement(label: "Pay", traits: [.button])
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Checkout", value: nil, identifier: nil)
+                type: .semanticGroup(label: "Checkout", value: nil), identifier: nil
             ), children: [
                 testElement(pay),
             ]),
             testContainer(makeTestAccessibilityContainer(
-                type: .semanticGroup(label: "Cart", value: nil, identifier: nil)
+                type: .semanticGroup(label: "Cart", value: nil), identifier: nil
             ), children: [
                 testElement(otherPay),
             ]),

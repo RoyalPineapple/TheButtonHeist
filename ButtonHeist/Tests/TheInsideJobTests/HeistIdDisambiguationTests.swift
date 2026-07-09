@@ -42,7 +42,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         anchorWindow?.addSubview(scrollView)
 
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
+            type: .none, scrollableContentSize: AccessibilitySize(scrollView.contentSize),
             frame: AccessibilityRect(scrollView.frame)
         )
         let children: [AccessibilityHierarchy] = elements.enumerated().map { index, element in

@@ -47,7 +47,8 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     func testPathIndexedContainersReturnNamedRecordsInPreorder() {
         let rootContainer = makeTestAccessibilityContainer(type: .landmark)
         let nestedScrollable = makeTestAccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 100, height: 400))
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 100, height: 400)
         )
         let siblingContainer = makeTestAccessibilityContainer(type: .list)
         let interface = makeTestInterface(nodes: [
@@ -129,7 +130,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         let original = makeTestInterface(nodes: [
             testContainer(
                 makeTestAccessibilityContainer(
-                    type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
+                    type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1000),
                     frameWidth: 320,
                     frameHeight: 480
                 ),
@@ -258,7 +259,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             omittedContainers: [
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
-                    type: .scrollable,
+                    type: .none,
                     reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 320,
@@ -284,7 +285,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     func testOmittedContainerDiagnosticsUseCanonicalSortOrder() {
         let unnamed = InterfaceDiscoveryOmittedContainer(
-            type: .scrollable,
+            type: .none,
             reasonCodes: [],
             viewportWidth: 320,
             viewportHeight: 400
@@ -298,21 +299,21 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         )
         let namedScrollableNarrow = InterfaceDiscoveryOmittedContainer(
             containerName: "main",
-            type: .scrollable,
+            type: .none,
             reasonCodes: [],
             viewportWidth: 320,
             viewportHeight: 400
         )
         let namedScrollableWide = InterfaceDiscoveryOmittedContainer(
             containerName: "main",
-            type: .scrollable,
+            type: .none,
             reasonCodes: [],
             viewportWidth: 500,
             viewportHeight: 400
         )
         let laterName = InterfaceDiscoveryOmittedContainer(
             containerName: "secondary",
-            type: .scrollable,
+            type: .none,
             reasonCodes: [],
             viewportWidth: 100,
             viewportHeight: 100

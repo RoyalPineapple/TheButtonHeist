@@ -288,7 +288,7 @@ struct DoctorDemoFixture {
     private static func container(children: [FixtureNode]) -> FixtureNode {
         .container(
             AccessibilityContainer(
-                type: .semanticGroup(label: nil, value: nil, identifier: nil),
+                type: .none,
                 frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 260)
             ),
             children

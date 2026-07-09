@@ -1073,7 +1073,7 @@ enum FenceParameterBlocks: Sendable {
     private static let containerPredicateCheckProperties: [FenceParameterSpec] = [
         param(
             .kind, .string, required: true,
-            enumValues: ["type", "semantic", "rowCount", "columnCount", "modalBoundary"]
+            enumValues: ContainerPredicateCheck<String>.wireKindValues
         ),
         param(.type, .string, enumValues: AccessibilityContainerKind.allCases.map(\.rawValue)),
         objectParam(
@@ -1081,6 +1081,7 @@ enum FenceParameterBlocks: Sendable {
             properties: semanticContainerPredicateProperties,
             validation: .customPayload
         ),
+        predicateCheckValuesParam(.values),
         FenceParameterSpec(
             key: FenceParameterKey.value.rawValue,
             schema: .unconstrained,

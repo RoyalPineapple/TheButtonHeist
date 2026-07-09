@@ -300,17 +300,19 @@ private func assertContainerPredicateSchema(
             .string("rowCount"),
             .string("columnCount"),
             .string("modalBoundary"),
+            .string("scrollable"),
+            .string("actions"),
         ]),
     ]), file: file, line: line)
     XCTAssertEqual(checkProperties["type"], .object([
         "type": .string("string"),
         "enum": .array([
+            .string("none"),
             .string("semanticGroup"),
             .string("list"),
             .string("landmark"),
             .string("dataTable"),
             .string("tabBar"),
-            .string("scrollable"),
         ]),
     ]), file: file, line: line)
     guard case .object(let semantic)? = checkProperties["semantic"],
@@ -324,6 +326,9 @@ private func assertContainerPredicateSchema(
     ]), file: file, line: line)
     guard case .object? = semanticProperties["match"] else {
         return XCTFail("Expected semantic match StringMatch object schema", file: file, line: line)
+    }
+    guard case .object? = checkProperties["values"] else {
+        return XCTFail("Expected container check values array schema", file: file, line: line)
     }
     XCTAssertNotNil(checkProperties["value"], file: file, line: line)
 }

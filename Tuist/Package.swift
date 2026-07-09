@@ -20,6 +20,6 @@ let package = Package(
     name: "Dependencies",
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.21.0"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.22.0"),
     ]
 )

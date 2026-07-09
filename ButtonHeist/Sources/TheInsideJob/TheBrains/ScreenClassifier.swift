@@ -44,12 +44,12 @@ import TheScore
     }
 
     enum ContainerRootShapeRole: Equatable, Hashable {
+        case none
         case semanticGroup
         case list
         case landmark
         case dataTable
         case tabBar
-        case scrollable
     }
 
     enum ElementRootShapeRole: Equatable, Hashable {
@@ -66,6 +66,7 @@ import TheScore
     struct RootShapeState: Equatable, Hashable {
         let isSelected: Bool
         let isModal: Bool
+        let isScrollable: Bool
     }
 
     enum Reason: String, Equatable {
@@ -173,18 +174,22 @@ import TheScore
 
     private static func marker(for container: AccessibilityContainer) -> Marker {
         switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
-            return Marker(label: label, value: value, identifier: stableIdentifier(identifier))
+        case .none:
+            return Marker(
+                label: container.scrollableContentSize == nil ? "container" : "scrollable",
+                value: nil,
+                identifier: stableIdentifier(container.identifier)
+            )
+        case .semanticGroup(let label, let value):
+            return Marker(label: label, value: value, identifier: stableIdentifier(container.identifier))
         case .list:
-            return Marker(label: "list", value: nil, identifier: nil)
+            return Marker(label: "list", value: nil, identifier: stableIdentifier(container.identifier))
         case .landmark:
-            return Marker(label: "landmark", value: nil, identifier: nil)
+            return Marker(label: "landmark", value: nil, identifier: stableIdentifier(container.identifier))
         case .dataTable(let rowCount, let columnCount):
-            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: nil)
+            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: stableIdentifier(container.identifier))
         case .tabBar:
-            return Marker(label: "tabBar", value: nil, identifier: nil)
-        case .scrollable:
-            return Marker(label: "scrollable", value: nil, identifier: nil)
+            return Marker(label: "tabBar", value: nil, identifier: stableIdentifier(container.identifier))
         }
     }
 
@@ -245,7 +250,8 @@ import TheScore
                     stableIdentifier: stableIdentifier(element.identifier),
                     state: RootShapeState(
                         isSelected: element.traits.contains(.selected),
-                        isModal: false
+                        isModal: false,
+                        isScrollable: false
                     )
                 )
             )
@@ -268,7 +274,8 @@ import TheScore
                     stableIdentifier: stableIdentifier(containerIdentifier(of: container)),
                     state: RootShapeState(
                         isSelected: false,
-                        isModal: container.isModalBoundary
+                        isModal: container.isModalBoundary,
+                        isScrollable: container.scrollableContentSize != nil
                     )
                 )
             )
@@ -285,6 +292,8 @@ import TheScore
 
     private static func containerRole(of container: AccessibilityContainer) -> ContainerRootShapeRole {
         switch container.type {
+        case .none:
+            return .none
         case .semanticGroup:
             return .semanticGroup
         case .list:
@@ -295,14 +304,11 @@ import TheScore
             return .dataTable
         case .tabBar:
             return .tabBar
-        case .scrollable:
-            return .scrollable
         }
     }
 
     private static func containerIdentifier(of container: AccessibilityContainer) -> String? {
-        guard case .semanticGroup(_, _, let identifier) = container.type else { return nil }
-        return identifier
+        container.identifier
     }
 
     private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {

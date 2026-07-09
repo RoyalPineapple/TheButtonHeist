@@ -11,7 +11,7 @@ final class AccessibilityHierarchyRemovalTests: XCTestCase {
         let keptNested = makeTestAccessibilityElement(element(label: "Nested"))
         let keptRoot = makeTestAccessibilityElement(element(label: "Root"))
         let list = makeTestAccessibilityContainer(type: .list)
-        let group = makeTestAccessibilityContainer(type: .semanticGroup(label: "Group", value: nil, identifier: nil))
+        let group = makeTestAccessibilityContainer(type: .semanticGroup(label: "Group", value: nil), identifier: nil)
         let tree: [AccessibilityHierarchy] = [
             .element(removed, traversalIndex: 0),
             .container(list, children: [

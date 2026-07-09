@@ -278,7 +278,7 @@ final class TheStashResolutionTests: XCTestCase {
         let visibleWord = element(label: "Words", traits: .staticText)
         let staleHomeButton = element(label: "Auto-Settle Fixtures", traits: .button)
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let currentVisible = Screen(
@@ -1029,7 +1029,7 @@ final class TheStashResolutionTests: XCTestCase {
         let visible = element(label: "Visible", traits: .button)
         let known = element(label: "Known", traits: .button)
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 800))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 800)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 400))
         )
         let screen = Screen(
@@ -1238,7 +1238,7 @@ final class TheStashResolutionTests: XCTestCase {
     func testContainerTargetResolutionUsesCommittedSemanticContainers() {
         let path = TreePath([0, 1])
         let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
             customActions: [.init(name: "Archive")]
         )
@@ -1280,7 +1280,7 @@ final class TheStashResolutionTests: XCTestCase {
                 containers: [
                     primaryPath: .init(
                         container: AccessibilityContainer(
-                            type: .semanticGroup(label: "Actions", value: nil, identifier: "primary"),
+                            type: .semanticGroup(label: "Actions", value: nil), identifier: "primary",
                             frame: AccessibilityRect(CGRect(x: 0, y: 120, width: 240, height: 80))
                         ),
                         path: primaryPath,
@@ -1289,7 +1289,7 @@ final class TheStashResolutionTests: XCTestCase {
                     ),
                     secondaryPath: .init(
                         container: AccessibilityContainer(
-                            type: .semanticGroup(label: "Actions", value: nil, identifier: "secondary"),
+                            type: .semanticGroup(label: "Actions", value: nil), identifier: "secondary",
                             frame: AccessibilityRect(CGRect(x: 0, y: 240, width: 240, height: 80))
                         ),
                         path: secondaryPath,
@@ -1492,11 +1492,11 @@ final class TheStashResolutionTests: XCTestCase {
         let staleFrame = CGRect(x: 0, y: 800, width: 240, height: 80)
         let freshFrame = CGRect(x: 0, y: 120, width: 240, height: 80)
         let staleContainer = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(staleFrame)
         )
         let freshContainer = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(freshFrame)
         )
         let liveObject = NSObject()
@@ -1674,11 +1674,11 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testScopedTargetResolvesDescendantOfContainerLabel() {
         let checkoutContainer = AccessibilityContainer(
-            type: .semanticGroup(label: "Checkout", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Checkout", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let cartContainer = AccessibilityContainer(
-            type: .semanticGroup(label: "Cart", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Cart", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let checkoutPay = element(label: "Pay", traits: .button)
