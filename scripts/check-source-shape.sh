@@ -45,14 +45,6 @@ any_allowlist = {
 # Each declaration documents its lock, queue, or actor ownership at the source.
 unchecked_sendable_allowlist = {
     source_key(
-        "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift",
-        "final class NWDeviceDiscoveryBrowser: DeviceDiscoveryBrowsing, @unchecked Sendable {",
-    ),
-    source_key(
-        "ButtonHeist/Sources/TheButtonHeist/TheHandoff/NetworkBoundary/DeviceConnectionFailures.swift",
-        "final class TLSFailureTracker: @unchecked Sendable {",
-    ),
-    source_key(
         "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationObserver.swift",
         "final class AccessibilityNotificationObserver: @unchecked Sendable {",
     ),
@@ -562,10 +554,11 @@ for source_root in source_roots:
             if is_exported_declaration:
                 declaration = collect_declaration(lines, index)
                 declaration_name = declaration_name_pattern.search(declaration)
-                return_type = function_return_type(declaration)
-                stored_type = property_type(declaration)
-                alias_type = typealias_type(declaration)
-                parameter_types = function_parameter_types(declaration)
+                is_callable = re.search(r"\b(?:func|init|subscript)\b", declaration_line)
+                return_type = function_return_type(declaration) if is_callable else None
+                stored_type = property_type(line) if re.search(r"\b(?:let|var)\b", declaration_line) else None
+                alias_type = typealias_type(declaration) if "typealias" in declaration_line else None
+                parameter_types = function_parameter_types(declaration) if is_callable else []
 
                 if pending_compatibility_attribute is not None:
                     violations.append((path, line_number, "exported compatibility/legacy helper", display_line))
