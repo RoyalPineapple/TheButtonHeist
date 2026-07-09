@@ -77,7 +77,18 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisiblePrimitiveRequestEnvelopeIsRejected() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","unexpected":"main_scroll"}}
+        {
+          "buttonHeistVersion": "\(buttonHeistVersion)",
+          "type": "scrollToVisible",
+          "payload": {
+            "target": {
+              "checks": [
+                { "kind": "label", "match": { "mode": "exact", "value": "Settings" } }
+              ]
+            },
+            "unexpected": "main_scroll"
+          }
+        }
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
             assertDecodingError(error, contains: ["Unsupported client wire message type"])

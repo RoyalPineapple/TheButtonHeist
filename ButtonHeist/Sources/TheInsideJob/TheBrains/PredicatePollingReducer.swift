@@ -233,7 +233,7 @@ private struct PredicatePollingLifecycleMachine: SimpleStateMachine, Equatable {
 
         let sleepSeconds = min(
             timing.remaining,
-            max(0, PredicatePollingCadence.visibleTickIntervalSeconds - timing.elapsed)
+            max(0, SemanticObservationTiming.visibleTickIntervalSeconds - timing.elapsed)
         )
         guard sleepSeconds > 0 else {
             return beginVisibleTick(state)
@@ -264,7 +264,7 @@ private struct PredicatePollingLifecycleMachine: SimpleStateMachine, Equatable {
     }
 
     private func visibleSettledTimeout(remaining: Double) -> Double {
-        min(remaining, PredicatePollingCadence.visibleTickIntervalSeconds)
+        min(remaining, SemanticObservationTiming.visibleTickIntervalSeconds)
     }
 
     private func discoveryTimeout(remaining: Double) -> Double {
@@ -423,7 +423,6 @@ struct PredicatePollingDiscoveryObservation: Sendable, Equatable {
 }
 
 enum PredicatePollingCadence {
-    static let visibleTickIntervalSeconds: Double = 0.1
     static let discoveryProbeIntervalVisibleTicks = 5
 }
 

@@ -24,6 +24,9 @@ top_level_typealias_allowlist = {
 
 access_pattern = re.compile(r"^\s*(public|package)\b")
 top_level_typealias_pattern = re.compile(r"^\s*(public|package)\s+typealias\b")
+top_level_selector_shortcut_pattern = re.compile(
+    r"^\s*(public|package)\s+func\s+(predicateCandidates|minimumUniquePredicate)\b"
+)
 declaration_name_pattern = re.compile(r"\b(?:func|var|let|typealias)\s+`?([A-Za-z_][A-Za-z0-9_]*)`?")
 compatibility_name_pattern = re.compile(
     r"(^legacy|^compat(?!ible)|^compatibility|^deprecated|Legacy|Compat(?!ible)|Compatibility|Deprecated)"
@@ -169,6 +172,8 @@ for source_root in source_roots:
 
             if depth == 0 and top_level_typealias_pattern.match(line) and path not in top_level_typealias_allowlist:
                 violations.append((path, line_number, "exported top-level typealias outside ButtonHeistDSL facade", display_line))
+            if depth == 0 and top_level_selector_shortcut_pattern.match(line):
+                violations.append((path, line_number, "exported top-level minimum predicate selector shortcut", display_line))
 
             if access_pattern.match(line):
                 declaration = collect_declaration(lines, index)

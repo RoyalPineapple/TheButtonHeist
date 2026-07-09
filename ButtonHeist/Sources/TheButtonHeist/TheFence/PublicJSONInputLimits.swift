@@ -8,8 +8,6 @@ public enum PublicJSONInputLimits {
     public static let maxRequestBytes = 1_000_000
     public static let maxNestingDepth = 32
     public static let maxTotalObjectKeys = 1_024
-    public static let maxTotalArrayValues = Int.max
-    public static let maxStringBytes = Int.max
 }
 
 public struct PublicJSONInputError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
@@ -34,23 +32,17 @@ public struct PublicJSONInputPolicy: Sendable, Equatable {
     public let maxBytes: Int
     public let maxNestingDepth: Int
     public let maxTotalObjectKeys: Int
-    public let maxTotalArrayValues: Int
-    public let maxStringBytes: Int
     public let nullHandling: NullHandling
 
     public init(
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
         maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
         maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys,
-        maxTotalArrayValues: Int = PublicJSONInputLimits.maxTotalArrayValues,
-        maxStringBytes: Int = PublicJSONInputLimits.maxStringBytes,
         nullHandling: NullHandling = .allowed
     ) {
         self.maxBytes = maxBytes
         self.maxNestingDepth = maxNestingDepth
         self.maxTotalObjectKeys = maxTotalObjectKeys
-        self.maxTotalArrayValues = maxTotalArrayValues
-        self.maxStringBytes = maxStringBytes
         self.nullHandling = nullHandling
     }
 }
@@ -60,8 +52,6 @@ public enum PublicJSONInputViolation: Sendable, Equatable {
     case bytes(max: Int, observed: Int)
     case nestingDepth(max: Int, observed: Int)
     case objectKeyCount(max: Int, observed: Int)
-    case arrayValueCount(max: Int, observed: Int)
-    case stringBytes(max: Int, observed: Int)
     case nullValue(expected: String)
     case nonFiniteNumber(Double)
 
@@ -73,10 +63,6 @@ public enum PublicJSONInputViolation: Sendable, Equatable {
             return "\(context) nesting depth exceeds \(max) (observed \(observed))"
         case .objectKeyCount(let max, let observed):
             return "\(context) object key count exceeds \(max) (observed \(observed))"
-        case .arrayValueCount(let max, let observed):
-            return "\(context) array value count exceeds \(max) (observed \(observed))"
-        case .stringBytes(let max, let observed):
-            return "\(context) string byte count exceeds \(max) (observed \(observed))"
         case .nullValue:
             return "\(context) contains null"
         case .nonFiniteNumber:
@@ -375,7 +361,7 @@ private struct PublicJSONValueTraversal<Value> {
         var size = 2
         for (index, entry) in object.enumerated() {
             if index > 0 { size = try bounded(size + 1) }
-            size = try bounded(size + jsonStringEncodedSize(entry.key) + 1)
+            size = try bounded(size + Self.jsonStringEncodedSize(entry.key) + 1)
             let valueSize = try jsonEncodedSize(of: entry.value, depth: depth + 1)
             size = try bounded(size + valueSize)
         }
@@ -403,15 +389,13 @@ private struct PublicJSONValueTraversal<Value> {
             }
             return try bounded(String(double).utf8.count)
         case .string(let string):
-            return try bounded(jsonStringEncodedSize(string))
+            return try bounded(Self.jsonStringEncodedSize(string))
         case let .data(mimeType, byteCount):
             let prefix = "data:\(mimeType ?? "text/plain");base64,"
             let base64ByteCount = ((byteCount + 2) / 3) * 4
             let encodedSize = Self.jsonStringEncodedSize(prefix) + base64ByteCount
-            try state.validateStringBytes(encodedSize, policy: policy, makeError: makeError)
             return try bounded(encodedSize)
         case .array(let values):
-            try state.countArrayValues(values.count, policy: policy, makeError: makeError)
             var size = 2
             for (index, nested) in values.enumerated() {
                 if index > 0 { size = try bounded(size + 1) }
@@ -422,12 +406,6 @@ private struct PublicJSONValueTraversal<Value> {
         case .object(let object):
             return try jsonEncodedSize(of: object, depth: depth)
         }
-    }
-
-    private mutating func jsonStringEncodedSize(_ value: String) throws -> Int {
-        let size = Self.jsonStringEncodedSize(value)
-        try state.validateStringBytes(size, policy: policy, makeError: makeError)
-        return size
     }
 
     private func bounded(_ size: Int) throws -> Int {
@@ -453,7 +431,6 @@ private struct PublicJSONValueTraversal<Value> {
 
 private struct PublicJSONInputTraversalState {
     private var totalObjectKeys = 0
-    private var totalArrayValues = 0
 
     static func validateByteCount(
         _ byteCount: Int,
@@ -476,17 +453,6 @@ private struct PublicJSONInputTraversalState {
         }
     }
 
-    mutating func countArrayValues(
-        _ count: Int,
-        policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
-    ) throws {
-        totalArrayValues += count
-        guard totalArrayValues <= policy.maxTotalArrayValues else {
-            throw makeError(.arrayValueCount(max: policy.maxTotalArrayValues, observed: totalArrayValues))
-        }
-    }
-
     func validateDepth(
         _ depth: Int,
         policy: PublicJSONInputPolicy,
@@ -494,16 +460,6 @@ private struct PublicJSONInputTraversalState {
     ) throws {
         guard depth <= policy.maxNestingDepth else {
             throw makeError(.nestingDepth(max: policy.maxNestingDepth, observed: depth))
-        }
-    }
-
-    func validateStringBytes(
-        _ byteCount: Int,
-        policy: PublicJSONInputPolicy,
-        makeError: PublicJSONValuePreflight.ErrorFactory
-    ) throws {
-        guard byteCount <= policy.maxStringBytes else {
-            throw makeError(.stringBytes(max: policy.maxStringBytes, observed: byteCount))
         }
     }
 
@@ -543,34 +499,17 @@ private struct PublicJSONParsedInputTraversal {
             guard number.isFinite else {
                 throw makeError(.nonFiniteNumber(number))
             }
-        case let .string(string):
-            try state.validateStringBytes(jsonStringEncodedSize(string), policy: policy, makeError: makeError)
+        case .string:
+            break
         case let .array(array):
-            try state.countArrayValues(array.count, policy: policy, makeError: makeError)
             for element in array {
                 try validate(element, depth: depth + 1)
             }
         case let .object(object):
             try state.countObjectKeys(object.count, policy: policy, makeError: makeError)
-            for (key, nested) in object {
-                try state.validateStringBytes(jsonStringEncodedSize(key), policy: policy, makeError: makeError)
+            for nested in object.values {
                 try validate(nested, depth: depth + 1)
             }
         }
-    }
-
-    private func jsonStringEncodedSize(_ value: String) -> Int {
-        var size = 2
-        for scalar in value.unicodeScalars {
-            switch scalar.value {
-            case 0x22, 0x5C:
-                size += 2
-            case 0x00...0x1F:
-                size += 6
-            default:
-                size += scalar.utf8.count
-            }
-        }
-        return size
     }
 }

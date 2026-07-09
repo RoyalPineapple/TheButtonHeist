@@ -609,11 +609,11 @@ private let fullASTJSON = """
         "command": {
           "type": "activate",
           "payload": {
-            "target": { "checks": [{ "kind": "label", "match": "Sign In" }] }
+            "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Sign In" } }] }
           }
         },
         "expectation": {
-          "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Home" }] } },
+          "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Home" } }] } },
           "timeout": 5
         }
       }
@@ -621,7 +621,7 @@ private let fullASTJSON = """
     {
       "type": "wait",
       "wait": {
-        "predicate": { "type": "missing", "element": { "checks": [{ "kind": "label", "match": "Loading" }] } },
+        "predicate": { "type": "missing", "element": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Loading" } }] } },
         "timeout": 1
       }
     },
@@ -630,7 +630,7 @@ private let fullASTJSON = """
       "conditional": {
         "cases": [
           {
-            "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Home" }] } },
+            "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Home" } }] } },
             "body": [
               { "type": "warn", "warn": { "message": "home" } }
             ]
@@ -644,7 +644,7 @@ private let fullASTJSON = """
     {
       "type": "wait",
       "wait": {
-        "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": "Results" }] } },
+        "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Results" } }] } },
         "timeout": 8,
         "else_body": [
           { "type": "fail", "fail": { "message": "timeout" } }
@@ -658,7 +658,7 @@ private let fullASTJSON = """
     {
       "type": "for_each_element",
       "for_each_element": {
-        "matching": { "checks": [{ "kind": "label", "match": "Delete" }] },
+        "matching": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
         "limit": 20,
         "parameter": "target",
         "body": [
@@ -691,11 +691,11 @@ private let fullASTJSON = """
                 "type": "typeText",
                 "payload": {
                   "text_ref": "item",
-                  "target": { "checks": [{ "kind": "label", "match": "Add item" }] }
+                  "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Add item" } }] }
                 }
               },
               "expectation": {
-                "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "ref": "item" } }] } },
+                "predicate": { "type": "exists", "element": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": { "ref": "item" } } }] } },
                 "timeout": 2
               }
             }
@@ -716,7 +716,7 @@ private let invalidElementLoopParameterJSON = """
     {
       "type": "for_each_element",
       "for_each_element": {
-        "matching": { "checks": [{ "kind": "label", "match": "Delete" }] },
+        "matching": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
         "limit": 20,
         "parameter": "target-name",
         "body": [
@@ -753,7 +753,7 @@ private let invalidStringLoopParameterJSON = """
                 "type": "typeText",
                 "payload": {
                   "text_ref": "target-name",
-                  "target": { "checks": [{ "kind": "label", "match": "Add item" }] }
+                  "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Add item" } }] }
                 }
               }
             }

@@ -77,7 +77,10 @@ private let expectedRepairJSONReportJSON = """
         "checks" : [
           {
             "kind" : "label",
-            "match" : "Remove"
+            "match" : {
+              "mode" : "exact",
+              "value" : "Remove"
+            }
           }
         ]
       },
@@ -104,7 +107,10 @@ private let expectedRepairJSONReportJSON = """
         "checks" : [
           {
             "kind" : "label",
-            "match" : "Delete"
+            "match" : {
+              "mode" : "exact",
+              "value" : "Delete"
+            }
           }
         ]
       },
@@ -843,7 +849,7 @@ private let expectedRepairJSONReportJSON = """
         #expect(repairEvidence.beforeSnapshot == before)
         #expect(repairEvidence.afterSnapshot == dispatchAfter)
         #expect(repairEvidence.result.method == .activate)
-        #expect(repairEvidence.result.outcome.errorKind == .timeout)
+        #expect(repairEvidence.result.errorKind == .timeout)
         #expect(repairEvidence.result.message == "timed out waiting for checkout")
         #expect(repairEvidence.result.expectation?.met == false)
     }
@@ -1134,6 +1140,8 @@ private let expectedRepairJSONReportJSON = """
                 return matches.indices.contains(ordinal) ? 1 : 0
             }
             return matches.count
+        case .within:
+            return 0
         }
     }
 

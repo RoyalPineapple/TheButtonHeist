@@ -38,7 +38,10 @@ enum EvidenceMinimumMatcher {
             semanticHash: before.hash,
             scope: .visible
         )
-        return minimumUniquePredicate(for: contextElementId(forOffset: index), in: context)?.target
+        return MinimumPredicateSelector.minimumUniquePredicate(
+            for: contextElementId(forOffset: index),
+            in: context
+        )?.target
     }
 
     private static func contextElementId(forOffset offset: Int) -> PredicateSelectionElementId {

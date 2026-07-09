@@ -12,7 +12,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             traits: [.selected, .button]
         )
 
-        let candidates = predicateCandidates(for: element)
+        let candidates = MinimumPredicateSelector.predicateCandidates(for: element)
 
         XCTAssertEqual(candidates.map(\.predicate), [
             ElementPredicate(identifier: "saveButton"),
@@ -87,7 +87,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("other", other),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: context))
+        let selection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("save"),
+            in: context
+        ))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(identifier: "saveButton")))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
@@ -101,7 +104,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("cancel", cancel),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: context))
+        let selection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("save"),
+            in: context
+        ))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Save")))
     }
@@ -117,8 +123,14 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("duplicate", makeElement(label: "Save", traits: [.button])),
         ])
 
-        let initial = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: initialContext))
-        let duplicate = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: duplicateContext))
+        let initial = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("save"),
+            in: initialContext
+        ))
+        let duplicate = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("save"),
+            in: duplicateContext
+        ))
 
         XCTAssertEqual(initial.target, .predicate(ElementPredicate(label: "Save")))
         XCTAssertEqual(duplicate.target, .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 0))
@@ -132,7 +144,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("text", staticText),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("button"), in: context))
+        let selection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("button"),
+            in: context
+        ))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button])))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
@@ -146,7 +161,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("cash", cash),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("visa"), in: context))
+        let selection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("visa"),
+            in: context
+        ))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Payment Method", value: "Visa")))
         XCTAssertEqual(selection.candidate.tier, .identityWithState)
@@ -160,7 +178,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("notSelected", notSelected),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("selected"), in: context))
+        let selection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("selected"),
+            in: context
+        ))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(traits: [.selected])))
         XCTAssertEqual(selection.candidate.tier, .stateOnly)
@@ -174,8 +195,14 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("second", second),
         ])
 
-        let firstSelection = try XCTUnwrap(minimumUniquePredicate(for: id("first"), in: context))
-        let secondSelection = try XCTUnwrap(minimumUniquePredicate(for: id("second"), in: context))
+        let firstSelection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("first"),
+            in: context
+        ))
+        let secondSelection = try XCTUnwrap(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("second"),
+            in: context
+        ))
 
         XCTAssertEqual(firstSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
         XCTAssertEqual(firstSelection.candidate.tier, .ordinalDisambiguation)
@@ -187,7 +214,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         let first = makeElement(label: "Item", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 40)
         let second = makeElement(label: "Item", frameX: 200, frameY: 300, frameWidth: 50, frameHeight: 20)
 
-        XCTAssertEqual(predicateCandidates(for: first), predicateCandidates(for: second))
+        XCTAssertEqual(
+            MinimumPredicateSelector.predicateCandidates(for: first),
+            MinimumPredicateSelector.predicateCandidates(for: second)
+        )
     }
 
     func testAnonymousElementHasCandidatesButDoesNotClaimUniquenessWithoutFacts() {
@@ -195,8 +225,11 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("anonymous", makeElement()),
         ])
 
-        XCTAssertTrue(predicateCandidates(for: makeElement()).isEmpty)
-        XCTAssertNil(minimumUniquePredicate(for: id("anonymous"), in: context))
+        XCTAssertTrue(MinimumPredicateSelector.predicateCandidates(for: makeElement()).isEmpty)
+        XCTAssertNil(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("anonymous"),
+            in: context
+        ))
     }
 
     func testContextMembershipIsRequiredForSelection() {
@@ -204,7 +237,10 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("save", makeElement(label: "Save")),
         ])
 
-        XCTAssertNil(minimumUniquePredicate(for: id("missing"), in: context))
+        XCTAssertNil(MinimumPredicateSelector.minimumUniquePredicate(
+            for: id("missing"),
+            in: context
+        ))
     }
 
     private func makeContext(

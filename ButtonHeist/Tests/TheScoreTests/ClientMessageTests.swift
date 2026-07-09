@@ -251,7 +251,19 @@ final class ClientMessageTests: XCTestCase {
 
     func testPrimitiveMutatingRequestEnvelopeJSONIsRejected() throws {
         let primitiveRequests = [
-            #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"activate","payload":{"label":"Save"}}"#,
+            """
+            {
+              "buttonHeistVersion": "\(TheScore.buttonHeistVersion)",
+              "type": "activate",
+              "payload": {
+                "target": {
+                  "checks": [
+                    { "kind": "label", "match": { "mode": "exact", "value": "Save" } }
+                  ]
+                }
+              }
+            }
+            """,
             #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"wait","payload":{"predicate":{"type":"change","scopes":[{"type":"elements"}]}}}"#,
             #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"setPasteboard","payload":{"text":"clipboard"}}"#,
         ]
@@ -265,7 +277,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testPrimitiveMutatingClientMessageJSONIsRejected() throws {
         let primitiveMessages = [
-            #"{"type":"activate","payload":{"label":"Save"}}"#,
+            #"{"type":"activate","payload":{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}}"#,
             #"{"type":"typeText","payload":{"text":"hello"}}"#,
             #"{"type":"setPasteboard","payload":{"text":"clipboard"}}"#,
             #"{"type":"wait","payload":{"predicate":{"type":"change","scopes":[{"type":"elements"}]},"timeout":1}}"#,

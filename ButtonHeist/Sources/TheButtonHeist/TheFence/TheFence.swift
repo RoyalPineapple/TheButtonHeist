@@ -148,13 +148,6 @@ public final class TheFence {
         FenceOperationRequest(parsed: try parseRequest(command: input.command, arguments: input.arguments))
     }
 
-    @_spi(ButtonHeistTooling) public func admit(
-        command: Command,
-        arguments: CommandArgumentEnvelope
-    ) throws -> FenceOperationRequest {
-        try admit(FenceCommandInput(command: command, arguments: arguments))
-    }
-
     /// Execute an admitted command request.
     @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {
         try await execute(parsed: request.parsed)

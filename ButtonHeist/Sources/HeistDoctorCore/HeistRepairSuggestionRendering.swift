@@ -41,7 +41,10 @@ enum HeistRepairSuggestionRenderer {
     ) -> RepairSuggestionValidation {
         let currentScreen = analysis.currentScreen
         let selectionContext = currentScreen.selectionContext()
-        guard let selection = minimumUniquePredicate(for: candidate.element.id, in: selectionContext),
+        guard let selection = MinimumPredicateSelector.minimumUniquePredicate(
+            for: candidate.element.id,
+            in: selectionContext
+        ),
               case .resolved(let validation, _) = currentScreen.resolve(selection.target),
               validation.id == candidate.element.id
         else {

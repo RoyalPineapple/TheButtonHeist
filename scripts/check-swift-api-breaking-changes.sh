@@ -242,6 +242,23 @@ INTENTIONAL_BREAKAGES=(
     "enumelement ContainerPredicateCheck.actions has been added as a new enum case"
     "enumelement AccessibilityContainerKind.scrollable has been removed"
     "constructor ContainerPredicateFacts.init(type:label:value:identifier:rowCount:columnCount:isModalBoundary:) has been removed"
+    "var PublicJSONInputLimits.maxTotalArrayValues has been removed"
+    "var PublicJSONInputLimits.maxStringBytes has been removed"
+    "var PublicJSONInputPolicy.maxTotalArrayValues has been removed"
+    "var PublicJSONInputPolicy.maxStringBytes has been removed"
+    "constructor PublicJSONInputPolicy.init(maxBytes:maxNestingDepth:maxTotalObjectKeys:maxTotalArrayValues:maxStringBytes:nullHandling:) has been removed"
+    "enumelement PublicJSONInputViolation.arrayValueCount has been removed"
+    "enumelement PublicJSONInputViolation.stringBytes has been removed"
+    "func TheFence.admit(command:arguments:) has been removed"
+    "func ActionResult.success(method:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "func ActionResult.success(payload:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "func ActionResult.failure(method:errorKind:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "func ActionResult.failure(payload:errorKind:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "constructor ActionResult.init(outcome:method:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "constructor ActionResult.init(outcome:payload:message:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:) has been removed"
+    "func predicateCandidates(for:) has been removed"
+    "func minimumUniquePredicate(for:in:) has been removed"
+    "func ButtonHeistTLSPreSharedKey.makeNetworkParameters(token:) has been renamed to func networkParameters(from:)"
 )
 
 PUBLIC_PRODUCTS=()

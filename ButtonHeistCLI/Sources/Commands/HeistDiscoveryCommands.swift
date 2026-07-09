@@ -98,7 +98,7 @@ private extension CLICommandContract {
     ) async throws {
         let fence = TheFence(configuration: try EnvironmentConfig.resolve(autoReconnect: false).fenceConfiguration)
         defer { fence.stop() }
-        let response = try await fence.execute(try fence.admit(command: command, arguments: arguments))
+        let response = try await fence.execute(try fence.admit(FenceCommandInput(command: command, arguments: arguments)))
         CLIRunner.outputResponse(response, format: format ?? .auto)
         if response.isFailure {
             throw ExitCode.failure

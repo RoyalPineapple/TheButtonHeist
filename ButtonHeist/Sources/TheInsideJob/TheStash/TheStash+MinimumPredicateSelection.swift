@@ -9,7 +9,7 @@ extension TheStash {
         let elements = orderedSemanticElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
-        return minimumUniquePredicate(
+        return MinimumPredicateSelector.minimumUniquePredicate(
             for: screenElement.heistId.predicateSelectionElementId,
             in: elements
         )?.target

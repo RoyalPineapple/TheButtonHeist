@@ -629,6 +629,46 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testActionResultRejectsScreenshotPayloadForNonScreenshotMethod() throws {
+        let json = """
+        {
+          "outcome": { "kind": "success" },
+          "method": "activate",
+          "payload": {
+            "kind": "screenshot",
+            "data": {
+              "pngData": "abc",
+              "width": 1,
+              "height": 1,
+              "timestamp": 0,
+              "interface": {
+                "timestamp": 0,
+                "tree": [],
+                "annotations": { "elements": [], "containers": [] }
+              }
+            }
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("screenshot ActionResult payload is only valid for takeScreenshot"),
+                "\(error)"
+            )
+        }
+    }
+
+    func testActionResultRejectsRotorPayloadForNonRotorMethod() throws {
+        let json = """
+        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"rotor","data":{"rotor":"Errors","direction":"next"}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("rotor ActionResult payload is only valid for rotor"), "\(error)")
+        }
+    }
+
     func testScreenEncodeDecode() throws {
         let element = HeistElement(
             description: "Pay",

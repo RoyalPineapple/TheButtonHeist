@@ -602,31 +602,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        success(
-            method: method,
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    public static func success(
-        method: ActionMethod,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
@@ -650,31 +627,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        success(
-            payload: payload,
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    public static func success(
-        payload: ActionResultPayload,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
@@ -699,33 +653,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        failure(
-            method: method,
-            errorKind: errorKind,
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    public static func failure(
-        method: ActionMethod,
-        errorKind: ErrorKind,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
@@ -750,33 +679,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        failure(
-            payload: payload,
-            errorKind: errorKind,
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    public static func failure(
-        payload: ActionResultPayload,
-        errorKind: ErrorKind,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
@@ -801,33 +705,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) {
-        self.init(
-            outcome: outcome,
-            methodAndPayload: .methodOnly(method),
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    package init(
-        outcome: ActionResultOutcome,
-        method: ActionMethod,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) {
         self.init(
             outcome: outcome,
@@ -852,33 +731,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) {
-        self.init(
-            outcome: outcome,
-            methodAndPayload: .payload(payload),
-            message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: nil
-        )
-    }
-
-    package init(
-        outcome: ActionResultOutcome,
-        payload: ActionResultPayload,
-        message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String?
+        announcement: String? = nil
     ) {
         self.init(
             outcome: outcome,

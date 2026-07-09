@@ -128,6 +128,30 @@ final class DocumentationContractTests: XCTestCase {
         }
     }
 
+    func testPublicJSONDocsUseCanonicalPredicateShape() throws {
+        let stalePatterns = [
+            #""match"\s*:\s*""#,
+            #""target"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
+            #""element"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
+            #""matcher"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
+        ]
+        let regexes = try stalePatterns.map { try NSRegularExpression(pattern: $0) }
+        var failures: [String] = []
+
+        for relativePath in ["docs/API.md", "docs/WIRE-PROTOCOL.md"] {
+            let text = try contents(relativePath: relativePath)
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            for regex in regexes where regex.firstMatch(in: text, range: range) != nil {
+                failures.append("\(relativePath): \(regex.pattern)")
+            }
+        }
+
+        XCTAssertTrue(
+            failures.isEmpty,
+            "Public JSON docs contain stale predicate shape:\n\(failures.joined(separator: "\n"))"
+        )
+    }
+
     func testCIReceiptContractDocumentsExistingScripts() throws {
         let ci = try contents(relativePath: "docs/CI.md")
 

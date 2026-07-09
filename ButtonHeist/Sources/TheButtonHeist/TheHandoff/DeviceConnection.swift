@@ -169,7 +169,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             return
         }
 
-        let parameters = Self.makeTLSParameters(token: token.rawValue)
+        let parameters = ButtonHeistTLSPreSharedKey.networkParameters(from: token.rawValue)
         deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint.nwEndpoint, using: parameters)

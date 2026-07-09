@@ -202,6 +202,25 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
+    // MARK: - Timing
+
+    func testSemanticObservationDeadlineOwnsRemainingAndElapsedTime() {
+        let deadline = SemanticObservationDeadline(start: 10, timeoutSeconds: 0.25)
+
+        XCTAssertTrue(deadline.hasTimeRemaining(at: 10.1))
+        XCTAssertEqual(deadline.remainingSeconds(at: 10.1), 0.15, accuracy: 0.000_001)
+        XCTAssertEqual(deadline.elapsedMilliseconds(at: 10.125), 125)
+        XCTAssertFalse(deadline.hasTimeRemaining(at: 10.25))
+        XCTAssertEqual(deadline.remainingSeconds(at: 10.5), 0)
+
+        let millisecondDeadline = SemanticObservationDeadline(start: 20, timeoutMs: 250)
+        XCTAssertEqual(millisecondDeadline.remainingSeconds(at: 20.1), 0.15, accuracy: 0.000_001)
+
+        let expiredDeadline = SemanticObservationDeadline(start: 30, timeoutSeconds: -1)
+        XCTAssertFalse(expiredDeadline.hasTimeRemaining(at: 30))
+        XCTAssertEqual(expiredDeadline.remainingSeconds(at: 30), 0)
+    }
+
     // MARK: - Machine
 
     func testMachineSettlesFixedCadenceAfterRequiredConsecutiveCycles() {
