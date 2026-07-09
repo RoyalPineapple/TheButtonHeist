@@ -116,7 +116,7 @@ final class ScreenTests: XCTestCase {
             shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44))
         )
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
         let screen = Screen(

@@ -3,12 +3,12 @@ import Foundation
 // MARK: - Container Predicates
 
 public enum AccessibilityContainerKind: String, Codable, CaseIterable, Sendable {
+    case none
     case semanticGroup
     case list
     case landmark
     case dataTable
     case tabBar
-    case scrollable
 }
 
 public enum SemanticContainerPredicate<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
@@ -156,7 +156,6 @@ extension SemanticContainerPredicate: CustomStringConvertible {
 
 private extension SemanticContainerPredicate where Value == String {
     func matches(_ facts: ContainerPredicateFacts) -> Bool {
-        guard facts.type == .semanticGroup else { return false }
         switch self {
         case .label(let match):
             return match.matches(optional: facts.label)
@@ -174,19 +173,27 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
     case rowCount(Int)
     case columnCount(Int)
     case modalBoundary(Bool)
+    case scrollable(Bool)
+    case actions(Set<ElementAction>)
 
     private enum Kind: String, Codable, CaseIterable {
-        case type, semantic, rowCount, columnCount, modalBoundary
+        case type, semantic, rowCount, columnCount, modalBoundary, scrollable, actions
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case kind, type, semantic, value
+        case kind, type, semantic, value, values
+    }
+
+    public static var wireKindValues: [String] {
+        Kind.allCases.map(\.rawValue)
     }
 
     public var hasPredicates: Bool {
         switch self {
-        case .type, .rowCount, .columnCount, .modalBoundary:
+        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return true
+        case .actions(let actions):
+            return !actions.isEmpty
         case .semantic(let predicate):
             return predicate.hasPredicates
         }
@@ -200,7 +207,11 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
             return "container rowCount must be non-negative"
         case .columnCount(let columnCount) where columnCount < 0:
             return "container columnCount must be non-negative"
-        case .type, .rowCount, .columnCount, .modalBoundary:
+        case .actions(let actions) where actions.isEmpty:
+            return "container actions check must not be empty"
+        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
+            return nil
+        case .actions:
             return nil
         }
     }
@@ -219,6 +230,10 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
             return .columnCount(count)
         case .modalBoundary(let required):
             return .modalBoundary(required)
+        case .scrollable(let required):
+            return .scrollable(required)
+        case .actions(let actions):
+            return .actions(actions)
         }
     }
 
@@ -234,6 +249,10 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
             return facts.type == .dataTable && facts.columnCount == columnCount
         case .modalBoundary(let required):
             return facts.isModalBoundary == required
+        case .scrollable(let required):
+            return facts.isScrollable == required
+        case .actions(let required):
+            return facts.actions.isSuperset(of: required)
         }
     }
 }
@@ -253,6 +272,10 @@ extension ContainerPredicateCheck: Codable where Value: Codable {
             self = .columnCount(try container.decode(Int.self, forKey: .value))
         case .modalBoundary:
             self = .modalBoundary(try container.decode(Bool.self, forKey: .value))
+        case .scrollable:
+            self = .scrollable(try container.decode(Bool.self, forKey: .value))
+        case .actions:
+            self = .actions(Set(try container.decode([ElementAction].self, forKey: .values)))
         }
         if let description = invalidEmptyPayloadDescription {
             throw DecodingError.dataCorrupted(.init(
@@ -280,6 +303,12 @@ extension ContainerPredicateCheck: Codable where Value: Codable {
         case .modalBoundary(let value):
             try container.encode(Kind.modalBoundary, forKey: .kind)
             try container.encode(value, forKey: .value)
+        case .scrollable(let value):
+            try container.encode(Kind.scrollable, forKey: .kind)
+            try container.encode(value, forKey: .value)
+        case .actions(let actions):
+            try container.encode(Kind.actions, forKey: .kind)
+            try container.encode(actions.canonicalElementActionArray, forKey: .values)
         }
     }
 }
@@ -297,6 +326,10 @@ extension ContainerPredicateCheck: CustomStringConvertible {
             return "columnCount=\(columnCount)"
         case .modalBoundary(let required):
             return "modal=\(required)"
+        case .scrollable(let required):
+            return "scrollable=\(required)"
+        case .actions(let actions):
+            return "actions=[\(actions.canonicalElementActionArray.map(\.description).joined(separator: ", "))]"
         }
     }
 }
@@ -338,6 +371,14 @@ private enum ContainerPredicateChecks {
 
     static func modalBoundary<Value: StringMatchPayload>() -> [ContainerPredicateCheck<Value>] {
         [.modalBoundary(true)]
+    }
+
+    static func scrollable<Value: StringMatchPayload>() -> [ContainerPredicateCheck<Value>] {
+        [.scrollable(true)]
+    }
+
+    static func actions<Value: StringMatchPayload>(_ actions: [ElementAction]) -> [ContainerPredicateCheck<Value>] {
+        [.actions(Set(actions))]
     }
 }
 
@@ -409,11 +450,14 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
         ContainerPredicate(ContainerPredicateChecks.semantic(predicate))
     }
 
+    public static var none: ContainerPredicate { .type(.none) }
     public static var semanticGroup: ContainerPredicate { .type(.semanticGroup) }
     public static var list: ContainerPredicate { .type(.list) }
     public static var landmark: ContainerPredicate { .type(.landmark) }
     public static var tabBar: ContainerPredicate { .type(.tabBar) }
-    public static var scrollable: ContainerPredicate { .type(.scrollable) }
+    public static var scrollable: ContainerPredicate {
+        ContainerPredicate(ContainerPredicateChecks.scrollable())
+    }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicate {
         ContainerPredicate(ContainerPredicateChecks.dataTable(rowCount: rowCount, columnCount: columnCount))
@@ -421,6 +465,14 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
 
     public static var modalBoundary: ContainerPredicate {
         ContainerPredicate(ContainerPredicateChecks.modalBoundary())
+    }
+
+    public static func scrollable(_ required: Bool) -> ContainerPredicate {
+        ContainerPredicate(.scrollable(required))
+    }
+
+    public static func actions(_ actions: [ElementAction]) -> ContainerPredicate {
+        ContainerPredicate(ContainerPredicateChecks.actions(actions))
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<String>...) -> ContainerPredicate {
@@ -533,11 +585,14 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
         ContainerPredicateExpr(ContainerPredicateChecks.semantic(predicate))
     }
 
+    public static var none: ContainerPredicateExpr { .type(.none) }
     public static var semanticGroup: ContainerPredicateExpr { .type(.semanticGroup) }
     public static var list: ContainerPredicateExpr { .type(.list) }
     public static var landmark: ContainerPredicateExpr { .type(.landmark) }
     public static var tabBar: ContainerPredicateExpr { .type(.tabBar) }
-    public static var scrollable: ContainerPredicateExpr { .type(.scrollable) }
+    public static var scrollable: ContainerPredicateExpr {
+        ContainerPredicateExpr(ContainerPredicateChecks.scrollable())
+    }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicateExpr {
         ContainerPredicateExpr(ContainerPredicateChecks.dataTable(rowCount: rowCount, columnCount: columnCount))
@@ -545,6 +600,14 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
 
     public static var modalBoundary: ContainerPredicateExpr {
         ContainerPredicateExpr(ContainerPredicateChecks.modalBoundary())
+    }
+
+    public static func scrollable(_ required: Bool) -> ContainerPredicateExpr {
+        ContainerPredicateExpr(.scrollable(required))
+    }
+
+    public static func actions(_ actions: [ElementAction]) -> ContainerPredicateExpr {
+        ContainerPredicateExpr(ContainerPredicateChecks.actions(actions))
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<StringExpr>...) -> ContainerPredicateExpr {
@@ -566,6 +629,8 @@ public struct ContainerPredicateFacts: Sendable, Equatable, Hashable {
     public let rowCount: Int?
     public let columnCount: Int?
     public let isModalBoundary: Bool
+    public let isScrollable: Bool
+    public let actions: Set<ElementAction>
 
     public init(
         type: AccessibilityContainerKind,
@@ -574,7 +639,9 @@ public struct ContainerPredicateFacts: Sendable, Equatable, Hashable {
         identifier: String? = nil,
         rowCount: Int? = nil,
         columnCount: Int? = nil,
-        isModalBoundary: Bool = false
+        isModalBoundary: Bool = false,
+        isScrollable: Bool = false,
+        actions: Set<ElementAction> = []
     ) {
         self.type = type
         self.label = label
@@ -583,5 +650,7 @@ public struct ContainerPredicateFacts: Sendable, Equatable, Hashable {
         self.rowCount = rowCount
         self.columnCount = columnCount
         self.isModalBoundary = isModalBoundary
+        self.isScrollable = isScrollable
+        self.actions = actions
     }
 }

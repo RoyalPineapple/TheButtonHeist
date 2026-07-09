@@ -463,17 +463,23 @@ func makeTestInterface(
 }
 
 func makeReceiptTestContainer(
-    type: AccessibilityContainer.ContainerType = .semanticGroup(label: nil, value: nil, identifier: nil),
+    type: AccessibilityContainer.ContainerType = .semanticGroup(label: nil, value: nil),
+    identifier: String? = nil,
+    scrollableContentSize: AccessibilitySize? = nil,
     frameX: Double = 0,
     frameY: Double = 0,
     frameWidth: Double = 100,
     frameHeight: Double = 100,
-    isModalBoundary: Bool = false
+    isModalBoundary: Bool = false,
+    customActions: [AccessibilityElement.CustomAction] = []
 ) -> AccessibilityContainer {
     AccessibilityContainer(
         type: type,
+        identifier: identifier,
+        scrollableContentSize: scrollableContentSize,
         frame: AccessibilityRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight),
-        isModalBoundary: isModalBoundary
+        isModalBoundary: isModalBoundary,
+        customActions: customActions
     )
 }
 
@@ -485,15 +491,17 @@ func makeReceiptTestSemanticContainer(
     frameY: Double = 0,
     frameWidth: Double = 100,
     frameHeight: Double = 100,
-    isModalBoundary: Bool = false
+    isModalBoundary: Bool = false,
+    customActions: [AccessibilityElement.CustomAction] = []
 ) -> AccessibilityContainer {
     makeReceiptTestContainer(
-        type: .semanticGroup(label: label, value: value, identifier: identifier),
+        type: .semanticGroup(label: label, value: value), identifier: identifier,
         frameX: frameX,
         frameY: frameY,
         frameWidth: frameWidth,
         frameHeight: frameHeight,
-        isModalBoundary: isModalBoundary
+        isModalBoundary: isModalBoundary,
+        customActions: customActions
     )
 }
 
@@ -504,15 +512,17 @@ func makeReceiptTestScrollableContainer(
     frameY: Double = 0,
     frameWidth: Double = 100,
     frameHeight: Double = 100,
-    isModalBoundary: Bool = false
+    isModalBoundary: Bool = false,
+    customActions: [AccessibilityElement.CustomAction] = []
 ) -> AccessibilityContainer {
     makeReceiptTestContainer(
-        type: .scrollable(contentSize: AccessibilitySize(width: contentWidth, height: contentHeight)),
+        type: .none, scrollableContentSize: AccessibilitySize(width: contentWidth, height: contentHeight),
         frameX: frameX,
         frameY: frameY,
         frameWidth: frameWidth,
         frameHeight: frameHeight,
-        isModalBoundary: isModalBoundary
+        isModalBoundary: isModalBoundary,
+        customActions: customActions
     )
 }
 

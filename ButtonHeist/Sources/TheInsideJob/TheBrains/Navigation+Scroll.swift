@@ -49,7 +49,7 @@ extension Navigation {
     // MARK: - Scroll Axis Detection
 
     static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
-        guard case .scrollable(let contentSize) = container.type else { return [] }
+        guard let contentSize = container.scrollableContentSize else { return [] }
         return scrollableAxis(contentSize: contentSize.cgSize, frame: container.frame.cgRect)
     }
 

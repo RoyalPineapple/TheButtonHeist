@@ -193,12 +193,15 @@ extension TheBurglar {
     ) -> ContainerName {
         let frameHash = coarseFrameHash(contentFrame.cgRect)
         switch container.type {
-        case .scrollable:
+        case .none where container.scrollableContentSize != nil:
             return ContainerName(rawValue: "scrollable_\(frameHash)")
-        case .semanticGroup(let label, let value, let identifier):
+        case .none:
+            let identifierSlug = container.identifier ?? "anon"
+            return ContainerName(rawValue: "container_\(identifierSlug)_\(frameHash)")
+        case .semanticGroup(let label, let value):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
-            let identifierSlug = identifier ?? ""
+            let identifierSlug = container.identifier ?? ""
             return ContainerName(rawValue: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
         case .list:
             return ContainerName(rawValue: "list_\(frameHash)")

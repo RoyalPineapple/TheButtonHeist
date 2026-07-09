@@ -10,6 +10,7 @@ struct PublicContainer: Encodable {
     let identifier: String?
     let rowCount: Int?
     let columnCount: Int?
+    let actions: [String]?
     let contentWidth: Double?
     let contentHeight: Double?
     let scrollAxis: String?
@@ -39,6 +40,7 @@ struct PublicContainer: Encodable {
         self.identifier = fields.identifier
         self.rowCount = fields.rowCount
         self.columnCount = fields.columnCount
+        self.actions = Self.actionNames(projection.container)
         self.contentWidth = fields.contentWidth
         self.contentHeight = fields.contentHeight
         self.scrollAxis = fields.scrollAxis
@@ -66,35 +68,46 @@ struct PublicContainer: Encodable {
         value.isFinite ? value : 0
     }
 
+    private static func actionNames(_ container: AccessibilityContainer) -> [String]? {
+        let actions = container.customActions.map(\.name).filter { !$0.isEmpty }
+        return actions.isEmpty ? nil : actions
+    }
+
     private static func fields(
         for container: AccessibilityContainer,
         children: [PublicTreeNode],
         observedElementCount: Int?,
         scrollInventory: ScrollInventory?
     ) -> Fields {
+        var fields: Fields
         switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
-            return Fields(type: .semanticGroup, label: label, value: value, identifier: identifier)
+        case .none:
+            fields = Fields(type: .none, identifier: container.identifier)
+        case .semanticGroup(let label, let value):
+            fields = Fields(type: .semanticGroup, label: label, value: value, identifier: container.identifier)
         case .list:
-            return Fields(type: .list)
+            fields = Fields(type: .list, identifier: container.identifier)
         case .landmark:
-            return Fields(type: .landmark)
+            fields = Fields(type: .landmark, identifier: container.identifier)
         case .dataTable(let rowCount, let columnCount):
-            return Fields(type: .dataTable, rowCount: rowCount, columnCount: columnCount)
+            fields = Fields(type: .dataTable, identifier: container.identifier, rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
-            return Fields(type: .tabBar)
-        case .scrollable(let contentSize):
-            return scrollableFields(
-                contentSize: contentSize,
+            fields = Fields(type: .tabBar, identifier: container.identifier)
+        }
+
+        if let scrollableContentSize = container.scrollableContentSize {
+            fields.addScrollFields(
+                contentSize: scrollableContentSize,
                 frame: container.frame,
                 children: children,
                 observedElementCount: observedElementCount,
                 scrollInventory: scrollInventory
             )
         }
+        return fields
     }
 
-    private static func scrollableFields(
+    private static func scrollFields(
         contentSize: AccessibilitySize,
         frame: AccessibilityRect,
         children: [PublicTreeNode],
@@ -120,7 +133,7 @@ struct PublicContainer: Encodable {
             viewportHeight: viewportHeight
         )
         return Fields(
-            type: .scrollable,
+            type: .none,
             contentWidth: contentWidth,
             contentHeight: contentHeight,
             scrollAxis: scrollAxis.rawValue,
@@ -172,6 +185,28 @@ struct PublicContainer: Encodable {
             self.pageScrollsX = pageScrollsX
             self.pageScrollsY = pageScrollsY
             self.observedElementCount = observedElementCount
+        }
+
+        mutating func addScrollFields(
+            contentSize: AccessibilitySize,
+            frame: AccessibilityRect,
+            children: [PublicTreeNode],
+            observedElementCount: Int?,
+            scrollInventory: ScrollInventory?
+        ) {
+            let scrollFields = PublicContainer.scrollFields(
+                contentSize: contentSize,
+                frame: frame,
+                children: children,
+                observedElementCount: observedElementCount,
+                scrollInventory: scrollInventory
+            )
+            contentWidth = scrollFields.contentWidth
+            contentHeight = scrollFields.contentHeight
+            scrollAxis = scrollFields.scrollAxis
+            pageScrollsX = scrollFields.pageScrollsX
+            pageScrollsY = scrollFields.pageScrollsY
+            self.observedElementCount = scrollFields.observedElementCount
         }
     }
 }

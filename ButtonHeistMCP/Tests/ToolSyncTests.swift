@@ -123,6 +123,8 @@ struct ToolSyncTests {
                 .string("rowCount"),
                 .string("columnCount"),
                 .string("modalBoundary"),
+                .string("scrollable"),
+                .string("actions"),
             ])
         )
 

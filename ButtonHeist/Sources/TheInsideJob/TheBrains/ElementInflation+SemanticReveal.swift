@@ -174,8 +174,7 @@ private extension AccessibilityContainer {
     }
 
     var semanticRevealScrollContentSize: AccessibilitySize? {
-        guard case .scrollable(let contentSize) = type else { return nil }
-        return contentSize
+        scrollableContentSize
     }
 }
 

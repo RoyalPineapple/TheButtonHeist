@@ -753,7 +753,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         let capturedInnerContainer = screen.semantic.containers[innerContainerPath]
         let innerContainer = capturedInnerContainer?.container ?? AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(fixture.innerScrollView.contentSize)),
+            type: .none, scrollableContentSize: AccessibilitySize(fixture.innerScrollView.contentSize),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
         )
         let innerContainerName = capturedInnerContainer?.containerName ?? TheBurglar.containerName(

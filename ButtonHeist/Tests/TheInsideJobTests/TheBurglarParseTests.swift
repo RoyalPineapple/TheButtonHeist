@@ -393,7 +393,7 @@ final class TheBurglarParseTests: XCTestCase {
         var values: [String] = []
         for node in hierarchy {
             if case let .container(container, children) = node {
-                if case let .semanticGroup(_, value, _) = container.type, let value {
+                if case let .semanticGroup(_, value) = container.type, let value {
                     values.append(value)
                 }
                 values.append(contentsOf: semanticGroupValues(in: children))

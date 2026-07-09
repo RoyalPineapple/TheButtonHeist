@@ -194,7 +194,7 @@ extension Navigation {
         return indexedContainers.compactMap { item -> ScrollPlan? in
             let container = item.container
             let path = item.path
-            guard case .scrollable(let contentSize) = container.type else { return nil }
+            guard let contentSize = container.scrollableContentSize else { return nil }
 
             if let axis, !Self.scrollableAxis(of: container).contains(axis) {
                 return nil

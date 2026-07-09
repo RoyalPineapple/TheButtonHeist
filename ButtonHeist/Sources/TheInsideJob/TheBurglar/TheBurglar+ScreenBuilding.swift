@@ -499,6 +499,8 @@ private extension AccessibilityContainer {
     func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityContainer {
         AccessibilityContainer(
             type: type,
+            identifier: identifier,
+            scrollableContentSize: scrollableContentSize,
             frame: frame.translatedBy(x: x, y: y),
             isModalBoundary: isModalBoundary,
             customActions: customActions

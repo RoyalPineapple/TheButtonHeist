@@ -87,7 +87,7 @@ extension Navigation {
         for semanticContainer: SemanticScreen.Container
     ) -> ContainerExploration? {
         let container = semanticContainer.container
-        guard case .scrollable(let contentSize) = container.type else { return nil }
+        guard let contentSize = container.scrollableContentSize else { return nil }
 
         guard let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
               scrollView.window != nil,
@@ -355,7 +355,7 @@ extension Navigation {
     }
 
     private func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
-        guard case .scrollable(let contentSize) = container.type else { return 0 }
+        guard let contentSize = container.scrollableContentSize else { return 0 }
         return max(0, contentSize.width - container.frame.width)
             + max(0, contentSize.height - container.frame.height)
     }

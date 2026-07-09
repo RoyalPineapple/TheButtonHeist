@@ -335,7 +335,7 @@ final class WireConverterTests: XCTestCase {
     func testToWireTreePreservesParserModalBoundary() {
         let element = makeElement(label: "Confirm", traits: [.button])
         let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
             frame: .zero,
             isModalBoundary: true
         )
@@ -406,7 +406,7 @@ final class WireConverterTests: XCTestCase {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
         let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Actions", value: nil), identifier: nil,
             frame: .zero
         )
         let screen = Screen(
@@ -461,7 +461,7 @@ final class WireConverterTests: XCTestCase {
             frameHeight: 44
         )
         let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let screen = Screen(
@@ -508,11 +508,11 @@ final class WireConverterTests: XCTestCase {
 
     func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let inner = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 280, height: 900))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 280, height: 900)),
             frame: AccessibilityRect(CGRect(x: 20, y: 700, width: 280, height: 240))
         )
         let nestedWord = makeElement(label: "interstitial", traits: [.staticText])
@@ -559,7 +559,7 @@ final class WireConverterTests: XCTestCase {
 
     func testDiscoveryInterfaceEmitsDuplicateGraftedHeistIdOnce() throws {
         let rootContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let recycledCell = makeElement(
@@ -614,7 +614,7 @@ final class WireConverterTests: XCTestCase {
 
     func testDiscoveryInterfacePreservesDistinctDisambiguatedHeistIds() throws {
         let rootContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let firstCell = makeElement(
@@ -677,11 +677,11 @@ final class WireConverterTests: XCTestCase {
 
     func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNamesByPath() throws {
         let rootContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let recycledContainer = AccessibilityContainer(
-            type: .semanticGroup(label: "Saved carts", value: nil, identifier: nil),
+            type: .semanticGroup(label: "Saved carts", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 640, width: 320, height: 120))
         )
         let screen = Screen(

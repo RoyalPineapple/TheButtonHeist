@@ -337,10 +337,11 @@ Activate(.within(container: .label("Checkout"), .label("Pay")))
 Activate(.within(container: .scrollable, .label("Load more")))
 ```
 
-Container predicates can match semantic `.label(...)`, `.value(...)`, and
-`.identifier(...)`, type shorthands such as `.scrollable`, `.list`, `.tabBar`,
-and `.dataTable(rowCount:columnCount:)`, or explicit `.matching(...)` check
-chains.
+Container predicates can match semantic-group `.label(...)` and `.value(...)`,
+`.identifier(...)` on any container, role shorthands such as `.list`,
+`.tabBar`, and `.dataTable(rowCount:columnCount:)`, scrollability through
+`.scrollable`, custom actions through `.actions(...)`, or explicit
+`.matching(...)` check chains.
 
 Use `.screenChanged(...)` for navigation. Assertions inside `screenChanged` are
 destination snapshot assertions, not element-delta predicates:

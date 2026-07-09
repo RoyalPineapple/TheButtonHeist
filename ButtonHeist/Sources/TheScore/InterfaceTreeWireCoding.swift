@@ -138,6 +138,8 @@ private struct InterfaceContainerWirePayload: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type
+        case identifier
+        case scrollableContentSize
         case frame
         case isModalBoundary
         case customActions
@@ -152,6 +154,11 @@ private struct InterfaceContainerWirePayload: Codable {
     init(from decoder: Decoder) throws {
         let codingContainer = try decoder.container(keyedBy: CodingKeys.self)
         let type = try codingContainer.decode(AccessibilityContainer.ContainerType.self, forKey: .type)
+        let identifier = try codingContainer.decodeIfPresent(String.self, forKey: .identifier)
+        let scrollableContentSize = try codingContainer.decodeIfPresent(
+            InterfaceSizeWirePayload.self,
+            forKey: .scrollableContentSize
+        )?.size
         let frame = try codingContainer.decode(InterfaceRectWirePayload.self, forKey: .frame).rect
         let isModalBoundary = try codingContainer.decode(Bool.self, forKey: .isModalBoundary)
         let customActions = try codingContainer.decode(
@@ -161,6 +168,8 @@ private struct InterfaceContainerWirePayload: Codable {
         children = try codingContainer.decode([InterfaceTreeWireNode].self, forKey: .children)
         container = AccessibilityContainer(
             type: type,
+            identifier: identifier,
+            scrollableContentSize: scrollableContentSize,
             frame: frame,
             isModalBoundary: isModalBoundary,
             customActions: customActions
@@ -172,6 +181,11 @@ private struct InterfaceContainerWirePayload: Codable {
         // Button Heist hierarchy metadata instead of exposing Swift enum wrappers.
         var codingContainer = encoder.container(keyedBy: CodingKeys.self)
         try codingContainer.encode(container.type, forKey: .type)
+        try codingContainer.encodeIfPresent(container.identifier, forKey: .identifier)
+        try codingContainer.encodeIfPresent(
+            container.scrollableContentSize.map(InterfaceSizeWirePayload.init),
+            forKey: .scrollableContentSize
+        )
         try codingContainer.encode(InterfaceRectWirePayload(container.frame), forKey: .frame)
         try codingContainer.encode(container.isModalBoundary, forKey: .isModalBoundary)
         try codingContainer.encode(container.customActions, forKey: .customActions)

@@ -242,7 +242,8 @@ struct RenderResponseTests {
         elementAnnotations.append(InterfaceElementAnnotation(path: TreePath([0, 0]), actions: [.activate]))
 
         let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            type: .semanticGroup(label: "Actions", value: nil),
+            identifier: "actions",
             frame: AccessibilityRect(x: 0, y: 40, width: 200, height: 100)
         )
         return Interface(

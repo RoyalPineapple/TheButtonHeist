@@ -310,28 +310,34 @@ private struct StableCaptureCustomContent: Codable {
 
 private struct StableCaptureContainer: Codable {
     let type: StableCaptureContainerType
+    let identifier: String?
+    let scrollableContentSize: AccessibilitySize?
     let isModalBoundary: Bool
     let customActions: [String]
 
     init(_ container: AccessibilityContainer) {
         type = StableCaptureContainerType(container.type)
+        identifier = container.identifier
+        scrollableContentSize = container.scrollableContentSize
         isModalBoundary = container.isModalBoundary
         customActions = container.customActions.map(\.name).filter { !$0.isEmpty }.sorted()
     }
 }
 
 private enum StableCaptureContainerType: Codable {
-    case semanticGroup(label: String?, value: String?, identifier: String?)
+    case none
+    case semanticGroup(label: String?, value: String?)
     case list
     case landmark
     case dataTable(rowCount: Int, columnCount: Int)
     case tabBar
-    case scrollable
 
     init(_ type: AccessibilityContainer.ContainerType) {
         switch type {
-        case .semanticGroup(let label, let value, let identifier):
-            self = .semanticGroup(label: label, value: value, identifier: identifier)
+        case .none:
+            self = .none
+        case .semanticGroup(let label, let value):
+            self = .semanticGroup(label: label, value: value)
         case .list:
             self = .list
         case .landmark:
@@ -340,8 +346,6 @@ private enum StableCaptureContainerType: Codable {
             self = .dataTable(rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
             self = .tabBar
-        case .scrollable:
-            self = .scrollable
         }
     }
 }

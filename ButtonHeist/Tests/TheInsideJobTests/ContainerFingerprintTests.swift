@@ -39,7 +39,7 @@ final class ContainerFingerprintTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .scrollable(contentSize: AccessibilitySize(contentSize)),
+                type: .none, scrollableContentSize: AccessibilitySize(contentSize),
                 frame: AccessibilityRect(frame)
             ),
             children: children
@@ -52,7 +52,7 @@ final class ContainerFingerprintTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .semanticGroup(label: label, value: nil, identifier: nil),
+                type: .semanticGroup(label: label, value: nil), identifier: nil,
                 frame: .zero
             ),
             children: children
@@ -193,11 +193,11 @@ final class ContainerFingerprintTests: XCTestCase {
 
     func testMultipleContainersGetIndependentFingerprints() {
         let container1 = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1000),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 250))
         )
         let container2 = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 800),
             frame: AccessibilityRect(CGRect(x: 0, y: 250, width: 320, height: 250))
         )
 
@@ -236,11 +236,11 @@ final class ContainerFingerprintTests: XCTestCase {
 
     func testOnlyChangedContainerFingerprintChanges() {
         let container1 = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1000),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 250))
         )
         let container2 = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 800),
             frame: AccessibilityRect(CGRect(x: 0, y: 250, width: 320, height: 250))
         )
 
@@ -327,18 +327,17 @@ final class ContainerFingerprintTests: XCTestCase {
 
         let containers = tree.scrollableContainers
         XCTAssertEqual(containers.count, 1)
-        if case .scrollable = containers.first?.type {} else {
-            XCTFail("Expected scrollable container")
-        }
+        XCTAssertEqual(containers.first?.type, AccessibilityContainer.ContainerType.none)
+        XCTAssertEqual(containers.first?.isScrollable, true)
     }
 
     func testScrollableContainersPreservesPreOrder() {
         let outerContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2000)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 2000),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 500))
         )
         let innerContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 800),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 200))
         )
 

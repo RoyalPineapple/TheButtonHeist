@@ -152,7 +152,7 @@ final class ElementMatcherTests: XCTestCase {
 
     private func group(children: [AccessibilityHierarchy]) -> AccessibilityHierarchy {
         .container(
-            AccessibilityContainer(type: .semanticGroup(label: nil, value: nil, identifier: nil), frame: .zero),
+            AccessibilityContainer(type: .semanticGroup(label: nil, value: nil), identifier: nil, frame: .zero),
             children: children
         )
     }
@@ -163,7 +163,7 @@ final class ElementMatcherTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .semanticGroup(label: label, value: nil, identifier: nil),
+                type: .semanticGroup(label: label, value: nil), identifier: nil,
                 frame: .zero
             ),
             children: children
