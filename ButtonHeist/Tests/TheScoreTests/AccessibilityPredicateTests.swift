@@ -589,10 +589,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         let action = makeResult(success: true, delta: .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [gained, lost]))))
 
         let selectedGain = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            change: .traits(before: .exclude([.selected]), after: .include([.selected]))
+            change: .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
         ))))
         let enabledLoss = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            change: .traits(before: .include([.notEnabled]), after: .exclude([.notEnabled]))
+            change: .traits(before: .init(include: [.notEnabled]), after: .init(exclude: [.notEnabled]))
         ))))
 
         XCTAssertTrue(selectedGain.validate(against: action).met)
@@ -609,13 +609,13 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .actions(ElementPropertyChange<ActionsProperty>(
-                before: ActionSetMatch.exclude(Set<ElementAction>([.activate])),
-                after: ActionSetMatch.include(Set<ElementAction>([.activate]))
+                before: ActionSetMatch(exclude: Set<ElementAction>([.activate])),
+                after: ActionSetMatch(include: Set<ElementAction>([.activate]))
             ))
         ))))
         let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .actions(ElementPropertyChange<ActionsProperty>(
-                after: ActionSetMatch.exclude(Set<ElementAction>([.activate]))
+                after: ActionSetMatch(exclude: Set<ElementAction>([.activate]))
             ))
         ))))
 
@@ -639,17 +639,17 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let framePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .frame(ElementPropertyChange<FrameProperty>(
-                after: ElementFrameMatch.exact(x: 12, y: 20, width: 120, height: 44)
+                after: ElementFrameMatch(x: 12, y: 20, width: 120, height: 44)
             ))
         ))))
         let pointPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .activationPoint(ElementPropertyChange<ActivationPointProperty>(
-                after: ElementPointMatch.exact(x: 42, y: 64)
+                after: ElementPointMatch(x: 42, y: 64)
             ))
         ))))
         let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .frame(ElementPropertyChange<FrameProperty>(
-                after: ElementFrameMatch.match(x: 13)
+                after: ElementFrameMatch(x: 13)
             ))
         ))))
 
@@ -677,7 +677,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let customPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .customContent(ElementPropertyChange<CustomContentProperty>(
-                after: CustomContentMatch.match(
+                after: CustomContentMatch(
                     label: StringMatch<String>.exact("Status"),
                     value: StringMatch<String>.contains("Ready"),
                     isImportant: true
@@ -686,13 +686,13 @@ final class AccessibilityPredicateTests: XCTestCase {
         ))))
         let rotorPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .rotors(ElementPropertyChange<RotorsProperty>(
-                before: RotorSetMatch.exclude([StringMatch<String>.exact("Headings")]),
-                after: RotorSetMatch.include([StringMatch<String>.contains("Head")])
+                before: RotorSetMatch(exclude: [StringMatch<String>.exact("Headings")]),
+                after: RotorSetMatch(include: [StringMatch<String>.contains("Head")])
             ))
         ))))
         let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             change: .customContent(ElementPropertyChange<CustomContentProperty>(
-                after: CustomContentMatch.match(
+                after: CustomContentMatch(
                     label: StringMatch<String>.exact("Status"),
                     isImportant: false
                 )

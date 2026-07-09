@@ -200,11 +200,18 @@ internal func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> Fenc
     case .stringArray:
         return stringArrayParam(key)
     case .stringMatchArray:
-        return stringMatchArrayParam(key)
+        return arrayParam(key, items: stringMatchParam(.values).schema)
     case .actionArray:
-        return actionArrayParam(key)
+        return arrayParam(key, items: .unconstrained)
     case .customContentMatch:
-        return customContentMatchParam(key)
+        return objectParam(
+            key,
+            properties: [
+                stringMatchParam(.label),
+                stringMatchParam(.value),
+                param(.isImportant, .boolean),
+            ]
+        )
     case .nonNegativeInteger:
         return param(key, .integer, minimum: 0)
     case .containerPredicate:
@@ -229,34 +236,11 @@ private func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpe
                     enumValues: ElementPredicateCheck<String>.Kind.allCases.map(\.rawValue)
                 ),
                 stringMatchParam(.match),
-                predicateCheckValuesParam(.values),
+                arrayParam(.values, items: .unconstrained),
                 objectParam(.check),
             ],
             additionalProperties: false
         )
-    )
-}
-
-private func predicateCheckValuesParam(_ key: FenceParameterKey) -> FenceParameterSpec {
-    arrayParam(key, items: .unconstrained)
-}
-
-private func actionArrayParam(_ key: FenceParameterKey) -> FenceParameterSpec {
-    arrayParam(key, items: .unconstrained)
-}
-
-private func stringMatchArrayParam(_ key: FenceParameterKey) -> FenceParameterSpec {
-    arrayParam(key, items: stringMatchParam(.values).schema)
-}
-
-private func customContentMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
-    objectParam(
-        key,
-        properties: [
-            stringMatchParam(.label),
-            stringMatchParam(.value),
-            param(.isImportant, .boolean),
-        ]
     )
 }
 
@@ -276,6 +260,6 @@ private let containerPredicateCheckProperties: [FenceParameterSpec] = [
         properties: semanticContainerPredicateProperties,
         validation: .customPayload
     ),
-    predicateCheckValuesParam(.values),
+    arrayParam(.values, items: .unconstrained),
     unconstrainedParam(.value, validation: .customPayload),
 ]

@@ -447,7 +447,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let framePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             element: ElementPredicate(label: "Checkout"),
             change: .frame(ElementPropertyChange<FrameProperty>(
-                after: ElementFrameMatch.exact(x: 10, y: 20, width: 100, height: 44)
+                after: ElementFrameMatch(x: 10, y: 20, width: 100, height: 44)
             ))
         ))))
         let semanticPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(

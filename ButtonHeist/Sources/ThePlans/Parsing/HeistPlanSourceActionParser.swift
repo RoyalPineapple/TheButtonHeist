@@ -128,7 +128,7 @@ extension HeistPlanSourceParser {
             match.value.map { "value: \(renderStringMatchFieldArgument($0))" },
             match.isImportant.map { "isImportant: \($0)" },
         ].compactMap { $0 }
-        return ".match(\(fields.joined(separator: ", ")))"
+        return ".init(\(fields.joined(separator: ", ")))"
     }
 
     func renderStringMatchArrayCorrection(_ matches: [StringMatch<StringExpr>]) -> String {

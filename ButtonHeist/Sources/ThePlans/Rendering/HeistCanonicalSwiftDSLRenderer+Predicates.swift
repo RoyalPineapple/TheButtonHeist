@@ -414,49 +414,37 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(traitSet match: TraitSetMatch) -> String {
-        switch (match.include.isEmpty, match.exclude.isEmpty) {
-        case (false, true):
-            return ".include(\(renderTraitArray(match.include)))"
-        case (true, false):
-            return ".exclude(\(renderTraitArray(match.exclude)))"
-        default:
-            return ".match(include: \(renderTraitArray(match.include)), exclude: \(renderTraitArray(match.exclude)))"
-        }
+        let fields = renderIncludeExcludeFields(
+            include: match.include.isEmpty ? nil : renderTraitArray(match.include),
+            exclude: match.exclude.isEmpty ? nil : renderTraitArray(match.exclude)
+        )
+        return ".init(\(fields))"
     }
 
     func render(actionSet match: ActionSetMatch) -> String {
-        switch (match.include.isEmpty, match.exclude.isEmpty) {
-        case (false, true):
-            return ".include(\(renderActionArray(match.include)))"
-        case (true, false):
-            return ".exclude(\(renderActionArray(match.exclude)))"
-        default:
-            return ".match(include: \(renderActionArray(match.include)), exclude: \(renderActionArray(match.exclude)))"
-        }
+        let fields = renderIncludeExcludeFields(
+            include: match.include.isEmpty ? nil : renderActionArray(match.include),
+            exclude: match.exclude.isEmpty ? nil : renderActionArray(match.exclude)
+        )
+        return ".init(\(fields))"
     }
 
     func render(frame match: ElementFrameMatch) -> String {
-        if let x = match.x, let y = match.y, let width = match.width, let height = match.height {
-            return ".exact(x: \(x), y: \(y), width: \(width), height: \(height))"
-        }
         let fields = renderIntegerFields([
             ("x", match.x),
             ("y", match.y),
             ("width", match.width),
             ("height", match.height),
         ])
-        return ".match(\(fields))"
+        return ".init(\(fields))"
     }
 
     func render(point match: ElementPointMatch) -> String {
-        if let x = match.x, let y = match.y {
-            return ".exact(x: \(x), y: \(y))"
-        }
         let fields = renderIntegerFields([
             ("x", match.x),
             ("y", match.y),
         ])
-        return ".match(\(fields))"
+        return ".init(\(fields))"
     }
 
     func render(customContent match: CustomContentMatch<String>) -> String {
@@ -465,7 +453,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             value: match.value.map(renderFieldArgument),
             isImportant: match.isImportant
         )
-        return ".match(\(fields))"
+        return ".init(\(fields))"
     }
 
     func render(customContent match: CustomContentMatch<StringExpr>, environment: RenderEnvironment) throws -> String {
@@ -474,37 +462,34 @@ extension HeistCanonicalSwiftDSLRenderer {
             value: match.value.map { try renderFieldArgument($0, environment: environment) },
             isImportant: match.isImportant
         )
-        return ".match(\(fields))"
+        return ".init(\(fields))"
     }
 
     func render(rotorSet match: RotorSetMatch<String>) -> String {
-        switch (match.include.isEmpty, match.exclude.isEmpty) {
-        case (false, true):
-            return ".include(\(renderStringMatchArray(match.include)))"
-        case (true, false):
-            return ".exclude(\(renderStringMatchArray(match.exclude)))"
-        default:
-            return ".match(include: \(renderStringMatchArray(match.include)), exclude: \(renderStringMatchArray(match.exclude)))"
-        }
+        let fields = renderIncludeExcludeFields(
+            include: match.include.isEmpty ? nil : renderStringMatchArray(match.include),
+            exclude: match.exclude.isEmpty ? nil : renderStringMatchArray(match.exclude)
+        )
+        return ".init(\(fields))"
     }
 
     func render(rotorSet match: RotorSetMatch<StringExpr>, environment: RenderEnvironment) throws -> String {
-        switch (match.include.isEmpty, match.exclude.isEmpty) {
-        case (false, true):
-            return try ".include(\(renderStringMatchArray(match.include, environment: environment)))"
-        case (true, false):
-            return try ".exclude(\(renderStringMatchArray(match.exclude, environment: environment)))"
-        default:
-            let include = try renderStringMatchArray(match.include, environment: environment)
-            let exclude = try renderStringMatchArray(match.exclude, environment: environment)
-            return ".match(include: \(include), exclude: \(exclude))"
-        }
+        let include = match.include.isEmpty ? nil : try renderStringMatchArray(match.include, environment: environment)
+        let exclude = match.exclude.isEmpty ? nil : try renderStringMatchArray(match.exclude, environment: environment)
+        return ".init(\(renderIncludeExcludeFields(include: include, exclude: exclude)))"
     }
 
     private func renderIntegerFields(_ fields: [(String, Int?)]) -> String {
         fields.compactMap { name, value in
             value.map { "\(name): \($0)" }
         }.joined(separator: ", ")
+    }
+
+    private func renderIncludeExcludeFields(include: String?, exclude: String?) -> String {
+        [
+            include.map { "include: \($0)" },
+            exclude.map { "exclude: \($0)" },
+        ].compactMap { $0 }.joined(separator: ", ")
     }
 
     private func renderCustomContentFields(

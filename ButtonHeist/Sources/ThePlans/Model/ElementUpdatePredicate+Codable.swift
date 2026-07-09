@@ -189,6 +189,24 @@ private enum UnlabeledAssociatedValueCodingKeys: String, CodingKey {
     case value = "_0"
 }
 
+private func decodeUnlabeledAssociatedValue<Value: Decodable, Key: CodingKey>(
+    _ type: Value.Type,
+    forKey key: Key,
+    from container: KeyedDecodingContainer<Key>
+) throws -> Value {
+    let nested = try container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
+    return try nested.decode(type, forKey: .value)
+}
+
+private func encodeUnlabeledAssociatedValue<Value: Encodable, Key: CodingKey>(
+    _ value: Value,
+    forKey key: Key,
+    to container: inout KeyedEncodingContainer<Key>
+) throws {
+    var nested = container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
+    try nested.encode(value, forKey: .value)
+}
+
 extension AnyPropertyChange: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
@@ -204,49 +222,49 @@ extension AnyPropertyChange: Codable {
 
         switch key {
         case .value:
-            self = .value(try Self.decodeAssociatedValue(
+            self = .value(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<ValueProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .traits:
-            self = .traits(try Self.decodeAssociatedValue(
+            self = .traits(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<TraitsProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .hint:
-            self = .hint(try Self.decodeAssociatedValue(
+            self = .hint(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<HintProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .actions:
-            self = .actions(try Self.decodeAssociatedValue(
+            self = .actions(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<ActionsProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .frame:
-            self = .frame(try Self.decodeAssociatedValue(
+            self = .frame(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<FrameProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .activationPoint:
-            self = .activationPoint(try Self.decodeAssociatedValue(
+            self = .activationPoint(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<ActivationPointProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .customContent:
-            self = .customContent(try Self.decodeAssociatedValue(
+            self = .customContent(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<CustomContentProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .rotors:
-            self = .rotors(try Self.decodeAssociatedValue(
+            self = .rotors(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<RotorsProperty>.self,
                 forKey: key,
                 from: container
@@ -258,40 +276,22 @@ extension AnyPropertyChange: Codable {
         var container = encoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
         switch self {
         case .value(let change):
-            try Self.encodeAssociatedValue(change, forKey: .value, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
         case .traits(let change):
-            try Self.encodeAssociatedValue(change, forKey: .traits, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .traits, to: &container)
         case .hint(let change):
-            try Self.encodeAssociatedValue(change, forKey: .hint, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .hint, to: &container)
         case .actions(let change):
-            try Self.encodeAssociatedValue(change, forKey: .actions, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .actions, to: &container)
         case .frame(let change):
-            try Self.encodeAssociatedValue(change, forKey: .frame, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .frame, to: &container)
         case .activationPoint(let change):
-            try Self.encodeAssociatedValue(change, forKey: .activationPoint, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .activationPoint, to: &container)
         case .customContent(let change):
-            try Self.encodeAssociatedValue(change, forKey: .customContent, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .customContent, to: &container)
         case .rotors(let change):
-            try Self.encodeAssociatedValue(change, forKey: .rotors, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .rotors, to: &container)
         }
-    }
-
-    private static func decodeAssociatedValue<Value: Decodable>(
-        _ type: Value.Type,
-        forKey key: AnyPropertyChangeCodingKeys,
-        from container: KeyedDecodingContainer<AnyPropertyChangeCodingKeys>
-    ) throws -> Value {
-        let nested = try container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
-        return try nested.decode(type, forKey: .value)
-    }
-
-    private static func encodeAssociatedValue<Value: Encodable>(
-        _ value: Value,
-        forKey key: AnyPropertyChangeCodingKeys,
-        to container: inout KeyedEncodingContainer<AnyPropertyChangeCodingKeys>
-    ) throws {
-        var nested = container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
-        try nested.encode(value, forKey: .value)
     }
 }
 
@@ -310,49 +310,49 @@ extension AnyPropertyChangeExpr: Codable {
 
         switch key {
         case .value:
-            self = .value(try Self.decodeAssociatedValue(
+            self = .value(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<ValueProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .traits:
-            self = .traits(try Self.decodeAssociatedValue(
+            self = .traits(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<TraitsProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .hint:
-            self = .hint(try Self.decodeAssociatedValue(
+            self = .hint(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<HintProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .actions:
-            self = .actions(try Self.decodeAssociatedValue(
+            self = .actions(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<ActionsProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .frame:
-            self = .frame(try Self.decodeAssociatedValue(
+            self = .frame(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<FrameProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .activationPoint:
-            self = .activationPoint(try Self.decodeAssociatedValue(
+            self = .activationPoint(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<ActivationPointProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .customContent:
-            self = .customContent(try Self.decodeAssociatedValue(
+            self = .customContent(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<CustomContentProperty>.self,
                 forKey: key,
                 from: container
             ))
         case .rotors:
-            self = .rotors(try Self.decodeAssociatedValue(
+            self = .rotors(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<RotorsProperty>.self,
                 forKey: key,
                 from: container
@@ -364,40 +364,22 @@ extension AnyPropertyChangeExpr: Codable {
         var container = encoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
         switch self {
         case .value(let change):
-            try Self.encodeAssociatedValue(change, forKey: .value, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
         case .traits(let change):
-            try Self.encodeAssociatedValue(change, forKey: .traits, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .traits, to: &container)
         case .hint(let change):
-            try Self.encodeAssociatedValue(change, forKey: .hint, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .hint, to: &container)
         case .actions(let change):
-            try Self.encodeAssociatedValue(change, forKey: .actions, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .actions, to: &container)
         case .frame(let change):
-            try Self.encodeAssociatedValue(change, forKey: .frame, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .frame, to: &container)
         case .activationPoint(let change):
-            try Self.encodeAssociatedValue(change, forKey: .activationPoint, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .activationPoint, to: &container)
         case .customContent(let change):
-            try Self.encodeAssociatedValue(change, forKey: .customContent, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .customContent, to: &container)
         case .rotors(let change):
-            try Self.encodeAssociatedValue(change, forKey: .rotors, to: &container)
+            try encodeUnlabeledAssociatedValue(change, forKey: .rotors, to: &container)
         }
-    }
-
-    private static func decodeAssociatedValue<Value: Decodable>(
-        _ type: Value.Type,
-        forKey key: AnyPropertyChangeCodingKeys,
-        from container: KeyedDecodingContainer<AnyPropertyChangeCodingKeys>
-    ) throws -> Value {
-        let nested = try container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
-        return try nested.decode(type, forKey: .value)
-    }
-
-    private static func encodeAssociatedValue<Value: Encodable>(
-        _ value: Value,
-        forKey key: AnyPropertyChangeCodingKeys,
-        to container: inout KeyedEncodingContainer<AnyPropertyChangeCodingKeys>
-    ) throws {
-        var nested = container.nestedContainer(keyedBy: UnlabeledAssociatedValueCodingKeys.self, forKey: key)
-        try nested.encode(value, forKey: .value)
     }
 }
 

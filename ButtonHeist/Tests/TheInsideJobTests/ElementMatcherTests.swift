@@ -98,12 +98,12 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertTrue(ElementPredicate.hint(.contains("edit")).matches(element))
         XCTAssertTrue(ElementPredicate.actions([.custom("Modify")]).matches(element))
         XCTAssertTrue(ElementPredicate.exclude(.actions([.custom("Sub")])).matches(element))
-        XCTAssertTrue(ElementPredicate.customContent(.match(label: "Slot", value: "Main")).matches(element))
-        XCTAssertTrue(ElementPredicate.exclude(.customContent(.match(label: "Discount"))).matches(element))
+        XCTAssertTrue(ElementPredicate.customContent(.init(label: "Slot", value: "Main")).matches(element))
+        XCTAssertTrue(ElementPredicate.exclude(.customContent(.init(label: "Discount"))).matches(element))
         XCTAssertTrue(ElementPredicate.rotors(["Actions"]).matches(element))
         XCTAssertTrue(ElementPredicate.exclude(.rotors(["Headings"])).matches(element))
         XCTAssertFalse(ElementPredicate.exclude(.actions([.custom("Modify")])).matches(element))
-        XCTAssertFalse(ElementPredicate.customContent(.match(label: "Slot", value: "Side")).matches(element))
+        XCTAssertFalse(ElementPredicate.customContent(.init(label: "Slot", value: "Side")).matches(element))
         XCTAssertFalse(ElementPredicate.rotors(["Headings"]).matches(element))
     }
 
