@@ -1815,12 +1815,16 @@ final class TheHandoffStateTests: XCTestCase {
 }
 
 final class FakeDiscoveryBrowser: DeviceDiscoveryBrowsing {
-    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)?
-    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
+    private var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
     private(set) var startCount = 0
     private(set) var cancelCount = 0
 
-    func start(queue: DispatchQueue) {
+    func start(
+        queue: DispatchQueue,
+        onResultsChanged: @escaping @Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void,
+        onStateChanged: @escaping @Sendable (DeviceDiscoveryBrowserState) -> Void
+    ) {
+        self.onStateChanged = onStateChanged
         startCount += 1
     }
 
