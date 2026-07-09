@@ -3,7 +3,7 @@
 The authoring surface as one picture: step types, action commands, the passable types, target forms, and — the central division — the split between state predicates (evaluated against a frozen parse) and change predicates (requiring delta evidence, never usable as search selectors). This diagram answers "what can a heist say, and what kind of evidence does each construct consume?"
 
 **Illustrates:** [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [HEIST-FORMAT.md](../HEIST-FORMAT.md), [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/HeistArgument.swift`, `ButtonHeist/Sources/ThePlans/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/StatePredicateExpressions.swift`, `ButtonHeist/Sources/ThePlans/ElementTarget.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/Model/StatePredicateExpressions.swift`, `ButtonHeist/Sources/ThePlans/Model/ElementTarget.swift`
 
 ```mermaid
 flowchart TD

@@ -3,7 +3,7 @@
 How an `ElementTarget` becomes a live, actionable element: predicate resolution against the settled world, ordinal disambiguation, near-miss diagnostics, and the auto-reveal scroll path for known-but-offscreen targets. This diagram answers "why did my selector hit, miss, or scroll?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md), [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [SCOPE-AND-LIMITS.md](../SCOPE-AND-LIMITS.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/ElementTarget.swift`, `ButtonHeist/Sources/ThePlans/ElementPredicate.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolution.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/ElementTarget.swift`, `ButtonHeist/Sources/ThePlans/Model/ElementPredicate.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolution.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift`
 
 ```mermaid
 flowchart TD
