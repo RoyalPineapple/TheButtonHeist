@@ -151,6 +151,16 @@ enum CLIElementTargetPayloadEncoder {
                 CommandArgumentWriter.value(.kind, "modalBoundary"),
                 CommandArgumentWriter.value(.value, required)
             ).heistValue
+        case .scrollable(let required):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "scrollable"),
+                CommandArgumentWriter.value(.value, required)
+            ).heistValue
+        case .actions(let actions):
+            return CommandArgumentWriter.object(
+                CommandArgumentWriter.value(.kind, "actions"),
+                CommandArgumentWriter.value(.values, .array(actionValues(actions)))
+            ).heistValue
         }
     }
 
