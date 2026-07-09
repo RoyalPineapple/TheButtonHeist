@@ -88,6 +88,21 @@ import Testing
     }
 }
 
+@Test func `runtime parser rejects alternate property match spellings`() {
+    let cases = [
+        ("WaitFor(.change(.elements(.updated(.traits(after: .include([.selected]))))))", "trait set match must use .init(...)"),
+        ("WaitFor(.change(.elements(.updated(.actions(after: .exclude([.activate]))))))", "action set match must use .init(...)"),
+        ("WaitFor(.change(.elements(.updated(.frame(after: .exact(x: 0, y: 0, width: 10, height: 10))))))", "frame match must use .init(...)"),
+        ("WaitFor(.change(.elements(.updated(.activationPoint(after: .match(x: 1))))))", "activation point match must use .init(...)"),
+        (#"WaitFor(.change(.elements(.updated(.customContent(after: .match(label: "Status"))))))"#, "custom content match must use .init(...)"),
+        (#"WaitFor(.change(.elements(.updated(.rotors(after: .include(["Headings"]))))))"#, "rotor set match must use .init(...)"),
+    ]
+
+    for (source, expected) in cases {
+        expect(compileError(root(source)), contains: expected)
+    }
+}
+
 @Test func `runtime parser rejects empty element predicates and matcher payloads`() {
     let cases = [
         ("Activate(.element())", ".element(...) requires at least one non-empty predicate check"),
@@ -96,7 +111,7 @@ import Testing
         ("Activate(.actions([]))", "actions predicate payload must not be empty"),
         (#"Activate(.actions([.custom("")]))"#, "custom action name must not be empty"),
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
-        ("Activate(.customContent(.match()))", "customContent match must include label, value, or isImportant"),
+        ("Activate(.customContent(.init()))", "customContent match must include label, value, or isImportant"),
     ]
 
     for (source, expected) in cases {
@@ -383,7 +398,7 @@ import Testing
 
 @Test func `inline plan source custom content update queries label and value`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
-    WaitFor(.change(.elements(.updated(.customContent(after: .match(
+    WaitFor(.change(.elements(.updated(.customContent(after: .init(
         label: "Status",
         value: .contains("Ready"),
         isImportant: true
@@ -391,7 +406,7 @@ import Testing
     """#))
     let expected = try HeistPlan(body: [
         .wait(WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-            change: .customContent(after: CustomContentMatch<StringExpr>.match(
+            change: .customContent(after: CustomContentMatch<StringExpr>(
                 label: .exact(.literal("Status")),
                 value: .contains(.literal("Ready")),
                 isImportant: true
@@ -400,7 +415,7 @@ import Testing
     ])
 
     #expect(plan == expected)
-    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(after: .match(label: "Status", value: .contains("Ready"), isImportant: true))"#))
+    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(after: .init(label: "Status", value: .contains("Ready"), isImportant: true))"#))
     try assertCanonicalRoundTrip(plan)
 }
 
@@ -1610,7 +1625,7 @@ import Testing
     #expect(canonical.contains(#".hint(.contains("edit"))"#))
     #expect(canonical.contains(#".actions([.custom("Modify")])"#))
     #expect(canonical.contains(#".exclude(.actions([.custom("Sub")]))"#))
-    #expect(canonical.contains(#".customContent(.match(label: "Slot", value: "Main"))"#))
+    #expect(canonical.contains(#".customContent(.init(label: "Slot", value: "Main"))"#))
     #expect(canonical.contains(#".rotors(["Actions"])"#))
     #expect(canonical.contains(#".exclude(.rotors(["Headings"]))"#))
 }

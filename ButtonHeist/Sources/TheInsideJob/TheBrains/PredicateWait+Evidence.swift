@@ -53,35 +53,12 @@ extension PredicateWait {
 
 private enum PredicateWaitAccumulatedTraceStorage {
     case unavailable
-    case captures(PredicateWaitTraceCaptures)
-    case noChangeAfterBaseline(PredicateWaitNoChangeAfterBaselineEvidence)
-}
+    case captures([AccessibilityTrace.Capture])
+    case noChangeAfterBaseline(AccessibilityTrace.Capture)
 
-private struct PredicateWaitTraceCaptures {
-    fileprivate var captures: [AccessibilityTrace.Capture]
-
-    fileprivate var last: AccessibilityTrace.Capture? {
-        captures.last
-    }
-
-    fileprivate var trace: AccessibilityTrace {
-        AccessibilityTrace(captures: captures)
-    }
-
-    fileprivate mutating func append(_ capture: AccessibilityTrace.Capture) {
-        captures.append(capture)
-    }
-}
-
-private struct PredicateWaitNoChangeAfterBaselineEvidence {
-    fileprivate let capture: AccessibilityTrace.Capture
-
-    fileprivate var trace: AccessibilityTrace {
-        AccessibilityTrace(captures: [capture, capture])
-    }
-
-    fileprivate var delta: AccessibilityTrace.AccumulatedDelta? {
-        trace.accumulatedDelta ?? AccessibilityTrace.AccumulatedDelta(
+    fileprivate static func noChangeDelta(for capture: AccessibilityTrace.Capture) -> AccessibilityTrace.AccumulatedDelta? {
+        let trace = AccessibilityTrace(captures: [capture, capture])
+        return trace.accumulatedDelta ?? AccessibilityTrace.AccumulatedDelta(
             elementCount: capture.interface.projectedElements.count,
             captureEdge: AccessibilityTrace.CaptureEdge(before: capture, after: capture),
             change: .noChange,
@@ -104,7 +81,7 @@ extension PredicateWait {
 
         internal init(baseline: WaitChangeBaseline) {
             if let capture = baseline.capture {
-                storage = .captures(PredicateWaitTraceCaptures(captures: [capture]))
+                storage = .captures([capture])
             } else {
                 storage = .unavailable
             }
@@ -114,10 +91,10 @@ extension PredicateWait {
             switch storage {
             case .unavailable:
                 return nil
-            case .captures(let evidence):
-                return evidence.trace
-            case .noChangeAfterBaseline(let evidence):
-                return evidence.trace
+            case .captures(let captures):
+                return AccessibilityTrace(captures: captures)
+            case .noChangeAfterBaseline(let capture):
+                return AccessibilityTrace(captures: [capture, capture])
             }
         }
 
@@ -125,10 +102,10 @@ extension PredicateWait {
             switch storage {
             case .unavailable:
                 return nil
-            case .captures(let evidence):
-                return evidence.trace.accumulatedDelta(projection: projection)
-            case .noChangeAfterBaseline(let evidence):
-                return evidence.delta
+            case .captures(let captures):
+                return AccessibilityTrace(captures: captures).accumulatedDelta(projection: projection)
+            case .noChangeAfterBaseline(let capture):
+                return PredicateWaitAccumulatedTraceStorage.noChangeDelta(for: capture)
             }
         }
 
@@ -146,10 +123,10 @@ extension PredicateWait {
             switch storage {
             case .unavailable:
                 return
-            case .captures(var evidence):
-                guard let last = evidence.last else {
-                    evidence.append(capture)
-                    storage = .captures(evidence)
+            case .captures(var captures):
+                guard let last = captures.last else {
+                    captures.append(capture)
+                    storage = .captures(captures)
                     return
                 }
                 if last.hash == capture.hash,
@@ -158,23 +135,21 @@ extension PredicateWait {
                        capture,
                        projection: projection
                    ).meaningfulWaitDelta == nil {
-                    storage = .noChangeAfterBaseline(PredicateWaitNoChangeAfterBaselineEvidence(capture: last))
+                    storage = .noChangeAfterBaseline(last)
                 } else {
-                    evidence.append(capture)
-                    storage = .captures(evidence)
+                    captures.append(capture)
+                    storage = .captures(captures)
                 }
-            case .noChangeAfterBaseline(let evidence):
-                if evidence.capture.hash == capture.hash,
+            case .noChangeAfterBaseline(let baselineCapture):
+                if baselineCapture.hash == capture.hash,
                    AccessibilityTrace.Delta.between(
-                       evidence.capture,
+                       baselineCapture,
                        capture,
                        projection: projection
                    ).meaningfulWaitDelta == nil {
                     return
                 }
-                var changedEvidence = PredicateWaitTraceCaptures(captures: [evidence.capture])
-                changedEvidence.append(capture)
-                storage = .captures(changedEvidence)
+                storage = .captures([baselineCapture, capture])
             }
         }
     }

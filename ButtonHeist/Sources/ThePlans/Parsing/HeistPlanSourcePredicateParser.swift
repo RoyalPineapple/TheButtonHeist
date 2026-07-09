@@ -5,6 +5,11 @@ struct PropertyChangeFields<Value> {
     let after: Value?
 }
 
+struct IncludeExcludeFields<Value> {
+    let include: Value?
+    let exclude: Value?
+}
+
 extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicateExpr {
         if case .string = currentToken.kind {
@@ -397,40 +402,14 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseTraitSetMatch(role: String) throws -> TraitSetMatch {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        try expectSymbol("(")
-        let match: TraitSetMatch
-        switch mode {
-        case "include":
-            match = TraitSetMatch(include: try parseTraitArray(role: role))
-        case "exclude":
-            match = TraitSetMatch(exclude: try parseTraitArray(role: role))
-        case "match":
-            var include: [HeistTrait] = []
-            var exclude: [HeistTrait] = []
-            if !currentToken.isSymbol(")") {
-                while true {
-                    if lookaheadLabel("include") {
-                        try expectIdentifier("include")
-                        try expectSymbol(":")
-                        include = try parseTraitArray(role: "\(role) include")
-                    } else if lookaheadLabel("exclude") {
-                        try expectIdentifier("exclude")
-                        try expectSymbol(":")
-                        exclude = try parseTraitArray(role: "\(role) exclude")
-                    } else {
-                        throw error(currentToken, "trait set match accepts include and exclude")
-                    }
-                    guard consumeSymbol(",") else { break }
-                }
-            }
-            match = TraitSetMatch(include: include, exclude: exclude)
-        default:
-            throw error(previous, "unsupported trait set match '.\(mode)'. Valid: include, exclude, match")
-        }
+        try expectContextualInitializer(role: "trait set match")
+        let fields = try parseIncludeExcludeFields(
+            role: role,
+            parseInclude: { parser, role in try parser.parseTraitArray(role: role) },
+            parseExclude: { parser, role in try parser.parseTraitArray(role: role) }
+        )
         try expectSymbol(")")
-        return match
+        return TraitSetMatch(include: fields.include ?? [], exclude: fields.exclude ?? [])
     }
 
     mutating func parseTypedPropertyChangeFields<T>(
@@ -469,40 +448,14 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseActionSetMatch(role: String) throws -> ActionSetMatch {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        try expectSymbol("(")
-        let match: ActionSetMatch
-        switch mode {
-        case "include":
-            match = ActionSetMatch(include: Set(try parseActionArray(role: role)))
-        case "exclude":
-            match = ActionSetMatch(exclude: Set(try parseActionArray(role: role)))
-        case "match":
-            var include: Set<ElementAction> = []
-            var exclude: Set<ElementAction> = []
-            if !currentToken.isSymbol(")") {
-                while true {
-                    if lookaheadLabel("include") {
-                        try expectIdentifier("include")
-                        try expectSymbol(":")
-                        include = Set(try parseActionArray(role: "\(role) include"))
-                    } else if lookaheadLabel("exclude") {
-                        try expectIdentifier("exclude")
-                        try expectSymbol(":")
-                        exclude = Set(try parseActionArray(role: "\(role) exclude"))
-                    } else {
-                        throw error(currentToken, "action set match accepts include and exclude")
-                    }
-                    guard consumeSymbol(",") else { break }
-                }
-            }
-            match = ActionSetMatch(include: include, exclude: exclude)
-        default:
-            throw error(previous, "unsupported action set match '.\(mode)'. Valid: include, exclude, match")
-        }
+        try expectContextualInitializer(role: "action set match")
+        let fields = try parseIncludeExcludeFields(
+            role: role,
+            parseInclude: { parser, role in Set(try parser.parseActionArray(role: role)) },
+            parseExclude: { parser, role in Set(try parser.parseActionArray(role: role)) }
+        )
         try expectSymbol(")")
-        return match
+        return ActionSetMatch(include: fields.include ?? [], exclude: fields.exclude ?? [])
     }
 
     mutating func parseActionArray(role: String) throws -> [ElementAction] {
@@ -547,53 +500,30 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementFrameMatch(role: String) throws -> ElementFrameMatch {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        try expectSymbol("(")
+        try expectContextualInitializer(role: "frame match")
         let fields = try parseIntegerMatchFields(
             role: role,
             allowed: ["x", "y", "width", "height"],
-            required: mode == "exact" ? ["x", "y", "width", "height"] : []
+            required: []
         )
         try expectSymbol(")")
-        switch mode {
-        case "exact":
-            return ElementFrameMatch.exact(
-                x: fields["x"]!,
-                y: fields["y"]!,
-                width: fields["width"]!,
-                height: fields["height"]!
-            )
-        case "match":
-            return ElementFrameMatch.match(
-                x: fields["x"],
-                y: fields["y"],
-                width: fields["width"],
-                height: fields["height"]
-            )
-        default:
-            throw error(previous, "unsupported frame match '.\(mode)'. Valid: exact, match")
-        }
+        return ElementFrameMatch(
+            x: fields["x"],
+            y: fields["y"],
+            width: fields["width"],
+            height: fields["height"]
+        )
     }
 
     mutating func parseElementPointMatch(role: String) throws -> ElementPointMatch {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        try expectSymbol("(")
+        try expectContextualInitializer(role: "activation point match")
         let fields = try parseIntegerMatchFields(
             role: role,
             allowed: ["x", "y"],
-            required: mode == "exact" ? ["x", "y"] : []
+            required: []
         )
         try expectSymbol(")")
-        switch mode {
-        case "exact":
-            return ElementPointMatch.exact(x: fields["x"]!, y: fields["y"]!)
-        case "match":
-            return ElementPointMatch.match(x: fields["x"], y: fields["y"])
-        default:
-            throw error(previous, "unsupported activation point match '.\(mode)'. Valid: exact, match")
-        }
+        return ElementPointMatch(x: fields["x"], y: fields["y"])
     }
 
     mutating func parseIntegerMatchFields(
@@ -635,12 +565,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseCustomContentMatch(role: String) throws -> CustomContentMatch<StringExpr> {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        guard mode == "match" else {
-            throw error(previous, "unsupported custom content match '.\(mode)'. Valid: match")
-        }
-        try expectSymbol("(")
+        try expectContextualInitializer(role: "custom content match")
         var label: StringMatch<StringExpr>?
         var value: StringMatch<StringExpr>?
         var isImportant: Bool?
@@ -682,40 +607,56 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch<StringExpr> {
-        try expectSymbol(".")
-        let mode = try parseIdentifier()
-        try expectSymbol("(")
-        let match: RotorSetMatch<StringExpr>
-        switch mode {
-        case "include":
-            match = RotorSetMatch(include: try parseStringMatchArray(role: role))
-        case "exclude":
-            match = RotorSetMatch(exclude: try parseStringMatchArray(role: role))
-        case "match":
-            var include: [StringMatch<StringExpr>] = []
-            var exclude: [StringMatch<StringExpr>] = []
-            if !currentToken.isSymbol(")") {
-                while true {
-                    if lookaheadLabel("include") {
-                        try expectIdentifier("include")
-                        try expectSymbol(":")
-                        include = try parseStringMatchArray(role: "\(role) include")
-                    } else if lookaheadLabel("exclude") {
-                        try expectIdentifier("exclude")
-                        try expectSymbol(":")
-                        exclude = try parseStringMatchArray(role: "\(role) exclude")
-                    } else {
-                        throw error(currentToken, "rotor set match accepts include and exclude")
-                    }
-                    guard consumeSymbol(",") else { break }
-                }
-            }
-            match = RotorSetMatch(include: include, exclude: exclude)
-        default:
-            throw error(previous, "unsupported rotor set match '.\(mode)'. Valid: include, exclude, match")
-        }
+        try expectContextualInitializer(role: "rotor set match")
+        let fields = try parseIncludeExcludeFields(
+            role: role,
+            parseInclude: { parser, role in try parser.parseStringMatchArray(role: role) },
+            parseExclude: { parser, role in try parser.parseStringMatchArray(role: role) }
+        )
         try expectSymbol(")")
-        return match
+        return RotorSetMatch(include: fields.include ?? [], exclude: fields.exclude ?? [])
+    }
+
+    mutating func expectContextualInitializer(role: String) throws {
+        try expectSymbol(".")
+        let token = currentToken
+        let name = try parseIdentifier()
+        guard name == "init" else {
+            throw error(token, "\(role) must use .init(...)")
+        }
+        try expectSymbol("(")
+    }
+
+    mutating func parseIncludeExcludeFields<Value>(
+        role: String,
+        parseInclude: (inout HeistPlanSourceParser, String) throws -> Value,
+        parseExclude: (inout HeistPlanSourceParser, String) throws -> Value
+    ) throws -> IncludeExcludeFields<Value> {
+        var include: Value?
+        var exclude: Value?
+        if !currentToken.isSymbol(")") {
+            while true {
+                if lookaheadLabel("include") {
+                    try expectIdentifier("include")
+                    try expectSymbol(":")
+                    guard include == nil else {
+                        throw error(previous, "\(role) accepts include only once")
+                    }
+                    include = try parseInclude(&self, "\(role) include")
+                } else if lookaheadLabel("exclude") {
+                    try expectIdentifier("exclude")
+                    try expectSymbol(":")
+                    guard exclude == nil else {
+                        throw error(previous, "\(role) accepts exclude only once")
+                    }
+                    exclude = try parseExclude(&self, "\(role) exclude")
+                } else {
+                    throw error(currentToken, "\(role) accepts include and exclude")
+                }
+                guard consumeSymbol(",") else { break }
+            }
+        }
+        return IncludeExcludeFields(include: include, exclude: exclude)
     }
 
     mutating func parseStringMatchArray(role: String) throws -> [StringMatch<StringExpr>] {

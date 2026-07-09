@@ -34,7 +34,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 command: .activate(.predicate(.identifier("Favorite"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                     element: .identifier("Favorite"),
-                    change: .traits(before: .exclude([.selected]), after: .include([.selected]))
+                    change: .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
                 )))))))),
             .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
             .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),

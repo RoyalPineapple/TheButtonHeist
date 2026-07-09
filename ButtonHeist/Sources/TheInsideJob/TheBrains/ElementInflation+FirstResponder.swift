@@ -8,7 +8,7 @@ extension ElementInflation {
 
     internal func inflateFirstResponder(method: ActionMethod) async -> ElementInflationFailure? {
         guard let screenElement = stash.firstResponderScreenElement(),
-              let target = firstResponderTarget(for: screenElement) else { return nil }
+              let target = stash.minimumUniqueTarget(for: screenElement) else { return nil }
         switch await inflate(
             for: target,
             method: method,
@@ -19,10 +19,6 @@ extension ElementInflation {
         case .failed(let failure):
             return failure
         }
-    }
-
-    private func firstResponderTarget(for screenElement: TheStash.ScreenElement) -> ElementTarget? {
-        stash.minimumUniqueTarget(for: screenElement)
     }
 }
 

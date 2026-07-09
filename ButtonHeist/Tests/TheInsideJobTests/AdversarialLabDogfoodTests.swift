@@ -63,8 +63,8 @@ final class AdversarialLabDogfoodTests: XCTestCase {
         let row = ElementTarget.element(
             .label("Review PR"),
             .value("Active"),
-            .customContent(.match(label: "Category", value: "Work")),
-            .customContent(.match(label: "Priority", value: "High")),
+            .customContent(.init(label: "Category", value: "Work")),
+            .customContent(.init(label: "Priority", value: "High")),
             .actions([.custom("Toggle")])
         )
 
@@ -74,8 +74,8 @@ final class AdversarialLabDogfoodTests: XCTestCase {
                 .expect(.exists(.element(
                     .label("Review PR"),
                     .value("Completed"),
-                    .customContent(.match(label: "Category", value: "Work")),
-                    .customContent(.match(label: "Priority", value: "High"))
+                    .customContent(.init(label: "Category", value: "Work")),
+                    .customContent(.init(label: "Priority", value: "High"))
                 )), timeout: .seconds(2))
         }
 
@@ -95,11 +95,11 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     func testDynamicCellsKeepSemanticIdentityAfterChurn() async throws {
         let noodles = ElementTarget.element(
             .label("Nebula Noodles Prime"),
-            .customContent(.match(label: "SKU", value: "SKU-72")),
-            .customContent(.match(label: "Category", value: "Mains")),
-            .customContent(.match(label: "Churn State", value: "post-churn")),
-            .customContent(.match(label: "Menu Slot", value: "deep target after churn")),
-            .customContent(.match(label: "Unit Price", value: "$18.00")),
+            .customContent(.init(label: "SKU", value: "SKU-72")),
+            .customContent(.init(label: "Category", value: "Mains")),
+            .customContent(.init(label: "Churn State", value: "post-churn")),
+            .customContent(.init(label: "Menu Slot", value: "deep target after churn")),
+            .customContent(.init(label: "Unit Price", value: "$18.00")),
             .actions([.custom("Add to Cart")])
         )
 
@@ -110,10 +110,10 @@ final class AdversarialLabDogfoodTests: XCTestCase {
             CustomAction("Add to Cart", on: noodles)
                 .expect(.exists(.element(
                     .label("Nebula Noodles Prime"),
-                    .customContent(.match(label: "SKU", value: "SKU-72")),
-                    .customContent(.match(label: "Churn State", value: "post-churn")),
-                    .customContent(.match(label: "Quantity", value: "1")),
-                    .customContent(.match(label: "Line Total", value: "$18.00")),
+                    .customContent(.init(label: "SKU", value: "SKU-72")),
+                    .customContent(.init(label: "Churn State", value: "post-churn")),
+                    .customContent(.init(label: "Quantity", value: "1")),
+                    .customContent(.init(label: "Line Total", value: "$18.00")),
                     .actions([.custom("Remove from Cart")])
                 )), timeout: .seconds(6))
         }
@@ -124,8 +124,8 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     func testDynamicCellsStalePreChurnSemanticTargetFails() async throws {
         let stale = ElementTarget.element(
             .label("Nebula Noodles"),
-            .customContent(.match(label: "SKU", value: "SKU-72")),
-            .customContent(.match(label: "Churn State", value: "pre-churn")),
+            .customContent(.init(label: "SKU", value: "SKU-72")),
+            .customContent(.init(label: "Churn State", value: "pre-churn")),
             .actions([.custom("Add to Cart")])
         )
 
