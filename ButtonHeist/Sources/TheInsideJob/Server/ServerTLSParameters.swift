@@ -1,14 +1,13 @@
 import Dispatch
-import Foundation
 import Network
 import Security
 
 import TheScore
 
-nonisolated extension DeviceConnection {
+enum ServerTLSParameters {
     private static let tlsPskWithAES128GCMSHA256 = tls_ciphersuite_t(rawValue: 0x00A8)!
 
-    static func makeTLSParameters(token: String) -> NWParameters {
+    static func make(token: String) -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
         sec_protocol_options_set_min_tls_protocol_version(
@@ -35,13 +34,5 @@ nonisolated extension DeviceConnection {
         )
 
         return NWParameters(tls: tlsOptions)
-    }
-
-    static func isLoopbackEndpoint(_ endpoint: DiscoveredDeviceEndpoint) -> Bool {
-        guard case .hostPort(let host, _) = endpoint else { return false }
-        let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized == "::1" ||
-            normalized == "0:0:0:0:0:0:0:1" ||
-            normalized.hasPrefix("127.")
     }
 }

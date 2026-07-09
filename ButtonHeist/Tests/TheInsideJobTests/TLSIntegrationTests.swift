@@ -30,7 +30,7 @@ final class TLSIntegrationTests: XCTestCase {
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            tlsParameters: ServerTLSParameters.make(token: token),
             callbacks: callbacks
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
@@ -53,7 +53,7 @@ final class TLSIntegrationTests: XCTestCase {
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            tlsParameters: ServerTLSParameters.make(token: token),
             callbacks: callbacks
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
@@ -71,7 +71,7 @@ final class TLSIntegrationTests: XCTestCase {
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: "server-token")
+            tlsParameters: ServerTLSParameters.make(token: "server-token")
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: "client-token")
         defer { client.cancel() }
@@ -95,7 +95,7 @@ final class TLSIntegrationTests: XCTestCase {
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            tlsParameters: ServerTLSParameters.make(token: token),
             callbacks: callbacks
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)

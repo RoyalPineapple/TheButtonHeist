@@ -3,7 +3,6 @@ import Foundation
 import Network
 import os
 
-import TheScore
 @testable import TheInsideJob
 
 /// `@unchecked Sendable` justification: the test client is used from async
@@ -44,7 +43,7 @@ final class ButtonHeistNetworkTestClient: @unchecked Sendable { // swiftlint:dis
     ) -> ButtonHeistNetworkTestClient {
         ButtonHeistNetworkTestClient(
             port: port,
-            parameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            parameters: ServerTLSParameters.make(token: token),
             host: host
         )
     }
