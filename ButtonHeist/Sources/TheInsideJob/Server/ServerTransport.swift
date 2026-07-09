@@ -2,6 +2,7 @@ import Foundation
 import Network
 
 import ButtonHeistSupport
+import TheScore
 
 /// Ordered transport-level event emitted by `ServerTransport`.
 enum TransportEvent: Sendable {

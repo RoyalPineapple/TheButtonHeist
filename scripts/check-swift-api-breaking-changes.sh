@@ -177,6 +177,7 @@ INTENTIONAL_BREAKAGES=(
     "enum ActionResult.Outcome has been removed"
     "var ActionResult.success has been removed"
     "var ActionResult.errorKind has been removed"
+    "func ButtonHeistTLSPreSharedKey.makeNetworkParameters(token:) has been removed"
     "struct HeistCatalogEntry has removed conformance to Decodable"
     "struct HeistCatalogEntry has removed conformance to Encodable"
     "var HeistCatalogEntry.tags has declared type change from [Swift.String] to [ThePlans.HeistCatalogTag]"
