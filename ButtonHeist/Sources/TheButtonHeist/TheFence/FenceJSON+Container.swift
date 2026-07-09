@@ -107,44 +107,6 @@ struct PublicContainer: Encodable {
         return fields
     }
 
-    private static func scrollFields(
-        contentSize: AccessibilitySize,
-        frame: AccessibilityRect,
-        children: [PublicTreeNode],
-        observedElementCount: Int?,
-        scrollInventory: ScrollInventory?
-    ) -> Fields {
-        let contentWidth = Self.sanitizedDouble(contentSize.width)
-        let contentHeight = Self.sanitizedDouble(contentSize.height)
-        let viewportWidth = Self.sanitizedDouble(frame.size.width)
-        let viewportHeight = Self.sanitizedDouble(frame.size.height)
-        let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-            contentWidth: contentWidth,
-            viewportWidth: viewportWidth
-        )
-        let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-            contentHeight: contentHeight,
-            viewportHeight: viewportHeight
-        )
-        let scrollAxis = ScrollContainerMetrics.axis(
-            contentWidth: contentWidth,
-            contentHeight: contentHeight,
-            viewportWidth: viewportWidth,
-            viewportHeight: viewportHeight
-        )
-        return Fields(
-            type: .none,
-            contentWidth: contentWidth,
-            contentHeight: contentHeight,
-            scrollAxis: scrollAxis.rawValue,
-            pageScrollsX: horizontalPageScrolls > 0 ? horizontalPageScrolls : nil,
-            pageScrollsY: verticalPageScrolls > 0 ? verticalPageScrolls : nil,
-            observedElementCount: scrollInventory?.totalElementCount
-                ?? observedElementCount
-                ?? children.reduce(0) { $0 + $1.elementCount }
-        )
-    }
-
     private struct Fields {
         let type: AccessibilityContainerKind
         var label: String?
@@ -194,19 +156,32 @@ struct PublicContainer: Encodable {
             observedElementCount: Int?,
             scrollInventory: ScrollInventory?
         ) {
-            let scrollFields = PublicContainer.scrollFields(
-                contentSize: contentSize,
-                frame: frame,
-                children: children,
-                observedElementCount: observedElementCount,
-                scrollInventory: scrollInventory
+            let contentWidth = PublicContainer.sanitizedDouble(contentSize.width)
+            let contentHeight = PublicContainer.sanitizedDouble(contentSize.height)
+            let viewportWidth = PublicContainer.sanitizedDouble(frame.size.width)
+            let viewportHeight = PublicContainer.sanitizedDouble(frame.size.height)
+            let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
+                contentWidth: contentWidth,
+                viewportWidth: viewportWidth
             )
-            contentWidth = scrollFields.contentWidth
-            contentHeight = scrollFields.contentHeight
-            scrollAxis = scrollFields.scrollAxis
-            pageScrollsX = scrollFields.pageScrollsX
-            pageScrollsY = scrollFields.pageScrollsY
-            self.observedElementCount = scrollFields.observedElementCount
+            let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
+                contentHeight: contentHeight,
+                viewportHeight: viewportHeight
+            )
+            let scrollAxis = ScrollContainerMetrics.axis(
+                contentWidth: contentWidth,
+                contentHeight: contentHeight,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight
+            )
+            self.contentWidth = contentWidth
+            self.contentHeight = contentHeight
+            self.scrollAxis = scrollAxis.rawValue
+            pageScrollsX = horizontalPageScrolls > 0 ? horizontalPageScrolls : nil
+            pageScrollsY = verticalPageScrolls > 0 ? verticalPageScrolls : nil
+            self.observedElementCount = scrollInventory?.totalElementCount
+                ?? observedElementCount
+                ?? children.reduce(0) { $0 + $1.elementCount }
         }
     }
 }

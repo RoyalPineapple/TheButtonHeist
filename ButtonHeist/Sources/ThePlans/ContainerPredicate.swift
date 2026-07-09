@@ -372,14 +372,6 @@ private enum ContainerPredicateChecks {
     static func modalBoundary<Value: StringMatchPayload>() -> [ContainerPredicateCheck<Value>] {
         [.modalBoundary(true)]
     }
-
-    static func scrollable<Value: StringMatchPayload>() -> [ContainerPredicateCheck<Value>] {
-        [.scrollable(true)]
-    }
-
-    static func actions<Value: StringMatchPayload>(_ actions: [ElementAction]) -> [ContainerPredicateCheck<Value>] {
-        [.actions(Set(actions))]
-    }
 }
 
 public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
@@ -456,7 +448,7 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     public static var landmark: ContainerPredicate { .type(.landmark) }
     public static var tabBar: ContainerPredicate { .type(.tabBar) }
     public static var scrollable: ContainerPredicate {
-        ContainerPredicate(ContainerPredicateChecks.scrollable())
+        ContainerPredicate(.scrollable(true))
     }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicate {
@@ -472,7 +464,7 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     public static func actions(_ actions: [ElementAction]) -> ContainerPredicate {
-        ContainerPredicate(ContainerPredicateChecks.actions(actions))
+        ContainerPredicate(.actions(Set(actions)))
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<String>...) -> ContainerPredicate {
@@ -591,7 +583,7 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     public static var landmark: ContainerPredicateExpr { .type(.landmark) }
     public static var tabBar: ContainerPredicateExpr { .type(.tabBar) }
     public static var scrollable: ContainerPredicateExpr {
-        ContainerPredicateExpr(ContainerPredicateChecks.scrollable())
+        ContainerPredicateExpr(.scrollable(true))
     }
 
     public static func dataTable(rowCount: Int? = nil, columnCount: Int? = nil) -> ContainerPredicateExpr {
@@ -607,7 +599,7 @@ public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public static func actions(_ actions: [ElementAction]) -> ContainerPredicateExpr {
-        ContainerPredicateExpr(ContainerPredicateChecks.actions(actions))
+        ContainerPredicateExpr(.actions(Set(actions)))
     }
 
     public static func matching(_ checks: ContainerPredicateCheck<StringExpr>...) -> ContainerPredicateExpr {

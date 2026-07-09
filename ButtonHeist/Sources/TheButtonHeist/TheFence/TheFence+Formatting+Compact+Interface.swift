@@ -188,47 +188,33 @@ extension FenceResponse {
         observedElementCount: Int? = nil,
         scrollInventory: ScrollInventory? = nil
     ) -> String {
+        let identifier = nonEmpty(container.identifier)
+        let containerName = nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
-        var rendersIdentifierInRole = false
         switch container.type {
         case .none:
             parts = ["container"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .semanticGroup(let label, let value):
             parts = ["group"]
             if let label = nonEmpty(label) { parts.append(quotedString(label)) }
             if let value = nonEmpty(value) { parts.append("value=\(quotedString(value))") }
-            if let identifier = nonEmpty(container.identifier) {
+            if let identifier {
                 parts.append("id=\(quotedString(identifier))")
-                rendersIdentifierInRole = true
-            }
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
             }
         case .list:
             parts = ["list"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append(quotedString(containerName))
-            }
         }
-        if !rendersIdentifierInRole, let identifier = nonEmpty(container.identifier) {
+        if let containerName {
+            parts.append(quotedString(containerName))
+        }
+        if case .semanticGroup = container.type {
+        } else if let identifier {
             parts.append("id=\(quotedString(identifier))")
         }
         let actionNames = container.customActions.map(\.name).filter { !$0.isEmpty }

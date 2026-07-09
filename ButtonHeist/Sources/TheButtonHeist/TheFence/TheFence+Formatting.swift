@@ -294,47 +294,33 @@ extension FenceResponse {
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail
     ) -> [String] {
+        let identifier = Self.nonEmpty(container.identifier)
+        let containerName = Self.nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
-        var rendersIdentifierInRole = false
         switch container.type {
         case .none:
             parts = ["container"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .semanticGroup(let label, let value):
             parts = ["group"]
             if let label = Self.nonEmpty(label) { parts.append(Self.quotedString(label)) }
             if let value = Self.nonEmpty(value) { parts.append("value=\(Self.quotedString(value))") }
-            if let identifier = Self.nonEmpty(container.identifier) {
+            if let identifier {
                 parts.append("id=\(Self.quotedString(identifier))")
-                rendersIdentifierInRole = true
-            }
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
             }
         case .list:
             parts = ["list"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName: \(containerName)")
-            }
         }
-        if !rendersIdentifierInRole, let identifier = Self.nonEmpty(container.identifier) {
+        if let containerName {
+            parts.append("containerName: \(containerName)")
+        }
+        if case .semanticGroup = container.type {
+        } else if let identifier {
             parts.append("id=\(Self.quotedString(identifier))")
         }
         let actionNames = container.customActions.map(\.name).filter { !$0.isEmpty }
