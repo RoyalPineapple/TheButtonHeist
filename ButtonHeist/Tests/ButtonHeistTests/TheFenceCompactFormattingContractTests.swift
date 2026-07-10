@@ -1604,7 +1604,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 children: []
             ),
             .container(
-                makeReceiptTestContainer(type: .dataTable(rowCount: 3, columnCount: 2)),
+                makeReceiptTestContainer(type: .dataTable(rowCount: 3, columnCount: 2, cells: [])),
                 containerName: "prices_table",
                 children: []
             ),
@@ -2099,7 +2099,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     .element(submit),
                     .container(
                         makeReceiptTestContainer(
-                            type: .dataTable(rowCount: 3, columnCount: 4),
+                            type: .dataTable(rowCount: 3, columnCount: 4, cells: []),
                             frameX: 8,
                             frameY: 52,
                             frameWidth: 180,

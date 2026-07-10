@@ -57,7 +57,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             (.semanticGroup(label: "Checkout", value: nil), "checkout-group"),
             (.list, "checkout-list"),
             (.landmark, "checkout-landmark"),
-            (.dataTable(rowCount: 3, columnCount: 2), "checkout-table"),
+            (.dataTable(rowCount: 3, columnCount: 2, cells: []), "checkout-table"),
             (.tabBar, "checkout-tabs"),
         ]
 
