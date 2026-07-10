@@ -28,8 +28,11 @@ import TheScore
     }
 
     @Test func `metric projection derives samples and ceilings from typed report facts`() throws {
-        let projection = try HeistExecutionMetricProjection(result: metricProjectionFixture())
+        let result = try metricProjectionFixture()
+        let rollup = result.evidenceRollup
+        let projection = HeistExecutionMetricProjection(rollup: rollup)
 
+        #expect(projection == rollup.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])
@@ -65,6 +68,25 @@ import TheScore
                 status: .passed
             ),
         ])
+    }
+
+    @Test func `summary excludes flattened failure actions from top level count`() {
+        let bodyStep = HeistExecutionStepResult.passed(
+            path: "$.body[0]",
+            kind: .wait,
+            durationMs: 1
+        )
+        let failureScreenshot = HeistExecutionStepResult.passed(
+            path: "$.body[0].failure.actions[0]",
+            kind: .action,
+            durationMs: 1
+        )
+        let result = HeistExecutionResult.passed(
+            steps: [bodyStep, failureScreenshot],
+            durationMs: 2
+        )
+
+        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 1)
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {

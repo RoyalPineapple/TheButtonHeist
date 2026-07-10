@@ -182,8 +182,6 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testPostActionObservationCaptureReturnsEmptySnapshotWhenRegistryEmpty() {
         let before = brains.postActionObservation.captureSemanticState()
-        XCTAssertTrue(before.snapshot.isEmpty,
-                      "Snapshot should be empty when no elements in registry")
         XCTAssertTrue(before.elements.isEmpty,
                       "Elements should be empty when no hierarchy set")
     }
@@ -194,8 +192,8 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)])
 
         let before = brains.postActionObservation.captureSemanticState()
-        XCTAssertEqual(before.snapshot.count, 1)
-        XCTAssertEqual(before.snapshot.first?.heistId, heistId)
+        XCTAssertEqual(before.screen.orderedElements.count, 1)
+        XCTAssertEqual(before.screen.orderedElements.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
     }
 
@@ -1779,7 +1777,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
             WaitStep(
-                predicate: .change(.screen(.exists(ElementPredicate(label: "Controls Demo", traits: [.header])))),
+                predicate: .change(.screenChanged(.exists(ElementPredicate(label: "Controls Demo", traits: [.header])))),
                 timeout: 1
             ),
             initialTrace: initialTrace
@@ -2137,7 +2135,7 @@ final class TheBrainsActionTests: XCTestCase {
                 .invoke(HeistInvocationStep(
                     path: ["Checkout", "pay"],
                     expectation: WaitStep(
-                        predicate: .change(.screen(.exists(.label("Receipt")))),
+                        predicate: .change(.screenChanged(.exists(.label("Receipt")))),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -2381,7 +2379,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
-        let expectation = WaitStep(predicate: .change(.screen()), timeout: 0)
+        let expectation = WaitStep(predicate: .change(.screenChanged), timeout: 0)
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -4117,16 +4115,8 @@ final class TheBrainsActionTests: XCTestCase {
         )
         return PostActionObservation.BeforeState(
             screen: state.screen,
-            snapshot: state.snapshot,
-            elements: state.elements,
-            hierarchy: state.hierarchy,
-            interface: state.interface,
-            interfaceHash: AccessibilityTrace.Capture.hash(interface: state.interface, context: context),
-            semanticHash: state.semanticHash,
             capture: capture,
             tripwireSignal: state.tripwireSignal,
-            screenSnapshot: state.screenSnapshot,
-            screenId: screenId,
             settledObservationSequence: state.settledObservationSequence
         )
     }

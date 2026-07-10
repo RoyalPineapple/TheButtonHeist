@@ -157,7 +157,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: makeTestActionResult(),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .change(.screen()),
+                predicate: .change(.screenChanged),
                 actual: "elementsChanged"
             )
         )

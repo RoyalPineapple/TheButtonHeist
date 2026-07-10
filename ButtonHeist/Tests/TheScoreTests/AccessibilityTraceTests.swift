@@ -391,7 +391,7 @@ final class AccessibilityTraceTests: XCTestCase {
                 element: .label("Save"),
                 change: .value(before: "0", after: "50")
             ))),
-            .screen(.exists(ElementPredicate(label: "Settings")))
+            .screenChanged(.exists(ElementPredicate(label: "Settings")))
         )
         let result = predicate.evaluate(
             currentElements: final.projectedElements,

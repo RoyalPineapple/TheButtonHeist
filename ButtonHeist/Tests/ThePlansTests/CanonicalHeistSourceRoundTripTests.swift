@@ -8,7 +8,7 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 0)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 0)))),
             .action(try ActionStep(
                 command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
@@ -148,7 +148,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 elseBody: [.fail(FailStep(message: "Pay button missing"))]
             )),
             .wait(WaitStep(
-                predicate: .change(.screen()),
+                predicate: .change(.screenChanged),
                 timeout: 3,
                 elseBody: [.fail(FailStep(message: "screen did not change"))]
             )),

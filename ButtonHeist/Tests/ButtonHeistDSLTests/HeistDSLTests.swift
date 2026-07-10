@@ -152,7 +152,7 @@ func predicateContextsInferExistsFromElementPredicates() throws {
             .expect(.label("Results"))
 
         Activate(.label("Open Details"))
-            .expect(.change(.screen(.label("Details"))))
+            .expect(.change(.screenChanged(.label("Details"))))
 
         WaitFor(.identifier("ready"), timeout: .seconds(2))
 
@@ -168,7 +168,7 @@ func predicateContextsInferExistsFromElementPredicates() throws {
         .action(try ActionStep(
             command: .activate(.label("Open Details")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.screen(.exists(.label("Details")))),
+                predicate: .change(.screenChanged(.exists(.label("Details")))),
                 timeout: 1
             )))),
         .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
@@ -221,19 +221,19 @@ func forEachInfersStringValuesAndElementPredicates() throws {
 func `chained screen and state expectations compose into one action expectation`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.change(.screen()))
+            .expect(.change(.screenChanged))
             .expect(.exists(.label("Results")), timeout: .seconds(5))
     }
     let reversed = try HeistPlan {
         Activate(.label("Search"))
             .expect(.exists(.label("Results")), timeout: .seconds(5))
-            .expect(.change(.screen()))
+            .expect(.change(.screenChanged))
     }
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.screen(.exists(.label("Results")))),
+                predicate: .change(.screenChanged(.exists(.label("Results")))),
                 timeout: 5
             )))),
     ])
@@ -265,19 +265,19 @@ func `chained state expectations compose with all`() throws {
 func `chained state expectation joins existing screen where clause`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.change(.screen(.exists(.label("Results")))))
+            .expect(.change(.screenChanged(.exists(.label("Results")))))
             .expect(.exists(.label("Filter")))
     }
     let reversed = try HeistPlan {
         Activate(.label("Search"))
             .expect(.exists(.label("Filter")))
-            .expect(.change(.screen(.exists(.label("Results")))))
+            .expect(.change(.screenChanged(.exists(.label("Results")))))
     }
 
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen(.all(
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged(.all(
                 .exists(.label("Results")),
                 .exists(.label("Filter"))
             ))), timeout: 1)))),
@@ -328,7 +328,7 @@ func `unsupported chained change expectations fail validation without replacemen
         try HeistPlan {
             Activate(.label("Save"))
                 .expect(.change(.elements()))
-                .expect(.change(.screen()))
+                .expect(.change(.screenChanged))
         }
     }
     #expect(try step == ActionStep(
@@ -345,7 +345,7 @@ func `string heist search flow preserves query ref in composed post activation e
                 .expect(.exists(.value(query)), timeout: .seconds(1))
 
             Activate(.label("Search"))
-                .expect(.change(.screen()))
+                .expect(.change(.screenChanged))
                 .expect(.exists(.label(query)), timeout: .seconds(5))
         }
     }
@@ -362,7 +362,7 @@ func `string heist search flow preserves query ref in composed post activation e
         .action(try ActionStep(
             command: .activate(.target(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.screen(.exists(.label(.ref("query"))))),
+                predicate: .change(.screenChanged(.exists(.label(.ref("query"))))),
                 timeout: 5
             )))),
     ])
@@ -438,7 +438,7 @@ func screenActionsNamespaceBuildsRegularActionContent() throws {
     #expect(heist.body == [
         .action(try ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
         .action(try ActionStep(
             command: .magicTap,
             expectationPolicy: .waived(try ActionExpectationWaiver("Magic tap toggles process-local playback state")))),
@@ -672,7 +672,7 @@ func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
             .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
 
         Activate(.label("Search"))
-            .expect(.change(.screen()), timeout: .seconds(5))
+            .expect(.change(.screenChanged), timeout: .seconds(5))
 
         WaitFor(.exists(.label("Results")), timeout: .seconds(5))
             .else {
@@ -945,7 +945,7 @@ func runHeistBuildsHeistRunSteps() throws {
     ])
 
     let expectedReceipt = WaitStep(
-        predicate: .change(.screen(.exists(.label("Receipt")))),
+        predicate: .change(.screenChanged(.exists(.label("Receipt")))),
         timeout: ButtonHeistDSL.defaultActionExpectationTimeout
     )
     let screenRun = ButtonHeistDSL.RunHeist("Checkout.pay")
@@ -1028,7 +1028,7 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
         ],
         body: [.invoke(HeistInvocationStep(
             path: ["CartScreen", "checkout"],
-            expectation: WaitStep(predicate: .change(.screen()), timeout: ButtonHeistDSL.defaultActionExpectationTimeout)
+            expectation: WaitStep(predicate: .change(.screenChanged), timeout: ButtonHeistDSL.defaultActionExpectationTimeout)
         ))]
     )
     let rendered = try plan.canonicalSwiftDSL()

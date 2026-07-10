@@ -23,7 +23,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testScreenChangedEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.change(.screen())
+        let predicate = AccessibilityPredicate.change(.screenChanged)
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
@@ -318,7 +318,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testExpectationResultRoundTrip() throws {
         let result = ExpectationResult(
             met: false,
-            predicate: .change(.screen()),
+            predicate: .change(.screenChanged),
             actual: "noChange"
         )
         let data = try JSONEncoder().encode(result)
@@ -332,21 +332,21 @@ final class AccessibilityPredicateTests: XCTestCase {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let action = makeResult(success: true, delta: delta)
-        let result = AccessibilityPredicate.change(.screen()).validate(against: action)
+        let result = AccessibilityPredicate.change(.screenChanged).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testScreenChangedNotMetWhenDeltaIsElementsChanged() {
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
-        let result = AccessibilityPredicate.change(.screen()).validate(against: action)
+        let result = AccessibilityPredicate.change(.screenChanged).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "elementsChanged")
     }
 
     func testScreenChangedNotMetWhenNoDelta() {
         let action = makeResult(success: true)
-        let result = AccessibilityPredicate.change(.screen()).validate(against: action)
+        let result = AccessibilityPredicate.change(.screenChanged).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no observed accessibility trace")
     }
@@ -380,7 +380,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             accessibilityTrace: AccessibilityTrace(captures: [first, last])
         )
 
-        let outcome = AccessibilityPredicate.change(.screen()).validate(against: result)
+        let outcome = AccessibilityPredicate.change(.screenChanged).validate(against: result)
 
         XCTAssertTrue(outcome.met)
         XCTAssertEqual(outcome.actual, "screenChanged")
@@ -426,7 +426,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             ))
         )
 
-        let outcome = AccessibilityPredicate.change(.screen()).validate(against: result)
+        let outcome = AccessibilityPredicate.change(.screenChanged).validate(against: result)
 
         XCTAssertFalse(outcome.met)
         XCTAssertEqual(outcome.actual, "noTrace")
@@ -1004,7 +1004,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let predicates: [AccessibilityPredicate] = [
             .state(.exists(ElementPredicate(label: "Done"))),
             .state(.missing(ElementPredicate(label: "Loading"))),
-            .change(.screen()),
+            .change(.screenChanged),
             .change(.elements()),
             .change(.elements(.updatedElement(ElementUpdatePredicate(
                 element: .label("btn"),

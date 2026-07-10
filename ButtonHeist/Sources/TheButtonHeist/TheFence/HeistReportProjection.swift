@@ -80,7 +80,7 @@ struct HeistReportProjection: Sendable {
         let reportSummary = rollup.summary
         status = reportSummary.abortedAtPath == nil ? .ok : .partial
         nodes = rollup.rootNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
-        outputNodes = rollup.outputNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
+        outputNodes = rollup.nodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
         summary = HeistReportSummaryProjection(summary: reportSummary)
         metrics = HeistExecutionMetricProjection(rollup: rollup)
         failedStepPath = reportSummary.abortedAtPath

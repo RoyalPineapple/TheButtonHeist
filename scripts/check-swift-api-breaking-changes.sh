@@ -273,6 +273,14 @@ INTENTIONAL_BREAKAGES=(
     "func predicateCandidates(for:) has been removed"
     "func minimumUniquePredicate(for:in:) has been removed"
     "func ButtonHeistTLSPreSharedKey.makeNetworkParameters(token:) has been renamed to func networkParameters(from:)"
+    "func AccessibilityPredicate.Change.screen() has been removed"
+    "func AccessibilityPredicate.Change.screen(_:_:) has been removed"
+    "func AccessibilityPredicate.ChangeScope.screen(_:_:) has been removed"
+    "func ChangePredicateExpr.screen() has been removed"
+    "func ChangePredicateExpr.screen(_:_:) has been removed"
+    "func ChangeScopePredicateExpr.screen(_:_:) has been removed"
+    "constructor HeistSemanticStringMatch.init(_:) has been removed"
+    "var HeistExecutionEvidenceRollup.outputNodes has been removed"
 )
 
 PUBLIC_PRODUCTS=()

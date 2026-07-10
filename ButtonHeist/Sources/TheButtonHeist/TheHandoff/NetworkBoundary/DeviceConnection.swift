@@ -66,22 +66,19 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         /// Continuation tied to this connection attempt. Yielded to from
         /// NWConnection's `.global()` callbacks; finished when the session exits.
         var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
-        var tlsFailureTracker: TLSFailureTracker?
 
         init(
             id: UUID = UUID(),
             connection: NWConnection,
             receiveBuffer: Data = Data(),
             eventConsumerTask: Task<Void, Never>? = nil,
-            eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation? = nil,
-            tlsFailureTracker: TLSFailureTracker? = nil
+            eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation? = nil
         ) {
             self.id = id
             self.connection = connection
             self.receiveBuffer = receiveBuffer
             self.eventConsumerTask = eventConsumerTask
             self.eventContinuation = eventContinuation
-            self.tlsFailureTracker = tlsFailureTracker
         }
 
         var activeConnection: ActiveConnection {
@@ -205,8 +202,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             id: sessionID,
             connection: conn,
             eventConsumerTask: eventConsumerTask,
-            eventContinuation: eventStream.continuation,
-            tlsFailureTracker: TLSFailureTracker()
+            eventContinuation: eventStream.continuation
         )))
         conn.start(queue: .global())
     }
@@ -245,17 +241,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             }
         }
         return true
-    }
-
-    private func currentTLSFailureReason(sessionID: UUID?) -> DisconnectReason? {
-        switch runtimePhase {
-        case .connecting(let session) where sessionID == nil || session.id == sessionID:
-            return session.tlsFailureTracker?.currentReason()
-        case .connected(let session) where sessionID == nil || session.id == sessionID:
-            return session.tlsFailureTracker?.currentReason()
-        case .disconnected, .connecting, .connected:
-            return nil
-        }
     }
 
     func connectedSession(
@@ -326,9 +311,8 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             startReceiving()
         case .failed(let error):
             deviceConnectionLogger.error("Connection failed: \(error)")
-            let reason = currentTLSFailureReason(sessionID: sessionID) ?? .networkError(error)
             setRuntimePhase(.disconnected)
-            onEvent?(.disconnected(reason))
+            onEvent?(.disconnected(.networkError(error)))
         case .cancelled:
             deviceConnectionLogger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,

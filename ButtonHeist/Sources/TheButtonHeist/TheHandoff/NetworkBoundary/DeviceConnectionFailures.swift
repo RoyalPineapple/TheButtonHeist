@@ -143,31 +143,3 @@ extension DisconnectReason: Equatable {
         }
     }
 }
-
-/// Captures the underlying TLS `DisconnectReason` observed off-actor on the
-/// network callback, so a connection failure can be diagnosed after the fact.
-///
-/// **Ownership.** Single-slot index owned by `DeviceConnection` for the span of
-/// one connection attempt. Key: none (one reason). Lifetime: per attempt.
-/// Invalidation: overwritten by a newer reason; dropped when the attempt's
-/// `DeviceConnection` is released. It cannot be derived from a receipt —
-/// `NWConnection` discards the TLS failure cause once the connection tears down,
-/// so this is the only place it survives. See `docs/ARCHITECTURE.md#state-has-one-owner`.
-///
-/// `@unchecked Sendable` justification: all access to `reason` is serialized by `lock`.
-final class TLSFailureTracker: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let lock = NSLock()
-    private var reason: DisconnectReason?
-
-    func record(_ reason: DisconnectReason) {
-        lock.withLock {
-            self.reason = reason
-        }
-    }
-
-    func currentReason() -> DisconnectReason? {
-        lock.withLock {
-            reason
-        }
-    }
-}

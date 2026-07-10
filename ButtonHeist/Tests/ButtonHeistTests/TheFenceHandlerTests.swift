@@ -1035,7 +1035,7 @@ final class TheFenceHandlerTests: XCTestCase {
             TheFence.CommandArgumentEnvelope(values: [
                 "plan": .string("""
                 HeistPlan {
-                    Activate(.label("Pay")).expect(.change(.screen()))
+                    Activate(.label("Pay")).expect(.screenChanged)
                 }
                 """),
             ])
@@ -1044,7 +1044,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(request.plan.body, [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
         ])
     }
 
@@ -3213,7 +3213,7 @@ final class TheFenceHandlerTests: XCTestCase {
               case .wait(let target) = message else {
             return XCTFail("Expected wait message")
         }
-        XCTAssertEqual(target.predicate, .change(.screen()))
+        XCTAssertEqual(target.predicate, .change(.screenChanged))
         XCTAssertEqual(target.timeout, 8.0)
     }
 
@@ -3387,7 +3387,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "type": .string("change"),
             "scopes": .array([.object(["type": .string("screen")])]),
         ]))
-        XCTAssertEqual(result, .change(.screen()))
+        XCTAssertEqual(result, .change(.screenChanged))
     }
 
     func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
@@ -3526,7 +3526,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "type": .string("change"),
             "scopes": .array([.object(["type": .string("screen")])]),
         ]))
-        XCTAssertEqual(result, .change(.screen()))
+        XCTAssertEqual(result, .change(.screenChanged))
     }
 
     @ButtonHeistActor

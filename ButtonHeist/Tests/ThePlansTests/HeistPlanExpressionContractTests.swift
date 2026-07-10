@@ -94,7 +94,7 @@ func `parameter binding resolves arguments in current scope and returns nested s
 @Test
 func `nested predicate resolution preserves state and change semantics`() throws {
     let target = ElementTarget.predicate(ElementPredicate(identifier: "cta"), ordinal: 0)
-    let expression = AccessibilityPredicateExpr.change(.screen(.all(
+    let expression = AccessibilityPredicateExpr.change(.screenChanged(.all(
         .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
         .missingTarget(.ref("ctaTarget")),
         .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
@@ -107,7 +107,7 @@ func `nested predicate resolution preserves state and change semantics`() throws
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = AccessibilityPredicate.change(.screen(.all(
+    let expected = AccessibilityPredicate.change(.screenChanged(.all(
         .exists(ElementPredicate(label: "Dashboard")),
         .missingTarget(target),
         .exists(ElementPredicate(value: .contains("Ready"))),

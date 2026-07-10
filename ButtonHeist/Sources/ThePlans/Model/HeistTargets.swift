@@ -613,14 +613,6 @@ public extension StatePredicateExpr {
 }
 
 public extension ChangePredicateExpr {
-    static func screen() -> ChangePredicateExpr {
-        .screenScope([])
-    }
-
-    static func screen(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangePredicateExpr {
-        .screenScope([first] + rest)
-    }
-
     static var screenChanged: ChangePredicateExpr {
         .screenScope([])
     }
@@ -663,10 +655,6 @@ public extension ChangePredicateExpr {
 }
 
 public extension ChangeScopePredicateExpr {
-    static func screen(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangeScopePredicateExpr {
-        .screen([first] + rest)
-    }
-
     static var screenChanged: ChangeScopePredicateExpr {
         .screen([])
     }
@@ -705,14 +693,6 @@ public extension ChangeScopePredicateExpr {
 }
 
 public extension AccessibilityPredicate.Change {
-    static func screen() -> AccessibilityPredicate.Change {
-        .screenScope([])
-    }
-
-    static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change {
-        .screenScope([first] + rest)
-    }
-
     static var screenChanged: AccessibilityPredicate.Change {
         .screenScope([])
     }
@@ -755,10 +735,6 @@ public extension AccessibilityPredicate.Change {
 }
 
 public extension AccessibilityPredicate.ChangeScope {
-    static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.ChangeScope {
-        .screen([first] + rest)
-    }
-
     static var screenChanged: AccessibilityPredicate.ChangeScope {
         .screen([])
     }

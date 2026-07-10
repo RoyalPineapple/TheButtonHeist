@@ -483,6 +483,42 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.subjectEvidence, evidence)
     }
 
+    func testPostActionReceiptResolvesDeferredPayloadFromFinalSemanticState() async {
+        let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let afterScreen = Screen.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Status",
+                    value: "Saved",
+                    traits: .staticText,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "status")
+            ),
+        ])
+        let outcome = PostActionObservation.ActionOutcome.success(.init(
+            payload: .afterState { state in
+                guard let value = state.screen.findElement(heistId: "status")?.element.value else {
+                    return .none
+                }
+                return .payload(.typeText(value))
+            }
+        ))
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .typeText,
+            outcome: outcome,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
+        )
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.payload, .value("Saved"))
+    }
+
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
@@ -1458,7 +1494,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Semantic Capture
 
-    func testCaptureSemanticStateKeepsKnownElementsWithCanonicalInterfaceHash() {
+    func testCaptureSemanticStateKeepsKnownElementsInCanonicalInterface() {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -1476,18 +1512,32 @@ final class TheBrainsPipelineTests: XCTestCase {
         let state = brains.postActionObservation.captureSemanticState()
 
         XCTAssertEqual(
-            Set(state.snapshot.map(\.heistId)),
+            Set(state.screen.orderedElements.map(\.heistId)),
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
             Set(state.interface.projectedElements.compactMap { $0.label }),
             ["Visible", "Below fold"]
         )
-        XCTAssertEqual(
-            state.interfaceHash,
-            AccessibilityTrace.Capture.hash(state.interface),
-            "Semantic captures hash the explored targetable interface, including known off-viewport entries"
+    }
+
+    func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() {
+        let screen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.installScreenForTesting(screen)
+        let captured = brains.postActionObservation.captureSemanticState()
+
+        let state = PostActionObservation.BeforeState(
+            screen: captured.screen,
+            capture: captured.capture,
+            tripwireSignal: captured.tripwireSignal,
+            settledObservationSequence: captured.settledObservationSequence
         )
+
+        XCTAssertEqual(state.elements, screen.orderedElements.map(\.element))
+        XCTAssertEqual(state.interface, captured.capture.interface)
+        XCTAssertEqual(state.semanticHash, screen.semantic.semanticHash)
+        XCTAssertEqual(state.screenSnapshot, ScreenClassifier.snapshot(of: screen))
+        XCTAssertEqual(state.screenId, screen.id)
     }
 
     func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {

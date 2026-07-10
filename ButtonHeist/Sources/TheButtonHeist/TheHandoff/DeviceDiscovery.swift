@@ -16,19 +16,16 @@ enum DeviceDiscoveryBrowserState: Equatable, Sendable {
 }
 
 protocol DeviceDiscoveryBrowsing {
-    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)? { get set }
-    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)? { get set }
-    func start(queue: DispatchQueue)
+    func start(
+        queue: DispatchQueue,
+        onResultsChanged: @escaping @Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void,
+        onStateChanged: @escaping @Sendable (DeviceDiscoveryBrowserState) -> Void
+    )
     func cancel()
 }
 
-// NWBrowser invokes its handlers on the configured browser queue; callback slots are assigned by the actor owner before start.
-// swiftlint:disable:next agent_unchecked_sendable_no_comment
-final class NWDeviceDiscoveryBrowser: DeviceDiscoveryBrowsing, @unchecked Sendable {
+final class NWDeviceDiscoveryBrowser: DeviceDiscoveryBrowsing {
     private let browser: NWBrowser
-
-    var onResultsChanged: (@Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void)?
-    var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
 
     init() {
         let parameters = NWParameters()
@@ -38,17 +35,17 @@ final class NWDeviceDiscoveryBrowser: DeviceDiscoveryBrowsing, @unchecked Sendab
             for: .bonjourWithTXTRecord(type: buttonHeistServiceType, domain: "local."),
             using: parameters
         )
-
-        browser.browseResultsChangedHandler = { [weak self] results, changes in
-            self?.onResultsChanged?(results, changes)
-        }
-
-        browser.stateUpdateHandler = { [weak self] state in
-            self?.onStateChanged?(Self.browserState(from: state))
-        }
     }
 
-    func start(queue: DispatchQueue) {
+    func start(
+        queue: DispatchQueue,
+        onResultsChanged: @escaping @Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void,
+        onStateChanged: @escaping @Sendable (DeviceDiscoveryBrowserState) -> Void
+    ) {
+        browser.browseResultsChangedHandler = onResultsChanged
+        browser.stateUpdateHandler = { state in
+            onStateChanged(Self.browserState(from: state))
+        }
         browser.start(queue: queue)
     }
 
@@ -123,21 +120,7 @@ final class DeviceDiscovery: DeviceDiscovering {
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
 
         let sessionID = UUID()
-        var browser = makeBrowser()
-
-        browser.onResultsChanged = { [weak self, sessionID] results, changes in
-            Task { @ButtonHeistActor [weak self, sessionID] in
-                logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-                self?.handleResults(results, changes: changes, sessionID: sessionID)
-            }
-        }
-
-        browser.onStateChanged = { [weak self, sessionID] state in
-            Task { @ButtonHeistActor [weak self, sessionID] in
-                logger.info("Browser state: \(String(describing: state))")
-                self?.handleStateUpdate(state, sessionID: sessionID)
-            }
-        }
+        let browser = makeBrowser()
 
         discoveryPhase = .active(ActiveDiscovery(
             id: sessionID,
@@ -146,7 +129,21 @@ final class DeviceDiscovery: DeviceDiscovering {
             reachabilityTask: nil,
             browserState: .setup
         ))
-        browser.start(queue: browserQueue)
+        browser.start(
+            queue: browserQueue,
+            onResultsChanged: { [weak self, sessionID] results, changes in
+                Task { @ButtonHeistActor [weak self, sessionID] in
+                    logger.info("Results changed: \(results.count) results, \(changes.count) changes")
+                    self?.handleResults(results, changes: changes, sessionID: sessionID)
+                }
+            },
+            onStateChanged: { [weak self, sessionID] state in
+                Task { @ButtonHeistActor [weak self, sessionID] in
+                    logger.info("Browser state: \(String(describing: state))")
+                    self?.handleStateUpdate(state, sessionID: sessionID)
+                }
+            }
+        )
         logger.info("Browser started")
     }
 

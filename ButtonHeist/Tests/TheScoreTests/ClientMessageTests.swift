@@ -152,7 +152,7 @@ final class ClientMessageTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.target(saveTarget)),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 10)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 10)))),
                 .wait(WaitStep(
                     predicate: .exists(ElementPredicate(label: "Save", traits: [.button])),
                     timeout: 2.5
@@ -176,7 +176,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
-              decodedAction.expectationPolicy.expectedStep?.predicate == AccessibilityPredicateExpr.predicate(.change(.screen())) else {
+              decodedAction.expectationPolicy.expectedStep?.predicate == AccessibilityPredicateExpr.predicate(.change(.screenChanged)) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedTarget, ElementTargetExpr.target(saveTarget))
@@ -241,7 +241,7 @@ final class ClientMessageTests: XCTestCase {
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 10)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 10)))
 
         XCTAssertEqual(
             step.description,
@@ -534,11 +534,11 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testWaitChangedScreenRoundTrip() throws {
-        let target = WaitTarget(predicate: .change(.screen()), timeout: 15.0)
+        let target = WaitTarget(predicate: .change(.screenChanged), timeout: 15.0)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        XCTAssertEqual(decoded.predicate, .change(.screen()))
+        XCTAssertEqual(decoded.predicate, .change(.screenChanged))
         XCTAssertEqual(decoded.timeout, 15.0)
     }
 

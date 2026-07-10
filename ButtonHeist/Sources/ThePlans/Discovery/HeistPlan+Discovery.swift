@@ -55,12 +55,6 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
         self.isImportant = isImportant
     }
 
-    init(_ match: CustomContentMatch<String>) {
-        self.label = match.label.map(HeistSemanticStringMatch.init)
-        self.value = match.value.map(HeistSemanticStringMatch.init)
-        self.isImportant = match.isImportant
-    }
-
     init(_ match: CustomContentMatch<StringExpr>) {
         self.label = match.label.map(HeistSemanticStringMatch.init)
         self.value = match.value.map(HeistSemanticStringMatch.init)
@@ -77,13 +71,19 @@ public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
         self.value = value
     }
 
-    public init(_ match: StringMatch<String>) {
-        self.mode = match.mode
-        self.value = match.valueIfPresent.map(HeistSemanticStringValue.literal)
-    }
-
     init(_ match: StringMatch<StringExpr>) {
-        self.mode = StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact
+        switch match.mode {
+        case .exact:
+            self.mode = .exact
+        case .contains:
+            self.mode = .contains
+        case .prefix:
+            self.mode = .prefix
+        case .suffix:
+            self.mode = .suffix
+        case .isEmpty:
+            self.mode = .isEmpty
+        }
         self.value = match.valueIfPresent.map(HeistSemanticStringValue.init)
     }
 }
@@ -471,12 +471,12 @@ struct ResolvedCatalogHeist {
 
 private struct HeistSemanticSurfaceBuilder {
     var actionCommands: [HeistActionCommandType] = []
-    var targetPredicates: [HeistTargetPredicateFact] = []
+    var targetPredicates: [ElementTargetExpr] = []
     var waits: [AccessibilityPredicateExpr] = []
     var expectations: [AccessibilityPredicateExpr] = []
     var nestedRunHeists: [HeistInvocationPath] = []
     var expectedEffects: [AccessibilityPredicateExpr] = []
-    var semanticFacets: [HeistSemanticSurfaceFact] = []
+    var semanticFacets: [ElementPredicateCheck<StringExpr>] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var builder = Self()
@@ -489,12 +489,12 @@ private struct HeistSemanticSurfaceBuilder {
         )
         return HeistSemanticSurface(
             actionCommands: builder.actionCommands,
-            targetPredicates: builder.targetPredicates,
+            targetPredicates: builder.targetPredicates.map(\.discoveryFact),
             waits: builder.waits,
             expectations: builder.expectations,
             nestedRunHeists: builder.nestedRunHeists,
             expectedEffects: builder.expectedEffects,
-            semanticSurfaces: builder.semanticFacets
+            semanticSurfaces: builder.semanticFacets.map(HeistSemanticSurfaceFact.init)
         )
     }
 
@@ -680,11 +680,11 @@ private struct HeistSemanticSurfaceBuilder {
         switch target {
         case .target(let target):
             appendTargetPredicate(target)
-        case .predicate(let predicate, _):
-            appendUnique(.template(predicate), to: &targetPredicates)
+        case .predicate(let predicate, let ordinal):
+            appendUnique(.predicate(predicate, ordinal: ordinal), to: &targetPredicates)
             appendSemanticSurfaces(predicate)
         case .ref(let reference):
-            appendUnique(.targetReference(reference), to: &targetPredicates)
+            appendUnique(.ref(reference), to: &targetPredicates)
         case .within(_, let target):
             appendTargetPredicate(target)
         }
@@ -692,8 +692,9 @@ private struct HeistSemanticSurfaceBuilder {
 
     mutating func appendTargetPredicate(_ target: ElementTarget) {
         switch target {
-        case .predicate(let predicate, _):
-            appendTargetPredicate(predicate)
+        case .predicate(let predicate, let ordinal):
+            appendUnique(.target(.predicate(predicate, ordinal: ordinal)), to: &targetPredicates)
+            appendSemanticSurfaces(predicate)
         case .within(_, let target):
             appendTargetPredicate(target)
         }
@@ -709,73 +710,17 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendTargetPredicate(_ predicate: ElementPredicate) {
-        appendUnique(.predicate(predicate), to: &targetPredicates)
+        appendUnique(.target(.predicate(predicate)), to: &targetPredicates)
         appendSemanticSurfaces(predicate)
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        for check in predicate.checks {
-            if let facet = semanticSurfaceFacet(for: check) {
-                appendUnique(facet, to: &semanticFacets)
-            }
-        }
+        appendSemanticSurfaces(ElementPredicateTemplate(predicate))
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
-        for check in predicate.checks {
-            if let facet = semanticSurfaceFacet(for: check) {
-                appendUnique(facet, to: &semanticFacets)
-            }
-        }
-    }
-
-    func semanticSurfaceFacet(for check: ElementPredicateCheck<String>) -> HeistSemanticSurfaceFact? {
-        switch check {
-        case .label(let label) where label.hasPredicateLiteral:
-            return .label(HeistSemanticStringMatch(label))
-        case .identifier(let identifier) where identifier.hasPredicateLiteral:
-            return .identifier(HeistSemanticStringMatch(identifier))
-        case .value(let value) where value.hasPredicateLiteral:
-            return .value(HeistSemanticStringMatch(value))
-        case .hint(let hint) where hint.hasPredicateLiteral:
-            return .hint(HeistSemanticStringMatch(hint))
-        case .traits(let traits) where !traits.isEmpty:
-            return .traits(traits.canonicalHeistTraitArray)
-        case .actions(let actions) where !actions.isEmpty:
-            return .actions(actions.canonicalElementActionArray)
-        case .customContent(let match) where match.hasPredicateLiteral:
-            return .customContent(HeistSemanticCustomContentMatch(match))
-        case .rotors(let matches) where matches.contains(where: \.hasPredicateLiteral):
-            return .rotors(matches.map(HeistSemanticStringMatch.init))
-        case .exclude(let check):
-            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFact.exclude)
-        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
-            return nil
-        }
-    }
-
-    func semanticSurfaceFacet(for check: ElementPredicateCheck<StringExpr>) -> HeistSemanticSurfaceFact? {
-        switch check {
-        case .label(let label) where label.hasPredicateLiteral:
-            return .label(HeistSemanticStringMatch(label))
-        case .identifier(let identifier) where identifier.hasPredicateLiteral:
-            return .identifier(HeistSemanticStringMatch(identifier))
-        case .value(let value) where value.hasPredicateLiteral:
-            return .value(HeistSemanticStringMatch(value))
-        case .hint(let hint) where hint.hasPredicateLiteral:
-            return .hint(HeistSemanticStringMatch(hint))
-        case .traits(let traits) where !traits.isEmpty:
-            return .traits(traits.canonicalHeistTraitArray)
-        case .actions(let actions) where !actions.isEmpty:
-            return .actions(actions.canonicalElementActionArray)
-        case .customContent(let match) where match.hasPredicateLiteral:
-            return .customContent(HeistSemanticCustomContentMatch(match))
-        case .rotors(let matches) where matches.contains(where: \.hasPredicateLiteral):
-            return .rotors(matches.map(HeistSemanticStringMatch.init))
-        case .exclude(let check):
-            return semanticSurfaceFacet(for: check).map(HeistSemanticSurfaceFact.exclude)
-        case .label, .identifier, .value, .hint, .traits, .actions, .customContent, .rotors:
-            return nil
+        for check in predicate.checks where check.hasPredicateLiteral {
+            appendUnique(check, to: &semanticFacets)
         }
     }
 
@@ -821,7 +766,7 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func appendPredicateTargets(_ state: StatePredicateExpr) {
         switch state {
         case .exists(let predicate), .missing(let predicate):
-            appendUnique(.template(predicate), to: &targetPredicates)
+            appendUnique(.predicate(predicate), to: &targetPredicates)
             appendSemanticSurfaces(predicate)
         case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
@@ -920,13 +865,55 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicateExpr) {
         switch predicate {
         case .appearedElement(let element), .disappearedElement(let element):
-            appendUnique(.template(element), to: &targetPredicates)
+            appendUnique(.predicate(element), to: &targetPredicates)
             appendSemanticSurfaces(element)
         case .updatedElement(let update):
             if let element = update.element {
-                appendUnique(.template(element), to: &targetPredicates)
+                appendUnique(.predicate(element), to: &targetPredicates)
                 appendSemanticSurfaces(element)
             }
+        }
+    }
+}
+
+private extension ElementTargetExpr {
+    var discoveryFact: HeistTargetPredicateFact {
+        switch self {
+        case .target(.predicate(let predicate, _)):
+            return .predicate(predicate)
+        case .target(.within(_, let target)):
+            return ElementTargetExpr.target(target).discoveryFact
+        case .predicate(let predicate, _):
+            return .template(predicate)
+        case .ref(let reference):
+            return .targetReference(reference)
+        case .within(_, let target):
+            return target.discoveryFact
+        }
+    }
+}
+
+private extension HeistSemanticSurfaceFact {
+    init(_ check: ElementPredicateCheck<StringExpr>) {
+        switch check {
+        case .label(let match):
+            self = .label(HeistSemanticStringMatch(match))
+        case .identifier(let match):
+            self = .identifier(HeistSemanticStringMatch(match))
+        case .value(let match):
+            self = .value(HeistSemanticStringMatch(match))
+        case .hint(let match):
+            self = .hint(HeistSemanticStringMatch(match))
+        case .traits(let traits):
+            self = .traits(traits.canonicalHeistTraitArray)
+        case .actions(let actions):
+            self = .actions(actions.canonicalElementActionArray)
+        case .customContent(let match):
+            self = .customContent(HeistSemanticCustomContentMatch(match))
+        case .rotors(let matches):
+            self = .rotors(matches.map(HeistSemanticStringMatch.init))
+        case .exclude(let check):
+            self = .exclude(HeistSemanticSurfaceFact(check))
         }
     }
 }

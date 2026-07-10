@@ -246,7 +246,7 @@ struct HeistCompilerTests {
             func heist() throws -> HeistPlan {
                 try HeistPlan("TrustedFrontend") {
                     Activate(.label(payLabel()))
-                        .expect(.change(.screen()))
+                        .expect(.change(.screenChanged))
                 }
             }
             """
@@ -259,7 +259,7 @@ struct HeistCompilerTests {
         #expect(plan.body == [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screen()), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
         ])
     }
 

@@ -106,7 +106,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
 
         XCTAssertEqual(projection.nodes.map(\.path), rollup.rootNodes.map(\.step.path))
-        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.outputNodes.map(\.step.path))
+        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.nodes.map(\.step.path))
         XCTAssertEqual(projection.summary.outputReceiptNodeCount, rollup.summary.outputReceiptNodeCount)
 
         let projectedRoot = try XCTUnwrap(projection.nodes.first)
@@ -146,7 +146,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testActionExpectationUsesTypedResultMeaningsAcrossReportFacts() throws {
-        let predicate = AccessibilityPredicate.change(.screen())
+        let predicate = AccessibilityPredicate.change(.screenChanged)
         let dispatchTrace = makeReceiptTestTrace(
             before: makeReceiptTestInterface(elementCount: 1),
             after: makeReceiptTestInterface(elementCount: 2),
@@ -453,7 +453,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testReportFailureFactsDeriveFromTypedOutcome() {
-        let predicate = AccessibilityPredicate.change(.screen())
+        let predicate = AccessibilityPredicate.change(.screenChanged)
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",
@@ -816,7 +816,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testJUnitExpectationFailureUsesExpectationReceiptFact() async {
-        let predicate = AccessibilityPredicate.change(.screen())
+        let predicate = AccessibilityPredicate.change(.screenChanged)
         let result = HeistExecutionResult(
             steps: [
                 .failed(
