@@ -186,8 +186,10 @@ import TheScore
             return Marker(label: "list", value: nil, identifier: stableIdentifier(container.identifier))
         case .landmark:
             return Marker(label: "landmark", value: nil, identifier: stableIdentifier(container.identifier))
-        case .dataTable(let rowCount, let columnCount):
+        case .dataTable(let rowCount, let columnCount, _):
             return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: stableIdentifier(container.identifier))
+        case .scrollable:
+            return Marker(label: "scrollable", value: nil, identifier: stableIdentifier(container.identifier))
         case .tabBar:
             return Marker(label: "tabBar", value: nil, identifier: stableIdentifier(container.identifier))
         }
@@ -302,6 +304,8 @@ import TheScore
             return .landmark
         case .dataTable:
             return .dataTable
+        case .scrollable:
+            return .none
         case .tabBar:
             return .tabBar
         }

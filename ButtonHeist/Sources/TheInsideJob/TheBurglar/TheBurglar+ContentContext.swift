@@ -209,8 +209,10 @@ extension TheBurglar {
             return ContainerName(rawValue: "landmark_\(frameHash)")
         case .tabBar:
             return ContainerName(rawValue: "tabBar_\(frameHash)")
-        case .dataTable(let rows, let columns):
+        case .dataTable(let rows, let columns, _):
             return ContainerName(rawValue: "table_\(rows)x\(columns)_\(frameHash)")
+        case .scrollable:
+            return ContainerName(rawValue: "scrollable_\(frameHash)")
         }
     }
 

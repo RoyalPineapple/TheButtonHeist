@@ -89,8 +89,10 @@ struct PublicContainer: Encodable {
             fields = Fields(type: .list, identifier: container.identifier)
         case .landmark:
             fields = Fields(type: .landmark, identifier: container.identifier)
-        case .dataTable(let rowCount, let columnCount):
+        case .dataTable(let rowCount, let columnCount, _):
             fields = Fields(type: .dataTable, identifier: container.identifier, rowCount: rowCount, columnCount: columnCount)
+        case .scrollable:
+            fields = Fields(type: .none, identifier: container.identifier)
         case .tabBar:
             fields = Fields(type: .tabBar, identifier: container.identifier)
         }

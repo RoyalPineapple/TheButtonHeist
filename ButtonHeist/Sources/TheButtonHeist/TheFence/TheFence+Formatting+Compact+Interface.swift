@@ -205,8 +205,10 @@ extension FenceResponse {
             parts = ["list"]
         case .landmark:
             parts = ["landmark"]
-        case .dataTable(let rowCount, let columnCount):
+        case .dataTable(let rowCount, let columnCount, _):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
+        case .scrollable:
+            parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
         }
@@ -310,6 +312,8 @@ extension FenceResponse {
             return "landmark"
         case .dataTable:
             return "table"
+        case .scrollable:
+            return "container"
         case .tabBar:
             return "tab_bar"
         }
