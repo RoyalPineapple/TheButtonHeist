@@ -280,6 +280,7 @@ INTENTIONAL_BREAKAGES=(
     "func ChangePredicateExpr.screen(_:_:) has been removed"
     "func ChangeScopePredicateExpr.screen(_:_:) has been removed"
     "constructor HeistSemanticStringMatch.init(_:) has been removed"
+    "var HeistExecutionEvidenceRollup.outputNodes has been removed"
 )
 
 PUBLIC_PRODUCTS=()

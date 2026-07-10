@@ -106,7 +106,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
 
         XCTAssertEqual(projection.nodes.map(\.path), rollup.rootNodes.map(\.step.path))
-        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.outputNodes.map(\.step.path))
+        XCTAssertEqual(projection.outputNodes.map(\.path), rollup.nodes.map(\.step.path))
         XCTAssertEqual(projection.summary.outputReceiptNodeCount, rollup.summary.outputReceiptNodeCount)
 
         let projectedRoot = try XCTUnwrap(projection.nodes.first)

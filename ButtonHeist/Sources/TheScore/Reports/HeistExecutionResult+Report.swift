@@ -16,9 +16,11 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let actions: HeistExecutionActionEvidenceRollup
     package let warnings: HeistExecutionWarningEvidenceRollup
     package let metrics: HeistExecutionMetricProjection
-    package let outputNodes: [HeistExecutionEvidenceNode]
-    package let outputReceiptNodes: [HeistExecutionStepResult]
     package let firstFailedStep: HeistExecutionStepResult?
+
+    package var outputReceiptNodes: [HeistExecutionStepResult] {
+        nodes.map(\.step)
+    }
 
     package init(result: HeistExecutionResult) {
         self.init(steps: result.steps, durationMs: result.durationMs)
@@ -64,8 +66,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             samples: accumulator.metricBuilder.samples,
             ceilings: accumulator.metricBuilder.ceilings
         )
-        outputNodes = accumulator.nodes
-        outputReceiptNodes = accumulator.nodes.map(\.step)
         firstFailedStep = accumulator.firstFailedStep
     }
 

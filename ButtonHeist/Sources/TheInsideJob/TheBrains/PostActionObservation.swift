@@ -72,23 +72,19 @@ final class PostActionObservation {
         var screenId: String? { screen.id }
     }
 
-    fileprivate enum SettlePhase {
+    enum SettleEvidence {
         case cancelled(cancelMs: Int)
         case unavailable(settleTimeMs: Int)
         case committed(SettleSession.Outcome, SettledSemanticObservationEvent)
         case observedUnsettled(SettleSession.Outcome, Screen)
-    }
-
-    struct SettleEvidence {
-        fileprivate let phase: SettlePhase
 
         var didSettleCleanly: Bool {
-            if case .committed = phase { return true }
+            if case .committed = self { return true }
             return false
         }
 
         var timeMs: Int {
-            switch phase {
+            switch self {
             case .cancelled(let timeMs), .unavailable(let timeMs):
                 return timeMs
             case .committed(let outcome, _), .observedUnsettled(let outcome, _):
@@ -97,7 +93,7 @@ final class PostActionObservation {
         }
 
         var accessibilityNotifications: [AccessibilityNotificationEvidence] {
-            switch phase {
+            switch self {
             case .committed(_, let event):
                 return event.trace.captures.last?.transition.accessibilityNotifications ?? []
             case .cancelled, .unavailable, .observedUnsettled:
@@ -106,7 +102,7 @@ final class PostActionObservation {
         }
 
         var failureMessage: String? {
-            switch phase {
+            switch self {
             case .cancelled(let cancelMs):
                 return "cancelled after \(cancelMs)ms"
             case .unavailable:
@@ -121,18 +117,18 @@ final class PostActionObservation {
             switch observation.result {
             case .committed(let event):
                 precondition(settle.outcome.didSettleCleanly, "committed observation requires clean settle")
-                phase = .committed(settle, event)
+                self = .committed(settle, event)
             case .observedUnsettled(let screen):
                 guard case .timedOut = settle.outcome else {
                     preconditionFailure("unsettled observation requires settle timeout")
                 }
-                phase = .observedUnsettled(settle, screen)
+                self = .observedUnsettled(settle, screen)
             case .unavailable:
                 switch settle.outcome {
                 case .cancelled(let timeMs):
-                    phase = .cancelled(cancelMs: timeMs)
+                    self = .cancelled(cancelMs: timeMs)
                 case .timedOut(let timeMs):
-                    phase = .unavailable(settleTimeMs: timeMs)
+                    self = .unavailable(settleTimeMs: timeMs)
                 case .settled:
                     preconditionFailure("clean settle requires committed observation")
                 }
@@ -209,7 +205,7 @@ final class PostActionObservation {
         settleEvidence: SettleEvidence
     ) async -> ObservationOutcome {
         let observed: (state: BeforeState, settle: SettleSession.Outcome)
-        switch settleEvidence.phase {
+        switch settleEvidence {
         case .cancelled, .unavailable:
             return .unavailable
         case .committed(let settle, let event):

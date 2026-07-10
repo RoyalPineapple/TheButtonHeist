@@ -12,13 +12,9 @@ cp "$SCRIPT_DIR/check-source-shape.sh" "$FIXTURE_ROOT/scripts/check-source-shape
 cat > "$FIXTURE_ROOT/ButtonHeist/Sources/Fixture/Violations.swift" <<'SWIFT'
 public struct Fixture {}
 
-public extension Fixture {
-    func tupleParameter(_ pair: (Int, String)) {}
-}
+public func tupleResult() -> (Int, String) { (1, "one") }
 
-public protocol FixtureProtocol {
-    var tupleProperty: [(Int, String)] { get }
-}
+package let tupleProperty: (Int, String) = (1, "one")
 
 public typealias LegacyFixture = Fixture
 
@@ -42,22 +38,22 @@ if "$FIXTURE_ROOT/scripts/check-source-shape.sh" >"$FIXTURE_ROOT/output" 2>&1; t
 fi
 
 expected_diagnostics=(
-    "Violations.swift:4: exported tuple API"
-    "Violations.swift:8: exported tuple API"
-    "Violations.swift:11: exported top-level typealias outside canonical ButtonHeistDSL facade"
-    "Violations.swift:14: exported compatibility/legacy helper"
-    "Violations.swift:16: unallowlisted Any type"
-    "Violations.swift:17: unallowlisted @unchecked Sendable"
-    "Violations.swift:18: unallowlisted nonisolated(unsafe)"
-    "Violations.swift:20: unallowlisted swiftlint:disable"
+    "Violations.swift:3: exported tuple return type"
+    "Violations.swift:5: exported tuple property type"
+    "Violations.swift:7: exported top-level typealias outside canonical ButtonHeistDSL facade"
+    "Violations.swift:10: exported compatibility/legacy helper"
+    "Violations.swift:12: unallowlisted Any type"
+    "Violations.swift:13: unallowlisted @unchecked Sendable"
+    "Violations.swift:14: unallowlisted nonisolated(unsafe)"
+    "Violations.swift:16: unallowlisted swiftlint:disable"
 )
 
 for diagnostic in "${expected_diagnostics[@]}"; do
     grep -F "$diagnostic" "$FIXTURE_ROOT/output" >/dev/null
 done
 
-if grep -F "Violations.swift:23:" "$FIXTURE_ROOT/output" >/dev/null \
-    || grep -F "Violations.swift:24:" "$FIXTURE_ROOT/output" >/dev/null; then
+if grep -F "Violations.swift:19:" "$FIXTURE_ROOT/output" >/dev/null \
+    || grep -F "Violations.swift:20:" "$FIXTURE_ROOT/output" >/dev/null; then
     echo "comments or strings produced a source-shape violation" >&2
     exit 1
 fi
