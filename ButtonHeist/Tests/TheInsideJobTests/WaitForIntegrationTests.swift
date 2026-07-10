@@ -464,8 +464,20 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("absent confirmed after") == true, result.message ?? "missing wait message")
-        guard case .elementsChanged = result.accessibilityTrace?.endpointDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
+        guard let endpointDelta = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected a two-capture semantic delta")
+        }
+        switch endpointDelta {
+        case .elementsChanged:
+            break
+        case .screenChanged(let payload):
+            XCTAssertEqual(
+                payload.interactionDigest?.elementSetChanged,
+                true,
+                "A screen transition must still prove the element set changed"
+            )
+        case .noChange:
+            XCTFail("Expected a semantic change, got noChange")
         }
     }
 
