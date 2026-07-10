@@ -32,6 +32,12 @@ public extension AccessibilityContainer {
             value = nil
             rowCount = nil
             columnCount = nil
+        case .scrollable:
+            kind = .none
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
         case .semanticGroup(let semanticLabel, let semanticValue):
             kind = .semanticGroup
             label = semanticLabel
@@ -50,7 +56,7 @@ public extension AccessibilityContainer {
             value = nil
             rowCount = nil
             columnCount = nil
-        case .dataTable(let tableRowCount, let tableColumnCount):
+        case .dataTable(let tableRowCount, let tableColumnCount, _):
             kind = .dataTable
             label = nil
             value = nil

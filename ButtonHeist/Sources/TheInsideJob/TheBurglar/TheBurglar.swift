@@ -18,7 +18,7 @@ import AccessibilitySnapshotParser
 @MainActor
 final class TheBurglar {
 
-    private let parser = AccessibilityHierarchyParser(options: .fullTree)
+    private let parser = AccessibilityHierarchyParser()
     private let tripwire: TheTripwire
 
     init(tripwire: TheTripwire) {
