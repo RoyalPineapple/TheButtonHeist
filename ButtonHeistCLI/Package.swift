@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "ButtonHeist", path: ".."),
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.22.0"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.23.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0"))
     ],
     targets: [
