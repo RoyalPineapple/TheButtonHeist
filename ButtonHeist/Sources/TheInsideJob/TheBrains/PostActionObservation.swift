@@ -58,6 +58,11 @@ final class PostActionObservation {
     let stash: TheStash
     let safecracker: TheSafecracker
 
+    enum StateInterfaceProjection {
+        case semantic
+        case discovery
+    }
+
     /// State captured before an action for delta computation.
     struct BeforeState {
         let screen: Screen
@@ -155,7 +160,8 @@ final class PostActionObservation {
         captureSemanticState(
             from: observation.screen,
             tripwireSignal: observation.tripwireSignal,
-            settledObservationSequence: observation.sequence
+            settledObservationSequence: observation.sequence,
+            interfaceProjection: observation.scope.stateInterfaceProjection
         )
     }
 
@@ -174,7 +180,8 @@ final class PostActionObservation {
         let current = captureSemanticState(
             from: screen,
             tripwireSignal: event.observation.tripwireSignal,
-            settledObservationSequence: event.sequence
+            settledObservationSequence: event.sequence,
+            interfaceProjection: event.scope.stateInterfaceProjection
         )
         return HeistSemanticObservation(
             event: event,
@@ -237,11 +244,12 @@ final class PostActionObservation {
     func captureSemanticState(
         from screen: Screen,
         tripwireSignal: TheTripwire.TripwireSignal,
-        settledObservationSequence: SettledObservationSequence?
+        settledObservationSequence: SettledObservationSequence?,
+        interfaceProjection: StateInterfaceProjection = .semantic
     ) -> BeforeState {
-        let semanticInterface = stash.semanticInterfaceWithHash(for: screen)
+        let interfaceSnapshot = interfaceSnapshot(for: screen, projection: interfaceProjection)
         let capture = makeTraceCapture(
-            interface: semanticInterface.interface,
+            interface: interfaceSnapshot.interface,
             sequence: 0,
             screen: screen,
             tripwireSignal: tripwireSignal,
@@ -253,6 +261,18 @@ final class PostActionObservation {
             tripwireSignal: tripwireSignal,
             settledObservationSequence: settledObservationSequence
         )
+    }
+
+    private func interfaceSnapshot(
+        for screen: Screen,
+        projection: StateInterfaceProjection
+    ) -> TheStash.SemanticInterfaceSnapshot {
+        switch projection {
+        case .semantic:
+            return stash.semanticInterfaceWithHash(for: screen)
+        case .discovery:
+            return stash.discoveryInterfaceWithHash(for: screen)
+        }
     }
 
     static func shouldRecordAccessibilityTrace(
@@ -565,6 +585,17 @@ final class PostActionObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheStash.WireConversion.convert($0) }
+    }
+}
+
+private extension SemanticObservationScope {
+    var stateInterfaceProjection: PostActionObservation.StateInterfaceProjection {
+        switch self {
+        case .visible:
+            return .semantic
+        case .discovery:
+            return .discovery
+        }
     }
 }
 

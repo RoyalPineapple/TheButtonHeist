@@ -233,6 +233,14 @@ extension TheStash {
         return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
+    func discoveryInterfaceWithHash(
+        for screen: Screen,
+        timestamp: Date = Date()
+    ) -> SemanticInterfaceSnapshot {
+        let interface = WireConversion.toDiscoveryInterface(from: screen, timestamp: timestamp)
+        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+    }
+
     private func clearWorldForLifecycleReset() {
         observedState.reset()
         liveLookup.reset()

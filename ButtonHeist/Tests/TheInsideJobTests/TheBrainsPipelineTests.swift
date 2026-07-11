@@ -1540,6 +1540,134 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.screenId, screen.id)
     }
 
+    func testDiscoveryObservationStateUsesDiscoveryInterfaceWhileTraceStaysSemantic() {
+        let fixture = makeDiscoveryObservationProjectionFixture()
+        let screen = fixture.screen
+        let discoveryInterface = TheStash.WireConversion.toDiscoveryInterface(from: screen)
+        let semanticInterface = TheStash.WireConversion.toSemanticInterface(from: screen)
+        let traceCapture = brains.postActionObservation.makeTraceCapture(
+            interface: semanticInterface,
+            sequence: 1,
+            screen: screen,
+            tripwireSignal: .empty,
+            screenId: screen.id
+        )
+        let trace = AccessibilityTrace(capture: traceCapture)
+        let settled = SettledSemanticObservation(
+            sequence: 7,
+            scope: .discovery,
+            screen: screen,
+            tripwireSignal: .empty
+        )
+        let event = SettledSemanticObservationEvent(
+            sequence: 7,
+            scope: .discovery,
+            observation: settled,
+            previous: nil,
+            trace: trace,
+            delta: trace.endpointDelta
+        )
+        let observation = brains.postActionObservation.semanticObservation(from: event)
+
+        XCTAssertNotEqual(discoveryInterface.tree, semanticInterface.tree)
+        XCTAssertEqual(observation.state.interface.tree, discoveryInterface.tree)
+        XCTAssertEqual(observation.state.interface.annotations, discoveryInterface.annotations)
+        XCTAssertEqual(observation.accessibilityTrace.captures.last?.interface.tree, semanticInterface.tree)
+        XCTAssertEqual(observation.accessibilityTrace.captures.last?.interface.annotations, semanticInterface.annotations)
+        XCTAssertNotNil(observation.state.interface.annotations.elementByPath[fixture.visiblePath])
+        XCTAssertEqual(
+            observation.state.interface.annotations.containerByPath[TreePath([0, 1])]?.containerName,
+            "offscreen_group"
+        )
+        XCTAssertEqual(
+            observation.accessibilityTrace.captures.last?.interface.annotations.containerByPath[TreePath([0, 0])]?
+                .containerName,
+            "offscreen_group"
+        )
+        let predicate = AccessibilityPredicate.exists(container: .identifier("OffscreenGroup"))
+        XCTAssertEqual(
+            PredicateEvaluation.evaluate(predicate, in: observation),
+            ExpectationResult(met: true, predicate: predicate)
+        )
+    }
+
+    private func makeDiscoveryObservationProjectionFixture() -> (screen: Screen, visiblePath: TreePath) {
+        let rootPath = TreePath([0])
+        let visiblePath = TreePath([0, 0])
+        let offscreenContainerPath = TreePath([0, 2])
+        let rootContainer = AccessibilityContainer(
+            type: .none,
+            identifier: "RootViewController",
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let offscreenContainer = AccessibilityContainer(
+            type: .semanticGroup(label: "OffscreenGroup", value: nil),
+            identifier: "OffscreenGroup",
+            frame: AccessibilityRect(CGRect(x: 0, y: 480, width: 320, height: 240))
+        )
+        let visible = AccessibilityElement.make(
+            label: "Visible",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let offscreen = AccessibilityElement.make(
+            label: "Offscreen",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "visible_button": SemanticScreen.Element(
+                        heistId: "visible_button",
+                        path: visiblePath,
+                        scrollMembership: nil,
+                        element: visible
+                    ),
+                    "offscreen_button": SemanticScreen.Element(
+                        heistId: "offscreen_button",
+                        path: TreePath([0, 2, 0]),
+                        scrollMembership: SemanticScreen.ScrollMembership(
+                            containerPath: offscreenContainerPath,
+                            index: 0
+                        ),
+                        element: offscreen
+                    ),
+                ],
+                containers: [
+                    rootPath: SemanticScreen.Container(
+                        container: rootContainer,
+                        path: rootPath,
+                        containerName: "root",
+                        contentFrame: nil
+                    ),
+                    offscreenContainerPath: SemanticScreen.Container(
+                        container: offscreenContainer,
+                        path: offscreenContainerPath,
+                        containerName: "offscreen_group",
+                        contentFrame: nil,
+                        scrollMembership: SemanticScreen.ScrollMembership(
+                            containerPath: rootPath,
+                            index: 0
+                        )
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [
+                    .container(rootContainer, children: [
+                        .element(visible, traversalIndex: 0),
+                    ]),
+                ],
+                containerNamesByPath: [rootPath: "root"],
+                heistIdsByPath: [visiblePath: "visible_button"],
+                elementRefs: [:],
+                firstResponderHeistId: nil
+            )
+        )
+        return (screen, visiblePath)
+    }
+
     func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {
         let beforeElement = AccessibilityElement.make(
             label: "Chicken Tikka",

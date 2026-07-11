@@ -169,6 +169,7 @@ extension AccessibilityTrace.Delta {
 internal struct PredicateObservationEvidence {
     private let snapshot: PredicateObservationSnapshot
     private let stateGraph: ElementMatchGraph
+    private let traceGraph: ElementMatchGraph
     internal let changeReadiness: PredicateChangeReadiness
     private let transition: PredicateWait.TransitionEvidence?
 
@@ -180,6 +181,7 @@ internal struct PredicateObservationEvidence {
         let snapshot = PredicateObservationSnapshot(observation)
         self.snapshot = snapshot
         self.stateGraph = ElementMatchGraph(interface: snapshot.interface)
+        self.traceGraph = ElementMatchGraph(interface: snapshot.traceInterface)
         self.changeReadiness = changeReadiness
         self.transition = transition
     }
@@ -217,7 +219,7 @@ internal struct PredicateObservationEvidence {
                     return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
                 }
                 return PredicateChangeMatchSet(
-                    currentElements: stateGraph.all.elements,
+                    currentElements: traceGraph.all.elements,
                     transition: transition
                 ).evaluate(predicate)
             }
@@ -238,6 +240,10 @@ private struct PredicateObservationSnapshot {
         self.interface = observation.state.interface
         self.trace = observation.accessibilityTrace
         self.summary = observation.summary
+    }
+
+    fileprivate var traceInterface: Interface {
+        trace.captures.last?.interface ?? interface
     }
 }
 
