@@ -50,9 +50,18 @@ enum PredicateEvaluation {
         in observation: HeistSemanticObservation,
         changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
-        evaluate(
+        if case .state = predicate {
+            return PredicateObservationEvidence(
+                observation: observation,
+                changeReadiness: .notRequired,
+                transition: nil
+            ).evaluate(predicate)
+        }
+
+        return evaluate(
             predicate,
-            currentElements: observation.state.interface.projectedElements,
+            currentElements: observation.accessibilityTrace.captures.last?.interface.projectedElements
+                ?? observation.state.interface.projectedElements,
             delta: observation.delta,
             observedSequence: observation.event.sequence,
             changeBaselineSequence: changeBaselineSequence

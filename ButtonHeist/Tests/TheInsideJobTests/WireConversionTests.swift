@@ -458,6 +458,90 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(Set(interface.projectedElements.compactMap(\.label)), ["First row", "Second row"])
     }
 
+    func testSemanticInterfaceDensifiesSparseContainerPathsBeforeValidation() throws {
+        let rootPath = TreePath([0])
+        let splitPath = TreePath([0, 2])
+        let orderPath = TreePath([0, 2, 63])
+        let libraryPath = TreePath([0, 2, 63, 83])
+        let rowPath = TreePath([0, 2, 63, 83, 10])
+        let orderIdentifier = "SquareCheckoutAppletCore.OrderEntryContainerViewController"
+        let root = AccessibilityContainer(
+            type: .none, identifier: "RGUIStatusBarContentViewController",
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1_024, height: 768))
+        )
+        let split = AccessibilityContainer(
+            type: .none, identifier: "MarketUI.MarketSplitViewController",
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1_024, height: 768))
+        )
+        let order = AccessibilityContainer(
+            type: .none, identifier: orderIdentifier,
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1_024, height: 768))
+        )
+        let library = AccessibilityContainer(
+            type: .semanticGroup(label: "LibraryListScreen", value: nil),
+            identifier: "LibraryListScreen",
+            frame: AccessibilityRect(CGRect(x: 0, y: 96, width: 820, height: 672))
+        )
+        let row = makeElement(label: "Search all items", identifier: "LibraryListScreen-SearchField", traits: [.searchField])
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "library_search_searchField": SemanticScreen.Element(
+                        heistId: "library_search_searchField",
+                        path: rowPath,
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: libraryPath, index: 0),
+                        element: row
+                    ),
+                ],
+                containers: [
+                    rootPath: SemanticScreen.Container(
+                        container: root,
+                        path: rootPath,
+                        containerName: "root",
+                        contentFrame: nil
+                    ),
+                    splitPath: SemanticScreen.Container(
+                        container: split,
+                        path: splitPath,
+                        containerName: "split",
+                        contentFrame: nil
+                    ),
+                    orderPath: SemanticScreen.Container(
+                        container: order,
+                        path: orderPath,
+                        containerName: "order_entry",
+                        contentFrame: nil
+                    ),
+                    libraryPath: SemanticScreen.Container(
+                        container: library,
+                        path: libraryPath,
+                        containerName: "library",
+                        contentFrame: nil
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [.container(root, children: [])],
+                containerNamesByPath: [rootPath: "root"],
+                elementRefs: [:],
+                firstResponderHeistId: nil
+            )
+        )
+
+        let interface = WireConversion.toSemanticInterface(from: screen)
+        let predicate = AccessibilityPredicate.exists(container: .identifier(orderIdentifier))
+        let result = predicate.evaluate(in: PredicateEvaluationEvidence(
+            currentInterface: interface,
+            currentElements: interface.projectedElements,
+            accumulatedDelta: nil
+        ))
+
+        XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
+        XCTAssertEqual(interface.annotations.containers.count, 4)
+        XCTAssertEqual(interface.projectedElements.single?.label, "Search all items")
+        XCTAssertNoThrow(try InterfaceGraph(interface: interface))
+    }
+
     func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])

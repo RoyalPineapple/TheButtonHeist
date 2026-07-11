@@ -216,41 +216,37 @@ extension TheStash {
     /// they are absent from the latest live parser hierarchy.
     static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         let entries = screen.orderedElements
-        if let pathKeyed = pathKeyedSemanticInterface(entries: entries, screen: screen, timestamp: timestamp) {
-            return pathKeyed
-        }
-        let tree = entries.enumerated().map { index, entry in
-            AccessibilityHierarchy.element(
-                entry.element,
-                traversalIndex: index
-            )
-        }
-        let annotations = entries.enumerated().map { index, entry in
-            InterfaceElementAnnotation(
-                path: TreePath([index]),
-                actions: buildActions(for: entry.element)
-            )
-        }
-        let traceIdentities = Dictionary(uniqueKeysWithValues: entries.enumerated().map { index, entry in
-            (TreePath([index]), entry.heistId.traceElementIdentity)
-        })
-        return Interface(
-            timestamp: timestamp,
-            tree: tree,
-            annotations: InterfaceAnnotations(elements: annotations),
-            traceIdentities: InterfaceTraceIdentities(traceIdentities)
-        )
+        return semanticInterface(entries: entries, screen: screen, timestamp: timestamp)
     }
 
-    private static func pathKeyedSemanticInterface(
+    private static func semanticInterface(
         entries: [SemanticScreen.Element],
         screen: Screen,
         timestamp: Date
-    ) -> Interface? {
-        let containersByPath = screen.semantic.containers
-        let placements = semanticElementPlacements(entries: entries, containersByPath: containersByPath)
-        let elementsByPath = Dictionary(uniqueKeysWithValues: placements.map { ($0.path, $0.entry) })
-        let childPathsByParent = Dictionary(grouping: (Array(elementsByPath.keys) + Array(containersByPath.keys))) { path in
+    ) -> Interface {
+        var pathAllocator = SemanticProjectionPathAllocator()
+        let containerPlacements = semanticContainerPlacements(
+            containersByPath: screen.semantic.containers,
+            pathAllocator: &pathAllocator
+        )
+        let containersByProjectedPath = Dictionary(
+            uniqueKeysWithValues: containerPlacements.map { ($0.path, $0.entry) }
+        )
+        let projectedContainerPathByOriginalPath = Dictionary(
+            uniqueKeysWithValues: containerPlacements.map { ($0.entry.path, $0.path) }
+        )
+        let elementPlacements = semanticElementPlacements(
+            entries: entries,
+            projectedContainerPathByOriginalPath: projectedContainerPathByOriginalPath,
+            pathAllocator: &pathAllocator
+        )
+        let elementsByPath = Dictionary(uniqueKeysWithValues: elementPlacements.map { ($0.path, $0.entry) })
+        let traversalIndexByHeistId = Dictionary(uniqueKeysWithValues: entries.enumerated().map { index, entry in
+            (entry.heistId, index)
+        })
+        let childPathsByParent = Dictionary(
+            grouping: Array(elementsByPath.keys) + Array(containersByProjectedPath.keys)
+        ) { path in
             path.parent ?? .root
         }.mapValues { paths in
             Array(Set(paths)).sorted()
@@ -270,9 +266,9 @@ extension TheStash {
                     actions: buildActions(for: entry.element)
                 ))
                 traceIdentities[path] = entry.heistId.traceElementIdentity
-                return .element(entry.element, traversalIndex: index)
+                return .element(entry.element, traversalIndex: traversalIndexByHeistId[entry.heistId] ?? index)
             }
-            guard let entry = containersByPath[path] else { return nil }
+            guard let entry = containersByProjectedPath[path] else { return nil }
             containerAnnotations.append(InterfaceContainerAnnotation(
                 path: path,
                 containerName: entry.containerName,
@@ -283,7 +279,6 @@ extension TheStash {
         }
 
         let roots = (childPathsByParent[.root] ?? []).compactMap(buildNode)
-        guard !roots.isEmpty || !entries.isEmpty || !screen.semantic.containers.isEmpty else { return nil }
         let interface = Interface(
             timestamp: timestamp,
             tree: roots,
@@ -293,105 +288,87 @@ extension TheStash {
             ),
             traceIdentities: InterfaceTraceIdentities(traceIdentities)
         )
-        guard (try? InterfaceGraph(interface: interface)) != nil else { return nil }
+        do {
+            _ = try InterfaceGraph(interface: interface)
+        } catch {
+            wireConversionLogger.fault("Invalid semantic interface projection: \(String(describing: error), privacy: .public)")
+            preconditionFailure("Invalid semantic interface projection: \(error)")
+        }
         return interface
+    }
+
+    private static func semanticContainerPlacements(
+        containersByPath: [TreePath: SemanticScreen.Container],
+        pathAllocator: inout SemanticProjectionPathAllocator
+    ) -> [SemanticContainerPlacement] {
+        var projectedPathByOriginalPath: [TreePath: TreePath] = [:]
+
+        return containersByPath.values
+            .sorted { $0.path < $1.path }
+            .map { entry in
+                let parent = semanticContainerRepairParent(
+                    for: entry,
+                    projectedPathByOriginalPath: projectedPathByOriginalPath
+                )
+                let path = pathAllocator.nextChildPath(parent: parent)
+                projectedPathByOriginalPath[entry.path] = path
+                return SemanticContainerPlacement(path: path, entry: entry)
+            }
     }
 
     private static func semanticElementPlacements(
         entries: [SemanticScreen.Element],
-        containersByPath: [TreePath: SemanticScreen.Container]
+        projectedContainerPathByOriginalPath: [TreePath: TreePath],
+        pathAllocator: inout SemanticProjectionPathAllocator
     ) -> [SemanticElementPlacement] {
-        var usedPaths = Set(containersByPath.keys)
-        var occupiedChildIndicesByParent: [TreePath: Set<Int>] = [:]
-
-        func reserve(_ path: TreePath) {
-            guard let parent = path.parent, let childIndex = path.indices.last else { return }
-            occupiedChildIndicesByParent[parent, default: []].insert(childIndex)
-        }
-
-        for path in containersByPath.keys {
-            reserve(path)
-        }
-
-        return entries.map { entry in
-            if canUseSemanticElementPath(
-                entry.path,
-                containersByPath: containersByPath,
-                usedPaths: usedPaths
-            ) {
-                usedPaths.insert(entry.path)
-                reserve(entry.path)
-                return SemanticElementPlacement(path: entry.path, entry: entry)
-            }
-
-            let parent = semanticElementRepairParent(for: entry, containersByPath: containersByPath)
-            let path = nextUnusedSemanticChildPath(
-                parent: parent,
-                usedPaths: &usedPaths,
-                occupiedChildIndicesByParent: &occupiedChildIndicesByParent
+        entries.map { entry in
+            let parent = semanticElementRepairParent(
+                for: entry,
+                projectedContainerPathByOriginalPath: projectedContainerPathByOriginalPath
             )
+            let path = pathAllocator.nextChildPath(parent: parent)
             return SemanticElementPlacement(path: path, entry: entry)
         }
     }
 
-    private static func canUseSemanticElementPath(
-        _ path: TreePath,
-        containersByPath: [TreePath: SemanticScreen.Container],
-        usedPaths: Set<TreePath>
-    ) -> Bool {
-        guard path != .root, !usedPaths.contains(path) else { return false }
-        return semanticPathHasReachableContainerAncestors(path.parent, containersByPath: containersByPath)
-    }
-
-    private static func semanticElementRepairParent(
-        for entry: SemanticScreen.Element,
-        containersByPath: [TreePath: SemanticScreen.Container]
+    private static func semanticContainerRepairParent(
+        for entry: SemanticScreen.Container,
+        projectedPathByOriginalPath: [TreePath: TreePath]
     ) -> TreePath {
         if let containerPath = entry.scrollMembership?.containerPath,
-           containersByPath[containerPath] != nil,
-           semanticPathHasReachableContainerAncestors(containerPath.parent, containersByPath: containersByPath) {
-            return containerPath
+           let projectedPath = projectedPathByOriginalPath[containerPath] {
+            return projectedPath
         }
 
         var parent = entry.path.parent
         while let candidate = parent {
             if candidate == .root { return .root }
-            if containersByPath[candidate] != nil,
-               semanticPathHasReachableContainerAncestors(candidate.parent, containersByPath: containersByPath) {
-                return candidate
+            if let projectedPath = projectedPathByOriginalPath[candidate] {
+                return projectedPath
             }
             parent = candidate.parent
         }
         return .root
     }
 
-    private static func semanticPathHasReachableContainerAncestors(
-        _ path: TreePath?,
-        containersByPath: [TreePath: SemanticScreen.Container]
-    ) -> Bool {
-        var current = path
-        while let candidate = current {
-            if candidate == .root { return true }
-            guard containersByPath[candidate] != nil else { return false }
-            current = candidate.parent
-        }
-        return true
-    }
-
-    private static func nextUnusedSemanticChildPath(
-        parent: TreePath,
-        usedPaths: inout Set<TreePath>,
-        occupiedChildIndicesByParent: inout [TreePath: Set<Int>]
+    private static func semanticElementRepairParent(
+        for entry: SemanticScreen.Element,
+        projectedContainerPathByOriginalPath: [TreePath: TreePath]
     ) -> TreePath {
-        var index = (occupiedChildIndicesByParent[parent]?.max() ?? -1) + 1
-        while true {
-            let path = parent.appending(index)
-            if usedPaths.insert(path).inserted {
-                occupiedChildIndicesByParent[parent, default: []].insert(index)
-                return path
-            }
-            index += 1
+        if let containerPath = entry.scrollMembership?.containerPath,
+           let projectedPath = projectedContainerPathByOriginalPath[containerPath] {
+            return projectedPath
         }
+
+        var parent = entry.path.parent
+        while let candidate = parent {
+            if candidate == .root { return .root }
+            if let projectedPath = projectedContainerPathByOriginalPath[candidate] {
+                return projectedPath
+            }
+            parent = candidate.parent
+        }
+        return .root
     }
 
     // MARK: - Private Helpers
@@ -428,6 +405,21 @@ extension TheStash {
 private struct SemanticElementPlacement {
     let path: TreePath
     let entry: SemanticScreen.Element
+}
+
+private struct SemanticContainerPlacement {
+    let path: TreePath
+    let entry: SemanticScreen.Container
+}
+
+private struct SemanticProjectionPathAllocator {
+    private var nextChildIndexByParent: [TreePath: Int] = [:]
+
+    mutating func nextChildPath(parent: TreePath) -> TreePath {
+        let index = nextChildIndexByParent[parent, default: 0]
+        nextChildIndexByParent[parent] = index + 1
+        return parent.appending(index)
+    }
 }
 
 private struct DiscoveryChildren {
