@@ -109,6 +109,7 @@ extension TheBrains {
                 context: context,
                 step: step,
                 observation: running.currentCheck.observation,
+                iterationResults: iterationResults,
                 deadline: deadline
             )
             let iterationNode = repeatUntilIterationResult(
@@ -159,6 +160,7 @@ extension TheBrains {
                 context: context,
                 step: step,
                 observation: running.currentCheck.observation,
+                iterationResults: iterationResults,
                 deadline: deadline
             )
         } else {

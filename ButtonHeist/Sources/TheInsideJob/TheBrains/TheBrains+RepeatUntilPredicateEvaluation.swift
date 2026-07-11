@@ -11,6 +11,16 @@ extension TheBrains.RepeatUntil {
         internal let trace: AccessibilityTrace?
         internal let summary: String?
 
+        internal init(
+            sequence: SettledObservationSequence,
+            trace: AccessibilityTrace?,
+            summary: String?
+        ) {
+            self.sequence = sequence
+            self.trace = trace
+            self.summary = summary
+        }
+
         internal init?(_ receipt: HeistWaitReceipt) {
             guard let sequence = receipt.observedSequence else { return nil }
             self.sequence = sequence
@@ -168,8 +178,17 @@ extension TheBrains {
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
         observation: RepeatUntil.Observation,
+        iterationResults: [HeistExecutionStepResult],
         deadline: CFAbsoluteTime
     ) async -> RepeatUntil.PostBodyCheck {
+        if let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
+            step: step,
+            observation: observation,
+            iterationResults: iterationResults
+        ) {
+            return actionTraceCheck
+        }
+
         let remaining = deadline - CFAbsoluteTimeGetCurrent()
         guard remaining > 0 else {
             return .deadlineElapsed(UnmetExpectationResult(
@@ -218,6 +237,79 @@ extension TheBrains {
         case .unmet(let check):
             return .changedUnmet(check)
         }
+    }
+
+    private func repeatUntilActionTracePostBodyCheck(
+        step: ResolvedRepeatUntilStep,
+        observation: RepeatUntil.Observation,
+        iterationResults: [HeistExecutionStepResult]
+    ) -> RepeatUntil.PostBodyCheck? {
+        guard let result = iterationResults
+            .compactMap(\.actionEvidence?.dispatchResult)
+            .last(where: repeatUntilActionResultCarriesSettledChange)
+        else { return nil }
+
+        guard let trace = result.accessibilityTrace else { return nil }
+        let stopExpectation = repeatUntilStopExpectation(
+            step.predicate,
+            trace: trace,
+            fallback: result.message
+        )
+        let sequence = repeatUntilObservedSequence(after: observation, result: result)
+        let actionObservation = RepeatUntil.Observation(
+            sequence: sequence,
+            trace: trace,
+            summary: repeatUntilObservationSummary(trace)
+        )
+        let receipt = HeistWaitReceipt.matched(
+            message: stopExpectation.actual,
+            accessibilityTrace: trace,
+            expectation: stopExpectation,
+            observedSequence: sequence,
+            observationSummary: actionObservation.summary
+        )
+        let check = RepeatUntil.ObservedCheck(
+            observation: actionObservation,
+            check: PredicateExpectationCheck(stopExpectation),
+            receipt: receipt
+        )
+        switch check {
+        case .met(let check):
+            return .changedMet(check)
+        case .unmet(let check):
+            return .changedUnmet(check)
+        }
+    }
+
+    private func repeatUntilActionResultCarriesSettledChange(_ result: ActionResult) -> Bool {
+        guard result.outcome.isSuccess,
+              result.settled == true,
+              let trace = result.accessibilityTrace,
+              let lastCapture = trace.captures.last
+        else { return false }
+        return PredicateEvaluation.evaluate(
+            .change(),
+            currentElements: lastCapture.interface.projectedElements,
+            accumulatedDelta: trace.accumulatedDelta
+        ).met
+    }
+
+    private func repeatUntilObservedSequence(
+        after observation: RepeatUntil.Observation,
+        result: ActionResult
+    ) -> SettledObservationSequence {
+        let nextSequence = observation.sequence + 1
+        guard let subjectSequence = result.subjectEvidence?.settledObservationSequence else {
+            return nextSequence
+        }
+        return max(nextSequence, subjectSequence + 1)
+    }
+
+    private func repeatUntilObservationSummary(_ trace: AccessibilityTrace) -> String? {
+        guard let elementCount = trace.captures.last?.interface.projectedElements.count else {
+            return nil
+        }
+        return "known: \(elementCount) elements"
     }
 
     private func repeatUntilStopExpectation(
