@@ -45,42 +45,115 @@ That changes the unit of automation:
 - the same heist language for agents and tests
 - receipts you can assert, print, report, and compose
 
-## First heist
+## From exploration to heist
 
-A single move proves one contract. A heist defines a product capability.
+A heist can begin as live exploration. The agent tries one item, reads the
+receipts, and uses that evidence to make the next run stricter.
+
+First, add `Milk` without writing the final contract up front:
 
 ```swift
-HeistPlan("shop") {
-    HeistDef<String>("Cart.addItem", parameter: "item") { item in
-        TypeText(item, into: .label("Search Items"))
-            .expect(.updated(.label("Search Items"), .value(item)))
+TypeText("Milk", into: .label("Search Items"))
+```
 
-        Activate(.label(item))
-            .expect(.appeared(.element(
-                .label(.prefix(item)),
-                .identifier(.contains("cart"))
-            )))
-    }
+```text
+type_text: elements changed (12 elements)
+  ~ Search Items: value "" → "Milk"
+  + "Milk":"$2.99" button
 
-    RunHeist("Cart.addItem", "Milk")
+// ...
+```
+
+The receipt says what changed and what appeared. The agent can act on that
+evidence instead of maintaining its own model of the transition:
+
+```swift
+Activate(.label("Milk"))
+```
+
+```text
+activate: elements changed (14 elements)
+  + "Milk":"$2.99" button id="cart.item"
+  + "subtotal":"$2.99, 1 item" staticText
+
+// ...
+```
+
+Now add `Eggs`, turning the observations from `Milk` into expectations:
+
+```swift
+TypeText("Eggs", into: .label("Search Items"))
+    .expect(.updated(.label("Search Items"), .value("Eggs")))
+
+Activate(.label("Eggs"))
+    .expect(.appeared(.element(
+        .label(.prefix("Eggs")),
+        .identifier(.contains("cart"))
+    )))
+```
+
+That is expectation refinement: live observations become durable assertions.
+Once the refined run passes, promote the workflow into product language:
+
+```swift
+HeistDef<String>("Cart.addItem", parameter: "item") { item in
+    TypeText(item, into: .label("Search Items"))
+        .expect(.updated(.label("Search Items"), .value(item)))
+
+    Activate(.label(item))
         .expect(.appeared(.element(
-            .label("subtotal"),
-            .value(.contains("1 item"))
+            .label(.prefix(item)),
+            .identifier(.contains("cart"))
         )))
-
-    RunHeist("Cart.addItem", "Eggs")
-        .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
-
-    RunHeist("Cart.addItem", "Bread")
-        .expect(.updated(.label("subtotal"), .value(.contains("3 items"))))
 }
 ```
 
-Each `Cart.addItem` call runs the same product capability with a new argument.
-The heist owns the search, activation, settlement, and evidence. The caller says
-what aggregate product outcome they require from that composed action.
+`Cart.addItem` is reusable product semantics, not a transcript of clicks. Put
+it in a plan, try it with another item, then run that same plan from a test:
 
-That is where the tool changes shape. The accessibility interface becomes the language of app interaction.
+```swift
+import ButtonHeistTesting
+import Testing
+
+func makeShopHeist() throws -> HeistPlan {
+    try HeistPlan("shop") {
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            TypeText(item, into: .label("Search Items"))
+                .expect(.updated(.label("Search Items"), .value(item)))
+
+            Activate(.label(item))
+                .expect(.appeared(.element(
+                    .label(.prefix(item)),
+                    .identifier(.contains("cart"))
+                )))
+        }
+
+        RunHeist("Cart.addItem", "Milk")
+            .expect(.appeared(.element(
+                .label("subtotal"),
+                .value(.contains("1 item"))
+            )))
+
+        RunHeist("Cart.addItem", "Eggs")
+            .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
+
+        RunHeist("Cart.addItem", "Bread")
+            .expect(.updated(.label("subtotal"), .value(.contains("3 items"))))
+    }
+}
+
+@Suite(.serialized)
+struct ShopHeistTests {
+    @MainActor
+    @Test
+    func addsItemsToCart() async throws {
+        try await runHeist(makeShopHeist())
+    }
+}
+```
+
+The reusable heist owns the local workflow. The test owns the aggregate product
+outcome.
 
 ## Ways to run heists
 
