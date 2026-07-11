@@ -142,6 +142,12 @@ private struct SemanticObservationFulfillmentState {
                     after: ScreenClassifier.snapshot(of: observation.screen)
                 ).reason
             }
+            if let fallbackReason {
+                AccessibilityObservationFallbackLog.record(
+                    fallbackReason,
+                    source: .settledObservation
+                )
+            }
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
                 previous: currentEvents[fulfilledScope],

@@ -308,7 +308,13 @@ final class PostActionObservation {
         transient: [HeistElement] = [],
         accessibilityNotifications: [AccessibilityNotificationEvidence] = []
     ) -> AccessibilityTrace {
-        makeAccessibilityTrace(
+        if let fallbackReason = classification.reason {
+            AccessibilityObservationFallbackLog.record(
+                fallbackReason,
+                source: .postAction
+            )
+        }
+        return makeAccessibilityTrace(
             afterInterface: afterInterface,
             parentCapture: parentCapture,
             transition: AccessibilityTrace.Transition(
