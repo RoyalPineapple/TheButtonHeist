@@ -96,10 +96,10 @@ final class HeistElementTests: XCTestCase {
             value: nil,
             identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: [.custom("Share"), .activate, .custom("Delete"), .activate, .decrement, .increment]
+            actions: [.custom("Share"), .activate, .custom("Delete"), .activate, .typeText, .decrement, .increment]
         )
 
-        XCTAssertEqual(element.actions, [.activate, .increment, .decrement, .custom("Delete"), .custom("Share")])
+        XCTAssertEqual(element.actions, [.activate, .typeText, .increment, .decrement, .custom("Delete"), .custom("Share")])
     }
 
     func testActionsCanonicalizeAtDecodeBoundaryAndEncodeDeterministically() throws {
@@ -118,6 +118,7 @@ final class HeistElementTests: XCTestCase {
           "actions": [
             {"custom": "Share"},
             "activate",
+            "typeText",
             {"custom": "Delete"},
             "activate"
           ]
@@ -127,8 +128,8 @@ final class HeistElementTests: XCTestCase {
         let encoded = try JSONEncoder().encode(decoded)
         let encodedProjection = try JSONDecoder().decode(EncodedElementActionsProjection.self, from: encoded)
 
-        XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Share")])
-        XCTAssertEqual(encodedProjection.actions, [.activate, .custom("Delete"), .custom("Share")])
+        XCTAssertEqual(decoded.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
+        XCTAssertEqual(encodedProjection.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
     }
 
     // MARK: - Helpers

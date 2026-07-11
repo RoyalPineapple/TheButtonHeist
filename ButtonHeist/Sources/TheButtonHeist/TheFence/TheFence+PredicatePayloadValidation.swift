@@ -176,13 +176,13 @@ extension TheFence {
 
     private nonisolated static func validateElementActionValue(_ value: HeistValue, field: String) throws {
         switch value {
-        case .string(let name) where ["activate", "increment", "decrement"].contains(name):
+        case .string(let name) where ["activate", "typeText", "increment", "decrement"].contains(name):
             return
         case .string(let name):
             throw SchemaValidationError(
                 field: field,
                 observed: "string \"\(name)\"",
-                expected: "built-in action string activate|increment|decrement, or {\"custom\":\"\(name)\"}"
+                expected: "built-in action string activate|typeText|increment|decrement, or {\"custom\":\"\(name)\"}"
             )
         case .object(let object):
             let allowed = Set(["custom"])

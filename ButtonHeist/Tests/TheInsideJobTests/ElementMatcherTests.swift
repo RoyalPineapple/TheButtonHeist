@@ -107,6 +107,13 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(ElementPredicate.rotors(["Headings"]).matches(element))
     }
 
+    func testTextInputTraitsExposeTypeTextActionToMatcher() {
+        let element = element(label: "Search", traits: .searchField)
+
+        XCTAssertTrue(ElementPredicate.actions([.typeText]).matches(element))
+        XCTAssertFalse(ElementPredicate.exclude(.actions([.typeText])).matches(element))
+    }
+
     func testTraitsIncludeExactBitmask() {
         let element = element(traits: [.button, .selected])
         XCTAssertTrue(ElementPredicate(traits: [.button]).matches(element))

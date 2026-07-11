@@ -72,6 +72,7 @@ public enum HeistFailureDiagnostics {
         element.actions.filter { action in
             switch action {
             case .activate: return !element.traits.contains(.button)
+            case .typeText: return !AccessibilityPolicy.supportsTextEntry(element.traits)
             case .increment, .decrement: return !element.traits.contains(.adjustable)
             case .custom: return true
             }

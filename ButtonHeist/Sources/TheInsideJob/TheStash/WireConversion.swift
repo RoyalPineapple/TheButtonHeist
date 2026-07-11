@@ -84,6 +84,9 @@ extension TheStash {
     static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
         let isInteractive = Interactivity.isInteractive(element: element)
         let activate: [ElementAction] = isInteractive ? [.activate] : []
+        let textEntry: [ElementAction] = AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits)
+            ? [.typeText]
+            : []
         let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
             ? [.increment, .decrement]
             : []
@@ -91,7 +94,7 @@ extension TheStash {
             .map { $0.name }
             .filter { !$0.isEmpty }
             .map(ElementAction.custom)
-        return activate + adjustable + custom
+        return activate + textEntry + adjustable + custom
     }
 
     // MARK: - Interface Conversion

@@ -286,6 +286,7 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
 
 public struct HeistActionWarning: Codable, Sendable, Equatable {
     public static let activationWeakAffordanceEvidenceCode = "activation_weak_affordance_evidence"
+    public static let textEntryWeakAffordanceEvidenceCode = "text_entry_weak_affordance_evidence"
 
     public let code: String
     public let message: String
@@ -307,6 +308,14 @@ public struct HeistActionWarning: Codable, Sendable, Equatable {
         HeistActionWarning(
             code: activationWeakAffordanceEvidenceCode,
             message: "activate succeeded, but the target does not advertise a primary activation affordance",
+            evidence: evidence
+        )
+    }
+
+    public static func textEntryWeakAffordanceEvidence(evidence: String?) -> HeistActionWarning {
+        HeistActionWarning(
+            code: textEntryWeakAffordanceEvidenceCode,
+            message: "typeText succeeded, but the target does not advertise a text-input trait",
             evidence: evidence
         )
     }

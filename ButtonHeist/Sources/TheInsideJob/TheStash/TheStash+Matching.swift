@@ -95,6 +95,9 @@ extension AccessibilityElement: PredicateSelectionSubject {
             || !traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
             || !customActions.isEmpty
         let activate: [ElementAction] = isInteractive ? [.activate] : []
+        let textEntry: [ElementAction] = AccessibilityPolicy.supportsTextEntry(traits.heistTraits)
+            ? [.typeText]
+            : []
         let adjustable: [ElementAction] = (isInteractive && traits.contains(.adjustable))
             ? [.increment, .decrement]
             : []
@@ -102,7 +105,7 @@ extension AccessibilityElement: PredicateSelectionSubject {
             .map(\.name)
             .filter { !$0.isEmpty }
             .map(ElementAction.custom)
-        return Set(activate + adjustable + custom)
+        return Set(activate + textEntry + adjustable + custom)
     }
 
     package var predicateMatcherFacts: [AccessibilityMatcherFact] {

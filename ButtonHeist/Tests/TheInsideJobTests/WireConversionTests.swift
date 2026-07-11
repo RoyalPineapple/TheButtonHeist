@@ -330,6 +330,33 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.actions, [.activate])
     }
 
+    func testToWireIncludesTypeTextForEveryTextInputTrait() {
+        for trait in [.textEntry, .searchField, .secureTextField, .textArea] as [HeistTrait] {
+            let element = makeScreenElement(
+                heistId: HeistId(rawValue: trait.rawValue),
+                label: trait.rawValue,
+                traits: [trait],
+                respondsToUserInteraction: false
+            )
+
+            XCTAssertTrue(
+                WireConversion.convert(element.element).actions.contains(.typeText),
+                "Expected typeText for \(trait.rawValue)"
+            )
+        }
+    }
+
+    func testToWireDoesNotInferTypeTextFromUnrelatedTraits() {
+        let element = makeScreenElement(
+            heistId: "button",
+            label: "Button",
+            traits: [.button],
+            respondsToUserInteraction: false
+        )
+
+        XCTAssertFalse(WireConversion.convert(element.element).actions.contains(.typeText))
+    }
+
     // MARK: - Tree Conversion
 
     func testToWireTreePreservesParserModalBoundary() {

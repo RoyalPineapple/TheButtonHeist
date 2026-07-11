@@ -454,6 +454,8 @@ extension HeistPlanSourceParser {
         switch name {
         case "activate":
             return .activate
+        case "typeText":
+            return .typeText
         case "increment":
             return .increment
         case "decrement":
@@ -470,7 +472,7 @@ extension HeistPlanSourceParser {
             try expectSymbol(")")
             return .custom(customName)
         default:
-            throw error(token, "unsupported action '.\(name)'. Valid: activate, increment, decrement, custom")
+            throw error(token, "unsupported action '.\(name)'. Valid: activate, typeText, increment, decrement, custom")
         }
     }
 

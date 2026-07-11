@@ -3,10 +3,11 @@ import Foundation
 // MARK: - Element Actions
 
 /// Actions that can be performed on a UI element.
-/// Built-in actions encode as plain strings ("activate", "increment", "decrement").
+/// Built-in actions encode as plain strings ("activate", "typeText", "increment", "decrement").
 /// Custom actions encode as their name string directly.
 public enum ElementAction: Equatable, Hashable, Sendable {
     case activate
+    case typeText
     case increment
     case decrement
     case custom(String)
@@ -16,6 +17,7 @@ extension ElementAction: CustomStringConvertible {
     public var description: String {
         switch self {
         case .activate: return "activate"
+        case .typeText: return "typeText"
         case .increment: return "increment"
         case .decrement: return "decrement"
         case .custom(let name): return name
@@ -43,6 +45,7 @@ extension ElementAction: Codable {
         let value = try container.decode(String.self)
         switch value {
         case "activate": self = .activate
+        case "typeText": self = .typeText
         case "increment": self = .increment
         case "decrement": self = .decrement
         default:
@@ -55,7 +58,7 @@ extension ElementAction: Codable {
 
     public func encode(to encoder: Encoder) throws {
         switch self {
-        case .activate, .increment, .decrement:
+        case .activate, .typeText, .increment, .decrement:
             var container = encoder.singleValueContainer()
             try container.encode(description)
         case .custom(let name):
@@ -78,12 +81,14 @@ package extension ElementAction {
         switch self {
         case .activate:
             return "0:activate"
+        case .typeText:
+            return "1:typeText"
         case .increment:
-            return "1:increment"
+            return "2:increment"
         case .decrement:
-            return "2:decrement"
+            return "3:decrement"
         case .custom(let name):
-            return "3:\(name)"
+            return "4:\(name)"
         }
     }
 }

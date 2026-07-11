@@ -557,18 +557,25 @@ extension TheBrains {
         command: HeistActionCommand,
         actionResult: ActionResult
     ) -> HeistActionWarning? {
-        guard case .activate = command,
-              actionResult.outcome.isSuccess,
-              let subject = actionResult.subjectEvidence,
-              !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits)
+        guard actionResult.outcome.isSuccess,
+              let subject = actionResult.subjectEvidence
         else { return nil }
 
-        return .activationWeakAffordanceEvidence(
-            evidence: activationAffordanceEvidenceDescription(for: subject.element)
-        )
+        switch command {
+        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits):
+            return .activationWeakAffordanceEvidence(
+                evidence: actionAffordanceEvidenceDescription(for: subject.element)
+            )
+        case .typeText where !AccessibilityPolicy.supportsTextEntry(subject.element.traits):
+            return .textEntryWeakAffordanceEvidence(
+                evidence: actionAffordanceEvidenceDescription(for: subject.element)
+            )
+        default:
+            return nil
+        }
     }
 
-    private func activationAffordanceEvidenceDescription(for element: HeistElement) -> String {
+    private func actionAffordanceEvidenceDescription(for element: HeistElement) -> String {
         ElementDiagnosticSummary(
             label: element.label,
             identifier: element.identifier,
