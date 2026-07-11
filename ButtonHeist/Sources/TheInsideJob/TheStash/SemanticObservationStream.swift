@@ -136,12 +136,19 @@ private struct SemanticObservationFulfillmentState {
                 screen: screen.semanticObservationProjection(for: fulfilledScope),
                 tripwireSignal: tripwireSignal
             )
+            let fallbackReason = currentEvents[fulfilledScope].flatMap { previousEvent in
+                ScreenClassifier.classify(
+                    before: ScreenClassifier.snapshot(of: previousEvent.observation.screen),
+                    after: ScreenClassifier.snapshot(of: observation.screen)
+                ).reason
+            }
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
                 previous: currentEvents[fulfilledScope],
                 stash: stash,
                 pendingAccessibilityNotifications: pendingAccessibilityNotifications,
-                notificationIdentityScreen: notificationIdentityScreen
+                notificationIdentityScreen: notificationIdentityScreen,
+                fallbackReason: fallbackReason
             )
             currentEvents[fulfilledScope] = event
             events[fulfilledScope] = event

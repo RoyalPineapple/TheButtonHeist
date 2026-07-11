@@ -35,4 +35,4 @@ Notes:
 
 - The before-state is captured **before** the action is delivered (`PostActionObservation.captureSemanticState`), and the delta is computed from two settled captures — never from raw mid-animation reads.
 - Settle blocks the pipeline: the response does not leave the app until `SettleSession` reaches a terminal `SettleOutcome`. A `timedOut` outcome is reported as `settled: false` in the receipt, never passed off as stable.
-- The delta classification lives in `AccessibilityTrace.Delta`: `noChange`, `elementsChanged` (same screen, element-level edits), or `screenChanged` (screen identity changed).
+- The delta classification has one owner, `AccessibilityObservationChangeReducer`: scoped `screenChanged` evidence is authoritative, scoped `layoutChanged` evidence produces a same-screen element change, and typed settled-snapshot heuristics are the silent-notification fallback. The public delta remains `noChange`, `elementsChanged`, or `screenChanged`.

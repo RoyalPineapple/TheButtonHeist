@@ -198,7 +198,7 @@ final class WireConverterTests: XCTestCase {
             interface: afterInterface,
             parentHash: beforeCapture.hash,
             transition: isScreenChange
-                ? AccessibilityTrace.Transition(screenChangeReason: "testScreenChange")
+                ? AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
                 : .empty
         )
         return AccessibilityTrace.Delta.between(

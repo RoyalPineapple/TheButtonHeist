@@ -157,8 +157,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(
-            result.accessibilityTrace?.captures.last?.transition.screenChangeReason,
-            "navigationMarkerChanged"
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .navigationMarkerChanged
         )
         let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last?.interface.projectedElements)
             .compactMap(\.label)
@@ -1451,7 +1451,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
-        XCTAssertNil(trace.captures.last?.transition.screenChangeReason)
+        XCTAssertNil(trace.captures.last?.transition.fallbackReason)
         guard case .elementsChanged(let payload)? = trace.endpointDelta else {
             return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDelta))")
         }
@@ -1468,7 +1468,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
-        XCTAssertEqual(trace.captures.last?.transition.screenChangeReason, "primaryHeaderChanged")
+        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         guard case .screenChanged(let payload)? = trace.endpointDelta else {
             return XCTFail("Expected screenChanged delta, got \(String(describing: trace.endpointDelta))")
         }

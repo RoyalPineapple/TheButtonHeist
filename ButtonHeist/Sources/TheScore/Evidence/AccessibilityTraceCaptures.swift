@@ -13,7 +13,7 @@ private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
 }
 
 private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIterable {
-    case screenChangeReason
+    case fallbackReason
     case transient
     case accessibilityNotifications
 }
@@ -118,10 +118,9 @@ public extension AccessibilityTrace {
     struct Transition: Codable, Sendable, Equatable, Hashable {
         public static let empty = Transition()
 
-        /// Reason a same-edge transition was classified as a screen change.
-        /// Stored as a string so producers outside TheScore can evolve their
-        /// classifier without making this wire receipt depend on that enum.
-        public let screenChangeReason: String?
+        /// Typed fallback reason used when scoped notifications did not
+        /// identify the screen transition.
+        public let fallbackReason: AccessibilityObservationFallbackReason?
         /// Elements that appeared and disappeared while settling this edge.
         public let transient: [HeistElement]
         /// AX notification traffic observed while moving into this capture.
@@ -129,17 +128,17 @@ public extension AccessibilityTrace {
         public let accessibilityNotifications: [AccessibilityNotificationEvidence]
 
         public init(
-            screenChangeReason: String? = nil,
+            fallbackReason: AccessibilityObservationFallbackReason? = nil,
             transient: [HeistElement] = [],
             accessibilityNotifications: [AccessibilityNotificationEvidence] = []
         ) {
-            self.screenChangeReason = screenChangeReason
+            self.fallbackReason = fallbackReason
             self.transient = transient
             self.accessibilityNotifications = accessibilityNotifications
         }
 
         public var isEmpty: Bool {
-            screenChangeReason == nil && transient.isEmpty && accessibilityNotifications.isEmpty
+            fallbackReason == nil && transient.isEmpty && accessibilityNotifications.isEmpty
         }
 
         public init(from decoder: Decoder) throws {
@@ -149,7 +148,10 @@ public extension AccessibilityTrace {
             )
             let container = try decoder.container(keyedBy: AccessibilityTraceTransitionCodingKeys.self)
             self.init(
-                screenChangeReason: try container.decodeIfPresent(String.self, forKey: .screenChangeReason),
+                fallbackReason: try container.decodeIfPresent(
+                    AccessibilityObservationFallbackReason.self,
+                    forKey: .fallbackReason
+                ),
                 transient: try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? [],
                 accessibilityNotifications: try container.decodeIfPresent(
                     [AccessibilityNotificationEvidence].self,
@@ -160,7 +162,7 @@ public extension AccessibilityTrace {
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: AccessibilityTraceTransitionCodingKeys.self)
-            try container.encodeIfPresent(screenChangeReason, forKey: .screenChangeReason)
+            try container.encodeIfPresent(fallbackReason, forKey: .fallbackReason)
             if !transient.isEmpty {
                 try container.encode(transient, forKey: .transient)
             }

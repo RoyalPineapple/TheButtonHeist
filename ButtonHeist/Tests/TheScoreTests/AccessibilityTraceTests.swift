@@ -40,6 +40,14 @@ final class AccessibilityTraceTests: XCTestCase {
         }
     }
 
+    func testDecodeRejectsTheOldStringlyScreenChangeReason() {
+        let json = #"{"screenChangeReason":"primaryHeaderChanged"}"#
+
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AccessibilityTrace.Transition.self, from: Data(json.utf8))
+        )
+    }
+
     func testCaptureDecodeRejectsMissingContext() throws {
         let capture = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
         let data = try JSONEncoder().encode(CaptureWithoutContextFixture(capture: capture))
@@ -88,7 +96,7 @@ final class AccessibilityTraceTests: XCTestCase {
             sequence: 1,
             interface: interface,
             transition: AccessibilityTrace.Transition(
-                screenChangeReason: "primaryHeaderChanged",
+                fallbackReason: .primaryHeaderChanged,
                 transient: [makeElement(label: "Loading", traits: [.staticText])]
             )
         )
@@ -150,12 +158,12 @@ final class AccessibilityTraceTests: XCTestCase {
         let trace = AccessibilityTrace(first: first).appending(
             second,
             transition: AccessibilityTrace.Transition(
-                screenChangeReason: "primaryHeaderChanged",
+                fallbackReason: .primaryHeaderChanged,
                 transient: [transient]
             )
         )
 
-        XCTAssertEqual(trace.captures[1].transition.screenChangeReason, "primaryHeaderChanged")
+        XCTAssertEqual(trace.captures[1].transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(trace.captures[1].transition.transient, [transient])
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
@@ -268,13 +276,13 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(interface.projectedElements.map(\.actions), [[.activate], [.increment]])
     }
 
-    func testScreenChangeReasonProjectsScreenChangedDelta() throws {
+    func testFallbackReasonProjectsScreenChangedDelta() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
             interface: makeInterface(label: "Checkout"),
             parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
 
         guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
@@ -282,13 +290,13 @@ final class AccessibilityTraceTests: XCTestCase {
         }
     }
 
-    func testScreenChangeReasonOverridesStructuralChange() throws {
+    func testFallbackReasonOverridesStructuralChange() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeListInterface(["Antipasti"]))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
             interface: makeListInterface(["Antipasti", "Pasta"]),
             parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
 
         guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
@@ -379,7 +387,7 @@ final class AccessibilityTraceTests: XCTestCase {
             .appending(updated)
             .appending(
                 final,
-                transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+                transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
             )
 
         let accumulated = try XCTUnwrap(trace.accumulatedDelta)
