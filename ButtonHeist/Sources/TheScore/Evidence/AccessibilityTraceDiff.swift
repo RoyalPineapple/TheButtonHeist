@@ -13,10 +13,14 @@ enum AccessibilityTraceDiff {
     ) -> AccessibilityTrace.Delta {
         let edge = AccessibilityTrace.CaptureEdge(before: before, after: after)
         let interactionDigest = AccessibilityTrace.InteractionDigest(between: before, and: after)
-        let screenChanged = before.context.screenId != after.context.screenId
-            || after.transition.screenChangeReason != nil
+        let change = AccessibilityObservationChangeReducer.reduce(
+            before: before,
+            after: after,
+            projection: projection
+        )
+        let screenChanged = change.isScreenChange
 
-        if !screenChanged, !projection.includesGeometry, before.hash == after.hash {
+        if !change.isChange {
             return .noChange(AccessibilityTrace.NoChange(
                 elementCount: after.interface.projectedElements.count,
                 captureEdge: edge,
@@ -29,6 +33,7 @@ enum AccessibilityTraceDiff {
             before.interface,
             after.interface,
             isScreenChange: screenChanged,
+            forceElementChange: change.isElementNotification,
             projection: projection,
             captureEdge: edge,
             interactionDigest: interactionDigest,
@@ -52,6 +57,7 @@ enum AccessibilityTraceDiff {
         _ before: Interface,
         _ after: Interface,
         isScreenChange: Bool,
+        forceElementChange: Bool,
         projection: AccessibilityTrace.DeltaProjection,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
@@ -66,15 +72,6 @@ enum AccessibilityTraceDiff {
                 elementCount: afterElements.count,
                 captureEdge: captureEdge,
                 newInterface: after,
-                interactionDigest: interactionDigest,
-                transient: transient
-            ))
-        }
-
-        if !projection.includesGeometry, AccessibilityTrace.Capture.hash(before) == AccessibilityTrace.Capture.hash(after) {
-            return .noChange(AccessibilityTrace.NoChange(
-                elementCount: afterElements.count,
-                captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
                 transient: transient
             ))
@@ -95,6 +92,7 @@ enum AccessibilityTraceDiff {
         return projectElementDelta(
             edits: edits,
             unpairedEdits: unpairedEdits,
+            forceChange: forceElementChange,
             elementCount: afterElements.count,
             captureEdge: captureEdge,
             interactionDigest: interactionDigest,
@@ -105,6 +103,7 @@ enum AccessibilityTraceDiff {
     private static func projectElementDelta(
         edits: ElementEdits,
         unpairedEdits: ElementEdits?,
+        forceChange: Bool,
         elementCount: Int,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
@@ -120,8 +119,17 @@ enum AccessibilityTraceDiff {
                     transient: transient
                 ))
             }
-            return .noChange(AccessibilityTrace.NoChange(
+            guard forceChange else {
+                return .noChange(AccessibilityTrace.NoChange(
+                    elementCount: elementCount,
+                    captureEdge: captureEdge,
+                    interactionDigest: interactionDigest,
+                    transient: transient
+                ))
+            }
+            return .elementsChanged(AccessibilityTrace.ElementsChanged(
                 elementCount: elementCount,
+                edits: ElementEdits(),
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
                 transient: transient

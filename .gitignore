@@ -42,3 +42,7 @@ WebDriverAgent/
 AccessibilitySnapshotBH
 heist-test/
 .claude/
+# rp1 directory
+!.rp1/
+.rp1/*
+!.rp1/project_id

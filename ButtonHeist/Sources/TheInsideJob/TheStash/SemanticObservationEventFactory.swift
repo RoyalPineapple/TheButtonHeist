@@ -10,7 +10,8 @@ enum SemanticObservationEventFactory {
         previous: SettledSemanticObservationEvent?,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
-        notificationIdentityScreen: Screen? = nil
+        notificationIdentityScreen: Screen? = nil,
+        fallbackReason: AccessibilityObservationFallbackReason? = nil
     ) -> SettledSemanticObservationEvent {
         let previousCapture = previous?.trace.captures.last
         let currentCapture = semanticTraceCapture(
@@ -19,7 +20,8 @@ enum SemanticObservationEventFactory {
             parentHash: previousCapture?.hash,
             stash: stash,
             pendingAccessibilityNotifications: pendingAccessibilityNotifications,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityScreen: notificationIdentityScreen,
+            fallbackReason: fallbackReason
         )
         let trace = if let previousCapture {
             AccessibilityTrace(captures: [previousCapture, currentCapture])
@@ -43,7 +45,8 @@ enum SemanticObservationEventFactory {
         parentHash: String?,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
-        notificationIdentityScreen: Screen?
+        notificationIdentityScreen: Screen?,
+        fallbackReason: AccessibilityObservationFallbackReason?
     ) -> AccessibilityTrace.Capture {
         let screen = switch observation.scope {
         case .visible:
@@ -73,6 +76,7 @@ enum SemanticObservationEventFactory {
                 windowStack: windows
             ),
             transition: AccessibilityTrace.Transition(
+                fallbackReason: fallbackReason,
                 accessibilityNotifications: accessibilityNotifications
             )
         )

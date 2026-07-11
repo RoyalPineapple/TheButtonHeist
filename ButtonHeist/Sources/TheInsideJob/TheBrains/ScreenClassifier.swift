@@ -69,13 +69,7 @@ import TheScore
         let isScrollable: Bool
     }
 
-    enum Reason: String, Equatable {
-        case modalBoundaryChanged
-        case selectedTabChanged
-        case navigationMarkerChanged
-        case primaryHeaderChanged
-        case rootShapeChanged
-    }
+    typealias Reason = AccessibilityObservationFallbackReason
 
     struct Classification: Equatable {
         let isScreenChange: Bool

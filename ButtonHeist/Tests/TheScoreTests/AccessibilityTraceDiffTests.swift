@@ -321,7 +321,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             sequence: 2,
             interface: makeInterface(label: "Checkout"),
             parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
         let trace = AccessibilityTrace(captures: [before, after])
 
@@ -332,6 +332,55 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         }
         XCTAssertEqual(payload.newInterface, after.interface)
         try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+    }
+
+    func testScreenChangedNotificationWinsWhenScreenIdentityIsUnchanged() {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Menu"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: [notification(kind: .screenChanged, sequence: 1)]
+            )
+        )
+
+        guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected screenChanged from the scoped screenChanged notification")
+        }
+    }
+
+    func testElementChangedNotificationProducesSameScreenDeltaWithoutSemanticEdits() {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Menu"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: [notification(kind: .elementChanged, sequence: 1)]
+            )
+        )
+
+        guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected elementsChanged from the scoped elementChanged notification")
+        }
+        XCTAssertTrue(payload.edits.isEmpty)
+    }
+
+    func testAnnouncementDoesNotCreateATransition() {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Menu"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: [notification(kind: .announcement, sequence: 1)]
+            )
+        )
+
+        guard case .noChange = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Announcements are evidence only and must not create a semantic transition")
+        }
     }
 
     func testTransitionTransientLivesOnCaptureEdgeAndProjectsToCompactDeltaField() throws {
@@ -862,6 +911,19 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let delta = AccessibilityTrace.Delta.between(before, after)
         XCTAssertNotNil(delta.testCaptureEdge, file: file, line: line)
         return delta
+    }
+
+    private func notification(
+        kind: AccessibilityNotificationKind,
+        sequence: UInt64
+    ) -> AccessibilityNotificationEvidence {
+        AccessibilityNotificationEvidence(
+            sequence: sequence,
+            kind: kind,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
+            notificationData: .none,
+            associatedElement: .none
+        )
     }
 
 }

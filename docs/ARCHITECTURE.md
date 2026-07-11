@@ -45,10 +45,14 @@ layout, animations, top view-controller identity, navigation state, window
 ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
-When Tripwire triggers, TheBrains parses the accessibility hierarchy and
-`ScreenClassifier` decides whether the settled result is no-change,
-element-change, or screen-change. The settle loop can also report unhealthy
-snapshots rather than pretending an empty post-navigation parse is stable.
+When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
+for a clean settled snapshot. One pure observation reducer then classifies the
+edge: a scoped `screenChanged` notification wins, a scoped `layoutChanged`
+notification becomes an `elementChanged` signal, and typed screen heuristics
+are used only when the notification stream is silent. Announcement
+notifications stay in the evidence stream and never create or wake a semantic
+transition. The settle loop can also report unhealthy snapshots rather than
+pretending an empty post-navigation parse is stable.
 See the [settle loop diagram](diagrams/settle-loop.md) for the state machine
 and its constants.
 
@@ -124,8 +128,13 @@ Runtime subscriptions are not a public driver surface.
 ### Screen Classification Is Typed
 
 Screen changes are not guessed from text, timers, or window events. The parser
-builds a typed semantic signature, and `ScreenClassifier` emits the screen
-classification used by action results and waiters.
+builds settled captures, `AccessibilityNotificationBus` records scoped
+screen/layout/announcement evidence, and `AccessibilityObservationChangeReducer`
+owns the one classification decision used by action results and waiters. The
+wire transition stores typed fallback reasons rather than a free-form
+`screenChangeReason` string. UIKit notification absence is not proof of no
+change: silent flows use the settled snapshot and the explicit typed fallback
+heuristics.
 
 ## Component Map
 
@@ -218,7 +227,8 @@ The public predicate layer is intentionally one tree language:
 3. TheGetaway routes the plan to TheBrains' heist runtime.
 4. TheBrains captures before-state, performs the action, waits for stable UI, and
    parses after-state.
-5. `ScreenClassifier` classifies the settled result.
+5. `AccessibilityObservationChangeReducer` classifies the settled edge using
+   scoped notifications first and typed fallback facts when notifications are silent.
 6. The response includes the heist execution receipt, accessibility trace, derived delta,
    and optional expectation result.
 
