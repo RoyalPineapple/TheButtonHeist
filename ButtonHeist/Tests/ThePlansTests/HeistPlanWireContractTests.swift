@@ -28,6 +28,26 @@ func `all heist step kinds round trip through canonical JSON bytes`() throws {
 }
 
 @Test
+func `checked in heist fixtures use canonical JSON contracts`() throws {
+    let fixtureURLs = try heistArtifactFixtureURLs()
+    if fixtureURLs.isEmpty {
+        Issue.record("Expected at least one checked-in .heist fixture")
+    }
+
+    for fixtureURL in fixtureURLs {
+        let artifact = try HeistArtifactCodec.read(from: fixtureURL)
+        try expectCanonicalJSON(
+            at: fixtureURL.appendingPathComponent(HeistArtifactCodec.manifestFileName, isDirectory: false),
+            expectedData: HeistArtifactCodec.canonicalManifestJSONData(artifact.manifest)
+        )
+        try expectCanonicalJSON(
+            at: fixtureURL.appendingPathComponent(HeistArtifactCodec.planFileName, isDirectory: false),
+            expectedData: artifact.plan.canonicalHeistJSONData()
+        )
+    }
+}
+
+@Test
 func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     let unresolvedInvocation = Data("""
     {
@@ -169,6 +189,47 @@ func `for each parameter names reject Swift reserved identifiers including Any`(
     #expect(HeistParameterName.isValid("item"))
     #expect(!HeistParameterName.isValid("Any"))
     #expect(!HeistParameterName.isValid("class"))
+}
+
+private func heistArtifactFixtureURLs() throws -> [URL] {
+    let fixturesURL = repositoryRootURL()
+        .appendingPathComponent("tests", isDirectory: true)
+        .appendingPathComponent("fixtures", isDirectory: true)
+    let enumerator = FileManager.default.enumerator(
+        at: fixturesURL,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    )
+    return try (enumerator?.compactMap { entry -> URL? in
+        guard let url = entry as? URL,
+              url.pathExtension == "heist"
+        else {
+            return nil
+        }
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+        return values.isDirectory == true ? url : nil
+    } ?? [])
+    .sorted { $0.path < $1.path }
+}
+
+private func repositoryRootURL() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+}
+
+private func expectCanonicalJSON(at url: URL, expectedData: Data) throws {
+    let actualData = try Data(contentsOf: url)
+    let actualJSON = try canonicalJSONObjectData(from: actualData)
+    let expectedJSON = try canonicalJSONObjectData(from: expectedData)
+    #expect(actualJSON == expectedJSON, "\(url.path) must use Button Heist's canonical JSON encoding")
+}
+
+private func canonicalJSONObjectData(from data: Data) throws -> Data {
+    let object = try JSONSerialization.jsonObject(with: data, options: [])
+    return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
 }
 
 @Test
