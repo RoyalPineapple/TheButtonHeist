@@ -101,6 +101,8 @@ INTENTIONAL_BREAKAGES=(
     "var AccessibilityNotificationEvidence.code has been removed"
     "var AccessibilityNotificationEvidence.name has been removed"
     "constructor AccessibilityNotificationEvidence.init(sequence:code:name:timestamp:notificationData:associatedElement:) has been removed"
+    "var AccessibilityTrace.Transition.screenChangeReason has been removed"
+    "constructor AccessibilityTrace.Transition.init(screenChangeReason:transient:accessibilityNotifications:) has been removed"
     "var CapturedAnnouncement.notificationCode has been removed"
     "var CapturedAnnouncement.notificationName has been removed"
     "constructor CapturedAnnouncement.init(sequence:text:timestamp:notificationCode:notificationName:associatedElement:) has been removed"
