@@ -512,6 +512,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch action {
         case .activate:
             return ".activate"
+        case .typeText:
+            return ".typeText"
         case .increment:
             return ".increment"
         case .decrement:

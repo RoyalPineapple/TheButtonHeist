@@ -35,6 +35,13 @@ final class AccessibilityPolicyTests: XCTestCase {
         }
     }
 
+    func testTextInputTraitsContainsNoUnknowns() {
+        for trait in AccessibilityPolicy.textInputTraits {
+            XCTAssertTrue(HeistTrait.allCases.contains(trait),
+                          "textInputTraits contains a trait outside HeistTrait.allCases: \(trait)")
+        }
+    }
+
     func testSynthesisPriorityContainsNoUnknowns() {
         for trait in AccessibilityPolicy.synthesisPriority {
             XCTAssertTrue(HeistTrait.allCases.contains(trait),
@@ -62,6 +69,15 @@ final class AccessibilityPolicyTests: XCTestCase {
             .intersection(AccessibilityPolicy.interactiveTraits)
         XCTAssertTrue(overlap.isEmpty,
                       "staticOnlyTraits and interactiveTraits must be disjoint; overlap: \(overlap)")
+    }
+
+    func testTextInputTraitsIdentifyEveryTextInputShape() {
+        for trait in [.textEntry, .searchField, .secureTextField, .textArea] as [HeistTrait] {
+            XCTAssertTrue(AccessibilityPolicy.supportsTextEntry([trait]))
+        }
+        XCTAssertFalse(AccessibilityPolicy.supportsTextEntry([.button]))
+        XCTAssertFalse(AccessibilityPolicy.supportsTextEntry([.isEditing]))
+        XCTAssertFalse(AccessibilityPolicy.supportsTextEntry([.textOperationsAvailable]))
     }
 
     // MARK: - Locked contents (regression guard)

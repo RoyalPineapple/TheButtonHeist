@@ -86,6 +86,8 @@ enum CLIElementTargetPayloadEncoder {
         switch action {
         case .activate:
             return .string("activate")
+        case .typeText:
+            return .string("typeText")
         case .increment:
             return .string("increment")
         case .decrement:
@@ -101,12 +103,14 @@ enum CLIElementTargetPayloadEncoder {
         switch action {
         case .activate:
             return "0:activate"
+        case .typeText:
+            return "1:typeText"
         case .increment:
-            return "1:increment"
+            return "2:increment"
         case .decrement:
-            return "2:decrement"
+            return "3:decrement"
         case .custom(let name):
-            return "3:\(name)"
+            return "4:\(name)"
         }
     }
 

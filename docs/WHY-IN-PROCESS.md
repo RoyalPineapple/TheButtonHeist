@@ -66,8 +66,8 @@ does.
 
 **The whole vocabulary, not the tappable slice.** The accessibility interface
 is not a label and a tap. It is every trait, the hint, the value, custom
-content, and — to act — not just activate but increment, decrement, custom
-actions, and the rotor. There is no pixel for a custom action, no coordinate
+content, and — to act — not just activate but type text, increment, decrement,
+custom actions, and the rotor. There is no pixel for a custom action, no coordinate
 that reads a hint. A tool that taps screen coordinates can exercise the slice
 of accessibility that happens to have a tappable frame; The Button Heist holds
 the real element and calls the real methods.

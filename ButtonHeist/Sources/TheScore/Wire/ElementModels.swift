@@ -50,17 +50,19 @@ extension Sequence where Element == ElementAction {
 
 private extension ElementAction {
     var canonicalSortKey: String {
-        switch self {
-        case .activate:
-            return "0:activate"
-        case .increment:
-            return "1:increment"
-        case .decrement:
-            return "2:decrement"
-        case .custom(let name):
-            return "3:\(name)"
-        }
+    switch self {
+    case .activate:
+        return "0:activate"
+    case .typeText:
+        return "1:typeText"
+    case .increment:
+        return "2:increment"
+    case .decrement:
+        return "3:decrement"
+    case .custom(let name):
+        return "4:\(name)"
     }
+}
 }
 
 // MARK: - Heist Element

@@ -73,6 +73,23 @@ public enum AccessibilityPolicy {
         .switchButton,
     ]
 
+    /// Traits that identify an element as a text input surface.
+    ///
+    /// These traits project to Button Heist's executable `typeText` action.
+    /// State traits such as `isEditing` and `textOperationsAvailable` are
+    /// intentionally excluded because they do not establish text-entry
+    /// capability.
+    public static let textInputTraits: Set<HeistTrait> = [
+        .textEntry,
+        .searchField,
+        .secureTextField,
+        .textArea,
+    ]
+
+    public static func supportsTextEntry(_ traits: some Sequence<HeistTrait>) -> Bool {
+        !Set(traits).isDisjoint(with: textInputTraits)
+    }
+
     // MARK: - Activation Affordance Evidence Traits
 
     /// Traits that advertise primary activation as an accessibility affordance.

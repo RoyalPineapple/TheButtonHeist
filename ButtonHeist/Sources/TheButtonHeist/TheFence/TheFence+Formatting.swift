@@ -413,11 +413,13 @@ extension FenceResponse {
     }
 
     /// Actions that aren't implied by the element's traits.
-    /// `activate` is implied by `.button`; `increment`/`decrement` by `.adjustable`.
+    /// `activate` is implied by `.button`; `typeText` by text-input traits;
+    /// `increment`/`decrement` by `.adjustable`.
     static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {
         element.actions.filter { action in
             switch action {
             case .activate: return !element.traits.contains(.button)
+            case .typeText: return !AccessibilityPolicy.supportsTextEntry(element.traits)
             case .increment, .decrement: return !element.traits.contains(.adjustable)
             case .custom: return true
             }

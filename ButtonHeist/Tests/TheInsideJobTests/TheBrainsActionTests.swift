@@ -856,6 +856,46 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testHeistTypeTextRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Notes"))
+        let subject = makeTestHeistElement(
+            label: "Notes",
+            traits: [.staticText],
+            actions: []
+        )
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                ActionResult.success(
+                    method: .typeText,
+                    subjectEvidence: ActionSubjectEvidence(
+                        source: .textInputTarget,
+                        target: target,
+                        element: subject
+                    )
+                )
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .typeText(
+                text: .literal("hello"),
+                target: .target(target)
+            ))),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
+        XCTAssertEqual(warning.code, HeistActionWarning.textEntryWeakAffordanceEvidenceCode)
+        XCTAssertEqual(
+            warning.message,
+            "typeText succeeded, but the target does not advertise a text-input trait"
+        )
+        XCTAssertEqual(warning.evidence, #"label="Notes" traits=[staticText] actions=[]"#)
+    }
+
     func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let screenshot = ScreenPayload(

@@ -207,6 +207,9 @@ import AccessibilitySnapshotParser
             actions.append(.increment)
             actions.append(.decrement)
         }
+        if AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits) {
+            actions.append(.typeText)
+        }
         appendUniqueActions(
             element.customActions.map { $0.name }.filter { !$0.isEmpty }.map(ElementAction.custom),
             to: &actions

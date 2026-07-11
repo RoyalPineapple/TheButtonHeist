@@ -21,6 +21,7 @@ fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
 INTENTIONAL_BREAKAGES=(
+    "enumelement ElementAction.typeText has been added as a new enum case"
     "enumelement HeistActionCommandType.dismiss has been added as a new enum case"
     "enumelement HeistActionCommandType.magicTap has been added as a new enum case"
     "enumelement HeistActionCommand.dismiss has been added as a new enum case"
