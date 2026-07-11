@@ -1054,7 +1054,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(children.count, 1)
         XCTAssertEqual(publicInterface.annotations.containers.first?.containerName, "main_scroll")
-        XCTAssertEqual(semanticInterface.annotations.containers, [])
+        XCTAssertEqual(semanticInterface.annotations.containers.first?.containerName, "main_scroll")
     }
 
     func testKnownScrollMembershipsAreKeyedByHeistIdForEqualElements() {

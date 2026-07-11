@@ -373,6 +373,64 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "checkout_button").traceElementIdentity)
     }
 
+    func testSemanticInterfacePreservesContainersWhenKnownElementsShareParserPath() throws {
+        let containerPath = TreePath([0])
+        let recycledElementPath = TreePath([0, 0])
+        let containerIdentifier = "SquareCheckoutAppletCore.OrderEntryContainerViewController"
+        let container = AccessibilityContainer(
+            type: .none, identifier: containerIdentifier,
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let first = makeElement(label: "First row", traits: [.staticText])
+        let second = makeElement(label: "Second row", traits: [.staticText])
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "first_row_staticText": SemanticScreen.Element(
+                        heistId: "first_row_staticText",
+                        path: recycledElementPath,
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: containerPath, index: 0),
+                        element: first
+                    ),
+                    "second_row_staticText": SemanticScreen.Element(
+                        heistId: "second_row_staticText",
+                        path: recycledElementPath,
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: containerPath, index: 1),
+                        element: second
+                    ),
+                ],
+                containers: [
+                    containerPath: SemanticScreen.Container(
+                        container: container,
+                        path: containerPath,
+                        containerName: "container_order_entry",
+                        contentFrame: nil
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [.container(container, children: [
+                    .element(second, traversalIndex: 0),
+                ])],
+                containerNamesByPath: [containerPath: "container_order_entry"],
+                heistIdsByPath: [recycledElementPath: "second_row_staticText"],
+                elementRefs: [:],
+                firstResponderHeistId: nil
+            )
+        )
+
+        let interface = WireConversion.toSemanticInterface(from: screen)
+        let predicate = AccessibilityPredicate.exists(container: .identifier(containerIdentifier))
+        let result = predicate.evaluate(in: PredicateEvaluationEvidence(
+            currentInterface: interface,
+            currentElements: interface.projectedElements,
+            accumulatedDelta: nil
+        ))
+
+        XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
+        XCTAssertEqual(Set(interface.projectedElements.compactMap(\.label)), ["First row", "Second row"])
+    }
+
     func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
