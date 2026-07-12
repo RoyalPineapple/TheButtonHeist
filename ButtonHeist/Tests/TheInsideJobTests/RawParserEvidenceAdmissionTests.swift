@@ -57,7 +57,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(rawObject.incrementCount, 0)
     }
 
-    func testSettledIdentityUsesRefreshedLiveEvidenceWithoutChangingSemanticSelection() async throws {
+    func testSettledIdentityUsesOnlyRefAndGeometryFromRawRefresh() async throws {
         let heistId: HeistId = "shared_control"
         let settledFrame = CGRect(x: 10, y: 20, width: 100, height: 44)
         let settled = observation(
@@ -90,7 +90,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         }
         XCTAssertTrue(liveTarget.object === refreshedObject)
         XCTAssertEqual(liveTarget.treeElement.heistId, heistId)
-        XCTAssertEqual(liveTarget.element.value, "raw")
+        XCTAssertEqual(liveTarget.element.value, "settled")
         XCTAssertEqual(liveTarget.frame, refreshedFrame)
 
         let result = await brains.actions.executeIncrement(target(label: "Shared Control"))

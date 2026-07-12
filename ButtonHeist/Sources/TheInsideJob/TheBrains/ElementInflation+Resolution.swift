@@ -10,10 +10,10 @@ extension ElementInflation {
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
         didReveal: Bool,
-        attempt: Int,
         method: ActionMethod,
         deallocatedBoundary: String,
-        activationPointPolicy: ActivationPointPolicy
+        activationPointPolicy: ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
     ) async -> State {
         switch resolveFreshElementTarget(
             target: target,
@@ -24,29 +24,26 @@ extension ElementInflation {
         case .success(let inflatedTarget):
             return await stateAfterResolvedFreshTarget(
                 inflatedTarget,
-                attempt: attempt,
                 didReveal: didReveal,
-                method: method,
                 activationPointPolicy: activationPointPolicy
             )
         case .retry(let reason):
-            switch await awaitStaleLiveTargetGrace(
+            switch await awaitLiveTargetRefresh(
                 for: target,
                 method: method,
-                reason: reason
+                after: stash.latestSettledSemanticObservationEvent?.sequence,
+                deadline: deadline
             ) {
             case .inflated(let inflatedTarget):
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
-                    attempt: attempt,
                     didReveal: didReveal,
-                    method: method,
                     activationPointPolicy: activationPointPolicy
                 )
             case .failure(let failure):
                 return .failed(failure)
             case .treeElement, .timedOut:
-                return .retrying(failedAttempt: attempt, reason: reason)
+                return .failed(staleRefreshFailure(reason: reason))
             case .cancelled:
                 return .failed(.cancelled(
                     "stale live target refresh was cancelled after \(reason.failureDescription)"
@@ -58,8 +55,7 @@ extension ElementInflation {
     }
 
     internal func findTargetInTree(
-        _ target: AccessibilityTarget,
-        allowKnownFallback: Bool
+        _ target: AccessibilityTarget
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):
@@ -74,19 +70,15 @@ extension ElementInflation {
             return .failure(failure)
         }
         if let exploredScreen = await exploration.discoverTarget(target) {
-            let screen = exploredScreen.screen
             stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
-            switch visibleTargetResolution(target, in: screen.tree) {
-            case .success(let visible):
-                return .success(.visible(visible))
-            case .failure(let failure):
-                return .failure(failure)
-            case nil:
-                return discoveredSemanticTarget(target)
-            }
         }
-        guard allowKnownFallback else {
-            return currentVisibleTargetFailure(target)
+        switch visibleTargetResolution(target) {
+        case .success(let visible):
+            return .success(.visible(visible))
+        case .failure(let failure):
+            return .failure(failure)
+        case nil:
+            break
         }
         switch knownSemanticTarget(target) {
         case .success(let treeElement):
@@ -113,20 +105,6 @@ extension ElementInflation {
         _ target: AccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
         switch stash.resolveVisibleTarget(target) {
-        case .resolved(let treeElement):
-            return .success(treeElement)
-        case .ambiguous(let facts):
-            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-        case .notFound:
-            return nil
-        }
-    }
-
-    internal func visibleTargetResolution(
-        _ target: AccessibilityTarget,
-        in tree: InterfaceTree
-    ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
-        switch stash.resolveTarget(target, in: tree.viewportOnly) {
         case .resolved(let treeElement):
             return .success(treeElement)
         case .ambiguous(let facts):
@@ -192,35 +170,6 @@ extension ElementInflation {
         }
     }
 
-    private func discoveredSemanticTarget(
-        _ target: AccessibilityTarget
-    ) -> Result<TreeTargetMatch, ElementInflationFailure> {
-        switch knownSemanticTarget(target) {
-        case .success(let treeElement):
-            return .success(.known(treeElement))
-        case .failure(let failure) where failure.failedStep == .notFound:
-            return .failure(failure)
-        case .failure(let failure):
-            return .failure(failure)
-        }
-    }
-
-    private func currentVisibleTargetFailure(
-        _ target: AccessibilityTarget
-    ) -> Result<TreeTargetMatch, ElementInflationFailure> {
-        switch stash.resolveVisibleTarget(target) {
-        case .resolved(let treeElement):
-            return .success(.visible(treeElement))
-        case .ambiguous(let facts):
-            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-        case .notFound(let facts):
-            return .failure(.staleRefresh(
-                "target was not found after refreshing the current live tree: "
-                    + TargetResolutionDiagnostics.message(for: .notFound(facts))
-            ))
-        }
-    }
-
     private func resolveFreshElementTarget(
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
@@ -250,13 +199,6 @@ extension ElementInflation {
                 ) {
                     return currentVisibleTarget
                 }
-                if stash.refreshLiveCapture() != nil,
-                   let refreshedCurrentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
-                       target: target,
-                       method: method
-                   ) {
-                    return refreshedCurrentVisibleTarget
-                }
                 return .retry(.staleTarget)
             }
             return .success(InflatedElementTarget(
@@ -270,13 +212,6 @@ extension ElementInflation {
                 method: method
             ) {
                 return currentVisibleTarget
-            }
-            if stash.refreshLiveCapture() != nil,
-               let refreshedCurrentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
-                   target: target,
-                   method: method
-               ) {
-                return refreshedCurrentVisibleTarget
             }
             return .retry(.objectDeallocated)
         case .geometryUnavailable:

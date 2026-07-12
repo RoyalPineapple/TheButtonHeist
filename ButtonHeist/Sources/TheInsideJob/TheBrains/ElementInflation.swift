@@ -28,8 +28,6 @@ internal final class ElementInflation {
     internal var exploration: Exploration
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    internal static let stableGeometryQuietFrames: Int = 2
-    internal static let stableGeometryTimeout: TimeInterval = 1.0
     internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     internal init(
@@ -56,69 +54,65 @@ internal final class ElementInflation {
         } catch {
             return .failed(.targetResolution(error))
         }
-        var state: State = .resolving(.initial)
-        let maxAttempts = 2
+        let deadline = SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent(),
+            timeoutSeconds: SemanticObservationTiming.defaultTimeout
+        )
+        var state: State = .resolving
 
         while true {
             switch state {
-            case .resolving(let pass):
-                switch await findTargetInTree(resolvedTarget, allowKnownFallback: pass.allowsKnownFallback) {
+            case .resolving:
+                switch await findTargetInTree(resolvedTarget) {
                 case .success(.visible(let treeElement)):
                     transition(
                         &state,
                         to: .refreshing(
                             target: resolvedTarget,
                             treeElement: treeElement,
-                            attempt: pass.attempt,
                             didReveal: false
                         )
                     )
                 case .success(.known(let treeElement)):
-                    transition(&state, to: .revealing(treeElement: treeElement, attempt: pass.attempt))
+                    transition(&state, to: .revealing(treeElement: treeElement))
                 case .failure(let failure):
                     transition(&state, to: .failed(failure))
                 }
 
-            case .revealing(let treeElement, let attempt):
-                transition(&state, to: await stateAfterReveal(treeElement, target: resolvedTarget, attempt: attempt))
+            case .revealing(let treeElement):
+                transition(
+                    &state,
+                    to: await stateAfterReveal(
+                        treeElement,
+                        target: resolvedTarget,
+                        deadline: deadline
+                    )
+                )
 
-            case .refreshing(let target, let treeElement, let attempt, let didReveal):
+            case .refreshing(let target, let treeElement, let didReveal):
                 transition(
                     &state,
                     to: await stateAfterRefresh(
                         target: target,
                         treeElement: treeElement,
                         didReveal: didReveal,
-                        attempt: attempt,
                         method: method,
                         deallocatedBoundary: deallocatedBoundary,
-                        activationPointPolicy: activationPointPolicy
+                        activationPointPolicy: activationPointPolicy,
+                        deadline: deadline
                     )
                 )
 
-            case .placing(let inflatedTarget, let attempt, let didReveal):
+            case .placing(let inflatedTarget, let didReveal):
                 transition(
                     &state,
                     to: await stateAfterPlacement(
                         inflatedTarget,
                         didReveal: didReveal,
-                        attempt: attempt,
-                        method: method
+                        method: method,
+                        deadline: deadline
                     )
                 )
-
-            case .retrying(let failedAttempt, let reason):
-                let nextAttempt = failedAttempt + 1
-                if nextAttempt >= maxAttempts {
-                    transition(
-                        &state,
-                        to: .failed(retryExhaustedFailure(reason: reason, maxAttempts: maxAttempts))
-                    )
-                } else {
-                    await tripwire.yieldRealFrames(1)
-                    stash.refreshLiveCapture()
-                    transition(&state, to: .resolving(.afterRetry(attempt: nextAttempt, reason: reason)))
-                }
 
             case .inflated(let result):
                 return .inflated(result)

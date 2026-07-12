@@ -96,17 +96,11 @@ extension ElementInflation {
         }
     }
 
-    internal func retryExhaustedFailure(
-        reason: RetryReason,
-        maxAttempts: Int
-    ) -> ElementInflationFailure {
-        let message = "inflation exhausted \(maxAttempts) retry attempts after \(reason.failureDescription)"
-        switch reason {
-        case .objectDeallocated, .staleTarget:
-            return .staleRefresh(message, failureKind: .targetUnavailable)
-        case .activationPointOffscreen:
-            return .geometryNotActionable(message)
-        }
+    internal func staleRefreshFailure(reason: RetryReason) -> ElementInflationFailure {
+        .staleRefresh(
+            "target refresh reached the action deadline after \(reason.failureDescription)",
+            failureKind: .targetUnavailable
+        )
     }
 
     internal func noScrollViewFailure(

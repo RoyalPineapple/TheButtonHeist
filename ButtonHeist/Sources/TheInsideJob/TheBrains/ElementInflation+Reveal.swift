@@ -21,13 +21,12 @@ extension ElementInflation {
     internal func stateAfterReveal(
         _ treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
-        attempt: Int
+        deadline: SemanticObservationDeadline
     ) async -> State {
         if case .success(let visible)? = visibleTargetResolution(target) {
             return .refreshing(
                 target: target,
                 treeElement: visible,
-                attempt: attempt,
                 didReveal: false
             )
         }
@@ -38,13 +37,13 @@ extension ElementInflation {
             switch await awaitTargetRefresh(
                 for: target,
                 mode: .revealPath,
-                after: settledSequence
+                after: settledSequence,
+                deadline: deadline
             ) {
             case .treeElement(let resolved, let didReveal):
                 return .refreshing(
                     target: target,
                     treeElement: resolved,
-                    attempt: attempt,
                     didReveal: didReveal
                 )
             case .failure(let refreshFailure):
@@ -53,7 +52,6 @@ extension ElementInflation {
                 return .refreshing(
                     target: target,
                     treeElement: inflatedTarget.treeElement,
-                    attempt: attempt,
                     didReveal: false
                 )
             case .timedOut:
@@ -71,42 +69,32 @@ extension ElementInflation {
         return .refreshing(
             target: target,
             treeElement: treeElement,
-            attempt: attempt,
             didReveal: reveal.didReveal
         )
     }
 
-    internal func awaitStaleLiveTargetGrace(
+    internal func awaitLiveTargetRefresh(
         for target: AccessibilityTarget,
         method: ActionMethod,
-        reason: RetryReason
-    ) async -> TargetRefreshGraceTerminal {
-        switch reason {
-        case .objectDeallocated, .staleTarget:
-            break
-        case .activationPointOffscreen:
-            return .timedOut
-        }
-
-        return await awaitTargetRefresh(
+        after settledSequence: SettledObservationSequence?,
+        deadline: SemanticObservationDeadline
+    ) async -> TargetRefreshTerminal {
+        await awaitTargetRefresh(
             for: target,
             mode: .liveTarget(method: method),
-            after: stash.latestSettledSemanticObservationEvent?.sequence
+            after: settledSequence,
+            deadline: deadline
         )
     }
 
-    /// Resolve only after settled semantic truth advances. Each settled event
-    /// earns one fresh live capture; a known target that gains scroll
-    /// membership earns at most one reveal attempt.
+    /// Resolve only after committed semantic truth advances. A known target
+    /// that gains scroll membership earns at most one reveal attempt.
     private func awaitTargetRefresh(
         for target: AccessibilityTarget,
         mode: TargetRefreshMode,
-        after settledSequence: SettledObservationSequence?
-    ) async -> TargetRefreshGraceTerminal {
-        let deadline = SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent(),
-            timeoutSeconds: SemanticObservationTiming.defaultTimeout
-        )
+        after settledSequence: SettledObservationSequence?,
+        deadline: SemanticObservationDeadline
+    ) async -> TargetRefreshTerminal {
         var sequence = settledSequence
         var didAttemptKnownTargetReveal = false
 
@@ -120,13 +108,10 @@ extension ElementInflation {
                 return Task.isCancelled ? .cancelled : .timedOut
             }
             sequence = event.sequence
-            guard stash.refreshLiveCapture() != nil else { continue }
 
-            let settledTree = event.observation.screen.tree
             switch targetRefreshResolution(
                 target: target,
-                mode: mode,
-                settledTree: settledTree
+                mode: mode
             ) {
             case .treeElement(let visible, let didReveal):
                 return .treeElement(visible, didReveal: didReveal)
@@ -140,7 +125,7 @@ extension ElementInflation {
 
             guard case .revealPath = mode,
                   !didAttemptKnownTargetReveal,
-                  case .resolved(let fresh) = stash.resolveTarget(target, in: settledTree),
+                  case .success(let fresh) = knownSemanticTarget(target),
                   fresh.scrollMembership != nil
             else { continue }
 
@@ -155,12 +140,11 @@ extension ElementInflation {
 
     private func targetRefreshResolution(
         target: AccessibilityTarget,
-        mode: TargetRefreshMode,
-        settledTree: InterfaceTree
+        mode: TargetRefreshMode
     ) -> TargetRefreshResolution {
         switch mode {
         case .revealPath:
-            switch visibleTargetResolution(target, in: settledTree) {
+            switch visibleTargetResolution(target) {
             case .success(let visible)?:
                 return .treeElement(visible, didReveal: false)
             case .failure(let failure)?:
@@ -170,32 +154,12 @@ extension ElementInflation {
             }
 
         case .liveTarget(let method):
-            switch visibleTargetResolution(target, in: settledTree) {
-            case .success(let treeElement)?:
-                switch stash.resolveLiveActionTarget(for: treeElement) {
-                case .resolved(let liveTarget):
-                    guard retainedInterfaceElement(liveTarget.treeElement, matches: target) else {
-                        return .missing
-                    }
-                    return .liveTarget(InflatedElementTarget(
-                        target: target,
-                        treeElement: liveTarget.treeElement,
-                        liveTarget: liveTarget
-                    ))
-                case .objectUnavailable:
-                    return .missing
-                case .geometryUnavailable:
-                    return .failed(.geometryNotActionable(
-                        ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                            method: method,
-                            element: treeElement,
-                            isVisible: settledTree.viewportElementIDs.contains(treeElement.heistId)
-                        )
-                    ))
-                }
+            switch resolveCurrentVisibleLiveElementTarget(target: target, method: method) {
+            case .success(let inflatedTarget)?:
+                return .liveTarget(inflatedTarget)
             case .failure(let failure)?:
                 return .failed(failure)
-            case nil:
+            case .retry?, nil:
                 return .missing
             }
         }

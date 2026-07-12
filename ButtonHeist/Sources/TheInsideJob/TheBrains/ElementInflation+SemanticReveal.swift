@@ -157,7 +157,6 @@ extension ElementInflation {
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
         stash.interfaceTree.containers[path]
-            ?? stash.latestObservation.tree.containers[path]
     }
 }
 

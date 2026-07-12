@@ -40,7 +40,6 @@ extension ElementInflation {
     internal enum RetryReason: String, CustomStringConvertible, Sendable, Equatable {
         case objectDeallocated
         case staleTarget
-        case activationPointOffscreen
 
         internal var description: String {
             rawValue
@@ -52,46 +51,19 @@ extension ElementInflation {
                 return "the live object was deallocated"
             case .staleTarget:
                 return "the live target no longer matched"
-            case .activationPointOffscreen:
-                return "the activation point stayed off-screen"
-            }
-        }
-    }
-
-    internal enum ResolutionPass: Sendable, Equatable {
-        case initial
-        case afterRetry(attempt: Int, reason: RetryReason)
-
-        internal var attempt: Int {
-            switch self {
-            case .initial:
-                return 0
-            case .afterRetry(let attempt, _):
-                return attempt
-            }
-        }
-
-        internal var allowsKnownFallback: Bool {
-            switch self {
-            case .initial, .afterRetry(_, .objectDeallocated):
-                return true
-            case .afterRetry(_, .staleTarget), .afterRetry(_, .activationPointOffscreen):
-                return false
             }
         }
     }
 
     internal enum State: CustomStringConvertible {
-        case resolving(ResolutionPass)
-        case revealing(treeElement: InterfaceTree.Element, attempt: Int)
+        case resolving
+        case revealing(treeElement: InterfaceTree.Element)
         case refreshing(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
-            attempt: Int,
             didReveal: Bool
         )
-        case placing(inflatedTarget: InflatedElementTarget, attempt: Int, didReveal: Bool)
-        case retrying(failedAttempt: Int, reason: RetryReason)
+        case placing(inflatedTarget: InflatedElementTarget, didReveal: Bool)
         case inflated(InflatedElementTarget)
         case failed(ElementInflationFailure)
 
@@ -99,14 +71,12 @@ extension ElementInflation {
             switch self {
             case .resolving:
                 return "resolving"
-            case .revealing(let treeElement, let attempt):
-                return "revealing(element: \(treeElement.heistId), attempt: \(attempt))"
-            case .refreshing(_, let treeElement, let attempt, let didReveal):
-                return "refreshing(element: \(treeElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
-            case .placing(let inflatedTarget, let attempt, let didReveal):
-                return "placing(element: \(inflatedTarget.treeElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
-            case .retrying(let failedAttempt, let reason):
-                return "retrying(failedAttempt: \(failedAttempt), reason: \(reason.description))"
+            case .revealing(let treeElement):
+                return "revealing(element: \(treeElement.heistId))"
+            case .refreshing(_, let treeElement, let didReveal):
+                return "refreshing(element: \(treeElement.heistId), didReveal: \(didReveal))"
+            case .placing(let inflatedTarget, let didReveal):
+                return "placing(element: \(inflatedTarget.treeElement.heistId), didReveal: \(didReveal))"
             case .inflated(let inflatedTarget):
                 return "inflated(element: \(inflatedTarget.treeElement.heistId))"
             case .failed(let failure):
@@ -121,7 +91,7 @@ extension ElementInflation {
         case failure(ElementInflationFailure)
     }
 
-    internal enum TargetRefreshGraceTerminal {
+    internal enum TargetRefreshTerminal {
         case treeElement(InterfaceTree.Element, didReveal: Bool)
         case inflated(InflatedElementTarget)
         case failure(ElementInflationFailure)

@@ -185,6 +185,11 @@ extension Navigation {
     struct ExploredScreen {
         let screen: InterfaceObservation
         let manifest: ScreenManifest
+
+        fileprivate init(screen: InterfaceObservation, manifest: ScreenManifest) {
+            self.screen = screen
+            self.manifest = manifest
+        }
     }
 
     struct SemanticExploration {

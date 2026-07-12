@@ -1695,7 +1695,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
     }
 
-    func testVisibleResolutionUsesFreshLiveGeometryWithoutReplacingSettledTruth() throws {
+    func testVisibleResolutionKeepsSettledSemanticsWhileLiveTargetUsesFreshGeometry() throws {
         let staleFrame = CGRect(x: 32, y: 865, width: 240, height: 44)
         let stalePoint = CGPoint(x: staleFrame.midX, y: staleFrame.midY)
         let settledElement = AccessibilityElement.make(
@@ -1735,8 +1735,8 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
 
         let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
-        XCTAssertEqual(visible.element.shape.frame, freshFrame)
-        XCTAssertEqual(visible.element.bhResolvedActivationPoint, freshPoint)
+        XCTAssertEqual(visible.element.shape.frame, staleFrame)
+        XCTAssertEqual(visible.element.bhResolvedActivationPoint, stalePoint)
 
         guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: settled) else {
             return XCTFail("Expected fresh live action target")

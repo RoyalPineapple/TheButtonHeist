@@ -12,9 +12,8 @@ extension TheStash {
 
     /// Dispatch-only action target.
     ///
-    /// The `treeElement` is semantic identity; `object`, `frame`, and
-    /// `activationPoint` are live accessibility authority freshly sampled by
-    /// `resolveLiveActionTarget(for:)`.
+    /// The `treeElement` is committed semantic truth; only `object`, `frame`,
+    /// and `activationPoint` come from the latest live capture.
     struct LiveActionTarget {
         let treeElement: InterfaceTree.Element
         let object: NSObject
@@ -63,7 +62,7 @@ extension TheStash {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
-            treeElement: liveElement,
+            treeElement: treeElement,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
