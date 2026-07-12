@@ -2,8 +2,10 @@
 #if DEBUG
 import UIKit
 
-import AccessibilitySnapshotParser
+import ThePlans
 import TheScore
+
+import AccessibilitySnapshotParser
 
 /// Classifies parsed accessibility snapshots.
 ///
@@ -161,27 +163,27 @@ import TheScore
     }
 
     private static func marker(for container: AccessibilityContainer) -> Marker {
-        switch container.type {
+        let facts = container.containerPredicateFacts
+        let identifier = stableIdentifier(facts.identifier)
+        switch facts.role {
         case .none:
             return Marker(
-                label: container.scrollableContentSize == nil ? "container" : "scrollable",
+                label: facts.isScrollable ? "scrollable" : "container",
                 value: nil,
-                identifier: stableIdentifier(container.identifier)
+                identifier: identifier
             )
         case .semanticGroup(let label, let value):
-            return Marker(label: label, value: value, identifier: stableIdentifier(container.identifier))
+            return Marker(label: label, value: value, identifier: identifier)
         case .list:
-            return Marker(label: "list", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "list", value: nil, identifier: identifier)
         case .landmark:
-            return Marker(label: "landmark", value: nil, identifier: stableIdentifier(container.identifier))
-        case .dataTable(let rowCount, let columnCount, _):
-            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: stableIdentifier(container.identifier))
-        case .scrollable:
-            return Marker(label: "scrollable", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "landmark", value: nil, identifier: identifier)
+        case .dataTable(let rowCount, let columnCount):
+            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: identifier)
         case .tabBar:
-            return Marker(label: "tabBar", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "tabBar", value: nil, identifier: identifier)
         case .series:
-            return Marker(label: "series", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "series", value: nil, identifier: identifier)
         }
     }
 
@@ -257,15 +259,16 @@ import TheScore
                 }
                 return
             }
+            let facts = container.containerPredicateFacts
             tokens.append(
                 RootShapeToken(
-                    kind: .container(containerRole(of: container)),
+                    kind: .container(containerRole(of: facts.role)),
                     depth: depth,
-                    stableIdentifier: stableIdentifier(containerIdentifier(of: container)),
+                    stableIdentifier: stableIdentifier(facts.identifier),
                     state: RootShapeState(
                         isSelected: false,
-                        isModal: container.isModalBoundary,
-                        isScrollable: container.scrollableContentSize != nil
+                        isModal: facts.isModalBoundary,
+                        isScrollable: facts.isScrollable
                     )
                 )
             )
@@ -280,8 +283,8 @@ import TheScore
         }
     }
 
-    private static func containerRole(of container: AccessibilityContainer) -> ContainerRootShapeRole {
-        switch container.type {
+    private static func containerRole(of role: ContainerPredicateRoleFacts) -> ContainerRootShapeRole {
+        switch role {
         case .none:
             return .none
         case .semanticGroup:
@@ -292,17 +295,11 @@ import TheScore
             return .landmark
         case .dataTable:
             return .dataTable
-        case .scrollable:
-            return .none
         case .tabBar:
             return .tabBar
         case .series:
             return .series
         }
-    }
-
-    private static func containerIdentifier(of container: AccessibilityContainer) -> String? {
-        container.identifier
     }
 
     private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {

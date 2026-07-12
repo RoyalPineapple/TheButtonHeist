@@ -336,13 +336,16 @@ settled accessibility structure without requiring a previous transition:
 WaitFor(.exists(.container(.identifier("Checkout"))), timeout: .seconds(2))
 WaitFor(.missing(.container(.identifier("Loading"))), timeout: .seconds(2))
 Activate(.within(container: .label("Checkout"), .label("Pay")))
-Activate(.within(container: .scrollable, .label("Load more")))
+Activate(.within(container: .scrollable(true), .label("Load more")))
+WaitFor(.exists(.container(.dataTable(rowCount: .init(3)))))
+WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))))
 ```
 
 Container predicates can match semantic-group `.label(...)` and `.value(...)`,
 `.identifier(...)` on any container, role shorthands such as `.list`,
-`.tabBar`, and `.dataTable(rowCount:columnCount:)`, scrollability through
-`.scrollable`, custom actions through `.actions(...)`, or explicit
+`.tabBar`, and `.dataTable(rowCount: .init(...), columnCount: .init(...))`,
+scrollability through
+`.scrollable(true)`, custom actions through `.actions(.init(...))`, or explicit
 `.matching(...)` check chains.
 
 Use `.changed(.screen())` for navigation. Assertions inside `.screen([...])`

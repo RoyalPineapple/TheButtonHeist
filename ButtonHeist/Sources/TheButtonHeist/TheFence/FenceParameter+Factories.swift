@@ -237,7 +237,6 @@ private let semanticContainerPredicateProperties: [FenceParameterSpec] = [
 private let semanticContainerPredicateKindValues: [String] = [
     SemanticContainerPredicate<String>.label("sample"),
     SemanticContainerPredicate<String>.value("sample"),
-    SemanticContainerPredicate<String>.identifier("sample"),
 ].map { semanticPredicate in
     wireDiscriminatorValue(semanticPredicate, discriminator: FenceParameterKey.kind.rawValue)
 }
@@ -248,12 +247,13 @@ private let containerPredicateCheckProperties: [FenceParameterSpec] = [
         enumValues: ContainerPredicateCheck<String>.wireKindValues
     ),
     param(.type, .string, enumValues: AccessibilityContainerKind.allCases.map(\.rawValue)),
+    stringMatchParam(.match),
     objectParam(
         .semantic,
         properties: semanticContainerPredicateProperties,
         validation: .customPayload
     ),
-    arrayParam(.values, items: .unconstrained),
+    arrayParam(.values, items: .unconstrained, minItems: 1),
     unconstrainedParam(.value, validation: .customPayload),
 ]
 

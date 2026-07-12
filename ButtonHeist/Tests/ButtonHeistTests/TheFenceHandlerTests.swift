@@ -4055,8 +4055,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "container": .object([
                     "checks": .array([
                         containerPredicateCheckValue(
-                            kind: "semantic",
-                            semanticKind: "identifier",
+                            kind: "identifier",
                             match: stringMatchValue(mode: "exact", value: "actions")
                         ),
                     ]),
@@ -4243,18 +4242,12 @@ private func predicateCheckValue(
 
 private func containerPredicateCheckValue(
     kind: String,
-    semanticKind: String? = nil,
     match: HeistValue? = nil,
     type: String? = nil,
     value: HeistValue? = nil
 ) -> HeistValue {
     var object: [String: HeistValue] = ["kind": .string(kind)]
-    if let semanticKind, let match {
-        object["semantic"] = .object([
-            "kind": .string(semanticKind),
-            "match": match,
-        ])
-    }
+    if let match { object["match"] = match }
     if let type { object["type"] = .string(type) }
     if let value { object["value"] = value }
     return .object(object)

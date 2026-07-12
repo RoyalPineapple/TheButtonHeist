@@ -1,6 +1,8 @@
-import ThePlans
 import CryptoKit
 import Foundation
+
+import ThePlans
+
 import AccessibilitySnapshotModel
 
 private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
@@ -337,11 +339,15 @@ private struct StableCaptureContainer: Codable {
     let customActions: [String]
 
     init(_ container: AccessibilityContainer) {
-        type = StableCaptureContainerType(container.type)
-        identifier = container.identifier
+        let facts = container.containerPredicateFacts
+        type = StableCaptureContainerType(facts.role)
+        identifier = facts.identifier
         scrollableContentSize = container.scrollableContentSize
-        isModalBoundary = container.isModalBoundary
-        customActions = container.customActions.map(\.name).filter { !$0.isEmpty }.sorted()
+        isModalBoundary = facts.isModalBoundary
+        customActions = facts.actions.compactMap { action in
+            guard case .custom(let name) = action else { return nil }
+            return name
+        }.sorted()
     }
 }
 
@@ -353,10 +359,9 @@ private enum StableCaptureContainerType: Codable {
     case dataTable(rowCount: Int, columnCount: Int)
     case tabBar
     case series
-    case scrollable
 
-    init(_ type: AccessibilityContainer.ContainerType) {
-        switch type {
+    init(_ role: ContainerPredicateRoleFacts) {
+        switch role {
         case .none:
             self = .none
         case .semanticGroup(let label, let value):
@@ -365,14 +370,12 @@ private enum StableCaptureContainerType: Codable {
             self = .list
         case .landmark:
             self = .landmark
-        case .dataTable(let rowCount, let columnCount, _):
+        case .dataTable(let rowCount, let columnCount):
             self = .dataTable(rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
             self = .tabBar
         case .series:
             self = .series
-        case .scrollable:
-            self = .scrollable
         }
     }
 }

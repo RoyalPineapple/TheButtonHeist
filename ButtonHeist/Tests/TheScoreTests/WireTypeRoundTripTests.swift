@@ -490,7 +490,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollTargetRoundTripsScopedAccessibilityTarget() throws {
-        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable(true), .label("Pay"))
         let request = ScrollTarget(selection: .element(accessibilityTarget), direction: .down)
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
@@ -563,7 +563,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollToEdgeTargetRoundTripsScopedAccessibilityTarget() throws {
-        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable(true), .label("Pay"))
         let request = ScrollToEdgeTarget(selection: .element(accessibilityTarget), edge: .bottom)
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
@@ -782,7 +782,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = Data(#"{"subtree":{"container":{"checks":[{"kind":"scrollable","value":true}]}}}"#.utf8)
         let decoded = try decoder.decode(InterfaceQuery.self, from: data)
 
-        XCTAssertEqual(decoded.subtree, .container(.scrollable))
+        XCTAssertEqual(decoded.subtree, .container(.scrollable(true)))
     }
 
     func testInterfaceQueryElementSubtreeRejectsHeistIdField() {

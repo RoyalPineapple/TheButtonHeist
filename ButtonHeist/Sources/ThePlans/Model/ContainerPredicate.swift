@@ -496,7 +496,7 @@ extension ContainerPredicate: CustomStringConvertible {
 public struct ContainerPredicateExpr: Codable, Sendable, Equatable, Hashable {
     public let checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>
 
-    fileprivate init(checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>) {
+    internal init(checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>) {
         self.checks = checks
     }
 

@@ -66,13 +66,24 @@ import Testing
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))
-    WaitFor(.exists(.container(.actions([.custom("Archive")]))), timeout: .seconds(1))
+    WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))
+    WaitFor(.exists(.container(.dataTable(rowCount: .init(3), columnCount: .init(2)))))
+    WaitFor(.exists(.container(.matching(.type(.list), .identifier("orders"), .scrollable(true)))))
     WaitFor(.missing(.container(.identifier("Checkout"), ordinal: 1)))
     Activate(.within(container: .label("Checkout"), .label("Pay")))
     """))
     let expected = try HeistPlan(body: [
         .wait(WaitStep(predicate: .exists(.container(.label("Checkout"))), timeout: 2)),
-        .wait(WaitStep(predicate: .exists(.container(.actions([.custom("Archive")]))), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(.container(.dataTable(
+            rowCount: ContainerPredicateCount(3),
+            columnCount: ContainerPredicateCount(2)
+        ))))),
+        .wait(WaitStep(predicate: .exists(.container(.matching(
+            .type(.list),
+            .identifier("orders"),
+            .scrollable(true)
+        ))))),
         .wait(WaitStep(predicate: .missing(.container(.identifier("Checkout"), ordinal: 1)))),
         .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ])
@@ -160,6 +171,44 @@ import Testing
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
         ("Activate(.customContent(.init()))", "customContent match must include label, value, or isImportant"),
         (#"WaitFor(.exists(.container(.identifier("Screen"), ordinal: -1)))"#, "ordinal must be non-negative"),
+    ]
+
+    for (source, expected) in cases {
+        expect(compileError(root(source)), contains: expected)
+    }
+}
+
+@Test func `runtime parser rejects malformed and removed container predicate source`() {
+    let cases = [
+        ("WaitFor(.exists(.container(.matching())))", "container matching predicate requires at least one check"),
+        (
+            "WaitFor(.exists(.container(.matching(.rowCount(.init(-1))))))",
+            "container rowCount must be non-negative"
+        ),
+        (
+            "WaitFor(.exists(.container(.dataTable(rowCount: 3))))",
+            "container rowCount must use .init(...)"
+        ),
+        (
+            "WaitFor(.exists(.container(.actions(.init()))))",
+            "container actions predicate payload must not be empty"
+        ),
+        (
+            "WaitFor(.exists(.container(.matching(.semantic(.identifier(\"Checkout\"))))))",
+            "semantic container predicates accept .label and .value"
+        ),
+        (
+            "WaitFor(.exists(.container(.type(.scrollable))))",
+            "unknown container kind '.scrollable'"
+        ),
+        (
+            "WaitFor(.exists(.container(.scrollable)))",
+            "expected symbol '('"
+        ),
+        (
+            "WaitFor(.exists(.container(.actions([.custom(\"Archive\")]))))",
+            "container actions must use .init(...)"
+        ),
     ]
 
     for (source, expected) in cases {

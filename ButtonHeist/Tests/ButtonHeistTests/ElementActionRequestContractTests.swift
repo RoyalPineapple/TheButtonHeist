@@ -348,6 +348,9 @@ private func assertContainerPredicateSchema(
         "type": .string("string"),
         "enum": .array(AccessibilityContainerKind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
+    guard case .object? = checkProperties["match"] else {
+        return XCTFail("Expected container identifier StringMatch schema", file: file, line: line)
+    }
     guard case .object(let semantic)? = checkProperties["semantic"],
           case .object(let semanticProperties)? = semantic["properties"] else {
         return XCTFail("Expected semantic container predicate schema", file: file, line: line)
@@ -363,6 +366,11 @@ private func assertContainerPredicateSchema(
     guard case .object? = checkProperties["values"] else {
         return XCTFail("Expected container check values array schema", file: file, line: line)
     }
+    XCTAssertEqual(checkProperties["values"], .object([
+        "type": .string("array"),
+        "items": .object([:]),
+        "minItems": .int(1),
+    ]), file: file, line: line)
     XCTAssertNotNil(checkProperties["value"], file: file, line: line)
 }
 
@@ -384,7 +392,6 @@ private func canonicalSemanticContainerPredicateKindValues() -> [String] {
     [
         SemanticContainerPredicate<String>.label("sample"),
         SemanticContainerPredicate<String>.value("sample"),
-        SemanticContainerPredicate<String>.identifier("sample"),
     ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.kind.rawValue) }
 }
 

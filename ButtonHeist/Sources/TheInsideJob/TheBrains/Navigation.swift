@@ -2,8 +2,8 @@
 #if DEBUG
 import UIKit
 
-import TheScore
 import ThePlans
+import TheScore
 
 import AccessibilitySnapshotParser
 
@@ -449,7 +449,7 @@ final class Navigation {
             guard let contentSize = container.scrollableContentSize else {
                 return InterfaceDiscoveryOmittedContainer(
                     containerName: containerName,
-                    type: container.accessibilityContainerKind,
+                    type: container.containerPredicateFacts.role.kind,
                     reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                     viewportWidth: Double(frame.size.width),
                     viewportHeight: Double(frame.size.height)
@@ -464,7 +464,7 @@ final class Navigation {
             )
             return InterfaceDiscoveryOmittedContainer(
                 containerName: containerName,
-                type: container.accessibilityContainerKind,
+                type: container.containerPredicateFacts.role.kind,
                 reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                 scrollAxis: scrollAxis,
                 viewportWidth: Double(frame.size.width),

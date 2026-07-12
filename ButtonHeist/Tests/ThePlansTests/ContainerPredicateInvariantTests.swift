@@ -19,8 +19,20 @@ struct ContainerPredicateInvariantTests {
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
+                ContainerPredicateExpr.self,
+                from: Data(#"{"checks":[]}"#.utf8)
+            )
+        }
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
                 ContainerPredicateCheck<String>.self,
                 from: Data(#"{"kind":"rowCount","value":-1}"#.utf8)
+            )
+        }
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                ContainerPredicateCheck<StringExpr>.self,
+                from: Data(#"{"kind":"columnCount","value":-1}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {

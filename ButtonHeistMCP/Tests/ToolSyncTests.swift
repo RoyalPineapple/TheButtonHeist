@@ -167,6 +167,7 @@ struct ToolSyncTests {
         #expect(
             schemaValue(at: containerPath + ["properties", "checks", "items", "properties", "kind", "enum"], in: tool.inputSchema) == .array([
                 .string("type"),
+                .string("identifier"),
                 .string("semantic"),
                 .string("rowCount"),
                 .string("columnCount"),

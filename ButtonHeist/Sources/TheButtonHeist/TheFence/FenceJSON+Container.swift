@@ -1,7 +1,9 @@
 import Foundation
 
-import AccessibilitySnapshotModel
+import ThePlans
 import TheScore
+
+import AccessibilitySnapshotModel
 
 struct PublicContainer: Encodable {
     let type: AccessibilityContainerKind
@@ -79,24 +81,23 @@ struct PublicContainer: Encodable {
         observedElementCount: Int?,
         scrollInventory: ScrollInventory?
     ) -> Fields {
+        let facts = container.containerPredicateFacts
         var fields: Fields
-        switch container.type {
+        switch facts.role {
         case .none:
-            fields = Fields(type: .none, identifier: container.identifier)
+            fields = Fields(type: .none, identifier: facts.identifier)
         case .semanticGroup(let label, let value):
-            fields = Fields(type: .semanticGroup, label: label, value: value, identifier: container.identifier)
+            fields = Fields(type: .semanticGroup, label: label, value: value, identifier: facts.identifier)
         case .list:
-            fields = Fields(type: .list, identifier: container.identifier)
+            fields = Fields(type: .list, identifier: facts.identifier)
         case .landmark:
-            fields = Fields(type: .landmark, identifier: container.identifier)
-        case .dataTable(let rowCount, let columnCount, _):
-            fields = Fields(type: .dataTable, identifier: container.identifier, rowCount: rowCount, columnCount: columnCount)
-        case .scrollable:
-            fields = Fields(type: .none, identifier: container.identifier)
+            fields = Fields(type: .landmark, identifier: facts.identifier)
+        case .dataTable(let rowCount, let columnCount):
+            fields = Fields(type: .dataTable, identifier: facts.identifier, rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
-            fields = Fields(type: .tabBar, identifier: container.identifier)
+            fields = Fields(type: .tabBar, identifier: facts.identifier)
         case .series:
-            fields = Fields(type: .series, identifier: container.identifier)
+            fields = Fields(type: .series, identifier: facts.identifier)
         }
 
         if let scrollableContentSize = container.scrollableContentSize {

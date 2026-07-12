@@ -1,7 +1,8 @@
 import Foundation
 
-import AccessibilitySnapshotModel
 import TheScore
+
+import AccessibilitySnapshotModel
 
 extension FenceResponse {
 
@@ -188,10 +189,11 @@ extension FenceResponse {
         observedElementCount: Int? = nil,
         scrollInventory: ScrollInventory? = nil
     ) -> String {
-        let identifier = nonEmpty(container.identifier)
+        let facts = container.containerPredicateFacts
+        let identifier = nonEmpty(facts.identifier)
         let containerName = nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
-        switch container.type {
+        switch facts.role {
         case .none:
             parts = ["container"]
         case .semanticGroup(let label, let value):
@@ -205,10 +207,8 @@ extension FenceResponse {
             parts = ["list"]
         case .landmark:
             parts = ["landmark"]
-        case .dataTable(let rowCount, let columnCount, _):
+        case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-        case .scrollable:
-            parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
         case .series:
@@ -217,7 +217,7 @@ extension FenceResponse {
         if let containerName {
             parts.append(quotedString(containerName))
         }
-        if case .semanticGroup = container.type {
+        if case .semanticGroup = facts.role {
         } else if let identifier {
             parts.append("id=\(quotedString(identifier))")
         }
@@ -233,7 +233,7 @@ extension FenceResponse {
                 parts.append("\(totalElementCount ?? observedElementCount) elements")
             }
         }
-        if container.isModalBoundary {
+        if facts.isModalBoundary {
             parts.append("modal")
         }
         if detail == .full {
@@ -303,7 +303,7 @@ extension FenceResponse {
     }
 
     private static func semanticContainerType(_ container: AccessibilityContainer) -> String {
-        switch container.type {
+        switch container.containerPredicateFacts.role {
         case .none:
             return "container"
         case .semanticGroup:
@@ -314,8 +314,6 @@ extension FenceResponse {
             return "landmark"
         case .dataTable:
             return "table"
-        case .scrollable:
-            return "container"
         case .tabBar:
             return "tab_bar"
         case .series:
@@ -324,7 +322,7 @@ extension FenceResponse {
     }
 
     private static func semanticContainerLabel(_ container: AccessibilityContainer) -> String? {
-        if case .semanticGroup(let label, _) = container.type {
+        if case .semanticGroup(let label, _) = container.containerPredicateFacts.role {
             return nonEmpty(label)
         }
         return nil

@@ -1,8 +1,9 @@
 import Foundation
+
 import ThePlans
+import TheScore
 
 import AccessibilitySnapshotModel
-import TheScore
 
 extension FenceResponse {
 
@@ -294,10 +295,11 @@ extension FenceResponse {
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail
     ) -> [String] {
-        let identifier = Self.nonEmpty(container.identifier)
+        let facts = container.containerPredicateFacts
+        let identifier = Self.nonEmpty(facts.identifier)
         let containerName = Self.nonEmpty(annotation?.containerName?.rawValue)
         var parts: [String]
-        switch container.type {
+        switch facts.role {
         case .none:
             parts = ["container"]
         case .semanticGroup(let label, let value):
@@ -311,10 +313,8 @@ extension FenceResponse {
             parts = ["list"]
         case .landmark:
             parts = ["landmark"]
-        case .dataTable(let rowCount, let columnCount, _):
+        case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-        case .scrollable:
-            parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
         case .series:
@@ -323,7 +323,7 @@ extension FenceResponse {
         if let containerName {
             parts.append("containerName: \(containerName)")
         }
-        if case .semanticGroup = container.type {
+        if case .semanticGroup = facts.role {
         } else if let identifier {
             parts.append("id=\(Self.quotedString(identifier))")
         }
@@ -336,7 +336,7 @@ extension FenceResponse {
             parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
             parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
         }
-        if container.isModalBoundary {
+        if facts.isModalBoundary {
             parts.append("modal=true")
         }
         if detail == .full {

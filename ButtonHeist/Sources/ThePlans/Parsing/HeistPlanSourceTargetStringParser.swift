@@ -248,11 +248,6 @@ extension HeistPlanSourceParser {
             let type = try parseEnumCase(AccessibilityContainerKind.self, role: "container kind")
             try expectSymbol(")")
             return .type(type)
-        case "semantic":
-            try expectSymbol("(")
-            let predicate = try parseSemanticContainerPredicateExpr()
-            try expectSymbol(")")
-            return .semantic(predicate)
         case "semanticGroup":
             return .semanticGroup
         case "none":
@@ -264,10 +259,13 @@ extension HeistPlanSourceParser {
         case "tabBar":
             return .tabBar
         case "scrollable":
-            return .scrollable
+            try expectSymbol("(")
+            let required = try parseBoolLiteral()
+            try expectSymbol(")")
+            return .scrollable(required)
         case "actions":
             try expectSymbol("(")
-            let actions = try parseActionArray(role: "container actions")
+            let actions = try parseContainerPredicateActions()
             try expectSymbol(")")
             return .actions(actions)
         case "dataTable":
@@ -276,24 +274,26 @@ extension HeistPlanSourceParser {
             if consumeSymbol("(") {
                 let required = try parseBoolLiteral()
                 try expectSymbol(")")
-                return ContainerPredicateExpr(.modalBoundary(required))
+                return .matching(.modalBoundary(required))
             }
             return .modalBoundary
         case "matching":
             try expectSymbol("(")
-            var checks: [ContainerPredicateCheck<StringExpr>] = []
-            if !consumeSymbol(")") {
-                repeat {
-                    checks.append(try parseContainerPredicateCheckExpr())
-                } while consumeSymbol(",")
-                try expectSymbol(")")
+            guard !consumeSymbol(")") else {
+                throw error(previous, "container matching predicate requires at least one check")
             }
-            return ContainerPredicateExpr(checks)
+            let first = try parseContainerPredicateCheckExpr()
+            var rest: [ContainerPredicateCheck<StringExpr>] = []
+            while consumeSymbol(",") {
+                rest.append(try parseContainerPredicateCheckExpr())
+            }
+            try expectSymbol(")")
+            return ContainerPredicateExpr(checks: NonEmptyArray(first, rest: rest))
         default:
             throw error(
                 token,
-                "container predicates accept .none, .label, .value, .identifier, .type, .semantic, " +
-                ".dataTable, .scrollable, .actions, and .matching"
+                "container predicates accept .none, .label, .value, .identifier, .type, " +
+                ".dataTable, .scrollable(...), .actions, and .matching"
             )
         }
     }
@@ -311,13 +311,8 @@ extension HeistPlanSourceParser {
             let value = try parseStringMatchCallArgument(field: "container value")
             try expectSymbol(")")
             return .value(value)
-        case "identifier":
-            try expectSymbol("(")
-            let identifier = try parseStringMatchCallArgument(field: "container identifier")
-            try expectSymbol(")")
-            return .identifier(identifier)
         default:
-            throw error(token, "semantic container predicates accept .label, .value, and .identifier")
+            throw error(token, "semantic container predicates accept .label and .value")
         }
     }
 
@@ -329,6 +324,11 @@ extension HeistPlanSourceParser {
             let type = try parseEnumCase(AccessibilityContainerKind.self, role: "container kind")
             try expectSymbol(")")
             return .type(type)
+        case "identifier":
+            try expectSymbol("(")
+            let match = try parseStringMatchCallArgument(field: "container identifier")
+            try expectSymbol(")")
+            return .identifier(match)
         case "semantic":
             try expectSymbol("(")
             let predicate = try parseSemanticContainerPredicateExpr()
@@ -336,12 +336,12 @@ extension HeistPlanSourceParser {
             return .semantic(predicate)
         case "rowCount":
             try expectSymbol("(")
-            let rowCount = try parseInteger()
+            let rowCount = try parseContainerPredicateCount(role: "container rowCount")
             try expectSymbol(")")
             return .rowCount(rowCount)
         case "columnCount":
             try expectSymbol("(")
-            let columnCount = try parseInteger()
+            let columnCount = try parseContainerPredicateCount(role: "container columnCount")
             try expectSymbol(")")
             return .columnCount(columnCount)
         case "modalBoundary":
@@ -356,28 +356,28 @@ extension HeistPlanSourceParser {
             return .scrollable(required)
         case "actions":
             try expectSymbol("(")
-            let actions = try parseActionArray(role: "container actions")
+            let actions = try parseContainerPredicateActions()
             try expectSymbol(")")
-            return .actions(Set(actions))
+            return .actions(actions)
         default:
-            throw error(token, "container predicate checks accept .type, .semantic, .rowCount, .columnCount, .modalBoundary, .scrollable, and .actions")
+            throw error(token, "container predicate checks accept .type, .identifier, .semantic, .rowCount, .columnCount, .modalBoundary, .scrollable(...), and .actions")
         }
     }
 
     mutating func parseDataTableContainerPredicateExpr() throws -> ContainerPredicateExpr {
-        guard consumeSymbol("(") else { return .dataTable() }
-        var rowCount: Int?
-        var columnCount: Int?
+        try expectSymbol("(")
+        var rowCount: ContainerPredicateCount?
+        var columnCount: ContainerPredicateCount?
         if !consumeSymbol(")") {
             repeat {
                 if lookaheadLabel("rowCount") {
                     try expectIdentifier("rowCount")
                     try expectSymbol(":")
-                    rowCount = try parseInteger()
+                    rowCount = try parseContainerPredicateCount(role: "container rowCount")
                 } else if lookaheadLabel("columnCount") {
                     try expectIdentifier("columnCount")
                     try expectSymbol(":")
-                    columnCount = try parseInteger()
+                    columnCount = try parseContainerPredicateCount(role: "container columnCount")
                 } else {
                     throw error(currentToken, "dataTable accepts rowCount and columnCount")
                 }
@@ -385,6 +385,41 @@ extension HeistPlanSourceParser {
             try expectSymbol(")")
         }
         return .dataTable(rowCount: rowCount, columnCount: columnCount)
+    }
+
+    mutating func parseContainerPredicateCount(role: String) throws -> ContainerPredicateCount {
+        guard currentToken.isSymbol(".") else {
+            throw error(currentToken, "\(role) must use .init(...)")
+        }
+        try expectContextualInitializer(role: role)
+        let token = currentToken
+        let isNegative = consumeSymbol("-")
+        let value = try parseInteger()
+        try expectSymbol(")")
+        guard !isNegative, let count = ContainerPredicateCount(exactly: value) else {
+            throw error(token, "\(role) must be non-negative")
+        }
+        return count
+    }
+
+    mutating func parseContainerPredicateActions() throws -> ContainerPredicateActions {
+        guard currentToken.isSymbol(".") else {
+            throw error(currentToken, "container actions must use .init(...)")
+        }
+        try expectContextualInitializer(role: "container actions")
+        guard !consumeSymbol(")") else {
+            throw error(previous, "container actions predicate payload must not be empty")
+        }
+        let first = try parseElementAction(role: "container actions")
+        var rest: [ElementAction] = []
+        while consumeSymbol(",") {
+            rest.append(try parseElementAction(role: "container actions"))
+        }
+        try expectSymbol(")")
+        guard let actions = ContainerPredicateActions(Set([first] + rest)) else {
+            throw error(previous, "container actions predicate payload must not be empty")
+        }
+        return actions
     }
 
     mutating func parseTraitArray(role: String) throws -> [HeistTrait] {

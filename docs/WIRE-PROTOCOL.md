@@ -250,9 +250,9 @@ Checks include `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
 
 Container identifiers are matched on every delivered container type that
 carries the identifier. They are not restricted to semantic-group containers.
-Canonical container kinds are `none`, `scrollable`, `semanticGroup`, `list`,
-`landmark`, `dataTable`, `tabBar`, and `series`; parser `scrollable` containers are never
-projected as `none`.
+Canonical container roles are `none`, `semanticGroup`, `list`, `landmark`,
+`dataTable`, `tabBar`, and `series`. Identifier and scrollability are orthogonal
+checks; a roleless parser scroll container has role `none` and `scrollable=true`.
 Target resolution always walks the canonical delivered tree, including for
 `exists`, `missing`, and subtree queries.
 `InterfaceQuery` contains only optional `subtree`, `maxScrollsPerContainer`,
@@ -336,7 +336,7 @@ single wait.
 
 To assert current settled container presence without requiring a transition,
 put the container in the canonical target slot:
-`{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}`.
+`{"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}`.
 Scoped targets use `{"container":{"checks":[...]},"target":{...}}` so
 resolution is limited to descendants of the matching container.
 

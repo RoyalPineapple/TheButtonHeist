@@ -92,16 +92,14 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String
     ) {
         switch check {
-        case .type, .modalBoundary, .scrollable:
+        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return
+        case .identifier(let match):
+            validateString(match, path: "\(path).identifier", role: "container identifier")
         case .actions(let actions):
-            validateContainerActions(actions, path: "\(path).actions")
+            validateContainerActions(actions.values, path: "\(path).actions")
         case .semantic(let predicate):
             validateSemanticContainerPredicate(predicate, path: "\(path).semantic")
-        case .rowCount(let rowCount):
-            validateNonNegative(rowCount, path: "\(path).rowCount", role: "container rowCount")
-        case .columnCount(let columnCount):
-            validateNonNegative(columnCount, path: "\(path).columnCount", role: "container columnCount")
         }
     }
 
@@ -111,16 +109,14 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch check {
-        case .type, .modalBoundary, .scrollable:
+        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return
+        case .identifier(let match):
+            validateString(match, path: "\(path).identifier", scope: scope)
         case .actions(let actions):
-            validateContainerActions(actions, path: "\(path).actions")
+            validateContainerActions(actions.values, path: "\(path).actions")
         case .semantic(let predicate):
             validateSemanticContainerPredicate(predicate, path: "\(path).semantic", scope: scope)
-        case .rowCount(let rowCount):
-            validateNonNegative(rowCount, path: "\(path).rowCount", role: "container rowCount")
-        case .columnCount(let columnCount):
-            validateNonNegative(columnCount, path: "\(path).columnCount", role: "container columnCount")
         }
     }
 
@@ -133,8 +129,6 @@ extension HeistPlanRuntimeSafetyValidator {
             validateString(match, path: "\(path).label", role: "container label")
         case .value(let match):
             validateString(match, path: "\(path).value", role: "container value")
-        case .identifier(let match):
-            validateString(match, path: "\(path).identifier", role: "container identifier")
         }
     }
 
@@ -170,19 +164,7 @@ extension HeistPlanRuntimeSafetyValidator {
             validateString(match, path: "\(path).label", scope: scope)
         case .value(let match):
             validateString(match, path: "\(path).value", scope: scope)
-        case .identifier(let match):
-            validateString(match, path: "\(path).identifier", scope: scope)
         }
-    }
-
-    mutating func validateNonNegative(_ value: Int, path: String, role: String) {
-        guard value < 0 else { return }
-        fail(
-            path: path,
-            contract: "\(role) must be non-negative",
-            observed: "\(value)",
-            correction: "Use a value of 0 or greater."
-        )
     }
 
     mutating func validateRequiredContainerPredicate(_ predicate: ContainerPredicate, path: String) {

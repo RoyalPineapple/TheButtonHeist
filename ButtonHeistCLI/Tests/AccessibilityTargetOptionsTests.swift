@@ -80,7 +80,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
 
     func testScopedTargetBridgeIncludesContainerScrollableAndActionsChecks() throws {
         let target = AccessibilityTarget.within(
-            container: .matching(.scrollable(true), .actions([.custom("Sub"), .activate])),
+            container: .matching(.scrollable(true), .actions(.init(.custom("Sub"), .activate))),
             .predicate(ElementPredicateTemplate(label: "Checkout"))
         )
 

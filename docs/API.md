@@ -161,7 +161,7 @@ carries `ContainerPredicateExpr`, and `.within(container:target:)` scopes any
 target to descendants of a matching container. Public target nesting is
 bounded by the shared public JSON input depth limit.
 
-Container identifiers are semantic data on every delivered parser container,
+Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
 delivered `Interface` tree is the authority for both element and container
@@ -437,7 +437,7 @@ Current-tree predicates use the same `AccessibilityTarget` object as actions and
 subtree queries. Container presence uses a container target:
 
 ```json
-{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}
+{"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}
 ```
 
 Scoped targets use `{"container":{"checks":[...]},"target":{...}}`. Element
