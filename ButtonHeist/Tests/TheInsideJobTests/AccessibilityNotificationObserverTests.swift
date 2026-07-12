@@ -165,22 +165,21 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(advanced?.sequence, bus.transitionCursor().sequence)
     }
 
-    func testTransitionWaiterIgnoresAnnouncementsAndUnsupportedEventsAndTimesOut() async {
+    func testTransitionWaiterTreatsAnnouncementsAsRecaptureTriggersAndDropsUnsupportedEvents() async {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.transitionCursor()
         bus.record(code: 4002, notificationData: .none, associatedElement: .none)
 
-        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 0.15)
         bus.record(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
         )
 
-        let advanced = await wake
-        XCTAssertNil(advanced)
+        let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
+        XCTAssertEqual(advanced, bus.transitionCursor())
         XCTAssertEqual(bus.pendingEvents().map(\.kind), [.announcement])
-        XCTAssertEqual(bus.transitionCursor(), cursor)
+        XCTAssertGreaterThan(bus.transitionCursor().sequence, cursor.sequence)
     }
 
     func testValueChangedIsElementTransitionEvidence() async {
@@ -234,7 +233,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
         bus.record(code: 1008, notificationData: .none, associatedElement: .none)
-        XCTAssertEqual(bus.transitionCursor().sequence, 1)
+        XCTAssertEqual(bus.transitionCursor().sequence, 2)
 
         bus.record(code: 1000, notificationData: .none, associatedElement: .none)
         XCTAssertEqual(bus.transitionCursor().sequence, 3)
@@ -245,6 +244,24 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         bus.record(code: 1000, notificationData: .none, associatedElement: .none)
         XCTAssertEqual(bus.transitionCursor().sequence, 4)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 4)
+    }
+
+    func testExplicitNotificationEventsPreservePublisherSequence() {
+        let bus = AccessibilityNotificationBus()
+        let event = PendingAccessibilityNotificationEvent(
+            sequence: 7,
+            kind: .valueChanged,
+            timestamp: Date(timeIntervalSince1970: 0),
+            notificationData: .none,
+            associatedElement: .none
+        )
+
+        bus.record(event)
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+
+        XCTAssertEqual(bus.pendingEvents().map(\.sequence), [7, 8])
+        XCTAssertEqual(bus.latestSequence, 8)
+        XCTAssertEqual(bus.transitionCursor().sequence, 8)
     }
 
     // MARK: - Settled Observation Invalidation

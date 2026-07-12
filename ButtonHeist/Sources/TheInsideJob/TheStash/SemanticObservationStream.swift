@@ -99,13 +99,6 @@ struct SettledSemanticObservationEvent: Sendable {
     }
 }
 
-private extension SettledSemanticObservationEvent {
-    var isScreenAppearance: Bool {
-        guard case .screenChanged? = delta else { return false }
-        return true
-    }
-}
-
 struct VisibleSemanticObservationEvidence {
     let screen: Screen
     let tripwireSignal: TheTripwire.TripwireSignal
@@ -197,7 +190,9 @@ private struct SemanticObservationFulfillmentState {
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
         notificationIdentityScreen: Screen? = nil
     ) -> Publication {
-        var currentEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
+        let startsNewGeneration = pendingAccessibilityNotifications.contains(\.startsObservationGeneration)
+        let eventGeneration = startsNewGeneration ? generation.advanced() : generation
+        var currentEvents = startsNewGeneration ? [:] : (currentFulfillment?.eventsByFulfilledScope ?? [:])
         var events: EventsByFulfilledScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
@@ -221,7 +216,7 @@ private struct SemanticObservationFulfillmentState {
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
                 previous: currentEvents[fulfilledScope],
-                generation: generation,
+                generation: eventGeneration,
                 notificationSequence: notificationSequence,
                 stash: stash,
                 pendingAccessibilityNotifications: pendingAccessibilityNotifications,
@@ -231,22 +226,16 @@ private struct SemanticObservationFulfillmentState {
             currentEvents[fulfilledScope] = event
             events[fulfilledScope] = event
         }
-        let startsNewGeneration = events.values.contains { $0.isScreenAppearance }
-        let publishedGeneration = startsNewGeneration ? generation.advanced() : generation
-        let publishedEvents = startsNewGeneration
-            ? events.mapValues { $0.replacingGeneration(publishedGeneration) }
-            : events
-        let retainedEvents = startsNewGeneration ? publishedEvents : currentEvents
-        guard let publishedSourceEvent = publishedEvents[sourceScope] else {
+        guard let publishedSourceEvent = events[sourceScope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
         state = .clean(CurrentFulfillment(
             sourceEvent: publishedSourceEvent,
-            eventsByFulfilledScope: retainedEvents
+            eventsByFulfilledScope: currentEvents
         ))
         return Publication(
-            events: publishedEvents,
-            generation: publishedGeneration,
+            events: events,
+            generation: eventGeneration,
             startsNewGeneration: startsNewGeneration
         )
     }

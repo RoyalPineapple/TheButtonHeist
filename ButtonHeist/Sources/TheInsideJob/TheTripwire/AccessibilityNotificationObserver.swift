@@ -12,6 +12,11 @@ private struct CapturedAccessibilityNotification {
     let associatedElement: CapturedAccessibilityNotificationPayload
 }
 
+private struct AccessibilityNotificationPublication {
+    let event: PendingAccessibilityNotificationEvent
+    let subscribers: [AccessibilityNotificationBus]
+}
+
 enum AccessibilityNotificationObserverLifecycleState: Equatable {
     case unsubscribed
     case subscribed(callbackInstalled: Bool)
@@ -84,18 +89,10 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
         AccessibilityNotificationCallbackState.shared.uninstall()
     }
 
-    fileprivate func rebroadcast(
-        code: UInt32,
-        notificationData: CapturedAccessibilityNotificationPayload,
-        associatedElement: CapturedAccessibilityNotificationPayload
-    ) {
-        let subscribers = recordAndCopySubscribers()
-        for subscriber in subscribers {
-            subscriber.record(
-                code: code,
-                notificationData: notificationData,
-                associatedElement: associatedElement
-            )
+    fileprivate func rebroadcast(_ notification: CapturedAccessibilityNotification) {
+        guard let publication = recordAndCopyPublication(notification) else { return }
+        for subscriber in publication.subscribers {
+            subscriber.record(publication.event)
         }
     }
 
@@ -114,13 +111,34 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
         subscribers.removeAll()
     }
 
-    private func recordAndCopySubscribers() -> [AccessibilityNotificationBus] {
-        lock.lock()
-        defer { lock.unlock() }
+    private func recordAndCopyPublication(
+        _ notification: CapturedAccessibilityNotification
+    ) -> AccessibilityNotificationPublication? {
+        guard let kind = PendingAccessibilityNotificationEvent.kind(forCode: notification.code) else {
+            return nil
+        }
 
-        latestSequenceStorage += 1
+        lock.lock()
         removeExpiredSubscribers()
-        return subscribers.values.compactMap(\.subscriber)
+        let subscribers = subscribers.values.compactMap(\.subscriber)
+        guard !subscribers.isEmpty else {
+            lock.unlock()
+            return nil
+        }
+        latestSequenceStorage += 1
+        let sequence = latestSequenceStorage
+        lock.unlock()
+
+        return AccessibilityNotificationPublication(
+            event: PendingAccessibilityNotificationEvent(
+                sequence: sequence,
+                kind: kind,
+                timestamp: Date(),
+                notificationData: notification.notificationData.pendingPayload,
+                associatedElement: notification.associatedElement.pendingPayload
+            ),
+            subscribers: subscribers
+        )
     }
 
     private func removeExpiredSubscribers() {
@@ -209,11 +227,7 @@ private final class AccessibilityNotificationCallbackState: @unchecked Sendable 
             return
         }
 
-        AccessibilityNotificationObserver.shared.rebroadcast(
-            code: notification.code,
-            notificationData: notification.notificationData,
-            associatedElement: notification.associatedElement
-        )
+        AccessibilityNotificationObserver.shared.rebroadcast(notification)
     }
 
 }

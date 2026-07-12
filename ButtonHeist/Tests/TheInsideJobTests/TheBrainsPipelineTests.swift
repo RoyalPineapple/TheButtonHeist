@@ -1627,7 +1627,16 @@ final class TheBrainsPipelineTests: XCTestCase {
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
-            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            pendingAccessibilityNotifications: [
+                PendingAccessibilityNotificationEvent(
+                    sequence: 1,
+                    kind: .screenChanged,
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    notificationData: .none,
+                    associatedElement: .none
+                ),
+            ]
         )
         let oldBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let transitionWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(

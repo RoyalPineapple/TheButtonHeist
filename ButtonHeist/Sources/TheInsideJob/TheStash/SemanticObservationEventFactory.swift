@@ -61,7 +61,7 @@ enum SemanticObservationEventFactory {
         }
         let interface = stash.semanticInterfaceWithHash(for: screen).interface
         let accessibilityNotifications = stash.resolveAccessibilityNotificationEvidence(
-            pendingAccessibilityNotifications,
+            pendingAccessibilityNotifications.filter(\.isTraceTransitionEvidence),
             identityScreen: notificationIdentityScreen ?? screen,
             referenceScreen: screen
         )
