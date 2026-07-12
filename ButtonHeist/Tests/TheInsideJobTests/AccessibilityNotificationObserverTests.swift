@@ -36,6 +36,53 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertFalse(AccessibilityNotificationObserver.shared.isInstalled)
     }
 
+    func testSubscribeDuringCallbackRemovalReinstallsForTheNewSubscriber() {
+        let harness = CallbackRegistrationHarness()
+        let observer = AccessibilityNotificationObserver(
+            installCallbackForTesting: { harness.install() },
+            uninstallCallbackForTesting: { harness.uninstall() }
+        )
+        harness.observer = observer
+        let original = AccessibilityNotificationBus()
+        let replacement = AccessibilityNotificationBus()
+
+        observer.subscribe(original)
+        harness.subscriberAddedDuringUninstall = replacement
+        observer.unsubscribe(original)
+
+        XCTAssertTrue(observer.hasSubscribers)
+        XCTAssertTrue(observer.isInstalled)
+        XCTAssertEqual(observer.lifecycleState, .subscribed(callbackInstalled: true))
+        XCTAssertTrue(harness.isInstalled)
+        XCTAssertEqual(harness.installCount, 2)
+        XCTAssertEqual(harness.uninstallCount, 1)
+
+        observer.unsubscribe(replacement)
+        XCTAssertFalse(observer.hasSubscribers)
+        XCTAssertFalse(observer.isInstalled)
+        XCTAssertEqual(observer.lifecycleState, .unsubscribed)
+        XCTAssertFalse(harness.isInstalled)
+    }
+
+    func testUnsubscribeDuringCallbackInstallationRemovesUnneededRegistration() {
+        let harness = CallbackRegistrationHarness()
+        let observer = AccessibilityNotificationObserver(
+            installCallbackForTesting: { harness.install() },
+            uninstallCallbackForTesting: { harness.uninstall() }
+        )
+        harness.observer = observer
+        let subscriber = AccessibilityNotificationBus()
+        harness.subscriberRemovedDuringInstall = subscriber
+
+        observer.subscribe(subscriber)
+
+        XCTAssertFalse(observer.hasSubscribers)
+        XCTAssertFalse(observer.isInstalled)
+        XCTAssertFalse(harness.isInstalled)
+        XCTAssertEqual(harness.installCount, 1)
+        XCTAssertEqual(harness.uninstallCount, 1)
+    }
+
     func testObserverReceivesPostedPayloadShapes() async throws {
         let bus = AccessibilityNotificationBus()
 
@@ -424,6 +471,32 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             _ = await Task.cancellableSleep(for: .milliseconds(1))
         }
         XCTAssertEqual(bus.transitionWaiterCount, expectedCount, file: file, line: line)
+    }
+
+    @MainActor
+    private final class CallbackRegistrationHarness {
+        weak var observer: AccessibilityNotificationObserver?
+        var subscriberRemovedDuringInstall: AccessibilityNotificationBus?
+        var subscriberAddedDuringUninstall: AccessibilityNotificationBus?
+        private(set) var installCount = 0
+        private(set) var uninstallCount = 0
+        private(set) var isInstalled = false
+
+        func install() {
+            installCount += 1
+            isInstalled = true
+            guard let subscriber = subscriberRemovedDuringInstall else { return }
+            subscriberRemovedDuringInstall = nil
+            observer?.unsubscribe(subscriber)
+        }
+
+        func uninstall() {
+            uninstallCount += 1
+            isInstalled = false
+            guard let subscriber = subscriberAddedDuringUninstall else { return }
+            subscriberAddedDuringUninstall = nil
+            observer?.subscribe(subscriber)
+        }
     }
 }
 
