@@ -65,23 +65,172 @@ extension TheFence {
         }
     }
 
-    struct ParsedRequest: Sendable {
-        let command: Command
+    fileprivate struct CommandAdmissionPayload: Sendable {
         let requestId: String
         let dispatch: DecodedRequestDispatch
         let expectationPayload: ExpectationPayload
+    }
 
+    fileprivate enum CommandAdmission: Sendable {
+        case ping(CommandAdmissionPayload)
+        case listDevices(CommandAdmissionPayload)
+        case getInterface(CommandAdmissionPayload)
+        case getScreen(CommandAdmissionPayload)
+        case getAnnouncements(CommandAdmissionPayload)
+        case wait(CommandAdmissionPayload)
+        case oneFingerTap(CommandAdmissionPayload)
+        case longPress(CommandAdmissionPayload)
+        case swipe(CommandAdmissionPayload)
+        case drag(CommandAdmissionPayload)
+        case scroll(CommandAdmissionPayload)
+        case scrollToVisible(CommandAdmissionPayload)
+        case scrollToEdge(CommandAdmissionPayload)
+        case activate(CommandAdmissionPayload)
+        case rotor(CommandAdmissionPayload)
+        case typeText(CommandAdmissionPayload)
+        case editAction(CommandAdmissionPayload)
+        case setPasteboard(CommandAdmissionPayload)
+        case getPasteboard(CommandAdmissionPayload)
+        case dismissKeyboard(CommandAdmissionPayload)
+        case perform(CommandAdmissionPayload)
+        case runHeist(CommandAdmissionPayload)
+        case listHeists(CommandAdmissionPayload)
+        case describeHeist(CommandAdmissionPayload)
+        case getSessionState(CommandAdmissionPayload)
+        case connect(CommandAdmissionPayload)
+        case listTargets(CommandAdmissionPayload)
+
+        @ButtonHeistActor
         init(
-            command: Command,
-            requestId: String,
-            dispatch: DecodedRequestDispatch,
-            expectationPayload: ExpectationPayload
-        ) {
-            self.command = command
-            self.requestId = requestId
-            self.dispatch = dispatch
-            self.expectationPayload = expectationPayload
+            fence: TheFence,
+            input: FenceCommandInput
+        ) throws {
+            try input.validatePublicContract()
+            let requestId = input.arguments.string(.requestId) ?? UUID().uuidString
+            let expectationPayload = try ExpectationPayload(arguments: input.arguments)
+            let dispatch = try input.command.descriptor.requestDecoder(
+                fence,
+                input.arguments,
+                requestId,
+                expectationPayload
+            )
+            let payload = CommandAdmissionPayload(
+                requestId: requestId,
+                dispatch: dispatch,
+                expectationPayload: expectationPayload
+            )
+
+            self = switch input.command {
+            case .ping: .ping(payload)
+            case .listDevices: .listDevices(payload)
+            case .getInterface: .getInterface(payload)
+            case .getScreen: .getScreen(payload)
+            case .getAnnouncements: .getAnnouncements(payload)
+            case .wait: .wait(payload)
+            case .oneFingerTap: .oneFingerTap(payload)
+            case .longPress: .longPress(payload)
+            case .swipe: .swipe(payload)
+            case .drag: .drag(payload)
+            case .scroll: .scroll(payload)
+            case .scrollToVisible: .scrollToVisible(payload)
+            case .scrollToEdge: .scrollToEdge(payload)
+            case .activate: .activate(payload)
+            case .rotor: .rotor(payload)
+            case .typeText: .typeText(payload)
+            case .editAction: .editAction(payload)
+            case .setPasteboard: .setPasteboard(payload)
+            case .getPasteboard: .getPasteboard(payload)
+            case .dismissKeyboard: .dismissKeyboard(payload)
+            case .perform: .perform(payload)
+            case .runHeist: .runHeist(payload)
+            case .listHeists: .listHeists(payload)
+            case .describeHeist: .describeHeist(payload)
+            case .getSessionState: .getSessionState(payload)
+            case .connect: .connect(payload)
+            case .listTargets: .listTargets(payload)
+            }
         }
+
+        var command: Command {
+            switch self {
+            case .ping: .ping
+            case .listDevices: .listDevices
+            case .getInterface: .getInterface
+            case .getScreen: .getScreen
+            case .getAnnouncements: .getAnnouncements
+            case .wait: .wait
+            case .oneFingerTap: .oneFingerTap
+            case .longPress: .longPress
+            case .swipe: .swipe
+            case .drag: .drag
+            case .scroll: .scroll
+            case .scrollToVisible: .scrollToVisible
+            case .scrollToEdge: .scrollToEdge
+            case .activate: .activate
+            case .rotor: .rotor
+            case .typeText: .typeText
+            case .editAction: .editAction
+            case .setPasteboard: .setPasteboard
+            case .getPasteboard: .getPasteboard
+            case .dismissKeyboard: .dismissKeyboard
+            case .perform: .perform
+            case .runHeist: .runHeist
+            case .listHeists: .listHeists
+            case .describeHeist: .describeHeist
+            case .getSessionState: .getSessionState
+            case .connect: .connect
+            case .listTargets: .listTargets
+            }
+        }
+
+        var payload: CommandAdmissionPayload {
+            switch self {
+            case .ping(let payload),
+                 .listDevices(let payload),
+                 .getInterface(let payload),
+                 .getScreen(let payload),
+                 .getAnnouncements(let payload),
+                 .wait(let payload),
+                 .oneFingerTap(let payload),
+                 .longPress(let payload),
+                 .swipe(let payload),
+                 .drag(let payload),
+                 .scroll(let payload),
+                 .scrollToVisible(let payload),
+                 .scrollToEdge(let payload),
+                 .activate(let payload),
+                 .rotor(let payload),
+                 .typeText(let payload),
+                 .editAction(let payload),
+                 .setPasteboard(let payload),
+                 .getPasteboard(let payload),
+                 .dismissKeyboard(let payload),
+                 .perform(let payload),
+                 .runHeist(let payload),
+                 .listHeists(let payload),
+                 .describeHeist(let payload),
+                 .getSessionState(let payload),
+                 .connect(let payload),
+                 .listTargets(let payload):
+                payload
+            }
+        }
+    }
+
+    struct ParsedRequest: Sendable {
+        fileprivate let admission: CommandAdmission
+
+        fileprivate init(admission: CommandAdmission) {
+            self.admission = admission
+        }
+
+        var command: Command { admission.command }
+
+        var requestId: String { admission.payload.requestId }
+
+        var dispatch: DecodedRequestDispatch { admission.payload.dispatch }
+
+        var expectationPayload: ExpectationPayload { admission.payload.expectationPayload }
 
         var singleStepHeistRequest: SingleStepHeistRequest? {
             guard case .singleStepHeist(let request) = dispatch else { return nil }
@@ -124,17 +273,8 @@ extension TheFence {
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        try FenceCommandInput(command: command, arguments: arguments).validatePublicContract()
-        let requestId = arguments.string(.requestId) ?? UUID().uuidString
-        let expectationPayload = try ExpectationPayload(arguments: arguments)
-        let dispatch = try command.descriptor.requestDecoder(self, arguments, requestId, expectationPayload)
-
-        return ParsedRequest(
-            command: command,
-            requestId: requestId,
-            dispatch: dispatch,
-            expectationPayload: expectationPayload
-        )
+        let input = FenceCommandInput(command: command, arguments: arguments)
+        return ParsedRequest(admission: try CommandAdmission(fence: self, input: input))
     }
 
 }

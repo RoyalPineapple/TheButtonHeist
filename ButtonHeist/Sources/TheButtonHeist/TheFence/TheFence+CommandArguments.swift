@@ -5,7 +5,7 @@ import TheScore
 
 extension TheFence {
 
-    /// Typed command arguments after external routing has selected a command.
+    /// Raw command arguments retained only until command admission.
     @_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope: Sendable {
         let values: [String: HeistValue]
         let argumentFieldPrefix: String?

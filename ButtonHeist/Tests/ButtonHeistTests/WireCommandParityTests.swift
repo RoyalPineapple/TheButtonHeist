@@ -169,14 +169,49 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
+    func testEveryPublicCommandHasOneDescriptorValidatedRuntimeAdmission() async throws {
         let (fence, _) = makeConnectedFence()
 
         for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            XCTAssertNoThrow(
-                try fence.parseRequest(command: descriptor.command, values: sampleArguments(for: descriptor.command)),
-                descriptor.command.rawValue
+            let input = FenceCommandInput(
+                command: descriptor.command,
+                arguments: .init(values: sampleArguments(for: descriptor.command))
             )
+            try input.validatePublicContract()
+
+            let request = try fence.admit(input)
+
+            XCTAssertEqual(request.command, descriptor.command, descriptor.command.rawValue)
+        }
+    }
+
+    @ButtonHeistActor
+    func testAdmissionRejectsUnknownMalformedAndMissingFields() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .ping,
+            arguments: .init(values: ["unknown": .bool(true)])
+        ))) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, "unknown")
+        }
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .typeText,
+            arguments: .init(values: ["text": .int(7)])
+        ))) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, "text")
+        }
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .ping,
+            arguments: .init(values: ["requestId": .int(7)])
+        ))) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, "requestId")
+        }
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .activate,
+            arguments: .init(values: [:])
+        ))) { error in
+            XCTAssertEqual((error as? TheFence.MissingAccessibilityTarget)?.command, .activate)
         }
     }
 

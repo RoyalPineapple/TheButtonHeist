@@ -17,7 +17,7 @@ import TheScore
     public var errorDescription: String? { message }
 }
 
-/// Routed public command input before admission into TheFence's typed runtime.
+/// Unadmitted boundary input. Execution can only consume its typed admission.
 @_spi(ButtonHeistTooling) public struct FenceCommandInput: Sendable {
     @_spi(ButtonHeistTooling) public let command: TheFence.Command
     @_spi(ButtonHeistTooling) public let arguments: TheFence.CommandArgumentEnvelope
@@ -34,6 +34,16 @@ import TheScore
                 observed: "string \"\(command.rawValue)\"",
                 expected: "public command for The Button Heist"
             )
+        }
+
+        if let requestId = arguments.value(for: .requestId) {
+            guard case .string = requestId else {
+                throw SchemaValidationError(
+                    field: FenceParameterKey.requestId.rawValue,
+                    observed: requestId.schemaObservedDescription,
+                    expected: "string"
+                )
+            }
         }
 
         let metadataKeys = Set([FenceParameterKey.requestId.rawValue])

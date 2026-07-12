@@ -890,24 +890,13 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    @ButtonHeistActor
-    func testDispatchSchemaFailureUsesDiagnosticFailureMapper() async throws {
-        let fence = TheFence(configuration: .init())
+    func testSchemaFailureUsesDiagnosticFailureMapper() throws {
         let validationError = SchemaValidationError(
             field: "target",
             observed: "integer 7",
             expected: "object"
         )
-        let parsed = TheFence.ParsedRequest(
-            command: .listTargets,
-            requestId: "public-failure-test",
-            dispatch: TheFence.DecodedRequestDispatch(handler: { _ in
-                throw validationError
-            }),
-            expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
-        )
-
-        let response = try await fence.execute(parsed: parsed)
+        let response = FenceResponse.failure(validationError)
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
         XCTAssertEqual(failure.failureCode, .requestValidationError)
