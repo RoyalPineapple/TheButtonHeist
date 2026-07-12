@@ -86,10 +86,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.timeout, CLITimeoutDefaults.wait)
     }
 
-    func testParsedTimeoutDefaultsComeFromCLITimeoutCatalog() throws {
+    func testParsedTimeoutDefaultsComeFromFenceDescriptorsWhenExposed() throws {
         XCTAssertEqual(try WaitCommand.parse(["--change", "screen"]).timeout, CLITimeoutDefaults.wait)
-        XCTAssertEqual(try TypeCommand.parse(["--text", "hello"]).timeout, CLITimeoutDefaults.typeText)
-        XCTAssertEqual(try ScrollToVisibleCommand.parse(["--label", "Item"]).timeout, CLITimeoutDefaults.scrollToVisible)
+        XCTAssertEqual(
+            try TypeCommand.parse(["--text", "hello"]).timeout,
+            try XCTUnwrap(TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds)
+        )
+        XCTAssertEqual(
+            try ScrollToVisibleCommand.parse(["--label", "Item"]).timeout,
+            try XCTUnwrap(TheFence.Command.scrollToVisible.descriptor.timeout.fixedSeconds)
+        )
         XCTAssertEqual(try ActivateCommand.parse(["--label", "Item"]).timeoutOption.timeout, CLITimeoutDefaults.common)
     }
 

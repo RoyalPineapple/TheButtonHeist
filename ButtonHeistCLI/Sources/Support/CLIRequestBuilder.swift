@@ -104,11 +104,24 @@ enum CLIRequestBuilder {
     }
 
     static func targetValue(_ target: ElementTarget) -> HeistValue {
-        CLICodableHeistValueBridge.value(from: target)
+        do {
+            return try TheFence.HeistValuePayloadEncoder.encode(target)
+        } catch {
+            preconditionFailure("Failed to encode canonical ElementTarget payload: \(error)")
+        }
     }
 
     static func targetObject(_ target: ElementTarget) -> CLIRequestObject {
-        CLICodableHeistValueBridge.object(from: target)
+        guard case .object(let fields) = targetValue(target) else {
+            preconditionFailure("Canonical ElementTarget payload did not encode as an object")
+        }
+
+        return CLIRequestObject(fields.map { rawKey, value in
+            guard let key = FenceParameterKey(rawValue: rawKey) else {
+                preconditionFailure("Canonical ElementTarget payload emitted unknown key \(rawKey)")
+            }
+            return (key, value)
+        })
     }
 }
 

@@ -7,8 +7,6 @@ struct OutputOptions: ParsableArguments {
 
 enum CLITimeoutDefaults {
     static let common: Double = 10
-    static let scrollToVisible: Double = 15
-    static let typeText: Double = 30
     static let wait: Double = common
 }
 

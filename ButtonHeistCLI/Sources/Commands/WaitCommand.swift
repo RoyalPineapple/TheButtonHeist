@@ -112,7 +112,7 @@ struct WaitPredicateInput: ParsableArguments {
     }
 
     private static func heistValue(from predicate: AccessibilityPredicate) throws -> HeistValue {
-        CLICodableHeistValueBridge.value(from: predicate)
+        try TheFence.HeistValuePayloadEncoder.encode(predicate)
     }
 }
 

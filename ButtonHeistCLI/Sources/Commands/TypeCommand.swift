@@ -2,6 +2,13 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
 struct TypeCommand: AsyncParsableCommand, CLICommandContract {
+    private static let defaultTimeout: Double = {
+        guard let seconds = TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds else {
+            preconditionFailure("type_text descriptor must expose a single-step action timeout")
+        }
+        return seconds
+    }()
+
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Type text into a field by tapping keyboard keys",
@@ -22,8 +29,8 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(CLITimeoutDefaults.typeText)))")
-    var timeout: Double = CLITimeoutDefaults.typeText
+    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(TypeCommand.defaultTimeout)))")
+    var timeout: Double = TypeCommand.defaultTimeout
 
     func validate() throws {
         if text.isEmpty {
