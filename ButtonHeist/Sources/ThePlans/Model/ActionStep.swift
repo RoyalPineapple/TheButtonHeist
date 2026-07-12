@@ -150,14 +150,15 @@ public struct ActionStep: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let expectationPolicy = try ActionExpectationPolicy.decode(
+            from: container,
+            expectationKey: .expectation,
+            waiverKey: .expectationWaiver,
+            ambiguousError: HeistPlanError.ambiguousExpectationContract
+        )
         try self.init(
             command: try container.decode(HeistActionCommand.self, forKey: .command),
-            expectationPolicy: try ActionExpectationPolicy.decode(
-                from: container,
-                expectationKey: .expectation,
-                waiverKey: .expectationWaiver,
-                ambiguousError: HeistPlanError.ambiguousExpectationContract
-            )
+            expectationPolicy: expectationPolicy
         )
     }
 

@@ -157,7 +157,7 @@ private enum HeistPathGrammar {
 
     static func components(from dottedName: String) -> [String] {
         guard !dottedName.isEmpty else { return [] }
-        dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        return dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
     }
 
     static func validate(_ components: [String]) throws -> [String] {

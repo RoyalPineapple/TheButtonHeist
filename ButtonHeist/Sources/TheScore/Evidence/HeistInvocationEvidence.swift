@@ -1,16 +1,16 @@
 import Foundation
 import ThePlans
 
+private enum InvocationExpectationStorage: Sendable, Equatable {
+    case summary(actionResult: ActionResult, expectation: ExpectationResult)
+    case wait(HeistWaitEvidence)
+}
+
 public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
     private let storage: Storage
 
     public struct InvocationExpectationEvidence: Sendable, Equatable {
-        private enum Storage: Sendable, Equatable {
-            case summary(actionResult: ActionResult, expectation: ExpectationResult)
-            case wait(HeistWaitEvidence)
-        }
-
-        private let storage: Storage
+        private let storage: InvocationExpectationStorage
 
         public var actionResult: ActionResult {
             switch storage {
@@ -42,7 +42,7 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
                     "Invocation expectation evidence must match its summarized action result and expectation"
                 )
             }
-            storage = waitEvidence.map(Storage.wait)
+            storage = waitEvidence.map(InvocationExpectationStorage.wait)
                 ?? .summary(actionResult: actionResult, expectation: expectation)
         }
     }

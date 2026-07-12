@@ -1406,6 +1406,9 @@ import Testing
     }
     """))
     expect(caseAfterElse, contains: "Case must appear before Else")
+}
+
+@Test func `reported agent update grammar mistakes fail with corrections`() throws {
     let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated())"#))
     expect(emptyUpdated, contains: ".updated(...) requires an update matcher")
 
