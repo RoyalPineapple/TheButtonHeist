@@ -235,6 +235,83 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(expectationResult.actionMethod.rawValue, "wait")
     }
 
+    func testReportOutputsShareCanonicalReportedActionFacts() async throws {
+        let predicate = AccessibilityPredicate.change(.screenChanged)
+        let dispatchTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2),
+            beforeScreenId: "start",
+            afterScreenId: "dispatch"
+        )
+        let expectationTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 2),
+            after: makeReceiptTestInterface(elementCount: 3),
+            beforeScreenId: "dispatch",
+            afterScreenId: "settled"
+        )
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Pay"))))
+        let result = HeistExecutionResult(
+            steps: [
+                actionStep(
+                    command: command,
+                    actionResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
+                    expectationActionResult: ActionResult.failure(
+                        method: .wait,
+                        errorKind: .timeout,
+                        message: "timed out waiting for checkout",
+                        accessibilityTrace: expectationTrace
+                    ),
+                    expectation: ExpectationResult(met: false, predicate: predicate, actual: "timed out"),
+                    failure: HeistFailureDetail(
+                        category: .expectation,
+                        contract: "action expectation is met",
+                        observed: "timed out waiting for checkout",
+                        expected: predicate.description
+                    )
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+        let plan = try evidenceProjectionPlan()
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+        let reportFacts = try XCTUnwrap(result.evidenceRollup.nodes.first?.reportFacts)
+        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .mcp)
+        let reportNode = try XCTUnwrap(projection.outputNodes.first)
+
+        XCTAssertEqual(reportNode.status, reportFacts.status)
+        XCTAssertEqual(reportNode.message, reportFacts.message)
+        XCTAssertEqual(reportNode.failureMessage, reportFacts.failureMessage)
+        guard case .action(let actionEvidence)? = reportNode.evidence,
+              case .expectation(_, let expectationResult, _, _)? = actionEvidence.evidence else {
+            return XCTFail("Expected projected action expectation evidence")
+        }
+        XCTAssertEqual(reportNode.traceDelta?.kind.rawValue, expectationResult.delta?.kind.rawValue)
+
+        let jsonNode = try XCTUnwrap(try publicHeistReportResponseDTO(response).report.nodes.first)
+        let jsonAction = try XCTUnwrap(jsonNode.evidence?.action)
+        XCTAssertEqual(jsonNode.status, reportFacts.status.rawValue)
+        XCTAssertEqual(jsonNode.message, reportFacts.message)
+        XCTAssertEqual(jsonAction.expectationResult?.method, reportFacts.results.actionResult?.method.rawValue)
+        XCTAssertEqual(jsonAction.expectationResult?.message, reportFacts.results.actionResult?.message)
+
+        let compact = response.compactFormatted()
+        XCTAssertTrue(
+            compact.contains("  [0] \(reportFacts.displayName) -> error: \(reportFacts.failureMessage ?? \"\")"),
+            compact
+        )
+
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).junitSteps(result: result)
+        }.value
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(row.command, reportFacts.commandName)
+        guard case .failed(let junitMessage, _) = row.outcome else {
+            return XCTFail("Expected failed JUnit row, got \(String(describing: row.outcome))")
+        }
+        XCTAssertTrue(junitMessage.hasPrefix(reportFacts.message ?? ""), junitMessage)
+    }
+
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
