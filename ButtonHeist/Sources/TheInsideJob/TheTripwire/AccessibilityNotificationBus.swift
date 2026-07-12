@@ -286,13 +286,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         notificationData data: CapturedAccessibilityNotificationPayload,
         associatedElement element: CapturedAccessibilityNotificationPayload
     ) {
-        guard let kind = PendingAccessibilityNotificationEvent.kind(forCode: code) else { return }
-
         lock.lock()
         let sequence = latestSequenceStorage + 1
         let event = PendingAccessibilityNotificationEvent(
             sequence: sequence,
-            kind: kind,
+            rawCode: code,
             timestamp: Date(),
             notificationData: data.pendingPayload,
             associatedElement: element.pendingPayload
@@ -552,6 +550,7 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
 struct PendingAccessibilityNotificationEvent {
     let sequence: UInt64
     let kind: AccessibilityNotificationKind
+    let rawCode: UInt32?
     let timestamp: Date
     let notificationData: PendingAccessibilityNotificationPayload
     let associatedElement: PendingAccessibilityNotificationPayload
@@ -559,30 +558,35 @@ struct PendingAccessibilityNotificationEvent {
     init(
         sequence: UInt64,
         kind: AccessibilityNotificationKind,
+        rawCode: UInt32? = nil,
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
         self.sequence = sequence
-        self.kind = kind
+        let normalizedKind = rawCode.map(AccessibilityNotificationKind.init(rawCode:)) ?? kind
+        self.kind = normalizedKind
+        self.rawCode = normalizedKind.rawCode
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
     }
 
-    static func kind(forCode code: UInt32) -> AccessibilityNotificationKind? {
-        switch code {
-        case 1000:
-            .screenChanged
-        case 1001:
-            .layoutChanged
-        case 1005:
-            .valueChanged
-        case 1008:
-            .announcement
-        default:
-            nil
-        }
+    init(
+        sequence: UInt64,
+        rawCode: UInt32,
+        timestamp: Date,
+        notificationData: PendingAccessibilityNotificationPayload,
+        associatedElement: PendingAccessibilityNotificationPayload
+    ) {
+        self.init(
+            sequence: sequence,
+            kind: AccessibilityNotificationKind(rawCode: rawCode),
+            rawCode: rawCode,
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement
+        )
     }
 
     var capturedAnnouncement: CapturedAnnouncement? {
@@ -592,6 +596,7 @@ struct PendingAccessibilityNotificationEvent {
             text: text,
             timestamp: timestamp,
             kind: kind,
+            rawCode: rawCode,
             associatedElement: associatedElement.publicPayload
         )
     }

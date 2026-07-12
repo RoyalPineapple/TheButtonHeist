@@ -214,7 +214,7 @@ final class AccessibilityTraceTests: XCTestCase {
         )
     }
 
-    func testNotificationEvidenceEncodesProductKindsWithoutUIKitCodeOrName() throws {
+    func testNotificationEvidenceNamesLayoutChangedInSwiftButKeepsLegacyWireSpelling() throws {
         let notifications = AccessibilityNotificationKind.allCases.enumerated().map { offset, kind in
             AccessibilityNotificationEvidence(
                 sequence: UInt64(offset + 1),
@@ -236,6 +236,27 @@ final class AccessibilityTraceTests: XCTestCase {
         )
         XCTAssertTrue(json.allSatisfy { $0["code"] == nil })
         XCTAssertTrue(json.allSatisfy { $0["name"] == nil })
+    }
+
+    func testUnknownNotificationEvidencePreservesRawCodeAndPayload() throws {
+        let notification = AccessibilityNotificationEvidence(
+            sequence: 9,
+            kind: .unknown(rawCode: 4002),
+            timestamp: Date(timeIntervalSince1970: 9),
+            notificationData: .string("private notification"),
+            associatedElement: .unresolvedObject(AccessibilityNotificationObjectPayload(
+                className: "NSObject",
+                summary: "payload summary"
+            ))
+        )
+
+        let data = try JSONEncoder().encode(notification)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let decoded = try JSONDecoder().decode(AccessibilityNotificationEvidence.self, from: data)
+
+        XCTAssertEqual(json["kind"] as? String, "unknown")
+        XCTAssertEqual(json["rawCode"] as? Int, 4002)
+        XCTAssertEqual(decoded, notification)
     }
 
     func testNotificationPayloadRejectsFieldsFromOtherVariants() {

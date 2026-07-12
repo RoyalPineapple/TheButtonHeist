@@ -165,7 +165,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(advanced?.sequence, bus.transitionCursor().sequence)
     }
 
-    func testTransitionWaiterTreatsAnnouncementsAsRecaptureTriggersAndDropsUnsupportedEvents() async {
+    func testTransitionWaiterTreatsAnnouncementsAndUnknownCodesAsRecaptureTriggers() async {
         let bus = AccessibilityNotificationBus()
         let cursor = bus.transitionCursor()
         bus.record(code: 4002, notificationData: .none, associatedElement: .none)
@@ -178,7 +178,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
         XCTAssertEqual(advanced, bus.transitionCursor())
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.announcement])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown(rawCode: 4002), .announcement])
+        XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [4002, nil])
         XCTAssertGreaterThan(bus.transitionCursor().sequence, cursor.sequence)
     }
 
@@ -194,15 +195,19 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.pendingEvents().map(\.kind), [.valueChanged])
     }
 
-    func testUnsupportedNotificationsAreDroppedAtBoundary() {
+    func testUnknownNotificationsPreserveRawCodesAtBoundary() {
         let bus = AccessibilityNotificationBus()
 
         bus.record(code: 1009, notificationData: .none, associatedElement: .none)
         bus.record(code: 4002, notificationData: .none, associatedElement: .none)
 
-        XCTAssertEqual(bus.latestSequence, 0)
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [])
-        XCTAssertEqual(bus.transitionCursor(), .origin)
+        XCTAssertEqual(bus.latestSequence, 2)
+        XCTAssertEqual(
+            bus.pendingEvents().map(\.kind),
+            [.unknown(rawCode: 1009), .unknown(rawCode: 4002)]
+        )
+        XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [1009, 4002])
+        XCTAssertEqual(bus.transitionCursor().sequence, 2)
     }
 
     func testTransitionWaiterCancellationReturnsPromptlyAndRemovesWaiter() async {

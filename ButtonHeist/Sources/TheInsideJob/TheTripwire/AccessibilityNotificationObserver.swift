@@ -114,10 +114,6 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
     private func recordAndCopyPublication(
         _ notification: CapturedAccessibilityNotification
     ) -> AccessibilityNotificationPublication? {
-        guard let kind = PendingAccessibilityNotificationEvent.kind(forCode: notification.code) else {
-            return nil
-        }
-
         lock.lock()
         removeExpiredSubscribers()
         let subscribers = subscribers.values.compactMap(\.subscriber)
@@ -132,7 +128,7 @@ final class AccessibilityNotificationObserver: @unchecked Sendable {
         return AccessibilityNotificationPublication(
             event: PendingAccessibilityNotificationEvent(
                 sequence: sequence,
-                kind: kind,
+                rawCode: notification.code,
                 timestamp: Date(),
                 notificationData: notification.notificationData.pendingPayload,
                 associatedElement: notification.associatedElement.pendingPayload
