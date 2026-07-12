@@ -15,7 +15,7 @@ extension Navigation {
         var exploration = SemanticExploration(
             baseline: stash.actionDiscoveryBaseline()
         )
-        exploration.absorb(stash.refreshLiveCapture())
+        exploration.absorb(await settledExplorationPage())
         if stash.liveContains(heistId: heistId) {
             return exploration.finish(startTime: startTime)
         }
@@ -176,7 +176,7 @@ extension Navigation {
             } else {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
-            absorbExplorationPage(in: &exploration)
+            await absorbExplorationPage(in: &exploration)
 
             if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
                 return .terminal(terminal)
@@ -316,9 +316,8 @@ extension Navigation {
         }
     }
 
-    private func absorbExplorationPage(in exploration: inout SemanticExploration) {
-        exploration.absorb(stash.semanticPageForExploration())
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(exploration.screen)
+    private func absorbExplorationPage(in exploration: inout SemanticExploration) async {
+        exploration.absorb(await settledExplorationPage())
     }
 
     private func restoreContainerPosition(
@@ -328,7 +327,7 @@ extension Navigation {
     ) async {
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        absorbExplorationPage(in: &exploration)
+        await absorbExplorationPage(in: &exploration)
     }
 
     static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {

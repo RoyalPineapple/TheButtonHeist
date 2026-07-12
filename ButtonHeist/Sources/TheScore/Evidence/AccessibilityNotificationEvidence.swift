@@ -158,6 +158,14 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
     }
 }
 
+public struct AccessibilityNotificationGap: Codable, Sendable, Equatable, Hashable {
+    public let droppedThroughSequence: UInt64
+
+    public init(droppedThroughSequence: UInt64) {
+        self.droppedThroughSequence = droppedThroughSequence
+    }
+}
+
 /// Normalized spoken accessibility text observed from UIKit accessibility
 /// notifications. The source notification may be `elementChanged`,
 /// `announcement`, or `screenChanged`; the text is exposed

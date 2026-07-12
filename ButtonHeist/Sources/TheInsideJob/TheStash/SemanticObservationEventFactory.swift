@@ -12,6 +12,7 @@ enum SemanticObservationEventFactory {
         notificationSequence: UInt64,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
+        accessibilityNotificationGap: AccessibilityNotificationGap? = nil,
         notificationIdentityScreen: InterfaceObservation? = nil,
         fallbackReason: AccessibilityObservationFallbackReason? = nil
     ) -> SettledSemanticObservationEvent {
@@ -23,6 +24,7 @@ enum SemanticObservationEventFactory {
             generation: generation,
             stash: stash,
             pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+            accessibilityNotificationGap: accessibilityNotificationGap,
             notificationIdentityScreen: notificationIdentityScreen,
             fallbackReason: fallbackReason
         )
@@ -51,6 +53,7 @@ enum SemanticObservationEventFactory {
         generation: ObservationGeneration,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
+        accessibilityNotificationGap: AccessibilityNotificationGap?,
         notificationIdentityScreen: InterfaceObservation?,
         fallbackReason: AccessibilityObservationFallbackReason?
     ) -> AccessibilityTrace.Capture {
@@ -84,7 +87,8 @@ enum SemanticObservationEventFactory {
             ),
             transition: AccessibilityTrace.Transition(
                 fallbackReason: fallbackReason,
-                accessibilityNotifications: accessibilityNotifications
+                accessibilityNotifications: accessibilityNotifications,
+                accessibilityNotificationGap: accessibilityNotificationGap
             )
         )
     }

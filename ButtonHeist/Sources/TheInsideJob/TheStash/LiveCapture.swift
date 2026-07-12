@@ -87,7 +87,8 @@ struct LiveCapture: Equatable {
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollMembershipsByPath: containerScrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath
+            scrollInventoriesByPath: scrollInventoriesByPath,
+            firstResponderHeistId: firstResponderHeistId
         )
         let dispatchReferences = DispatchReferences(
             elementRefs: elementRefs,
@@ -114,7 +115,7 @@ struct LiveCapture: Equatable {
             self.dispatchReferences = DispatchReferences(
                 elementRefs: table.elementRefsByHeistId,
                 containerRefsByPath: dispatchReferences.containerRefsByPath,
-                firstResponderHeistId: dispatchReferences.firstResponderHeistId,
+                firstResponderHeistId: dispatchReferences.firstResponderHeistId ?? snapshot.firstResponderHeistId,
                 scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
             )
             elementIndex = LiveElementIndex(
@@ -247,6 +248,7 @@ struct LiveCapture: Equatable {
         let containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
         let scrollInventoriesByPath: [TreePath: ScrollInventory]
+        let firstResponderHeistId: HeistId?
 
         init(
             hierarchy: [AccessibilityHierarchy],
@@ -255,7 +257,8 @@ struct LiveCapture: Equatable {
             containerContentFramesByPath: [TreePath: ContentRect] = [:],
             containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
             containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
-            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:]
+            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+            firstResponderHeistId: HeistId? = nil
         ) {
             self.hierarchy = hierarchy
             self.containerNamesByPath = containerNamesByPath
@@ -264,6 +267,7 @@ struct LiveCapture: Equatable {
             self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
             self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
             self.scrollInventoriesByPath = scrollInventoriesByPath
+            self.firstResponderHeistId = firstResponderHeistId
         }
 
         static let empty = Snapshot(

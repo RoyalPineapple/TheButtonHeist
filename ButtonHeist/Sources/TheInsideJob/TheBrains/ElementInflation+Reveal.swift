@@ -103,7 +103,7 @@ extension ElementInflation {
     private func refreshedVisibleTargetResolution(
         _ target: AccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
-        guard stash.refreshCurrentVisibleTree() != nil else { return nil }
+        guard stash.refreshLiveCapture() != nil else { return nil }
         return visibleTargetResolution(target)
     }
 
@@ -238,7 +238,7 @@ extension ElementInflation {
         let refreshedScreen: InterfaceObservation?
         switch mode {
         case .revealPath:
-            refreshedScreen = stash.refreshCurrentVisibleTree()
+            refreshedScreen = stash.refreshLiveCapture()
         case .liveTarget:
             refreshedScreen = stash.refreshLiveCapture()
         }

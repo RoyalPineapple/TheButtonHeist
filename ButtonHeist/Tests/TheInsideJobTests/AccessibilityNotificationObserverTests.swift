@@ -91,7 +91,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let claimed = action.finishEvents()
+        let claimed = action.capture()?.events ?? []
+        action.cancel()
 
         XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
         XCTAssertEqual(
@@ -287,7 +288,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.stash.semanticObservationStream.commitSettledVisibleObservation(staleScreen)
+        let staleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
         // The completion notification lands after the commit, inside an
         // action's attribution window: the settled overview has already been
@@ -336,7 +337,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.stash.semanticObservationStream.commitSettledVisibleObservation(staleScreen)
+        let staleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
         brains.stash.accessibilityNotifications.record(
             code: 1000,
@@ -378,7 +379,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let claimed = action.finishEvents()
+        let claimed = action.capture()?.events ?? []
+        action.cancel()
 
         XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
         XCTAssertEqual(

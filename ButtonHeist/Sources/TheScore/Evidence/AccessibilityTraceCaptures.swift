@@ -16,6 +16,7 @@ private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIter
     case fallbackReason
     case transient
     case accessibilityNotifications
+    case accessibilityNotificationGap
 }
 
 public extension AccessibilityTrace {
@@ -126,19 +127,27 @@ public extension AccessibilityTrace {
         /// AX notification traffic observed while moving into this capture.
         /// Element payloads reference nodes in this capture's interface tree.
         public let accessibilityNotifications: [AccessibilityNotificationEvidence]
+        /// Present when the bounded notification stream dropped events before
+        /// this edge was captured. Absence means the edge is complete.
+        public let accessibilityNotificationGap: AccessibilityNotificationGap?
 
         public init(
             fallbackReason: AccessibilityObservationFallbackReason? = nil,
             transient: [HeistElement] = [],
-            accessibilityNotifications: [AccessibilityNotificationEvidence] = []
+            accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
+            accessibilityNotificationGap: AccessibilityNotificationGap? = nil
         ) {
             self.fallbackReason = fallbackReason
             self.transient = transient
             self.accessibilityNotifications = accessibilityNotifications
+            self.accessibilityNotificationGap = accessibilityNotificationGap
         }
 
         public var isEmpty: Bool {
-            fallbackReason == nil && transient.isEmpty && accessibilityNotifications.isEmpty
+            fallbackReason == nil
+                && transient.isEmpty
+                && accessibilityNotifications.isEmpty
+                && accessibilityNotificationGap == nil
         }
 
         public init(from decoder: Decoder) throws {
@@ -156,7 +165,11 @@ public extension AccessibilityTrace {
                 accessibilityNotifications: try container.decodeIfPresent(
                     [AccessibilityNotificationEvidence].self,
                     forKey: .accessibilityNotifications
-                ) ?? []
+                ) ?? [],
+                accessibilityNotificationGap: try container.decodeIfPresent(
+                    AccessibilityNotificationGap.self,
+                    forKey: .accessibilityNotificationGap
+                )
             )
         }
 
@@ -169,6 +182,7 @@ public extension AccessibilityTrace {
             if !accessibilityNotifications.isEmpty {
                 try container.encode(accessibilityNotifications, forKey: .accessibilityNotifications)
             }
+            try container.encodeIfPresent(accessibilityNotificationGap, forKey: .accessibilityNotificationGap)
         }
     }
 

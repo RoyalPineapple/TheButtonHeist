@@ -31,6 +31,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private let maxBufferedEvents = 64
     private let lock = NSLock()
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
+    private var discardedThroughSequenceStorage: UInt64 = 0
     private var latestSequenceStorage: UInt64 = 0
     private var latestTransitionSequenceStorage: UInt64 = 0
     private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
@@ -316,7 +317,9 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         latestSequenceStorage = max(latestSequenceStorage, event.sequence)
         bufferedEvents.append(event)
         if bufferedEvents.count > maxBufferedEvents {
-            bufferedEvents.removeFirst(bufferedEvents.count - maxBufferedEvents)
+            let removed = bufferedEvents.prefix(bufferedEvents.count - maxBufferedEvents)
+            discardedThroughSequenceStorage = max(discardedThroughSequenceStorage, removed.last?.sequence ?? 0)
+            bufferedEvents.removeFirst(removed.count)
         }
         return NotificationResumptions(
             cursor: AccessibilityNotificationCursor(sequence: event.sequence),
@@ -446,15 +449,28 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return "\(singleLine.prefix(157))..."
     }
 
-    fileprivate func finishActionWindow(after cursor: AccessibilityNotificationCursor) -> [PendingAccessibilityNotificationEvent] {
+    fileprivate func captureActionWindow(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
         lock.lock()
         defer { lock.unlock() }
 
-        let events = bufferedEvents.filter { $0.sequence > cursor.sequence }
-        if activeActionWindows > 0 {
-            activeActionWindows -= 1
-        }
-        return events
+        return batchLocked(after: cursor)
+    }
+
+    func checkpoint() -> AccessibilityNotificationBatch {
+        lock.lock()
+        defer { lock.unlock() }
+        return batchLocked(after: AccessibilityNotificationCursor(sequence: latestSequenceStorage))
+    }
+
+    private func batchLocked(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
+        AccessibilityNotificationBatch(
+            events: bufferedEvents.filter { $0.sequence > cursor.sequence },
+            through: AccessibilityNotificationCursor(sequence: latestSequenceStorage),
+            scopedScreenChangedThrough: latestScopedScreenChangedSequenceStorage,
+            gap: cursor.sequence < discardedThroughSequenceStorage
+                ? AccessibilityNotificationGap(droppedThroughSequence: discardedThroughSequenceStorage)
+                : nil
+        )
     }
 
     fileprivate func cancelActionWindow() {
@@ -483,6 +499,13 @@ struct AccessibilityNotificationCursor: Sendable, Equatable {
     static let origin = AccessibilityNotificationCursor(sequence: 0)
 
     let sequence: UInt64
+}
+
+struct AccessibilityNotificationBatch {
+    let events: [PendingAccessibilityNotificationEvent]
+    let through: AccessibilityNotificationCursor
+    let scopedScreenChangedThrough: UInt64
+    let gap: AccessibilityNotificationGap?
 }
 
 /// Lifetime token for a heist-level notification stream.
@@ -529,14 +552,11 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
         cancel()
     }
 
-    func finishEvents() -> [PendingAccessibilityNotificationEvent] {
-        let bus: AccessibilityNotificationBus?
+    func capture() -> AccessibilityNotificationBatch? {
         lock.lock()
-        bus = self.bus
-        self.bus = nil
+        let bus = self.bus
         lock.unlock()
-
-        return bus?.finishActionWindow(after: cursor) ?? []
+        return bus?.captureActionWindow(after: cursor)
     }
 
     func cancel() {

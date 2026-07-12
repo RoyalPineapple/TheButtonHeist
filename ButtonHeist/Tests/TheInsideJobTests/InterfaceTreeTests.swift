@@ -514,7 +514,7 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertEqual(updated.elementIDs, ["button_visible", "button_known"])
         XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
         XCTAssertEqual(refresh.liveCapture.firstResponderHeistId, "button_visible")
-        XCTAssertNil(LiveCapture(snapshot: updated.viewportCapture).firstResponderHeistId)
+        XCTAssertEqual(LiveCapture(snapshot: updated.viewportCapture).firstResponderHeistId, "button_visible")
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 

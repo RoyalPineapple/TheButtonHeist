@@ -125,7 +125,7 @@ extension ElementInflation {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         case .moved:
             await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-            stash.refreshTreeAfterViewportMove()
+            stash.refreshLiveCapture()
             return .success(.moved)
         }
     }

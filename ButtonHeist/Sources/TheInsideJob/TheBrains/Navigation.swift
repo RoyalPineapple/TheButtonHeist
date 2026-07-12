@@ -46,11 +46,11 @@ final class Navigation {
             return await self.exploreScreen(
                 target: target,
                 baseline: self.stash.actionDiscoveryBaseline()
-            ).screen
+            )
         }
         self.elementInflation.revealKnownTarget = { [weak self] heistId in
             guard let self else { return nil }
-            return await self.scanForHeistId(heistId)?.screen
+            return await self.scanForHeistId(heistId)
         }
     }
 

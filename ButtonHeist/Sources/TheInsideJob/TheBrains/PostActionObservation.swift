@@ -477,14 +477,8 @@ final class PostActionObservation {
         for reference: AccessibilityNotificationElementReference,
         in state: BeforeState
     ) -> HeistId? {
-        guard reference.path.indices.count == 1,
-              let index = reference.path.indices.first,
-              index == reference.traversalIndex,
-              state.screen.orderedElements.indices.contains(index)
-        else {
-            return nil
-        }
-        return state.screen.orderedElements[index].heistId
+        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
+            .heistId(for: reference)
     }
 
     private static func accessibilityNotificationElementReference(
@@ -492,14 +486,8 @@ final class PostActionObservation {
         in state: BeforeState,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
-        for (index, element) in state.screen.orderedElements.enumerated() where element.heistId == heistId {
-            return AccessibilityNotificationElementReference(
-                path: TreePath([index]),
-                traversalIndex: index,
-                resolution: resolution
-            )
-        }
-        return nil
+        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
+            .accessibilityNotificationElementReference(for: heistId, resolution: resolution)
     }
 
     private func makeCaptureContext(

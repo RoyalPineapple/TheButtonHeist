@@ -700,7 +700,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             associatedElement: .none
         )
 
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Passive", .staticText, "passive")])
         )
 
@@ -759,7 +759,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(discoveryAfter)
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryAfter)
 
         let result = await resultTask.value
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
@@ -882,7 +882,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -926,9 +926,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -954,7 +954,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(observedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(observedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -979,7 +979,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(emptyScreen)
 
         let receipt = await receiptTask.value
 
@@ -1003,7 +1003,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(readyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(readyScreen)
 
         let receipt = await receiptTask.value
 
@@ -1033,7 +1033,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
 
         let receipt = await receiptTask.value
 
@@ -1066,7 +1066,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
 
         let receipt = await receiptTask.value
 
@@ -1091,9 +1091,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(loadingScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(loadingScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(emptyScreen)
 
         let receipt = await receiptTask.value
 
@@ -1457,8 +1457,8 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testPredicateWaitPreservesActionBaselineWhenCaptureIsNotInObservationHistory() async throws {
         let beforeScreen = volumeScreen(value: "50%")
         let afterScreen = volumeScreen(value: "60%")
-        _ = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
-        let afterEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(afterScreen)
+        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
+        let afterEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(afterScreen)
         let actionBaseline = AccessibilityTrace.Capture(
             sequence: 1,
             interface: brains.stash.discoveryInterfaceWithHash(
@@ -1493,13 +1493,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testObservationWindowRetainsFastRoundTripTransition() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        _ = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let finalEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1518,10 +1518,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testCompleteObservationWindowProducesUnchangedProof() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1543,12 +1543,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testIncompleteObservationWindowDoesNotProduceUnchangedVerdict() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1574,12 +1574,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testIncompleteObservationWindowStillProvesEndpointElementChange() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1597,12 +1597,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testNoChangePredicateRequiresCompleteObservationWindow() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1622,20 +1622,23 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testScreenAppearanceStartsNewObservationGeneration() throws {
-        let oldScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let oldScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
-        let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
-            pendingAccessibilityNotifications: [
-                PendingAccessibilityNotificationEvent(
+            notificationBatch: AccessibilityNotificationBatch(
+                events: [PendingAccessibilityNotificationEvent(
                     sequence: 1,
                     kind: .screenChanged,
                     timestamp: Date(timeIntervalSince1970: 0),
                     notificationData: .none,
                     associatedElement: .none
-                ),
-            ]
+                )],
+                through: AccessibilityNotificationCursor(sequence: 1),
+                scopedScreenChangedThrough: 1,
+                gap: nil
+            )
         )
         let oldBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let transitionWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1651,7 +1654,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let newBaseline = try XCTUnwrap(newScreenEvent.settledCapture)
-        let nextEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let nextEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
         let newScreenWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1664,10 +1667,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testChangePredicatesReadScreenAndElementFactsSeparately() throws {
-        let oldScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let oldScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
-        let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
         let oldScreenBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
@@ -1686,10 +1689,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(screenPredicate.met)
         XCTAssertTrue(elementPredicateAgainstScreen.met)
 
-        let elementBaselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let elementBaselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let elementCurrentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let elementCurrentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
         let elementBaseline = try XCTUnwrap(elementBaselineEvent.settledCapture)
@@ -1711,13 +1714,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testPredicateObservationStreamPreservesChangeBaselineAcrossReductions() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let intermediateEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let intermediateEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let finalEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "70%")
         )
 

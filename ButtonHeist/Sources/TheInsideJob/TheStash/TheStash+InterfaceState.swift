@@ -59,61 +59,12 @@ extension TheStash {
         return parse()
     }
 
-    /// Parse the current viewport and commit it as the current visible tree.
-    /// Use this for ordinary observation, where the app may have navigated and
-    /// stale offscreen entries should not be blindly preserved.
-    @discardableResult
-    func refreshCurrentVisibleTree() -> InterfaceObservation? {
-        if let visibleTree = nextVisibleRefreshScreenForTesting {
-            nextVisibleRefreshScreenForTesting = nil
-            return semanticObservationStream
-                .commitSettledVisibleObservation(visibleTree)
-                .observation
-                .screen
-        }
-        guard let visibleTree = parse() else { return nil }
-        return semanticObservationStream
-            .commitSettledVisibleObservation(visibleTree)
-            .observation
-            .screen
-    }
-
-    /// Parse after viewport movement and fold the visible page into the
-    /// settled semantic tree. Scrolling changes what is visible, not which
-    /// screen we are on, so the tree should grow from every observed page.
-    @discardableResult
-    func refreshTreeAfterViewportMove() -> InterfaceObservation? {
-        guard let visiblePage = parse() else { return nil }
-        let updatedTree = InterfaceObservation(
-            tree: interfaceTree.merging(visiblePage.tree),
-            liveCapture: visiblePage.liveCapture
-        )
-        return semanticObservationStream
-            .commitSettledDiscoveryObservation(updatedTree)
-            .observation
-            .screen
-    }
-
     /// Produce one visible observation for the settle loop without committing
     /// it yet. Successful parses refresh latest observed capture and visible
     /// live view; the observation stream alone promotes a proven final screen
     /// into the interface tree.
     func semanticObservationForSettle() -> InterfaceObservation? {
         refreshLiveCapture()
-    }
-
-    /// Consume a synthetic visible refresh as the post-action commit value.
-    /// Production has no queued value here; tests use this to model the fresh
-    /// visible tree that appears after a transitional settle observation.
-    func consumeQueuedVisibleRefreshForPostActionCommit() -> InterfaceObservation? {
-        guard let visibleTree = nextVisibleRefreshScreenForTesting else { return nil }
-        guard visibleTree.interfaceHash != interfaceTree.interfaceHash else {
-            nextVisibleRefreshScreenForTesting = nil
-            return nil
-        }
-        nextVisibleRefreshScreenForTesting = nil
-        recordParsedObservedEvidence(from: visibleTree)
-        return visibleTree
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
@@ -153,7 +104,7 @@ extension TheStash {
 
     func installScreenForTesting(_ screen: InterfaceObservation) {
         nextVisibleRefreshScreenForTesting = screen
-        _ = semanticObservationStream.commitSettledVisibleObservation(screen)
+        _ = semanticObservationStream.commitSettledVisibleObservation(.testing(screen))
     }
 
     func clearInstalledVisibleRefreshScreenForTesting() {

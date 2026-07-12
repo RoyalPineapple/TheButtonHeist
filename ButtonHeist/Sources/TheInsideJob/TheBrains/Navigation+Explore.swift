@@ -11,9 +11,8 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    fileprivate func observeSemanticDiscovery() async -> InterfaceObservation? {
-        let exploration = await exploreScreen()
-        return exploration.screen
+    fileprivate func observeSemanticDiscovery() async -> ExploredScreen? {
+        await exploreScreen()
     }
 
     func exploreScreen(
@@ -29,7 +28,7 @@ extension Navigation {
             maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
         )
 
-        exploration.absorb(stash.refreshLiveCapture())
+        exploration.absorb(await settledExplorationPage())
 
         if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen.tree) {
             exploration.manifest.clearPendingContainers()
@@ -59,6 +58,21 @@ extension Navigation {
 
     func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget, in tree: InterfaceTree) -> Bool {
         hasTerminalExplorationResolution(target, in: tree.viewportOnly)
+    }
+}
+
+extension Navigation {
+    func settledExplorationPage() async -> InterfaceObservation? {
+        let settle = await SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: SettleSession.defaultTimeoutMs
+        ).run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: tripwire.tripwireSignal()
+        )
+        guard settle.outcome.didSettleCleanly else { return nil }
+        return settle.finalScreen
     }
 }
 

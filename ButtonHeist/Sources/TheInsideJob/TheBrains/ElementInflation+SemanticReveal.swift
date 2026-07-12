@@ -41,10 +41,10 @@ extension ElementInflation {
            await moveToObservedContentActivationPoint(treeElement) {
             return .revealed
         }
-        guard let revealedScreen = await revealKnownTarget?(treeElement.heistId) else {
+        guard let exploration = await revealKnownTarget?(treeElement.heistId) else {
             return .failed(.noLiveScrollableAncestor)
         }
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(revealedScreen)
+        stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploration))
         guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
               visible.element.representsSameSemanticElement(as: treeElement.element)
         else {
@@ -86,7 +86,7 @@ extension ElementInflation {
             animated: false
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.refreshTreeAfterViewportMove()
+        stash.refreshLiveCapture()
         return true
     }
 
@@ -113,7 +113,7 @@ extension ElementInflation {
             animated: false
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        guard stash.refreshTreeAfterViewportMove() != nil else { return false }
+        guard stash.refreshLiveCapture() != nil else { return false }
         return liveScrollView(forScrollContainerPath: path) != nil
     }
 

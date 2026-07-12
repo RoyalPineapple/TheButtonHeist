@@ -1264,7 +1264,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 )
             ]
         )
-        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleRootScreen)
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleRootScreen)
 
         let currentHeader = makeElement(label: "Controls Demo", traits: .header)
         let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
@@ -1338,14 +1338,14 @@ final class TheBrainsScrollTests: XCTestCase {
             ),
             liveCapture: visibleScreen.liveCapture
         )
-        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleScreen)
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
         let exploration = await brains.navigation.exploreScreen(
             baseline: brains.stash.visibleExplorationBaseline(from: visibleScreen),
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
         )
-        _ = brains.stash.commitDiscoveryInterface(exploration.screen)
+        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(exploration.screen)
 
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
         XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")
@@ -1391,7 +1391,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        _ = brains.stash.refreshCurrentVisibleTree()
+        _ = brains.stash.refreshLiveCapture()
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Top Target")))

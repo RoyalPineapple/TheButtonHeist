@@ -20,8 +20,8 @@ internal final class ElementInflation {
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
-    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> InterfaceObservation?)?
-    internal var revealKnownTarget: (@MainActor (HeistId) async -> InterfaceObservation?)?
+    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?)?
+    internal var revealKnownTarget: (@MainActor (HeistId) async -> Navigation.ExploredScreen?)?
 
     /// Bounded window inflation waits for a target whose reveal failed, or
     /// whose visible live object was recycled, to become resolvable before
@@ -69,7 +69,7 @@ internal final class ElementInflation {
         } catch {
             return .failed(.targetResolution(error))
         }
-        stash.refreshCurrentVisibleTree()
+        stash.refreshLiveCapture()
         var state: State = .resolving(.initial)
         let maxAttempts = 2
 
@@ -130,7 +130,7 @@ internal final class ElementInflation {
                     )
                 } else {
                     await tripwire.yieldRealFrames(1)
-                    stash.refreshCurrentVisibleTree()
+                    stash.refreshLiveCapture()
                     transition(&state, to: .resolving(.afterRetry(attempt: nextAttempt, reason: reason)))
                 }
 
@@ -164,7 +164,7 @@ internal final class ElementInflation {
     }
 
     private func refreshLiveCaptureForActivation() {
-        stash.refreshCurrentVisibleTree()
+        stash.refreshLiveCapture()
     }
 }
 

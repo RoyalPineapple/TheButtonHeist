@@ -201,7 +201,7 @@ final class TheBrains {
             maxScrollsPerContainer: query.maxScrollsPerContainer,
             maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
         )
-        _ = stash.commitDiscoveryInterface(exploration.screen)
+        _ = stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploration))
 
         do {
             let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)

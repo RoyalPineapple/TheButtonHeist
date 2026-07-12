@@ -102,6 +102,34 @@ struct VisibleSemanticObservationEvidence {
     let settleOutcome: SettleOutcome
 }
 
+struct InterfaceObservationProof {
+    let screen: InterfaceObservation
+
+    private init(screen: InterfaceObservation) {
+        self.screen = screen
+    }
+
+    static func settled(_ outcome: SettleSession.Outcome) -> InterfaceObservationProof? {
+        guard outcome.outcome.didSettleCleanly, let screen = outcome.finalScreen else { return nil }
+        return InterfaceObservationProof(screen: screen)
+    }
+
+    static func explored(_ exploration: Navigation.ExploredScreen) -> InterfaceObservationProof {
+        InterfaceObservationProof(screen: exploration.screen)
+    }
+
+    static func testing(_ screen: InterfaceObservation) -> InterfaceObservationProof {
+        InterfaceObservationProof(screen: screen)
+    }
+
+    func mergingSemanticTree(_ tree: InterfaceTree) -> InterfaceObservationProof {
+        InterfaceObservationProof(screen: InterfaceObservation(
+            tree: tree.merging(screen.tree),
+            liveCapture: screen.liveCapture
+        ))
+    }
+}
+
 struct PostActionSettleObservation {
     enum Result {
         case committed(SettledSemanticObservationEvent)
@@ -191,13 +219,13 @@ private struct SemanticObservationFulfillmentState {
         sourceScope: SemanticObservationScope,
         sequence: SettledObservationSequence,
         generation: ObservationGeneration,
-        notificationSequence: UInt64,
+        notificationBatch: AccessibilityNotificationBatch,
         screen: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> Publication {
+        let pendingAccessibilityNotifications = notificationBatch.events
         let startsNewGeneration = pendingAccessibilityNotifications.contains(where: \.startsObservationGeneration)
         if startsNewGeneration {
             beginReplacement()
@@ -230,9 +258,10 @@ private struct SemanticObservationFulfillmentState {
                 observation: observation,
                 previous: previousEvent,
                 generation: eventGeneration,
-                notificationSequence: notificationSequence,
+                notificationSequence: notificationBatch.through.sequence,
                 stash: stash,
                 pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+                accessibilityNotificationGap: notificationBatch.gap,
                 notificationIdentityScreen: notificationIdentityScreen,
                 fallbackReason: fallbackReason
             )
@@ -282,7 +311,7 @@ private struct SemanticObservationFulfillmentState {
 final class SemanticObservationStream {
     /// An active stream is an observation lease. Baseline cycles observe the
     /// visible world; subscribers can widen demand to discovery.
-    typealias DiscoveryObservation = @MainActor () async -> InterfaceObservation?
+    typealias DiscoveryObservation = @MainActor () async -> Navigation.ExploredScreen?
 
     private enum PassiveObservationState {
         case stopped
@@ -474,7 +503,6 @@ final class SemanticObservationStream {
         if timeout == 0 {
             guard isActive else { return nil }
             if scope == .visible {
-                _ = stash?.refreshCurrentVisibleTree()
                 return cleanEvent(scope: scope, after: requiredSequence)
             }
             await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
@@ -538,8 +566,8 @@ final class SemanticObservationStream {
             return nil
         }
 
-        if outcome.outcome.didSettleCleanly {
-            let event = commitSettledVisibleObservation(screen)
+        if let proof = InterfaceObservationProof.settled(outcome) {
+            let event = commitSettledVisibleObservation(proof)
             return VisibleSemanticObservationEvidence(
                 screen: event.observation.screen,
                 tripwireSignal: event.observation.tripwireSignal,
@@ -575,35 +603,56 @@ final class SemanticObservationStream {
 
     @discardableResult
     func commitSettledVisibleObservation(
-        _ screen: InterfaceObservation,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
+        _ proof: InterfaceObservationProof,
+        notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         publishCommittedObservation(
-            screen,
+            proof.screen,
             scope: .visible,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+            notificationBatch: notificationBatch,
             notificationIdentityScreen: notificationIdentityScreen
         )
     }
 
     @discardableResult
     func commitSettledDiscoveryObservation(
-        _ screen: InterfaceObservation,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = []
+        _ proof: InterfaceObservationProof,
+        notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledSemanticObservationEvent {
         publishCommittedObservation(
-            screen,
+            proof.screen,
             scope: .discovery,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications
+            notificationBatch: notificationBatch
         )
+    }
+
+    @discardableResult
+    func commitVisibleObservationForTesting(
+        _ screen: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil,
+        notificationIdentityScreen: InterfaceObservation? = nil
+    ) -> SettledSemanticObservationEvent {
+        commitSettledVisibleObservation(
+            .testing(screen),
+            notificationBatch: notificationBatch,
+            notificationIdentityScreen: notificationIdentityScreen
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationForTesting(
+        _ screen: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) -> SettledSemanticObservationEvent {
+        commitSettledDiscoveryObservation(.testing(screen), notificationBatch: notificationBatch)
     }
 
     @discardableResult
     private func publishCommittedObservation(
         _ screen: InterfaceObservation,
         scope: SemanticObservationScope,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
+        notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         guard let stash else {
@@ -618,7 +667,7 @@ final class SemanticObservationStream {
         return publishCurrentSettledObservation(
             scope: scope,
             stash: stash,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+            notificationBatch: notificationBatch ?? stash.accessibilityNotifications.checkpoint(),
             notificationIdentityScreen: notificationIdentityScreen
         )
     }
@@ -672,23 +721,22 @@ final class SemanticObservationStream {
             )
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
-        if outcome.outcome.didSettleCleanly {
-            let pendingAccessibilityNotifications = notificationWindow?.finishEvents() ?? []
+        if let proof = InterfaceObservationProof.settled(outcome) {
+            let notificationBatch = notificationWindow?.capture()
+                ?? stash.accessibilityNotifications.checkpoint()
+            defer { notificationWindow?.cancel() }
             let event: SettledSemanticObservationEvent
             switch commitScope {
             case .visible:
                 event = commitSettledVisibleObservation(
-                    postActionVisibleCommitScreen(finalScreen, stash: stash),
-                    pendingAccessibilityNotifications: pendingAccessibilityNotifications,
+                    proof,
+                    notificationBatch: notificationBatch,
                     notificationIdentityScreen: finalScreen
                 )
             case .discovery:
                 event = commitSettledDiscoveryObservation(
-                    InterfaceObservation(
-                        tree: stash.interfaceTree.merging(finalScreen.tree),
-                        liveCapture: finalScreen.liveCapture
-                    ),
-                    pendingAccessibilityNotifications: pendingAccessibilityNotifications
+                    proof.mergingSemanticTree(stash.interfaceTree),
+                    notificationBatch: notificationBatch
                 )
             }
             return PostActionSettleObservation(settle: outcome, result: .committed(event))
@@ -704,10 +752,6 @@ final class SemanticObservationStream {
             settle: outcome,
             result: .observedUnsettled(finalScreen)
         )
-    }
-
-    private func postActionVisibleCommitScreen(_ finalScreen: InterfaceObservation, stash: TheStash) -> InterfaceObservation {
-        stash.consumeQueuedVisibleRefreshForPostActionCommit() ?? finalScreen
     }
 
     func clearSettledObservationHistory() {
@@ -750,7 +794,7 @@ final class SemanticObservationStream {
     private func publishCurrentSettledObservation(
         scope: SemanticObservationScope = .visible,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
+        notificationBatch: AccessibilityNotificationBatch,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
@@ -758,14 +802,13 @@ final class SemanticObservationStream {
             sourceScope: scope,
             sequence: settledSequence,
             generation: observationGeneration,
-            notificationSequence: stash.accessibilityNotifications.latestSequence,
+            notificationBatch: notificationBatch,
             screen: InterfaceObservation(
                 tree: stash.interfaceTree,
                 liveCapture: LiveCapture(snapshot: stash.interfaceTree.viewportCapture)
             ),
             tripwireSignal: tripwire.tripwireSignal(),
             stash: stash,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications,
             notificationIdentityScreen: notificationIdentityScreen
         )
         guard let sourceEvent = publication.events[scope] else {
@@ -776,7 +819,7 @@ final class SemanticObservationStream {
             eventHistory.removeAll()
         }
         recordHistory(publication.events.values)
-        lastCommittedScopedScreenChangedSequence = stash.accessibilityNotifications.latestScopedScreenChangedSequence
+        lastCommittedScopedScreenChangedSequence = notificationBatch.scopedScreenChangedThrough
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
         settledWaiters.completeWaiters(with: publication.events)
@@ -929,13 +972,13 @@ final class SemanticObservationStream {
                 await Task.yield()
                 return true
             }
-            guard let exploredScreen = await discovery() else {
+            guard let exploration = await discovery() else {
                 invalidateLatestSettledObservation()
                 await Task.yield()
                 return true
             }
             guard !Task.isCancelled else { return false }
-            _ = commitSettledDiscoveryObservation(exploredScreen)
+            _ = commitSettledDiscoveryObservation(.explored(exploration))
             await Task.yield()
             return true
         }
@@ -968,7 +1011,7 @@ final class SemanticObservationStream {
             baselineTripwireSignal: baselineSignal
         )
 
-        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
+        guard let proof = InterfaceObservationProof.settled(settle) else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(
                 for: settle,
                 layerGateWasClear: layerGateWasClear
@@ -979,7 +1022,7 @@ final class SemanticObservationStream {
         }
 
         guard !Task.isCancelled else { return false }
-        _ = commitSettledVisibleObservation(screen)
+        _ = commitSettledVisibleObservation(proof)
         await Task.yield()
         return true
     }
@@ -993,7 +1036,7 @@ final class SemanticObservationStream {
             timeoutMs: SemanticObservationSettleCadence.activePassiveSettleTimeoutMs
         )
 
-        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
+        guard let proof = InterfaceObservationProof.settled(settle) else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: settle)
             recordNonActionFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
             await Task.yield()
@@ -1001,7 +1044,7 @@ final class SemanticObservationStream {
         }
 
         guard !Task.isCancelled else { return false }
-        _ = commitSettledVisibleObservation(screen)
+        _ = commitSettledVisibleObservation(proof)
         await Task.yield()
         return true
     }
@@ -1022,7 +1065,7 @@ final class SemanticObservationStream {
         notificationWindow: AccessibilityNotificationActionWindow?
     ) {
         if let notificationWindow {
-            _ = notificationWindow.finishEvents()
+            notificationWindow.cancel()
         }
         recordFailedSettleDiagnosticEvidence(
             screen,

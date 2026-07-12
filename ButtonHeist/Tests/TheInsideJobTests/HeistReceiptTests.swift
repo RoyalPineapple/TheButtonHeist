@@ -276,7 +276,7 @@ final class HeistReceiptTests: XCTestCase {
             elements: [(staleHeader, "controls_demo")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
         )
-        job.brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleDiscovery)
+        job.brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
 
         let currentHeader = AccessibilityElement.make(
             label: "ButtonHeist Demo",
