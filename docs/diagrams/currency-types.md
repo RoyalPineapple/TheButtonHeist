@@ -16,7 +16,7 @@ flowchart TD
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
         WALK --> AXE
         AXE --> OBS
-        OBS -- "commit / merge" --> TREE
+        OBS -- "proof-backed commit / merge" --> TREE
         OBS --> STASH
         TREE --> STASH
         STASH --> LIVET
@@ -41,8 +41,8 @@ flowchart TD
 Notes:
 
 - `AccessibilityElement` and `AccessibilityHierarchy` are the parser's output and the internal working currency. They never cross the wire; the wire representation of an element is `HeistElement` (TheScore, Codable).
-- `InterfaceTree` is the durable, targetable representation. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
-- `InterfaceObservation` pairs an interface tree with one viewport's `LiveCapture`. Live references are replaced on every parse and never unioned across exploration pages.
+- The settled `InterfaceTree` is the sole current semantic truth. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
+- `InterfaceObservation` pairs an interface tree with one viewport's disposable `LiveCapture`. Live references are replaced on every parse and never unioned across exploration pages.
 - `TheStash` owns one `interfaceTree`, one `latestObservation`, and optional failed-settle diagnostic evidence. There is no parallel world store or live lookup.
 - Targets flow the other way: `AccessibilityTarget` (ThePlans, Codable) refers
   to an element, container, scoped descendant, or target reference. Actions,

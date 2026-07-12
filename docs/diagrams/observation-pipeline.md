@@ -1,7 +1,8 @@
 # Observation Pipeline
 
-Button Heist retains settled accessibility captures as truth and derives one
-ordered `ChangeFact` stream for every temporal consumer. Predicates, receipts,
+Button Heist retains one settled `InterfaceTree` as current semantic truth and
+settled accessibility captures as temporal truth. It derives one ordered
+`ChangeFact` stream for every temporal consumer. Predicates, receipts,
 diagnostics, and public formatting all start from that stream. The public
 `delta` is a final, lossy fold for display and transport; it is never evaluator
 input.
@@ -10,6 +11,8 @@ input.
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
 
 **Source of truth:**
+`ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift`,
 `ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift`,
 `ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift`,
 `ButtonHeist/Sources/TheScore/Evidence/AccessibilityTraceDiff.swift`,
@@ -19,8 +22,9 @@ input.
 ```mermaid
 flowchart TD
     Signals["Scoped accessibility notifications<br/>screen, layout, value, announcement"] --> Settle["Settle and parse"]
-    Tree["Delivered Interface tree<br/>elements and containers"] --> Settle
-    Settle --> Captures["AccessibilityTrace captures<br/>canonical observation truth"]
+    Parse["Parser read<br/>InterfaceObservation + disposable LiveCapture"] --> Settle
+    Settle -- "clean proof" --> Tree["TheStash.interfaceTree<br/>sole current semantic truth"]
+    Tree --> Captures["AccessibilityTrace captures<br/>durable temporal truth"]
     Captures --> Facts["Ordered ChangeFact stream<br/>sole temporal model"]
 
     Facts --> Evaluate["AccessibilityPredicate evaluation"]
@@ -60,6 +64,8 @@ Consequences:
 - Any scoped screen, layout, value, or announcement notification is edge
   evidence. It prevents a fact-free `noChange` verdict even when endpoint
   captures have equal hashes.
+- Raw parser reads refresh disposable live action evidence but do not update the
+  settled interface. Failed settles remain diagnostic evidence only.
 - The public fold composes facts like stacked layers, resolves transient
   appear/disappear pairs, and lets any screen marker dominate the final kind.
   That convenience projection cannot recover the ordered history it squashed.

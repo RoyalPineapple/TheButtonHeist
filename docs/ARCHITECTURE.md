@@ -26,9 +26,10 @@ documented separately.
 
 ### Captures and Change Facts Are the Currency
 
-The durable observation truth is an `AccessibilityTrace` of settled captures.
-Each capture contains the delivered `Interface` tree and its content hash.
-There is no independently stored delta or alternate flat screen model.
+The settled `TheStash.interfaceTree` is the sole current semantic truth.
+`AccessibilityTrace` is the durable temporal observation truth: each settled
+capture contains the delivered `Interface` tree and its content hash. There is
+no independently stored delta or alternate flat screen model.
 
 `InterfaceObservation` is live capture evidence, not authority to publish
 semantic truth. It pairs an `InterfaceTree` with the viewport-local
@@ -136,7 +137,7 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheStash`: settled `Screen`, latest disposable `LiveCapture`, and non-clean
+- `TheStash`: settled `InterfaceTree`, latest disposable `LiveCapture`, and non-clean
   settle diagnostics.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
@@ -160,9 +161,11 @@ parallel result fields.
 
 `ActionResult` owns outcome-bound `ActionResultSuccessEvidence` or
 `ActionResultFailureEvidence`. `PostActionObservation` coordinates capture and
-settle proof, then supplies one explicit observation case. Action warnings live
-only on successful action-result evidence; heist receipts and report projections
-derive them from their dispatch result instead of storing a sibling warning.
+settle proof, then supplies exactly one observation case: `none`, `announcement`,
+`trace`, or `settledTrace`. Only `settledTrace` carries settlement evidence.
+Action warnings live only on successful action-result evidence; heist receipts
+and report projections derive them from their dispatch result instead of storing
+a sibling warning.
 
 `AccessibilityNotificationBus` owns notification collection. Each action opens
 one cursor-bounded window, and post-action settlement captures that window once
@@ -171,6 +174,12 @@ event after the opening cursor, the exact through-cursor observed under the same
 lock, and an explicit `AccessibilityNotificationGap` when bounded history
 overflowed. The same batch supplies trace evidence and advances the committed
 notification cursor; there is no second notification read for that action.
+
+`AccessibilityNotificationObserver` owns callback registration generations.
+Each installed callback captures its generation, and publication accepts only
+the active installing or installed generation. A callback retained past
+uninstall or replacement is rejected before it can advance notification
+sequence or publish into a later action window.
 
 `SemanticObservationStream` owns notification invalidation. It records the
 scoped `screenChanged` sequence covered by the committed batch. A scoped
@@ -240,9 +249,10 @@ sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ```mermaid
 flowchart TD
-    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
-    Compile --> Validate["Runtime validation<br/>finite steps, valid predicates, valid targets"]
-    Validate --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
+    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Parse / build<br/>HeistPlanAdmissionCandidate"]
+    Compile --> Validate["Admit once<br/>semantic validation + runtime bounds"]
+    Validate --> Plan["Validated HeistPlan"]
+    Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains executor"]
 
@@ -273,9 +283,9 @@ flowchart TD
     Append --> Accumulate["Derive ordered ChangeFact stream<br/>over the complete window"]
     Accumulate --> Evaluate["Evaluate predicate<br/>current tree + ordered facts"]
     Evaluate --> Matched{"matched?"}
-    Matched -->|yes| Success["ActionResult success<br/>trace + expectation"]
+    Matched -->|yes| Success["ActionResult success<br/>outcome-bound observation + expectation"]
     Matched -->|no, timeout not elapsed| Observe
-    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>trace + unmet evidence"]
+    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>outcome-bound observation + unmet evidence"]
 ```
 
 The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
