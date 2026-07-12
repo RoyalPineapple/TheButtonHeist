@@ -28,6 +28,7 @@ internal final class ElementInflation {
     internal var exploration: Exploration
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
+    internal static let operationTimeout = SemanticObservationTiming.defaultTimeout * 2
     internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     internal init(
@@ -53,7 +54,7 @@ internal final class ElementInflation {
         }
         let deadline = SemanticObservationDeadline(
             start: CFAbsoluteTimeGetCurrent(),
-            timeoutSeconds: SemanticObservationTiming.defaultTimeout
+            timeoutSeconds: Self.operationTimeout
         )
         return await inflateBeforeDeadline(
             for: target,
