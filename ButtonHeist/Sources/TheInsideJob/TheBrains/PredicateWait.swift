@@ -129,6 +129,20 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             )
         }
 
+        if let traceEvaluation = initialTraceChangeEvaluation(
+            for: step.predicate,
+            initialTrace: initialTrace
+        ), traceEvaluation.met {
+            return waitReceipt(
+                for: step,
+                trace: initialTrace,
+                observationSummary: nil,
+                expectation: traceEvaluation,
+                start: start,
+                success: true
+            )
+        }
+
         let plan = observationPlan ?? WaitObservationPlan(step: step)
 
         let initialEntry = await observeSemanticState(

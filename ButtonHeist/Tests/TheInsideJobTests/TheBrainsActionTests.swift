@@ -1153,6 +1153,92 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout, accuracy: 0.1)
     }
 
+    func testHeistRepeatUntilUsesActionTraceProgressBeforePostBodyWait() async throws {
+        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
+        let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
+        let firstMutation = observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
+        let secondMutation = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
+        let states = [initialState, firstMutation, secondMutation]
+        var incrementCount = 0
+        let runtime = repeatUntilReceiptRuntime(
+            execute: { command in
+                guard case .increment = command else {
+                    return ActionResult.success(method: .activate)
+                }
+                let before = states[incrementCount]
+                incrementCount += 1
+                let after = states[incrementCount]
+                return ActionResult.success(
+                    method: .increment,
+                    accessibilityTrace: AccessibilityTrace(captures: [before.capture, after.capture]),
+                    settled: true
+                )
+            },
+            wait: { request in
+                switch request {
+                case .immediate:
+                    let initialTrace = AccessibilityTrace(capture: initialState.capture)
+                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
+                    return .timedOut(
+                        message: expectation.actual,
+                        accessibilityTrace: initialTrace,
+                        expectation: expectation,
+                        observedSequence: 1,
+                        observationSummary: "known: 1 elements"
+                    )
+                case .afterObservation:
+                    XCTFail("repeat_until should use action trace progress before post-body wait")
+                    return .failed(
+                        errorKind: .general,
+                        message: "unexpected post-body wait",
+                        accessibilityTrace: nil,
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "unexpected post-body wait"
+                        )
+                    )
+                case .standalone, .actionEndpoint, .baselineTraceOnly:
+                    XCTFail("repeat_until should not issue \(request)")
+                    return .failed(
+                        errorKind: .general,
+                        message: "unexpected wait request",
+                        accessibilityTrace: nil,
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "unexpected wait request"
+                        )
+                    )
+                }
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: predicate,
+                timeout: 1,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        guard case .heistExecution(let heist) = result.payload else {
+            return XCTFail("Expected heist execution payload")
+        }
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
+        XCTAssertEqual(incrementCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertEqual(
+            step.children.map(\.kind),
+            [HeistExecutionStepKind.repeatUntilIteration, .repeatUntilIteration]
+        )
+    }
+
     func testHeistRepeatUntilSucceedsWhenBodyActionFailsAfterPredicateMet() async throws {
         var activationCount = 0
         let runtime = heistRuntime(

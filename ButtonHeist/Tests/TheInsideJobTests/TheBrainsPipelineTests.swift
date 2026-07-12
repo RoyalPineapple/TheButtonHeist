@@ -1428,6 +1428,110 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
+    func testPredicateWaitAcceptsSatisfiedChangeFromInitialTraceBeforeObserving() async {
+        let before = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [
+                ("Checkout", .staticText, "checkout"),
+            ]),
+            tripwireSignal: .empty,
+            settledObservationSequence: 41
+        )
+        let after = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [
+                ("Checkout", .staticText, "checkout"),
+                ("More", .button, "more"),
+            ]),
+            tripwireSignal: .empty,
+            settledObservationSequence: 42
+        )
+        let initialTrace = AccessibilityTrace(captures: [before.capture, after.capture])
+        var didObserve = false
+        let staleObservation = makeStaleObservation(from: before, sequence: 42)
+        let wait = PredicateWait(
+            observeEvent: { _, _, _ in
+                didObserve = true
+                return staleObservation.event
+            },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                event.sequence == staleObservation.event.sequence
+                    ? staleObservation
+                    : self.brains.postActionObservation.semanticObservation(from: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
+        )
+
+        let receipt = await wait.wait(
+            for: WaitStep(predicate: .change(.elements()), timeout: 0),
+            initialTrace: initialTrace
+        )
+
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertFalse(didObserve)
+        guard case .elementsChanged? = receipt.actionResult.accessibilityTrace?.endpointDelta else {
+            return XCTFail(
+                "Expected elementsChanged delta, got "
+                    + "\(String(describing: receipt.actionResult.accessibilityTrace?.endpointDelta))"
+            )
+        }
+    }
+
+    func testPredicateWaitMatchesChangeFromSuppliedBaselineAndNextObservation() async {
+        let before = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [
+                ("Volume", .adjustable, "volume"),
+            ]),
+            tripwireSignal: .empty,
+            settledObservationSequence: 1
+        )
+        let after = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [
+                ("Volume 60", .adjustable, "volume"),
+            ]),
+            tripwireSignal: .empty,
+            settledObservationSequence: 2
+        )
+        let afterObservation = makeStaleObservation(from: after, sequence: 2)
+        let baselineTrace = AccessibilityTrace(capture: before.capture)
+        var observedAfterSequence: SettledObservationSequence?
+        let wait = PredicateWait(
+            observeEvent: { _, after, _ in
+                observedAfterSequence = after
+                return afterObservation.event
+            },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                event.sequence == afterObservation.event.sequence
+                    ? afterObservation
+                    : self.brains.postActionObservation.semanticObservation(from: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
+        )
+
+        let receipt = await wait.wait(
+            for: WaitStep(predicate: .change(), timeout: 1),
+            initialTrace: baselineTrace,
+            after: 1
+        )
+
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertEqual(observedAfterSequence, 1)
+        guard case .elementsChanged? = receipt.actionResult.accessibilityTrace?.endpointDelta else {
+            return XCTFail(
+                "Expected elementsChanged delta, got "
+                    + "\(String(describing: receipt.actionResult.accessibilityTrace?.endpointDelta))"
+            )
+        }
+    }
+
     func testWaitObservationPlanUsesDiscoveryForElementAndContainerPredicates() {
         XCTAssertEqual(
             WaitObservationPlan(predicate: .state(.exists(ElementPredicate(label: "Ready")))).scope,
@@ -2006,6 +2110,34 @@ final class TheBrainsPipelineTests: XCTestCase {
             state: state,
             accessibilityTrace: trace,
             delta: event.delta,
+            summary: "known: \(state.interface.projectedElements.count) elements"
+        )
+    }
+
+    private func makeStaleObservation(
+        from state: PostActionObservation.BeforeState,
+        sequence: SettledObservationSequence
+    ) -> HeistSemanticObservation {
+        let trace = AccessibilityTrace(capture: state.capture)
+        let settled = SettledSemanticObservation(
+            sequence: sequence,
+            scope: .discovery,
+            screen: state.screen,
+            tripwireSignal: .empty
+        )
+        let event = SettledSemanticObservationEvent(
+            sequence: sequence,
+            scope: .discovery,
+            observation: settled,
+            previous: nil,
+            trace: trace,
+            delta: nil
+        )
+        return HeistSemanticObservation(
+            event: event,
+            state: state,
+            accessibilityTrace: trace,
+            delta: nil,
             summary: "known: \(state.interface.projectedElements.count) elements"
         )
     }
