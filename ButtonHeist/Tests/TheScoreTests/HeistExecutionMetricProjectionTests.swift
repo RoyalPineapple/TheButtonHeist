@@ -119,20 +119,25 @@ import TheScore
                 command: command,
                 dispatchResult: .success(
                     method: .activate,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 3),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 3)
+                        ),
                         timing: actionTiming
                     )
                 ),
                 expectationResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 8),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 8)
+                        ),
                         timing: expectationTiming
                     )
                 ),
-                expectation: ExpectationResult(met: true, predicate: predicate),
-                warning: nil
+                expectation: ExpectationResult(met: true, predicate: predicate)
             )
         )
     }
@@ -141,8 +146,11 @@ import TheScore
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(
                 method: .wait,
-                evidence: ActionResultEvidence(
-                    settlement: .settled(durationMs: 13),
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        .noChangeForTests(elementCount: 0),
+                        .settled(durationMs: 13)
+                    ),
                     timing: waitTiming
                 )
             ),
@@ -170,8 +178,11 @@ import TheScore
                 expectation: ExpectationResult.Met(predicate: predicate),
                 actionResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 23),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 23)
+                        ),
                         timing: repeatTiming
                     )
                 )
@@ -199,7 +210,6 @@ import TheScore
             beforeObservationMs: 4,
             targetResolutionMs: 1,
             actionDispatchMs: 2,
-            settleMs: 3,
             finalSemanticEvidenceMs: 5,
             totalMs: 15
         )
@@ -210,7 +220,6 @@ import TheScore
             beforeObservationMs: 9,
             targetResolutionMs: 6,
             actionDispatchMs: 7,
-            settleMs: 8,
             finalSemanticEvidenceMs: 10,
             totalMs: 40
         )
@@ -221,7 +230,6 @@ import TheScore
             beforeObservationMs: 14,
             targetResolutionMs: 11,
             actionDispatchMs: 12,
-            settleMs: 13,
             finalSemanticEvidenceMs: 15,
             totalMs: 95
         )
@@ -232,7 +240,6 @@ import TheScore
             beforeObservationMs: 24,
             targetResolutionMs: 21,
             actionDispatchMs: 22,
-            settleMs: 23,
             finalSemanticEvidenceMs: 25,
             totalMs: 60
         )

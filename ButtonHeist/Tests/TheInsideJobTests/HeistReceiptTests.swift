@@ -146,13 +146,13 @@ final class HeistReceiptTests: XCTestCase {
     private func receiptActionEvidence(success: Bool = true) -> HeistActionEvidence {
         let result: ActionResult
         if success {
-            result = ActionResult.success(method: .activate, evidence: ActionResultEvidence())
+            result = ActionResult.success(method: .activate, evidence: .none)
         } else {
             result = ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
                 message: "failed",
-                evidence: ActionResultEvidence()
+                evidence: .none
             )
         }
         return .commandlessDispatch(dispatchResult: result)
@@ -392,7 +392,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
+            return ActionResult.success(method: .increment, evidence: .none)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -429,7 +429,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
+            return ActionResult.success(method: .increment, evidence: .none)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -541,9 +541,8 @@ final class HeistReceiptTests: XCTestCase {
                         command: .takeScreenshot,
                         dispatchResult: ActionResult.success(
                             payload: .screenshot(screenshot),
-                            evidence: ActionResultEvidence()
-                        ),
-                        warning: nil
+                            evidence: .none
+                        )
                     )
                 ),
             ],

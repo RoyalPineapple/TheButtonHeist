@@ -158,9 +158,11 @@ facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
 consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
-`ActionResult` owns one `ActionResultEvidence` envelope for post-action
-evidence. `PostActionObservation` coordinates capture and settle proof, then
-supplies that envelope; it does not publish a second post-action evidence shape.
+`ActionResult` owns outcome-bound `ActionResultSuccessEvidence` or
+`ActionResultFailureEvidence`. `PostActionObservation` coordinates capture and
+settle proof, then supplies one explicit observation case. Action warnings live
+only on successful action-result evidence; heist receipts and report projections
+derive them from their dispatch result instead of storing a sibling warning.
 
 `AccessibilityNotificationBus` owns notification collection. Each action opens
 one cursor-bounded window, and post-action settlement captures that window once

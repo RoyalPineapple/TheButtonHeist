@@ -112,7 +112,8 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
+                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan",
+                evidence: .none
             )
         }
         guard brains.semanticObservationIsActive else {
@@ -124,7 +125,8 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Could not resolve direct runtime action: \(error)"
+                message: "Could not resolve direct runtime action: \(error)",
+                evidence: .none
             )
         }
     }

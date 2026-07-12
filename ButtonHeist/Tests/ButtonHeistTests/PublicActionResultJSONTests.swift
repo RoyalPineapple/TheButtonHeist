@@ -25,7 +25,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             command: .typeText,
             result: ActionResult.success(
                 payload: .typeText("Hello"),
-                message: "typed"
+                message: "typed",
+                evidence: .none
             )
         )
 
@@ -41,7 +42,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             command: .getScreen,
             result: ActionResult.success(
                 payload: .screenshot(ScreenPayload(pngData: "abc", width: 393, height: 852)),
-                message: "captured"
+                message: "captured",
+                evidence: .none
             )
         )
 
@@ -71,7 +73,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             command: .runHeist,
             result: ActionResult.success(
                 payload: .heistExecution(heistResult),
-                message: "ran"
+                message: "ran",
+                evidence: .none
             )
         )
 
@@ -88,7 +91,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                message: "activated"
+                message: "activated",
+                evidence: .none
             )
         )
 
@@ -143,7 +147,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let actionResult = ActionResult.failure(
             method: .activate,
             errorKind: .elementNotFound,
-            message: "Delete not found")
+            message: "Delete not found", evidence: .none)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             result: HeistExecutionResult(
@@ -183,7 +187,8 @@ final class PublicActionResultJSONTests: XCTestCase {
         let subject = makeReceiptTestElement(label: "Pay", identifier: "pay")
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
+            evidence: ActionResultSuccessEvidence(
+                observation: .none,
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(ElementPredicateTemplate(label: "Pay")),
@@ -209,9 +214,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         let result = try standaloneActionResultJSON(
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultEvidence(
-                    accessibilityTrace: makeReceiptTestTrace(before: interface, after: interface),
-                    settlement: .timedOut(durationMs: 0)
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        makeReceiptTestTrace(before: interface, after: interface),
+                        .timedOut(durationMs: 0)
+                    )
                 )
             ),
             profile: .mcp
@@ -226,11 +233,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         }
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: makeReceiptTestTrace(
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeReceiptTestTrace(
                     before: makeReceiptTestInterface([]),
                     after: makeReceiptTestInterface(addedRows)
-                )
+                ))
             )
         )
 
@@ -255,11 +262,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         }
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: makeReceiptTestTrace(
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeReceiptTestTrace(
                     before: makeReceiptTestInterface([]),
                     after: makeReceiptTestInterface(addedRows)
-                )
+                ))
             )
         )
 
@@ -295,9 +302,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: AccessibilityTrace(captures: [before, after])
-            )
+            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [before, after])))
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -335,9 +340,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: AccessibilityTrace(captures: [before, after])
-            )
+            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [before, after])))
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -363,7 +366,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                     rangeDescription: "0..<9"
                 )
             )),
-            message: "moved to next heading"
+            message: "moved to next heading",
+            evidence: .none
         )
     }
 
@@ -372,7 +376,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             method: .activate,
             errorKind: .accessibilityTreeUnavailable,
             message: Self.treeUnavailableMessage,
-            evidence: ActionResultEvidence(accessibilityTrace: accessibilityTrace)
+            evidence: ActionResultFailureEvidence(observation: .trace(accessibilityTrace))
         )
     }
 

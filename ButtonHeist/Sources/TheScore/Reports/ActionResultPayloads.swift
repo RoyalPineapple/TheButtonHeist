@@ -603,46 +603,33 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     }
 }
 
-public struct ActionResultObservationEvidence: Codable, Sendable, Equatable {
-    private enum Storage: Sendable, Equatable {
-        case none
-        case announcement(String)
-        case trace(AccessibilityTrace, settlement: ActionSettlementEvidence?)
-    }
-
-    private let storage: Storage
-
-    public static let none = ActionResultObservationEvidence(storage: .none)
-
-    public static func announcement(_ text: String) -> ActionResultObservationEvidence {
-        precondition(!text.isEmpty, "action announcement must not be empty")
-        return ActionResultObservationEvidence(storage: .announcement(text))
-    }
-
-    public static func trace(
-        _ trace: AccessibilityTrace,
-        settlement: ActionSettlementEvidence? = nil
-    ) -> ActionResultObservationEvidence {
-        ActionResultObservationEvidence(storage: .trace(trace, settlement: settlement))
-    }
+public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
+    case none
+    case announcement(String)
+    case trace(AccessibilityTrace)
+    case settledTrace(AccessibilityTrace, ActionSettlementEvidence)
 
     public var accessibilityTrace: AccessibilityTrace? {
-        guard case .trace(let trace, _) = storage else { return nil }
-        return trace
+        switch self {
+        case .trace(let trace), .settledTrace(let trace, _):
+            return trace
+        case .none, .announcement:
+            return nil
+        }
     }
 
     public var settlement: ActionSettlementEvidence? {
-        guard case .trace(_, let settlement) = storage else { return nil }
+        guard case .settledTrace(_, let settlement) = self else { return nil }
         return settlement
     }
 
     public var announcement: String? {
-        switch storage {
+        switch self {
         case .none:
             return nil
         case .announcement(let text):
             return text
-        case .trace(let trace, _):
+        case .trace(let trace), .settledTrace(let trace, _):
             return trace.capturedAnnouncements.first?.text
         }
     }
@@ -684,37 +671,47 @@ public struct ActionResultObservationEvidence: Codable, Sendable, Equatable {
                 in: container,
                 kind: .trace
             )
-            self = .trace(
-                try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace),
-                settlement: try container.decodeIfPresent(
-                    ActionSettlementEvidence.self,
-                    forKey: .settlement
-                )
-            )
+            let trace = try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace)
+            if let settlement = try container.decodeIfPresent(
+                ActionSettlementEvidence.self,
+                forKey: .settlement
+            ) {
+                self = .settledTrace(trace, settlement)
+            } else {
+                self = .trace(trace)
+            }
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch storage {
+        switch self {
         case .none:
             try container.encode(Kind.none, forKey: .kind)
         case .announcement(let text):
             try container.encode(Kind.announcement, forKey: .kind)
             try container.encode(text, forKey: .announcement)
-        case .trace(let trace, let settlement):
+        case .trace(let trace):
             try container.encode(Kind.trace, forKey: .kind)
             try container.encode(trace, forKey: .accessibilityTrace)
-            try container.encodeIfPresent(settlement, forKey: .settlement)
+        case .settledTrace(let trace, let settlement):
+            try container.encode(Kind.trace, forKey: .kind)
+            try container.encode(trace, forKey: .accessibilityTrace)
+            try container.encode(settlement, forKey: .settlement)
         }
     }
 
     fileprivate func replacingSettlementDuration(_ durationMs: Int?) -> ActionResultObservationEvidence {
         guard let durationMs else { return self }
-        guard case .trace(let trace, let settlement?) = storage else {
+        guard case .settledTrace(let trace, let settlement) = self else {
             preconditionFailure("settle timing requires trace settlement evidence")
         }
-        return .trace(trace, settlement: settlement.replacingDurationMs(durationMs))
+        return .settledTrace(trace, settlement.replacingDurationMs(durationMs))
+    }
+
+    fileprivate func validateForConstruction() {
+        guard case .announcement(let text) = self else { return }
+        precondition(!text.isEmpty, "action announcement must not be empty")
     }
 
     private static func rejectFields(
@@ -748,6 +745,7 @@ public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
         timing: ActionPerformanceTiming? = nil,
         warning: HeistActionWarning? = nil
     ) {
+        observation.validateForConstruction()
         precondition(timing?.settleMs == nil, "settlement duration belongs to action observation")
         self.observation = observation
         self.subjectEvidence = subjectEvidence
@@ -828,6 +826,7 @@ public struct ActionResultFailureEvidence: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
+        observation.validateForConstruction()
         precondition(timing?.settleMs == nil, "settlement duration belongs to action observation")
         self.observation = observation
         self.subjectEvidence = subjectEvidence

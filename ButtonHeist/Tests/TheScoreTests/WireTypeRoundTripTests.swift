@@ -220,33 +220,38 @@ final class WireTypeRoundTripTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             message: "activated",
-            evidence: ActionResultEvidence(
-                settlement: .settled(durationMs: 74),
-                timing: timing
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 74)
+                )
             )
-        )
+        ).withTiming(timing)
 
         let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
         XCTAssertEqual(decoded.timing, timing)
     }
 
     func testActionResultWithTimingMergesWithoutErasingExistingFields() {
+        let initialTiming = ActionPerformanceTiming(
+            beforeObservationMs: 1,
+            targetResolutionMs: 2,
+            actionDispatchMs: 3,
+            interactionMs: 4,
+            settleMs: 5,
+            finalSemanticEvidenceMs: 6,
+            receiptGenerationMs: 7,
+            totalMs: 8
+        )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                settlement: .settled(durationMs: 5),
-                timing: ActionPerformanceTiming(
-                    beforeObservationMs: 1,
-                    targetResolutionMs: 2,
-                    actionDispatchMs: 3,
-                    interactionMs: 4,
-                    settleMs: 5,
-                    finalSemanticEvidenceMs: 6,
-                    receiptGenerationMs: 7,
-                    totalMs: 8
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 5)
                 )
             )
-        )
+        ).withTiming(initialTiming)
         let overlay = ActionPerformanceTiming(
             beforeObservationMs: 10,
             actionDispatchMs: 30,
@@ -972,9 +977,11 @@ final class WireTypeRoundTripTests: XCTestCase {
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
-                            evidence: ActionResultEvidence(activationTrace: activationTrace)
-                        ),
-                        warning: nil
+                            evidence: ActionResultFailureEvidence(
+                                observation: .none,
+                                activationTrace: activationTrace
+                            )
+                        )
                     ),
                     failure: failure
                 ),
@@ -1114,6 +1121,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "button disabled",
+                    evidence: .none
                 )
             ),
             failure: HeistFailureDetail(
@@ -1201,7 +1209,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let actionResult = ActionResult.success(method: .wait)
+        let actionResult = ActionResult.success(method: .wait, evidence: .none)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
@@ -1217,7 +1225,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
         let evidence = HeistActionEvidence.commandlessDispatch(
-            dispatchResult: ActionResult.success(method: .activate)
+            dispatchResult: ActionResult.success(method: .activate, evidence: .none)
         )
         XCTAssertNil(evidence.command)
         XCTAssertNil(evidence.warning)
@@ -1425,7 +1433,11 @@ final class WireTypeRoundTripTests: XCTestCase {
                     receiptKind: .action,
                     durationMs: durationMs,
                     evidence: .commandlessDispatch(
-                        dispatchResult: .success(method: .activate, message: "activated")
+                        dispatchResult: .success(
+                            method: .activate,
+                            message: "activated",
+                            evidence: .none
+                        )
                     )
                 ),
             ]

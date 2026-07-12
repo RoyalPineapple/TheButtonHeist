@@ -391,7 +391,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
         default:
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
         }
     }
 
@@ -416,7 +416,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 ))
             }
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
         }
         return probe
     }
@@ -573,13 +573,12 @@ func makeTestHeistActionStep(
             command: command,
             dispatchResult: result,
             expectationResult: expectationActionResult,
-            expectation: expectation,
-            warning: nil
+            expectation: expectation
         )
     } else {
         precondition(expectationActionResult == nil && expectation == nil)
         evidence = command.map {
-            .dispatch(command: $0, dispatchResult: result, warning: nil)
+            .dispatch(command: $0, dispatchResult: result)
         } ?? .commandlessDispatch(dispatchResult: result)
     }
 

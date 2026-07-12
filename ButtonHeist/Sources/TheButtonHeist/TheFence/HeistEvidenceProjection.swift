@@ -106,7 +106,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
         switch evidence {
         case .commandResolutionFailure:
             self = .commandResolutionFailure(warning: nil)
-        case .dispatch(let command, let dispatchResult, let warning):
+        case .dispatch(let command, let dispatchResult):
             self = .dispatch(
                 result: ActionProjection(
                     actionMethod: .heist(command),
@@ -114,7 +114,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     profile: profile,
                     includeOmissions: true
                 ),
-                warning: warning
+                warning: dispatchResult.warning
             )
         case .commandlessDispatch(let dispatchResult):
             self = .dispatch(
@@ -124,9 +124,9 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     profile: profile,
                     includeOmissions: true
                 ),
-                warning: nil
+                warning: dispatchResult.warning
             )
-        case .expectation(let command, let dispatchResult, let expectationResult, let expectation, let warning):
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
             self = .expectation(
                 dispatchResult: ActionProjection(
                     actionMethod: .heist(command),
@@ -141,7 +141,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     includeOmissions: true
                 ),
                 expectation: ExpectationProjection(result: expectation),
-                warning: warning
+                warning: dispatchResult.warning
             )
         }
     }

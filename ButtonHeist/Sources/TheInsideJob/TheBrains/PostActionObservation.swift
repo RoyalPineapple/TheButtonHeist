@@ -645,27 +645,52 @@ extension ActionResult {
         let settlement: ActionSettlementEvidence = settledObservation.settled
             ? .settled(durationMs: settledObservation.settleTimeMs)
             : .timedOut(durationMs: settledObservation.settleTimeMs)
-        let evidence = ActionResultEvidence(
-            accessibilityTrace: settledObservation.accessibilityTrace,
-            settlement: settlement,
-            subjectEvidence: outcome.subjectEvidence,
-            activationTrace: outcome.activationTrace
+        let observation = ActionResultObservationEvidence.settledTrace(
+            settledObservation.accessibilityTrace,
+            settlement
         )
-        if let payload {
-            self = ActionResult(
-                outcome: resultOutcome,
-                payload: payload,
-                message: message,
-                evidence: evidence
+        switch resultOutcome {
+        case .success:
+            let evidence = ActionResultSuccessEvidence(
+                observation: observation,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace,
+                warning: Self.warning(method: method, subjectEvidence: outcome.subjectEvidence)
             )
-            return
+            self = payload.map { ActionResult.success(payload: $0, message: message, evidence: evidence) }
+                ?? ActionResult.success(method: method, message: message, evidence: evidence)
+        case .failure(let errorKind):
+            let evidence = ActionResultFailureEvidence(
+                observation: observation,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace
+            )
+            self = payload.map {
+                ActionResult.failure(payload: $0, errorKind: errorKind, message: message, evidence: evidence)
+            } ?? ActionResult.failure(method: method, errorKind: errorKind, message: message, evidence: evidence)
         }
-        self = ActionResult(
-            outcome: resultOutcome,
-            method: method,
-            message: message,
-            evidence: evidence
-        )
+    }
+
+    private static func warning(
+        method: ActionMethod,
+        subjectEvidence: ActionSubjectEvidence?
+    ) -> HeistActionWarning? {
+        guard let element = subjectEvidence?.element else { return nil }
+        let evidence = ElementDiagnosticSummary(
+            label: element.label,
+            identifier: element.identifier,
+            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
+            actions: element.actions.sorted { $0.description < $1.description }
+        ).rendered(using: .activationAffordanceEvidence)
+
+        switch method {
+        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(element.traits):
+            return .activationWeakAffordance(evidence: evidence)
+        case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
+            return .textEntryWeakAffordance(evidence: evidence)
+        default:
+            return nil
+        }
     }
 }
 

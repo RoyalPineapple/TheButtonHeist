@@ -5,25 +5,23 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
     case commandResolutionFailure(command: HeistActionCommand)
     case dispatch(
         command: HeistActionCommand,
-        dispatchResult: ActionResult,
-        warning: HeistActionWarning?
+        dispatchResult: ActionResult
     )
     case commandlessDispatch(dispatchResult: ActionResult)
     case expectation(
         command: HeistActionCommand,
         dispatchResult: ActionResult,
         expectationResult: ActionResult,
-        expectation: ExpectationResult,
-        warning: HeistActionWarning?
+        expectation: ExpectationResult
     )
 
     public var dispatchResult: ActionResult? {
         switch self {
         case .commandResolutionFailure:
             return nil
-        case .dispatch(_, let result, _),
+        case .dispatch(_, let result),
              .commandlessDispatch(let result),
-             .expectation(_, let result, _, _, _):
+             .expectation(_, let result, _, _):
             return result
         }
     }
@@ -32,23 +30,23 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         switch self {
         case .commandResolutionFailure:
             return nil
-        case .dispatch(_, let result, _), .commandlessDispatch(let result):
+        case .dispatch(_, let result), .commandlessDispatch(let result):
             return result
-        case .expectation(_, _, let result, _, _):
+        case .expectation(_, _, let result, _):
             return result
         }
     }
 
     public var expectationResult: ActionResult? {
-        guard case .expectation(_, _, let result, _, _) = self else { return nil }
+        guard case .expectation(_, _, let result, _) = self else { return nil }
         return result
     }
 
     public var command: HeistActionCommand? {
         switch self {
         case .commandResolutionFailure(let command),
-             .dispatch(let command, _, _),
-             .expectation(let command, _, _, _, _):
+             .dispatch(let command, _),
+             .expectation(let command, _, _, _):
             return command
         case .commandlessDispatch:
             return nil
@@ -56,17 +54,12 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
     }
 
     public var checkedExpectation: ExpectationResult? {
-        guard case .expectation(_, _, _, let expectation, _) = self else { return nil }
+        guard case .expectation(_, _, _, let expectation) = self else { return nil }
         return expectation
     }
 
     public var warning: HeistActionWarning? {
-        switch self {
-        case .dispatch(_, _, let warning), .expectation(_, _, _, _, let warning):
-            return warning
-        case .commandResolutionFailure, .commandlessDispatch:
-            return nil
-        }
+        dispatchResult?.warning
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -75,7 +68,6 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case dispatchResult
         case expectationResult
         case expectation
-        case warning
     }
 
     private enum EvidenceType: String, Codable {
@@ -98,10 +90,9 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .dispatch:
             self = .dispatch(
                 command: try container.decode(HeistActionCommand.self, forKey: .command),
-                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult),
-                warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+                dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
             )
-            try Self.rejectFields(except: [.type, .command, .dispatchResult, .warning], in: container, type: type)
+            try Self.rejectFields(except: [.type, .command, .dispatchResult], in: container, type: type)
         case .commandlessDispatch:
             self = .commandlessDispatch(
                 dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
@@ -112,11 +103,10 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
                 command: try container.decode(HeistActionCommand.self, forKey: .command),
                 dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult),
                 expectationResult: try container.decode(ActionResult.self, forKey: .expectationResult),
-                expectation: try container.decode(ExpectationResult.self, forKey: .expectation),
-                warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+                expectation: try container.decode(ExpectationResult.self, forKey: .expectation)
             )
             try Self.rejectFields(
-                except: [.type, .command, .dispatchResult, .expectationResult, .expectation, .warning],
+                except: [.type, .command, .dispatchResult, .expectationResult, .expectation],
                 in: container,
                 type: type
             )
@@ -129,21 +119,19 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .commandResolutionFailure(let command):
             try container.encode(EvidenceType.commandResolutionFailure, forKey: .type)
             try container.encode(command, forKey: .command)
-        case .dispatch(let command, let dispatchResult, let warning):
+        case .dispatch(let command, let dispatchResult):
             try container.encode(EvidenceType.dispatch, forKey: .type)
             try container.encode(command, forKey: .command)
             try container.encode(dispatchResult, forKey: .dispatchResult)
-            try container.encodeIfPresent(warning, forKey: .warning)
         case .commandlessDispatch(let dispatchResult):
             try container.encode(EvidenceType.commandlessDispatch, forKey: .type)
             try container.encode(dispatchResult, forKey: .dispatchResult)
-        case .expectation(let command, let dispatchResult, let expectationResult, let expectation, let warning):
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
             try container.encode(EvidenceType.expectation, forKey: .type)
             try container.encode(command, forKey: .command)
             try container.encode(dispatchResult, forKey: .dispatchResult)
             try container.encode(expectationResult, forKey: .expectationResult)
             try container.encode(expectation, forKey: .expectation)
-            try container.encodeIfPresent(warning, forKey: .warning)
         }
     }
 

@@ -119,14 +119,15 @@ extension TheBrains {
         switch result.outcome {
         case .success(let success):
             guard let payload = success.payload else {
-                return .success(method: result.method, message: result.message)
+                return .success(method: result.method, message: result.message, evidence: .none)
             }
-            return .success(payload: payload, message: result.message)
+            return .success(payload: payload, message: result.message, evidence: .none)
         case .failure(let failure):
             return .failure(
                 method: result.method,
                 errorKind: Self.actionErrorKind(for: failure.kind),
-                message: result.message
+                message: result.message,
+                evidence: .none
             )
         }
     }

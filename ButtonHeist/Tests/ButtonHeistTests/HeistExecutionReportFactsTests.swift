@@ -15,8 +15,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
-                    actionResult: ActionResult.success(method: .activate),
-                    expectationActionResult: ActionResult.success(method: .wait),
+                    actionResult: ActionResult.success(method: .activate, evidence: .none),
+                    expectationActionResult: ActionResult.success(method: .wait, evidence: .none),
                     expectation: ExpectationResult(met: true, predicate: expectationPredicate)
                 ),
             ],
@@ -44,12 +44,17 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[0]",
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
-                    actionResult: ActionResult.success(method: .activate),
-                    warning: actionWarning
+                    actionResult: ActionResult.success(
+                        method: .activate,
+                        evidence: ActionResultSuccessEvidence(
+                            observation: .none,
+                            warning: actionWarning
+                        )
+                    )
                 ),
                 waitStep(
                     path: "$.body[1]",
-                    actionResult: ActionResult.success(method: .wait),
+                    actionResult: ActionResult.success(method: .wait, evidence: .none),
                     expectation: ExpectationResult(
                         met: true,
                         predicate: .exists(.label("Ready"))
@@ -118,7 +123,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                     )
                 ),
             ],
@@ -161,20 +166,19 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         dispatchResult: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultEvidence(accessibilityTrace: dispatchTrace)
+                            evidence: ActionResultSuccessEvidence(observation: .trace(dispatchTrace))
                         ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            evidence: ActionResultEvidence(accessibilityTrace: expectationTrace)
+                            evidence: ActionResultFailureEvidence(observation: .trace(expectationTrace))
                         ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "timed out waiting for checkout"
-                        ),
-                        warning: nil
+                        )
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -256,20 +260,19 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         command: command,
                         dispatchResult: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultEvidence(accessibilityTrace: dispatchTrace)
+                            evidence: ActionResultSuccessEvidence(observation: .trace(dispatchTrace))
                         ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            evidence: ActionResultEvidence(accessibilityTrace: expectationTrace)
+                            evidence: ActionResultFailureEvidence(observation: .trace(expectationTrace))
                         ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "timed out"
-                        ),
-                        warning: nil
+                        )
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -297,36 +300,40 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportNode.actionErrorKind, reportFacts.results.actionErrorKind)
     }
 
-    func testActionEvidenceStrictlyDecodesActionWarnings() throws {
-        let evidence = HeistActionEvidence.dispatch(
+    func testActionEvidenceDerivesWarningAndRejectsLegacyReceiptWarning() throws {
+        let warning = HeistActionWarning.activationWeakAffordance(
+            evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#
+        )
+        let dispatchResult = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultSuccessEvidence(observation: .none, warning: warning)
+        )
+        let dispatch = HeistActionEvidence.dispatch(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
-            dispatchResult: ActionResult.success(method: .activate),
-            warning: .activationWeakAffordance(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
+            dispatchResult: dispatchResult
         )
+        let encoded = try JSONEncoder().encode(dispatch)
+        let decoded = try JSONDecoder().decode(HeistActionEvidence.self, from: encoded)
 
-        let decoded = try JSONDecoder().decode(
-            HeistActionEvidence.self,
-            from: try JSONEncoder().encode(evidence)
+        XCTAssertEqual(decoded, dispatch)
+        XCTAssertEqual(decoded.warning, warning)
+
+        let expectation = HeistActionEvidence.expectation(
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
+            dispatchResult: dispatchResult,
+            expectationResult: .success(method: .wait, evidence: .none),
+            expectation: ExpectationResult(met: true, predicate: .changed(.screen()))
         )
-
-        XCTAssertEqual(decoded, evidence)
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            HeistActionEvidence.self,
-            from: Data(#"{"actionResult":{"outcome":{"kind":"success"},"method":"activate"},"warning":"loose"}"#.utf8)
-        ))
-        XCTAssertThrowsError(try JSONDecoder().decode(
-            HeistActionEvidence.self,
-            from: Data("""
-            {
-              "actionResult": { "outcome": { "kind": "success" }, "method": "activate" },
-              "warning": {
-                "code": "activation_weak_affordance_evidence",
-                "message": "activate succeeded",
-                "legacy": true
-              }
-            }
-            """.utf8)
-        ))
+        for receipt in [dispatch, expectation] {
+            var legacyReceipt = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: JSONEncoder().encode(receipt)) as? [String: Any]
+            )
+            legacyReceipt["warning"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(warning))
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                HeistActionEvidence.self,
+                from: try JSONSerialization.data(withJSONObject: legacyReceipt)
+            ))
+        }
     }
 
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
@@ -335,7 +342,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[9]",
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Delete"))),
-                    actionResult: ActionResult.success(method: .activate)
+                    actionResult: ActionResult.success(method: .activate, evidence: .none)
                 ),
             ],
             durationMs: 5
@@ -355,7 +362,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     actionResult: ActionResult.failure(
                         method: .activate,
                         errorKind: .elementNotFound,
-                        message: "Delete not found"),
+                        message: "Delete not found", evidence: .none),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "action dispatch succeeds",
@@ -393,7 +400,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     actionResult: ActionResult.failure(
                         method: .activate,
                         errorKind: .actionFailed,
-                        message: "Delete failed"),
+                        message: "Delete failed", evidence: .none),
                     failure: HeistFailureDetail(
                         category: .action,
                         contract: "action dispatch succeeds",
@@ -447,14 +454,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultEvidence(accessibilityTrace: actionTrace)
+                        evidence: ActionResultSuccessEvidence(observation: .trace(actionTrace))
                     )
                 ),
                 waitStep(
                     path: "$.body[1]",
                     actionResult: ActionResult.success(
                         method: .wait,
-                        evidence: ActionResultEvidence(accessibilityTrace: waitTrace)
+                        evidence: ActionResultSuccessEvidence(observation: .trace(waitTrace))
                     )
                 ),
             ],
@@ -474,7 +481,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             actionResult: ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
-                message: "boom"),
+                message: "boom", evidence: .none),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "action dispatch succeeds",
@@ -537,14 +544,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay")))),
                     evidence: .expectation(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
-                        dispatchResult: ActionResult.success(method: .activate),
-                        expectationResult: ActionResult.success(method: .wait, message: "screen did not change"),
+                        dispatchResult: ActionResult.success(method: .activate, evidence: .none),
+                        expectationResult: ActionResult.success(method: .wait, message: "screen did not change", evidence: .none),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "screen did not change"
-                        ),
-                        warning: nil
+                        )
                     ),
                     failure: failure
                 ),
@@ -584,7 +590,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     children: [
                         actionStep(
                             path: "$.body[0].conditional.cases[0].body[0]",
-                            actionResult: ActionResult.success(method: .activate)
+                            actionResult: ActionResult.success(method: .activate, evidence: .none)
                         ),
                     ]
                 ),
@@ -609,7 +615,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 waitStep(
-                    actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
+                    actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s", evidence: .none),
                     expectation: ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s"),
                     failure: failure
                 ),
@@ -629,7 +635,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
         guard let handledElseCheck = HeistWaitEvidence.UnmatchedCheck(
-            actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s"),
+            actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s", evidence: .none),
             expectation: expectation
         ) else {
             preconditionFailure("Handled-else wait fixture requires unmatched wait evidence")
@@ -730,7 +736,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             actionResult: ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
-                message: "Add to Cart not found"),
+                message: "Add to Cart not found", evidence: .none),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "action dispatch succeeds",
@@ -802,7 +808,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     actionResult: ActionResult.failure(
                         method: .activate,
                         errorKind: .elementNotFound,
-                        message: "Delete not found"),
+                        message: "Delete not found", evidence: .none),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "activate command succeeds",
@@ -835,7 +841,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             actionResult: ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
-                message: "Save failed"
+                message: "Save failed",
+                evidence: .none
             ),
             failure: HeistFailureDetail(
                 category: .action,
@@ -892,14 +899,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay")))),
                     evidence: .expectation(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
-                        dispatchResult: ActionResult.success(method: .activate),
-                        expectationResult: ActionResult.success(method: .wait, message: "elementsChanged"),
+                        dispatchResult: ActionResult.success(method: .activate, evidence: .none),
+                        expectationResult: ActionResult.success(method: .wait, message: "elementsChanged", evidence: .none),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "elementsChanged"
-                        ),
-                        warning: nil
+                        )
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -962,8 +968,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: .takeScreenshot),
                     evidence: .dispatch(
                         command: .takeScreenshot,
-                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot)),
-                        warning: nil
+                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot), evidence: .none)
                     )
                 ),
             ],
@@ -1117,8 +1122,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             name: "action",
             step: actionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
-                actionResult: ActionResult.success(method: .activate),
-                warning: .activationWeakAffordance(evidence: #"label="Button" traits=[staticText] actions=[activate]"#)
+                actionResult: ActionResult.success(
+                    method: .activate,
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .none,
+                        warning: .activationWeakAffordance(
+                            evidence: #"label="Button" traits=[staticText] actions=[activate]"#
+                        )
+                    )
+                )
             ),
             expectedKey: "action",
             assertEvidence: { evidence in
@@ -1142,7 +1154,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         (
             name: "wait",
             step: waitStep(
-                actionResult: ActionResult.success(method: .wait),
+                actionResult: ActionResult.success(method: .wait, evidence: .none),
                 expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate())
             ),
             expectedKey: "wait",
@@ -1244,7 +1256,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     timeout: 2,
                     iterationCount: 1,
                     expectation: ExpectationResult.Met(predicate: predicate),
-                    actionResult: ActionResult.success(method: .wait),
+                    actionResult: ActionResult.success(method: .wait, evidence: .none),
                     lastObservedSummary: "Ready"
                 )
             ),
@@ -1283,7 +1295,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
         let predicate = evidenceProjectionPredicate()
         let expectation = ExpectationResult(met: true, predicate: predicate, actual: "Ready")
-        let actionResult = ActionResult.success(method: .wait)
+        let actionResult = ActionResult.success(method: .wait, evidence: .none)
         guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
             expectation: ExpectationResult.Met(predicate: expectation.predicate, actual: expectation.actual)
@@ -1343,7 +1355,6 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         actionResult: ActionResult,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
-        warning: HeistActionWarning? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence: HeistActionEvidence
@@ -1355,13 +1366,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 command: command,
                 dispatchResult: actionResult,
                 expectationResult: expectationActionResult,
-                expectation: expectation,
-                warning: warning
+                expectation: expectation
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
-                .dispatch(command: $0, dispatchResult: actionResult, warning: warning)
+                .dispatch(command: $0, dispatchResult: actionResult)
             } ?? .commandlessDispatch(dispatchResult: actionResult)
         }
 
@@ -1389,7 +1399,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     private func waitStep(
         path: String = "$.body[0]",
-        actionResult: ActionResult = ActionResult.success(method: .wait),
+        actionResult: ActionResult = ActionResult.success(method: .wait, evidence: .none),
         expectation: ExpectationResult = ExpectationResult(
             met: true,
             predicate: .exists(.label("Done"))
@@ -1515,7 +1525,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
                     command: .typeText(text: .literal("Milk"), target: nil),
-                    actionResult: ActionResult.success(method: .typeText)
+                    actionResult: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
         )
@@ -1545,7 +1555,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     actionResult: ActionResult.failure(
                         method: .typeText,
                         errorKind: .elementNotFound,
-                        message: "field missing"),
+                        message: "field missing", evidence: .none),
                     failure: HeistFailureDetail(
                         category: .targetResolution,
                         contract: "action dispatch succeeds",
@@ -1633,7 +1643,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionStep(
                     path: actionPath,
                     command: .typeText(text: .literal(value), target: nil),
-                    actionResult: ActionResult.success(method: .typeText)
+                    actionResult: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
         )

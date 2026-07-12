@@ -159,11 +159,21 @@ final class TheBrains {
         let message = stash.latestSemanticObservationFailureDiagnostic()
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
-        return .failure(method: method, errorKind: .accessibilityTreeUnavailable, message: message)
+        return .failure(
+            method: method,
+            errorKind: .accessibilityTreeUnavailable,
+            message: message,
+            evidence: .none
+        )
     }
 
     func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
-        .failure(method: method, errorKind: .actionFailed, message: TheBrains.runtimeInactiveMessage)
+        .failure(
+            method: method,
+            errorKind: .actionFailed,
+            message: TheBrains.runtimeInactiveMessage,
+            evidence: .none
+        )
     }
 
     // MARK: - Clear

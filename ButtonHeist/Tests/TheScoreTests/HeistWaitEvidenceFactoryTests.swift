@@ -8,8 +8,8 @@ import TheScore
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate)
         let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
-        let success = ActionResult.success(method: .wait)
-        let timeout = ActionResult.failure(method: .wait, errorKind: .timeout)
+        let success = ActionResult.success(method: .wait, evidence: .none)
+        let timeout = ActionResult.failure(method: .wait, errorKind: .timeout, evidence: .none)
 
         let matchedCheck = try #require(HeistWaitEvidence.MatchedCheck(actionResult: success, expectation: met))
         let matched = HeistWaitEvidence.matched(matchedCheck)
@@ -42,7 +42,7 @@ import TheScore
     @Test func `decode rejects invalid wait evidence polarity at boundary`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.MatchedCheck(
-            actionResult: .success(method: .wait),
+            actionResult: .success(method: .wait, evidence: .none),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
         let evidence = HeistWaitEvidence.matched(check)
@@ -62,7 +62,7 @@ import TheScore
     @Test func `decode rejects continued wait evidence`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.UnmatchedCheck(
-            actionResult: .success(method: .wait),
+            actionResult: .success(method: .wait, evidence: .none),
             expectation: .unmet(ExpectationResult.Unmet(predicate: predicate, actual: "not found"))
         ))
         var invalidFixture = WaitEvidenceFixture(HeistWaitEvidence.failed(check))
@@ -77,7 +77,7 @@ import TheScore
     @Test func `decode rejects legacy wait warning`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.MatchedCheck(
-            actionResult: .success(method: .wait),
+            actionResult: .success(method: .wait, evidence: .none),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
         let encoded = try JSONEncoder().encode(HeistWaitEvidence.matched(check))

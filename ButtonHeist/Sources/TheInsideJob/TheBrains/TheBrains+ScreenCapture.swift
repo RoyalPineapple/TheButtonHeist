@@ -75,7 +75,8 @@ extension TheBrains {
             return .success(
                 payload: .screenshot(payload),
                 message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                evidence: ActionResultEvidence(
+                evidence: ActionResultSuccessEvidence(
+                    observation: .none,
                     timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
                 )
             )
@@ -84,7 +85,8 @@ extension TheBrains {
                 method: .takeScreenshot,
                 errorKind: .general,
                 message: failure.message,
-                evidence: ActionResultEvidence(
+                evidence: ActionResultFailureEvidence(
+                    observation: .none,
                     timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
                 )
             )

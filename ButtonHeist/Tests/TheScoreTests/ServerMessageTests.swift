@@ -201,7 +201,7 @@ final class ServerMessageTests: XCTestCase {
     // MARK: - ActionResult Tests
 
     func testActionResultWithValue() throws {
-        let result = ActionResult.success(payload: .typeText("Hello World"))
+        let result = ActionResult.success(payload: .typeText("Hello World"), evidence: .none)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -221,7 +221,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultWithoutValue() throws {
-        let result = ActionResult.success(method: .syntheticTap)
+        let result = ActionResult.success(method: .syntheticTap, evidence: .none)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -236,7 +236,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultPayloadValueWireShape() throws {
-        let result = ActionResult.success(payload: .typeText("Hi"))
+        let result = ActionResult.success(payload: .typeText("Hi"), evidence: .none)
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
@@ -252,7 +252,7 @@ final class ServerMessageTests: XCTestCase {
             timestamp: Date(timeIntervalSince1970: 0),
             interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         )
-        let result = ActionResult.success(payload: .screenshot(screen))
+        let result = ActionResult.success(payload: .screenshot(screen), evidence: .none)
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -270,7 +270,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadHeistExecutionWireShape() throws {
         let heist = HeistExecutionResult.passed(steps: [], durationMs: 42)
-        let result = ActionResult.success(payload: .heistExecution(heist))
+        let result = ActionResult.success(payload: .heistExecution(heist), evidence: .none)
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -305,7 +305,10 @@ final class ServerMessageTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(subjectEvidence: evidence)
+            evidence: ActionResultSuccessEvidence(
+                observation: .none,
+                subjectEvidence: evidence
+            )
         )
 
         let data = try JSONEncoder().encode(result)
@@ -368,7 +371,7 @@ final class ServerMessageTests: XCTestCase {
             ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
-        let result = ActionResult.success(payload: .rotor(rotor))
+        let result = ActionResult.success(payload: .rotor(rotor), evidence: .none)
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
@@ -414,7 +417,7 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(accessibilityTrace: trace)
+            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
         )
 
         let data = try JSONEncoder().encode(result)
@@ -425,7 +428,8 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
         let result = ActionResult.success(
-            method: .activate
+            method: .activate,
+            evidence: .none
         )
 
         let data = try JSONEncoder().encode(result)
@@ -444,7 +448,7 @@ final class ServerMessageTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(accessibilityTrace: trace)
+            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
         )
 
         XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
@@ -460,7 +464,7 @@ final class ServerMessageTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(accessibilityTrace: trace)
+            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
         )
 
         let data = try JSONEncoder().encode(result)
@@ -478,7 +482,7 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(accessibilityTrace: trace)
+            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
         )
 
         XCTAssertNil(result.accessibilityTrace?.endpointScreenName)
@@ -555,6 +559,7 @@ final class ServerMessageTests: XCTestCase {
             method: .syntheticTap,
             errorKind: .elementNotFound,
             message: "Element not found",
+            evidence: .none
         )
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
@@ -571,7 +576,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testErrorKindAllCasesRoundTrip() throws {
         for kind in ErrorKind.allCases {
-            let result = ActionResult.failure(method: .syntheticTap, errorKind: kind)
+            let result = ActionResult.failure(method: .syntheticTap, errorKind: kind, evidence: .none)
             let data = try JSONEncoder().encode(result)
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
             XCTAssertEqual(decoded.outcome.errorKind, kind, "Round-trip failed for \(kind)")
@@ -716,10 +721,10 @@ final class ServerMessageTests: XCTestCase {
     private struct StoredActionResultScreenContextFixture: Encodable {
         let outcome = ActionResultOutcome.success
         let method = ActionMethod.activate
-        let evidence: ActionResultEvidence
+        let evidence: ActionResultSuccessEvidence
 
         init(accessibilityTrace: AccessibilityTrace) {
-            evidence = ActionResultEvidence(accessibilityTrace: accessibilityTrace)
+            evidence = ActionResultSuccessEvidence(observation: .trace(accessibilityTrace))
         }
     }
 

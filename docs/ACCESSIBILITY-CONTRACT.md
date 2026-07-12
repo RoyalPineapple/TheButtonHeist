@@ -106,9 +106,9 @@ The ownership rules for the remaining evidence boundaries are explicit:
 - `HeistExecutionStepReportFacts` is the one canonical typed report-fact
   projection from `HeistExecutionResult`. Output adapters consume it rather
   than re-deriving report facts.
-- `ActionResult` owns the single `ActionResultEvidence` post-action envelope.
-  `PostActionObservation` gathers and coordinates evidence but does not own a
-  parallel public result shape.
+- `ActionResult` owns outcome-bound success or failure evidence with one tagged
+  observation case. `PostActionObservation` gathers and coordinates evidence
+  but does not own a parallel result shape.
 - UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
   boundary, where each use is allowlisted and justified. Typed core and wire
   values remain checked `Sendable` values.

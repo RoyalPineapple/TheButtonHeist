@@ -203,8 +203,8 @@ import TheScore
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: trace,
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(trace),
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(.label("Checkout")),
@@ -222,9 +222,8 @@ import TheScore
                     evidence: .expectation(
                         command: .activate(.predicate(.label("Checkout"))),
                         dispatchResult: result,
-                        expectationResult: ActionResult.success(method: .wait, message: "screenChanged"),
-                        expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged"),
-                        warning: nil
+                        expectationResult: ActionResult.success(method: .wait, message: "screenChanged", evidence: .none),
+                        expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
                     )
                 ),
             ],

@@ -9,7 +9,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             method: .activate,
             message: "done",
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(trace, settlement: .settled(durationMs: 125)),
+                observation: .settledTrace(trace, .settled(durationMs: 125)),
                 timing: ActionPerformanceTiming(actionDispatchMs: 4),
                 warning: .activationWeakAffordance(evidence: "label=Checkout")
             )
@@ -93,7 +93,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(trace, settlement: .settled(durationMs: 5)),
+                observation: .settledTrace(trace, .settled(durationMs: 5)),
                 timing: ActionPerformanceTiming(actionDispatchMs: 1)
             )
         )

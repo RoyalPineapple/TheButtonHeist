@@ -300,7 +300,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultEvidence(accessibilityTrace: trace)
+                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
             )
         )
 
@@ -347,7 +347,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultEvidence(accessibilityTrace: trace)
+                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
             )
         )
 
@@ -380,7 +380,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultEvidence(accessibilityTrace: trace)
+                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
             )
         )
 
@@ -429,7 +429,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultEvidence(accessibilityTrace: trace)
+                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
             )
         )
 
@@ -463,7 +463,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                     )
                 ),
             ],
@@ -545,7 +545,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                         )
                     ),
                 ],
@@ -623,7 +623,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                         )
                     ),
                 ],
@@ -696,7 +696,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .activate,
                         errorKind: .actionFailed,
                         message: "target stopped responding",
-                        evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        evidence: ActionResultFailureEvidence(observation: .trace(trace))
                     ),
                     failure: HeistFailureDetail(
                         category: .action,
@@ -734,7 +734,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                             method: .activate,
                             errorKind: .actionFailed,
                             message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
-                            evidence: ActionResultEvidence(activationTrace: activationTrace)
+                            evidence: ActionResultFailureEvidence(
+                                observation: .none,
+                                activationTrace: activationTrace
+                            )
                         ),
                         failure: HeistFailureDetail(
                             category: .action,
@@ -767,7 +770,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate),
+            result: ActionResult.success(method: .activate, evidence: .none),
             expectation: ExpectationResult(
                 met: true,
                 predicate: .exists(.label("Done")),
@@ -798,8 +801,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childResult = actionReceiptStep(
             path: "$.body[0].conditional.cases[0].body[0]",
-            result: ActionResult.success(method: .activate),
-            expectationActionResult: ActionResult.success(method: .wait),
+            result: ActionResult.success(method: .activate, evidence: .none),
+            expectationActionResult: ActionResult.success(method: .wait, evidence: .none),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = HeistExecutionResult(steps: [
@@ -842,8 +845,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 actionReceiptStep(
                     path: "$.body[1]",
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
-                    result: ActionResult.success(method: .activate),
-                    expectationActionResult: ActionResult.success(method: .wait),
+                    result: ActionResult.success(method: .activate, evidence: .none),
+                    expectationActionResult: ActionResult.success(method: .wait, evidence: .none),
                     expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
                 ),
             ],
@@ -887,15 +890,19 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultEvidence(
+                        evidence: ActionResultSuccessEvidence(
+                            observation: .none,
                             timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
                         )
                     ),
                     expectationActionResult: ActionResult.success(
                         method: .wait,
-                        evidence: ActionResultEvidence(
-                            settlement: .settled(durationMs: 7),
-                            timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                        evidence: ActionResultSuccessEvidence(
+                            observation: .settledTrace(
+                                .noChangeForTests(elementCount: 0),
+                                .settled(durationMs: 7)
+                            ),
+                            timing: ActionPerformanceTiming(totalMs: 9)
                         )
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
@@ -926,7 +933,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
-                    result: ActionResult.success(method: .activate)
+                    result: ActionResult.success(method: .activate, evidence: .none)
                 ),
             ],
             durationMs: 3
@@ -953,7 +960,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
-                        result: ActionResult.success(method: .activate)
+                        result: ActionResult.success(method: .activate, evidence: .none)
                     ),
                 ],
                 durationMs: 3
@@ -1085,7 +1092,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
-                message: "nested button failed"),
+                message: "nested button failed", evidence: .none),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "activate command succeeds",
@@ -1165,7 +1172,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childResult = actionReceiptStep(
             path: childPath,
             command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback"))),
-            result: ActionResult.success(method: .activate)
+            result: ActionResult.success(method: .activate, evidence: .none)
         )
         let result = HeistExecutionResult(
             steps: [
@@ -1220,7 +1227,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 actionReceiptStep(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
                     command: .typeText(text: .ref("item"), target: nil),
-                    result: ActionResult.success(method: .typeText)
+                    result: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
         )
@@ -1231,7 +1238,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult.failure(
                 method: .typeText,
                 errorKind: .elementNotFound,
-                message: "field missing"),
+                message: "field missing", evidence: .none),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "type_text command succeeds",
@@ -2033,13 +2040,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 command: command,
                 dispatchResult: result,
                 expectationResult: expectationActionResult,
-                expectation: expectation,
-                warning: nil
+                expectation: expectation
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
-                .dispatch(command: $0, dispatchResult: result, warning: nil)
+                .dispatch(command: $0, dispatchResult: result)
             } ?? .commandlessDispatch(dispatchResult: result)
         }
 

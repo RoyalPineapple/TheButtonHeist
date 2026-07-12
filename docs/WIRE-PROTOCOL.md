@@ -356,13 +356,17 @@ accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
 Action responses use `actionResult`:
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate"}}
+{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
-Optional action evidence is nested under one `evidence` object. Settlement is
-the tagged shape `{"kind":"settled|timedOut","durationMs":...}`; traces,
-subject evidence, activation traces, timing, and announcements are siblings in
-that object. The removed flat evidence fields are invalid input.
+Action evidence is required and bound to the result outcome. Its `observation`
+is exactly one tagged case: `none`, `announcement`, or `trace`. A trace may own
+the tagged settlement shape `{"kind":"settled|timedOut","durationMs":...}`.
+Captured announcements derive from the trace; standalone announcements use the
+`announcement` case. Settlement duration does not also appear in stored timing.
+Warnings are valid only in successful evidence and are not duplicated on a
+containing heist action receipt. Missing evidence, optional evidence bags, flat
+evidence fields, and sibling receipt warnings are invalid input.
 
 `ActionResult.payload` is a tagged union when command-specific data is needed,
 for example:

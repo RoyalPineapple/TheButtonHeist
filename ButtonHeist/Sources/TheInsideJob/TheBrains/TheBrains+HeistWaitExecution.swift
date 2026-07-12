@@ -219,30 +219,41 @@ struct HeistWaitReceipt {
     }
 
     func makeActionResult(method: ActionMethod = .wait) -> ActionResult {
-        let evidence = ActionResultEvidence(
-            accessibilityTrace: accessibilityTrace,
-            announcement: announcement
-        )
+        let observation: ActionResultObservationEvidence
+        switch (accessibilityTrace, announcement) {
+        case (nil, nil):
+            observation = .none
+        case (nil, let announcement?):
+            observation = .announcement(announcement)
+        case (let trace?, nil):
+            observation = .trace(trace)
+        case (let trace?, let announcement?):
+            precondition(
+                trace.capturedAnnouncements.first?.text == announcement,
+                "wait announcement must belong to its accessibility trace"
+            )
+            observation = .trace(trace)
+        }
         switch status {
         case .matched:
             return ActionResult.success(
                 method: method,
                 message: message,
-                evidence: evidence
+                evidence: ActionResultSuccessEvidence(observation: observation)
             )
         case .timedOut:
             return ActionResult.failure(
                 method: method,
                 errorKind: .timeout,
                 message: message,
-                evidence: evidence
+                evidence: ActionResultFailureEvidence(observation: observation)
             )
         case .failed(let errorKind):
             return ActionResult.failure(
                 method: method,
                 errorKind: errorKind,
                 message: message,
-                evidence: evidence
+                evidence: ActionResultFailureEvidence(observation: observation)
             )
         }
     }
