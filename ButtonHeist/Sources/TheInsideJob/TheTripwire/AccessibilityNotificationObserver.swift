@@ -33,16 +33,11 @@ final class AccessibilityNotificationObserver {
         let uninstall: @MainActor () -> Void
     }
 
-    private struct InstalledRegistration {
-        let generation: UInt64
-        let installation: CallbackInstallation
-    }
-
     private enum RegistrationPhase {
         case uninstalled
         case installing(generation: UInt64)
-        case installed(InstalledRegistration)
-        case uninstalling(InstalledRegistration)
+        case installed(generation: UInt64, CallbackInstallation)
+        case uninstalling
         case installationUnavailable
 
         var isInstalled: Bool {
@@ -63,16 +58,11 @@ final class AccessibilityNotificationObserver {
 
     private let callbackInstaller: CallbackInstaller
     private var subscribers: [ObjectIdentifier: WeakAccessibilityNotificationSubscriber] = [:]
-    private var latestSequenceStorage: UInt64 = 0
+    private(set) var latestSequence: UInt64 = 0
     private var nextGeneration: UInt64 = 0
     private var registrationPhase: RegistrationPhase = .uninstalled
 
-    var latestSequence: UInt64 {
-        latestSequenceStorage
-    }
-
     var hasSubscribers: Bool {
-        removeExpiredSubscribers()
         reconcileRegistration()
         return !subscribers.isEmpty
     }
@@ -83,7 +73,6 @@ final class AccessibilityNotificationObserver {
     }
 
     var lifecycleState: AccessibilityNotificationObserverLifecycleState {
-        removeExpiredSubscribers()
         reconcileRegistration()
         guard !subscribers.isEmpty else { return .unsubscribed }
         return .subscribed(callbackInstalled: registrationPhase.isInstalled)
@@ -138,14 +127,12 @@ final class AccessibilityNotificationObserver {
     }
 
     func subscribe(_ subscriber: AccessibilityNotificationBus) {
-        removeExpiredSubscribers()
         subscribers[ObjectIdentifier(subscriber)] = WeakAccessibilityNotificationSubscriber(subscriber)
         reconcileRegistration()
     }
 
     func unsubscribe(_ subscriber: AccessibilityNotificationBus) {
         subscribers[ObjectIdentifier(subscriber)] = nil
-        removeExpiredSubscribers()
         reconcileRegistration()
     }
 
@@ -159,8 +146,8 @@ final class AccessibilityNotificationObserver {
         switch (!subscribers.isEmpty, registrationPhase) {
         case (true, .uninstalled):
             installRegistration()
-        case (false, .installed(let registration)):
-            uninstallRegistration(registration)
+        case (false, .installed(_, let installation)):
+            uninstallRegistration(installation)
         case (false, .installationUnavailable):
             registrationPhase = .uninstalled
         case (false, .uninstalled),
@@ -185,11 +172,7 @@ final class AccessibilityNotificationObserver {
                     generation: generation
                 )
             }
-            let registration = InstalledRegistration(
-                generation: generation,
-                installation: installation
-            )
-            registrationPhase = .installed(registration)
+            registrationPhase = .installed(generation: generation, installation)
             accessibilityNotificationLogger.info(
                 "Installed accessibility notification callback source=\(installation.source, privacy: .public)"
             )
@@ -203,9 +186,9 @@ final class AccessibilityNotificationObserver {
         }
     }
 
-    private func uninstallRegistration(_ registration: InstalledRegistration) {
-        registrationPhase = .uninstalling(registration)
-        registration.installation.uninstall()
+    private func uninstallRegistration(_ installation: CallbackInstallation) {
+        registrationPhase = .uninstalling
+        installation.uninstall()
         registrationPhase = .uninstalled
         accessibilityNotificationLogger.info("Removed accessibility notification callback")
         reconcileRegistration()
@@ -222,9 +205,9 @@ final class AccessibilityNotificationObserver {
         let subscribers = subscribers.values.compactMap(\.subscriber)
         guard !subscribers.isEmpty else { return }
 
-        latestSequenceStorage += 1
+        latestSequence += 1
         let event = PendingAccessibilityNotificationEvent(
-            sequence: latestSequenceStorage,
+            sequence: latestSequence,
             rawCode: code,
             timestamp: Date(),
             notificationData: CapturedAccessibilityNotificationPayload(notificationData).pendingPayload,
@@ -239,8 +222,8 @@ final class AccessibilityNotificationObserver {
         switch registrationPhase {
         case .installing(let activeGeneration):
             activeGeneration == generation
-        case .installed(let registration):
-            registration.generation == generation
+        case .installed(let activeGeneration, _):
+            activeGeneration == generation
         case .uninstalled, .uninstalling, .installationUnavailable:
             false
         }
