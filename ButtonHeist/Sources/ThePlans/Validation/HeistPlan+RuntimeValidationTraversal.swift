@@ -194,13 +194,6 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func walk(
-        _ steps: [HeistStep],
-        context: HeistPlanAdmissionTraversalContext
-    ) {
-        walk(steps.map(HeistStepAdmissionCandidate.init), context: context)
-    }
-
-    private mutating func walk(
         _ step: HeistStepAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {

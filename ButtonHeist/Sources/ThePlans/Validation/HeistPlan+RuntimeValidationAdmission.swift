@@ -450,69 +450,67 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
     }
 }
 
-private struct HeistPlanRuntimeAdmission {}
-
 extension HeistPlanRuntimeSafetyValidator {
     mutating func validate(_ candidate: HeistPlanAdmissionCandidate) throws -> HeistPlan {
         inspect(candidate)
         guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
-        return try HeistPlan(candidate, admittedBy: HeistPlanRuntimeAdmission())
+        return try HeistPlan(admitting: candidate)
     }
 }
 
 private extension HeistPlan {
-    init(_ candidate: HeistPlanAdmissionCandidate, admittedBy admission: HeistPlanRuntimeAdmission) throws {
+    init(admitting candidate: HeistPlanAdmissionCandidate) throws {
         version = candidate.version
         name = candidate.name
         parameter = candidate.parameter
-        definitions = try candidate.definitions.map { try HeistPlan($0, admittedBy: admission) }
-        body = try candidate.body.map { try $0.admittedStep(admission) }
+        definitions = try candidate.definitions.map { try HeistPlan(admitting: $0) }
+        body = try candidate.body.map { try $0.admittedStep() }
     }
 }
 
 private extension HeistStepAdmissionCandidate {
-    func admittedStep(_ admission: HeistPlanRuntimeAdmission) throws -> HeistStep {
+    func admittedStep() throws -> HeistStep {
         switch payload {
         case .action(let step): return .action(step)
         case .wait(let step):
             return .wait(WaitStep(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                elseBody: try step.elseBody?.map { try $0.admittedStep(admission) }
+                elseBody: try step.elseBody?.map { try $0.admittedStep() }
             ))
         case .conditional(let step):
             return .conditional(try ConditionalStep(
                 cases: try step.cases.map { predicateCase in
                     PredicateCase(
                         predicate: predicateCase.predicate,
-                        body: try predicateCase.body.map { try $0.admittedStep(admission) }
+                        body: try predicateCase.body.map { try $0.admittedStep() }
                     )
                 },
-                elseBody: try step.elseBody?.map { try $0.admittedStep(admission) }
+                elseBody: try step.elseBody?.map { try $0.admittedStep() }
             ))
         case .forEachElement(let step):
             return .forEachElement(try ForEachElementStep(
                 matching: step.matching,
                 limit: step.limit,
                 parameter: step.parameter,
-                body: try step.body.map { try $0.admittedStep(admission) }
+                body: try step.body.map { try $0.admittedStep() }
             ))
         case .forEachString(let step):
             return .forEachString(try ForEachStringStep(
                 values: step.values,
                 parameter: step.parameter,
-                body: try step.body.map { try $0.admittedStep(admission) }
+                body: try step.body.map { try $0.admittedStep() }
             ))
         case .repeatUntil(let step):
             return .repeatUntil(try RepeatUntilStep(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                body: try step.body.map { try $0.admittedStep(admission) },
-                elseBody: try step.elseBody?.map { try $0.admittedStep(admission) }
+                body: try step.body.map { try $0.admittedStep() },
+                elseBody: try step.elseBody?.map { try $0.admittedStep() }
             ))
         case .warn(let step): return .warn(step)
         case .fail(let step): return .fail(step)
-        case .heist(let candidate): return .heist(try HeistPlan(candidate, admittedBy: admission))
+        case .heist(let candidate): return .heist(try HeistPlan(admitting: candidate))
         case .invoke(let step): return .invoke(step)
         }
     }
