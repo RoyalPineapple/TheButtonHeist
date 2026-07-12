@@ -149,22 +149,18 @@ extension TheStash {
         in screen: Screen
     ) -> [ScreenElement] {
         guard limit > 0, predicate.hasPredicates else { return [] }
-        return Array(screenElementMatchGraph(in: screen).resolve(predicate).subjects.prefix(limit))
+        let projection = WireConversion.semanticInterfaceProjection(from: screen)
+        let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
+        return Array(projection.screenElements(matching: matches).prefix(limit))
     }
 
     /// All matching screen elements in traversal order. Use when diagnostics
     /// need the exact match-set size rather than an early-exit prefix.
     func matchScreenElements(_ predicate: ElementPredicate, in screen: Screen) -> [ScreenElement] {
         guard predicate.hasPredicates else { return [] }
-        return screenElementMatchGraph(in: screen).resolve(predicate).subjects
-    }
-
-    func screenElementMatchGraph(_ elements: [ScreenElement]) -> ElementPredicateGraph<HeistId, ScreenElement> {
-        ElementPredicateGraph(subjects: elements, identity: \.heistId)
-    }
-
-    func screenElementMatchGraph(in screen: Screen) -> ElementPredicateGraph<HeistId, ScreenElement> {
-        screenElementMatchGraph(selectElements(in: screen))
+        let projection = WireConversion.semanticInterfaceProjection(from: screen)
+        let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
+        return projection.screenElements(matching: matches)
     }
 
 }

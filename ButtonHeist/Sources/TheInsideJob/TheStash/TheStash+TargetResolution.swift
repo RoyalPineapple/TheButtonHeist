@@ -165,26 +165,36 @@ extension TheStash {
     }
 
     func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
+        resolveContainerTarget(
+            predicate,
+            ordinal: ordinal,
+            in: WireConversion.semanticInterfaceProjection(from: settledSemanticScreen),
+            resolutionScope: .known
+        )
+    }
+
+    private func resolveContainerTarget(
+        _ predicate: ContainerPredicate,
+        ordinal: Int?,
+        in projection: SemanticInterfaceProjection,
+        resolutionScope: ResolutionScope
+    ) -> ContainerTargetResolution {
         guard predicate.hasPredicates else {
             return .notFound(ContainerNotFoundFacts(
                 predicate: predicate,
                 ordinal: ordinal,
                 reason: .emptyPredicate,
-                resolutionScope: .known
+                resolutionScope: resolutionScope
             ))
         }
-        let matches = semanticContainersInTraversalOrder
-            .compactMap { item -> SemanticScreen.Container? in
-                guard predicate.matches(item.container.containerPredicateFacts) else { return nil }
-                return item
-            }
+        let matches = projection.containers(matching: predicate)
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
                     predicate: predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
-                    resolutionScope: .known
+                    resolutionScope: resolutionScope
                 ))
             }
             return .resolved(matches[ordinal])
@@ -197,14 +207,14 @@ extension TheStash {
                 predicate: predicate,
                 ordinal: nil,
                 reason: .noMatches,
-                resolutionScope: .known
+                resolutionScope: resolutionScope
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
                 predicate: predicate,
                 candidates: matches.map(ContainerCandidateFacts.init),
                 matchedCount: matches.count,
-                resolutionScope: .known
+                resolutionScope: resolutionScope
             ))
         }
     }
@@ -259,40 +269,35 @@ private extension TheStash {
         in screen: Screen,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            return resolveMatcher(predicate, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
-        case .within(let container, let target):
-            return resolveTarget(
-                target,
-                in: screen.scoped(to: container),
-                resolutionScope: resolutionScope
-            )
-        }
+        let projection = WireConversion.semanticInterfaceProjection(from: screen)
+        return resolveTarget(target, in: projection, screen: screen, resolutionScope: resolutionScope)
     }
 
-    func resolveMatcher(
-        _ predicate: ElementPredicate,
-        ordinal: Int?,
-        in screen: Screen,
+    func resolveTarget(
+        _ target: ElementTarget,
+        in projection: SemanticInterfaceProjection,
+        screen: Screen,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let screenElements = selectElements(in: screen)
-        let matches = screenElementMatchGraph(screenElements).resolve(predicate).subjects
-        if let ordinal {
-            guard ordinal >= 0 else {
+        let selection = target.terminalSelection
+        let screenElements = projection.screenElements(scopedBy: target)
+        if let ordinal = selection.ordinal, ordinal < 0 {
+            return .notFound(TargetNotFoundFacts(
+                predicate: selection.predicate,
+                ordinal: ordinal,
+                reason: .ordinalNegative(ordinal),
+                resolutionScope: resolutionScope,
+                screenElements: screenElements,
+                visibleHeistIds: screen.visibleIds
+            ))
+        }
+
+        let matchGraph = ElementMatchGraph(interface: projection.interface)
+        let matches = projection.screenElements(matching: matchGraph.resolve(selection.targetWithoutOrdinal))
+        if let ordinal = selection.ordinal {
+            guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
-                    predicate: predicate,
-                    ordinal: ordinal,
-                    reason: .ordinalNegative(ordinal),
-                    resolutionScope: resolutionScope,
-                    screenElements: screenElements,
-                    visibleHeistIds: screen.visibleIds
-                ))
-            }
-            guard ordinal < matches.count else {
-                return .notFound(TargetNotFoundFacts(
-                    predicate: predicate,
+                    predicate: selection.predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
@@ -305,7 +310,7 @@ private extension TheStash {
         switch matches.count {
         case 0:
             return .notFound(TargetNotFoundFacts(
-                predicate: predicate,
+                predicate: selection.predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
@@ -316,7 +321,7 @@ private extension TheStash {
             return .resolved(matches[0])
         default:
             return .ambiguous(TargetAmbiguityFacts(
-                predicate: predicate,
+                predicate: selection.predicate,
                 candidates: matches.prefix(10).map {
                     TargetCandidateFacts(screenElement: $0, visibleHeistIds: screen.visibleIds)
                 },
@@ -327,7 +332,31 @@ private extension TheStash {
     }
 }
 
+private struct TargetTerminalSelection {
+    let predicate: ElementPredicate
+    let ordinal: Int?
+    let targetWithoutOrdinal: ElementTarget
+}
+
 private extension ElementTarget {
+    var terminalSelection: TargetTerminalSelection {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return TargetTerminalSelection(
+                predicate: predicate,
+                ordinal: ordinal,
+                targetWithoutOrdinal: .predicate(predicate)
+            )
+        case .within(let container, let nestedTarget):
+            let nestedSelection = nestedTarget.terminalSelection
+            return TargetTerminalSelection(
+                predicate: nestedSelection.predicate,
+                ordinal: nestedSelection.ordinal,
+                targetWithoutOrdinal: .within(container, nestedSelection.targetWithoutOrdinal)
+            )
+        }
+    }
+
     var firstMatchTarget: ElementTarget {
         switch self {
         case .predicate(let predicate, _):
@@ -335,31 +364,6 @@ private extension ElementTarget {
         case .within(let container, let target):
             return .within(container, target.firstMatchTarget)
         }
-    }
-}
-
-private extension Screen {
-    func scoped(to predicate: ContainerPredicate) -> Screen {
-        let containerPaths = orderedContainers
-            .filter { predicate.matches($0.container.containerPredicateFacts) }
-            .map(\.path)
-        guard !containerPaths.isEmpty else {
-            return Screen(
-                semantic: SemanticScreen(elements: [:], containers: [:]),
-                liveCapture: liveCapture
-            )
-        }
-        return Screen(
-            semantic: SemanticScreen(
-                elements: semantic.elements.filter { _, element in
-                    containerPaths.contains { element.path.hasPrefix($0) }
-                },
-                containers: semantic.containers.filter { path, _ in
-                    containerPaths.contains { path.hasPrefix($0) }
-                }
-            ),
-            liveCapture: liveCapture
-        )
     }
 }
 

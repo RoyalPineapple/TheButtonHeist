@@ -215,15 +215,22 @@ extension TheStash {
     /// captures, so known off-viewport elements must be present here even when
     /// they are absent from the latest live parser hierarchy.
     static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
-        let entries = screen.orderedElements
-        return semanticInterface(entries: entries, screen: screen, timestamp: timestamp)
+        semanticInterfaceProjection(from: screen, timestamp: timestamp).interface
     }
 
-    private static func semanticInterface(
+    static func semanticInterfaceProjection(
+        from screen: Screen,
+        timestamp: Date = Date()
+    ) -> SemanticInterfaceProjection {
+        let entries = screen.orderedElements
+        return semanticInterfaceProjection(entries: entries, screen: screen, timestamp: timestamp)
+    }
+
+    private static func semanticInterfaceProjection(
         entries: [SemanticScreen.Element],
         screen: Screen,
         timestamp: Date
-    ) -> Interface {
+    ) -> SemanticInterfaceProjection {
         var pathAllocator = SemanticProjectionPathAllocator()
         let containerPlacements = semanticContainerPlacements(
             containersByPath: screen.semantic.containers,
@@ -294,7 +301,11 @@ extension TheStash {
             wireConversionLogger.fault("Invalid semantic interface projection: \(String(describing: error), privacy: .public)")
             preconditionFailure("Invalid semantic interface projection: \(error)")
         }
-        return interface
+        return SemanticInterfaceProjection(
+            interface: interface,
+            elementByProjectedPath: elementsByPath,
+            containerByProjectedPath: containersByProjectedPath
+        )
     }
 
     private static func semanticContainerPlacements(
@@ -399,6 +410,80 @@ extension TheStash {
             )
         }
     }
+    }
+}
+
+struct SemanticInterfaceProjection {
+    let interface: Interface
+    let elementByProjectedPath: [TreePath: SemanticScreen.Element]
+    let containerByProjectedPath: [TreePath: SemanticScreen.Container]
+}
+
+extension SemanticInterfaceProjection {
+    func screenElements(matching matchSet: ElementMatchSet) -> [SemanticScreen.Element] {
+        matchSet.matches.map { match in
+            guard let screenElement = elementByProjectedPath[match.path] else {
+                preconditionFailure("Semantic interface match path is not backed by a screen element")
+            }
+            return screenElement
+        }
+    }
+
+    func screenElements(scopedBy target: ElementTarget) -> [SemanticScreen.Element] {
+        screenElements(scopedBy: target, ancestorPaths: nil)
+    }
+
+    func containers(matching predicate: ContainerPredicate) -> [SemanticScreen.Container] {
+        containerPaths(matching: predicate, ancestorPaths: nil).map { path in
+            guard let container = containerByProjectedPath[path] else {
+                preconditionFailure("Semantic interface container path is not backed by a screen container")
+            }
+            return container
+        }
+    }
+
+    private func screenElements(
+        scopedBy target: ElementTarget,
+        ancestorPaths: [TreePath]?
+    ) -> [SemanticScreen.Element] {
+        switch target {
+        case .predicate:
+            return screenElements(ancestorPaths: ancestorPaths)
+        case .within(let container, let nestedTarget):
+            let matchedContainerPaths = containerPaths(matching: container, ancestorPaths: ancestorPaths)
+            guard !matchedContainerPaths.isEmpty else { return [] }
+            return screenElements(scopedBy: nestedTarget, ancestorPaths: matchedContainerPaths)
+        }
+    }
+
+    private func screenElements(ancestorPaths: [TreePath]?) -> [SemanticScreen.Element] {
+        interface.graph.elementsInTraversalOrder.map { record in
+            guard record.path.isDescendant(ofAny: ancestorPaths) else { return nil }
+            guard let screenElement = elementByProjectedPath[record.path] else {
+                preconditionFailure("Semantic interface element path is not backed by a screen element")
+            }
+            return screenElement
+        }.compactMap { $0 }
+    }
+
+    private func containerPaths(
+        matching predicate: ContainerPredicate,
+        ancestorPaths: [TreePath]?
+    ) -> [TreePath] {
+        interface.graph.nodesInPathOrder.compactMap { record in
+            guard record.path.isDescendant(ofAny: ancestorPaths),
+                  case .container(let containerRecord) = record.kind,
+                  predicate.matches(containerRecord.container.containerPredicateFacts)
+            else { return nil }
+            return record.path
+        }
+    }
+}
+
+private extension TreePath {
+    func isDescendant(ofAny ancestors: [TreePath]?) -> Bool {
+        guard let ancestors else { return true }
+        return ancestors.contains { hasPrefix($0) }
     }
 }
 
