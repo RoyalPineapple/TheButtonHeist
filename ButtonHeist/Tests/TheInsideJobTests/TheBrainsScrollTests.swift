@@ -10,6 +10,11 @@ import UIKit
 @MainActor
 final class TheBrainsScrollTests: XCTestCase {
 
+    @MainActor
+    private final class InflationResultBox {
+        var value: ElementInflation.ElementInflationResult?
+    }
+
     private var brains: TheBrains!
     private var retainedLiveObjects: [NSObject] = []
 
@@ -800,8 +805,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ])
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
+        let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
-            await self.brains.navigation.elementInflation.inflate(
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
                 method: .activate,
                 deallocatedBoundary: "activation dispatch"
@@ -812,12 +818,12 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(brains.stash.semanticObservationStream.settledWaiterCount, 1)
         brains.stash.nextVisibleRefreshScreenForTesting = arrivedScreen
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(arrivedScreen)
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
 
-        let result = await inflation.value
+        await inflation.value
 
-        guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected settled-observation recovery of arriving target, got \(result)")
+        guard case .inflated(let inflatedTarget)? = resultBox.value else {
+            return XCTFail("Expected settled-observation recovery of arriving target, got \(String(describing: resultBox.value))")
         }
         XCTAssertEqual(inflatedTarget.treeElement.heistId, "current_coke_button")
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, arrivedFrame.midX, accuracy: 0.01)
@@ -849,8 +855,9 @@ final class TheBrainsScrollTests: XCTestCase {
             revealAttempts += 1
             return nil
         }
+        let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
-            await self.brains.navigation.elementInflation.inflate(
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
                 method: .activate,
                 deallocatedBoundary: "activation dispatch"
@@ -860,19 +867,20 @@ final class TheBrainsScrollTests: XCTestCase {
             await Task.yield()
         }
         brains.stash.nextVisibleRefreshScreenForTesting = freshKnownScreen
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(freshKnownScreen)
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         for _ in 0..<50 where revealAttempts == 0 {
             await Task.yield()
         }
         XCTAssertEqual(revealAttempts, 1)
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(freshKnownScreen)
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         for _ in 0..<50 {
             await Task.yield()
         }
         XCTAssertEqual(revealAttempts, 1)
         inflation.cancel()
+        await inflation.value
 
-        guard case .failed(let failure) = await inflation.value else {
+        guard case .failed(let failure)? = resultBox.value else {
             return XCTFail("Expected typed cancellation after reveal retry")
         }
         XCTAssertEqual(failure.failedStep, .cancelled)
@@ -927,7 +935,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
-            return staleScreen
+            return Navigation.ExploredScreen(screen: staleScreen, manifest: Navigation.ScreenManifest())
         }
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Gone Target", traits: [.button])),
@@ -974,8 +982,9 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: recoveredObject
             )
         ])
+        let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
-            await self.brains.navigation.elementInflation.inflate(
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
                 method: .scrollToVisible,
                 deallocatedBoundary: "scroll_to_visible dispatch"
@@ -986,12 +995,12 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(brains.stash.semanticObservationStream.settledWaiterCount, 1)
         brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(recoveredScreen)
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
-        let result = await inflation.value
+        await inflation.value
 
-        guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected settled-observation refresh to recover target, got \(result)")
+        guard case .inflated(let inflatedTarget)? = resultBox.value else {
+            return XCTFail("Expected settled-observation refresh to recover target, got \(String(describing: resultBox.value))")
         }
         XCTAssertEqual(inflatedTarget.treeElement.heistId, targetId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
@@ -1199,7 +1208,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
-            return currentScreen
+            return Navigation.ExploredScreen(screen: currentScreen, manifest: Navigation.ScreenManifest())
         }
 
         let result = await brains.navigation.elementInflation.inflate(
@@ -1248,8 +1257,8 @@ final class TheBrainsScrollTests: XCTestCase {
             literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button]))
         )
 
-        XCTAssertNotNil(discovered?.findElement(heistId: "current_controls_header"))
-        XCTAssertNil(discovered?.findElement(heistId: "stale_controls_button"))
+        XCTAssertNotNil(discovered?.screen.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.screen.findElement(heistId: "stale_controls_button"))
     }
 
     func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
@@ -1433,7 +1442,9 @@ final class TheBrainsScrollTests: XCTestCase {
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
-            return discoveryAttempts == 1 ? nil : recoveredScreen
+            return (discoveryAttempts == 1 ? nil : recoveredScreen).map {
+                Navigation.ExploredScreen(screen: $0, manifest: Navigation.ScreenManifest())
+            }
         }
 
         let result = await brains.navigation.elementInflation.inflate(
@@ -1583,9 +1594,12 @@ final class TheBrainsScrollTests: XCTestCase {
             revealAttempts += 1
             if revealAttempts == 1 {
                 self.brains.stash.nextVisibleRefreshScreenForTesting = retryOffViewportScreen
-                return staleVisibleScreen
+                return Navigation.ExploredScreen(
+                    screen: staleVisibleScreen,
+                    manifest: Navigation.ScreenManifest()
+                )
             }
-            return recoveredScreen
+            return Navigation.ExploredScreen(screen: recoveredScreen, manifest: Navigation.ScreenManifest())
         }
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
