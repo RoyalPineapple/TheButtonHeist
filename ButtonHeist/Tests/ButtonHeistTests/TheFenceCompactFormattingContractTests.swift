@@ -298,7 +298,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -342,7 +345,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -370,7 +376,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -416,7 +425,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let trace = AccessibilityTrace(captures: [before, elementChange, after])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -447,7 +459,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: command,
-                    result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                    result: ActionResult.success(
+                        method: .activate,
+                        evidence: ActionResultEvidence(accessibilityTrace: trace)
+                    )
                 ),
             ],
             durationMs: 8
@@ -526,7 +541,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(
+                            method: .activate,
+                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        )
                     ),
                 ],
                 durationMs: 8
@@ -601,7 +619,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(
+                            method: .activate,
+                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        )
                     ),
                 ],
                 durationMs: 8
@@ -673,7 +694,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .activate,
                         errorKind: .actionFailed,
                         message: "target stopped responding",
-                        accessibilityTrace: trace
+                        evidence: ActionResultEvidence(accessibilityTrace: trace)
                     ),
                     failure: HeistFailureDetail(
                         category: .action,
@@ -711,7 +732,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                             method: .activate,
                             errorKind: .actionFailed,
                             message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
-                            activationTrace: activationTrace
+                            evidence: ActionResultEvidence(activationTrace: activationTrace)
                         ),
                         failure: HeistFailureDetail(
                             category: .action,
@@ -787,7 +808,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
-                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -864,11 +885,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
+                        evidence: ActionResultEvidence(
+                            timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
+                        )
                     ),
                     expectationActionResult: ActionResult.success(
                         method: .wait,
-                        timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                        evidence: ActionResultEvidence(
+                            settlement: .settled(durationMs: 7),
+                            timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                        )
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
                 ),
@@ -1073,7 +1099,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
-                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -1148,7 +1174,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: runtimePredicate,
-                                result: ExpectationResult(met: false, predicate: runtimePredicate)
+                                met: false
                             ),
                         ],
                         outcome: .elseBranch(reason: .noMatch),
@@ -2005,12 +2031,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 command: command,
                 dispatchResult: result,
                 expectationResult: expectationActionResult,
-                expectation: expectation
+                expectation: expectation,
+                warning: nil
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
-                .dispatch(command: $0, dispatchResult: result)
+                .dispatch(command: $0, dispatchResult: result, warning: nil)
             } ?? .commandlessDispatch(dispatchResult: result)
         }
 
