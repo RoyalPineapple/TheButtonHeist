@@ -229,8 +229,11 @@ final class AccessibilityTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode([AccessibilityNotificationEvidence].self, from: data)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
 
-        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .elementChanged, .announcement])
-        XCTAssertEqual(json.compactMap { $0["kind"] as? String }, ["screenChanged", "elementChanged", "announcement"])
+        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .elementChanged, .valueChanged, .announcement])
+        XCTAssertEqual(
+            json.compactMap { $0["kind"] as? String },
+            ["screenChanged", "elementChanged", "valueChanged", "announcement"]
+        )
         XCTAssertTrue(json.allSatisfy { $0["code"] == nil })
         XCTAssertTrue(json.allSatisfy { $0["name"] == nil })
     }

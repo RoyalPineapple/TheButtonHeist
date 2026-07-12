@@ -40,7 +40,7 @@ extension PredicateWait {
                 return .satisfied(state, warning: nil)
             }
             if allowsTransitionFinalStateWarning,
-               state.changeReadiness.canEvaluateFinalStateWarning,
+               state.changeBaseline != nil,
                let warning = finalStateSatisfiedTransitionWarning(for: step.predicate, state: state) {
                 return .satisfied(state, warning: warning)
             }
@@ -97,7 +97,7 @@ extension PredicateWait {
             element: ElementPredicate,
             expectedPresence: Bool
         ) -> HeistPredicateWarning? {
-            guard let baselineElements = state.changeBaseline?.capture?.interface.projectedElements else {
+            guard let baselineElements = state.changeBaseline?.capture.interface.projectedElements else {
                 return nil
             }
 
@@ -148,7 +148,7 @@ extension PredicateWait {
             state: State,
             update: ElementUpdatePredicate
         ) -> HeistPredicateWarning? {
-            guard let baselineElements = state.changeBaseline?.capture?.interface.projectedElements
+            guard let baselineElements = state.changeBaseline?.capture.interface.projectedElements
             else { return nil }
 
             let timing: FinalStateSatisfactionTiming
@@ -299,19 +299,22 @@ extension PredicateWait {
             return snapshot.observation.sequence
         }
 
-        internal var changeBaseline: WaitChangeBaseline? {
+        internal var changeBaseline: SettledCapture? {
             guard case .observed(let snapshot) = self else { return nil }
-            return snapshot.changeReadiness.baseline
-        }
-
-        internal var changeReadiness: PredicateChangeReadiness {
-            guard case .observed(let snapshot) = self else { return .notRequired }
-            return snapshot.changeReadiness
+            return snapshot.baseline
         }
 
         internal var observedChangeAfterBaseline: Bool {
-            guard case .observed(let snapshot) = self else { return false }
-            return snapshot.changeReadiness.observedChangeAfterBaseline
+            guard case .observed(let snapshot) = self,
+                  let baseline = snapshot.baseline,
+                  let window = snapshot.window
+            else { return false }
+            return window.current.cursor.sequence > baseline.cursor.sequence
+        }
+
+        internal var observationWindow: ObservationWindow? {
+            guard case .observed(let snapshot) = self else { return nil }
+            return snapshot.window
         }
 
         internal var finalElements: [HeistElement]? {
@@ -330,16 +333,19 @@ extension PredicateWait {
     internal struct Snapshot: Sendable, Equatable {
         internal let observation: WaitObservation
         internal let expectation: ExpectationResult
-        internal let changeReadiness: PredicateChangeReadiness
+        internal let baseline: SettledCapture?
+        internal let window: ObservationWindow?
 
         internal init(
             observation: WaitObservation,
             expectation: ExpectationResult,
-            changeReadiness: PredicateChangeReadiness
+            baseline: SettledCapture?,
+            window: ObservationWindow?
         ) {
             self.observation = observation
             self.expectation = expectation
-            self.changeReadiness = changeReadiness
+            self.baseline = baseline
+            self.window = window
         }
     }
 
@@ -390,85 +396,6 @@ extension PredicateWait {
     private enum FinalStateSatisfactionTiming: String {
         case baseline
         case afterObservation = "after_observation"
-    }
-}
-
-internal struct WaitChangeBaseline: Sendable, Equatable {
-    internal let sequence: SettledObservationSequence
-    internal let capture: AccessibilityTrace.Capture?
-
-    internal var hash: String? {
-        capture?.hash
-    }
-
-    internal init(sequence: SettledObservationSequence, capture: AccessibilityTrace.Capture?) {
-        self.sequence = sequence
-        self.capture = capture
-    }
-}
-
-extension WaitChangeBaseline {
-    internal init(event: SettledSemanticObservationEvent) {
-        self.init(sequence: event.sequence, capture: event.trace.captures.last)
-    }
-
-    internal init?(previousOf event: SettledSemanticObservationEvent) {
-        guard let previous = event.previous,
-              previous.sequence < event.sequence,
-              let capture = event.trace.captures.first
-        else { return nil }
-        self.init(sequence: previous.sequence, capture: capture)
-    }
-}
-
-extension PredicateWait {
-    internal struct ObservedChange: Sendable, Equatable {
-        internal let baseline: WaitChangeBaseline
-        internal let observedSequence: SettledObservationSequence
-
-        internal init?(
-            baseline: WaitChangeBaseline,
-            observedSequence: SettledObservationSequence
-        ) {
-            guard observedSequence > baseline.sequence else { return nil }
-            self.baseline = baseline
-            self.observedSequence = observedSequence
-        }
-    }
-}
-
-internal enum PredicateChangeReadiness: Sendable, Equatable {
-    case notRequired
-    case baselineOnly(WaitChangeBaseline)
-    case observedTransition(PredicateWait.ObservedChange)
-    case unavailableTrace(PredicateWait.ObservedChange)
-
-    internal var baseline: WaitChangeBaseline? {
-        switch self {
-        case .notRequired:
-            return nil
-        case .baselineOnly(let baseline):
-            return baseline
-        case .observedTransition(let transition),
-             .unavailableTrace(let transition):
-            return transition.baseline
-        }
-    }
-
-    internal var observedChangeAfterBaseline: Bool {
-        switch self {
-        case .observedTransition, .unavailableTrace:
-            return true
-        case .notRequired, .baselineOnly:
-            return false
-        }
-    }
-
-    internal var canEvaluateFinalStateWarning: Bool {
-        switch self {
-        case .notRequired, .baselineOnly, .observedTransition, .unavailableTrace:
-            return true
-        }
     }
 }
 

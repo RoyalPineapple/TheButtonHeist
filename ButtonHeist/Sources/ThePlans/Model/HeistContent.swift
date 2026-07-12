@@ -498,7 +498,7 @@ public extension HeistInvocationContent {
     }
 
     func expect(timeout: Double? = nil) -> HeistInvocationContent {
-        expect(.change(.elements()), timeout: timeout)
+        expect(.change(), timeout: timeout)
     }
 
     @_disfavoredOverload

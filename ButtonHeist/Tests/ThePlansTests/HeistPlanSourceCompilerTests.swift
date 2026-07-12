@@ -645,7 +645,7 @@ import Testing
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements()), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .change(), timeout: 1)))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,

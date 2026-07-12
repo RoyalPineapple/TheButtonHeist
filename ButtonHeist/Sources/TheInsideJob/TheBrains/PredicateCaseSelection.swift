@@ -29,14 +29,12 @@ struct PredicateCaseSelection {
 
     static func evaluate(
         _ cases: [ResolvedPredicateCase],
-        observation: HeistSemanticObservation,
-        changeBaselineSequence: SettledObservationSequence? = nil
+        observation: HeistSemanticObservation
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
             PredicateEvaluation.caseMatch(
                 $0,
-                in: observation,
-                changeBaselineSequence: changeBaselineSequence
+                in: observation
             )
         }
         return PredicateCaseSelection(
@@ -73,8 +71,7 @@ struct PredicateCaseSelection {
             scope: scope,
             timeout: rawTimeout,
             start: start,
-            requiresChangeBaseline: requiresChangeBaseline,
-            evaluate: { observation, _ in
+            evaluate: { observation in
                 let baselineSeed: PredicateObservationBaselineSeed =
                     requiresChangeBaseline && stream.changeBaseline == nil
                         ? .previousObservationIfAvailable

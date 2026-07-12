@@ -31,19 +31,18 @@ extension PredicateWait {
                 timeout: step.timeout,
                 start: start,
                 after: nil,
-                changeBaselineSequence: nil,
-                requiresChangeBaseline: step.predicate.requiresChangeBaseline,
                 pollWhenTimeoutZero: false,
                 discoveryBootstrap: .afterInitialDiscoveryAttempt,
-                evaluate: { observation, _ in
+                evaluate: { observation in
                     let baselineSeed: PredicateObservationBaselineSeed =
                         step.predicate.requiresChangeBaseline && stream.changeBaseline == nil
                             ? .previousObservationIfAvailable
                             : .preserve
-                    let reduced = stream.reducing(
+                    let reduced = reduceObservation(
                         observation,
                         predicate: step.predicate,
-                        baselineSeed: baselineSeed
+                        baselineSeed: baselineSeed,
+                        stream: stream
                     )
                     stream = reduced.state
                     let decision = reducer.decision(
@@ -213,7 +212,8 @@ extension PredicateWait {
         start: CFAbsoluteTime,
         success: Bool,
         warning: HeistPredicateWarning? = nil,
-        changeReadiness: PredicateChangeReadiness = .notRequired,
+        baseline: SettledCapture? = nil,
+        window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil
     ) -> HeistWaitReceipt {
         let elapsed = Self.elapsedSeconds(since: start)
@@ -222,7 +222,8 @@ extension PredicateWait {
             : presenceTimeoutMessage(step.predicate, elapsed)
         let latest = latestEvent()
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
-            changeReadiness: changeReadiness,
+            baseline: baseline,
+            window: window,
             last: latest.map(SettledEventSummary.init(event:)),
             lastDelta: trace?.accumulatedEndpointDelta ?? trace?.endpointDelta ?? latest?.delta,
             settleFailure: latestSettleFailure()
@@ -259,7 +260,8 @@ extension PredicateWait {
             start: start,
             success: success,
             warning: warning,
-            changeReadiness: state.changeReadiness,
+            baseline: state.changeBaseline,
+            window: state.observationWindow,
             observedSequence: state.observedSequence
         )
     }
@@ -475,9 +477,9 @@ extension PredicateWait {
             hash = event.latestCaptureRef?.hash
         }
 
-        fileprivate init(baseline: WaitChangeBaseline) {
-            sequence = baseline.sequence
-            hash = baseline.hash
+        fileprivate init(baseline: SettledCapture) {
+            sequence = baseline.cursor.sequence
+            hash = baseline.capture.hash
         }
 
         fileprivate var description: String {
@@ -489,29 +491,33 @@ extension PredicateWait {
     }
 
     private struct SettledWaitDiagnostics {
-        fileprivate let changeReadiness: PredicateChangeReadiness
+        fileprivate let baselineCapture: SettledCapture?
+        fileprivate let window: ObservationWindow?
         fileprivate let last: SettledEventSummary?
         fileprivate let lastDelta: AccessibilityTrace.Delta?
         fileprivate let settleFailure: String?
 
         fileprivate init(
-            changeReadiness: PredicateChangeReadiness,
+            baseline: SettledCapture?,
+            window: ObservationWindow?,
             last: SettledEventSummary?,
             lastDelta: AccessibilityTrace.Delta?,
             settleFailure: String?
         ) {
-            self.changeReadiness = changeReadiness
+            self.baselineCapture = baseline
+            self.window = window
             self.last = last
             self.lastDelta = lastDelta
             self.settleFailure = settleFailure
         }
 
         fileprivate var baseline: SettledEventSummary? {
-            changeReadiness.baseline.map(SettledEventSummary.init(baseline:))
+            baselineCapture.map(SettledEventSummary.init(baseline:))
         }
 
         fileprivate var observedChangeAfterBaseline: Bool {
-            changeReadiness.observedChangeAfterBaseline
+            guard let baselineCapture, let window else { return false }
+            return window.current.cursor.sequence > baselineCapture.cursor.sequence
         }
     }
 }

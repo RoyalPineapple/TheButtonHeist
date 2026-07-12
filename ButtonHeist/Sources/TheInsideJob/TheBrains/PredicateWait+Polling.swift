@@ -16,47 +16,10 @@ internal struct PredicatePollingResult<Evaluation> {
 
 private struct PredicatePollingCursor<Evaluation> {
     fileprivate var observedSequence: SettledObservationSequence?
-    fileprivate var changeBaseline: PredicatePollingChangeBaseline
     fileprivate var last: PredicatePollingObservationEvaluation<Evaluation>?
 
-    fileprivate init(
-        observedSequence: SettledObservationSequence?,
-        changeBaselineSequence: SettledObservationSequence?,
-        requiresChangeBaseline: Bool
-    ) {
+    fileprivate init(observedSequence: SettledObservationSequence?) {
         self.observedSequence = observedSequence
-        self.changeBaseline = PredicatePollingChangeBaseline(
-            requiresChangeBaseline: requiresChangeBaseline,
-            initialSequence: changeBaselineSequence
-        )
-    }
-}
-
-private enum PredicatePollingChangeBaseline {
-    case notRequired
-    case awaitingFirstObservation
-    case observingSince(SettledObservationSequence)
-
-    fileprivate init(requiresChangeBaseline: Bool, initialSequence: SettledObservationSequence?) {
-        guard requiresChangeBaseline else {
-            self = .notRequired
-            return
-        }
-        if let initialSequence {
-            self = .observingSince(initialSequence)
-        } else {
-            self = .awaitingFirstObservation
-        }
-    }
-
-    fileprivate var sequence: SettledObservationSequence? {
-        guard case .observingSince(let sequence) = self else { return nil }
-        return sequence
-    }
-
-    fileprivate mutating func recordObservation(_ observation: HeistSemanticObservation) {
-        guard case .awaitingFirstObservation = self else { return }
-        self = .observingSince(observation.event.previous?.sequence ?? observation.event.sequence)
     }
 }
 
@@ -79,21 +42,15 @@ internal struct PredicatePollingEngine<Evaluation> {
         timeout rawTimeout: Double,
         start: CFAbsoluteTime = CFAbsoluteTimeGetCurrent(),
         after initialObservedSequence: SettledObservationSequence? = nil,
-        changeBaselineSequence initialChangeBaselineSequence: SettledObservationSequence? = nil,
-        requiresChangeBaseline: Bool,
         pollWhenTimeoutZero: Bool = true,
         initialVisibleFingerprint: PredicateVisibleFingerprint = .unknown,
         discoveryBootstrap: PredicateDiscoveryBootstrap = .ifNoObservation,
-        evaluate: (HeistSemanticObservation, SettledObservationSequence?) -> Evaluation,
+        evaluate: (HeistSemanticObservation) -> Evaluation,
         isMatched: (Evaluation) -> Bool
     ) async -> PredicatePollingResult<Evaluation> {
         let timeout = PredicateWait.clampedWaitTimeout(rawTimeout)
         let deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
-        var cursor = PredicatePollingCursor<Evaluation>(
-            observedSequence: initialObservedSequence,
-            changeBaselineSequence: initialChangeBaselineSequence,
-            requiresChangeBaseline: requiresChangeBaseline
-        )
+        var cursor = PredicatePollingCursor<Evaluation>(observedSequence: initialObservedSequence)
         let reducer = PredicatePollingReducer(
             timeout: timeout,
             pollWhenTimeoutZero: pollWhenTimeoutZero
@@ -187,7 +144,7 @@ internal struct PredicatePollingEngine<Evaluation> {
     private func pollObservation(
         request: PredicatePollingObservationRequest,
         cursor: inout PredicatePollingCursor<Evaluation>,
-        evaluate: (HeistSemanticObservation, SettledObservationSequence?) -> Evaluation
+        evaluate: (HeistSemanticObservation) -> Evaluation
     ) async -> PredicatePollingObservationEvaluation<Evaluation>? {
         guard let observation = await observeSemanticState(
             request.scope,
@@ -198,9 +155,7 @@ internal struct PredicatePollingEngine<Evaluation> {
         }
 
         cursor.observedSequence = observation.event.sequence
-        cursor.changeBaseline.recordObservation(observation)
-
-        let evaluation = evaluate(observation, cursor.changeBaseline.sequence)
+        let evaluation = evaluate(observation)
         let observed = PredicatePollingObservationEvaluation(
             observation: observation,
             evaluation: evaluation

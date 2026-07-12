@@ -31,15 +31,78 @@ struct SettledSemanticObservation: Sendable {
 }
 
 struct SettledSemanticObservationEvent: Sendable {
+    let generation: ObservationGeneration
     let sequence: SettledObservationSequence
     let scope: SemanticObservationScope
     let observation: SettledSemanticObservation
     let previous: SettledSemanticObservation?
+    let previousCursor: ObservationCursor?
+    let notificationSequence: UInt64
     let trace: AccessibilityTrace
     let delta: AccessibilityTrace.Delta?
 
+    init(
+        generation: ObservationGeneration = .initial,
+        sequence: SettledObservationSequence,
+        scope: SemanticObservationScope,
+        observation: SettledSemanticObservation,
+        previous: SettledSemanticObservation?,
+        previousCursor: ObservationCursor? = nil,
+        notificationSequence: UInt64 = 0,
+        trace: AccessibilityTrace,
+        delta: AccessibilityTrace.Delta?
+    ) {
+        self.generation = generation
+        self.sequence = sequence
+        self.scope = scope
+        self.observation = observation
+        self.previous = previous
+        self.previousCursor = previousCursor
+        self.notificationSequence = notificationSequence
+        self.trace = trace
+        self.delta = delta
+    }
+
+    var cursor: ObservationCursor? {
+        trace.captures.last.map {
+            ObservationCursor(
+                generation: generation,
+                scope: scope,
+                sequence: sequence,
+                captureHash: $0.hash,
+                notificationSequence: notificationSequence
+            )
+        }
+    }
+
+    var settledCapture: SettledCapture? {
+        guard let cursor, let capture = trace.captures.last else { return nil }
+        return SettledCapture(cursor: cursor, capture: capture)
+    }
+
+    func replacingGeneration(_ generation: ObservationGeneration) -> SettledSemanticObservationEvent {
+        SettledSemanticObservationEvent(
+            generation: generation,
+            sequence: sequence,
+            scope: scope,
+            observation: observation,
+            previous: previous,
+            previousCursor: previousCursor,
+            notificationSequence: notificationSequence,
+            trace: trace,
+            delta: delta
+        )
+    }
+
     var latestCaptureRef: AccessibilityTrace.CaptureRef? {
         trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))
+    }
+}
+
+private extension SettledSemanticObservationEvent {
+    var isScreenAppearance: Bool {
+        guard case .screenChanged? = delta else { return false }
+        return true
     }
 }
 
@@ -68,6 +131,12 @@ private enum FailedSettleAccessibilityNotificationPolicy {
 
 private struct SemanticObservationFulfillmentState {
     typealias EventsByFulfilledScope = [SemanticObservationScope: SettledSemanticObservationEvent]
+
+    struct Publication {
+        let events: EventsByFulfilledScope
+        let generation: ObservationGeneration
+        let startsNewGeneration: Bool
+    }
 
     struct CurrentFulfillment {
         let sourceEvent: SettledSemanticObservationEvent
@@ -120,15 +189,16 @@ private struct SemanticObservationFulfillmentState {
     mutating func publish(
         sourceScope: SemanticObservationScope,
         sequence: SettledObservationSequence,
+        generation: ObservationGeneration,
+        notificationSequence: UInt64,
         screen: Screen,
         tripwireSignal: TheTripwire.TripwireSignal,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
         notificationIdentityScreen: Screen? = nil
-    ) -> EventsByFulfilledScope {
+    ) -> Publication {
         var currentEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
         var events: EventsByFulfilledScope = [:]
-        var sourceEvent: SettledSemanticObservationEvent?
         for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
                 sequence: sequence,
@@ -151,6 +221,8 @@ private struct SemanticObservationFulfillmentState {
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
                 previous: currentEvents[fulfilledScope],
+                generation: generation,
+                notificationSequence: notificationSequence,
                 stash: stash,
                 pendingAccessibilityNotifications: pendingAccessibilityNotifications,
                 notificationIdentityScreen: notificationIdentityScreen,
@@ -158,19 +230,25 @@ private struct SemanticObservationFulfillmentState {
             )
             currentEvents[fulfilledScope] = event
             events[fulfilledScope] = event
-
-            if fulfilledScope == sourceScope {
-                sourceEvent = event
-            }
         }
-        guard let sourceEvent else {
+        let startsNewGeneration = events.values.contains { $0.isScreenAppearance }
+        let publishedGeneration = startsNewGeneration ? generation.advanced() : generation
+        let publishedEvents = startsNewGeneration
+            ? events.mapValues { $0.replacingGeneration(publishedGeneration) }
+            : events
+        let retainedEvents = startsNewGeneration ? publishedEvents : currentEvents
+        guard let publishedSourceEvent = publishedEvents[sourceScope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
         state = .clean(CurrentFulfillment(
-            sourceEvent: sourceEvent,
-            eventsByFulfilledScope: currentEvents
+            sourceEvent: publishedSourceEvent,
+            eventsByFulfilledScope: retainedEvents
         ))
-        return events
+        return Publication(
+            events: publishedEvents,
+            generation: publishedGeneration,
+            startsNewGeneration: startsNewGeneration
+        )
     }
 
     func cleanEvent(
@@ -272,6 +350,9 @@ final class SemanticObservationStream {
     // MARK: - Subscriber-Facing Settled Observation History
 
     private var settledSequence: SettledObservationSequence = 0
+    private var observationGeneration = ObservationGeneration.initial
+    private var eventHistory: [SemanticObservationScope: [SettledSemanticObservationEvent]] = [:]
+    private static let eventHistoryLimit = 256
     private var fulfillmentState = SemanticObservationFulfillmentState()
     /// Bus sequence of the most recent scoped `screenChanged` at the latest
     /// settled commit; a later scoped `screenChanged` marks that commit as
@@ -590,7 +671,7 @@ final class SemanticObservationStream {
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
         if outcome.outcome.didSettleCleanly {
-            let pendingAccessibilityNotifications = notificationWindow?.finishAndClaimEvents() ?? []
+            let pendingAccessibilityNotifications = notificationWindow?.finishEvents() ?? []
             let event: SettledSemanticObservationEvent
             switch commitScope {
             case .visible:
@@ -626,6 +707,8 @@ final class SemanticObservationStream {
 
     func clearSettledObservationHistory() {
         fulfillmentState.clear()
+        observationGeneration = observationGeneration.advanced()
+        eventHistory.removeAll()
         passiveObservationState.updateSettledReading(nil)
         latestSettleFailureDiagnostic = nil
     }
@@ -662,23 +745,100 @@ final class SemanticObservationStream {
         notificationIdentityScreen: Screen? = nil
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
-        let events = fulfillmentState.publish(
+        let publication = fulfillmentState.publish(
             sourceScope: scope,
             sequence: settledSequence,
+            generation: observationGeneration,
+            notificationSequence: stash.accessibilityNotifications.latestSequence,
             screen: stash.settledSemanticScreen,
             tripwireSignal: tripwire.tripwireSignal(),
             stash: stash,
             pendingAccessibilityNotifications: pendingAccessibilityNotifications,
             notificationIdentityScreen: notificationIdentityScreen
         )
-        guard let sourceEvent = events[scope] else {
+        guard let sourceEvent = publication.events[scope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
+        observationGeneration = publication.generation
+        if publication.startsNewGeneration {
+            eventHistory.removeAll()
+        }
+        recordHistory(publication.events.values)
         lastCommittedScopedScreenChangedSequence = stash.accessibilityNotifications.latestScopedScreenChangedSequence
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
-        settledWaiters.completeWaiters(with: events)
+        settledWaiters.completeWaiters(with: publication.events)
         return sourceEvent
+    }
+
+    func observationWindow(
+        from baseline: SettledCapture,
+        through currentEvent: SettledSemanticObservationEvent,
+        projection: AccessibilityTrace.DeltaProjection
+    ) -> ObservationWindow? {
+        guard let current = currentEvent.settledCapture else { return nil }
+        let gapReason: ObservationGap.Reason? = if baseline.cursor.generation != current.cursor.generation {
+            .generationChanged
+        } else if baseline.cursor.scope != current.cursor.scope {
+            .scopeChanged
+        } else if current.cursor.sequence <= baseline.cursor.sequence {
+            .noObservationAfterBaseline
+        } else {
+            nil
+        }
+
+        let history = eventHistory[current.cursor.scope] ?? []
+        let baselineIsRetained = history.contains {
+            $0.sequence == baseline.cursor.sequence && $0.cursor?.captureHash == baseline.cursor.captureHash
+        }
+        let directLineage = currentEvent.previousCursor?.sequence == baseline.cursor.sequence
+            && currentEvent.previousCursor?.captureHash == baseline.cursor.captureHash
+        let currentIsRetained = history.contains {
+            $0.sequence == current.cursor.sequence && $0.cursor?.captureHash == current.cursor.captureHash
+        }
+        let completeness: Completeness
+        if let gapReason {
+            completeness = .incomplete(ObservationGap(
+                reason: gapReason,
+                baseline: baseline.cursor,
+                current: current.cursor
+            ))
+        } else if (baselineIsRetained || directLineage) && currentIsRetained {
+            completeness = .complete
+        } else {
+            completeness = .incomplete(ObservationGap(
+                reason: .historyUnavailable,
+                baseline: baseline.cursor,
+                current: current.cursor
+            ))
+        }
+
+        let captures = [baseline.capture] + history.lazy
+            .filter {
+                $0.scope == current.cursor.scope
+                    && $0.sequence > baseline.cursor.sequence
+                    && $0.sequence <= current.cursor.sequence
+            }
+            .compactMap { $0.trace.captures.last }
+        let windowCaptures = captures.count > 1 ? captures : [baseline.capture, current.capture]
+        return ObservationWindow(
+            baseline: baseline,
+            current: current,
+            captures: windowCaptures,
+            completeness: completeness,
+            projection: projection
+        )
+    }
+
+    private func recordHistory(_ events: Dictionary<SemanticObservationScope, SettledSemanticObservationEvent>.Values) {
+        for event in events {
+            var history = eventHistory[event.scope] ?? []
+            history.append(event)
+            if history.count > Self.eventHistoryLimit {
+                history.removeFirst(history.count - Self.eventHistoryLimit)
+            }
+            eventHistory[event.scope] = history
+        }
     }
 
     private func waitForNextSettledEvent(
@@ -854,7 +1014,7 @@ final class SemanticObservationStream {
         notificationWindow: AccessibilityNotificationActionWindow?
     ) {
         if let notificationWindow {
-            _ = notificationWindow.finishAndClaimEvents()
+            _ = notificationWindow.finishEvents()
         }
         recordFailedSettleDiagnosticEvidence(
             screen,

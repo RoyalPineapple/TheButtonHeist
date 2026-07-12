@@ -8,6 +8,8 @@ enum SemanticObservationEventFactory {
     static func makeEvent(
         observation: SettledSemanticObservation,
         previous: SettledSemanticObservationEvent?,
+        generation: ObservationGeneration,
+        notificationSequence: UInt64,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
         notificationIdentityScreen: Screen? = nil,
@@ -29,10 +31,13 @@ enum SemanticObservationEventFactory {
             AccessibilityTrace(capture: currentCapture)
         }
         return SettledSemanticObservationEvent(
+            generation: generation,
             sequence: observation.sequence,
             scope: observation.scope,
             observation: observation,
             previous: previous?.observation,
+            previousCursor: previous?.cursor,
+            notificationSequence: notificationSequence,
             trace: trace,
             delta: trace.endpointDelta
         )

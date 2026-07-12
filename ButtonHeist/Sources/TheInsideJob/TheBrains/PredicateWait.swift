@@ -37,6 +37,11 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     internal typealias LatestEvent = @MainActor () -> SettledSemanticObservationEvent?
     internal typealias LatestSettleFailure = @MainActor () -> String?
     internal typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
+    internal typealias BuildObservationWindow = @MainActor (
+        SettledCapture,
+        SettledSemanticObservationEvent,
+        AccessibilityTrace.DeltaProjection
+    ) -> ObservationWindow?
     internal typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate, String) -> String?
     internal typealias AnnouncementCursor = @MainActor (AnnouncementWaitCursorStrategy) -> AccessibilityNotificationCursor
     internal typealias AnnouncementWait = @MainActor (
@@ -49,6 +54,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     internal let latestEvent: LatestEvent
     internal let latestSettleFailure: LatestSettleFailure
     internal let semanticObservation: SemanticObserver
+    internal let buildObservationWindow: BuildObservationWindow
     internal let presenceTimeoutMessage: PresenceTimeoutMessage
     internal let announcementCursor: AnnouncementCursor
     internal let waitForAnnouncement: AnnouncementWait
@@ -58,6 +64,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         latestEvent: @escaping LatestEvent,
         latestSettleFailure: @escaping LatestSettleFailure,
         semanticObservation: @escaping SemanticObserver,
+        buildObservationWindow: @escaping BuildObservationWindow = ObservationWindow.direct,
         presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
         announcementCursor: @escaping AnnouncementCursor,
         waitForAnnouncement: @escaping AnnouncementWait
@@ -66,6 +73,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         self.latestEvent = latestEvent
         self.latestSettleFailure = latestSettleFailure
         self.semanticObservation = semanticObservation
+        self.buildObservationWindow = buildObservationWindow
         self.presenceTimeoutMessage = presenceTimeoutMessage
         self.announcementCursor = announcementCursor
         self.waitForAnnouncement = waitForAnnouncement
@@ -173,6 +181,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             for: step,
             entry: entry,
             initialTrace: initialTrace,
+            suppliedBaselineSequence: sequence,
             reducer: reducer,
             stream: &stream,
             state: &state,
@@ -229,13 +238,18 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         for step: ResolvedWaitStep,
         entry: HeistSemanticObservation,
         initialTrace: AccessibilityTrace?,
+        suppliedBaselineSequence: SettledObservationSequence?,
         reducer: Reducer,
         stream: inout PredicateObservationStreamState,
         state: inout State,
         timeout: Double
     ) -> Decision {
         if step.predicate.requiresChangeBaseline,
-           let suppliedBaseline = Self.suppliedChangeBaseline(from: initialTrace, entry: entry.event) {
+           let suppliedBaseline = Self.suppliedChangeBaseline(
+               from: initialTrace,
+               sequence: suppliedBaselineSequence,
+               entry: entry.event
+           ) {
             return observedInitialDecision(
                 for: step,
                 entry: entry,
@@ -281,10 +295,11 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         baselineSeed: PredicateObservationBaselineSeed,
         timedOutWhenUnmatched: Bool
     ) -> Decision {
-        let reduced = stream.reducing(
+        let reduced = reduceObservation(
             entry,
             predicate: step.predicate,
-            baselineSeed: baselineSeed
+            baselineSeed: baselineSeed,
+            stream: stream
         )
         stream = reduced.state
         return reducer.decision(
@@ -311,13 +326,16 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             timeout: step.timeout,
             start: start,
             after: state.observedSequence,
-            changeBaselineSequence: state.changeBaseline?.sequence,
-            requiresChangeBaseline: step.predicate.requiresChangeBaseline,
             pollWhenTimeoutZero: false,
             initialVisibleFingerprint: state.lastVisibleFingerprint,
             discoveryBootstrap: .ifNoObservation,
-            evaluate: { observation, _ in
-                let reduced = stream.reducing(observation, predicate: step.predicate)
+            evaluate: { observation in
+                let reduced = reduceObservation(
+                    observation,
+                    predicate: step.predicate,
+                    baselineSeed: .preserve,
+                    stream: stream
+                )
                 stream = reduced.state
                 let decision = reducer.decision(
                     after: .observation(Snapshot(reduced.reduction)),
@@ -331,6 +349,30 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         )
         state = pollResult.last?.evaluation.state ?? waitState
         return pollResult.last?.evaluation
+    }
+
+    internal func reduceObservation(
+        _ observation: HeistSemanticObservation,
+        predicate: AccessibilityPredicate,
+        baselineSeed: PredicateObservationBaselineSeed,
+        stream: PredicateObservationStreamState
+    ) -> PredicateObservationStreamReduction {
+        let seeded = stream.reducing(
+            observation,
+            predicate: predicate,
+            baselineSeed: baselineSeed
+        )
+        guard let baseline = seeded.state.changeBaseline else { return seeded }
+        let window = buildObservationWindow(
+            baseline,
+            observation.event,
+            predicate.deltaProjection
+        )
+        return seeded.state.reducing(
+            observation,
+            predicate: predicate,
+            observationWindow: window
+        )
     }
 
     internal func observeSemanticState(

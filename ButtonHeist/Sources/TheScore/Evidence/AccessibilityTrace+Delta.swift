@@ -100,19 +100,24 @@ public extension AccessibilityTrace {
         public let interactionDigest: InteractionDigest?
         /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
+        /// Scoped layout-change evidence that classified this edge as an
+        /// element transition, including notification-only changes.
+        public let accessibilityNotifications: [AccessibilityNotificationEvidence]
 
         public init(
             elementCount: Int,
             edits: ElementEdits,
             captureEdge: CaptureEdge? = nil,
             interactionDigest: InteractionDigest? = nil,
-            transient: [HeistElement] = []
+            transient: [HeistElement] = [],
+            accessibilityNotifications: [AccessibilityNotificationEvidence] = []
         ) {
             self.elementCount = elementCount
             self.edits = edits
             self.captureEdge = captureEdge
             self.interactionDigest = interactionDigest
             self.transient = transient
+            self.accessibilityNotifications = accessibilityNotifications
         }
 
         public init(
@@ -144,19 +149,24 @@ public extension AccessibilityTrace {
         public let interactionDigest: InteractionDigest?
         /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
+        /// Scoped screen-appearance evidence that classified this edge as a
+        /// screen transition.
+        public let accessibilityNotifications: [AccessibilityNotificationEvidence]
 
         public init(
             elementCount: Int,
             captureEdge: CaptureEdge? = nil,
             newInterface: Interface,
             interactionDigest: InteractionDigest? = nil,
-            transient: [HeistElement] = []
+            transient: [HeistElement] = [],
+            accessibilityNotifications: [AccessibilityNotificationEvidence] = []
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
             self.newInterface = newInterface
             self.interactionDigest = interactionDigest
             self.transient = transient
+            self.accessibilityNotifications = accessibilityNotifications
         }
 
         public init(
@@ -386,6 +396,7 @@ extension AccessibilityTrace.Delta: Codable {
         case captureEdge
         case interactionDigest
         case transient
+        case accessibilityNotifications
         case edits
         case newInterface
     }
@@ -401,6 +412,10 @@ extension AccessibilityTrace.Delta: Codable {
             forKey: .interactionDigest
         )
         let transient = try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? []
+        let accessibilityNotifications = try container.decodeIfPresent(
+            [AccessibilityNotificationEvidence].self,
+            forKey: .accessibilityNotifications
+        ) ?? []
 
         switch kind {
         case .noChange:
@@ -418,7 +433,8 @@ extension AccessibilityTrace.Delta: Codable {
                 edits: edits,
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
             ))
 
         case .screenChanged:
@@ -428,7 +444,8 @@ extension AccessibilityTrace.Delta: Codable {
                 captureEdge: captureEdge,
                 newInterface: newInterface,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
             ))
         }
     }
@@ -456,6 +473,9 @@ extension AccessibilityTrace.Delta: Codable {
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
             }
+            if !payload.accessibilityNotifications.isEmpty {
+                try container.encode(payload.accessibilityNotifications, forKey: .accessibilityNotifications)
+            }
 
         case .screenChanged(let payload):
             try container.encode(AccessibilityTrace.DeltaKind.screenChanged, forKey: .kind)
@@ -465,6 +485,9 @@ extension AccessibilityTrace.Delta: Codable {
             try container.encode(payload.newInterface, forKey: .newInterface)
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
+            }
+            if !payload.accessibilityNotifications.isEmpty {
+                try container.encode(payload.accessibilityNotifications, forKey: .accessibilityNotifications)
             }
         }
     }
@@ -485,6 +508,7 @@ private enum AccessibilityTraceAccumulatedDelta {
             AccessibilityTrace.Delta.between(before, after, projection: projection)
         }
         let transient = allDeltas.flatMap(\.transientElements)
+        let accessibilityNotifications = allDeltas.flatMap(\.accessibilityNotifications)
         let captureEdge = AccessibilityTrace.CaptureEdge(before: first, after: last)
         let interactionDigest = AccessibilityTrace.InteractionDigest(between: first, and: last)
 
@@ -494,7 +518,10 @@ private enum AccessibilityTraceAccumulatedDelta {
                 captureEdge: captureEdge,
                 newInterface: last.interface,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications.filter {
+                    $0.kind == .screenChanged
+                }
             )
             : nil
 
@@ -510,7 +537,10 @@ private enum AccessibilityTraceAccumulatedDelta {
                 edits: edits,
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications.filter {
+                    $0.kind.isElementTransition
+                }
             )
             : nil
 
@@ -577,6 +607,17 @@ private extension AccessibilityTrace.Delta {
             return payload.transient
         case .screenChanged(let payload):
             return payload.transient
+        }
+    }
+
+    var accessibilityNotifications: [AccessibilityNotificationEvidence] {
+        switch self {
+        case .noChange:
+            return []
+        case .elementsChanged(let payload):
+            return payload.accessibilityNotifications
+        case .screenChanged(let payload):
+            return payload.accessibilityNotifications
         }
     }
 }

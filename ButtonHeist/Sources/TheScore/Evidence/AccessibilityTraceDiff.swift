@@ -37,7 +37,7 @@ enum AccessibilityTraceDiff {
             projection: projection,
             captureEdge: edge,
             interactionDigest: interactionDigest,
-            transient: after.transition.transient
+            transition: after.transition
         )
 
         guard before.context != after.context else { return interfaceDelta }
@@ -47,7 +47,10 @@ enum AccessibilityTraceDiff {
                 edits: ElementEdits(),
                 captureEdge: edge,
                 interactionDigest: interactionDigest,
-                transient: after.transition.transient
+                transient: after.transition.transient,
+                accessibilityNotifications: after.transition.accessibilityNotifications.filter {
+                    $0.kind.isElementTransition
+                }
             ))
         }
         return interfaceDelta
@@ -61,7 +64,7 @@ enum AccessibilityTraceDiff {
         projection: AccessibilityTrace.DeltaProjection,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
-        transient: [HeistElement]
+        transition: AccessibilityTrace.Transition
     ) -> AccessibilityTrace.Delta {
         let beforeRecords = before.projectedElementRecords.map(ElementDiffRecord.init)
         let afterRecords = after.projectedElementRecords.map(ElementDiffRecord.init)
@@ -73,7 +76,10 @@ enum AccessibilityTraceDiff {
                 captureEdge: captureEdge,
                 newInterface: after,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transition.transient,
+                accessibilityNotifications: transition.accessibilityNotifications.filter {
+                    $0.kind == .screenChanged
+                }
             ))
         }
 
@@ -96,7 +102,10 @@ enum AccessibilityTraceDiff {
             elementCount: afterElements.count,
             captureEdge: captureEdge,
             interactionDigest: interactionDigest,
-            transient: transient
+            transient: transition.transient,
+            accessibilityNotifications: transition.accessibilityNotifications.filter {
+                $0.kind.isElementTransition
+            }
         )
     }
 
@@ -107,7 +116,8 @@ enum AccessibilityTraceDiff {
         elementCount: Int,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
-        transient: [HeistElement]
+        transient: [HeistElement],
+        accessibilityNotifications: [AccessibilityNotificationEvidence]
     ) -> AccessibilityTrace.Delta {
         if edits.isEmpty {
             if let unpairedEdits, !unpairedEdits.isEmpty {
@@ -116,7 +126,8 @@ enum AccessibilityTraceDiff {
                     edits: unpairedEdits,
                     captureEdge: captureEdge,
                     interactionDigest: interactionDigest,
-                    transient: transient
+                    transient: transient,
+                    accessibilityNotifications: accessibilityNotifications
                 ))
             }
             guard forceChange else {
@@ -132,7 +143,8 @@ enum AccessibilityTraceDiff {
                 edits: ElementEdits(),
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
-                transient: transient
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
             ))
         }
         return .elementsChanged(AccessibilityTrace.ElementsChanged(
@@ -140,7 +152,8 @@ enum AccessibilityTraceDiff {
             edits: edits,
             captureEdge: captureEdge,
             interactionDigest: interactionDigest,
-            transient: transient
+            transient: transient,
+            accessibilityNotifications: accessibilityNotifications
         ))
     }
 }

@@ -486,7 +486,7 @@ extension HeistPlanSourceParser {
                 let predicate: AccessibilityPredicateExpr
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
-                    predicate = .change(.elements())
+                    predicate = .change()
                     timeout = nil
                 } else {
                     predicate = try parseAccessibilityPredicateExpr()
