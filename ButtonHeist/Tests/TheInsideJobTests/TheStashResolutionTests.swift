@@ -384,7 +384,7 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: "email"
         )
 
-        bagman.semanticObservationStream.commitSettledVisibleObservation(screen)
+        bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
 
         let settledScreen = try XCTUnwrap(bagman.latestSettledSemanticObservation?.screen)
         XCTAssertEqual(settledScreen.liveCapture.firstResponderHeistId, "email")
@@ -654,7 +654,7 @@ final class TheStashResolutionTests: XCTestCase {
             .init(target, heistId: "pay", object: payloadObject),
         ])
         let container = AccessibilityContainer(
-            type: .semanticGroup,
+            type: .semanticGroup(label: nil, value: nil),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let reference = InterfaceObservation.makeForTests(
@@ -1377,7 +1377,7 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            return second
+            return Navigation.ExploredScreen(screen: second, manifest: .init())
         }
 
         let observation = await bagman.observeSettledSemanticObservation(
@@ -1396,7 +1396,7 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            return discovery
+            return Navigation.ExploredScreen(screen: discovery, manifest: .init())
         }
 
         XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
@@ -1481,7 +1481,7 @@ final class TheStashResolutionTests: XCTestCase {
             }
             let screen = discoveryScreen
             discoveryScreen = nil
-            return screen
+            return screen.map { Navigation.ExploredScreen(screen: $0, manifest: .init()) }
         }
         defer { resumeDiscovery(returning: nil) }
 
@@ -1582,7 +1582,10 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertEqual(facts.resolutionScope, .interface)
-        XCTAssertEqual(facts.candidates.map(\.identifier), ["primary", "secondary"])
+        XCTAssertEqual(
+            facts.candidates.map { $0.container.containerPredicateFacts.identifier },
+            ["primary", "secondary"]
+        )
         XCTAssertEqual(facts.candidates.map(\.containerName), ["actions_primary", "actions_secondary"])
         XCTAssertTrue(ambiguous.diagnostics.contains("container target is ambiguous across 2 containers"))
         XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
