@@ -172,18 +172,19 @@ struct DoctorDemoFixture {
         let actionResult = actionSucceeded
             ? ActionResult.success(
                 method: .activate,
-                accessibilityTrace: trace
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
             )
             : ActionResult.failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
-                accessibilityTrace: trace
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
             )
         let command = HeistActionCommand.activate(target)
         let evidence = HeistActionEvidence.dispatch(
             command: command,
-            dispatchResult: actionResult
+            dispatchResult: actionResult,
+            warning: nil
         )
         let intent = HeistStepIntent.action(command: command)
         let step: HeistExecutionStepResult
