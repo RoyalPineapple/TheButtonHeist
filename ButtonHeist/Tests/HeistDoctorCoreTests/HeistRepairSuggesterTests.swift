@@ -873,18 +873,22 @@ private let expectedRepairJSONReportJSON = """
             intent: .action(command: .activate(target)),
             evidence: .expectation(
                 command: .activate(target),
-                dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
+                dispatchResult: ActionResult.success(
+                    method: .activate,
+                    evidence: ActionResultEvidence(accessibilityTrace: dispatchTrace)
+                ),
                 expectationResult: ActionResult.failure(
                     method: .wait,
                     errorKind: .timeout,
                     message: "wait timed out",
-                    accessibilityTrace: expectationTrace
+                    evidence: ActionResultEvidence(accessibilityTrace: expectationTrace)
                 ),
                 expectation: ExpectationResult(
                     met: false,
                     predicate: predicate,
                     actual: "timed out waiting for checkout"
-                )
+                ),
+                warning: nil
             ),
             failure: failure
         )
@@ -1216,19 +1220,20 @@ private let expectedRepairJSONReportJSON = """
         let actionResult = if actionSucceeded {
             ActionResult.success(
                 method: .activate,
-                accessibilityTrace: trace
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
             )
         } else {
             ActionResult.failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
-                accessibilityTrace: trace
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
             )
         }
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(target),
-            dispatchResult: actionResult
+            dispatchResult: actionResult,
+            warning: nil
         )
         let step = status == .failed
             ? HeistExecutionStepResult.failed(

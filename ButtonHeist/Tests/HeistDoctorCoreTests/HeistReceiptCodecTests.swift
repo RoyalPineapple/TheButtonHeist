@@ -203,11 +203,13 @@ import TheScore
         )
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace,
-            subjectEvidence: ActionSubjectEvidence(
-                source: .resolvedSemanticTarget,
-                target: .predicate(.label("Checkout")),
-                element: element(label: "Checkout", traits: [.button], actions: [.activate])
+            evidence: ActionResultEvidence(
+                accessibilityTrace: trace,
+                subjectEvidence: ActionSubjectEvidence(
+                    source: .resolvedSemanticTarget,
+                    target: .predicate(.label("Checkout")),
+                    element: element(label: "Checkout", traits: [.button], actions: [.activate])
+                )
             )
         )
         return HeistExecutionResult(
@@ -221,7 +223,8 @@ import TheScore
                         command: .activate(.predicate(.label("Checkout"))),
                         dispatchResult: result,
                         expectationResult: ActionResult.success(method: .wait, message: "screenChanged"),
-                        expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged")
+                        expectation: ExpectationResult(met: true, predicate: nil, actual: "screenChanged"),
+                        warning: nil
                     )
                 ),
             ],
