@@ -137,21 +137,22 @@ private struct EncodedInvocationStepContract: Decodable {
 
 @Test func `plan call graph includes invocations in wait else bodies`() throws {
     let raw = HeistPlanAdmissionCandidate(definitions: [
-        HeistPlanAdmissionCandidate(name: "checkout", body: [
+        HeistPlanAdmissionCandidate(name: "checkout", definitions: [
+            HeistPlanAdmissionCandidate(name: "fallback", body: [
+                .warn(WarnStep(message: "fallback")),
+            ]),
+        ], body: [
             .wait(WaitStep(
                 predicate: .state(.exists(.label("Ready"))),
                 timeout: 0,
                 elseBody: [.invoke(HeistInvocationStep(path: ["fallback"]))]
             )),
         ]),
-        HeistPlanAdmissionCandidate(name: "fallback", body: [
-            .warn(WarnStep(message: "fallback")),
-        ]),
     ], body: [.warn(WarnStep(message: "root"))])
 
     let graph = HeistCallGraph(plan: try raw.validatedForRuntimeSafety())
 
-    #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "checkout", callee: "fallback")))
+    #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "checkout", callee: "checkout.fallback")))
 }
 
 @Test func `duplicate definition names keep public display and typed nodes collapsed`() throws {

@@ -15,6 +15,18 @@ public enum ValueProperty: ElementPropertyKind {
     public static let property: ElementProperty = .value
 }
 
+public enum LabelProperty: ElementPropertyKind {
+    public typealias Checker = StringMatch<String>
+    public typealias ExprChecker = StringMatch<StringExpr>
+    public static let property: ElementProperty = .label
+}
+
+public enum IdentifierProperty: ElementPropertyKind {
+    public typealias Checker = StringMatch<String>
+    public typealias ExprChecker = StringMatch<StringExpr>
+    public static let property: ElementProperty = .identifier
+}
+
 public enum TraitsProperty: ElementPropertyKind {
     public typealias Checker = TraitSetMatch
     public typealias ExprChecker = TraitSetMatch
