@@ -45,7 +45,6 @@ import TheScore
         exclusiveMinimum: 0
     )
     public static let token = FenceParameter<String>.string(.token)
-    public static let containerType = FenceParameter<AccessibilityContainerKind>.enumValue(.type)
 }
 
 internal func param(

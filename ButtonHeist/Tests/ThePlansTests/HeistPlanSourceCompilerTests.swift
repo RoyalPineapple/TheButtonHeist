@@ -190,6 +190,10 @@ import Testing
             "container rowCount must use .init(...)"
         ),
         (
+            "WaitFor(.exists(.container(.matching(.rowCount(3)))))",
+            "container rowCount must use .init(...)"
+        ),
+        (
             "WaitFor(.exists(.container(.actions(.init()))))",
             "container actions predicate payload must not be empty"
         ),
@@ -198,12 +202,24 @@ import Testing
             "semantic container predicates accept .label and .value"
         ),
         (
+            "WaitFor(.exists(.container(.semantic(.label(\"Checkout\")))))",
+            "container predicates accept"
+        ),
+        (
             "WaitFor(.exists(.container(.type(.scrollable))))",
             "unknown container kind '.scrollable'"
         ),
         (
             "WaitFor(.exists(.container(.scrollable)))",
             "expected '('"
+        ),
+        (
+            "WaitFor(.exists(.container(.dataTable)))",
+            "expected symbol '('"
+        ),
+        (
+            "WaitFor(.exists(.container(.modalBoundary(true))))",
+            "expected symbol ')'"
         ),
         (
             "WaitFor(.exists(.container(.actions([.custom(\"Archive\")]))))",

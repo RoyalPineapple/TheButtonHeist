@@ -80,7 +80,12 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
 
     func testScopedTargetBridgeIncludesContainerScrollableAndActionsChecks() throws {
         let target = AccessibilityTarget.within(
-            container: .matching(.scrollable(true), .actions(.init(.custom("Sub"), .activate))),
+            container: .matching(
+                .type(.list),
+                .identifier("orders"),
+                .scrollable(true),
+                .actions(.init(.custom("Sub"), .activate))
+            ),
             .predicate(ElementPredicateTemplate(label: "Checkout"))
         )
 
@@ -89,6 +94,17 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
         XCTAssertEqual(object.heistValue, try TheFence.HeistValuePayloadEncoder.encode(target))
         XCTAssertEqual(object[.container], .object([
             "checks": .array([
+                .object([
+                    "kind": .string("type"),
+                    "type": .string("list"),
+                ]),
+                .object([
+                    "kind": .string("identifier"),
+                    "match": .object([
+                        "mode": .string("exact"),
+                        "value": .string("orders"),
+                    ]),
+                ]),
                 .object([
                     "kind": .string("scrollable"),
                     "value": .bool(true),

@@ -271,11 +271,6 @@ extension HeistPlanSourceParser {
         case "dataTable":
             return try parseDataTableContainerPredicateExpr()
         case "modalBoundary":
-            if consumeSymbol("(") {
-                let required = try parseBoolLiteral()
-                try expectSymbol(")")
-                return .matching(.modalBoundary(required))
-            }
             return .modalBoundary
         case "matching":
             try expectSymbol("(")
@@ -292,8 +287,9 @@ extension HeistPlanSourceParser {
         default:
             throw error(
                 token,
-                "container predicates accept .none, .label, .value, .identifier, .type, " +
-                ".dataTable, .scrollable(...), .actions, and .matching"
+                "container predicates accept .none, .semanticGroup, .list, .landmark, .tabBar, " +
+                ".label, .value, .identifier, .type, .dataTable(...), .modalBoundary, " +
+                ".scrollable(...), .actions, and .matching"
             )
         }
     }

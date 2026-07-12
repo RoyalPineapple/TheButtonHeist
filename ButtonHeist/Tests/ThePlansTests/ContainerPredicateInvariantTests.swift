@@ -47,6 +47,12 @@ struct ContainerPredicateInvariantTests {
     func removedWireSpellings() {
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
+                ContainerPredicate.self,
+                from: Data(#"{"identifier":"orders"}"#.utf8)
+            )
+        }
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
                 ContainerPredicateCheck<String>.self,
                 from: Data(
                     (#"{"kind":"semantic","semantic":{"kind":"identifier","# +
@@ -58,6 +64,21 @@ struct ContainerPredicateInvariantTests {
             _ = try JSONDecoder().decode(
                 ContainerPredicateCheck<String>.self,
                 from: Data(#"{"kind":"type","type":"scrollable"}"#.utf8)
+            )
+        }
+    }
+
+    @Test("container check kinds reject payload keys owned by other kinds", arguments: [
+        #"{"kind":"identifier","match":{"mode":"exact","value":"orders"},"semantic":{"kind":"label","match":{"mode":"exact","value":"Orders"}}}"#,
+        #"{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Orders"}},"match":{"mode":"exact","value":"orders"}}"#,
+        #"{"kind":"scrollable","value":true,"type":"none"}"#,
+        #"{"kind":"actions","values":["activate"],"value":true}"#,
+    ])
+    func rejectsCrossKindPayloadKeys(source: String) {
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                ContainerPredicateCheck<String>.self,
+                from: Data(source.utf8)
             )
         }
     }

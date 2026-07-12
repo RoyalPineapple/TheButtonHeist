@@ -332,7 +332,7 @@ private struct StableCaptureCustomContent: Codable {
 }
 
 private struct StableCaptureContainer: Codable {
-    let type: StableCaptureContainerType
+    let type: ContainerPredicateRoleFacts
     let identifier: String?
     let scrollableContentSize: AccessibilitySize?
     let isModalBoundary: Bool
@@ -340,7 +340,7 @@ private struct StableCaptureContainer: Codable {
 
     init(_ container: AccessibilityContainer) {
         let facts = container.containerPredicateFacts
-        type = StableCaptureContainerType(facts.role)
+        type = facts.role
         identifier = facts.identifier
         scrollableContentSize = container.scrollableContentSize
         isModalBoundary = facts.isModalBoundary
@@ -348,35 +348,6 @@ private struct StableCaptureContainer: Codable {
             guard case .custom(let name) = action else { return nil }
             return name
         }.sorted()
-    }
-}
-
-private enum StableCaptureContainerType: Codable {
-    case none
-    case semanticGroup(label: String?, value: String?)
-    case list
-    case landmark
-    case dataTable(rowCount: Int, columnCount: Int)
-    case tabBar
-    case series
-
-    init(_ role: ContainerPredicateRoleFacts) {
-        switch role {
-        case .none:
-            self = .none
-        case .semanticGroup(let label, let value):
-            self = .semanticGroup(label: label, value: value)
-        case .list:
-            self = .list
-        case .landmark:
-            self = .landmark
-        case .dataTable(let rowCount, let columnCount):
-            self = .dataTable(rowCount: rowCount, columnCount: columnCount)
-        case .tabBar:
-            self = .tabBar
-        case .series:
-            self = .series
-        }
     }
 }
 

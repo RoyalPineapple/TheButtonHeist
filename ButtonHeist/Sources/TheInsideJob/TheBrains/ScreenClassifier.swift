@@ -41,18 +41,8 @@ import AccessibilitySnapshotParser
     }
 
     enum RootShapeKind: Equatable, Hashable {
-        case container(ContainerRootShapeRole)
+        case container(AccessibilityContainerKind)
         case element(ElementRootShapeRole)
-    }
-
-    enum ContainerRootShapeRole: Equatable, Hashable {
-        case none
-        case semanticGroup
-        case list
-        case landmark
-        case dataTable
-        case tabBar
-        case series
     }
 
     enum ElementRootShapeRole: Equatable, Hashable {
@@ -262,7 +252,7 @@ import AccessibilitySnapshotParser
             let facts = container.containerPredicateFacts
             tokens.append(
                 RootShapeToken(
-                    kind: .container(containerRole(of: facts.role)),
+                    kind: .container(facts.role.kind),
                     depth: depth,
                     stableIdentifier: stableIdentifier(facts.identifier),
                     state: RootShapeState(
@@ -280,25 +270,6 @@ import AccessibilitySnapshotParser
                     into: &tokens
                 )
             }
-        }
-    }
-
-    private static func containerRole(of role: ContainerPredicateRoleFacts) -> ContainerRootShapeRole {
-        switch role {
-        case .none:
-            return .none
-        case .semanticGroup:
-            return .semanticGroup
-        case .list:
-            return .list
-        case .landmark:
-            return .landmark
-        case .dataTable:
-            return .dataTable
-        case .tabBar:
-            return .tabBar
-        case .series:
-            return .series
         }
     }
 

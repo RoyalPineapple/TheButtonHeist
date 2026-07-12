@@ -142,7 +142,7 @@ public struct ContainerPredicateCount: Codable, Sendable, Equatable, Hashable {
         self.value = value
     }
 
-    public init?(exactly value: Int) {
+    init?(exactly value: Int) {
         guard let value = UInt(exactly: value) else { return nil }
         self.value = value
     }
@@ -168,13 +168,13 @@ public struct ContainerPredicateActions: Sendable, Equatable, Hashable {
         self.values = Set([first] + rest)
     }
 
-    public init?(_ values: Set<ElementAction>) {
+    init?(_ values: Set<ElementAction>) {
         guard !values.isEmpty else { return nil }
         self.values = values
     }
 }
 
-public enum ContainerPredicateRoleFacts: Sendable, Equatable, Hashable {
+public enum ContainerPredicateRoleFacts: Codable, Sendable, Equatable, Hashable {
     case none
     case semanticGroup(label: String?, value: String?)
     case list
@@ -215,6 +215,21 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
 
     private enum Kind: String, Codable, CaseIterable {
         case type, identifier, semantic, rowCount, columnCount, modalBoundary, scrollable, actions
+
+        var payloadKey: CodingKeys {
+            switch self {
+            case .type:
+                return .type
+            case .identifier:
+                return .match
+            case .semantic:
+                return .semantic
+            case .rowCount, .columnCount, .modalBoundary, .scrollable:
+                return .value
+            case .actions:
+                return .values
+            }
+        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -292,9 +307,13 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
 
 extension ContainerPredicateCheck: Codable where Value: Codable {
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "container predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .kind) {
+        let kind = try container.decode(Kind.self, forKey: .kind)
+        try decoder.rejectUnknownKeys(
+            allowed: Set([CodingKeys.kind.stringValue, kind.payloadKey.stringValue]),
+            typeName: "\(kind.rawValue) container predicate check"
+        )
+        switch kind {
         case .type:
             self = .type(try container.decode(AccessibilityContainerKind.self, forKey: .type))
         case .identifier:

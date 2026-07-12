@@ -165,6 +165,10 @@ struct ToolSyncTests {
         #expect(properties["containerName"] == nil)
         #expect(properties["checks"] != nil)
         #expect(
+            schemaValue(at: containerPath + ["properties", "checks", "minItems"], in: tool.inputSchema)
+                == .int(1)
+        )
+        #expect(
             schemaValue(at: containerPath + ["properties", "checks", "items", "properties", "kind", "enum"], in: tool.inputSchema) == .array([
                 .string("type"),
                 .string("identifier"),
@@ -175,6 +179,30 @@ struct ToolSyncTests {
                 .string("scrollable"),
                 .string("actions"),
             ])
+        )
+        let checkPropertiesPath = containerPath + ["properties", "checks", "items", "properties"]
+        let checkProperties = try #require(
+            schemaValue(at: checkPropertiesPath, in: tool.inputSchema)?.objectValue
+        )
+        #expect(Set(checkProperties.keys) == ["kind", "type", "match", "semantic", "values", "value"])
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["type", "enum"], in: tool.inputSchema) == .array([
+                .string("none"),
+                .string("semanticGroup"),
+                .string("list"),
+                .string("landmark"),
+                .string("dataTable"),
+                .string("tabBar"),
+                .string("series"),
+            ])
+        )
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["semantic", "properties", "kind", "enum"], in: tool.inputSchema)
+                == .array([.string("label"), .string("value")])
+        )
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["values", "minItems"], in: tool.inputSchema)
+                == .int(1)
         )
 
         // No schema combinator anywhere under the container subschema.

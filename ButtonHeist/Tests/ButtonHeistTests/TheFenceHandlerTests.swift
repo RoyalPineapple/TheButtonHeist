@@ -2041,6 +2041,34 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAccessibilityTargetRejectsRemovedContainerPredicateShapes() async {
+        let exactOrders = stringMatchValue(mode: "exact", value: "orders")
+        let removedShapes = [
+            accessibilityTargetValue([
+                "container": .object(["identifier": .string("orders")]),
+            ]),
+            accessibilityTargetValue([
+                "container": .object([
+                    "checks": .array([
+                        .object([
+                            "kind": .string("identifier"),
+                            "match": exactOrders,
+                            "semantic": .object([
+                                "kind": .string("label"),
+                                "match": exactOrders,
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
+        ]
+
+        for target in removedShapes {
+            XCTAssertThrowsError(try decodedAccessibilityTarget(target: target))
+        }
+    }
+
+    @ButtonHeistActor
     func testAccessibilityTargetWithMatcherFields() async throws {
         guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save", traits: ["button"])),
               case .predicate(let matcher, _) = target else {

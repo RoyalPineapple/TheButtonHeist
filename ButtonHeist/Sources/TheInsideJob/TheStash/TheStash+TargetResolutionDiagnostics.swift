@@ -36,14 +36,24 @@ enum TargetResolutionDiagnostics {
         ).rendered(using: .targetCandidate)
     }
 
-    static func containerCandidateDescription(_ candidate: TheStash.ContainerCandidateFacts) -> String {
-        ElementDiagnosticSummary(
-            label: candidate.label,
-            identifier: candidate.identifier,
-            value: candidate.value
+    static func containerCandidateDescription(_ candidate: InterfaceTree.Container) -> String {
+        let facts = candidate.container.containerPredicateFacts
+        let label: String?
+        let value: String?
+        if case .semanticGroup(let semanticLabel, let semanticValue) = facts.role {
+            label = semanticLabel
+            value = semanticValue
+        } else {
+            label = nil
+            value = nil
+        }
+        return ElementDiagnosticSummary(
+            label: label,
+            identifier: facts.identifier,
+            value: value
         ).rendered(using: .containerCandidate(
-            type: candidate.type.rawValue,
-            isModalBoundary: candidate.isModalBoundary
+            type: facts.role.kind.rawValue,
+            isModalBoundary: facts.isModalBoundary
         ))
     }
 

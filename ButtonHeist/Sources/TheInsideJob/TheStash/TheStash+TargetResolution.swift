@@ -62,32 +62,6 @@ extension TheStash {
         let resolutionScope: ResolutionScope
     }
 
-    struct ContainerCandidateFacts {
-        let containerName: ContainerName?
-        let type: AccessibilityContainerKind
-        let label: String?
-        let value: String?
-        let identifier: String?
-        let isModalBoundary: Bool
-
-        init(container: InterfaceTree.Container) {
-            let accessibilityContainer = container.container
-            containerName = container.containerName
-            let facts = accessibilityContainer.containerPredicateFacts
-            type = facts.role.kind
-            switch facts.role {
-            case .semanticGroup(let semanticLabel, let semanticValue):
-                label = semanticLabel
-                value = semanticValue
-            case .none, .list, .landmark, .dataTable, .tabBar, .series:
-                label = nil
-                value = nil
-            }
-            identifier = facts.identifier
-            isModalBoundary = facts.isModalBoundary
-        }
-    }
-
     enum ContainerNotFoundReason: Equatable {
         case emptyPredicate
         case ordinalOutOfRange(requested: Int, matchCount: Int)
@@ -103,7 +77,7 @@ extension TheStash {
 
     struct ContainerAmbiguityFacts {
         let predicate: ContainerPredicate
-        let candidates: [ContainerCandidateFacts]
+        let candidates: [InterfaceTree.Container]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
     }
@@ -217,7 +191,7 @@ extension TheStash {
         default:
             return .ambiguous(ContainerAmbiguityFacts(
                 predicate: predicate,
-                candidates: matches.map(ContainerCandidateFacts.init),
+                candidates: matches,
                 matchedCount: matches.count,
                 resolutionScope: resolutionScope
             ))
