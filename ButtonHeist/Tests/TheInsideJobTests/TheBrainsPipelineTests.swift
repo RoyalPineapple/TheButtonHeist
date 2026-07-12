@@ -986,7 +986,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
@@ -1011,7 +1010,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
@@ -1042,7 +1040,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testFromToUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
@@ -1076,10 +1073,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(receipt.expectation.met, false)
-        XCTAssertNil(receipt.warning)
     }
 
-    func testDisappearedWaitDoesNotWarnWhenTransitionIsObserved() async throws {
+    func testDisappearedWaitSucceedsWhenTransitionIsObserved() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let loadingScreen = Screen.makeForTests(elements: [
@@ -1103,7 +1099,6 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
-        XCTAssertNil(receipt.warning)
     }
 
     func testPredicatePollingReducerFinishesVisibleMatch() {

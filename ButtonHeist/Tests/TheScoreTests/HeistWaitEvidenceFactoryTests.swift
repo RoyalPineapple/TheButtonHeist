@@ -73,6 +73,26 @@ import TheScore
             _ = try JSONDecoder().decode(HeistWaitEvidence.self, from: invalidData)
         }
     }
+
+    @Test func `decode rejects legacy wait warning`() throws {
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let check = try #require(HeistWaitEvidence.MatchedCheck(
+            actionResult: .success(method: .wait),
+            expectation: MetExpectationResult(predicate: predicate)
+        ))
+        let encoded = try JSONEncoder().encode(HeistWaitEvidence.matched(check))
+        var legacyObject = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacyObject["warning"] = [
+            "code": "transition_not_observed_final_state_satisfied",
+            "predicate": predicate.description,
+            "message": "final state was already satisfied",
+        ]
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistWaitEvidence.self, from: legacyData)
+        }
+    }
 }
 
 private struct WaitEvidenceFixture: Codable {
@@ -81,7 +101,6 @@ private struct WaitEvidenceFixture: Codable {
     var expectation: ExpectationResult
     var baselineSummary: String?
     var finalSummary: String?
-    var warning: HeistPredicateWarning?
 
     init(_ evidence: HeistWaitEvidence) {
         outcome = evidence.outcome
@@ -89,6 +108,5 @@ private struct WaitEvidenceFixture: Codable {
         expectation = evidence.expectation
         baselineSummary = evidence.baselineSummary
         finalSummary = evidence.finalSummary
-        warning = evidence.warning
     }
 }

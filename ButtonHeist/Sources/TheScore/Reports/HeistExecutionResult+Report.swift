@@ -170,13 +170,9 @@ private struct HeistExecutionEvidenceAccumulator {
             if let warning = evidence.warning {
                 record(.warning(.action(path: node.step.path, warning: warning)))
             }
-        case .wait(let evidence):
-            if let warning = evidence.warning {
-                record(.warning(.wait(path: node.step.path, warning: warning)))
-            }
         case .warning(let warning):
             record(.warning(.explicit(warning)))
-        case .caseSelection, .forEachString, .forEachElement, .repeatUntil, .invocation, .none:
+        case .wait, .caseSelection, .forEachString, .forEachElement, .repeatUntil, .invocation, .none:
             break
         }
         if firstFailedStep == nil, node.firstFailedStepInSubtree?.path == node.step.path {
@@ -280,7 +276,6 @@ package struct HeistExecutionWarningEvidenceRollup: Sendable, Equatable {
 
 package enum HeistExecutionEvidenceWarning: Sendable, Equatable {
     case action(path: String, warning: HeistActionWarning)
-    case wait(path: String, warning: HeistPredicateWarning)
     case explicit(HeistExecutionWarning)
 
     package var explicitWarning: HeistExecutionWarning? {

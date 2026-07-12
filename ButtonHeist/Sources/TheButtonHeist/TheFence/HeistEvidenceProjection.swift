@@ -147,7 +147,6 @@ struct HeistWaitEvidenceProjection: Sendable {
     let expectation: ExpectationProjection
     let baselineSummary: String?
     let finalSummary: String?
-    let warning: HeistPredicateWarning?
 
     init(evidence: HeistWaitEvidence, profile: ProjectionProfile) {
         outcome = evidence.outcome
@@ -160,7 +159,6 @@ struct HeistWaitEvidenceProjection: Sendable {
         expectation = ExpectationProjection(result: evidence.expectation)
         baselineSummary = evidence.baselineSummary
         finalSummary = evidence.finalSummary
-        warning = evidence.warning
     }
 }
 

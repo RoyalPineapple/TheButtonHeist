@@ -193,8 +193,7 @@ extension TheBrains {
             return .matched(
                 check,
                 baselineSummary: context?.baseline.observationSummary,
-                finalSummary: finalSummary,
-                warning: receipt.warning
+                finalSummary: finalSummary
             )
         }
         guard let check = HeistWaitEvidence.UnmatchedCheck(
@@ -206,8 +205,7 @@ extension TheBrains {
         return .failed(
             check,
             baselineSummary: context?.baseline.observationSummary,
-            finalSummary: finalSummary,
-            warning: receipt.warning
+            finalSummary: finalSummary
         )
     }
 

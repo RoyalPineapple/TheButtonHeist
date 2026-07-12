@@ -554,7 +554,6 @@ struct PublicHeistWaitEvidence: Encodable {
     let expectation: PublicExpectationResult
     let baselineSummary: String?
     let finalSummary: String?
-    let warning: HeistPredicateWarning?
 
     init(projection: HeistWaitEvidenceProjection) {
         self.outcome = projection.outcome
@@ -562,7 +561,6 @@ struct PublicHeistWaitEvidence: Encodable {
         self.expectation = PublicExpectationResult(projection: projection.expectation)
         self.baselineSummary = projection.baselineSummary
         self.finalSummary = projection.finalSummary
-        self.warning = projection.warning
     }
 }
 

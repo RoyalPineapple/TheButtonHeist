@@ -95,8 +95,8 @@ extension PredicateWait {
     ) -> HeistWaitReceipt? {
         state = decision.state
         switch decision {
-        case .satisfied(_, let warning):
-            return waitReceipt(for: step, state: state, start: start, success: true, warning: warning)
+        case .satisfied:
+            return waitReceipt(for: step, state: state, start: start, success: true)
         case .failed:
             return waitReceipt(for: step, state: state, start: start, success: false)
         case .poll:
@@ -209,7 +209,6 @@ extension PredicateWait {
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
         success: Bool,
-        warning: HeistPredicateWarning? = nil,
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
         observedSequence: SettledObservationSequence? = nil
@@ -233,7 +232,6 @@ extension PredicateWait {
             expectation: expectation,
             elapsed: elapsed,
             success: success,
-            warning: warning,
             presenceTimeoutMessage: presenceMessage,
             settledDiagnostics: settledDiagnostics,
             observedSequence: observedSequence
@@ -244,20 +242,15 @@ extension PredicateWait {
         for step: ResolvedWaitStep,
         state: State,
         start: CFAbsoluteTime,
-        success: Bool,
-        warning: HeistPredicateWarning? = nil
+        success: Bool
     ) -> HeistWaitReceipt {
-        let expectation = warning.map {
-            ExpectationResult(met: true, predicate: step.predicate, actual: $0.message)
-        } ?? state.evaluation
         return waitReceipt(
             for: step,
             trace: state.lastTrace,
             observationSummary: state.lastObservationSummary,
-            expectation: expectation,
+            expectation: state.evaluation,
             start: start,
             success: success,
-            warning: warning,
             baseline: state.changeBaseline,
             window: state.observationWindow,
             observedSequence: state.observedSequence
@@ -286,12 +279,11 @@ extension PredicateWait {
         expectation: ExpectationResult,
         elapsed: String,
         success: Bool,
-        warning: HeistPredicateWarning? = nil,
         presenceTimeoutMessage: String? = nil,
         settledDiagnostics: SettledWaitDiagnostics? = nil,
         observedSequence: SettledObservationSequence? = nil
     ) -> HeistWaitReceipt {
-        let message = warning?.message ?? (success
+        let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
             : waitTimeoutMessage(
                 for: step,
@@ -300,15 +292,14 @@ extension PredicateWait {
                 elapsed: elapsed,
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
-            ))
+            )
         if success {
             return .matched(
                 message: message,
                 accessibilityTrace: trace,
                 expectation: expectation,
                 observedSequence: observedSequence,
-                observationSummary: observationSummary,
-                warning: warning
+                observationSummary: observationSummary
             )
         }
         return .timedOut(

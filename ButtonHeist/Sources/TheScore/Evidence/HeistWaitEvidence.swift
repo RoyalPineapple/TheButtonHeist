@@ -4,7 +4,6 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
     private let storage: Storage
     public let baselineSummary: String?
     public let finalSummary: String?
-    public let warning: HeistPredicateWarning?
 
     public struct MatchedCheck: Sendable, Equatable {
         public let actionResult: ActionResult
@@ -84,55 +83,47 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
     public static func matched(
         _ check: MatchedCheck,
         baselineSummary: String? = nil,
-        finalSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
+        finalSummary: String? = nil
     ) -> HeistWaitEvidence {
         return HeistWaitEvidence(
             storage: .matched(check),
             baselineSummary: baselineSummary,
-            finalSummary: finalSummary,
-            warning: warning
+            finalSummary: finalSummary
         )
     }
 
     public static func handledElse(
         _ check: UnmatchedCheck,
         baselineSummary: String? = nil,
-        finalSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
+        finalSummary: String? = nil
     ) -> HeistWaitEvidence {
         return HeistWaitEvidence(
             storage: .handledElse(check),
             baselineSummary: baselineSummary,
-            finalSummary: finalSummary,
-            warning: warning
+            finalSummary: finalSummary
         )
     }
 
     public static func failed(
         _ check: UnmatchedCheck,
         baselineSummary: String? = nil,
-        finalSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil
+        finalSummary: String? = nil
     ) -> HeistWaitEvidence {
         return HeistWaitEvidence(
             storage: .failed(check),
             baselineSummary: baselineSummary,
-            finalSummary: finalSummary,
-            warning: warning
+            finalSummary: finalSummary
         )
     }
 
     private init(
         storage: Storage,
         baselineSummary: String?,
-        finalSummary: String?,
-        warning: HeistPredicateWarning?
+        finalSummary: String?
     ) {
         self.storage = storage
         self.baselineSummary = baselineSummary
         self.finalSummary = finalSummary
-        self.warning = warning
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -141,7 +132,6 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         case expectation
         case baselineSummary
         case finalSummary
-        case warning
     }
 
     public init(from decoder: Decoder) throws {
@@ -158,7 +148,6 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         )
         baselineSummary = try container.decodeIfPresent(String.self, forKey: .baselineSummary)
         finalSummary = try container.decodeIfPresent(String.self, forKey: .finalSummary)
-        warning = try container.decodeIfPresent(HeistPredicateWarning.self, forKey: .warning)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -168,7 +157,6 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         try container.encode(expectation, forKey: .expectation)
         try container.encodeIfPresent(baselineSummary, forKey: .baselineSummary)
         try container.encodeIfPresent(finalSummary, forKey: .finalSummary)
-        try container.encodeIfPresent(warning, forKey: .warning)
     }
 
     private static func storage(
@@ -214,30 +202,5 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
 
     private static func evidenceError(_ message: String, codingPath: [CodingKey]) -> DecodingError {
         .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
-    }
-}
-
-public struct HeistPredicateWarning: Codable, Sendable, Equatable {
-    public let code: String
-    public let predicate: String
-    public let impliedPredicate: String?
-    public let finalStateTiming: String?
-    public let evidence: String?
-    public let message: String
-
-    public init(
-        code: String,
-        predicate: String,
-        impliedPredicate: String? = nil,
-        finalStateTiming: String? = nil,
-        evidence: String? = nil,
-        message: String
-    ) {
-        self.code = code
-        self.predicate = predicate
-        self.impliedPredicate = impliedPredicate
-        self.finalStateTiming = finalStateTiming
-        self.evidence = evidence
-        self.message = message
     }
 }

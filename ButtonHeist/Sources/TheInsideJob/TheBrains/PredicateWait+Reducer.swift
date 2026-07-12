@@ -34,7 +34,7 @@ extension PredicateWait {
             timedOutWhenUnmatched: Bool = true
         ) -> Decision {
             if state.evaluation.met {
-                return .satisfied(state, warning: nil)
+                return .satisfied(state)
             }
             return timedOutWhenUnmatched ? .failed(state) : .poll(state)
         }
@@ -169,13 +169,13 @@ extension PredicateWait {
 
     internal enum Decision: Sendable, Equatable {
         case poll(State)
-        case satisfied(State, warning: HeistPredicateWarning?)
+        case satisfied(State)
         case failed(State)
 
         internal var state: State {
             switch self {
             case .poll(let state),
-                 .satisfied(let state, _),
+                 .satisfied(let state),
                  .failed(let state):
                 return state
             }

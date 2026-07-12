@@ -417,22 +417,19 @@ extension TheBrains {
             return .matched(
                 matchedCheck(),
                 baselineSummary: nil,
-                finalSummary: finalSummary,
-                warning: receipt.warning
+                finalSummary: finalSummary
             )
         case .handledElse:
             return .handledElse(
                 unmatchedCheck("Handled-else"),
                 baselineSummary: nil,
-                finalSummary: finalSummary,
-                warning: receipt.warning
+                finalSummary: finalSummary
             )
         case .failed:
             return .failed(
                 unmatchedCheck("Failed"),
                 baselineSummary: nil,
-                finalSummary: finalSummary,
-                warning: receipt.warning
+                finalSummary: finalSummary
             )
         case .continued:
             preconditionFailure("Continued outcome is only valid for repeat_until evidence")
