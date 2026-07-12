@@ -118,7 +118,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        accessibilityTrace: trace
+                        evidence: ActionResultEvidence(accessibilityTrace: trace)
                     )
                 ),
             ],
@@ -159,18 +159,22 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay")))),
                     evidence: .expectation(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
-                        dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
+                        dispatchResult: ActionResult.success(
+                            method: .activate,
+                            evidence: ActionResultEvidence(accessibilityTrace: dispatchTrace)
+                        ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            accessibilityTrace: expectationTrace
+                            evidence: ActionResultEvidence(accessibilityTrace: expectationTrace)
                         ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "timed out waiting for checkout"
-                        )
+                        ),
+                        warning: nil
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -199,7 +203,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(actionEvidence.dispatchResult?.method, .activate)
         XCTAssertEqual(actionEvidence.expectationResult?.method, .wait)
         XCTAssertEqual(actionEvidence.reportedResult?.method, .wait)
-        XCTAssertEqual(actionEvidence.traceResult?.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(actionEvidence.reportedResult?.accessibilityTrace?.endpointScreenId, "settled")
         XCTAssertEqual(reportResults, HeistExecutionStepReportResults(
             dispatchedActionResult: actionEvidence.dispatchResult,
             actionResult: actionEvidence.reportedResult,
@@ -252,19 +256,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         command: command,
                         dispatchResult: ActionResult.success(
                             method: .activate,
-                            accessibilityTrace: dispatchTrace
+                            evidence: ActionResultEvidence(accessibilityTrace: dispatchTrace)
                         ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            accessibilityTrace: expectationTrace
+                            evidence: ActionResultEvidence(accessibilityTrace: expectationTrace)
                         ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
                             actual: "timed out"
-                        )
+                        ),
+                        warning: nil
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -440,11 +445,17 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 actionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
-                    actionResult: ActionResult.success(method: .activate, accessibilityTrace: actionTrace)
+                    actionResult: ActionResult.success(
+                        method: .activate,
+                        evidence: ActionResultEvidence(accessibilityTrace: actionTrace)
+                    )
                 ),
                 waitStep(
                     path: "$.body[1]",
-                    actionResult: ActionResult.success(method: .wait, accessibilityTrace: waitTrace)
+                    actionResult: ActionResult.success(
+                        method: .wait,
+                        evidence: ActionResultEvidence(accessibilityTrace: waitTrace)
+                    )
                 ),
             ],
             durationMs: 10
@@ -532,7 +543,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                             met: false,
                             predicate: predicate,
                             actual: "screen did not change"
-                        )
+                        ),
+                        warning: nil
                     ),
                     failure: failure
                 ),
@@ -563,10 +575,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: .exists(.label("Selected")),
-                                result: ExpectationResult(
-                                    met: true,
-                                    predicate: .exists(.label("Selected"))
-                                )
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -739,10 +748,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         argument: .string(.literal("Milk"))
                     ),
                     evidence: .invocation(
-                        invocation,
+                        invocation: invocation,
                         name: "LibraryScreen.addToCart",
                         argument: "Milk",
-                        childFailedPath: child.path
+                        outcome: .childFailed(path: child.path)
                     ),
                     failure: HeistFailureDetail(
                         category: .invocation,
@@ -889,7 +898,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                             met: false,
                             predicate: predicate,
                             actual: "elementsChanged"
-                        )
+                        ),
+                        warning: nil
                     ),
                     failure: HeistFailureDetail(
                         category: .expectation,
@@ -952,7 +962,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     intent: .action(command: .takeScreenshot),
                     evidence: .dispatch(
                         command: .takeScreenshot,
-                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
+                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot)),
+                        warning: nil
                     )
                 ),
             ],
@@ -1255,7 +1266,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 receiptKind: .heist,
                 durationMs: 7,
                 intent: .heist(name: "Nested"),
-                evidence: .heist(name: "Nested")
+                evidence: .heist(name: "Nested", childFailedPath: nil)
             ),
             expectedKey: "invocation",
             assertEvidence: { evidence in
@@ -1287,17 +1298,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 durationMs: 8,
                 intent: .invoke(path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"), argument: .string(.literal("Milk"))),
                 evidence: .invocation(
-                    invocation,
+                    invocation: invocation,
                     name: "LibraryScreen.addToCart",
                     argument: "Milk",
-                    expectation: .init(
-                        actionResult: actionResult,
-                        expectation: expectation,
-                        waitEvidence: .matched(
+                    outcome: .completed(
+                        expectation: .wait(.matched(
                             matchedCheck,
                             baselineSummary: "before addToCart",
                             finalSummary: "Ready"
-                        )
+                        ))
                     )
                 )
             ),
@@ -1636,7 +1645,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(
             predicate: predicate,
-            result: ExpectationResult(met: met, predicate: predicate)
+            met: met
         )
     }
 }
