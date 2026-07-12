@@ -1,6 +1,7 @@
 import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
 import Foundation
+import ThePlans
 import XCTest
 @testable import TheScore
 
@@ -129,6 +130,7 @@ final class InterfaceGraphTests: XCTestCase {
             frameY: 0,
             frameWidth: 100,
             frameHeight: 44,
+            activationPointEvidence: .defaultCenter(ScreenPoint(x: 50, y: 22)),
             actions: []
         )
     }

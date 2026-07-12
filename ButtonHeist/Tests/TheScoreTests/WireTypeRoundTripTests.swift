@@ -1371,7 +1371,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(
             try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))
         ) { error in
-            assertDecodingError(error, contains: ["argument"])
+            assertDecodingError(error, contains: ["incompatible fields"])
         }
 
         let childAbortWithExpectation = """

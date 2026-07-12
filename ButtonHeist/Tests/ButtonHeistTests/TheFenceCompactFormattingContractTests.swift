@@ -318,14 +318,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let interface = makeReceiptTestInterface(elementCount: 1)
         let first = AccessibilityNotificationEvidence(
             sequence: 7,
-            kind: .valueChanged,
+            kind: .elementChanged(.value),
             timestamp: Date(timeIntervalSince1970: 7),
             notificationData: .none,
             associatedElement: .none
         )
         let second = AccessibilityNotificationEvidence(
             sequence: 8,
-            kind: .layoutChanged,
+            kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 8),
             notificationData: .none,
             associatedElement: .none
@@ -358,9 +358,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         try delta.assertMissing("edits")
         XCTAssertEqual(try notifications.map { try $0.int("sequence") }, [7, 8])
-        XCTAssertEqual(try notifications.map { try $0.string("kind") }, ["valueChanged", "elementChanged"])
-        XCTAssertTrue(compact.contains("accessibility notification valueChanged #7"), compact)
-        XCTAssertTrue(compact.contains("accessibility notification elementChanged #8"), compact)
+        let kinds = try notifications.map { try $0.object("kind") }
+        XCTAssertEqual(try kinds.map { try $0.string("type") }, ["elementChanged", "elementChanged"])
+        XCTAssertEqual(try kinds.map { try $0.string("notification") }, ["value", "layout"])
+        XCTAssertTrue(compact.contains("accessibility notification elementChanged(value) #7"), compact)
+        XCTAssertTrue(compact.contains("accessibility notification elementChanged(layout) #8"), compact)
     }
 
     func testScreenChangedActionOutputIncludesDestinationSummaryTree() throws {
@@ -1199,7 +1201,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try root.string("status"), "passed")
         try evidence.assertPresent("caseSelection")
         XCTAssertEqual(try child.string("path"), "$.body[0].conditional.else_body[0]")
-        XCTAssertTrue(compact.contains("[0] if"), compact)
+        XCTAssertTrue(compact.contains("[0] conditional"), compact)
         XCTAssertTrue(compact.contains("[1] activate"), compact)
     }
 

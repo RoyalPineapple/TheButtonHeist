@@ -1288,7 +1288,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 100,
         frameHeight: Double = 44,
-        activationPointEvidence: ActivationPointEvidence = .unavailable,
+        activationPointEvidence: ActivationPointEvidence? = nil,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction] = []
@@ -1304,7 +1304,10 @@ final class AccessibilityPredicateTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointEvidence: activationPointEvidence,
+            activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
+                x: frameX + frameWidth / 2,
+                y: frameY + frameHeight / 2
+            )),
             customContent: customContent,
             rotors: rotors,
             actions: actions

@@ -1858,14 +1858,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.screenId, screen.id)
     }
 
-    func testNotificationRemapPreservesUnknownRawCode() throws {
+    func testNotificationRemapPreservesUnknownNotificationKind() throws {
         let screen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(screen)
         let state = brains.postActionObservation.captureSemanticState()
         let notification = AccessibilityNotificationEvidence(
             sequence: 1,
-            kind: .unknown,
-            rawCode: 4_242,
+            kind: .unknown(4_242),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
             associatedElement: .none
@@ -1878,8 +1877,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let result = try XCTUnwrap(remapped.first)
-        XCTAssertEqual(result.kind, .unknown)
-        XCTAssertEqual(result.rawCode, 4_242)
+        XCTAssertEqual(result.kind, .unknown(4_242))
     }
 
     func testDiscoveryObservationStateUsesDiscoveryInterfaceWhileTraceStaysSemantic() {

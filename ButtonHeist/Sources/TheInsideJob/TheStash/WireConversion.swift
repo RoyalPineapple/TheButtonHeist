@@ -54,8 +54,6 @@ extension TheStash {
             frameY: frame.origin.y.sanitizedForJSON,
             frameWidth: frame.size.width.sanitizedForJSON,
             frameHeight: frame.size.height.sanitizedForJSON,
-            activationPointX: activationPoint.point?.x,
-            activationPointY: activationPoint.point?.y,
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: {

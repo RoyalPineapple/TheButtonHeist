@@ -49,16 +49,18 @@ private func semanticActionResult(
 ) -> ActionResult {
     ActionResult.success(
         method: method,
-        accessibilityTrace: makeReceiptTestTrace(
-            before: makeReceiptTestInterface(before),
-            after: makeReceiptTestInterface(after)
-        ),
-        settled: settled,
-        subjectEvidence: ActionSubjectEvidence(
-            source: source,
-            target: target,
-            element: subject,
-            settledObservationSequence: 1
+        evidence: ActionResultEvidence(
+            accessibilityTrace: makeReceiptTestTrace(
+                before: makeReceiptTestInterface(before),
+                after: makeReceiptTestInterface(after)
+            ),
+            settlement: settled ? .settled(durationMs: 0) : .timedOut(durationMs: 0),
+            subjectEvidence: ActionSubjectEvidence(
+                source: source,
+                target: target,
+                element: subject,
+                settledObservationSequence: 1
+            )
         )
     )
 }

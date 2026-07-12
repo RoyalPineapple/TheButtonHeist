@@ -438,7 +438,6 @@ final class PostActionObservation {
             AccessibilityNotificationEvidence(
                 sequence: notification.sequence,
                 kind: notification.kind,
-                rawCode: notification.rawCode,
                 timestamp: notification.timestamp,
                 notificationData: remapAccessibilityNotificationPayload(
                     notification.notificationData,

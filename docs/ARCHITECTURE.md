@@ -52,10 +52,11 @@ accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
 for a clean settled snapshot. One pure observation reducer combines the
-settled capture edge with scoped screen, layout, value, and announcement
-notifications. Notifications are edge evidence, not a second state model, and
-any of those notifications prevents the edge from being classified as
-fact-free `noChange`.
+settled capture edge with scoped `screenChanged`, typed `elementChanged`, and
+`announcement` notifications. Notifications are edge evidence, not a second
+state model. Screen and element notifications classify interface change;
+announcements remain separate transition evidence and never synthesize an
+interface mutation.
 
 Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
 `SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
@@ -69,10 +70,11 @@ element facts when there is no screen boundary. The settle loop can also report
 unhealthy snapshots rather than pretending an empty post-navigation parse is
 stable.
 
-UIKit value changes are not identified by `valueChanged` alone. UIKit controls
-may signal through value, layout, or announcement notifications, so all three
-trigger a recapture; the before/after `accessibilityValue` diff confirms the
-change. SwiftUI's uniform value notification follows the same recapture path.
+UIKit value changes are not identified by an `elementChanged(.value)` signal
+alone. UIKit controls may signal through either element-change subtype or an
+announcement, so all three trigger a recapture; the before/after
+`accessibilityValue` diff confirms the change. SwiftUI's uniform value
+notification follows the same recapture path.
 See the [settle loop diagram](diagrams/settle-loop.md) for the state machine
 and its constants.
 

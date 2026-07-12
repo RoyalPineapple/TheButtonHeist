@@ -223,8 +223,10 @@ contract.
           "frameY": 140,
           "frameWidth": 361,
           "frameHeight": 44,
-          "activationPointX": 196.5,
-          "activationPointY": 162
+          "activationPointEvidence": {
+            "source": "defaultCenter",
+            "point": { "x": 196.5, "y": 162 }
+          }
         }
       }
     ],
@@ -357,6 +359,11 @@ Action responses use `actionResult`:
 {"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate"}}
 ```
 
+Optional action evidence is nested under one `evidence` object. Settlement is
+the tagged shape `{"kind":"settled|timedOut","durationMs":...}`; traces,
+subject evidence, activation traces, timing, and announcements are siblings in
+that object. The removed flat evidence fields are invalid input.
+
 `ActionResult.payload` is a tagged union when command-specific data is needed,
 for example:
 
@@ -385,15 +392,16 @@ then new-tree arrivals. `updated` entries can only be derived from captures in
 the same screen generation. A complete trace with no facts is proof of
 `noChange`; no `noChange` fact is emitted.
 
-Scoped `screenChanged`, `elementChanged`, `valueChanged`, and `announcement`
-notifications are evidence on the capture edge. A notification prevents a
-complete window from being treated as fact-free even when its tree hashes are
-equal.
+Scoped notification evidence has one semantic shape: `screenChanged`,
+`elementChanged` with a `layout` or `value` subtype, `announcement`, or
+`unknown` with its raw code. Screen and element notifications classify
+interface change even when tree hashes are equal. Announcements remain ordered
+transition evidence without synthesizing an interface mutation.
 
-For UIKit value controls, `valueChanged`, `elementChanged`, and `announcement`
-are all recapture triggers. The notification kind does not assert the new
-value; Button Heist re-reads the delivered node and derives any value update
-from the before/after captures. SwiftUI value notifications use that same path.
+For UIKit value controls, both `elementChanged` subtypes and `announcement` are
+recapture triggers. The notification kind does not assert the new value;
+Button Heist re-reads the delivered node and derives any value update from the
+before/after captures. SwiftUI value notifications use that same path.
 
 Public action JSON retains a compact `delta` field. It is a one-way lossy fold
 over the ordered facts for display and transport. A folded public delta is

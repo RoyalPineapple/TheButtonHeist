@@ -67,7 +67,23 @@ package func makeTestInterface(
 }
 
 package func makeTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-    AccessibilityElement(
+    let parserActivationPoint: AccessibilityPoint
+    let usesDefaultActivationPoint: Bool
+    switch element.activationPointEvidence {
+    case .unavailable:
+        parserActivationPoint = AccessibilityPoint(
+            x: element.frameX + element.frameWidth / 2,
+            y: element.frameY + element.frameHeight / 2
+        )
+        usesDefaultActivationPoint = true
+    case .explicit(let point):
+        parserActivationPoint = AccessibilityPoint(x: point.x, y: point.y)
+        usesDefaultActivationPoint = false
+    case .defaultCenter(let point):
+        parserActivationPoint = AccessibilityPoint(x: point.x, y: point.y)
+        usesDefaultActivationPoint = true
+    }
+    return AccessibilityElement(
         description: element.description,
         label: element.label,
         value: element.value,
@@ -81,16 +97,8 @@ package func makeTestAccessibilityElement(_ element: HeistElement) -> Accessibil
             width: element.frameWidth,
             height: element.frameHeight
         )),
-        activationPoint: {
-            guard let point = element.activationPointEvidence.point else {
-                return AccessibilityPoint(x: .nan, y: .nan)
-            }
-            return AccessibilityPoint(x: point.x, y: point.y)
-        }(),
-        usesDefaultActivationPoint: {
-            if case .defaultCenter = element.activationPointEvidence { return true }
-            return false
-        }(),
+        activationPoint: parserActivationPoint,
+        usesDefaultActivationPoint: usesDefaultActivationPoint,
         customActions: [],
         customContent: element.customContent?.map {
             AccessibilityElement.CustomContent(

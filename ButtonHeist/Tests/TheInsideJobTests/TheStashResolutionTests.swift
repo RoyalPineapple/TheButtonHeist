@@ -580,7 +580,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .layoutChanged,
+            kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(identity),
             associatedElement: .none
@@ -606,7 +606,7 @@ final class TheStashResolutionTests: XCTestCase {
         ])
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .layoutChanged,
+            kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(AccessibilityNotificationObjectIdentity(
                 object: payloadObject,
@@ -705,14 +705,14 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(
             event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.valueChanged]
+            [.elementChanged(.value)]
         )
         XCTAssertEqual(event.trace.changeFacts.count, 1)
         guard case .elementsChanged(let fact)? = event.trace.changeFacts.first else {
             return XCTFail("Expected notification-only elementsChanged fact")
         }
         XCTAssertTrue(fact.isNotificationOnly)
-        XCTAssertEqual(fact.metadata.accessibilityNotifications.map(\.kind), [.valueChanged])
+        XCTAssertEqual(fact.metadata.accessibilityNotifications.map(\.kind), [.elementChanged(.value)])
     }
 
     func testValueChangedNotificationRequiresAccessibilityValueChangeForElementDelta() async throws {
@@ -746,20 +746,20 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(
             event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
-            [.valueChanged]
+            [.elementChanged(.value)]
         )
         XCTAssertEqual(event.trace.changeFacts.count, 1)
         guard case .elementsChanged(let fact)? = event.trace.changeFacts.first else {
             return XCTFail("Expected value edit to drive elementsChanged")
         }
-        XCTAssertEqual(fact.metadata.accessibilityNotifications.map(\.kind), [.valueChanged])
+        XCTAssertEqual(fact.metadata.accessibilityNotifications.map(\.kind), [.elementChanged(.value)])
         let change = try XCTUnwrap(fact.updated.first?.changes.first)
         XCTAssertEqual(change.property, .value)
         XCTAssertEqual(change.oldDisplayText, "50%")
         XCTAssertEqual(change.newDisplayText, "75%")
     }
 
-    func testAnnouncementNotificationIsPreservedAsElementChangeEvidence() async {
+    func testAnnouncementNotificationIsPreservedOutsideInterfaceChangeFacts() async {
         let screen = Screen.makeForTests(elements: [(element(label: "Stable"), "stable")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(screen)
 
@@ -785,12 +785,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(event.trace.capturedAnnouncements.map(\.text), ["Saved"])
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind), [.announcement])
-        XCTAssertEqual(event.trace.changeFacts.count, 1)
-        guard case .elementsChanged(let fact)? = event.trace.changeFacts.first else {
-            return XCTFail("Expected announcement-only elementsChanged fact")
-        }
-        XCTAssertTrue(fact.isNotificationOnly)
-        XCTAssertEqual(fact.metadata.accessibilityNotifications.map(\.kind), [.announcement])
+        XCTAssertTrue(event.trace.changeFacts.isEmpty)
     }
 
     func testScreenChangedNotificationStartsGenerationAndPreservesBoundaryFacts() throws {

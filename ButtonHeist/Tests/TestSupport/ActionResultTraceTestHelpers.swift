@@ -42,6 +42,10 @@ package func makeTestHeistElement(
         frameY: frameY,
         frameWidth: frameWidth,
         frameHeight: frameHeight,
+        activationPointEvidence: .defaultCenter(ScreenPoint(
+            x: frameX + frameWidth / 2,
+            y: frameY + frameHeight / 2
+        )),
         actions: actions ?? (traits.contains(.button) ? [.activate] : [])
     )
 }

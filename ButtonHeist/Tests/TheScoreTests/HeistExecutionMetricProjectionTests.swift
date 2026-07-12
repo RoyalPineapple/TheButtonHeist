@@ -119,11 +119,17 @@ import TheScore
                 command: command,
                 dispatchResult: .success(
                     method: .activate,
-                    evidence: ActionResultEvidence(timing: actionTiming)
+                    evidence: ActionResultEvidence(
+                        settlement: .settled(durationMs: 3),
+                        timing: actionTiming
+                    )
                 ),
                 expectationResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(timing: expectationTiming)
+                    evidence: ActionResultEvidence(
+                        settlement: .settled(durationMs: 8),
+                        timing: expectationTiming
+                    )
                 ),
                 expectation: ExpectationResult(met: true, predicate: predicate),
                 warning: nil
@@ -135,7 +141,10 @@ import TheScore
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(
                 method: .wait,
-                evidence: ActionResultEvidence(timing: waitTiming)
+                evidence: ActionResultEvidence(
+                    settlement: .settled(durationMs: 13),
+                    timing: waitTiming
+                )
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
@@ -161,7 +170,10 @@ import TheScore
                 expectation: ExpectationResult.Met(predicate: predicate),
                 actionResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(timing: repeatTiming)
+                    evidence: ActionResultEvidence(
+                        settlement: .settled(durationMs: 23),
+                        timing: repeatTiming
+                    )
                 )
             )
         )

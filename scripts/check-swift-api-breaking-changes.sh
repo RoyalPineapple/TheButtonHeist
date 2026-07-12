@@ -20,7 +20,7 @@ if [[ -z "$BASELINE_TAG" ]]; then
 fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
-INTENTIONAL_BREAKING_BASELINE_TAG="v0.6.27"
+INTENTIONAL_BREAKING_BASELINE_TAG="v0.6.28"
 INTENTIONAL_BREAKAGES=(
     "enum HeistStepAdmissionCandidate has been changed to a struct"
     "enumelement HeistStepAdmissionCandidate.action has been removed"
