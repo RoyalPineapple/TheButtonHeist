@@ -360,7 +360,11 @@ extension HeistPlanSourceParser {
             try expectSymbol(")")
             return .actions(actions)
         default:
-            throw error(token, "container predicate checks accept .type, .identifier, .semantic, .rowCount, .columnCount, .modalBoundary, .scrollable(...), and .actions")
+            throw error(
+                token,
+                "container predicate checks accept .type, .identifier, .semantic, .rowCount, "
+                    + ".columnCount, .modalBoundary, .scrollable(...), and .actions"
+            )
         }
     }
 
