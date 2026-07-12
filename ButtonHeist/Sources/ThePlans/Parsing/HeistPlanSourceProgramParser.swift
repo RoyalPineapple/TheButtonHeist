@@ -196,29 +196,7 @@ extension HeistPlanSourceParser {
     }
 
     func mergeDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) -> [HeistPlanAdmissionCandidate] {
-        var merged: [HeistPlanAdmissionCandidate] = []
-        for definition in definitions {
-            guard let name = definition.name,
-                  let existingIndex = merged.firstIndex(where: { $0.name == name }) else {
-                merged.append(definition)
-                continue
-            }
-            let existing = merged[existingIndex]
-            if isNamespace(existing), isNamespace(definition) {
-                merged[existingIndex] = HeistPlanAdmissionCandidate(
-                    name: name,
-                    definitions: mergeDefinitions(existing.definitions + definition.definitions),
-                    body: []
-                )
-            } else {
-                merged.append(definition)
-            }
-        }
-        return merged
-    }
-
-    func isNamespace(_ definition: HeistPlanAdmissionCandidate) -> Bool {
-        definition.parameter == .none && definition.body.isEmpty && !definition.definitions.isEmpty
+        HeistDefinitionMerger.merge(definitions, duplicatePolicy: .preserve)
     }
 
     mutating func parseStatement() throws -> [HeistStepAdmissionCandidate] {

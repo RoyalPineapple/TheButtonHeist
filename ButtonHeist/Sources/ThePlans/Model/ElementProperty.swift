@@ -1,5 +1,5 @@
 /// Which accessibility property changed on an element.
-public enum ElementProperty: String, Codable, Sendable, CaseIterable {
+public enum ElementProperty: String, Codable, Sendable, CaseIterable, CodingKey {
     case label
     case identifier
     case value
@@ -15,49 +15,24 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     public var isGeometry: Bool {
         self == .frame || self == .activationPoint
     }
-}
 
-extension ElementProperty {
-    struct SourceDescriptor: Sendable, Equatable {
-        let property: ElementProperty
-        let sourceName: String
-        let expectedFields: [String]
-        let allowsUnlabeledAfter: Bool
-
-        init(
-            _ property: ElementProperty,
-            expectedFields: [String] = ["before", "after"],
-            allowsUnlabeledAfter: Bool = false
-        ) {
-            self.property = property
-            self.sourceName = property.rawValue
-            self.expectedFields = expectedFields
-            self.allowsUnlabeledAfter = allowsUnlabeledAfter
-        }
-
-        var expectedFieldList: String {
-            expectedFields.joined(separator: " and ")
+    /// Properties whose before/after values can change without changing the
+    /// identity matcher used to pair an element across captures.
+    public var isUpdateProperty: Bool {
+        switch self {
+        case .label, .identifier:
+            return false
+        case .value, .traits, .hint, .actions, .frame, .activationPoint, .customContent, .rotors:
+            return true
         }
     }
 
-    static let parserSupportedSourceDescriptors: [SourceDescriptor] = [
-        SourceDescriptor(.label),
-        SourceDescriptor(.identifier),
-        SourceDescriptor(.value, allowsUnlabeledAfter: true),
-        SourceDescriptor(.traits),
-        SourceDescriptor(.hint),
-        SourceDescriptor(.actions),
-        SourceDescriptor(.frame),
-        SourceDescriptor(.activationPoint),
-        SourceDescriptor(.customContent),
-        SourceDescriptor(.rotors),
-    ]
+    public static let updateProperties = allCases.filter(\.isUpdateProperty)
 
-    static func parserSupportedSourceDescriptor(named sourceName: String) -> SourceDescriptor? {
-        parserSupportedSourceDescriptors.first { $0.sourceName == sourceName }
+    static var updatePropertyNameList: String {
+        updateProperties.map(\.rawValue).joined(separator: ", ")
     }
 
-    static var parserSupportedSourceNameList: String {
-        parserSupportedSourceDescriptors.map(\.sourceName).joined(separator: ", ")
-    }
+    public init?(intValue: Int) { nil }
+    public var intValue: Int? { nil }
 }

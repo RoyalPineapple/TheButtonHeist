@@ -288,6 +288,23 @@ func `element update property checkers reject unknown fields`() {
     }
 }
 
+@Test
+func `element update property registry excludes identity matchers`() {
+    #expect(ElementProperty.updateProperties == [
+        .value,
+        .traits,
+        .hint,
+        .actions,
+        .frame,
+        .activationPoint,
+        .customContent,
+        .rotors,
+    ])
+    #expect(ElementProperty.allCases.filter(\.isUpdateProperty) == ElementProperty.updateProperties)
+    #expect(!ElementProperty.label.isUpdateProperty)
+    #expect(!ElementProperty.identifier.isUpdateProperty)
+}
+
 private struct UnknownFieldCase {
     var name: String
     var expectedMessage: String

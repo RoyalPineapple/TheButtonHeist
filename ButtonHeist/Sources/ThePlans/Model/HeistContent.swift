@@ -182,36 +182,7 @@ public enum HeistBuilder {
     }
 
     private static func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
-        var merged: [HeistPlan] = []
-        for definition in definitions {
-            guard let name = definition.name,
-                  let existingIndex = merged.firstIndex(where: { $0.name == name }) else {
-                merged.append(definition)
-                continue
-            }
-            let existing = merged[existingIndex]
-            if existing == definition {
-                continue
-            }
-            if existing.isNamespaceDefinition, definition.isNamespaceDefinition {
-                merged[existingIndex] = HeistPlan(
-                    runtimeValidatedVersion: existing.version,
-                    name: existing.name,
-                    parameter: existing.parameter,
-                    definitions: mergeDefinitions(existing.definitions + definition.definitions),
-                    body: []
-                )
-            } else {
-                merged.append(definition)
-            }
-        }
-        return merged
-    }
-}
-
-private extension HeistPlan {
-    var isNamespaceDefinition: Bool {
-        parameter == .none && body.isEmpty
+        HeistDefinitionMerger.merge(definitions, duplicatePolicy: .discardIdentical)
     }
 }
 

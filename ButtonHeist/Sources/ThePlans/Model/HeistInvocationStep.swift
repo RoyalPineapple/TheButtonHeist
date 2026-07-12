@@ -21,19 +21,15 @@ public struct HeistDefinitionPath: Sendable, Equatable, Hashable, CustomStringCo
     public let components: [String]
 
     public init(components: [String]) throws {
-        guard !components.isEmpty else { throw ValidationError.emptyPath }
-        for (index, component) in components.enumerated() {
-            guard !component.isEmpty else { throw ValidationError.emptyComponent(index: index) }
-            guard HeistParameterName.isValid(component) else {
-                throw ValidationError.invalidComponent(index: index, component: component)
-            }
+        do {
+            self.components = try HeistPathGrammar.validate(components)
+        } catch let error as HeistPathGrammar.ValidationError {
+            throw Self.validationError(error)
         }
-        self.components = components
     }
 
     public init(dottedName: String) throws {
-        guard !dottedName.isEmpty else { throw ValidationError.emptyPath }
-        try self.init(components: Self.strictComponents(fromDottedName: dottedName))
+        try self.init(components: HeistPathGrammar.components(from: dottedName))
     }
 
     public var dottedName: String {
@@ -45,7 +41,7 @@ public struct HeistDefinitionPath: Sendable, Equatable, Hashable, CustomStringCo
     }
 
     public static func render(_ components: [String]) -> String {
-        components.joined(separator: ".")
+        HeistPathGrammar.render(components)
     }
 
     public static func components(fromDottedName dottedName: String) throws -> [String] {
@@ -68,8 +64,13 @@ public struct HeistDefinitionPath: Sendable, Equatable, Hashable, CustomStringCo
         }
     }
 
-    private static func strictComponents(fromDottedName dottedName: String) -> [String] {
-        dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+    private static func validationError(_ error: HeistPathGrammar.ValidationError) -> ValidationError {
+        switch error {
+        case .emptyPath: return .emptyPath
+        case .emptyComponent(let index): return .emptyComponent(index: index)
+        case .invalidComponent(let index, let component):
+            return .invalidComponent(index: index, component: component)
+        }
     }
 }
 
@@ -94,19 +95,15 @@ public struct HeistInvocationPath: Sendable, Equatable, Hashable, CustomStringCo
     public let components: [String]
 
     public init(components: [String]) throws {
-        guard !components.isEmpty else { throw ValidationError.emptyPath }
-        for (index, component) in components.enumerated() {
-            guard !component.isEmpty else { throw ValidationError.emptyComponent(index: index) }
-            guard HeistParameterName.isValid(component) else {
-                throw ValidationError.invalidComponent(index: index, component: component)
-            }
+        do {
+            self.components = try HeistPathGrammar.validate(components)
+        } catch let error as HeistPathGrammar.ValidationError {
+            throw Self.validationError(error)
         }
-        self.components = components
     }
 
     public init(dottedName: String) throws {
-        guard !dottedName.isEmpty else { throw ValidationError.emptyPath }
-        try self.init(components: Self.strictComponents(fromDottedName: dottedName))
+        try self.init(components: HeistPathGrammar.components(from: dottedName))
     }
 
     public var dottedName: String {
@@ -118,7 +115,7 @@ public struct HeistInvocationPath: Sendable, Equatable, Hashable, CustomStringCo
     }
 
     public static func render(_ components: [String]) -> String {
-        components.joined(separator: ".")
+        HeistPathGrammar.render(components)
     }
 
     public static func components(fromDottedName dottedName: String) throws -> [String] {
@@ -141,8 +138,40 @@ public struct HeistInvocationPath: Sendable, Equatable, Hashable, CustomStringCo
         }
     }
 
-    private static func strictComponents(fromDottedName dottedName: String) -> [String] {
+    private static func validationError(_ error: HeistPathGrammar.ValidationError) -> ValidationError {
+        switch error {
+        case .emptyPath: return .emptyPath
+        case .emptyComponent(let index): return .emptyComponent(index: index)
+        case .invalidComponent(let index, let component):
+            return .invalidComponent(index: index, component: component)
+        }
+    }
+}
+
+private enum HeistPathGrammar {
+    enum ValidationError: Error {
+        case emptyPath
+        case emptyComponent(index: Int)
+        case invalidComponent(index: Int, component: String)
+    }
+
+    static func components(from dottedName: String) -> [String] {
         dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+    }
+
+    static func validate(_ components: [String]) throws -> [String] {
+        guard !components.isEmpty else { throw ValidationError.emptyPath }
+        for (index, component) in components.enumerated() {
+            guard !component.isEmpty else { throw ValidationError.emptyComponent(index: index) }
+            guard HeistParameterName.isValid(component) else {
+                throw ValidationError.invalidComponent(index: index, component: component)
+            }
+        }
+        return components
+    }
+
+    static func render(_ components: [String]) -> String {
+        components.joined(separator: ".")
     }
 }
 

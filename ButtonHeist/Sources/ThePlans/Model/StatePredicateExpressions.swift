@@ -11,10 +11,6 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     case missingContainer(ContainerPredicateExpr)
     case all(NonEmptyArray<StatePredicateExpr>)
 
-    private enum WireType: String {
-        case exists, missing, all
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, element, target, targetRef = "target_ref", container, states
     }
@@ -41,11 +37,11 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        guard let wireType = WireType(rawValue: typeString) else {
+        guard let wireType = AccessibilityPredicateContract.StateWireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, all"
+                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: \(AccessibilityPredicateContract.StateWireType.validDescription)"
             )
         }
         switch wireType {
@@ -83,25 +79,25 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .exists(let predicate):
-            try container.encode(WireType.exists.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.exists.rawValue, forKey: .type)
             try container.encode(predicate, forKey: .element)
         case .missing(let predicate):
-            try container.encode(WireType.missing.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.missing.rawValue, forKey: .type)
             try container.encode(predicate, forKey: .element)
         case .existsTarget(let target):
-            try container.encode(WireType.exists.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.exists.rawValue, forKey: .type)
             try Self.encode(target, into: &container)
         case .missingTarget(let target):
-            try container.encode(WireType.missing.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.missing.rawValue, forKey: .type)
             try Self.encode(target, into: &container)
         case .existsContainer(let containerPredicate):
-            try container.encode(WireType.exists.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.exists.rawValue, forKey: .type)
             try container.encode(containerPredicate, forKey: .container)
         case .missingContainer(let containerPredicate):
-            try container.encode(WireType.missing.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.missing.rawValue, forKey: .type)
             try container.encode(containerPredicate, forKey: .container)
         case .all(let states):
-            try container.encode(WireType.all.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
         }
     }

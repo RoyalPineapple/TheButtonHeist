@@ -332,39 +332,14 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
-        if rotor != nil, rotorIndex != nil {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "rotor accepts either rotor or rotorIndex, not both"
-            ))
-        }
-        if let rotorIndex, rotorIndex < 0 {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "rotorIndex must be non-negative, got \(rotorIndex)"
-            ))
-        }
-        selection = if let rotor {
-            .named(rotor)
-        } else if let rotorIndex {
-            .index(rotorIndex)
-        } else {
-            .automatic
-        }
+        selection = try RotorSelection.decode(name: rotor, index: rotorIndex, codingPath: container.codingPath)
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
         target = try TargetExprPayload.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch selection {
-        case .automatic:
-            break
-        case .named(let rotor):
-            try container.encode(rotor, forKey: .rotor)
-        case .index(let rotorIndex):
-            try container.encode(rotorIndex, forKey: .rotorIndex)
-        }
+        try selection.encode(to: &container, nameKey: .rotor, indexKey: .rotorIndex)
         try container.encode(direction, forKey: .direction)
         try TargetExprPayload.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
     }
@@ -397,11 +372,13 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
         let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: .textRef)
         switch (literal, reference) {
         case (.some(let literal), nil):
-            guard replacingExisting || !literal.isEmpty else {
+            do {
+                try TypeTextTarget.validate(literal, replacingExisting: replacingExisting)
+            } catch {
                 throw DecodingError.dataCorruptedError(
                     forKey: .text,
                     in: container,
-                    debugDescription: "text must be non-empty unless replacingExisting is true"
+                    debugDescription: String(describing: error)
                 )
             }
             text = .literal(literal)

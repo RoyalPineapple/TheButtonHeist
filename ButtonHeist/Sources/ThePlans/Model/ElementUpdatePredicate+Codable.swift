@@ -174,17 +174,6 @@ extension ElementPropertyChangeExpr: Codable {
 
 // MARK: - Erased Element Property Change Codable
 
-private enum AnyPropertyChangeCodingKeys: String, CodingKey {
-    case value
-    case traits
-    case hint
-    case actions
-    case frame
-    case activationPoint
-    case customContent
-    case rotors
-}
-
 private enum UnlabeledAssociatedValueCodingKeys: String, CodingKey {
     case value = "_0"
 }
@@ -209,7 +198,7 @@ private func encodeUnlabeledAssociatedValue<Value: Encodable, Key: CodingKey>(
 
 extension AnyPropertyChange: Codable {
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
+        let container = try decoder.container(keyedBy: ElementProperty.self)
         let keys = container.allKeys
         guard keys.count == 1, let key = keys.first else {
             throw DecodingError.dataCorrupted(
@@ -221,6 +210,10 @@ extension AnyPropertyChange: Codable {
         }
 
         switch key {
+        case .label, .identifier:
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "\(key.rawValue) is not an update property")
+            )
         case .value:
             self = .value(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChange<ValueProperty>.self,
@@ -273,7 +266,7 @@ extension AnyPropertyChange: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
+        var container = encoder.container(keyedBy: ElementProperty.self)
         switch self {
         case .value(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
@@ -297,7 +290,7 @@ extension AnyPropertyChange: Codable {
 
 extension AnyPropertyChangeExpr: Codable {
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
+        let container = try decoder.container(keyedBy: ElementProperty.self)
         let keys = container.allKeys
         guard keys.count == 1, let key = keys.first else {
             throw DecodingError.dataCorrupted(
@@ -309,6 +302,10 @@ extension AnyPropertyChangeExpr: Codable {
         }
 
         switch key {
+        case .label, .identifier:
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "\(key.rawValue) is not an update property")
+            )
         case .value:
             self = .value(try decodeUnlabeledAssociatedValue(
                 ElementPropertyChangeExpr<ValueProperty>.self,
@@ -361,7 +358,7 @@ extension AnyPropertyChangeExpr: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: AnyPropertyChangeCodingKeys.self)
+        var container = encoder.container(keyedBy: ElementProperty.self)
         switch self {
         case .value(let change):
             try encodeUnlabeledAssociatedValue(change, forKey: .value, to: &container)
