@@ -74,11 +74,17 @@ extension TheStash {
             let accessibilityContainer = container.container
             containerName = container.containerName
             let facts = accessibilityContainer.containerPredicateFacts
-            type = facts.type
-            label = facts.label
-            value = facts.value
+            type = facts.role.kind
+            switch facts.role {
+            case .semanticGroup(let semanticLabel, let semanticValue):
+                label = semanticLabel
+                value = semanticValue
+            case .none, .list, .landmark, .dataTable, .tabBar, .series:
+                label = nil
+                value = nil
+            }
             identifier = facts.identifier
-            isModalBoundary = accessibilityContainer.isModalBoundary
+            isModalBoundary = facts.isModalBoundary
         }
     }
 

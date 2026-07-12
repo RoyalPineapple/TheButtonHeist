@@ -325,7 +325,7 @@ import AccessibilitySnapshotParser
     ) -> Bool {
         guard depth == 0, hasMultipleRootNodes, !container.isModalBoundary else { return false }
         guard case .semanticGroup = container.type else { return false }
-        return stableIdentifier(containerIdentifier(of: container)) == nil
+        return stableIdentifier(container.containerPredicateFacts.identifier) == nil
     }
 
     private static func isRootShapeReplacement(before: [RootShapeToken], after: [RootShapeToken]) -> Bool {
