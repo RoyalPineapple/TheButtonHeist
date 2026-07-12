@@ -419,9 +419,10 @@ the same screen generation. A complete trace with no facts is proof of
 
 Scoped notification evidence has one semantic shape: `screenChanged`,
 `elementChanged` with a `layout` or `value` subtype, `announcement`, or
-`unknown` with its raw code. Screen and element notifications classify
-interface change even when tree hashes are equal. Announcements remain ordered
-transition evidence without synthesizing an interface mutation.
+`unknown` with its raw code. A scoped screen notification authoritatively
+classifies replacement even when tree hashes are equal. Element and
+announcement notifications remain same-generation evidence. Unknown kinds
+retain their raw code and never become screen evidence by themselves.
 
 One action contributes one captured notification batch. Its retained events
 are strictly after the action window's opening cursor and no later than the
@@ -449,9 +450,12 @@ Observed notification evidence and inferred screen classification occupy
 different transition fields. `transition.accessibilityNotifications` retains
 the notification records. `transition.fallbackReason` separately retains the
 typed reason inferred by `ScreenClassifier` from settled snapshots.
-`AccessibilityObservationChangeReducer` is the sole owner of precedence
-between those inputs and gives an observed `screenChanged` notification
-priority over inference.
+`ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative;
+`elementChanged` and `announcement` suppress replacement inference; and only an
+empty or unknown batch permits snapshot fallback. Every inferred replacement
+records its typed fallback reason. Parsed screen IDs, first-responder state,
+geometry, and observation-generation counters never classify a screen boundary
+on their own.
 
 For UIKit value controls, both `elementChanged` subtypes and `announcement` are
 recapture triggers. The notification kind does not assert the new value;

@@ -618,15 +618,6 @@ struct PendingAccessibilityNotificationEvent {
         )
     }
 
-    var startsObservationGeneration: Bool {
-        switch kind {
-        case .screenChanged:
-            true
-        case .elementChanged, .announcement, .unknown:
-            false
-        }
-    }
-
 }
 
 enum PendingAccessibilityNotificationPayload {

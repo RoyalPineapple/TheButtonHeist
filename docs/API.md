@@ -203,9 +203,11 @@ that stream directly; there is no endpoint delta or alternate temporal model.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
-between captures in the same screen generation. Screen, layout, value, and
-announcement notifications are edge evidence and prevent a complete window
-from being considered fact-free.
+between captures in the same screen generation. A scoped `screenChanged`
+notification is authoritative replacement evidence. `elementChanged` and
+announcement notifications stay in the same generation; when no usable
+notification exists, a typed snapshot fallback may emit the screen boundary
+and records its reason in the trace.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:

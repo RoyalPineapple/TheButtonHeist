@@ -7,6 +7,42 @@ import XCTest
 @MainActor
 final class ScreenClassifierTests: XCTestCase {
 
+    func testScopedScreenChangedNotificationIsAuthoritative() {
+        let screen = screen(elements: [element(label: "Home", traits: .header)])
+
+        XCTAssertEqual(
+            classify(before: screen, after: screen, notifications: [.screenChanged]),
+            .screenChangedNotification
+        )
+    }
+
+    func testElementChangedAndAnnouncementSuppressSnapshotFallback() {
+        let before = screen(elements: [element(label: "Home", traits: .header)])
+        let after = screen(elements: [element(label: "Settings", traits: .header)])
+
+        for notification in [
+            AccessibilityNotificationKind.elementChanged(.layout),
+            .elementChanged(.value),
+            .announcement,
+        ] {
+            XCTAssertEqual(
+                classify(before: before, after: after, notifications: [notification]),
+                .sameGeneration,
+                "notification: \(notification)"
+            )
+        }
+    }
+
+    func testUnknownNotificationAllowsLabeledSnapshotFallback() {
+        let before = screen(elements: [element(label: "Home", traits: .header)])
+        let after = screen(elements: [element(label: "Settings", traits: .header)])
+
+        XCTAssertEqual(
+            classify(before: before, after: after, notifications: [.unknown(4_002)]),
+            .inferredScreenChange(reason: .primaryHeaderChanged)
+        )
+    }
+
     func testPrimaryHeaderChangeInfersScreenChange() {
         let before = screen(elements: [element(label: "Home", traits: .header)])
         let after = screen(elements: [element(label: "Settings", traits: .header)])
@@ -29,6 +65,21 @@ final class ScreenClassifierTests: XCTestCase {
         let result = classify(before: before, after: after)
 
         XCTAssertEqual(result, .sameGeneration)
+    }
+
+    func testHeaderGeometryChangeAloneKeepsSameGeneration() {
+        let top = AccessibilityShape.frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 100, height: 40)))
+        let bottom = AccessibilityShape.frame(AccessibilityRect(CGRect(x: 0, y: 100, width: 100, height: 40)))
+        let before = screen(elements: [
+            element(label: "Primary", traits: .header, shape: top),
+            element(label: "Secondary", traits: .header, shape: bottom),
+        ])
+        let after = screen(elements: [
+            element(label: "Primary", traits: .header, shape: bottom),
+            element(label: "Secondary", traits: .header, shape: top),
+        ])
+
+        XCTAssertEqual(classify(before: before, after: after), .sameGeneration)
     }
 
     func testBackButtonChangeInfersScreenChange() {
@@ -277,10 +328,15 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    private func classify(before: InterfaceObservation, after: InterfaceObservation) -> ScreenClassifier.Classification {
+    private func classify(
+        before: InterfaceObservation,
+        after: InterfaceObservation,
+        notifications: [AccessibilityNotificationKind] = []
+    ) -> ScreenClassifier.Classification {
         ScreenClassifier.classify(
             before: ScreenClassifier.snapshot(of: before.tree),
-            after: ScreenClassifier.snapshot(of: after.tree)
+            after: ScreenClassifier.snapshot(of: after.tree),
+            notifications: notifications
         )
     }
 
@@ -334,13 +390,15 @@ final class ScreenClassifierTests: XCTestCase {
         label: String,
         value: String? = nil,
         identifier: String? = nil,
-        traits: UIAccessibilityTraits
+        traits: UIAccessibilityTraits,
+        shape: AccessibilityShape = .frame(.zero)
     ) -> AccessibilityElement {
         .make(
             label: label,
             value: value,
             identifier: identifier,
             traits: traits,
+            shape: shape,
             respondsToUserInteraction: false
         )
     }

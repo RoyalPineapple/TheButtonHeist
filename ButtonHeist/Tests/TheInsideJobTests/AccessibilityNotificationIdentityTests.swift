@@ -18,14 +18,6 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
         }
     }
 
-    func testPendingEventClassificationSwitchesOnOuterSemanticCategory() {
-        XCTAssertTrue(event(rawCode: 1000).startsObservationGeneration)
-        XCTAssertFalse(event(rawCode: 1001).startsObservationGeneration)
-        XCTAssertFalse(event(rawCode: 1005).startsObservationGeneration)
-        XCTAssertFalse(event(rawCode: 1008).startsObservationGeneration)
-        XCTAssertFalse(event(rawCode: 4002).startsObservationGeneration)
-    }
-
     func testCapturedAnnouncementPreservesNormalizedIdentity() throws {
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,

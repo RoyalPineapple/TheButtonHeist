@@ -47,7 +47,8 @@ Notes:
   captures are truth; facts are derived over the full observation window.
 - Settle blocks the pipeline: the response does not leave the app until `SettleSession` reaches a terminal `SettleOutcome`. A `timedOut` outcome is reported as `settled: false` in the receipt, never passed off as stable.
 - Scoped screen, layout, value, and announcement notifications are fact evidence
-  and prevent `noChange`; screen notification begins a new generation.
+  and prevent `noChange`; scoped screen notification or typed snapshot fallback
+  begins a new generation.
 - First-responder state is capture-local `HeistId` value evidence. Trace context
   projects that id to an `AccessibilityTarget`; no UIKit responder identity is
   retained or sent over the wire.

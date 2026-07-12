@@ -66,6 +66,9 @@ Consequences:
   captures have equal hashes.
 - Raw parser reads refresh disposable live action evidence but do not update the
   settled interface. Failed settles remain diagnostic evidence only.
+- Scoped screen notification is authoritative replacement evidence. Element
+  and announcement notifications stay in-generation; only empty or unknown
+  notification evidence permits typed snapshot fallback.
 - The public fold composes facts like stacked layers, resolves transient
   appear/disappear pairs, and lets any screen marker dominate the final kind.
   That convenience projection cannot recover the ordered history it squashed.

@@ -313,7 +313,7 @@ final class PostActionObservation {
         classification: ScreenClassifier.Classification
     ) -> Bool {
         switch classification {
-        case .inferredScreenChange:
+        case .screenChangedNotification, .inferredScreenChange:
             return true
         case .sameGeneration:
             return current.capture.context != baseline.capture.context
@@ -366,7 +366,7 @@ final class PostActionObservation {
     ) -> AccessibilityTrace {
         let transition: AccessibilityTrace.Transition
         switch classification {
-        case .sameGeneration:
+        case .sameGeneration, .screenChangedNotification:
             transition = AccessibilityTrace.Transition(
                 transient: transient,
                 accessibilityNotifications: accessibilityNotifications
@@ -389,29 +389,6 @@ final class PostActionObservation {
         )
     }
 
-    func makeClassifiedAccessibilityTrace(after: BeforeState, parent: BeforeState) -> AccessibilityTrace {
-        let classification = ScreenClassifier.classify(
-            before: parent.screenSnapshot,
-            after: after.screenSnapshot
-        )
-        let transition: AccessibilityTrace.Transition
-        switch classification {
-        case .sameGeneration:
-            transition = .empty
-        case .inferredScreenChange(let reason):
-            transition = AccessibilityTrace.Transition(fallbackReason: reason)
-        }
-        let capture = AccessibilityTrace.Capture(
-            sequence: after.capture.sequence,
-            interface: after.capture.interface,
-            parentHash: after.capture.parentHash,
-            context: after.capture.context,
-            transition: transition,
-            hash: after.capture.hash
-        )
-        return AccessibilityTrace(captures: [parent.capture, capture])
-    }
-
     private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) -> BeforeState {
         let observation = visibleEvent.observation
         let screen = visibleEvent.scope == .visible
@@ -432,7 +409,8 @@ final class PostActionObservation {
     ) -> AccessibilityTrace {
         let classification = ScreenClassifier.classify(
             before: before.screenSnapshot,
-            after: final.screenSnapshot
+            after: final.screenSnapshot,
+            notifications: accessibilityNotifications.map(\.kind)
         )
         return makeAccessibilityTrace(
             afterInterface: final.interface,

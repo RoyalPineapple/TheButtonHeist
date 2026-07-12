@@ -232,33 +232,48 @@ private struct SemanticObservationFulfillmentState {
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> Publication {
         let pendingAccessibilityNotifications = notificationBatch.events
-        let startsNewGeneration = pendingAccessibilityNotifications.contains(where: \.startsObservationGeneration)
+        let notificationKinds = pendingAccessibilityNotifications.map(\.kind)
+        let previousEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
+        let sourceObservation = SettledSemanticObservation(
+            sequence: sequence,
+            scope: sourceScope,
+            screen: screen.semanticObservationProjection(for: sourceScope),
+            tripwireSignal: tripwireSignal
+        )
+        let sourceClassification = ScreenClassifier.classify(
+            before: previousEvents[sourceScope].map {
+                ScreenClassifier.snapshot(of: $0.observation.screen.tree)
+            },
+            after: ScreenClassifier.snapshot(of: sourceObservation.screen.tree),
+            notifications: notificationKinds
+        )
+        let startsNewGeneration = sourceClassification.isScreenReplacement
         if startsNewGeneration {
             beginReplacement()
         }
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
-        let previousEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
         var currentEvents = startsNewGeneration ? [:] : previousEvents
         var events: EventsByFulfilledScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
             let previousEvent = previousEvents[fulfilledScope]
-            let observation = SettledSemanticObservation(
-                sequence: sequence,
-                scope: fulfilledScope,
-                screen: screen.semanticObservationProjection(for: fulfilledScope),
-                tripwireSignal: tripwireSignal
-            )
-            let fallbackReason = previousEvent.flatMap { previousEvent -> AccessibilityObservationFallbackReason? in
-                switch ScreenClassifier.classify(
-                    before: ScreenClassifier.snapshot(of: previousEvent.observation.screen.tree),
-                    after: ScreenClassifier.snapshot(of: observation.screen.tree)
-                ) {
-                case .sameGeneration:
-                    return nil
-                case .inferredScreenChange(let reason):
-                    return reason
-                }
-            }
+            let observation = fulfilledScope == sourceScope
+                ? sourceObservation
+                : SettledSemanticObservation(
+                    sequence: sequence,
+                    scope: fulfilledScope,
+                    screen: screen.semanticObservationProjection(for: fulfilledScope),
+                    tripwireSignal: tripwireSignal
+                )
+            let classification = fulfilledScope == sourceScope
+                ? sourceClassification
+                : ScreenClassifier.classify(
+                    before: previousEvent.map {
+                        ScreenClassifier.snapshot(of: $0.observation.screen.tree)
+                    },
+                    after: ScreenClassifier.snapshot(of: observation.screen.tree),
+                    notifications: notificationKinds
+                )
+            let fallbackReason = classification.fallbackReason
             if let fallbackReason {
                 AccessibilityObservationFallbackLog.record(
                     fallbackReason,

@@ -338,25 +338,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
-    func testScreenIdChangeProjectsScreenBoundaryFacts() throws {
-        let interface = makeInterface(label: "Menu")
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: interface,
-            context: AccessibilityTrace.Context(screenId: "menu")
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: interface,
-            parentHash: before.hash,
-            context: AccessibilityTrace.Context(screenId: "checkout")
-        )
-
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-
-        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-    }
-
     func testSameScreenContextChangeProjectsElementChangedFact() throws {
         let interface = makeInterface(label: "Menu")
         let before = AccessibilityTrace.Capture(

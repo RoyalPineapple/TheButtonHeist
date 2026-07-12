@@ -64,7 +64,26 @@ import AccessibilitySnapshotParser
 
     enum Classification: Equatable {
         case sameGeneration
+        case screenChangedNotification
         case inferredScreenChange(reason: AccessibilityObservationFallbackReason)
+
+        var isScreenReplacement: Bool {
+            switch self {
+            case .sameGeneration:
+                false
+            case .screenChangedNotification, .inferredScreenChange:
+                true
+            }
+        }
+
+        var fallbackReason: AccessibilityObservationFallbackReason? {
+            switch self {
+            case .sameGeneration, .screenChangedNotification:
+                nil
+            case .inferredScreenChange(let reason):
+                reason
+            }
+        }
     }
 
     static func snapshot(of tree: InterfaceTree) -> Snapshot {
@@ -81,7 +100,29 @@ import AccessibilitySnapshotParser
         snapshot(of: stash.interfaceTree)
     }
 
-    static func classify(before: Snapshot, after: Snapshot) -> Classification {
+    static func classify(
+        before: Snapshot?,
+        after: Snapshot,
+        notifications: [AccessibilityNotificationKind]
+    ) -> Classification {
+        if notifications.contains(where: {
+            if case .screenChanged = $0 { return true }
+            return false
+        }) {
+            return .screenChangedNotification
+        }
+        if notifications.contains(where: {
+            switch $0 {
+            case .elementChanged, .announcement:
+                true
+            case .screenChanged, .unknown:
+                false
+            }
+        }) {
+            return .sameGeneration
+        }
+        guard let before else { return .sameGeneration }
+
         let beforeSignature = before.signature
         let afterSignature = after.signature
 
@@ -122,20 +163,7 @@ import AccessibilitySnapshotParser
         if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
             return explicit
         }
-        return elements
-            .enumerated()
-            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
-                guard element.traits.contains(.header), element.label != nil else { return nil }
-                return (index, element)
-            }
-            .min { left, right in
-                let leftFrame = left.element.shape.frame
-                let rightFrame = right.element.shape.frame
-                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
-                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
-                return left.index < right.index
-            }?
-            .element
+        return elements.first { $0.traits.contains(.header) && $0.label != nil }
     }
 
     private static func hasStableInteractionContext(before: Snapshot, after: Snapshot) -> Bool {

@@ -347,7 +347,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
     }
 
-    func testObservationGenerationBoundaryCannotProduceElementUpdates() {
+    func testObservationGenerationChangeAloneDoesNotClassifyScreenBoundary() throws {
         let beforeInterface = makeTestInterface(elements: [
             makeElement(label: "Quantity", value: "1", traits: [.adjustable]),
         ])
@@ -368,10 +368,9 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-        XCTAssertTrue(facts.testElementEdits.updated.isEmpty)
-        XCTAssertEqual(facts.testDisappearedLabels, ["Quantity"])
-        XCTAssertEqual(facts.testAppearedLabels, ["Quantity"])
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged])
+        XCTAssertEqual(try XCTUnwrap(facts.testElementEdits.updated.single).before.value, "1")
+        XCTAssertEqual(facts.testElementEdits.updated.single?.after.value, "2")
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
@@ -417,23 +416,30 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(payload.isNotificationOnly)
     }
 
-    func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
-        let notification = notification(kind: .elementChanged(.value), sequence: 1)
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Volume"),
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: .primaryHeaderChanged,
-                accessibilityNotifications: [notification]
+    func testKnownSameScreenNotificationsSuppressScreenFallback() {
+        for kind in [
+            AccessibilityNotificationKind.elementChanged(.layout),
+            .elementChanged(.value),
+            .announcement,
+        ] {
+            let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
+            let after = AccessibilityTrace.Capture(
+                sequence: 2,
+                interface: makeInterface(label: "Volume"),
+                parentHash: before.hash,
+                transition: AccessibilityTrace.Transition(
+                    fallbackReason: .primaryHeaderChanged,
+                    accessibilityNotifications: [notification(kind: kind, sequence: 1)]
+                )
             )
-        )
 
-        XCTAssertEqual(
-            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
-        )
+            XCTAssertFalse(
+                AccessibilityTrace.ChangeFact.between(before, after).contains {
+                    if case .screenChanged = $0 { true } else { false }
+                },
+                "notification: \(kind)"
+            )
+        }
     }
 
     func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() {
@@ -653,7 +659,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
     }
 
-    func testCaptureScreenContextDiffsAsScreenChanged() {
+    func testCaptureScreenContextDiffDoesNotClassifyScreenBoundary() {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -669,7 +675,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
         XCTAssertEqual(
             AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
+            []
         )
     }
 
@@ -696,6 +702,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
         let digest = try XCTUnwrap(facts.testInteractionDigest)
 
+        XCTAssertFalse(facts.contains { if case .screenChanged = $0 { true } else { false } })
         XCTAssertTrue(digest.screenIdChanged)
         XCTAssertEqual(digest.screenIdBefore, "login")
         XCTAssertEqual(digest.screenIdAfter, "signup")

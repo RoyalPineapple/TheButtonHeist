@@ -59,24 +59,24 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
-for a clean settled snapshot. One pure observation reducer combines the
-settled capture edge with scoped `screenChanged`, typed `elementChanged`, and
-`announcement` notifications. Notifications are edge evidence, not a second
-state model. Screen and element notifications classify interface change;
-announcements remain separate transition evidence and never synthesize an
-interface mutation.
+for a clean settled snapshot. One pure `ScreenClassifier` combines typed
+snapshots with scoped `screenChanged`, `elementChanged`, and `announcement`
+notifications. Notifications are edge evidence, not a second state model. A
+scoped screen notification is authoritative replacement evidence. Element and
+announcement notifications keep the edge in the same generation; only an
+empty or unknown notification batch permits snapshot fallback inference.
 
 Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
 `SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
 cadence for that pair; it does not create another settle pipeline. UIKit and
 ObjC signals may trigger or reset sampling, but they never classify the AX tree.
 
-A screen notification starts a new observation generation. The screen boundary
-is normalized as old-tree departures, a `screenChanged` marker, then new-tree
-arrivals. Layout, value, and announcement notifications trigger same-generation
-element facts when there is no screen boundary. The settle loop can also report
-unhealthy snapshots rather than pretending an empty post-navigation parse is
-stable.
+A scoped screen notification or typed snapshot fallback starts a new
+observation generation. The screen boundary is normalized as old-tree
+departures, a `screenChanged` marker, then new-tree arrivals. Layout, value, and
+announcement notifications stay in the same generation. The settle loop can
+also report unhealthy snapshots rather than pretending an empty
+post-navigation parse is stable.
 
 UIKit value changes are not identified by an `elementChanged(.value)` signal
 alone. UIKit controls may signal through either element-change subtype or an
@@ -219,16 +219,17 @@ Runtime subscriptions are not a public driver surface.
 
 Screen changes are not guessed from text, timers, or window events. The parser
 builds settled captures, `AccessibilityNotificationBus` records scoped screen,
-layout, value, and announcement evidence, and
-`AccessibilityObservationChangeReducer` determines the capture-edge kind used
-to derive facts. A screen notification is authoritative and starts a new
-generation. Notification absence is not proof of no change: silent flows still
-derive facts from settled capture differences and typed screen-appearance
-evidence. Notification evidence and inferred classification remain separate in
-the capture transition: notifications stay in `accessibilityNotifications`,
-while `ScreenClassifier` records an inferred reason in `fallbackReason`. The
-reducer owns their precedence, so consumers can distinguish an observed
-`screenChanged` notification from an inferred screen boundary.
+layout, value, and announcement evidence, and `ScreenClassifier` determines
+replacement before traces are built. A scoped screen notification is
+authoritative and starts a new generation. Element and announcement
+notifications never classify a replacement. When the batch has no usable kind,
+the classifier may infer replacement from typed settled snapshots and records
+the reason in both logs and `fallbackReason`. Notification records remain in
+`accessibilityNotifications`; parsed screen IDs, first-responder state,
+geometry, and generation counters are not independent screen evidence. The
+fact reducer consumes only the resulting notification or fallback evidence, so
+consumers can distinguish an observed `screenChanged` notification from an
+inferred screen boundary.
 
 ## Component Map
 
@@ -307,8 +308,9 @@ retains bounded per-scope history and builds one `ObservationWindow` from that
 baseline through the latest settled capture. Polling extends this window; it
 does not maintain a second baseline or notification claim.
 
-A screen notification ends the current observation generation and starts the
-next. The boundary is retained in the same ordered fact stream as three facts:
+A scoped screen notification or typed snapshot fallback ends the current
+observation generation and starts the next. The boundary is retained in the
+same ordered fact stream as three facts:
 
 1. `elementsChanged` with every node in the old delivered tree disappeared.
 2. `screenChanged` as the generation boundary marker.
