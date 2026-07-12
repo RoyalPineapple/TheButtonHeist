@@ -180,11 +180,11 @@ final class SettleSessionTests: XCTestCase {
         topVCSequence: [ObjectIdentifier?]? = nil,
         accessibilityNotificationSequence: [UInt64]? = nil,
         yieldCount: Counter? = nil
-    ) -> SemanticQuietSettleSession {
+        ) -> SettleSession {
         let scriptBox = ScriptBox(script: script)
         let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
         let notificationBox = ScriptBox(script: accessibilityNotificationSequence ?? [0])
-        return SemanticQuietSettleSession(
+        return SettleSession(
             parseProvider: { scriptBox.next() },
             tripwireSignalProvider: {
                 Self.tripwireSignal(
@@ -230,7 +230,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            consecutiveCyclesRequired: 2,
+            policy: .consecutiveCycles(required: 2),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
 
@@ -252,7 +252,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            quietWindowMilliseconds: 30,
+            policy: .quietWindow(milliseconds: 30),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
 
@@ -277,7 +277,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            consecutiveCyclesRequired: 2,
+            policy: .consecutiveCycles(required: 2),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
 
@@ -304,7 +304,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            consecutiveCyclesRequired: 1,
+            policy: .consecutiveCycles(required: 1),
             tripwireBaseline: baseline
         )
 
@@ -327,7 +327,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            consecutiveCyclesRequired: 1,
+            policy: .consecutiveCycles(required: 1),
             tripwireBaseline: baseline
         )
 
@@ -350,7 +350,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            consecutiveCyclesRequired: 2,
+            policy: .consecutiveCycles(required: 2),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -368,7 +368,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            quietWindowMilliseconds: 30,
+            policy: .quietWindow(milliseconds: 30),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -386,7 +386,7 @@ final class SettleSessionTests: XCTestCase {
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
-            quietWindowMilliseconds: 30,
+            policy: .quietWindow(milliseconds: 30),
             tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -507,7 +507,7 @@ final class SettleSessionTests: XCTestCase {
     func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {
         let clock = ManualClock()
         let counter = Counter()
-        let session = SemanticQuietSettleSession(
+        let session = SettleSession(
             parseProvider: {
                 let index = counter.next()
                 return self.makeParseResult([
@@ -542,7 +542,7 @@ final class SettleSessionTests: XCTestCase {
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
         let clock = ManualClock()
-        let session = SemanticQuietSettleSession(
+        let session = SettleSession(
             parseProvider: { stable },
             tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
             observationYield: {

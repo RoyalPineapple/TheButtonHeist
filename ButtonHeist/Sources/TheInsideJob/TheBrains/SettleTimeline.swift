@@ -80,9 +80,7 @@ extension AccessibilityElement {
     }
 }
 
-// Rationale: settle observations are captured and consumed by the main-actor settle loop.
-// swiftlint:disable:next agent_unchecked_sendable_no_comment
-struct SettleRecordedObservation: Equatable, @unchecked Sendable {
+struct SettleRecordedObservation: Equatable {
     let screen: Screen
     let fingerprint: Int
     let elementsByKey: [TimelineKey: AccessibilityElement]
