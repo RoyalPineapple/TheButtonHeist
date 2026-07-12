@@ -216,22 +216,6 @@ extension ElementInflation {
         requireOnscreenActivationPoint: Bool,
         deadline: SemanticObservationDeadline
     ) async -> State {
-        if !canRefreshLiveGeometryThroughWindow(inflatedTarget.liveTarget.object) {
-            await tripwire.yieldRealFrames(1)
-            guard !Task.isCancelled else {
-                return .failed(.cancelled(
-                    "live geometry stabilization was cancelled for target "
-                        + Navigation.ScrollTargetDescription(inflatedTarget.treeElement).description
-                ))
-            }
-            guard !requireOnscreenActivationPoint else {
-                return .failed(.geometryNotActionable(
-                    "target \(Navigation.ScrollTargetDescription(inflatedTarget.treeElement).description) "
-                        + "live geometry could not be refreshed through its window"
-                ))
-            }
-            return .inflated(inflatedTarget)
-        }
         var stableTarget = inflatedTarget
         var stabilization = LiveGeometryStabilization(
             initial: LiveGeometrySample(inflatedTarget.liveTarget),
