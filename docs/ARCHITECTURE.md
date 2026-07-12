@@ -30,6 +30,13 @@ The durable observation truth is an `AccessibilityTrace` of settled captures.
 Each capture contains the delivered `Interface` tree and its content hash.
 There is no independently stored delta or alternate flat screen model.
 
+`InterfaceObservation` is live capture evidence, not authority to publish
+semantic truth. It pairs an `InterfaceTree` with the viewport-local
+`LiveCapture` from the latest parser read. `SemanticObservationStream` is the
+only publication owner, and its production commit entry points require an
+`InterfaceObservationProof` produced by a clean settle or a finished
+exploration.
+
 The trace derives one ordered `ChangeFact` stream for every temporal consumer.
 Predicates, receipts, diagnostics, and repair analysis all use those facts. A
 public response may expose a compact `delta`, but that value is a one-way,
@@ -85,6 +92,14 @@ including semantic content The Button Heist can discover in scrollable container
 `get_screen` returns pixels plus the fresh visible accessibility tree with
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
+
+Visible observation reduces parser reads through `SettleSession`; only a clean
+settle can construct the proof consumed by the visible commit path. Discovery
+has the same publication boundary. `Navigation.SemanticExploration` absorbs
+cleanly settled pages into one last-read-wins semantic graph while retaining
+only the latest page's live capture. Intermediate pages are local reducer state.
+`Navigation.ExploredScreen` represents the finished graph, and only that
+finished value can construct the proof consumed by the discovery commit path.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -147,6 +162,31 @@ parallel result fields.
 evidence. `PostActionObservation` coordinates capture and settle proof, then
 supplies that envelope; it does not publish a second post-action evidence shape.
 
+`AccessibilityNotificationBus` owns notification collection. Each action opens
+one cursor-bounded window, and post-action settlement captures that window once
+as one `AccessibilityNotificationBatch`. The batch contains every retained
+event after the opening cursor, the exact through-cursor observed under the same
+lock, and an explicit `AccessibilityNotificationGap` when bounded history
+overflowed. The same batch supplies trace evidence and advances the committed
+notification cursor; there is no second notification read for that action.
+
+`SemanticObservationStream` owns notification invalidation. It records the
+scoped `screenChanged` sequence covered by the committed batch. A scoped
+`screenChanged` recorded after that capture remains beyond the committed
+through-cursor and invalidates the fulfilled observation before it can be
+served as current.
+
+TheBurglar owns first-responder capture. A parser read converts responder state
+to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
+the capture. Settled storage never retains a UIKit object as responder identity;
+wire evidence projects the captured id to a semantic `AccessibilityTarget`.
+
+TheStash owns notification-element correlation. While live evidence exists, it
+correlates a notification object to a capture node, then
+`SemanticInterfaceProjection` emits the reference from that node's canonical
+semantic graph record. The reference is the record's `TreePath` and traversal
+index, never a UIKit object identity or a parallel element index.
+
 UIKit/ObjC `@unchecked Sendable` is a platform-boundary escape hatch only. Such
 uses stay in TheInsideJob, require an exact source-shape allowlist entry and a
 justification, and must not cross into the typed core or wire/report layers.
@@ -171,7 +211,11 @@ layout, value, and announcement evidence, and
 to derive facts. A screen notification is authoritative and starts a new
 generation. Notification absence is not proof of no change: silent flows still
 derive facts from settled capture differences and typed screen-appearance
-evidence.
+evidence. Notification evidence and inferred classification remain separate in
+the capture transition: notifications stay in `accessibilityNotifications`,
+while `ScreenClassifier` records an inferred reason in `fallbackReason`. The
+reducer owns their precedence, so consumers can distinguish an observed
+`screenChanged` notification from an inferred screen boundary.
 
 ## Component Map
 

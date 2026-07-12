@@ -386,6 +386,12 @@ ordered `ChangeFact` stream from adjacent capture edges. Predicate evaluation,
 diagnostics, and repair analysis consume that stream directly; no separate
 stored or endpoint temporal model exists.
 
+Only proof-backed observations become committed captures in the settled
+semantic stream. A raw `InterfaceObservation` is live parser evidence and
+cannot be committed directly. Visible commits require a clean-settle
+`InterfaceObservationProof`; discovery commits require the proof made from the
+finished exploration graph after its settled pages have been reduced.
+
 Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
 always derives three ordered facts: old-tree departures, the screen marker,
 then new-tree arrivals. `updated` entries can only be derived from captures in
@@ -397,6 +403,36 @@ Scoped notification evidence has one semantic shape: `screenChanged`,
 `unknown` with its raw code. Screen and element notifications classify
 interface change even when tree hashes are equal. Announcements remain ordered
 transition evidence without synthesizing an interface mutation.
+
+One action contributes one captured notification batch. Its retained events
+are strictly after the action window's opening cursor and no later than the
+batch's exact through-cursor. That through-cursor becomes the observation's
+notification cursor. If the bounded notification stream discarded relevant
+events, the destination capture carries
+`transition.accessibilityNotificationGap.droppedThroughSequence`; a gapped edge
+does not claim complete notification evidence. A scoped `screenChanged` after
+batch capture is outside that cursor and still invalidates the committed
+observation.
+
+Notification object payloads never carry UIKit identity. A resolved element
+payload contains an `AccessibilityNotificationElementReference` with the
+destination interface's canonical semantic graph `path`, `traversalIndex`, and
+resolution method. The path and traversal index identify one record in that
+graph's traversal order. Failed correlation remains explicit as an unresolved
+payload.
+
+First-responder state is captured internally as a capture-local `HeistId` and
+retained in the value-only capture snapshot, never as a UIKit object identity.
+When trace context exposes `firstResponder`, the host projects that captured id
+to an `AccessibilityTarget`; internal ids do not cross the wire.
+
+Observed notification evidence and inferred screen classification occupy
+different transition fields. `transition.accessibilityNotifications` retains
+the notification records. `transition.fallbackReason` separately retains the
+typed reason inferred by `ScreenClassifier` from settled snapshots.
+`AccessibilityObservationChangeReducer` is the sole owner of precedence
+between those inputs and gives an observed `screenChanged` notification
+priority over inference.
 
 For UIKit value controls, both `elementChanged` subtypes and `announcement` are
 recapture triggers. The notification kind does not assert the new value;
