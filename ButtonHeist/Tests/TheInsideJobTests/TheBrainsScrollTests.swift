@@ -558,100 +558,60 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
     }
 
-    func testSemanticRevealUsesRemappedNestedLiveScrollContainerPath() async throws {
-        let parentPath = TreePath([0])
-        let oldChildPath = TreePath([0, 0])
-        let liveChildPath = TreePath([0, 1])
-        let parentScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        parentScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let childScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        childScrollView.contentSize = CGSize(width: 280, height: 900)
-        let parentContainer = makeScrollableContainer(
-            contentSize: parentScrollView.contentSize,
-            frame: parentScrollView.frame
-        )
-        let childContainer = makeScrollableContainer(
-            contentSize: childScrollView.contentSize,
-            frame: childScrollView.frame
-        )
-        let targetActivationPoint = CGPoint(x: 130, y: 662)
-        let target = makeElement(label: "Nested Target", traits: .button)
-        let entry = InterfaceTree.Element(
-            heistId: "nested_target",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: oldChildPath, index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(targetActivationPoint),
-            element: target
-        )
-        let childMembership = InterfaceTree.ScrollMembership(containerPath: parentPath, index: nil)
-        let childContentFrame = ContentRect(CGRect(origin: .zero, size: childScrollView.frame.size))
-        let semantic = InterfaceTree(
-            elements: [entry.heistId: entry],
-            containers: [
-                parentPath: InterfaceTree.Container(
-                    container: parentContainer,
-                    path: parentPath,
-                    containerName: "parent_scroll",
-                    contentFrame: parentScrollView.frame
-                ),
-                oldChildPath: InterfaceTree.Container(
-                    container: childContainer,
-                    path: oldChildPath,
-                    containerName: "child_scroll",
-                    contentRect: childContentFrame,
-                    scrollMembership: childMembership
-                ),
-                liveChildPath: InterfaceTree.Container(
-                    container: childContainer,
-                    path: liveChildPath,
-                    containerName: "child_scroll",
-                    contentRect: childContentFrame,
-                    scrollMembership: childMembership
-                ),
-            ]
-        )
-        let liveCapture = LiveCapture.makeForTests(
-            hierarchy: [
-                .container(parentContainer, children: [
-                    .element(makeElement(label: "Visible"), traversalIndex: 0),
-                    .container(childContainer, children: []),
-                ])
-            ],
-            containerNamesByPath: [
-                parentPath: "parent_scroll",
-                liveChildPath: "child_scroll",
-            ],
-            elementRefs: [:],
-            containerContentFramesByPath: [
-                parentPath: ContentRect(parentScrollView.frame),
-                liveChildPath: childContentFrame,
-            ],
-            containerScrollMembershipsByPath: [
-                liveChildPath: childMembership,
-            ],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [
-                parentPath: .init(view: parentScrollView),
-                liveChildPath: .init(view: childScrollView),
-            ]
-        )
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
-            tree: semantic,
-            liveCapture: liveCapture
-        ))
+    func testNestedScrollMemberPathResolvesLiveAncestor() {
+        let outerScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        installNestedLiveScrollContainers(outerScrollView: outerScrollView)
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+        let memberPath = TreePath([0, 0, 0, 0])
 
-        guard case .revealed = result else {
-            return XCTFail("Expected semantic reveal to use remapped live child path, got \(result)")
-        }
-        XCTAssertEqual(parentScrollView.setContentOffsetAnimations, [])
-        XCTAssertEqual(childScrollView.setContentOffsetAnimations, [false])
-        let expectedOffset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(targetActivationPoint),
-            in: childScrollView
+        XCTAssertEqual(brains.stash.nearestLiveScrollContainerPath(for: memberPath), TreePath([0, 0]))
+        XCTAssertTrue(brains.stash.liveScrollView(forContainerPath: memberPath) === outerScrollView)
+    }
+
+    func testNestedScrollMemberPathIgnoresEqualSizedDecoyWindowPath() {
+        let innerScrollView = UIScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
+        innerScrollView.contentSize = CGSize(width: 280, height: 900)
+        let decoyScrollView = UIScrollView(frame: innerScrollView.frame)
+        decoyScrollView.contentSize = innerScrollView.contentSize
+        installNestedLiveScrollContainers(
+            innerScrollView: innerScrollView,
+            decoyScrollView: decoyScrollView
         )
-        XCTAssertEqual(childScrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
-        XCTAssertEqual(childScrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
+
+        let memberPath = TreePath([0, 0, 0, 0])
+
+        XCTAssertEqual(brains.stash.nearestLiveScrollContainerPath(for: memberPath), TreePath([0, 0, 0]))
+        XCTAssertTrue(brains.stash.liveScrollView(forContainerPath: memberPath) === innerScrollView)
+        XCTAssertFalse(brains.stash.liveScrollView(forContainerPath: memberPath) === decoyScrollView)
+    }
+
+    func testNestedScrollMemberPathFailsWithoutLiveAncestor() {
+        let decoyScrollView = UIScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
+        decoyScrollView.contentSize = CGSize(width: 280, height: 900)
+        installNestedLiveScrollContainers(decoyScrollView: decoyScrollView)
+
+        let memberPath = TreePath([0, 0, 0, 0])
+
+        XCTAssertNil(brains.stash.nearestLiveScrollContainerPath(for: memberPath))
+        XCTAssertNil(brains.stash.liveScrollView(forContainerPath: memberPath))
+    }
+
+    func testNestedScrollMemberPathSelectsNearestLiveAncestor() {
+        let outerScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let innerScrollView = UIScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
+        innerScrollView.contentSize = CGSize(width: 280, height: 900)
+        installNestedLiveScrollContainers(
+            outerScrollView: outerScrollView,
+            innerScrollView: innerScrollView
+        )
+
+        let memberPath = TreePath([0, 0, 0, 0])
+
+        XCTAssertEqual(brains.stash.nearestLiveScrollContainerPath(for: memberPath), TreePath([0, 0, 0]))
+        XCTAssertTrue(brains.stash.liveScrollView(forContainerPath: memberPath) === innerScrollView)
+        XCTAssertFalse(brains.stash.liveScrollView(forContainerPath: memberPath) === outerScrollView)
     }
 
     func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() async throws {
@@ -2296,6 +2256,53 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private func installNestedLiveScrollContainers(
+        outerScrollView: UIScrollView? = nil,
+        innerScrollView: UIScrollView? = nil,
+        decoyScrollView: UIScrollView? = nil
+    ) {
+        let rootContainer = AccessibilityContainer(
+            type: .none,
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 390, height: 844))
+        )
+        let outerContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1_600),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let innerContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 280, height: 900),
+            frame: CGRect(x: 20, y: 820, width: 280, height: 200)
+        )
+        let decoyContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 280, height: 900),
+            frame: CGRect(x: 20, y: 820, width: 280, height: 200)
+        )
+        let pathViews: [(TreePath, UIScrollView?)] = [
+            (TreePath([0, 0]), outerScrollView),
+            (TreePath([0, 0, 0]), innerScrollView),
+            (TreePath([1]), decoyScrollView),
+        ]
+        let liveViews = Dictionary(
+            uniqueKeysWithValues: pathViews.compactMap { path, view in
+                view.map { (path, LiveCapture.ScrollableViewRef(view: $0)) }
+            }
+        )
+
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [
+                .container(rootContainer, children: [
+                    .container(outerContainer, children: [
+                        .container(innerContainer, children: []),
+                    ]),
+                ]),
+                .container(decoyContainer, children: []),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: liveViews
+        ))
+    }
 
     private func makeElement(
         label: String? = nil,

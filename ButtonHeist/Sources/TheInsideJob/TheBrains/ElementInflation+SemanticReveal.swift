@@ -96,7 +96,7 @@ extension ElementInflation {
     }
 
     private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        if liveScrollView(forScrollContainerPath: path) != nil {
+        if hasLiveScrollContainer(at: path) {
             return true
         }
         guard depth < Self.maxNestedRevealDepth else { return false }
@@ -114,7 +114,7 @@ extension ElementInflation {
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         guard stash.refreshLiveCapture() != nil else { return false }
-        return liveScrollView(forScrollContainerPath: path) != nil
+        return hasLiveScrollContainer(at: path)
     }
 
     private func liveScrollView(for treeElement: InterfaceTree.Element) -> UIScrollView? {
@@ -126,54 +126,17 @@ extension ElementInflation {
     }
 
     private func liveScrollView(forScrollContainerPath path: TreePath) -> UIScrollView? {
-        if let scrollView = stash.capturedLiveScrollView(forContainerPath: path) {
-            return scrollView
-        }
-        guard let remappedPath = remappedLiveScrollContainerPath(for: path) else {
-            return nil
-        }
-        return stash.capturedLiveScrollView(forContainerPath: remappedPath)
+        stash.liveScrollView(forContainerPath: path)
     }
 
-    private func remappedLiveScrollContainerPath(for path: TreePath) -> TreePath? {
-        guard let expectedContainer = semanticContainer(at: path),
-              expectedContainer.scrollMembership != nil,
-              expectedContainer.container.isSemanticRevealScrollable
-        else { return nil }
-
-        let matches = stash.scrollableContainerViewsByPath.keys
-            .sorted()
-            .filter { candidatePath in
-                guard candidatePath != path,
-                      candidatePath.parent == path.parent,
-                      let candidate = semanticContainer(at: candidatePath),
-                      candidate.scrollMembership == expectedContainer.scrollMembership,
-                      candidate.matchesScrollIdentity(of: expectedContainer)
-                else { return false }
-                return true
-            }
-        return matches.count == 1 ? matches[0] : nil
+    private func hasLiveScrollContainer(at path: TreePath) -> Bool {
+        guard let livePath = stash.nearestLiveScrollContainerPath(for: path) else { return false }
+        guard let parentPath = semanticContainer(at: path)?.scrollMembership?.containerPath else { return true }
+        return livePath != stash.nearestLiveScrollContainerPath(for: parentPath)
     }
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
         stash.interfaceTree.containers[path]
-    }
-}
-
-private extension InterfaceTree.Container {
-    func matchesScrollIdentity(of other: InterfaceTree.Container) -> Bool {
-        container.semanticRevealScrollContentSize == other.container.semanticRevealScrollContentSize
-            && contentFrame == other.contentFrame
-    }
-}
-
-private extension AccessibilityContainer {
-    var isSemanticRevealScrollable: Bool {
-        semanticRevealScrollContentSize != nil
-    }
-
-    var semanticRevealScrollContentSize: AccessibilitySize? {
-        scrollableContentSize
     }
 }
 

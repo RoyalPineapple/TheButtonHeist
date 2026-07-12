@@ -89,18 +89,20 @@ extension TheStash {
         dispatchObject(for: treeElement)
     }
 
-    func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
-        var ancestorIndices = path.indices
-        while !ancestorIndices.isEmpty {
-            ancestorIndices.removeLast()
-            guard !ancestorIndices.isEmpty else { break }
-            let ancestorPath = TreePath(ancestorIndices)
-            let scrollView = liveScrollableContainerView(forPath: ancestorPath)
-            if let scrollView {
-                return scrollView
+    func nearestLiveScrollContainerPath(for path: TreePath) -> TreePath? {
+        var candidatePath: TreePath? = path
+        while let candidate = candidatePath {
+            if liveScrollableContainerView(forPath: candidate) != nil {
+                return candidate
             }
+            candidatePath = candidate.parent
         }
         return nil
+    }
+
+    func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
+        nearestLiveScrollContainerPath(for: path)
+            .flatMap { liveScrollableContainerView(forPath: $0) }
     }
 
     private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
