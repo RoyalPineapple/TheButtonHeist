@@ -116,6 +116,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordActionObservationWireShape(node)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
@@ -132,10 +133,13 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
-        return .skipChildren
+        return .visitChildren
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordRetiredParameterLabels(node.signature.parameterClause.parameters)
+        recordContainerSemanticIdentifierAlias(node)
+        recordRawExecutableParameters(node)
         recordSelectorShortcut(node)
         recordCompatibilitySurface(
             node: node,
@@ -155,11 +159,27 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
             message: "non-private tuple return type",
             expectation: "cross-file function results use named Swift types"
         )
+        recordExportedTupleParameters(
+            node: node,
+            modifiers: node.modifiers,
+            parameters: node.signature.parameterClause.parameters
+        )
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
+    override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordRetiredParameterLabels(node.signature.parameterClause.parameters)
+        recordExportedTupleParameters(
+            node: node,
+            modifiers: node.modifiers,
+            parameters: node.signature.parameterClause.parameters
+        )
+        return .visitChildren
+    }
+
     override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordRetiredParameterLabels(node.parameterClause.parameters)
         recordTupleReturn(
             modifiers: node.modifiers,
             returnType: node.returnClause.type,
@@ -172,10 +192,16 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
             message: "non-private tuple return type",
             expectation: "cross-file subscript results use named Swift types"
         )
+        recordExportedTupleParameters(
+            node: node,
+            modifiers: node.modifiers,
+            parameters: node.parameterClause.parameters
+        )
         return .visitChildren
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordExportedTupleTypealias(node)
         recordTopLevelTypealias(node)
         recordCompatibilitySurface(
             node: node,
@@ -187,6 +213,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordRetiredVariableSymbols(node)
+        recordSiblingReceiptWarnings(node)
         recordVariableCompatibilitySurface(node)
         recordTupleProperty(node)
         recordNonPrivateTupleProperty(node)
@@ -205,6 +233,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        recordRetiredCallLabels(node)
+        recordOldTraceSettlementJSON(node)
         recordOwnedPipelineConstruction(node)
         recordRawNotificationNormalization(node)
         return .visitChildren
@@ -223,6 +253,168 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         recordJSONBoundaryUse(node, observed: observed)
         recordPurePipelineEffectUse(node, observed: observed)
         return .visitChildren
+    }
+
+    override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordContainerSemanticIdentifierAlias(node)
+        recordSiblingReceiptWarnings(node)
+        return .visitChildren
+    }
+
+    private func recordRetiredVariableSymbols(_ node: VariableDeclSyntax) {
+        for binding in node.bindings {
+            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
+            recordRetiredSourceSymbol(node: identifier, observed: identifier.identifier.text)
+        }
+    }
+
+    private func recordRetiredCallLabels(_ node: FunctionCallExprSyntax) {
+        for argument in node.arguments {
+            guard let label = argument.label?.text else { continue }
+            recordRetiredSourceSymbol(node: argument, observed: label)
+        }
+    }
+
+    private func recordRetiredParameterLabels(_ parameters: FunctionParameterListSyntax) {
+        for parameter in parameters {
+            recordRetiredSourceSymbol(node: parameter, observed: parameter.firstName.text)
+            if let secondName = parameter.secondName?.text {
+                recordRetiredSourceSymbol(node: parameter, observed: secondName)
+            }
+        }
+    }
+
+    private func recordRetiredSourceSymbol(node: some SyntaxProtocol, observed: String) {
+        guard retiredProductionSymbols.contains(observed) else { return }
+        failures.append(
+            file.failure(
+                at: node,
+                message: "retired production source symbol",
+                evidence: ViolationEvidence(
+                    observed: observed,
+                    expectation: "production source uses the canonical admitted and typed architecture"
+                )
+            )
+        )
+    }
+
+    private func recordRawExecutableParameters(_ node: FunctionDeclSyntax) {
+        guard filePath.hasPrefix("ButtonHeist/Sources/"),
+              node.name.text.lowercased().hasPrefix("execute") else {
+            return
+        }
+
+        for parameter in node.signature.parameterClause.parameters where isRawCommandArgumentType(parameter.type) {
+            failures.append(
+                file.failure(
+                    at: parameter.type,
+                    message: "raw command arguments in executable runtime API",
+                    evidence: ViolationEvidence(
+                        observed: parameter.type.trimmedDescription,
+                        expectation: "execution accepts an admitted typed request"
+                    )
+                )
+            )
+        }
+    }
+
+    private func recordContainerSemanticIdentifierAlias(_ node: FunctionDeclSyntax) {
+        guard node.name.text == "identifier",
+              enclosingExtensionType(of: node) == "SemanticContainerPredicate" else {
+            return
+        }
+        recordContainerSemanticIdentifierAlias(at: node)
+    }
+
+    private func recordContainerSemanticIdentifierAlias(_ node: EnumCaseDeclSyntax) {
+        guard enclosingNominalType(of: node) == "SemanticContainerPredicate",
+              node.elements.contains(where: { $0.name.text == "identifier" }) else {
+            return
+        }
+        recordContainerSemanticIdentifierAlias(at: node)
+    }
+
+    private func recordContainerSemanticIdentifierAlias(at node: some SyntaxProtocol) {
+        failures.append(
+            file.failure(
+                at: node,
+                message: "container semantic identifier alias",
+                evidence: ViolationEvidence(
+                    observed: "SemanticContainerPredicate.identifier",
+                    expectation: "container identifiers use ContainerPredicateCheck.identifier"
+                )
+            )
+        )
+    }
+
+    private func recordSiblingReceiptWarnings(_ node: VariableDeclSyntax) {
+        guard isTopLevelOrFirstLevelMember(node),
+              enclosingNominalType(of: node) == "HeistExecutionEvidenceRollup",
+              node.bindings.contains(where: {
+                  $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "warnings"
+              }) else {
+            return
+        }
+        recordSiblingReceiptWarning(at: node, observed: "HeistExecutionEvidenceRollup.warnings")
+    }
+
+    private func recordSiblingReceiptWarnings(_ node: EnumCaseDeclSyntax) {
+        guard enclosingNominalType(of: node) == "HeistExecutionEvidenceEvent",
+              node.elements.contains(where: { $0.name.text == "warning" }) else {
+            return
+        }
+        recordSiblingReceiptWarning(at: node, observed: "HeistExecutionEvidenceEvent.warning")
+    }
+
+    private func recordSiblingReceiptWarning(at node: some SyntaxProtocol, observed: String) {
+        failures.append(
+            file.failure(
+                at: node,
+                message: "sibling heist receipt warning pipeline",
+                evidence: ViolationEvidence(
+                    observed: observed,
+                    expectation: "warnings are derived from canonical receipt nodes and action results"
+                )
+            )
+        )
+    }
+
+    private func recordActionObservationWireShape(_ node: EnumDeclSyntax) {
+        guard node.name.text == "ActionResultObservationEvidence",
+              let kind = node.memberBlock.members.compactMap({ member in
+                  member.decl.as(EnumDeclSyntax.self)
+              }).first(where: { $0.name.text == "Kind" }) else {
+            return
+        }
+        let cases = enumCaseNames(in: kind)
+        guard cases.contains("trace"), !cases.contains("settledTrace") else { return }
+        failures.append(
+            file.failure(
+                at: kind,
+                message: "trace and settlement share an old JSON discriminator",
+                evidence: ViolationEvidence(
+                    observed: "trace without settledTrace",
+                    expectation: "settled trace evidence has its own settledTrace wire kind"
+                )
+            )
+        )
+    }
+
+    private func recordOldTraceSettlementJSON(_ node: FunctionCallExprSyntax) {
+        guard node.calledExpression.trimmedDescription.hasSuffix(".decodeIfPresent"),
+              node.arguments.first?.expression.trimmedDescription == "ActionSettlementEvidence.self" else {
+            return
+        }
+        failures.append(
+            file.failure(
+                at: node,
+                message: "optional settlement in trace JSON",
+                evidence: ViolationEvidence(
+                    observed: "decodeIfPresent(ActionSettlementEvidence.self)",
+                    expectation: "trace and settledTrace decode as distinct wire kinds"
+                )
+            )
+        )
     }
 
     private func recordTopLevelTypealias(_ node: TypeAliasDeclSyntax) {
@@ -353,6 +545,43 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 evidence: ViolationEvidence(
                     observed: returnType.trimmedDescription,
                     expectation: expectation
+                )
+            )
+        )
+    }
+
+    private func recordExportedTupleParameters(
+        node: some SyntaxProtocol,
+        modifiers: DeclModifierListSyntax,
+        parameters: FunctionParameterListSyntax
+    ) {
+        guard isEffectivelyExported(node, modifiers: modifiers) else { return }
+
+        for parameter in parameters where isTupleType(parameter.type) {
+            failures.append(
+                file.failure(
+                    at: parameter.type,
+                    message: "exported tuple parameter type",
+                    evidence: ViolationEvidence(
+                        observed: parameter.type.trimmedDescription,
+                        expectation: "public and package parameters use named Swift types"
+                    )
+                )
+            )
+        }
+    }
+
+    private func recordExportedTupleTypealias(_ node: TypeAliasDeclSyntax) {
+        let type = node.initializer.value
+        guard isEffectivelyExported(node, modifiers: node.modifiers), isTupleType(type) else { return }
+
+        failures.append(
+            file.failure(
+                at: type,
+                message: "exported tuple typealias",
+                evidence: ViolationEvidence(
+                    observed: type.trimmedDescription,
+                    expectation: "public and package aliases use named Swift types"
                 )
             )
         )
@@ -634,6 +863,7 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         recordForbiddenReference(node: node, observed: node.name.text)
+        recordRawSemanticCommit(node)
         return .visitChildren
     }
 
@@ -684,7 +914,7 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
     }
 
     private func recordForbiddenReference(node: some SyntaxProtocol, observed: String) {
-        guard forbiddenInsideJobArchitectureSymbols.contains(observed) else { return }
+        guard isForbiddenInsideJobArchitectureSymbol(observed) else { return }
         recordFailure(
             at: node,
             observed: observed,
@@ -692,6 +922,23 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
             reveal retries await settled visible observations, refresh live \
             capture, and resolve before the action deadline
             """
+        )
+    }
+
+    private func recordRawSemanticCommit(_ node: FunctionDeclSyntax) {
+        let name = node.name.text
+        let lowercasedName = name.lowercased()
+        guard lowercasedName.hasPrefix("commit"),
+              lowercasedName.contains("semantic") || lowercasedName.contains("observation"),
+              !name.hasSuffix("ForTesting"),
+              let firstType = node.signature.parameterClause.parameters.first?.type,
+              rawSemanticCommitTypes.contains(unwrappedOptionalTypeName(firstType)) else {
+            return
+        }
+        recordFailure(
+            at: firstType,
+            observed: "\(name)(\(firstType.trimmedDescription))",
+            expectation: "semantic commits require settled or explored InterfaceObservationProof"
         )
     }
 
@@ -737,6 +984,20 @@ private let pipelineConstructionOwnership: [String: PipelineConstructionOwnershi
             "ButtonHeist/Sources/TheScore/Reports/ActionResultPayloads.swift",
         ],
         expectation: "action result evidence is assembled only by its value owner or runtime evidence producers"
+    ),
+    "InterfaceObservation": PipelineConstructionOwnership(
+        symbol: "InterfaceObservation",
+        allowedPaths: [
+            "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
+        ],
+        expectation: "production observations enter through InterfaceObservation.build"
+    ),
+    "LiveCapture": PipelineConstructionOwnership(
+        symbol: "LiveCapture",
+        allowedPaths: [
+            "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
+        ],
+        expectation: "production live captures enter through LiveCapture.build"
     ),
 ]
 
@@ -1068,6 +1329,7 @@ private let architectureCurrencyOwnerPaths: [String: String] = [
     "SettlePolicy": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
     "InterfaceObservation": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
     "InterfaceTree": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift",
+    "LiveCapture": "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
 ]
 
 private let anyBoundaryAllowedPaths: Set<String> = [
@@ -1078,13 +1340,16 @@ private let anyBoundaryAllowedPaths: Set<String> = [
 
 private let insideJobSourcePrefix = "ButtonHeist/Sources/TheInsideJob/"
 
+private let retiredProductionSymbols: Set<String> = [
+    "runtimeValidatedVersion",
+]
+
 private let forbiddenInsideJobArchitectureSymbols: Set<String> = [
-    "RevealPathGraceMachine",
     "refreshCurrentVisibleTree",
     "refreshTreeAfterViewportMove",
-    "revealPathGraceTimeout",
-    "revealPathSilentReparseInterval",
 ]
+
+private let rawSemanticCommitTypes: Set<String> = ["InterfaceObservation", "Screen"]
 
 private let interfaceObservationTestingCallShapes: Set<String> = [
     ".testing",
@@ -1166,6 +1431,26 @@ private func isExported(_ modifiers: DeclModifierListSyntax) -> Bool {
     return !names.isDisjoint(with: ["open", "public", "package"])
 }
 
+private func isEffectivelyExported(
+    _ node: some SyntaxProtocol,
+    modifiers: DeclModifierListSyntax
+) -> Bool {
+    if isExported(modifiers) { return true }
+
+    var ancestor = Syntax(node).parent
+    while let current = ancestor {
+        if current.is(CodeBlockSyntax.self) { return false }
+        if let declaration = current.as(ExtensionDeclSyntax.self) {
+            return isExported(declaration.modifiers)
+        }
+        if let declaration = current.as(ProtocolDeclSyntax.self) {
+            return isExported(declaration.modifiers)
+        }
+        ancestor = current.parent
+    }
+    return false
+}
+
 private func isPrivate(_ modifiers: DeclModifierListSyntax) -> Bool {
     let names = Set(modifiers.map(\.name.text))
     return !names.isDisjoint(with: ["private", "fileprivate"])
@@ -1209,6 +1494,44 @@ private func enclosingFunctionName(of node: some SyntaxProtocol) -> String? {
         ancestor = current.parent
     }
     return nil
+}
+
+private func enclosingNominalType(of node: some SyntaxProtocol) -> String? {
+    var ancestor = Syntax(node).parent
+    while let current = ancestor {
+        if let declaration = current.as(StructDeclSyntax.self) {
+            return declaration.name.text
+        }
+        if let declaration = current.as(EnumDeclSyntax.self) {
+            return declaration.name.text
+        }
+        if let declaration = current.as(ClassDeclSyntax.self) {
+            return declaration.name.text
+        }
+        if let declaration = current.as(ActorDeclSyntax.self) {
+            return declaration.name.text
+        }
+        ancestor = current.parent
+    }
+    return nil
+}
+
+private func enclosingExtensionType(of node: some SyntaxProtocol) -> String? {
+    var ancestor = Syntax(node).parent
+    while let current = ancestor {
+        if current.is(CodeBlockSyntax.self) { return nil }
+        if let declaration = current.as(ExtensionDeclSyntax.self) {
+            return declaration.extendedType.trimmedDescription
+        }
+        ancestor = current.parent
+    }
+    return nil
+}
+
+private func enumCaseNames(in declaration: EnumDeclSyntax) -> Set<String> {
+    Set(declaration.memberBlock.members.flatMap { member in
+        member.decl.as(EnumCaseDeclSyntax.self)?.elements.map(\.name.text) ?? []
+    })
 }
 
 private func isTopLevelOrFirstLevelMember(_ node: some SyntaxProtocol) -> Bool {
@@ -1277,67 +1600,33 @@ private func isCompatibilityName(_ name: String) -> Bool {
     return name.contains("Compat") && !name.contains("Compatible")
 }
 
-private func isTupleType(_ type: some TypeSyntaxProtocol) -> Bool {
-    isTupleTypeDescription(type.trimmedDescription)
+private func isForbiddenInsideJobArchitectureSymbol(_ observed: String) -> Bool {
+    if forbiddenInsideJobArchitectureSymbols.contains(observed) { return true }
+    let lowercased = observed.lowercased()
+    return lowercased.contains("reveal")
+        && (lowercased.contains("grace") || lowercased.contains("silentreparse"))
 }
 
-private func isTupleTypeDescription(_ rawText: String) -> Bool {
-    let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-    let characters = Array(text)
-    guard characters.first == "(" else {
-        return false
-    }
-
-    guard let closeIndex = matchingCloseParenIndex(in: characters, openIndex: 0) else {
-        return false
-    }
-
-    let suffix = String(characters[(closeIndex + 1)...])
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    if suffix.hasPrefix("->") {
-        return false
-    }
-
-    let content = Array(characters[1..<closeIndex])
-    var depth = 0
-    var hasComma = false
-    var hasColon = false
-    var hasTopLevelArrow = false
-    var index = 0
-
-    while index < content.count {
-        let character = content[index]
-        if "([{".contains(character) {
-            depth += 1
-        } else if ")]}".contains(character) {
-            depth = max(0, depth - 1)
-        } else if depth == 0 {
-            if character == "," {
-                hasComma = true
-            } else if character == ":" {
-                hasColon = true
-            } else if character == "-", index + 1 < content.count, content[index + 1] == ">" {
-                hasTopLevelArrow = true
-                index += 1
-            }
-        }
-        index += 1
-    }
-
-    return (hasComma || hasColon) && !hasTopLevelArrow
+private func isRawCommandArgumentType(_ type: TypeSyntax) -> Bool {
+    let compact = type.trimmedDescription.filter { !$0.isWhitespace }
+    return compact.contains("CommandArgumentEnvelope")
+        || compact.contains("[String:HeistValue]")
+        || compact.contains("Dictionary<String,HeistValue>")
 }
 
-private func matchingCloseParenIndex(in characters: [Character], openIndex: Int) -> Int? {
-    var depth = 0
-    for index in openIndex..<characters.count {
-        if characters[index] == "(" {
-            depth += 1
-        } else if characters[index] == ")" {
-            depth -= 1
-            if depth == 0 {
-                return index
-            }
-        }
+private func unwrappedOptionalTypeName(_ type: TypeSyntax) -> String {
+    type.trimmedDescription.trimmingCharacters(in: CharacterSet(charactersIn: "?!"))
+}
+
+private func isTupleType(_ type: TypeSyntax) -> Bool {
+    if let tuple = type.as(TupleTypeSyntax.self) {
+        return tuple.elements.count > 1
     }
-    return nil
+    if let optional = type.as(OptionalTypeSyntax.self) {
+        return isTupleType(optional.wrappedType)
+    }
+    if let attributed = type.as(AttributedTypeSyntax.self) {
+        return isTupleType(attributed.baseType)
+    }
+    return false
 }
