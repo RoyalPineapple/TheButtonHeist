@@ -740,7 +740,7 @@ final class TheBrainsActionTests: XCTestCase {
                 method: .activate,
                 errorKind: .actionFailed,
                 message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
-                activationTrace: activationTrace
+                evidence: ActionResultEvidence(activationTrace: activationTrace)
             )
         }
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -785,7 +785,9 @@ final class TheBrainsActionTests: XCTestCase {
                 waitRequests.append(request)
                 return ActionResult.success(
                     method: .wait,
-                    accessibilityTrace: AccessibilityTrace(capture: observedReady.capture)
+                    evidence: ActionResultEvidence(
+                        accessibilityTrace: AccessibilityTrace(capture: observedReady.capture)
+                    )
                 )
             }
         )
@@ -830,10 +832,12 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { _ in
                 ActionResult.success(
                     method: .activate,
-                    subjectEvidence: ActionSubjectEvidence(
-                        source: .resolvedSemanticTarget,
-                        target: target,
-                        element: subject
+                    evidence: ActionResultEvidence(
+                        subjectEvidence: ActionSubjectEvidence(
+                            source: .resolvedSemanticTarget,
+                            target: target,
+                            element: subject
+                        )
                     )
                 )
             }
@@ -871,10 +875,12 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { _ in
                 ActionResult.success(
                     method: .typeText,
-                    subjectEvidence: ActionSubjectEvidence(
-                        source: .textInputTarget,
-                        target: target,
-                        element: subject
+                    evidence: ActionResultEvidence(
+                        subjectEvidence: ActionSubjectEvidence(
+                            source: .textInputTarget,
+                            target: target,
+                            element: subject
+                        )
                     )
                 )
             }
@@ -1173,8 +1179,10 @@ final class TheBrainsActionTests: XCTestCase {
                 let after = states[incrementCount]
                 return ActionResult.success(
                     method: .increment,
-                    accessibilityTrace: AccessibilityTrace(captures: [before.capture, after.capture]),
-                    settled: true
+                    evidence: ActionResultEvidence(
+                        accessibilityTrace: AccessibilityTrace(captures: [before.capture, after.capture]),
+                        settlement: .settled(durationMs: 0)
+                    )
                 )
             },
             wait: { request in
@@ -2530,7 +2538,10 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult.success(method: .activate, accessibilityTrace: trace)
+                ActionResult.success(
+                    method: .activate,
+                    evidence: ActionResultEvidence(accessibilityTrace: trace)
+                )
             }
         )
         let plan = try HeistPlan(body: [
@@ -2566,7 +2577,9 @@ final class TheBrainsActionTests: XCTestCase {
                     method: .wait,
                     errorKind: .timeout,
                     message: "timed out after 0.2s — expectation not met",
-                    accessibilityTrace: .noChangeForTests(elementCount: 1)
+                    evidence: ActionResultEvidence(
+                        accessibilityTrace: .noChangeForTests(elementCount: 1)
+                    )
                 )
             }
         )
@@ -3127,14 +3140,18 @@ final class TheBrainsActionTests: XCTestCase {
                 executedCommands.append(command)
                 return ActionResult.success(
                     method: .activate,
-                    accessibilityTrace: AccessibilityTrace(capture: stillPresentState.capture)
+                    evidence: ActionResultEvidence(
+                        accessibilityTrace: AccessibilityTrace(capture: stillPresentState.capture)
+                    )
                 )
             },
             wait: { request in
                 waitedSteps.append(request.step)
                 return ActionResult.success(
                     method: .wait,
-                    accessibilityTrace: AccessibilityTrace(capture: waitObservedState.capture)
+                    evidence: ActionResultEvidence(
+                        accessibilityTrace: AccessibilityTrace(capture: waitObservedState.capture)
+                    )
                 )
             }
         )
@@ -4632,14 +4649,14 @@ private func makeWaitActionResult(
         return ActionResult.success(
             method: .wait,
             message: message,
-            accessibilityTrace: accessibilityTrace
+            evidence: ActionResultEvidence(accessibilityTrace: accessibilityTrace)
         )
     }
     return ActionResult.failure(
         method: .wait,
         errorKind: .timeout,
         message: message,
-        accessibilityTrace: accessibilityTrace
+        evidence: ActionResultEvidence(accessibilityTrace: accessibilityTrace)
     )
 }
 
