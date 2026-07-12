@@ -38,10 +38,11 @@ message discriminators such as `requestInterface`, `requestScreen`, `status`,
 and `heistPlan`. Use Fence command names at public adapter boundaries and wire
 discriminators only when speaking raw TCP.
 
-Side-effecting app interactions are not public primitive wire messages. A
-single `activate`, `type_text`, `wait`, `set_pasteboard`, or viewport command is
-a one-step `HeistPlan`; composed flows are multi-step plans. The public
-mutating wire path is always `heistPlan`.
+Side-effecting app interactions are not raw command dictionaries on the wire.
+Durable mutations such as `activate`, `type_text`, `wait`, and `set_pasteboard`
+cross as one-step or composed `heistPlan` messages. Non-durable viewport/debug
+commands cross as typed `runtimeAction` messages. In both cases, Fence admission
+has already converted the public command envelope into typed runtime values.
 
 ## Transport
 
@@ -134,7 +135,7 @@ Client request:
 Server response:
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"interface","payload":{"timestamp":"2026-02-03T10:30:45.123Z","tree":[],"annotations":{"elements":[],"containers":[]}}}
+{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"interface","payload":{"timestamp":791807445.123,"tree":[],"annotations":{"elements":[],"containers":[]}}}
 ```
 
 | Field | Description |
@@ -203,47 +204,52 @@ Clients without a token fail before starting the TLS connection.
 
 The interface payload carries the canonical hierarchy tree plus ButtonHeist
 annotations. There is no parallel wire `elements` array in the public wire
-contract.
+contract. `timestamp` uses Foundation `Date`'s default Codable representation:
+seconds since 2001-01-01 00:00:00 UTC.
 
 ```json
 {
   "buttonHeistVersion": "<semver>",
   "type": "interface",
   "payload": {
-    "screenDescription": "Sign In - 1 text field, 1 button",
-    "timestamp": "2026-02-03T10:30:45.123Z",
+    "timestamp": 791807445.123,
     "tree": [
       {
         "element": {
-          "heistId": "button_sign_in",
+          "description": "Button",
           "label": "Sign In",
           "identifier": "signInButton",
           "traits": ["button"],
-          "frameX": 16,
-          "frameY": 140,
-          "frameWidth": 361,
-          "frameHeight": 44,
-          "activationPointEvidence": {
-            "source": "defaultCenter",
-            "point": { "x": 196.5, "y": 162 }
-          }
+          "shape": { "type": "frame", "frame": [[16, 140], [361, 44]] },
+          "activationPoint": [196.5, 162],
+          "usesDefaultActivationPoint": true,
+          "customActions": [],
+          "customContent": [],
+          "customRotors": [],
+          "respondsToUserInteraction": true,
+          "visibility": "onscreen",
+          "traversalIndex": 0
         }
       }
     ],
     "annotations": {
-      "elements": [],
+      "elements": [
+        { "path": { "indices": [0] }, "actions": ["activate"] }
+      ],
       "containers": []
     }
   }
 }
 ```
 
-`heistId` is a current-capture annotation for correlation and diagnostics.
-`AccessibilityTarget` is the canonical target object for actions, predicates,
-and `get_interface.query.subtree`. An element target carries an ordered
-predicate `checks` chain and optional `ordinal`; a container target carries
-`container` and optional `ordinal`; `container` plus `target` expresses a
-descendant-scoped target; `ref` refers to a scoped heist target parameter.
+The raw interface tree carries parser values plus path-indexed Button Heist
+annotations. Capture-local `HeistId` values remain inside TheInsideJob and are
+not selectors on this transport. `AccessibilityTarget` is the canonical target
+object for actions, predicates, and `get_interface.query.subtree`. An element
+target carries an ordered predicate `checks` chain and optional `ordinal`; a
+container target carries `container` and optional `ordinal`; `container` plus
+`target` expresses a descendant-scoped target; `ref` refers to a scoped heist
+target parameter.
 Public target nesting is bounded by the shared public JSON input depth limit.
 Checks include `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
 `customContent`, and `rotors`. Durable replay uses the same target shape.
@@ -306,10 +312,10 @@ target against current state, moves the viewport if needed, refreshes, acquires
 fresh live geometry, and then dispatches through the heist runtime. Cached
 coordinates from a prior capture are not the authority.
 
-Explicit viewport messages such as `scroll`, `scrollToEdge`, and
-`scrollToVisible` remain public Fence commands because moving the viewport is
-the requested behavior, but they also cross the device wire as one-step
-`heistPlan` requests.
+Explicit viewport commands such as `scroll`, `scroll_to_edge`, and
+`scroll_to_visible` remain public Fence commands because moving the viewport is
+the requested behavior. They are non-durable debug operations and cross the
+device wire as typed `runtimeAction` requests, not as `heistPlan` steps.
 
 ### Screen Capture
 
@@ -390,8 +396,9 @@ for example:
 {"kind":"value","data":"Hello"}
 ```
 
-Returned elements may include capture-local annotations. Compose follow-up
-commands from their semantic fields, not from `heistId`.
+Returned elements expose semantic accessibility fields. Compose follow-up
+commands from those fields; internal capture-local `HeistId` values are not
+public selectors.
 
 Action failures use `{"outcome":{"kind":"failure","errorKind":"..."}}`
 when the error belongs to the action. Server-level failures use the `error`
@@ -423,6 +430,9 @@ Scoped notification evidence has one semantic shape: `screenChanged`,
 classifies replacement even when tree hashes are equal. Element and
 announcement notifications remain same-generation evidence. Unknown kinds
 retain their raw code and never become screen evidence by themselves.
+UIKit does not guarantee delivery of a useful notification for every change;
+absence permits explicit snapshot classification but is not itself evidence of
+either replacement or stability.
 
 One action contributes one captured notification batch. Its retained events
 are strictly after the action window's opening cursor and no later than the
@@ -444,7 +454,7 @@ payload.
 First-responder state is captured internally as a capture-local `HeistId` and
 retained in the value-only capture snapshot, never as a UIKit object identity.
 When trace context exposes `firstResponder`, the host projects that captured id
-to an `AccessibilityTarget`; internal ids do not cross the wire.
+once to an `AccessibilityTarget`; internal ids do not cross the wire.
 
 Observed notification evidence and inferred screen classification occupy
 different transition fields. `transition.accessibilityNotifications` retains

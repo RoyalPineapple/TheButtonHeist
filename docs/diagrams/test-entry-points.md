@@ -81,5 +81,6 @@ Notes:
 
 - `runHeist` and `runHeistSync` run the plan in-process; `joinHeist` and `withJoinedHeistSession` start a `TheInsideJob` server inside the test host so an **external** agent can connect (observation and control come from outside, over the same wire as any other client).
 - `runHeistSync` exists so the test method itself can stay synchronous: it polls `HeistSyncState` in 0.05 s run-loop slices until the main-actor task publishes a result.
+- Every XCTest-facing synchronous failure preserves the public caller location and routes through `recordHeistXCTestIssue`, the single `XCTFail` emission path.
 - Bare `joinHeist` never returns — it is for interactive sessions only. Under CI, test watchdogs will kill a parked test; use `withJoinedHeistSession` when the join must end.
 - Receipts can be recorded per run via `HeistTestReceiptRecording` (`.environment`, `.failures`, `.always`).

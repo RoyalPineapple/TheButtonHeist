@@ -11,13 +11,13 @@ flowchart TD
         WALK["recursiveAccessibilityHierarchy()<br/>parser tree walk"]
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
-        TREE["InterfaceTree<br/>elements + containers<br/>value-only viewport capture"]
+        TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>value-only viewport capture"]
         STASH["TheStash<br/>interfaceTree (targetable truth)<br/>latestObservation (live evidence)<br/>diagnosticObservation (optional)"]
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
         WALK --> AXE
         AXE --> OBS
         OBS -- "proof-backed commit / merge" --> TREE
-        OBS --> STASH
+        OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
         TREE --> STASH
         STASH --> LIVET
     end
@@ -32,7 +32,7 @@ flowchart TD
 
     CLIENT["CLI / MCP / DSL client"]
 
-    STASH -- "IdAssignment: stable identifier<br/>or synthesizeBaseId" --> HE
+    STASH -- "public Interface / element projection" --> HE
     HE -- "get_interface response" --> CLIENT
     CLIENT -- "actions, predicates,<br/>subtree queries" --> ET
     ET -- "one delivered-tree resolver" --> STASH
@@ -48,4 +48,4 @@ Notes:
   to an element, container, scoped descendant, or target reference. Actions,
   predicates, and subtree queries pass the same value. Container identifiers
   match every delivered parser container type that carries them.
-- heistIds are assigned by `TheStash.IdAssignment`: a stable developer `identifier` wins when present; otherwise `synthesizeBaseId` derives an id from the element's label and highest-priority trait (`AccessibilityPolicy.synthesisPriority`), with `_1`, `_2` suffixes for duplicates in traversal order.
+- Capture-local `HeistId` values are assigned by `TheStash.IdAssignment`: a stable developer `identifier` wins when present; otherwise `synthesizeBaseId` derives an id from the element's label and highest-priority trait (`AccessibilityPolicy.synthesisPriority`), with `_1`, `_2` suffixes for duplicates in traversal order. They correlate committed nodes with live evidence inside TheInsideJob and do not cross the public transport as selectors.

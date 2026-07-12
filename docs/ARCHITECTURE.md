@@ -20,6 +20,10 @@ JSON, session JSON, and heist files accept canonical command strings such as
 `activate`, `type_text`, and `scroll_to_visible`; those strings are parsed once
 at the boundary and routed as typed values inside the stack.
 
+Raw command dictionaries end at Fence admission. `FenceCommandInput` is the
+unadmitted edge value; `FenceOperationRequest` contains the typed operation that
+execution consumes.
+
 ButtonHeistMCP projects one tool per exposed Fence command from the same
 contract. Wire message discriminators live one layer lower in TheScore and are
 documented separately.
@@ -37,6 +41,10 @@ semantic truth. It pairs an `InterfaceTree` with the viewport-local
 only publication owner, and its production commit entry points require an
 `InterfaceObservationProof` produced by a clean settle or a finished
 exploration.
+
+A raw parser read may replace live object and geometry evidence, but only a
+`HeistId` resolved from the committed `InterfaceTree` can select that evidence
+for action. Parsed nodes do not become targetable until a proven commit.
 
 The trace derives one ordered `ChangeFact` stream for every temporal consumer.
 Predicates, receipts, diagnostics, and repair analysis all use those facts. A
@@ -65,6 +73,8 @@ notifications. Notifications are edge evidence, not a second state model. A
 scoped screen notification is authoritative replacement evidence. Element and
 announcement notifications keep the edge in the same generation; only an
 empty or unknown notification batch permits snapshot fallback inference.
+Notification delivery is best effort; absence is not evidence of replacement
+or stability.
 
 Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
 `SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
@@ -190,7 +200,7 @@ served as current.
 TheBurglar owns first-responder capture. A parser read converts responder state
 to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
 the capture. Settled storage never retains a UIKit object as responder identity;
-TheStash alone projects the captured id to a semantic `AccessibilityTarget`
+TheStash alone projects the captured id once to a semantic `AccessibilityTarget`
 through the shared minimum-predicate selector used by semantic and post-action
 trace context.
 

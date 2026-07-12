@@ -1,5 +1,6 @@
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
+import TheScore
 
 final class DocumentationContractTests: XCTestCase {
 
@@ -152,6 +153,132 @@ final class DocumentationContractTests: XCTestCase {
         )
     }
 
+    func testWireEnvelopeExamplesDecodeWithCanonicalTypes() throws {
+        let wireProtocol = try contents(relativePath: "docs/WIRE-PROTOCOL.md")
+        let envelopeBlocks = try jsonCodeBlocks(in: markdownSection(
+            startingAt: "## Envelopes",
+            endingAt: "## Public Wire Examples",
+            in: wireProtocol
+        ))
+        let hello = try jsonDocuments(in: onlyJSONBlock(
+            startingAt: "### Hello",
+            endingAt: "### Authentication",
+            in: wireProtocol
+        ))
+
+        let requestDocuments = try [
+            XCTUnwrap(envelopeBlocks[safe: 0]),
+            XCTUnwrap(hello[safe: 1]),
+            onlyJSONBlock(
+                startingAt: "### Authentication",
+                endingAt: "### Unsupported Legacy Auth Messages",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 0,
+                startingAt: "### Status Probe",
+                endingAt: "### Interface",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 0,
+                startingAt: "### Interface",
+                endingAt: "### One-Step Semantic Action",
+                in: wireProtocol
+            ),
+            onlyJSONBlock(
+                startingAt: "### One-Step Semantic Action",
+                endingAt: "### Screen Capture",
+                in: wireProtocol
+            ),
+            onlyJSONBlock(
+                startingAt: "### Screen Capture",
+                endingAt: "### Wait",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 0,
+                startingAt: "### Wait",
+                endingAt: "## Action Results",
+                in: wireProtocol
+            ),
+        ]
+        let responseDocuments = try [
+            XCTUnwrap(envelopeBlocks[safe: 1]),
+            XCTUnwrap(hello[safe: 0]),
+            XCTUnwrap(hello[safe: 2]),
+            onlyJSONBlock(
+                startingAt: "### Protocol Mismatch",
+                endingAt: "### Session Locked",
+                in: wireProtocol
+            ),
+            onlyJSONBlock(
+                startingAt: "### Session Locked",
+                endingAt: "### Status Probe",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 1,
+                startingAt: "### Status Probe",
+                endingAt: "### Interface",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 1,
+                startingAt: "### Interface",
+                endingAt: "### One-Step Semantic Action",
+                in: wireProtocol
+            ),
+            jsonBlock(
+                at: 0,
+                startingAt: "## Action Results",
+                endingAt: "## Traces, Facts, and Public Deltas",
+                in: wireProtocol
+            ),
+        ]
+
+        for document in requestDocuments {
+            _ = try JSONDecoder().decode(RequestEnvelope.self, from: Data(document.utf8))
+        }
+        for document in responseDocuments {
+            _ = try JSONDecoder().decode(ResponseEnvelope.self, from: Data(document.utf8))
+        }
+    }
+
+    func testPublicContractFragmentsDecodeWithCanonicalTypes() throws {
+        let api = try contents(relativePath: "docs/API.md")
+        let wireProtocol = try contents(relativePath: "docs/WIRE-PROTOCOL.md")
+        let predicateDocuments = try jsonCodeBlocks(in: markdownSection(
+            startingAt: "### Expectations",
+            endingAt: "## Minimal Integration",
+            in: api
+        )) + jsonDocuments(in: onlyJSONBlock(
+            startingAt: "The strict predicate wire grammar is:",
+            endingAt: "Raw heist receipt steps use one tagged `outcome`",
+            in: wireProtocol
+        ))
+
+        for document in predicateDocuments {
+            let value = try JSONDecoder().decode(HeistValue.self, from: Data(document.utf8))
+            _ = try TheFence.ExpectationPayload.parseRequiredPredicate(value)
+        }
+
+        let receipt = try onlyJSONBlock(
+            startingAt: "Raw heist receipt steps use one tagged `outcome`",
+            endingAt: "## Action Results",
+            in: wireProtocol
+        )
+        _ = try JSONDecoder().decode(HeistExecutionStepResult.self, from: Data(receipt.utf8))
+
+        let actionBlocks = try jsonCodeBlocks(in: markdownSection(
+            startingAt: "## Action Results",
+            endingAt: "## Traces, Facts, and Public Deltas",
+            in: wireProtocol
+        ))
+        let payload = try XCTUnwrap(actionBlocks[safe: 1])
+        _ = try JSONDecoder().decode(ResultPayload.self, from: Data(payload.utf8))
+    }
+
     func testCIReceiptContractDocumentsExistingScripts() throws {
         let ci = try contents(relativePath: "docs/CI.md")
 
@@ -218,6 +345,53 @@ final class DocumentationContractTests: XCTestCase {
                 else { return nil }
                 return (line: offset + 1, json: String(line[start...end]))
             }
+    }
+
+    private func onlyJSONBlock(
+        startingAt start: String,
+        endingAt end: String,
+        in contents: String
+    ) throws -> String {
+        let blocks = try jsonCodeBlocks(in: markdownSection(startingAt: start, endingAt: end, in: contents))
+        return try XCTUnwrap(blocks.only)
+    }
+
+    private func jsonBlock(
+        at index: Int,
+        startingAt start: String,
+        endingAt end: String,
+        in contents: String
+    ) throws -> String {
+        let section = try markdownSection(startingAt: start, endingAt: end, in: contents)
+        return try XCTUnwrap(jsonCodeBlocks(in: section)[safe: index])
+    }
+
+    private func markdownSection(
+        startingAt start: String,
+        endingAt end: String,
+        in contents: String
+    ) throws -> String {
+        let startRange = try XCTUnwrap(contents.range(of: start))
+        let remainder = contents[startRange.upperBound...]
+        let endRange = try XCTUnwrap(remainder.range(of: end))
+        return String(remainder[..<endRange.lowerBound])
+    }
+
+    private func jsonCodeBlocks(in contents: String) throws -> [String] {
+        let regex = try NSRegularExpression(pattern: #"```json\s*\n([\s\S]*?)\n```"#)
+        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
+        return regex.matches(in: contents, range: range).compactMap { match in
+            Range(match.range(at: 1), in: contents).map { String(contents[$0]) }
+        }
+    }
+
+    private func jsonDocuments(in block: String) throws -> [String] {
+        let lines = block.split(whereSeparator: \Character.isNewline).map(String.init)
+        guard lines.count > 1,
+              lines.allSatisfy({ $0.hasPrefix("{") && $0.hasSuffix("}") }) else {
+            return [block]
+        }
+        return lines
     }
 
     private func markdownLinks(in contents: String) throws -> [String] {
@@ -298,6 +472,18 @@ final class DocumentationContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+private extension Collection {
+    var only: Element? {
+        count == 1 ? first : nil
+    }
+}
+
+private extension Collection where Index == Int {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

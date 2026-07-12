@@ -50,8 +50,8 @@ Notes:
   and prevent `noChange`; scoped screen notification or typed snapshot fallback
   begins a new generation.
 - First-responder state is capture-local `HeistId` value evidence. Trace context
-  projects that id to an `AccessibilityTarget`; no UIKit responder identity is
-  retained or sent over the wire.
+  projects that id once to an `AccessibilityTarget`; no UIKit responder identity
+  is retained or sent over the wire.
 - Action observation evidence is exactly one of `none`, `announcement`, `trace`,
   or `settledTrace`; only `settledTrace` carries settlement evidence.
 - Public delta is a lossy formatting fold. Predicate evaluation never reads it.

@@ -23,7 +23,9 @@ input.
 flowchart TD
     Signals["Scoped accessibility notifications<br/>screen, layout, value, announcement"] --> Settle["Settle and parse"]
     Parse["Parser read<br/>InterfaceObservation + disposable LiveCapture"] --> Settle
+    Parse -- "live object / geometry refresh<br/>for committed HeistIds only" --> Live["TheStash latestObservation<br/>disposable action evidence"]
     Settle -- "clean proof" --> Tree["TheStash.interfaceTree<br/>sole current semantic truth"]
+    Tree -- "semantic target selects HeistId" --> Live
     Tree --> Captures["AccessibilityTrace captures<br/>durable temporal truth"]
     Captures --> Facts["Ordered ChangeFact stream<br/>sole temporal model"]
 
@@ -64,11 +66,13 @@ Consequences:
 - Any scoped screen, layout, value, or announcement notification is edge
   evidence. It prevents a fact-free `noChange` verdict even when endpoint
   captures have equal hashes.
-- Raw parser reads refresh disposable live action evidence but do not update the
-  settled interface. Failed settles remain diagnostic evidence only.
+- Raw parser reads refresh disposable live action evidence for committed
+  `HeistId` values but do not update the settled interface or make new parsed
+  nodes targetable. Failed settles remain diagnostic evidence only.
 - Scoped screen notification is authoritative replacement evidence. Element
   and announcement notifications stay in-generation; only empty or unknown
-  notification evidence permits typed snapshot fallback.
+  notification evidence permits typed snapshot fallback. Notification delivery
+  is best effort; absence is not a classification.
 - The public fold composes facts like stacked layers, resolves transient
   appear/disappear pairs, and lets any screen marker dominate the final kind.
   That convenience projection cannot recover the ordered history it squashed.
