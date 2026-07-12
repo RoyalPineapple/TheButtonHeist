@@ -215,11 +215,11 @@ import Testing
         ),
         (
             "WaitFor(.exists(.container(.dataTable)))",
-            "expected symbol '('"
+            "expected '('"
         ),
         (
             "WaitFor(.exists(.container(.modalBoundary(true))))",
-            "expected symbol ')'"
+            "expected ')'"
         ),
         (
             "WaitFor(.exists(.container(.actions([.custom(\"Archive\")]))))",
