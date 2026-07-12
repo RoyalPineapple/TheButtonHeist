@@ -7,9 +7,17 @@ extension TheSafecracker {
     /// Outcome of a high-level action dispatch before post-action observation.
     /// TheInsideJob wraps this with post-action observations to produce the wire ActionResult.
     struct ActionDispatchOutcome {
-        let method: ActionMethod
         let message: String?
         let outcome: ActionDispatchState
+
+        var method: ActionMethod {
+            switch outcome {
+            case .success(let success):
+                return success.method
+            case .failure(let failure):
+                return failure.method
+            }
+        }
 
         var success: Bool {
             if case .success = outcome { return true }
@@ -55,11 +63,9 @@ extension TheSafecracker {
         }
 
         private init(
-            method: ActionMethod,
             message: String?,
             outcome: ActionDispatchState
         ) {
-            self.method = method
             self.message = message
             self.outcome = outcome
         }
@@ -72,10 +78,9 @@ extension TheSafecracker {
             activationTrace: ActivationTrace? = nil
         ) -> ActionDispatchOutcome {
             ActionDispatchOutcome(
-                method: method,
                 message: message,
                 outcome: .success(ActionDispatchSuccess(
-                    payload: nil,
+                    method: method,
                     subjectEvidence: subjectEvidence,
                     resolvedElementId: resolvedElementId,
                     activationTrace: activationTrace
@@ -91,7 +96,6 @@ extension TheSafecracker {
             activationTrace: ActivationTrace? = nil
         ) -> ActionDispatchOutcome {
             ActionDispatchOutcome(
-                method: payload.method,
                 message: message,
                 outcome: .success(ActionDispatchSuccess(
                     payload: payload,
@@ -109,9 +113,9 @@ extension TheSafecracker {
             failureKind: FailureKind = .actionFailed
         ) -> ActionDispatchOutcome {
             ActionDispatchOutcome(
-                method: method,
                 message: message,
                 outcome: .failure(ActionDispatchFailure(
+                    method: method,
                     kind: failureKind,
                     activationTrace: activationTrace
                 ))
@@ -123,15 +127,8 @@ extension TheSafecracker {
             switch outcome {
             case .success(let success):
                 return ActionDispatchOutcome(
-                    method: method,
                     message: message,
-                    outcome: .success(ActionDispatchSuccess(
-                        payload: success.payload,
-                        subjectEvidence: evidence,
-                        resolvedElementId: success.resolvedElementId,
-                        activationTrace: success.activationTrace,
-                        timing: success.timing
-                    ))
+                    outcome: .success(success.withSubjectEvidence(evidence))
                 )
             case .failure:
                 return self
@@ -143,25 +140,13 @@ extension TheSafecracker {
             switch outcome {
             case .success(let success):
                 return ActionDispatchOutcome(
-                    method: method,
                     message: message,
-                    outcome: .success(ActionDispatchSuccess(
-                        payload: success.payload,
-                        subjectEvidence: success.subjectEvidence,
-                        resolvedElementId: success.resolvedElementId,
-                        activationTrace: trace,
-                        timing: success.timing
-                    ))
+                    outcome: .success(success.withActivationTrace(trace))
                 )
             case .failure(let failure):
                 return ActionDispatchOutcome(
-                    method: method,
                     message: message,
-                    outcome: .failure(ActionDispatchFailure(
-                        kind: failure.kind,
-                        activationTrace: trace,
-                        timing: failure.timing
-                    ))
+                    outcome: .failure(failure.withActivationTrace(trace))
                 )
             }
         }
@@ -172,25 +157,13 @@ extension TheSafecracker {
             switch outcome {
             case .success(let success):
                 return ActionDispatchOutcome(
-                    method: method,
                     message: message,
-                    outcome: .success(ActionDispatchSuccess(
-                        payload: success.payload,
-                        subjectEvidence: success.subjectEvidence,
-                        resolvedElementId: success.resolvedElementId,
-                        activationTrace: success.activationTrace,
-                        timing: mergedTiming
-                    ))
+                    outcome: .success(success.withTiming(mergedTiming))
                 )
             case .failure(let failure):
                 return ActionDispatchOutcome(
-                    method: method,
                     message: message,
-                    outcome: .failure(ActionDispatchFailure(
-                        kind: failure.kind,
-                        activationTrace: failure.activationTrace,
-                        timing: mergedTiming
-                    ))
+                    outcome: .failure(failure.withTiming(mergedTiming))
                 )
             }
         }
@@ -203,6 +176,7 @@ extension TheSafecracker {
     }
 
     struct ActionDispatchSuccess {
+        let method: ActionMethod
         let payload: ActionResultPayload?
         let subjectEvidence: ActionSubjectEvidence?
         let resolvedElementId: HeistId?
@@ -210,17 +184,74 @@ extension TheSafecracker {
         let timing: ActionPerformanceTiming?
 
         init(
-            payload: ActionResultPayload? = nil,
+            method: ActionMethod,
             subjectEvidence: ActionSubjectEvidence? = nil,
             resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil,
             timing: ActionPerformanceTiming? = nil
         ) {
+            self.method = method
+            payload = nil
+            self.subjectEvidence = subjectEvidence
+            self.resolvedElementId = resolvedElementId
+            self.activationTrace = activationTrace
+            self.timing = timing
+        }
+
+        init(
+            payload: ActionResultPayload,
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            resolvedElementId: HeistId? = nil,
+            activationTrace: ActivationTrace? = nil,
+            timing: ActionPerformanceTiming? = nil
+        ) {
+            method = payload.method
             self.payload = payload
             self.subjectEvidence = subjectEvidence
             self.resolvedElementId = resolvedElementId
             self.activationTrace = activationTrace
             self.timing = timing
+        }
+
+        private init(
+            preserving source: ActionDispatchSuccess,
+            subjectEvidence: ActionSubjectEvidence?,
+            activationTrace: ActivationTrace?,
+            timing: ActionPerformanceTiming?
+        ) {
+            method = source.method
+            payload = source.payload
+            self.subjectEvidence = subjectEvidence
+            resolvedElementId = source.resolvedElementId
+            self.activationTrace = activationTrace
+            self.timing = timing
+        }
+
+        func withSubjectEvidence(_ evidence: ActionSubjectEvidence) -> ActionDispatchSuccess {
+            ActionDispatchSuccess(
+                preserving: self,
+                subjectEvidence: evidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
+        }
+
+        func withActivationTrace(_ trace: ActivationTrace) -> ActionDispatchSuccess {
+            ActionDispatchSuccess(
+                preserving: self,
+                subjectEvidence: subjectEvidence,
+                activationTrace: trace,
+                timing: timing
+            )
+        }
+
+        func withTiming(_ timing: ActionPerformanceTiming) -> ActionDispatchSuccess {
+            ActionDispatchSuccess(
+                preserving: self,
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
         }
     }
 
@@ -228,18 +259,29 @@ extension TheSafecracker {
         /// Structural reason for failure. Lets dispatch code distinguish
         /// tree-unavailable from timeout without parsing `message` (which is
         /// user-facing copy, not a control-flow contract).
+        let method: ActionMethod
         let kind: FailureKind
         let activationTrace: ActivationTrace?
         let timing: ActionPerformanceTiming?
 
         init(
+            method: ActionMethod,
             kind: FailureKind,
             activationTrace: ActivationTrace? = nil,
             timing: ActionPerformanceTiming? = nil
         ) {
+            self.method = method
             self.kind = kind
             self.activationTrace = activationTrace
             self.timing = timing
+        }
+
+        func withActivationTrace(_ trace: ActivationTrace) -> ActionDispatchFailure {
+            ActionDispatchFailure(method: method, kind: kind, activationTrace: trace, timing: timing)
+        }
+
+        func withTiming(_ timing: ActionPerformanceTiming) -> ActionDispatchFailure {
+            ActionDispatchFailure(method: method, kind: kind, activationTrace: activationTrace, timing: timing)
         }
     }
 

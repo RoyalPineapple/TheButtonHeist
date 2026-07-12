@@ -24,7 +24,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
         XCTAssertEqual(Set(evidence.keys), Set(["observation", "timing", "warning"]))
-        XCTAssertEqual(observation["kind"] as? String, "trace")
+        XCTAssertEqual(observation["kind"] as? String, "settledTrace")
         XCTAssertNotNil(observation["accessibilityTrace"])
         XCTAssertNil(observation["announcement"])
         XCTAssertEqual(settlement["kind"] as? String, "settled")
@@ -138,6 +138,33 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             "settlement": {"kind": "settled", "durationMs": 5},
             "timing": {"settleMs": 5}
           }
+        }
+        """)
+    }
+
+    func testDecodingRejectsImplicitSettledTrace() {
+        assertActionResultRejects("""
+        {
+          "outcome": {"kind": "success"},
+          "method": "wait",
+          "evidence": {
+            "observation": {
+              "kind": "trace",
+              "accessibilityTrace": {"captures": []},
+              "settlement": {"kind": "settled", "durationMs": 5}
+            }
+          }
+        }
+        """)
+    }
+
+    func testDecodingRejectsSiblingWarning() {
+        assertActionResultRejects("""
+        {
+          "outcome": {"kind": "success"},
+          "method": "activate",
+          "evidence": {"observation": {"kind": "none"}},
+          "warning": {"code": "activation_weak_affordance_evidence"}
         }
         """)
     }

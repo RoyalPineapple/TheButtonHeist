@@ -47,9 +47,9 @@ enum HeistReportEvidenceProjection: Sendable {
             switch projection.evidence {
             case .commandResolutionFailure:
                 return nil
-            case .dispatch(let result, _):
+            case .dispatch(let result):
                 return result.delta
-            case .expectation(_, let expectationResult, _, _):
+            case .expectation(_, let expectationResult, _):
                 return expectationResult.delta
             }
         case .wait(let projection):
@@ -90,13 +90,12 @@ struct HeistActionEvidenceProjection: Sendable {
 }
 
 enum HeistActionResultEvidenceProjection: Sendable {
-    case commandResolutionFailure(warning: HeistActionWarning?)
-    case dispatch(result: ActionProjection, warning: HeistActionWarning?)
+    case commandResolutionFailure
+    case dispatch(result: ActionProjection)
     case expectation(
         dispatchResult: ActionProjection,
         expectationResult: ActionProjection,
-        expectation: ExpectationProjection,
-        warning: HeistActionWarning?
+        expectation: ExpectationProjection
     )
 
     init(
@@ -105,7 +104,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
     ) {
         switch evidence {
         case .commandResolutionFailure:
-            self = .commandResolutionFailure(warning: nil)
+            self = .commandResolutionFailure
         case .dispatch(let command, let dispatchResult):
             self = .dispatch(
                 result: ActionProjection(
@@ -113,8 +112,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
-                ),
-                warning: dispatchResult.warning
+                )
             )
         case .commandlessDispatch(let dispatchResult):
             self = .dispatch(
@@ -123,8 +121,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
-                ),
-                warning: dispatchResult.warning
+                )
             )
         case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
             self = .expectation(
@@ -140,8 +137,7 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     profile: profile,
                     includeOmissions: true
                 ),
-                expectation: ExpectationProjection(result: expectation),
-                warning: dispatchResult.warning
+                expectation: ExpectationProjection(result: expectation)
             )
         }
     }

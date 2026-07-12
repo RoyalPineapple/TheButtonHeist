@@ -360,8 +360,11 @@ Action responses use `actionResult`:
 ```
 
 Action evidence is required and bound to the result outcome. Its `observation`
-is exactly one tagged case: `none`, `announcement`, or `trace`. A trace may own
-the tagged settlement shape `{"kind":"settled|timedOut","durationMs":...}`.
+is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
+Only `settledTrace` owns the tagged settlement shape
+`{"kind":"settled|timedOut","durationMs":...}`.
+The former `trace` plus `settlement` shape is invalid rather than decoded as an
+alias.
 Captured announcements derive from the trace; standalone announcements use the
 `announcement` case. Settlement duration does not also appear in stored timing.
 Warnings are valid only in successful evidence and are not duplicated on a

@@ -1137,14 +1137,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 let action = try evidence.object("action")
                 XCTAssertEqual(try action.string("commandName"), "activate")
                 try action.assertPresent("result")
-                XCTAssertEqual(
-                    try action.object("warning").string("code"),
-                    "activation_weak_affordance_evidence"
-                )
-                XCTAssertEqual(
-                    try action.object("warning").string("evidence"),
-                    #"label="Button" traits=[staticText] actions=[activate]"#
-                )
+                try action.assertMissing("warning")
                 try evidence.assertMissing("warning")
             }
         )

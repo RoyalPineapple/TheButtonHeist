@@ -638,6 +638,7 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         case none
         case announcement
         case trace
+        case settledTrace
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -666,20 +667,18 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             }
             self = .announcement(text)
         case .trace:
+            try Self.rejectFields(except: [.kind, .accessibilityTrace], in: container, kind: .trace)
+            self = .trace(try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace))
+        case .settledTrace:
             try Self.rejectFields(
                 except: [.kind, .accessibilityTrace, .settlement],
                 in: container,
-                kind: .trace
+                kind: .settledTrace
             )
-            let trace = try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace)
-            if let settlement = try container.decodeIfPresent(
-                ActionSettlementEvidence.self,
-                forKey: .settlement
-            ) {
-                self = .settledTrace(trace, settlement)
-            } else {
-                self = .trace(trace)
-            }
+            self = .settledTrace(
+                try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace),
+                try container.decode(ActionSettlementEvidence.self, forKey: .settlement)
+            )
         }
     }
 
@@ -695,7 +694,7 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             try container.encode(Kind.trace, forKey: .kind)
             try container.encode(trace, forKey: .accessibilityTrace)
         case .settledTrace(let trace, let settlement):
-            try container.encode(Kind.trace, forKey: .kind)
+            try container.encode(Kind.settledTrace, forKey: .kind)
             try container.encode(trace, forKey: .accessibilityTrace)
             try container.encode(settlement, forKey: .settlement)
         }

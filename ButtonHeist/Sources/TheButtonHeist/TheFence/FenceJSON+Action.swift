@@ -517,7 +517,6 @@ struct PublicHeistActionEvidence: Encodable {
         case result
         case expectationResult
         case expectation
-        case warning
     }
 
     func encode(to encoder: Encoder) throws {
@@ -525,15 +524,14 @@ struct PublicHeistActionEvidence: Encodable {
         try container.encodeIfPresent(projection.command?.rawValue, forKey: .commandName)
         try container.encodeIfPresent(projection.target, forKey: .target)
         switch projection.evidence {
-        case .commandResolutionFailure(let warning):
-            try container.encodeIfPresent(warning, forKey: .warning)
-        case .dispatch(let result, let warning):
+        case .commandResolutionFailure:
+            break
+        case .dispatch(let result):
             try container.encode(
                 PublicActionResultOutput(projection: result, context: .heistReportEvidence),
                 forKey: .result
             )
-            try container.encodeIfPresent(warning, forKey: .warning)
-        case .expectation(let dispatchResult, let expectationResult, let expectation, let warning):
+        case .expectation(let dispatchResult, let expectationResult, let expectation):
             try container.encode(
                 PublicActionResultOutput(projection: dispatchResult, context: .heistReportEvidence),
                 forKey: .result
@@ -543,7 +541,6 @@ struct PublicHeistActionEvidence: Encodable {
                 forKey: .expectationResult
             )
             try container.encode(PublicExpectationResult(projection: expectation), forKey: .expectation)
-            try container.encodeIfPresent(warning, forKey: .warning)
         }
     }
 }
