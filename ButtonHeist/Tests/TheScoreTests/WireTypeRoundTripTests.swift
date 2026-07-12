@@ -220,7 +220,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             message: "activated",
-            timing: timing
+            evidence: ActionResultEvidence(
+                settlement: .settled(durationMs: 74),
+                timing: timing
+            )
         )
 
         let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
@@ -230,15 +233,18 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testActionResultWithTimingMergesWithoutErasingExistingFields() {
         let result = ActionResult.success(
             method: .activate,
-            timing: ActionPerformanceTiming(
-                beforeObservationMs: 1,
-                targetResolutionMs: 2,
-                actionDispatchMs: 3,
-                interactionMs: 4,
-                settleMs: 5,
-                finalSemanticEvidenceMs: 6,
-                receiptGenerationMs: 7,
-                totalMs: 8
+            evidence: ActionResultEvidence(
+                settlement: .settled(durationMs: 5),
+                timing: ActionPerformanceTiming(
+                    beforeObservationMs: 1,
+                    targetResolutionMs: 2,
+                    actionDispatchMs: 3,
+                    interactionMs: 4,
+                    settleMs: 5,
+                    finalSemanticEvidenceMs: 6,
+                    receiptGenerationMs: 7,
+                    totalMs: 8
+                )
             )
         )
         let overlay = ActionPerformanceTiming(
@@ -966,8 +972,9 @@ final class WireTypeRoundTripTests: XCTestCase {
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
-                            activationTrace: activationTrace
-                        )
+                            evidence: ActionResultEvidence(activationTrace: activationTrace)
+                        ),
+                        warning: nil
                     ),
                     failure: failure
                 ),
@@ -1102,7 +1109,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             path: "$.body[0].conditional.cases[0].body[0]",
             receiptKind: .action,
             durationMs: 4,
-            evidence: .dispatch(
+            evidence: .commandlessDispatch(
                 dispatchResult: .failure(
                     method: .activate,
                     errorKind: .actionFailed,
@@ -1126,7 +1133,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: predicate,
-                                result: ExpectationResult(met: true, predicate: predicate)
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -1160,7 +1167,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
     }
 
-    func testHeistCaseMatchResultRejectsMismatchedNestedPredicate() throws {
+    func testHeistCaseMatchResultRejectsOldNestedResultShape() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
         let mismatchedPredicate = AccessibilityPredicate<RootContext>.exists(.label("Settings"))
         let payload = HeistCaseMatchResultPayload(
@@ -1170,10 +1177,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = try encoder.encode(payload)
 
         XCTAssertThrowsError(try decoder.decode(HeistCaseMatchResult.self, from: data)) { error in
-            assertDecodingError(
-                error,
-                contains: ["heist case match result predicate must match nested expectation result predicate"]
-            )
+            assertDecodingError(error, contains: ["result"])
         }
     }
 
@@ -1198,17 +1202,13 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let actionResult = ActionResult.success(method: .wait)
-        let expectation = MetExpectationResult(predicate: predicate)
+        let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
             expectation: expectation
         ))
         let waitEvidence = HeistWaitEvidence.matched(check)
-        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence(
-            actionResult: actionResult,
-            expectation: expectation.result,
-            waitEvidence: waitEvidence
-        )
+        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence.wait(waitEvidence)
 
         XCTAssertEqual(evidence.actionResult, waitEvidence.actionResult)
         XCTAssertEqual(evidence.expectation, waitEvidence.expectation)
@@ -1216,7 +1216,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
-        let evidence = HeistActionEvidence.dispatch(
+        let evidence = HeistActionEvidence.commandlessDispatch(
             dispatchResult: ActionResult.success(method: .activate)
         )
         XCTAssertNil(evidence.command)
@@ -1363,6 +1363,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testHeistInvocationEvidenceRejectsMixedOutcomeFields() throws {
         let inlineHeistWithInvokeField = """
         {
+          "type": "heist",
           "name": "Nested",
           "argument": "Milk"
         }
@@ -1370,33 +1371,30 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(
             try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))
         ) { error in
-            assertDecodingError(error, contains: ["inline heist invocation evidence", "invoke-only fields"])
+            assertDecodingError(error, contains: ["argument"])
         }
 
         let childAbortWithExpectation = """
         {
+          "type": "invocation",
           "invocation": {
             "path": ["LibraryScreen", "addToCart"],
             "argument": { "type": "none" }
           },
           "name": "LibraryScreen.addToCart",
-          "childFailedPath": "$.body[0].invoke.body[0]",
-          "expectationActionResult": {
-            "outcome": { "kind": "success" },
-            "method": "wait"
-          },
-          "expectation": {
-            "met": true
+          "outcome": {
+            "type": "child_failed",
+            "path": "$.body[0].invoke.body[0]",
+            "expectation": {
+              "type": "result"
+            }
           }
         }
         """
         XCTAssertThrowsError(
             try decoder.decode(HeistInvocationEvidence.self, from: Data(childAbortWithExpectation.utf8))
         ) { error in
-            assertDecodingError(
-                error,
-                contains: ["child-aborted invocation evidence", "must not include expectation evidence"]
-            )
+            assertDecodingError(error, contains: ["incompatible fields"])
         }
     }
 
@@ -1426,7 +1424,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "\(path).body[0]",
                     receiptKind: .action,
                     durationMs: durationMs,
-                    evidence: .dispatch(
+                    evidence: .commandlessDispatch(
                         dispatchResult: .success(method: .activate, message: "activated")
                     )
                 ),

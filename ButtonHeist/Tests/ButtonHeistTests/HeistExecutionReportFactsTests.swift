@@ -36,7 +36,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testEvidenceRollupUsesOneOrderedNodeShapeForSummaryActionsAndWarnings() {
-        let actionWarning = HeistActionWarning.activationWeakAffordanceEvidence(
+        let actionWarning = HeistActionWarning.activationWeakAffordance(
             evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#
         )
         let result = HeistExecutionResult(
@@ -203,7 +203,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportResults, HeistExecutionStepReportResults(
             dispatchedActionResult: actionEvidence.dispatchResult,
             actionResult: actionEvidence.reportedResult,
-            expectation: actionEvidence.expectation
+            expectation: actionEvidence.checkedExpectation
         ))
         XCTAssertEqual(reportFacts.results.dispatchedActionResult, reportResults.dispatchedActionResult)
         XCTAssertEqual(reportFacts.results.actionResult, reportResults.actionResult)
@@ -296,7 +296,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
             dispatchResult: ActionResult.success(method: .activate),
-            warning: .activationWeakAffordanceEvidence(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
+            warning: .activationWeakAffordance(evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#)
         )
 
         let decoded = try JSONDecoder().decode(
@@ -1107,7 +1107,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             step: actionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
                 actionResult: ActionResult.success(method: .activate),
-                warning: .activationWeakAffordanceEvidence(evidence: #"label="Button" traits=[staticText] actions=[activate]"#)
+                warning: .activationWeakAffordance(evidence: #"label="Button" traits=[staticText] actions=[activate]"#)
             ),
             expectedKey: "action",
             assertEvidence: { evidence in
@@ -1116,7 +1116,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 try action.assertPresent("result")
                 XCTAssertEqual(
                     try action.object("warning").string("code"),
-                    HeistActionWarning.activationWeakAffordanceEvidenceCode
+                    "activation_weak_affordance_evidence"
                 )
                 XCTAssertEqual(
                     try action.object("warning").string("evidence"),
@@ -1232,7 +1232,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
-                    expectation: MetExpectationResult(predicate: predicate),
+                    expectation: ExpectationResult.Met(predicate: predicate),
                     actionResult: ActionResult.success(method: .wait),
                     lastObservedSummary: "Ready"
                 )
@@ -1275,7 +1275,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let actionResult = ActionResult.success(method: .wait)
         guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
-            expectation: MetExpectationResult(predicate: expectation.predicate, actual: expectation.actual)
+            expectation: ExpectationResult.Met(predicate: expectation.predicate, actual: expectation.actual)
         ) else {
             preconditionFailure("Matched invocation fixture requires successful wait evidence")
         }
@@ -1353,7 +1353,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
                 .dispatch(command: $0, dispatchResult: actionResult, warning: warning)
-            } ?? .dispatch(dispatchResult: actionResult)
+            } ?? .commandlessDispatch(dispatchResult: actionResult)
         }
 
         let intent = command.map {
@@ -1389,7 +1389,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     ) -> HeistExecutionStepResult {
         let waitEvidence: HeistWaitEvidence
         if failure == nil {
-            guard let metExpectation = MetExpectationResult(expectation) else {
+            guard let metExpectation = ExpectationResult.Met(expectation) else {
                 preconditionFailure("Passed wait test fixture requires a met expectation")
             }
             guard let matchedCheck = HeistWaitEvidence.MatchedCheck(

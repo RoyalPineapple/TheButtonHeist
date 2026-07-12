@@ -40,9 +40,11 @@ enum PredicateEvaluation {
         in observation: HeistSemanticObservation
     ) -> HeistCaseMatchResult {
         let predicate = predicateCase.predicate.rootPredicate
+        let result = evaluate(predicate, in: observation)
         return HeistCaseMatchResult(
             predicate: predicate,
-            result: evaluate(predicate, in: observation)
+            met: result.met,
+            actual: result.actual
         )
     }
 
@@ -51,9 +53,11 @@ enum PredicateEvaluation {
         in evidence: PredicateObservationEvidence
     ) -> HeistCaseMatchResult {
         let predicate = predicateCase.predicate.rootPredicate
+        let result = evaluate(predicate, in: evidence)
         return HeistCaseMatchResult(
             predicate: predicate,
-            result: evaluate(predicate, in: evidence)
+            met: result.met,
+            actual: result.actual
         )
     }
 }

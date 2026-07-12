@@ -405,7 +405,7 @@ private struct HeistExecutionMetricProjectionBuilder {
                 node: node
             )
         case .invocation(let evidence):
-            let expectationResult = evidence.expectationEvidence?.actionResult ?? evidence.expectationActionResult
+            let expectationResult = evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult
             appendWaitTiming(expectationResult?.timing, node: node)
             append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
         case .caseSelection(let evidence):
@@ -565,7 +565,7 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
             return HeistExecutionStepReportResults(
                 dispatchedActionResult: evidence.dispatchResult,
                 actionResult: actionResult,
-                expectation: evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.expectation
+                expectation: evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.checkedExpectation
             )
         case .wait(let evidence):
             return HeistExecutionStepReportResults(

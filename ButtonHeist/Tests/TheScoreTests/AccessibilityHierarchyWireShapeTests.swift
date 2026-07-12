@@ -1,5 +1,6 @@
 import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
+import ThePlans
 import XCTest
 @testable import TheScore
 
@@ -417,7 +418,10 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointEvidence: .defaultCenter(activationPoint),
+            activationPointEvidence: .defaultCenter(ScreenPoint(
+                x: activationPoint.x,
+                y: activationPoint.y
+            )),
             actions: [.activate]
         )
     }

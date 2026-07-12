@@ -103,7 +103,7 @@ extension FenceResponse {
     private static func compactNotificationLines(
         _ notifications: [AccessibilityNotificationEvidence]
     ) -> [String] {
-        notifications.map { "  ! accessibility notification \($0.kind.rawValue) #\($0.sequence)" }
+        notifications.map { "  ! accessibility notification \($0.kind) #\($0.sequence)" }
     }
 
     private static func display(_ value: ElementPropertyValue?) -> String {

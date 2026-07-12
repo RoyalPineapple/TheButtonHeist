@@ -86,6 +86,21 @@ public enum AccessibilityNotificationKind: Codable, Sendable, Equatable, Hashabl
     }
 }
 
+extension AccessibilityNotificationKind: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .screenChanged:
+            return "screenChanged"
+        case .elementChanged(let notification):
+            return "elementChanged(\(notification.rawValue))"
+        case .announcement:
+            return "announcement"
+        case .unknown(let rawCode):
+            return "unknown(\(rawCode))"
+        }
+    }
+}
+
 /// Ordered accessibility-notification evidence observed while moving between
 /// two accessibility snapshots.
 ///

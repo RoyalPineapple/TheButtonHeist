@@ -2011,7 +2011,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
                 .dispatch(command: $0, dispatchResult: result)
-            } ?? .dispatch(dispatchResult: result)
+            } ?? .commandlessDispatch(dispatchResult: result)
         }
 
         let intent = command.map {

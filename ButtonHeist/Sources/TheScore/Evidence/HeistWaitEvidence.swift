@@ -7,11 +7,11 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
 
     public struct MatchedCheck: Sendable, Equatable {
         public let actionResult: ActionResult
-        public let expectation: MetExpectationResult
+        public let expectation: ExpectationResult.Met
 
         public init?(
             actionResult: ActionResult,
-            expectation: MetExpectationResult
+            expectation: ExpectationResult.Met
         ) {
             guard actionResult.outcome.isSuccess else { return nil }
             self.actionResult = actionResult
@@ -21,25 +21,15 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
 
     public struct UnmatchedCheck: Sendable, Equatable {
         public let actionResult: ActionResult
-        public let expectation: PredicateExpectationCheck
-
-        public init?(
-            actionResult: ActionResult,
-            expectation: PredicateExpectationCheck
-        ) {
-            guard !actionResult.outcome.isSuccess || !expectation.result.met else { return nil }
-            self.actionResult = actionResult
-            self.expectation = expectation
-        }
+        public let expectation: ExpectationResult
 
         public init?(
             actionResult: ActionResult,
             expectation: ExpectationResult
         ) {
-            self.init(
-                actionResult: actionResult,
-                expectation: PredicateExpectationCheck(expectation)
-            )
+            guard !actionResult.outcome.isSuccess || !expectation.met else { return nil }
+            self.actionResult = actionResult
+            self.expectation = expectation
         }
     }
 
@@ -76,7 +66,7 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
             return check.expectation.result
         case .handledElse(let check),
              .failed(let check):
-            return check.expectation.result
+            return check.expectation
         }
     }
 
@@ -165,18 +155,21 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
         expectation: ExpectationResult,
         codingPath: [CodingKey]
     ) throws -> Storage {
-        let expectation = PredicateExpectationCheck(expectation)
-        switch outcome {
-        case .matched:
-            guard case .met(let expectation) = expectation,
-                  let check = MatchedCheck(actionResult: actionResult, expectation: expectation) else {
+        switch (outcome, expectation) {
+        case (.matched, .met(let expectation)):
+            guard let check = MatchedCheck(actionResult: actionResult, expectation: expectation) else {
                 throw evidenceError(
                     "matched wait evidence requires a successful action result and met expectation",
                     codingPath: codingPath + [CodingKeys.outcome]
                 )
             }
             return .matched(check)
-        case .handledElse:
+        case (.matched, .unmet):
+            throw evidenceError(
+                "matched wait evidence requires a successful action result and met expectation",
+                codingPath: codingPath + [CodingKeys.outcome]
+            )
+        case (.handledElse, _):
             guard let check = UnmatchedCheck(actionResult: actionResult, expectation: expectation) else {
                 throw evidenceError(
                     "handled_else wait evidence requires a failed action result or unmet expectation",
@@ -184,7 +177,7 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
                 )
             }
             return .handledElse(check)
-        case .failed:
+        case (.failed, _):
             guard let check = UnmatchedCheck(actionResult: actionResult, expectation: expectation) else {
                 throw evidenceError(
                     "failed wait evidence requires a failed action result or unmet expectation",
@@ -192,7 +185,7 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
                 )
             }
             return .failed(check)
-        case .continued:
+        case (.continued, _):
             throw evidenceError(
                 "continued outcome is only valid for repeat_until evidence",
                 codingPath: codingPath + [CodingKeys.outcome]

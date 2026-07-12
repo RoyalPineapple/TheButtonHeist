@@ -642,16 +642,21 @@ extension ActionResult {
         let resultOutcome = settledObservation.resultOutcome(for: outcome)
         let message = settledObservation.message(explicit: message)
         let payload = settledObservation.payload(for: outcome)
+        let settlement: ActionSettlementEvidence = settledObservation.settled
+            ? .settled(durationMs: settledObservation.settleTimeMs)
+            : .timedOut(durationMs: settledObservation.settleTimeMs)
+        let evidence = ActionResultEvidence(
+            accessibilityTrace: settledObservation.accessibilityTrace,
+            settlement: settlement,
+            subjectEvidence: outcome.subjectEvidence,
+            activationTrace: outcome.activationTrace
+        )
         if let payload {
             self = ActionResult(
                 outcome: resultOutcome,
                 payload: payload,
                 message: message,
-                accessibilityTrace: settledObservation.accessibilityTrace,
-                settled: settledObservation.settled,
-                settleTimeMs: settledObservation.settleTimeMs,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace
+                evidence: evidence
             )
             return
         }
@@ -659,11 +664,7 @@ extension ActionResult {
             outcome: resultOutcome,
             method: method,
             message: message,
-            accessibilityTrace: settledObservation.accessibilityTrace,
-            settled: settledObservation.settled,
-            settleTimeMs: settledObservation.settleTimeMs,
-            subjectEvidence: outcome.subjectEvidence,
-            activationTrace: outcome.activationTrace
+            evidence: evidence
         )
     }
 }

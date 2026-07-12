@@ -390,7 +390,7 @@ extension TheBrains {
         let finalSummary = receipt.expectation.actual
 
         func matchedCheck() -> HeistWaitEvidence.MatchedCheck {
-            guard let expectation = MetExpectationResult(receipt.expectation) else {
+            guard let expectation = ExpectationResult.Met(receipt.expectation) else {
                 preconditionFailure("Matched wait evidence requires a met expectation")
             }
             guard let check = HeistWaitEvidence.MatchedCheck(
@@ -539,11 +539,11 @@ extension TheBrains {
 
         switch command {
         case .activate where !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits):
-            return .activationWeakAffordanceEvidence(
+            return .activationWeakAffordance(
                 evidence: actionAffordanceEvidenceDescription(for: subject.element)
             )
         case .typeText where !AccessibilityPolicy.supportsTextEntry(subject.element.traits):
-            return .textEntryWeakAffordanceEvidence(
+            return .textEntryWeakAffordance(
                 evidence: actionAffordanceEvidenceDescription(for: subject.element)
             )
         default:

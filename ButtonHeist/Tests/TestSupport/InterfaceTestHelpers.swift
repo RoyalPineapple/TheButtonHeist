@@ -81,8 +81,16 @@ package func makeTestAccessibilityElement(_ element: HeistElement) -> Accessibil
             width: element.frameWidth,
             height: element.frameHeight
         )),
-        activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-        usesDefaultActivationPoint: element.activationPointEvidence.source == .defaultCenter,
+        activationPoint: {
+            guard let point = element.activationPointEvidence.point else {
+                return AccessibilityPoint(x: .nan, y: .nan)
+            }
+            return AccessibilityPoint(x: point.x, y: point.y)
+        }(),
+        usesDefaultActivationPoint: {
+            if case .defaultCenter = element.activationPointEvidence { return true }
+            return false
+        }(),
         customActions: [],
         customContent: element.customContent?.map {
             AccessibilityElement.CustomContent(

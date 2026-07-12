@@ -406,7 +406,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             : nil
         let waitEvidence: HeistWaitEvidence
         if failure == nil {
-            guard let metExpectation = MetExpectationResult(expectation) else {
+            guard let metExpectation = ExpectationResult.Met(expectation) else {
                 preconditionFailure("Passed wait mock fixture requires a met expectation")
             }
             guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
@@ -520,7 +520,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
-                expectation: MetExpectationResult(predicate: predicate)
+                expectation: ExpectationResult.Met(predicate: predicate)
             )
         )
     }

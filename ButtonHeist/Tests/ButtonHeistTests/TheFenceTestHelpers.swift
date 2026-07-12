@@ -580,7 +580,7 @@ func makeTestHeistActionStep(
         precondition(expectationActionResult == nil && expectation == nil)
         evidence = command.map {
             .dispatch(command: $0, dispatchResult: result)
-        } ?? .dispatch(dispatchResult: result)
+        } ?? .commandlessDispatch(dispatchResult: result)
     }
 
     guard !result.outcome.isSuccess else {

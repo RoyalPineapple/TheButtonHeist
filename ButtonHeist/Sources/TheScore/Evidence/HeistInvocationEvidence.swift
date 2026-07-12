@@ -1,244 +1,250 @@
 import Foundation
 import ThePlans
 
-private enum InvocationExpectationStorage: Sendable, Equatable {
-    case summary(actionResult: ActionResult, expectation: ExpectationResult)
-    case wait(HeistWaitEvidence)
+private enum InvocationExpectationEvidenceKind: String, Codable {
+    case result
+    case wait
 }
 
-public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
-    private let storage: Storage
+private enum InvocationExpectationEvidenceCodingKey: String, CodingKey, CaseIterable {
+    case type
+    case actionResult
+    case expectation
+    case waitEvidence
+}
 
-    public struct InvocationExpectationEvidence: Sendable, Equatable {
-        private let storage: InvocationExpectationStorage
+private enum InvocationOutcomeKind: String, Codable {
+    case completed
+    case childFailed = "child_failed"
+}
+
+private enum InvocationOutcomeCodingKey: String, CodingKey, CaseIterable {
+    case type
+    case expectation
+    case path
+}
+
+public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
+    public enum InvocationExpectationEvidence: Codable, Sendable, Equatable {
+        case result(actionResult: ActionResult, expectation: ExpectationResult)
+        case wait(HeistWaitEvidence)
 
         public var actionResult: ActionResult {
-            switch storage {
-            case .summary(let actionResult, _): actionResult
+            switch self {
+            case .result(let actionResult, _): actionResult
             case .wait(let evidence): evidence.actionResult
             }
         }
 
         public var expectation: ExpectationResult {
-            switch storage {
-            case .summary(_, let expectation): expectation
+            switch self {
+            case .result(_, let expectation): expectation
             case .wait(let evidence): evidence.expectation
             }
         }
 
         public var waitEvidence: HeistWaitEvidence? {
-            guard case .wait(let evidence) = storage else { return nil }
+            guard case .wait(let evidence) = self else { return nil }
             return evidence
         }
 
-        public init(
-            actionResult: ActionResult,
-            expectation: ExpectationResult,
-            waitEvidence: HeistWaitEvidence? = nil
-        ) {
-            if let waitEvidence {
-                precondition(
-                    waitEvidence.actionResult == actionResult && waitEvidence.expectation == expectation,
-                    "Invocation expectation evidence must match its summarized action result and expectation"
+        public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(
+                allowed: InvocationExpectationEvidenceCodingKey.self,
+                typeName: "invocation expectation evidence"
+            )
+            let container = try decoder.container(keyedBy: InvocationExpectationEvidenceCodingKey.self)
+            switch try container.decode(InvocationExpectationEvidenceKind.self, forKey: .type) {
+            case .result:
+                self = .result(
+                    actionResult: try container.decode(ActionResult.self, forKey: .actionResult),
+                    expectation: try container.decode(ExpectationResult.self, forKey: .expectation)
+                )
+                try Self.rejectFields(except: [.type, .actionResult, .expectation], in: container)
+            case .wait:
+                self = .wait(try container.decode(HeistWaitEvidence.self, forKey: .waitEvidence))
+                try Self.rejectFields(except: [.type, .waitEvidence], in: container)
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: InvocationExpectationEvidenceCodingKey.self)
+            switch self {
+            case .result(let actionResult, let expectation):
+                try container.encode(InvocationExpectationEvidenceKind.result, forKey: .type)
+                try container.encode(actionResult, forKey: .actionResult)
+                try container.encode(expectation, forKey: .expectation)
+            case .wait(let evidence):
+                try container.encode(InvocationExpectationEvidenceKind.wait, forKey: .type)
+                try container.encode(evidence, forKey: .waitEvidence)
+            }
+        }
+
+        private static func rejectFields(
+            except allowed: Set<InvocationExpectationEvidenceCodingKey>,
+            in container: KeyedDecodingContainer<InvocationExpectationEvidenceCodingKey>
+        ) throws {
+            for key in InvocationExpectationEvidenceCodingKey.allCases
+                where !allowed.contains(key) && container.contains(key) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: container,
+                    debugDescription: "invocation expectation evidence contains incompatible fields"
                 )
             }
-            storage = waitEvidence.map(InvocationExpectationStorage.wait)
-                ?? .summary(actionResult: actionResult, expectation: expectation)
         }
     }
 
-    private enum Storage: Sendable, Equatable {
-        case heist(name: String?, childFailedPath: String?)
-        case invocation(
-            invocation: HeistInvocationStep,
-            name: String?,
-            argument: String?,
-            childFailedPath: String?,
-            expectation: InvocationExpectationEvidence?
-        )
+    public enum InvocationOutcome: Codable, Sendable, Equatable {
+        case completed(expectation: InvocationExpectationEvidence?)
+        case childFailed(path: String)
+
+        public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(allowed: InvocationOutcomeCodingKey.self, typeName: "invocation outcome")
+            let container = try decoder.container(keyedBy: InvocationOutcomeCodingKey.self)
+            switch try container.decode(InvocationOutcomeKind.self, forKey: .type) {
+            case .completed:
+                self = .completed(
+                    expectation: try container.decodeIfPresent(InvocationExpectationEvidence.self, forKey: .expectation)
+                )
+                try Self.rejectFields(except: [.type, .expectation], in: container)
+            case .childFailed:
+                self = .childFailed(path: try container.decode(String.self, forKey: .path))
+                try Self.rejectFields(except: [.type, .path], in: container)
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: InvocationOutcomeCodingKey.self)
+            switch self {
+            case .completed(let expectation):
+                try container.encode(InvocationOutcomeKind.completed, forKey: .type)
+                try container.encodeIfPresent(expectation, forKey: .expectation)
+            case .childFailed(let path):
+                try container.encode(InvocationOutcomeKind.childFailed, forKey: .type)
+                try container.encode(path, forKey: .path)
+            }
+        }
+
+        private static func rejectFields(
+            except allowed: Set<InvocationOutcomeCodingKey>,
+            in container: KeyedDecodingContainer<InvocationOutcomeCodingKey>
+        ) throws {
+            for key in InvocationOutcomeCodingKey.allCases where !allowed.contains(key) && container.contains(key) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: key,
+                    in: container,
+                    debugDescription: "invocation outcome contains incompatible fields"
+                )
+            }
+        }
     }
 
-    public static func heist(
+    case heist(name: String?, childFailedPath: String?)
+    case invocation(
+        invocation: HeistInvocationStep,
         name: String?,
-        childFailedPath: String? = nil
-    ) -> HeistInvocationEvidence {
-        HeistInvocationEvidence(storage: .heist(name: name, childFailedPath: childFailedPath))
-    }
+        argument: String?,
+        outcome: InvocationOutcome
+    )
 
-    public static func invocation(
-        _ invocation: HeistInvocationStep,
-        name: String?,
-        argument: String? = nil,
-        childFailedPath: String? = nil,
-        expectation: InvocationExpectationEvidence? = nil
-    ) -> HeistInvocationEvidence {
-        precondition(
-            childFailedPath == nil || expectation == nil,
-            "Child-aborted invocation evidence cannot include expectation evidence"
-        )
-        return HeistInvocationEvidence(storage: .invocation(
-            invocation: invocation,
-            name: name,
-            argument: argument,
-            childFailedPath: childFailedPath,
-            expectation: expectation
-        ))
-    }
-
-    private init(storage: Storage) {
-        self.storage = storage
-    }
-
-    public var invocation: HeistInvocationStep? {
-        guard case .invocation(let invocation, _, _, _, _) = storage else { return nil }
-        return invocation
-    }
-
-    public var name: String? {
-        switch storage {
-        case .heist(let name, _),
-             .invocation(_, let name, _, _, _):
-            return name
-        }
-    }
-
-    public var argument: String? {
-        guard case .invocation(_, _, let argument, _, _) = storage else { return nil }
-        return argument
-    }
-
-    public var childFailedPath: String? {
-        switch storage {
-        case .heist(_, let childFailedPath),
-             .invocation(_, _, _, let childFailedPath, _):
-            return childFailedPath
-        }
-    }
-
-    public var expectationActionResult: ActionResult? {
-        guard case .invocation(_, _, _, _, let expectation) = storage else { return nil }
-        return expectation?.actionResult
-    }
-
-    public var expectation: ExpectationResult? {
-        guard case .invocation(_, _, _, _, let expectation) = storage else { return nil }
-        return expectation?.expectation
-    }
-
-    public var expectationEvidence: HeistWaitEvidence? {
-        guard case .invocation(_, _, _, _, let expectation) = storage else { return nil }
-        return expectation?.waitEvidence
+    private enum Kind: String, Codable {
+        case heist
+        case invocation
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type
         case invocation
         case name
         case argument
         case childFailedPath
-        case expectationActionResult
-        case expectation
-        case expectationEvidence
+        case outcome
     }
+
+    public var invocation: HeistInvocationStep? {
+        guard case .invocation(let invocation, _, _, _) = self else { return nil }
+        return invocation
+    }
+
+    public var name: String? {
+        switch self {
+        case .heist(let name, _), .invocation(_, let name, _, _): name
+        }
+    }
+
+    public var argument: String? {
+        guard case .invocation(_, _, let argument, _) = self else { return nil }
+        return argument
+    }
+
+    public var childFailedPath: String? {
+        switch self {
+        case .heist(_, let path):
+            return path
+        case .invocation(_, _, _, .childFailed(let path)):
+            return path
+        case .invocation:
+            return nil
+        }
+    }
+
+    private var expectationEvidence: InvocationExpectationEvidence? {
+        guard case .invocation(_, _, _, .completed(let expectation)) = self else { return nil }
+        return expectation
+    }
+
+    public var expectationActionResult: ActionResult? { expectationEvidence?.actionResult }
+    public var expectation: ExpectationResult? { expectationEvidence?.expectation }
+    public var waitEvidence: HeistWaitEvidence? { expectationEvidence?.waitEvidence }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist invocation evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let invocation = try container.decodeIfPresent(HeistInvocationStep.self, forKey: .invocation)
-        let name = try container.decodeIfPresent(String.self, forKey: .name)
-        let argument = try container.decodeIfPresent(String.self, forKey: .argument)
-        let childFailedPath = try container.decodeIfPresent(String.self, forKey: .childFailedPath)
-        let expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
-        let expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
-        let expectationEvidence = try container.decodeIfPresent(HeistWaitEvidence.self, forKey: .expectationEvidence)
-
-        if let invocation {
-            if childFailedPath != nil,
-               expectationActionResult != nil || expectation != nil || expectationEvidence != nil {
-                throw Self.decodingError(
-                    "child-aborted invocation evidence must not include expectation evidence",
-                    key: .childFailedPath,
-                    container: container
-                )
-            }
-            let expectationSummary = try Self.decodeExpectationEvidence(
-                actionResult: expectationActionResult,
-                expectation: expectation,
-                waitEvidence: expectationEvidence,
-                container: container
+        switch try container.decode(Kind.self, forKey: .type) {
+        case .heist:
+            self = .heist(
+                name: try container.decodeIfPresent(String.self, forKey: .name),
+                childFailedPath: try container.decodeIfPresent(String.self, forKey: .childFailedPath)
             )
-            storage = .invocation(
-                invocation: invocation,
-                name: name,
-                argument: argument,
-                childFailedPath: childFailedPath,
-                expectation: expectationSummary
+            try Self.rejectFields(except: [.type, .name, .childFailedPath], in: container)
+        case .invocation:
+            self = .invocation(
+                invocation: try container.decode(HeistInvocationStep.self, forKey: .invocation),
+                name: try container.decodeIfPresent(String.self, forKey: .name),
+                argument: try container.decodeIfPresent(String.self, forKey: .argument),
+                outcome: try container.decode(InvocationOutcome.self, forKey: .outcome)
             )
-        } else {
-            guard argument == nil,
-                  childFailedPath == nil || expectationActionResult == nil && expectation == nil && expectationEvidence == nil,
-                  expectationActionResult == nil,
-                  expectation == nil,
-                  expectationEvidence == nil
-            else {
-                throw Self.decodingError(
-                    "inline heist invocation evidence must not include invoke-only fields",
-                    key: .invocation,
-                    container: container
-                )
-            }
-            storage = .heist(name: name, childFailedPath: childFailedPath)
+            try Self.rejectFields(except: [.type, .invocation, .name, .argument, .outcome], in: container)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(invocation, forKey: .invocation)
-        try container.encodeIfPresent(name, forKey: .name)
-        try container.encodeIfPresent(argument, forKey: .argument)
-        try container.encodeIfPresent(childFailedPath, forKey: .childFailedPath)
-        try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
-        try container.encodeIfPresent(expectation, forKey: .expectation)
-        try container.encodeIfPresent(expectationEvidence, forKey: .expectationEvidence)
-    }
-
-    private static func decodeExpectationEvidence(
-        actionResult: ActionResult?,
-        expectation: ExpectationResult?,
-        waitEvidence: HeistWaitEvidence?,
-        container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> InvocationExpectationEvidence? {
-        switch (actionResult, expectation, waitEvidence) {
-        case (.none, .none, .none):
-            return nil
-        case (.some(let actionResult), .some(let expectation), .none):
-            return InvocationExpectationEvidence(actionResult: actionResult, expectation: expectation)
-        case (.some(let actionResult), .some(let expectation), .some(let waitEvidence)):
-            guard waitEvidence.actionResult == actionResult && waitEvidence.expectation == expectation else {
-                throw decodingError(
-                    "invocation expectation evidence must match expectationActionResult and expectation",
-                    key: .expectationEvidence,
-                    container: container
-                )
-            }
-            return InvocationExpectationEvidence(
-                actionResult: actionResult,
-                expectation: expectation,
-                waitEvidence: waitEvidence
-            )
-        case (.none, _, .some), (_, .none, .some), (.some, .none, .none), (.none, .some, .none):
-            throw decodingError(
-                "invocation expectation evidence requires expectationActionResult and expectation",
-                key: .expectationEvidence,
-                container: container
-            )
+        switch self {
+        case .heist(let name, let childFailedPath):
+            try container.encode(Kind.heist, forKey: .type)
+            try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeIfPresent(childFailedPath, forKey: .childFailedPath)
+        case .invocation(let invocation, let name, let argument, let outcome):
+            try container.encode(Kind.invocation, forKey: .type)
+            try container.encode(invocation, forKey: .invocation)
+            try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeIfPresent(argument, forKey: .argument)
+            try container.encode(outcome, forKey: .outcome)
         }
     }
 
-    private static func decodingError(
-        _ message: String,
-        key: CodingKeys,
-        container: KeyedDecodingContainer<CodingKeys>
-    ) -> DecodingError {
-        DecodingError.dataCorruptedError(forKey: key, in: container, debugDescription: message)
+    private static func rejectFields(
+        except allowed: Set<CodingKeys>,
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) throws {
+        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "heist invocation evidence contains incompatible fields"
+            )
+        }
     }
 }

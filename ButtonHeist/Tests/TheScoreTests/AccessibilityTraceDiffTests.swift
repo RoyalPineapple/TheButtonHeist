@@ -436,7 +436,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
     }
 
-    func testAnnouncementProducesElementChangeEvidenceForUIKitValueControls() {
+    func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() {
         let notification = notification(kind: .announcement, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
@@ -448,11 +448,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
-            return XCTFail("Expected announcement-backed elementsChanged fact")
-        }
-        XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
+        XCTAssertTrue(AccessibilityTrace.ChangeFact.between(before, after).isEmpty)
     }
 
     func testUIKitValueSignalsAllConfirmChangesByRereadingAccessibilityValue() throws {
@@ -482,7 +478,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
             XCTAssertEqual(update.before.value, "50%", "notification: \(kind)")
             XCTAssertEqual(update.after.value, "75%", "notification: \(kind)")
-            XCTAssertEqual(facts.first?.metadata.accessibilityNotifications, [evidence])
+            let expectedNotifications: [AccessibilityNotificationEvidence]
+            if case .elementChanged = kind {
+                expectedNotifications = [evidence]
+            } else {
+                expectedNotifications = []
+            }
+            XCTAssertEqual(facts.first?.metadata.accessibilityNotifications, expectedNotifications)
         }
     }
 

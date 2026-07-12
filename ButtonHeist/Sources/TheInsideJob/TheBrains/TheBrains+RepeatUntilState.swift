@@ -33,9 +33,9 @@ extension TheBrains.RepeatUntil {
     }
 
     internal enum IterationOutcome {
-        case predicateMet(MetExpectationResult)
-        case continued(UnmetExpectationResult)
-        case failed(expectation: UnmetExpectationResult, childPath: String)
+        case predicateMet(ExpectationResult.Met)
+        case continued(ExpectationResult.Unmet)
+        case failed(expectation: ExpectationResult.Unmet, childPath: String)
     }
 
     internal struct RunningState {
@@ -184,7 +184,7 @@ extension TheBrains.RepeatUntil {
 
     internal enum LoopEvent {
         case initial(InitialCheck)
-        case deadlineElapsed(UnmetExpectationResult)
+        case deadlineElapsed(ExpectationResult.Unmet)
         case iterationPassed(PassedIterationEvent)
         case iterationFailed(FailedIterationEvent)
         case elseCompleted([HeistExecutionStepResult])
@@ -194,28 +194,28 @@ extension TheBrains.RepeatUntil {
         case predicateMet(check: MetCheck, iterationCount: Int, iterationNodes: [HeistExecutionStepResult])
         case timedOut(
             observation: Observation?,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult]
         )
         case initialObservationUnavailable(HeistWaitReceipt)
         case bodyFailed(
             observation: Observation,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             iterationIndex: Int,
             childPath: String,
             iterationNodes: [HeistExecutionStepResult]
         )
         case timeoutHandledByElse(
             observation: Observation?,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult],
             elseChildren: [HeistExecutionStepResult]
         )
         case timeoutElseFailed(
             observation: Observation?,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult],
             elseChildren: [HeistExecutionStepResult],
@@ -283,7 +283,7 @@ extension TheBrains.RepeatUntil {
         internal let frame: IterationFrame
         internal let failedStep: HeistExecutionStepResult
         internal let postBody: PostBodyCheck?
-        internal let failureExpectation: UnmetExpectationResult
+        internal let failureExpectation: ExpectationResult.Unmet
         internal let predicateMetIterationNode: HeistExecutionStepResult
         internal let failedIterationNode: HeistExecutionStepResult
 
@@ -291,7 +291,7 @@ extension TheBrains.RepeatUntil {
             frame: IterationFrame,
             failedStep: HeistExecutionStepResult,
             postBody: PostBodyCheck?,
-            failureExpectation: UnmetExpectationResult,
+            failureExpectation: ExpectationResult.Unmet,
             predicateMetIterationNode: HeistExecutionStepResult,
             failedIterationNode: HeistExecutionStepResult
         ) {

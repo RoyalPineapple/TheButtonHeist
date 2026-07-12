@@ -111,17 +111,27 @@ import TheScore
             intent: .action(command: command),
             evidence: HeistActionEvidence.expectation(
                 command: command,
-                dispatchResult: .success(method: .activate, timing: actionTiming),
-                expectationResult: .success(method: .wait, timing: expectationTiming),
-                expectation: ExpectationResult(met: true, predicate: predicate)
+                dispatchResult: .success(
+                    method: .activate,
+                    evidence: ActionResultEvidence(timing: actionTiming)
+                ),
+                expectationResult: .success(
+                    method: .wait,
+                    evidence: ActionResultEvidence(timing: expectationTiming)
+                ),
+                expectation: ExpectationResult(met: true, predicate: predicate),
+                warning: nil
             )
         )
     }
 
     private func waitStep(predicate: AccessibilityPredicate<RootContext>) throws -> HeistExecutionStepResult {
         let check = try #require(HeistWaitEvidence.MatchedCheck(
-            actionResult: .success(method: .wait, timing: waitTiming),
-            expectation: MetExpectationResult(predicate: predicate)
+            actionResult: .success(
+                method: .wait,
+                evidence: ActionResultEvidence(timing: waitTiming)
+            ),
+            expectation: ExpectationResult.Met(predicate: predicate)
         ))
         return HeistExecutionStepResult.passed(
             path: "$.body[1]",
@@ -142,8 +152,11 @@ import TheScore
                 predicate: predicate,
                 timeout: 0.05,
                 iterationCount: 1,
-                expectation: MetExpectationResult(predicate: predicate),
-                actionResult: .success(method: .wait, timing: repeatTiming)
+                expectation: ExpectationResult.Met(predicate: predicate),
+                actionResult: .success(
+                    method: .wait,
+                    evidence: ActionResultEvidence(timing: repeatTiming)
+                )
             )
         )
     }

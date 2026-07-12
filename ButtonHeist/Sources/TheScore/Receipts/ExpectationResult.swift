@@ -42,78 +42,97 @@ public struct PredicateEvaluationEvidence: Sendable, Equatable {
 
 /// The outcome of checking an `AccessibilityPredicate` against an observed
 /// interface or transition delta.
-public struct ExpectationResult: Codable, Sendable, Equatable {
-    /// Whether the predicate was met.
-    public let met: Bool
-    /// The predicate that was checked. Nil for implicit delivery check.
-    public let predicate: AccessibilityPredicate<RootContext>?
-    /// What was actually observed (for diagnostics when `met` is false).
-    public let actual: String?
+public enum ExpectationResult: Codable, Sendable, Equatable {
+    public struct Met: Sendable, Equatable {
+        public let predicate: AccessibilityPredicate<RootContext>?
+        public let actual: String?
+
+        public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
+            self.predicate = predicate
+            self.actual = actual
+        }
+
+        public init?(_ result: ExpectationResult) {
+            guard case .met(let evidence) = result else { return nil }
+            self = evidence
+        }
+
+        public var result: ExpectationResult { .met(self) }
+    }
+
+    public struct Unmet: Sendable, Equatable {
+        public let predicate: AccessibilityPredicate<RootContext>?
+        public let actual: String?
+
+        public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
+            self.predicate = predicate
+            self.actual = actual
+        }
+
+        public init?(_ result: ExpectationResult) {
+            guard case .unmet(let evidence) = result else { return nil }
+            self = evidence
+        }
+
+        public var result: ExpectationResult { .unmet(self) }
+    }
+
+    case met(Met)
+    case unmet(Unmet)
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case met
+        case predicate
+        case actual
+    }
 
     public init(met: Bool, predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
-        self.met = met
-        self.predicate = predicate
-        self.actual = actual
+        self = met
+            ? .met(Met(predicate: predicate, actual: actual))
+            : .unmet(Unmet(predicate: predicate, actual: actual))
     }
 
     public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate<RootContext>?) {
         self.init(met: result.met, predicate: predicate, actual: result.actual)
     }
-}
 
-public struct MetExpectationResult: Sendable, Equatable {
-    public let result: ExpectationResult
-
-    fileprivate init(unchecked result: ExpectationResult) {
-        self.result = result
+    public var met: Bool {
+        if case .met = self { return true }
+        return false
     }
 
-    public init?(_ result: ExpectationResult) {
-        guard result.met else { return nil }
-        self.result = result
-    }
-
-    public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
-        result = ExpectationResult(met: true, predicate: predicate, actual: actual)
-    }
-}
-
-public struct UnmetExpectationResult: Sendable, Equatable {
-    public let result: ExpectationResult
-
-    fileprivate init(unchecked result: ExpectationResult) {
-        self.result = result
-    }
-
-    public init?(_ result: ExpectationResult) {
-        guard !result.met else { return nil }
-        self.result = result
-    }
-
-    public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
-        result = ExpectationResult(met: false, predicate: predicate, actual: actual)
-    }
-}
-
-public enum PredicateExpectationCheck: Sendable, Equatable {
-    case met(MetExpectationResult)
-    case unmet(UnmetExpectationResult)
-
-    public init(_ result: ExpectationResult) {
-        if result.met {
-            self = .met(MetExpectationResult(unchecked: result))
-        } else {
-            self = .unmet(UnmetExpectationResult(unchecked: result))
-        }
-    }
-
-    public var result: ExpectationResult {
+    public var predicate: AccessibilityPredicate<RootContext>? {
         switch self {
-        case .met(let expectation):
-            return expectation.result
-        case .unmet(let expectation):
-            return expectation.result
+        case .met(let evidence): evidence.predicate
+        case .unmet(let evidence): evidence.predicate
         }
+    }
+
+    public var actual: String? {
+        switch self {
+        case .met(let evidence): evidence.actual
+        case .unmet(let evidence): evidence.actual
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ExpectationResult")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            met: try container.decode(Bool.self, forKey: .met),
+            predicate: try container.decodeIfPresent(
+                AccessibilityPredicate<RootContext>.self,
+                forKey: .predicate
+            ),
+            actual: try container.decodeIfPresent(String.self, forKey: .actual)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(met, forKey: .met)
+        try container.encodeIfPresent(predicate, forKey: .predicate)
+        try container.encodeIfPresent(actual, forKey: .actual)
     }
 }
 

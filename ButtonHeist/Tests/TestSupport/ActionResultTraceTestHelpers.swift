@@ -59,28 +59,31 @@ package func makeTestActionResult(
     activationTrace: ActivationTrace? = nil,
     timing: ActionPerformanceTiming? = nil
 ) -> ActionResult {
+    let settlement = settled.map {
+        let durationMs = settleTimeMs ?? timing?.settleMs ?? 0
+        return $0
+            ? ActionSettlementEvidence.settled(durationMs: durationMs)
+            : ActionSettlementEvidence.timedOut(durationMs: durationMs)
+    }
+    let evidence = ActionResultEvidence(
+        accessibilityTrace: accessibilityTrace,
+        settlement: settlement,
+        subjectEvidence: subjectEvidence,
+        activationTrace: activationTrace,
+        timing: timing
+    )
     if succeeded {
         if let payload {
             return ActionResult.success(
                 payload: payload,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                settled: settled,
-                settleTimeMs: settleTimeMs,
-                subjectEvidence: subjectEvidence,
-                activationTrace: activationTrace,
-                timing: timing
+                evidence: evidence
             )
         }
         return ActionResult.success(
             method: method,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing
+            evidence: evidence
         )
     }
 
@@ -92,24 +95,14 @@ package func makeTestActionResult(
             payload: payload,
             errorKind: errorKind,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing
+            evidence: evidence
         )
     }
     return ActionResult.failure(
         method: method,
         errorKind: errorKind,
         message: message,
-        accessibilityTrace: accessibilityTrace,
-        settled: settled,
-        settleTimeMs: settleTimeMs,
-        subjectEvidence: subjectEvidence,
-        activationTrace: activationTrace,
-        timing: timing
+        evidence: evidence
     )
 }
 
@@ -120,8 +113,8 @@ package func makeTestHeistActionStep(
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
     let actionEvidence = command.map {
-        HeistActionEvidence.dispatch(command: $0, dispatchResult: result)
-    } ?? HeistActionEvidence.dispatch(dispatchResult: result)
+        HeistActionEvidence.dispatch(command: $0, dispatchResult: result, warning: nil)
+    } ?? HeistActionEvidence.commandlessDispatch(dispatchResult: result)
     guard !result.outcome.isSuccess else {
         return .passed(
             path: path,

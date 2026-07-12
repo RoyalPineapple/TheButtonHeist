@@ -75,14 +75,18 @@ extension TheBrains {
             return .success(
                 payload: .screenshot(payload),
                 message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                evidence: ActionResultEvidence(
+                    timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                )
             )
         case .failure(let failure):
             return .failure(
                 method: .takeScreenshot,
                 errorKind: .general,
                 message: failure.message,
-                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                evidence: ActionResultEvidence(
+                    timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                )
             )
         }
     }

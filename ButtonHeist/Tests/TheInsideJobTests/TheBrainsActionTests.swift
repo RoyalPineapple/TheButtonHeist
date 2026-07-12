@@ -847,7 +847,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
-        XCTAssertEqual(warning.code, HeistActionWarning.activationWeakAffordanceEvidenceCode)
+        XCTAssertEqual(warning.code, "activation_weak_affordance_evidence")
         XCTAssertEqual(
             warning.message,
             "activate succeeded, but the target does not advertise a primary activation affordance"
@@ -891,7 +891,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
-        XCTAssertEqual(warning.code, HeistActionWarning.textEntryWeakAffordanceEvidenceCode)
+        XCTAssertEqual(warning.code, "text_entry_weak_affordance_evidence")
         XCTAssertEqual(
             warning.message,
             "typeText succeeded, but the target does not advertise a text-input trait"

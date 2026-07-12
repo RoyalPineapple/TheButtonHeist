@@ -620,7 +620,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
             )
         }
-        if evidence.expectationResult?.outcome.isSuccess == false || evidence.expectation?.met == false {
+        if evidence.expectationResult?.outcome.isSuccess == false || evidence.checkedExpectation?.met == false {
             throw receiptError(
                 "passed action heist execution step must not include failed expectation evidence",
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]

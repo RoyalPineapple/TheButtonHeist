@@ -17,11 +17,8 @@ struct PredicateCaseSelection {
                 let predicate = $0.predicate.rootPredicate
                 return HeistCaseMatchResult(
                     predicate: predicate,
-                    result: ExpectationResult(
-                        met: false,
-                        predicate: predicate,
-                        actual: "no settled accessibility state observed"
-                    )
+                    met: false,
+                    actual: "no settled accessibility state observed"
                 )
             },
             selectedCaseIndex: nil
@@ -40,7 +37,7 @@ struct PredicateCaseSelection {
         }
         return PredicateCaseSelection(
             cases: evaluatedCases,
-            selectedCaseIndex: evaluatedCases.firstIndex(where: \.result.met)
+            selectedCaseIndex: evaluatedCases.firstIndex(where: \.met)
         )
     }
 
@@ -53,7 +50,7 @@ struct PredicateCaseSelection {
         }
         return PredicateCaseSelection(
             cases: evaluatedCases,
-            selectedCaseIndex: evaluatedCases.firstIndex(where: \.result.met)
+            selectedCaseIndex: evaluatedCases.firstIndex(where: \.met)
         )
     }
 

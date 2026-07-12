@@ -524,15 +524,77 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
     }
 }
 
-/// Observation evidence attached to one action result.
-///
-/// Keeping post-action fields together gives construction and validation one
-/// owner. The public JSON encoder still flattens these fields at its existing
-/// action-result boundary.
+public enum ActionSettlementEvidence: Codable, Sendable, Equatable {
+    case settled(durationMs: Int)
+    case timedOut(durationMs: Int)
+
+    private enum Kind: String, Codable {
+        case settled
+        case timedOut
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind
+        case durationMs
+    }
+
+    public var durationMs: Int {
+        switch self {
+        case .settled(let durationMs), .timedOut(let durationMs):
+            return durationMs
+        }
+    }
+
+    public var settled: Bool {
+        if case .settled = self { return true }
+        return false
+    }
+
+    fileprivate func replacingDurationMs(_ durationMs: Int?) -> ActionSettlementEvidence {
+        guard let durationMs else { return self }
+        switch self {
+        case .settled:
+            return .settled(durationMs: durationMs)
+        case .timedOut:
+            return .timedOut(durationMs: durationMs)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSettlementEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let durationMs = try container.decode(Int.self, forKey: .durationMs)
+        guard durationMs >= 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .durationMs,
+                in: container,
+                debugDescription: "action settlement duration must not be negative"
+            )
+        }
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .settled:
+            self = .settled(durationMs: durationMs)
+        case .timedOut:
+            self = .timedOut(durationMs: durationMs)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .settled:
+            try container.encode(Kind.settled, forKey: .kind)
+        case .timedOut:
+            try container.encode(Kind.timedOut, forKey: .kind)
+        }
+        try container.encode(durationMs, forKey: .durationMs)
+    }
+}
+
+/// Independent evidence attached to one action result.
 public struct ActionResultEvidence: Codable, Sendable, Equatable {
     public let accessibilityTrace: AccessibilityTrace?
-    public let settled: Bool?
-    public let settleTimeMs: Int?
+    public let settlement: ActionSettlementEvidence?
     public let subjectEvidence: ActionSubjectEvidence?
     public let activationTrace: ActivationTrace?
     public let timing: ActionPerformanceTiming?
@@ -540,17 +602,16 @@ public struct ActionResultEvidence: Codable, Sendable, Equatable {
 
     public init(
         accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
+        settlement: ActionSettlementEvidence? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
         announcement: String? = nil
     ) {
-        if let settleTimeMs, let timingSettleMs = timing?.settleMs {
+        if let timingDurationMs = timing?.settleMs {
             precondition(
-                settleTimeMs == timingSettleMs,
-                "settleTimeMs must match timing.settleMs"
+                timingDurationMs == settlement?.durationMs,
+                "timing.settleMs must match ActionSettlementEvidence"
             )
         }
         let traceAnnouncement = accessibilityTrace?.capturedAnnouncements.first
@@ -561,12 +622,25 @@ public struct ActionResultEvidence: Codable, Sendable, Equatable {
             )
         }
         self.accessibilityTrace = accessibilityTrace
-        self.settled = settled
-        self.settleTimeMs = settleTimeMs
+        self.settlement = settlement
         self.subjectEvidence = subjectEvidence
         self.activationTrace = activationTrace
-        self.timing = timing
+        self.timing = timing?.replacingSettleMs(nil)
         self.announcement = traceAnnouncement?.text ?? announcement
+    }
+
+    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidence {
+        let settlement = settlement?.replacingDurationMs(timing.settleMs)
+        precondition(timing.settleMs == nil || settlement != nil, "settle timing requires settlement evidence")
+        return ActionResultEvidence(
+            accessibilityTrace: accessibilityTrace,
+            settlement: settlement,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: self.timing?.merging(timing).replacingSettleMs(nil)
+                ?? timing.replacingSettleMs(nil),
+            announcement: announcement
+        )
     }
 }
 
@@ -642,18 +716,20 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
     /// endpoint delta projection may not be a final state.
-    public var settled: Bool? { evidence.settled }
+    public var settled: Bool? { evidence.settlement?.settled }
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
-    public var settleTimeMs: Int? { evidence.settleTimeMs }
+    public var settleTimeMs: Int? { evidence.settlement?.durationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
     public var activationTrace: ActivationTrace? { evidence.activationTrace }
     /// Optional measured durations for the local observed action pipeline.
-    private var performanceTiming: ActionPerformanceTiming? { evidence.timing }
     public var timing: ActionPerformanceTiming? {
-        performanceTiming?.replacingSettleMs(evidence.settleTimeMs)
+        if let timing = evidence.timing {
+            return timing.replacingSettleMs(settleTimeMs)
+        }
+        return settleTimeMs.map { ActionPerformanceTiming(settleMs: $0) }
     }
 
     // MARK: - Init
@@ -661,50 +737,26 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         method: ActionMethod,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
             method: method,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
     public static func success(
         payload: ActionResultPayload,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) -> ActionResult {
         ActionResult(
             outcome: .success,
             payload: payload,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
@@ -712,25 +764,13 @@ public struct ActionResult: Codable, Sendable, Equatable {
         method: ActionMethod,
         errorKind: ErrorKind,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
             method: method,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
@@ -738,25 +778,13 @@ public struct ActionResult: Codable, Sendable, Equatable {
         payload: ActionResultPayload,
         errorKind: ErrorKind,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) -> ActionResult {
         ActionResult(
             outcome: .failure(errorKind),
             payload: payload,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
@@ -764,25 +792,13 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: ActionResultOutcome,
         method: ActionMethod,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) {
         self.init(
             outcome: outcome,
             methodAndPayload: .methodOnly(method),
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
@@ -790,25 +806,13 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: ActionResultOutcome,
         payload: ActionResultPayload,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) {
         self.init(
             outcome: outcome,
             methodAndPayload: .payload(payload),
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing,
-            announcement: announcement
+            evidence: evidence
         )
     }
 
@@ -816,26 +820,12 @@ public struct ActionResult: Codable, Sendable, Equatable {
         outcome: ActionResultOutcome,
         methodAndPayload: MethodAndPayload,
         message: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        evidence: ActionResultEvidence = ActionResultEvidence()
     ) {
         self.outcome = outcome
         self.methodAndPayload = methodAndPayload
         self.message = message
-        self.evidence = ActionResultEvidence(
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: settleTimeMs ?? timing?.settleMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing?.replacingSettleMs(nil),
-            announcement: announcement
-        )
+        self.evidence = evidence
     }
 
     // MARK: - Coding
@@ -844,14 +834,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case outcome
         case method
         case message
-        case announcement
         case payload
-        case accessibilityTrace
-        case settled
-        case settleTimeMs
-        case subjectEvidence
-        case activationTrace
-        case timing
+        case evidence
     }
 
     public init(from decoder: Decoder) throws {
@@ -866,38 +850,12 @@ public struct ActionResult: Codable, Sendable, Equatable {
             codingPath: container.codingPath + [CodingKeys.payload]
         )
 
-        let accessibilityTrace = try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace)
-        let settleTimeMs = try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
-        let timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
-        let announcement = try container.decodeIfPresent(String.self, forKey: .announcement)
-        if let settleTimeMs, let timingSettleMs = timing?.settleMs, settleTimeMs != timingSettleMs {
-            throw DecodingError.dataCorruptedError(
-                forKey: .settleTimeMs,
-                in: container,
-                debugDescription: "settleTimeMs must match timing.settleMs"
-            )
-        }
-        if let announcement,
-           let capturedAnnouncement = accessibilityTrace?.capturedAnnouncements.first,
-           announcement != capturedAnnouncement.text {
-            throw DecodingError.dataCorruptedError(
-                forKey: .announcement,
-                in: container,
-                debugDescription: "announcement must match accessibilityTrace captured announcement"
-            )
-        }
-
         self.init(
             outcome: outcome,
             methodAndPayload: methodAndPayload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            accessibilityTrace: accessibilityTrace,
-            settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
-            settleTimeMs: settleTimeMs,
-            subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence),
-            activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
-            timing: timing,
-            announcement: announcement
+            evidence: try container.decodeIfPresent(ActionResultEvidence.self, forKey: .evidence)
+                ?? ActionResultEvidence()
         )
     }
 
@@ -906,32 +864,19 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encode(outcome, forKey: .outcome)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
-        try container.encodeIfPresent(announcement, forKey: .announcement)
         try container.encodeIfPresent(payload, forKey: .payload)
-        try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
-        try container.encodeIfPresent(settled, forKey: .settled)
-        try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
-        try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
-        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
-        try container.encodeIfPresent(timing, forKey: .timing)
+        try container.encode(evidence, forKey: .evidence)
     }
 
     // MARK: - Timing
 
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
-        let mergedTiming = self.timing?.merging(timing) ?? timing
         return ActionResult(
             outcome: outcome,
             methodAndPayload: methodAndPayload,
             message: message,
-            accessibilityTrace: accessibilityTrace,
-            settled: settled,
-            settleTimeMs: mergedTiming.settleMs ?? settleTimeMs,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: mergedTiming,
-            announcement: announcement
+            evidence: evidence.mergingTiming(timing)
         )
     }
 }

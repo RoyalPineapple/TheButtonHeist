@@ -1,5 +1,6 @@
 import XCTest
 import ButtonHeistTestSupport
+import ThePlans
 import TheScore
 
 final class ScreenshotPayloadTests: XCTestCase {

@@ -154,7 +154,7 @@ final class HeistReceiptTests: XCTestCase {
                 message: "failed"
             )
         }
-        return .dispatch(dispatchResult: result)
+        return .commandlessDispatch(dispatchResult: result)
     }
 
     private func receiptFailure(observed: String) -> HeistFailureDetail {

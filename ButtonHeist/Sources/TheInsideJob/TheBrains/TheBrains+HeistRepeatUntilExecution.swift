@@ -41,7 +41,7 @@ extension TheBrains {
         if case .running = state, timeout <= 0 {
             state = RepeatUntil.LoopState.reduce(
                 state,
-                event: .deadlineElapsed(UnmetExpectationResult(
+                event: .deadlineElapsed(ExpectationResult.Unmet(
                     predicate: resolved.predicate,
                     actual: "repeat_until deadline elapsed"
                 ))
@@ -135,7 +135,7 @@ extension TheBrains {
         if case .running = state {
             state = RepeatUntil.LoopState.reduce(
                 state,
-                event: .deadlineElapsed(UnmetExpectationResult(
+                event: .deadlineElapsed(ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: "repeat_until deadline elapsed"
                 ))
@@ -166,7 +166,7 @@ extension TheBrains {
         } else {
             postBody = nil
         }
-        let failureExpectation = UnmetExpectationResult(
+        let failureExpectation = ExpectationResult.Unmet(
             predicate: step.predicate,
             actual: "iteration body failed before predicate evaluation"
         )
