@@ -289,7 +289,7 @@ final class ScreenClassifierTests: XCTestCase {
         firstResponderHeistId: HeistId
     ) -> InterfaceObservation {
         precondition(!elements.isEmpty)
-        InterfaceObservation.makeForTests(
+        return InterfaceObservation.makeForTests(
             elements: elements.enumerated().map { index, element in
                 let heistId = index == 0
                     ? firstResponderHeistId

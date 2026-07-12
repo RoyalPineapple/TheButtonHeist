@@ -19,7 +19,8 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         observer.uninstall()
         callback(1000, nil, nil)
 
-        XCTAssertTrue(actionWindow.finishEvents().isEmpty)
+        XCTAssertTrue(actionWindow.capture()?.events.isEmpty == true)
+        actionWindow.cancel()
         XCTAssertEqual(observer.latestSequence, 0)
         XCTAssertEqual(harness.uninstallCount, 1)
     }
@@ -42,7 +43,8 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         removedCallback(1005, nil, nil)
         removedCallback(1008, "Stale announcement" as NSString, nil)
 
-        XCTAssertTrue(actionWindow.finishEvents().isEmpty)
+        XCTAssertTrue(actionWindow.capture()?.events.isEmpty == true)
+        actionWindow.cancel()
         XCTAssertEqual(observer.latestSequence, 0)
 
         let activeCallback = try XCTUnwrap(harness.callbacks.last)
@@ -51,10 +53,9 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         activeCallback(1005, nil, nil)
         activeCallback(1008, "Current announcement" as NSString, nil)
 
-        XCTAssertEqual(
-            activeWindow.finishEvents().map(\.kind),
-            [.screenChanged, .elementChanged(.value), .announcement]
-        )
+        let kinds: [AccessibilityNotificationKind] = activeWindow.capture()?.events.map(\.kind) ?? []
+        activeWindow.cancel()
+        XCTAssertEqual(kinds, [.screenChanged, .elementChanged(.value), .announcement])
     }
 
     func testCallbackImmediatelyNormalizesMutableObjectiveCPayload() throws {
@@ -70,7 +71,8 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         callback(1008, mutablePayload, nil)
         mutablePayload.setString("Mutated after callback")
 
-        let events = actionWindow.finishEvents()
+        let events = actionWindow.capture()?.events ?? []
+        actionWindow.cancel()
         XCTAssertEqual(events.count, 1)
         let event = try XCTUnwrap(events.first)
         guard case .string(let value) = event.notificationData else {

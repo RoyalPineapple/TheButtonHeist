@@ -126,7 +126,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
     }
 
     private func target(label: String) -> AccessibilityTarget {
-        literalTarget(ElementPredicate(label: label, traits: [.adjustable]))
+        literalTarget(ElementPredicate(label: .exact(label), traits: [.adjustable]))
     }
 
     private func observation(
