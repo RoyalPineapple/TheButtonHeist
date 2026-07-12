@@ -98,6 +98,21 @@ compose the next heist.
 Adapters format product results for CLI, MCP, JSON, compact text, or JUnit. They
 do not decide what a semantic action means or whether a predicate is true.
 
+The ownership rules for the remaining evidence boundaries are explicit:
+
+- `SettleLoopMachine` is the one settled AX reducer and `SettleLoopRunner` is
+  its one runner. `SettlePolicy` selects sampling cadence and stability proof;
+  it does not introduce another AX pipeline.
+- `HeistExecutionStepReportFacts` is the one canonical typed report-fact
+  projection from `HeistExecutionResult`. Output adapters consume it rather
+  than re-deriving report facts.
+- `ActionResult` owns the single `ActionResultEvidence` post-action envelope.
+  `PostActionObservation` gathers and coordinates evidence but does not own a
+  parallel public result shape.
+- UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
+  boundary, where each use is allowlisted and justified. Typed core and wire
+  values remain checked `Sendable` values.
+
 ## Pipeline
 
 All public executable routes enter the same machine:

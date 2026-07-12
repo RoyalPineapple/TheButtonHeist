@@ -43,6 +43,7 @@ expected_diagnostics=(
     "Violations.swift:7: exported top-level typealias outside canonical ButtonHeistDSL facade"
     "Violations.swift:10: exported compatibility/legacy helper"
     "Violations.swift:12: unallowlisted Any type"
+    "Violations.swift:13: UIKit/ObjC @unchecked Sendable outside TheInsideJob platform boundary"
     "Violations.swift:13: unallowlisted @unchecked Sendable"
     "Violations.swift:14: unallowlisted nonisolated(unsafe)"
     "Violations.swift:16: unallowlisted swiftlint:disable"
