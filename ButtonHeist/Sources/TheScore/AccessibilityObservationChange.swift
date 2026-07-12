@@ -14,6 +14,7 @@ public enum AccessibilityObservationFallbackReason: String, Codable, Sendable, E
 enum AccessibilityObservationChangeSource: Equatable, Sendable {
     case screenChangedNotification
     case elementChangedNotification
+    case valueChangedNotification
     case settledSnapshot
     case fallback(AccessibilityObservationFallbackReason)
 }
@@ -34,8 +35,13 @@ enum AccessibilityObservationChange: Equatable, Sendable {
     }
 
     var isElementNotification: Bool {
-        guard case .elementChanged(source: .elementChangedNotification) = self else { return false }
-        return true
+        switch self {
+        case .elementChanged(source: .elementChangedNotification),
+             .elementChanged(source: .valueChangedNotification):
+            true
+        case .unchanged, .elementChanged, .screenChanged:
+            false
+        }
     }
 }
 
@@ -54,6 +60,9 @@ enum AccessibilityObservationChangeReducer {
         }
         if notificationKinds.contains(.elementChanged) {
             return .elementChanged(source: .elementChangedNotification)
+        }
+        if notificationKinds.contains(.valueChanged) {
+            return .elementChanged(source: .valueChangedNotification)
         }
         if before.context.screenId != after.context.screenId {
             return .screenChanged(source: .fallback(.screenIdentifierChanged))

@@ -364,7 +364,12 @@ storage truth.
 | `elementsChanged` | Same screen, element-level additions/removals/updates. |
 | `screenChanged` | Screen identity changed; the post-change interface is included. |
 
-Empty edit collections are omitted on the wire.
+`elementsChanged` and `screenChanged` may include
+`accessibilityNotifications`, filtered to the notification category that
+supports that delta. Notification kinds are `screenChanged`, `elementChanged`,
+`valueChanged`, and `announcement`; both element and value notifications
+support an `elementsChanged` delta. This preserves the evidence used to classify the change.
+Empty edit and notification collections are omitted on the wire.
 
 ## Authentication and Sessions
 

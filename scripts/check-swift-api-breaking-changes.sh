@@ -21,6 +21,9 @@ fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
 INTENTIONAL_BREAKAGES=(
+    "enumelement AccessibilityNotificationKind.valueChanged has been added as a new enum case"
+    "constructor AccessibilityTrace.ElementsChanged.init(elementCount:edits:captureEdge:interactionDigest:transient:) has been removed"
+    "constructor AccessibilityTrace.ScreenChanged.init(elementCount:captureEdge:newInterface:interactionDigest:transient:) has been removed"
     "enumelement ElementAction.typeText has been added as a new enum case"
     "enumelement HeistActionCommandType.dismiss has been added as a new enum case"
     "enumelement HeistActionCommandType.magicTap has been added as a new enum case"

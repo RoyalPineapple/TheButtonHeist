@@ -44,6 +44,13 @@ final class InteractionObservation {
             semanticObservation: { event in
                 postActionObservation.semanticObservation(from: event)
             },
+            buildObservationWindow: { baseline, event, projection in
+                stash.semanticObservationStream.observationWindow(
+                    from: baseline,
+                    through: event,
+                    projection: projection
+                )
+            },
             presenceTimeoutMessage: { predicate, elapsed in
                 stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
             },

@@ -47,9 +47,10 @@ accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
 for a clean settled snapshot. One pure observation reducer then classifies the
-edge: a scoped `screenChanged` notification wins, a scoped `layoutChanged`
-notification becomes an `elementChanged` signal, and typed screen heuristics
-are used only when the notification stream is silent. Announcement
+edge: a scoped `screenChanged` notification wins, followed by typed screen
+appearance evidence. When the screen identity remains stable, scoped
+`layoutChanged` and `valueChanged` notifications become `elementChanged`
+signals. Announcement
 notifications stay in the evidence stream and never create or wake a semantic
 transition. The settle loop can also report unhealthy snapshots rather than
 pretending an empty post-navigation parse is stable.
@@ -202,6 +203,25 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 - `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
   immediately first; after each body, The Button Heist waits up to one second for
   `.change()`, then evaluates the stop predicate against the accumulated trace.
+
+Each baseline is a settled `ObservationCursor` carrying generation, semantic
+scope, sequence, capture hash, and notification sequence. The semantic stream
+retains bounded per-scope history and builds one `ObservationWindow` from that
+baseline through the latest settled capture. Polling extends this window; it
+does not maintain a second baseline or notification claim.
+
+A screen appearance ends the current observation generation. The transition
+edge remains available as `screenAppearance` evidence, but retained state from
+the prior screen is discarded and the destination capture starts collection
+for the new generation.
+
+An observation window projects its accumulated trace into distinct transition
+facts. `screenAppearance` carries screen-change evidence, `elementsChanged`
+carries before/after element evidence and layout notifications, and interaction
+or announcement facts remain diagnostic. Generic `.change()` accepts screen or
+element facts; element and screen predicates read only their matching fact.
+Only a complete window can produce unchanged evidence. If lineage or retained
+history is incomplete, the window has no verdict, so `.noChange` cannot pass.
 
 The public predicate layer is intentionally one tree language:
 

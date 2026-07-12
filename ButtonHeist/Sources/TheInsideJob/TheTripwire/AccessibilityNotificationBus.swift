@@ -11,12 +11,13 @@ import TheScore
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
 final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    /// Closed notification domain. UIKit spells element-change notifications
-    /// `layoutChanged`; evidence maps that boundary code to Button Heist's
-    /// product-level `elementChanged` kind.
+    /// Closed notification domain. UIKit's `layoutChanged` and private
+    /// `valueChanged` codes remain distinct evidence kinds, then both project
+    /// to product-level element transitions.
     private enum SupportedNotification: UInt32 {
         case screenChanged = 1000
         case elementChanged = 1001
+        case valueChanged = 1005
         case announcement = 1008
 
         var kind: AccessibilityNotificationKind {
@@ -25,6 +26,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
                 return .screenChanged
             case .elementChanged:
                 return .elementChanged
+            case .valueChanged:
+                return .valueChanged
             case .announcement:
                 return .announcement
             }
@@ -32,7 +35,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
         var wakesTransitionWaiters: Bool {
             switch self {
-            case .screenChanged, .elementChanged:
+            case .screenChanged, .elementChanged, .valueChanged:
                 return true
             case .announcement:
                 return false
@@ -452,12 +455,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         defer { lock.unlock() }
 
         let events = bufferedEvents.filter { $0.sequence > cursor.sequence }
-        let upperBound = events.last?.sequence ?? cursor.sequence
         if activeActionWindows > 0 {
             activeActionWindows -= 1
-        }
-        if activeHeistScopes == 0 {
-            bufferedEvents.removeAll { $0.sequence <= upperBound }
         }
         return events
     }
@@ -534,7 +533,7 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
         cancel()
     }
 
-    func finishAndClaimEvents() -> [PendingAccessibilityNotificationEvent] {
+    func finishEvents() -> [PendingAccessibilityNotificationEvent] {
         let bus: AccessibilityNotificationBus?
         lock.lock()
         bus = self.bus

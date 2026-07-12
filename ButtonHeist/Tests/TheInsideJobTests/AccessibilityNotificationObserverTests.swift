@@ -79,7 +79,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
     }
 
-    func testActionWindowClaimsOnlyEventsAfterCursor() {
+    func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() {
         let bus = AccessibilityNotificationBus()
         bus.record(code: 1001, notificationData: .none, associatedElement: .none)
 
@@ -91,10 +91,10 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let claimed = action.finishAndClaimEvents()
+        let claimed = action.finishEvents()
 
-        XCTAssertEqual(claimed.map(\.kind), [.announcement])
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [])
+        XCTAssertEqual(claimed.map(\.kind), [.valueChanged, .announcement])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.elementChanged, .valueChanged, .announcement])
     }
 
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
@@ -183,10 +183,21 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.transitionCursor(), cursor)
     }
 
+    func testValueChangedIsElementTransitionEvidence() async {
+        let bus = AccessibilityNotificationBus()
+        let cursor = bus.transitionCursor()
+
+        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 1.0)
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+
+        let advanced = await wake
+        XCTAssertNotNil(advanced)
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.valueChanged])
+    }
+
     func testUnsupportedNotificationsAreDroppedAtBoundary() {
         let bus = AccessibilityNotificationBus()
 
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
         bus.record(code: 1009, notificationData: .none, associatedElement: .none)
         bus.record(code: 4002, notificationData: .none, associatedElement: .none)
 
@@ -344,12 +355,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let claimed = action.finishAndClaimEvents()
+        let claimed = action.finishEvents()
 
-        XCTAssertEqual(claimed.map(\.kind), [.announcement])
+        XCTAssertEqual(claimed.map(\.kind), [.valueChanged, .announcement])
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
-            [.announcement],
+            [.valueChanged, .announcement],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 

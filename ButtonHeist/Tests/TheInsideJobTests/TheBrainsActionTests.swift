@@ -1606,8 +1606,10 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(stateExpectation.met)
         XCTAssertTrue(changed.reduction.expectation.met)
-        XCTAssertEqual(changed.reduction.changeBaseline?.sequence, baselineObservation.event.sequence)
-        XCTAssertTrue(changed.reduction.changeReadiness.observedChangeAfterBaseline)
+        XCTAssertEqual(changed.reduction.changeBaseline?.cursor.sequence, baselineObservation.event.sequence)
+        guard case .changed? = changed.reduction.changeVerdict else {
+            return XCTFail("Expected changed observation-window verdict")
+        }
     }
 
     func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {

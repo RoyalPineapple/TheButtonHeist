@@ -7,20 +7,8 @@ enum PredicateEvaluation {
     static func evaluate(
         _ predicate: AccessibilityPredicate,
         currentElements: [HeistElement],
-        delta: AccessibilityTrace.Delta?,
-        observedSequence: SettledObservationSequence? = nil,
-        changeBaselineSequence: SettledObservationSequence? = nil
+        delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        if predicate.requiresChangeBaseline,
-           let observedSequence,
-           let changeBaselineSequence,
-           observedSequence <= changeBaselineSequence {
-            return ExpectationResult(
-                met: false,
-                predicate: predicate,
-                actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
-            )
-        }
         return predicate.evaluate(
             currentElements: currentElements,
             delta: delta
@@ -47,14 +35,13 @@ enum PredicateEvaluation {
 
     static func evaluate(
         _ predicate: AccessibilityPredicate,
-        in observation: HeistSemanticObservation,
-        changeBaselineSequence: SettledObservationSequence? = nil
+        in observation: HeistSemanticObservation
     ) -> ExpectationResult {
         if case .state = predicate {
             return PredicateObservationEvidence(
                 observation: observation,
-                changeReadiness: .notRequired,
-                transition: nil
+                baseline: nil,
+                window: nil
             ).evaluate(predicate)
         }
 
@@ -62,9 +49,7 @@ enum PredicateEvaluation {
             predicate,
             currentElements: observation.accessibilityTrace.captures.last?.interface.projectedElements
                 ?? observation.state.interface.projectedElements,
-            delta: observation.delta,
-            observedSequence: observation.event.sequence,
-            changeBaselineSequence: changeBaselineSequence
+            delta: observation.delta
         )
     }
 
@@ -77,15 +62,13 @@ enum PredicateEvaluation {
 
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCase,
-        in observation: HeistSemanticObservation,
-        changeBaselineSequence: SettledObservationSequence? = nil
+        in observation: HeistSemanticObservation
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(
             predicate: predicateCase.predicate,
             result: evaluate(
                 predicateCase.predicate,
-                in: observation,
-                changeBaselineSequence: changeBaselineSequence
+                in: observation
             )
         )
     }
