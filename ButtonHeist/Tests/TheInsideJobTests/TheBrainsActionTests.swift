@@ -549,7 +549,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
     }
 
-    func testElementActionUsesCurrentAccessibilityCaptureGeometry() async {
+    func testActionsExecuteIncrementUsesCurrentAccessibilityCaptureGeometry() async {
         let heistId: HeistId = "moving_slider"
         let staleObjectPoint = CGPoint(x: 20, y: 20)
         let staleObjectFrame = CGRect(x: 0, y: 0, width: 40, height: 40)
@@ -584,7 +584,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionUsesMatcherTargetBeforeLiveResolution() async throws {
+    func testActionsExecuteIncrementUsesMatcherTargetBeforeLiveResolution() async throws {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -615,7 +615,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionSemanticTargetUsesAccessibilityGeometryWhenObjectFrameIsMissing() async throws {
+    func testActionsExecuteIncrementUsesAccessibilityGeometryWhenObjectFrameIsMissing() async throws {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -3184,7 +3184,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(waitedSteps.last?.predicate, .missing(literalTarget(matching, ordinal: 0)))
     }
 
-    func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
+    func testActionsExecuteIncrementFailsWhenSemanticTargetHasNoLiveGeometry() async {
         let heistId: HeistId = "geometry_missing_slider"
         let element = AccessibilityElement.make(
             label: "Geometry Missing",
@@ -3220,7 +3220,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementActionUsesFreshLiveTargetForStaleSemanticCapture() async throws {
+    func testActionsExecuteIncrementUsesFreshLiveTargetForStaleSemanticCapture() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
         let liveObject = AdjustableGeometryView(
@@ -3271,7 +3271,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testExecuteActivateRefreshesBeforeSingleActivationAttempt() async throws {
+    func testActionsExecuteActivateRefreshesBeforeSingleActivationAttempt() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
         let liveObject = ActionActivationOverrideView(

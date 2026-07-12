@@ -25,7 +25,7 @@ final class ElementInflationProductTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testElementActionRejectsContainerTargetWithTypedResolutionFailure() async {
+    func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async {
         let result = await brains.navigation.elementInflation.inflate(
             for: .container(.identifier("content")),
             method: .activate,
@@ -39,7 +39,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(failure.targetResolutionFailure, .containerTarget)
     }
 
-    func testElementActionRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {
+    func testElementInflationRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {
         let result = await brains.navigation.elementInflation.inflate(
             for: .ref("row"),
             method: .activate,
