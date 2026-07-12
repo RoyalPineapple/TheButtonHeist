@@ -545,7 +545,7 @@ private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async
         job.tripwire.startPulse()
         job.brains.startSemanticObservation()
         job.brains.safecracker.startKeyboardObservation()
-        job.brains.stash.clearWorldForHeistBootstrap()
+        job.brains.stash.clearInterfaceForHeistBootstrap()
         _ = await job.brains.interactionObservation.observeVisibleState(
             timeout: SemanticObservationTiming.defaultTimeout
         )

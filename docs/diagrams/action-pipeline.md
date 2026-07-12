@@ -22,7 +22,7 @@ sequenceDiagram
     Muscle->>Brains: dispatch command
     Brains->>Stash: capture BeforeState<br/>(settled screen, interface hash,<br/>tripwire baseline)
     Brains->>Stash: resolveTarget(AccessibilityTarget)
-    Stash-->>Brains: TargetResolution (.resolved ScreenElement)
+    Stash-->>Brains: TargetResolution (.resolved InterfaceTree.Element)
     Brains->>Safecracker: ActivationPolicy.apply / gesture dispatch
     Safecracker-->>Brains: InteractionResult (+ ActivationTrace)
     Brains->>Brains: SettleSession.run(start:baselineTripwireSignal:)

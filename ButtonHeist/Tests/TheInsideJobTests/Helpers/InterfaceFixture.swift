@@ -77,7 +77,7 @@ enum TestInterfaceNode {
     }
 
     @MainActor
-    static func screenElement(_ element: Screen.ScreenElement) -> TestInterfaceNode {
+    static func treeElement(_ element: InterfaceTree.Element) -> TestInterfaceNode {
         .element(
             element.element,
             actions: TheStash.WireConversion.convert(element.element).actions

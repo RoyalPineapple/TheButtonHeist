@@ -203,7 +203,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertNil(result.outcome.errorKind)
     }
 
-    func testWaitForAppearTimeoutNamesExpectedMatcherAndKnownCount() async throws {
+    func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
         let label = addLabel("WaitFor-Known-Anchor")
         defer { label.removeFromSuperview() }
 
@@ -219,7 +219,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.outcome.errorKind, .timeout)
         XCTAssertTrue(message.contains("waiting for element to appear"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("known:"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("interface:"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("Next: get_interface()"), "Unexpected message: \(message)")
     }
 
@@ -349,12 +349,12 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_for_offscreen_still_here_staticText"
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [(visibleElement, "wait_for_offscreen_anchor_staticText")],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         insideJob.brains.stash.installScreenForTesting(screen)
-        XCTAssertNotNil(insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let response = await waitFor(
             target: ElementPredicate(label: "WaitFor-Offscreen-StillHere"),
@@ -539,12 +539,12 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
-        let baseline = Screen.makeForTests(
+        let baseline = InterfaceObservation.makeForTests(
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         insideJob.brains.stash.installScreenForTesting(baseline)
-        XCTAssertNotNil(insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let waitTask = Task { @MainActor in
             await self.changedWait(
@@ -554,14 +554,14 @@ final class WaitForIntegrationTests: XCTestCase {
         }
         await waitForSettledSemanticWaiter()
 
-        let updatedVisible = Screen.makeForTests(elements: [(visibleAfter, visibleHeistId)])
+        let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
         insideJob.brains.stash.installScreenForTesting(updatedVisible)
 
         let result = await waitTask.value
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
-            insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId),
+            insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId),
             "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
         )
     }

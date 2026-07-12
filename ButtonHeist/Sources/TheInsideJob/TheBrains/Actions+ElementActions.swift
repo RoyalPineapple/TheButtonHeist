@@ -19,7 +19,7 @@ extension Actions {
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
         deallocatedBoundary: String = "element action",
-        preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
+        preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.ActionDispatchOutcome
     ) async -> TheSafecracker.ActionDispatchOutcome {
         func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
@@ -41,7 +41,7 @@ extension Actions {
         case .failed(let failure):
             result = failure.actionDispatchOutcome(commandMethod: method)
         case .inflated(let context):
-            if let failure = preflight?(context.screenElement) {
+            if let failure = preflight?(context.treeElement) {
                 result = failure
             } else if let failure = interactivityFailure(
                 context,
@@ -68,20 +68,20 @@ extension Actions {
         requireInteractive: Bool
     ) -> TheSafecracker.ActionDispatchOutcome? {
         guard requireInteractive else { return nil }
-        let screenElement = context.screenElement
+        let treeElement = context.treeElement
         let liveTarget = context.liveTarget
-        switch TheStash.Interactivity.checkInteractivity(screenElement.element, object: liveTarget.object) {
+        switch TheStash.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
         case .blocked(let reason):
             return .failure(method, message: reason)
         case .interactive(let warning):
             if let warning { insideJobLogger.warning("\(warning)") }
         }
-        guard TheStash.Interactivity.isInteractive(element: screenElement.element, object: liveTarget.object) else {
+        guard TheStash.Interactivity.isInteractive(element: treeElement.element, object: liveTarget.object) else {
             return .failure(
                 method,
                 message: ActionCapabilityDiagnostic.unsupportedElementAction(
                     method,
-                    element: screenElement
+                    element: treeElement
                 )
             )
         }
@@ -106,7 +106,7 @@ extension Actions {
                     ) {
                     case .inflated(let inflatedTarget):
                         return .resolved(
-                            screenElement: inflatedTarget.screenElement,
+                            treeElement: inflatedTarget.treeElement,
                             liveTarget: inflatedTarget.liveTarget
                         )
                     case .failed(let failure):
@@ -121,10 +121,10 @@ extension Actions {
     }
 
     private func textEntryActivationFailure(
-        screenElement: TheStash.ScreenElement,
+        treeElement: InterfaceTree.Element,
         activationTrace: ActivationTrace
     ) async -> TheSafecracker.ActionDispatchOutcome? {
-        guard screenElement.element.traits.contains(.textEntry) else { return nil }
+        guard treeElement.element.traits.contains(.textEntry) else { return nil }
         guard await safecracker.waitForActiveTextInput() else {
             return .failure(
                 .activate,
@@ -145,13 +145,13 @@ extension Actions {
             target: target,
             method: .increment,
             deallocatedBoundary: "adjustable action",
-            preflight: { screenElement in
-                guard screenElement.element.traits.contains(.adjustable) else {
+            preflight: { treeElement in
+                guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
                         .increment,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
                             .increment,
-                            element: screenElement
+                            element: treeElement
                         )
                     )
                 }
@@ -170,13 +170,13 @@ extension Actions {
             target: target,
             method: .decrement,
             deallocatedBoundary: "adjustable action",
-            preflight: { screenElement in
-                guard screenElement.element.traits.contains(.adjustable) else {
+            preflight: { treeElement in
+                guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
                         .decrement,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
                             .decrement,
-                            element: screenElement
+                            element: treeElement
                         )
                     )
                 }
@@ -208,7 +208,7 @@ extension Actions {
             case .failed(let result):
                 return result
             }
-            let screenElement = dispatchContext.screenElement
+            let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
             switch self.accessibilityActions.performCustomAction(named: target.actionName, on: liveTarget) {
             case .deallocated:
@@ -218,7 +218,7 @@ extension Actions {
                     .customAction,
                     message: ActionCapabilityDiagnostic.missingCustomAction(
                         target.actionName,
-                        element: screenElement
+                        element: treeElement
                     )
                 )
             case .declined:
@@ -226,7 +226,7 @@ extension Actions {
                     .customAction,
                     message: ActionCapabilityDiagnostic.declinedCustomAction(
                         target.actionName,
-                        element: screenElement
+                        element: treeElement
                     )
                 )
             case .succeeded:

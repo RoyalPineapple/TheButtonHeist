@@ -46,17 +46,17 @@ extension ElementInflation {
         }
         if didReveal {
             return .failed(.geometryNotActionable(
-                "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
+                "target \(Navigation.ScrollTargetDescription(liveTarget.treeElement).description) "
                     + "did not become actionable after semantic reveal; "
                     + Self.liveGeometrySummary(liveTarget)
             ))
         }
 
-        let screenElement = liveTarget.screenElement
-        let description = Navigation.ScrollTargetDescription(screenElement).description
+        let treeElement = liveTarget.treeElement
+        let description = Navigation.ScrollTargetDescription(treeElement).description
         let placement = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(for: screenElement),
+            in: stash.liveScrollView(for: treeElement),
             method: method,
             noScrollViewFailure: noScrollViewFailure(
                 for: liveTarget,
@@ -139,9 +139,9 @@ extension ElementInflation {
             activationPoint = target.activationPoint
         }
 
-        fileprivate init?(_ screenElement: TheStash.ScreenElement) {
-            let frame = screenElement.element.bhFrame
-            let activationPoint = screenElement.element.bhResolvedActivationPoint
+        fileprivate init?(_ treeElement: InterfaceTree.Element) {
+            let frame = treeElement.element.bhFrame
+            let activationPoint = treeElement.element.bhResolvedActivationPoint
             guard Self.isUsableFrame(frame),
                   Self.isUsablePoint(activationPoint)
             else { return nil }
@@ -192,13 +192,13 @@ extension ElementInflation {
             await tripwire.yieldRealFrames(1)
             guard stash.refreshLiveCapture() != nil else { continue }
             switch visibleTargetResolution(inflatedTarget.target) {
-            case .success(let currentScreenElement)?:
-                guard let current = LiveGeometrySample(currentScreenElement) else {
+            case .success(let currentTreeElement)?:
+                guard let current = LiveGeometrySample(currentTreeElement) else {
                     return .failed(.geometryNotActionable(
                         ActionCapabilityDiagnostic.gestureTargetUnavailable(
                             method: method,
-                            element: currentScreenElement,
-                            isVisible: stash.visibleIds.contains(currentScreenElement.heistId)
+                            element: currentTreeElement,
+                            isVisible: stash.viewportElementIDs.contains(currentTreeElement.heistId)
                         )
                     ))
                 }
@@ -208,10 +208,10 @@ extension ElementInflation {
                 }
                 guard let currentTarget = stableActionTarget(
                     target: inflatedTarget.target,
-                    screenElement: currentScreenElement
+                    treeElement: currentTreeElement
                 ) else {
                     return .failed(.staleRefresh(
-                        "target \(Navigation.ScrollTargetDescription(currentScreenElement).description) "
+                        "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
                             + "could not be proven against the current live capture"
                     ))
                 }
@@ -234,7 +234,7 @@ extension ElementInflation {
         }
 
         return .failed(.geometryNotActionable(
-            "target \(Navigation.ScrollTargetDescription(stableTarget.screenElement).description) "
+            "target \(Navigation.ScrollTargetDescription(stableTarget.treeElement).description) "
                 + "live geometry did not settle within \(Int(Self.stableGeometryTimeout * 1_000))ms; "
                 + Self.liveGeometrySummary(stableTarget.liveTarget)
         ))
@@ -242,14 +242,14 @@ extension ElementInflation {
 
     private func stableActionTarget(
         target: AccessibilityTarget,
-        screenElement: TheStash.ScreenElement
+        treeElement: InterfaceTree.Element
     ) -> InflatedElementTarget? {
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement),
-              retainedScreenElement(liveTarget.screenElement, matches: target)
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement),
+              retainedInterfaceElement(liveTarget.treeElement, matches: target)
         else { return nil }
         return InflatedElementTarget(
             target: target,
-            screenElement: liveTarget.screenElement,
+            treeElement: liveTarget.treeElement,
             liveTarget: liveTarget
         )
     }

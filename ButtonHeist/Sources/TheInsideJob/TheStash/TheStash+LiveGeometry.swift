@@ -12,16 +12,16 @@ extension TheStash {
 
     /// Dispatch-only action target.
     ///
-    /// The `screenElement` is semantic identity; `object`, `frame`, and
+    /// The `treeElement` is semantic identity; `object`, `frame`, and
     /// `activationPoint` are live accessibility authority freshly sampled by
     /// `resolveLiveActionTarget(for:)`.
     struct LiveActionTarget {
-        let screenElement: ScreenElement
+        let treeElement: InterfaceTree.Element
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
 
-        var element: AccessibilityElement { screenElement.element }
+        var element: AccessibilityElement { treeElement.element }
     }
 
     enum LiveActionTargetResolution {
@@ -35,7 +35,7 @@ extension TheStash {
     /// `containerTarget` is semantic container identity. The backing object is
     /// acquired from the latest live interface immediately before dispatch.
     struct LiveContainerTarget {
-        let containerTarget: SemanticScreen.Container
+        let containerTarget: InterfaceTree.Container
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
@@ -54,23 +54,23 @@ extension TheStash {
         let activationPoint: CGPoint
     }
 
-    func resolveLiveActionTarget(for screenElement: ScreenElement) -> LiveActionTargetResolution {
-        guard let object = dispatchObject(for: screenElement) else {
+    func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveActionTargetResolution {
+        guard let object = dispatchObject(for: treeElement) else {
             return .objectUnavailable
         }
-        let liveScreenElement = liveScreenElement(heistId: screenElement.heistId) ?? screenElement
-        guard let geometry = Self.liveGeometry(for: liveScreenElement.element) else {
+        let liveElement = liveInterfaceElement(heistId: treeElement.heistId) ?? treeElement
+        guard let geometry = Self.liveGeometry(for: liveElement.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
-            screenElement: liveScreenElement,
+            treeElement: liveElement,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
         ))
     }
 
-    func resolveLiveContainerTarget(for containerTarget: SemanticScreen.Container) -> LiveContainerTargetResolution {
+    func resolveLiveContainerTarget(for containerTarget: InterfaceTree.Container) -> LiveContainerTargetResolution {
         guard let object = liveContainerObject(forPath: containerTarget.path) else {
             return .objectUnavailable
         }
@@ -86,8 +86,8 @@ extension TheStash {
         ))
     }
 
-    func liveObject(for screenElement: ScreenElement) -> NSObject? {
-        dispatchObject(for: screenElement)
+    func liveObject(for treeElement: InterfaceTree.Element) -> NSObject? {
+        dispatchObject(for: treeElement)
     }
 
     func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
@@ -104,9 +104,9 @@ extension TheStash {
         return nil
     }
 
-    private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
-        if visibleIds.contains(screenElement.heistId) {
-            return liveObject(for: screenElement.heistId)
+    private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
+        if viewportElementIDs.contains(treeElement.heistId) {
+            return liveObject(for: treeElement.heistId)
         }
         return nil
     }

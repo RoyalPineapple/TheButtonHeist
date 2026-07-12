@@ -281,8 +281,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             brains.tripwire.stopPulse()
         }
 
-        let staleScreen = Screen.makeForTests([
-            Screen.TestEntry(
+        let staleScreen = InterfaceObservation.makeForTests([
+            InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Overview", traits: .header),
                 heistId: "overview_header"
             )
@@ -299,8 +299,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             notificationData: .none,
             associatedElement: .none
         )
-        let freshScreen = Screen.makeForTests([
-            Screen.TestEntry(
+        let freshScreen = InterfaceObservation.makeForTests([
+            InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Destination", traits: .header),
                 heistId: "destination_header"
             )
@@ -330,8 +330,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             brains.tripwire.stopPulse()
         }
 
-        let staleScreen = Screen.makeForTests([
-            Screen.TestEntry(
+        let staleScreen = InterfaceObservation.makeForTests([
+            InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Overview", traits: .header),
                 heistId: "overview_header"
             )
@@ -345,8 +345,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
         let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.nextVisibleRefreshScreenForTesting = Screen.makeForTests([
-            Screen.TestEntry(
+        brains.stash.nextVisibleRefreshScreenForTesting = InterfaceObservation.makeForTests([
+            InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Destination", traits: .header),
                 heistId: "destination_header"
             )

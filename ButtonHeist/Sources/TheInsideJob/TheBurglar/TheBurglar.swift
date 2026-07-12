@@ -10,7 +10,7 @@ import AccessibilitySnapshotParser
 ///
 /// TheBurglar reads the live accessibility tree and assigns heistIds. Pure
 /// helpers — he has no mutable state. TheStash invokes
-/// him via `parse()` to obtain a `Screen` value, then commits or merges it on
+/// him via `parse()` to obtain a `InterfaceObservation` value, then commits or merges it on
 /// its own schedule.
 ///
 /// Intentionally module-internal so TheInsideJob unit tests can validate parse

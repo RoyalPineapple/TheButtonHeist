@@ -468,10 +468,12 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 **Canonical element types** (from AccessibilitySnapshotParser):
 - `AccessibilityElement` — a leaf element with label, identifier, value, traits, frame, activation point, and custom actions. This is the parsed representation of a live UIKit accessibility element.
-- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheStash keeps the latest parsed hierarchy in disposable live capture, separate from settled semantic truth.
+- `AccessibilityHierarchy` — the parser tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`.
 
-**Screen value** (TheInsideJob):
-- `Screen` — immutable snapshot of one screen state. Bundles settled semantic elements with one live capture: hierarchy, per-element live refs, first responder, and scrollable container views. Pure value semantics — TheStash stores a settled screen as truth, a separate latest live capture for action machinery, and separate diagnostic evidence for non-clean settle. Exploration uses a local `var union: Screen` that's `merging(_:)`'d across page parses and commits the finished union as settled discovery state. **Conflict rule**: `Screen.merging` is pure last-read-wins — `other`'s entry replaces `self`'s on heistId conflict; no field-level preservation. `name`/`id`/`heistIds` are derived on demand so they cannot drift from `hierarchy`.
+**Interface types** (TheInsideJob):
+- `InterfaceTree` — the durable, targetable accessibility tree. It owns typed element/container facts plus a value-only viewport capture. It never owns UIKit references. `merging(_:)` is pure last-read-wins: the newer entry replaces the older entry on heistId conflict, and the newer viewport capture wins.
+- `InterfaceObservation` — one observed interface value: an `InterfaceTree` paired with the `LiveCapture` for that tree's viewport. The live half contains weak UIKit references and is replaced wholesale on every parse.
+- `TheStash` is the owner. It stores `interfaceTree` as targetable truth, `latestObservation` for current live dispatch evidence, and optional `diagnosticObservation` for a failed settle. Do not add another store, index, or projection around these values.
 
 **Target types** (ThePlans wire types):
 - `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it against live state.
@@ -480,12 +482,13 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 **Rules:**
 - Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
-- Pass `Screen` when working with a committed snapshot of the resolution layer.
+- Pass `InterfaceTree` for target resolution, matching, diffing, and committed interface reads.
+- Pass `InterfaceObservation` only when a parse, settle, or exploration step also needs current live evidence.
 - Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheStash).
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
-- Wire types (`AccessibilityTarget`, `ElementPredicate`, `HeistElement`) cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `Screen`) stay inside TheInsideJob.
+- Wire types (`AccessibilityTarget`, `ElementPredicate`, `HeistElement`) cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `InterfaceTree`, `InterfaceObservation`, `LiveCapture`) stay inside TheInsideJob.
 
-**Strict off-screen rule**: semantic target resolution reads settled world only. Live capture can prove actionability and geometry for a settled element, but diagnostic settle evidence is not targetable by default.
+**Strict off-screen rule**: semantic target resolution reads `InterfaceTree` only. `LiveCapture` can prove current actionability and geometry for an interface element, but diagnostic settle evidence is not targetable by default.
 
 ## heistId synthesis is wire-format-stable
 

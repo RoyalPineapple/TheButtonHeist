@@ -7,18 +7,18 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-// MARK: - Screen Exploration
+// MARK: - InterfaceObservation Exploration
 
 extension Navigation {
 
-    fileprivate func observeSemanticDiscovery() async -> Screen? {
+    fileprivate func observeSemanticDiscovery() async -> InterfaceObservation? {
         let exploration = await exploreScreen()
         return exploration.screen
     }
 
     func exploreScreen(
         target: AccessibilityTarget? = nil,
-        baseline: Screen? = nil,
+        baseline: InterfaceObservation? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
     ) async -> ExploredScreen {
@@ -31,7 +31,7 @@ extension Navigation {
 
         exploration.absorb(stash.refreshLiveCapture())
 
-        if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen) {
+        if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen.tree) {
             exploration.manifest.clearPendingContainers()
             return exploration.finish(startTime: startTime)
         }
@@ -44,8 +44,8 @@ extension Navigation {
         return exploration.finish(startTime: startTime)
     }
 
-    func hasTerminalExplorationResolution(_ target: AccessibilityTarget, in screen: Screen) -> Bool {
-        switch stash.resolveTarget(target, in: screen) {
+    func hasTerminalExplorationResolution(_ target: AccessibilityTarget, in tree: InterfaceTree) -> Bool {
+        switch stash.resolveTarget(target, in: tree) {
         case .resolved, .ambiguous:
             return true
         case .notFound:
@@ -54,11 +54,11 @@ extension Navigation {
     }
 
     func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget) -> Bool {
-        hasTerminalExplorationResolution(target, in: stash.liveVisibleScreen.visibleOnly)
+        hasTerminalExplorationResolution(target, in: stash.latestObservation.tree.viewportOnly)
     }
 
-    func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget, in screen: Screen) -> Bool {
-        hasTerminalExplorationResolution(target, in: screen.visibleOnly)
+    func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget, in tree: InterfaceTree) -> Bool {
+        hasTerminalExplorationResolution(target, in: tree.viewportOnly)
     }
 }
 

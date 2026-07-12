@@ -141,8 +141,8 @@ final class WireConverterTests: XCTestCase {
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
-    ) -> Screen.ScreenElement {
-        Screen.ScreenElement(
+    ) -> InterfaceTree.Element {
+        InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
             element: makeElement(
@@ -157,9 +157,9 @@ final class WireConverterTests: XCTestCase {
         )
     }
 
-    /// Build a test tree node from a ScreenElement leaf.
-    private func wireLeaf(_ element: Screen.ScreenElement) -> TestInterfaceNode {
-        .screenElement(element)
+    /// Build a test tree node from a InterfaceTree.Element leaf.
+    private func wireLeaf(_ element: InterfaceTree.Element) -> TestInterfaceNode {
+        .treeElement(element)
     }
 
     /// Build a test tree container node with a fixed containerName.
@@ -192,8 +192,8 @@ final class WireConverterTests: XCTestCase {
     }
 
     private func computeDelta(
-        before: [Screen.ScreenElement],
-        after: [Screen.ScreenElement],
+        before: [InterfaceTree.Element],
+        after: [InterfaceTree.Element],
         beforeTree: [TestInterfaceNode]? = nil,
         afterTree: [TestInterfaceNode]? = nil,
         isScreenChange: Bool
@@ -325,9 +325,9 @@ final class WireConverterTests: XCTestCase {
             hierarchy: [.element(element, traversalIndex: 0)],
             objectsByPath: [TreePath([0]): liveObject],
         )
-        let screen = TheBurglar.buildScreen(from: parse)
+        let screen = TheBurglar.buildObservation(from: parse)
 
-        let annotations = WireConversion.toInterface(from: screen).annotations.elements
+        let annotations = WireConversion.toInterface(from: screen.tree).annotations.elements
 
         XCTAssertEqual(annotations.first?.actions, [])
     }
@@ -383,9 +383,9 @@ final class WireConverterTests: XCTestCase {
         let parse = TheBurglar.ParseResult(
             hierarchy: [.container(container, children: [.element(element, traversalIndex: 0)])],
         )
-        let screen = TheBurglar.buildScreen(from: parse)
+        let screen = TheBurglar.buildObservation(from: parse)
 
-        let tree = WireConversion.toInterface(from: screen).tree
+        let tree = WireConversion.toInterface(from: screen.tree).tree
 
         guard case .container(let info, _) = tree.first else {
             return XCTFail("Expected container root")
@@ -394,20 +394,20 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testSemanticInterfaceAnnotatesTraceIdentityFromHeistIds() throws {
-        let screenElement = makeScreenElement(
+        let treeElement = makeScreenElement(
             heistId: "checkout_button",
             label: "Checkout",
             traits: [.button],
             respondsToUserInteraction: true
         )
-        let screen = Screen(
-            elements: ["checkout_button": screenElement],
-            hierarchy: [.element(screenElement.element, traversalIndex: 0)],
+        let screen = InterfaceObservation(
+            elements: ["checkout_button": treeElement],
+            hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "checkout_button"],
             firstResponderHeistId: nil
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen)
+        let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let record = try XCTUnwrap(interface.projectedElementRecords.single)
 
         XCTAssertEqual(record.element.label, "Checkout")
@@ -424,24 +424,24 @@ final class WireConverterTests: XCTestCase {
         )
         let first = makeElement(label: "First row", traits: [.staticText])
         let second = makeElement(label: "Second row", traits: [.staticText])
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [
-                    "first_row_staticText": SemanticScreen.Element(
+                    "first_row_staticText": InterfaceTree.Element(
                         heistId: "first_row_staticText",
                         path: recycledElementPath,
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: containerPath, index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 0),
                         element: first
                     ),
-                    "second_row_staticText": SemanticScreen.Element(
+                    "second_row_staticText": InterfaceTree.Element(
                         heistId: "second_row_staticText",
                         path: recycledElementPath,
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: containerPath, index: 1),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 1),
                         element: second
                     ),
                 ],
                 containers: [
-                    containerPath: SemanticScreen.Container(
+                    containerPath: InterfaceTree.Container(
                         container: container,
                         path: containerPath,
                         containerName: "container_order_entry",
@@ -460,7 +460,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen)
+        let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(containerIdentifier)))
         let evidence = try XCTUnwrap(PredicateEvaluationEvidence(
             trace: AccessibilityTrace(captures: [
@@ -499,36 +499,36 @@ final class WireConverterTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 0, y: 96, width: 820, height: 672))
         )
         let row = makeElement(label: "Search all items", identifier: "LibraryListScreen-SearchField", traits: [.searchField])
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [
-                    "library_search_searchField": SemanticScreen.Element(
+                    "library_search_searchField": InterfaceTree.Element(
                         heistId: "library_search_searchField",
                         path: rowPath,
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: libraryPath, index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: libraryPath, index: 0),
                         element: row
                     ),
                 ],
                 containers: [
-                    rootPath: SemanticScreen.Container(
+                    rootPath: InterfaceTree.Container(
                         container: root,
                         path: rootPath,
                         containerName: "root",
                         contentFrame: nil
                     ),
-                    splitPath: SemanticScreen.Container(
+                    splitPath: InterfaceTree.Container(
                         container: split,
                         path: splitPath,
                         containerName: "split",
                         contentFrame: nil
                     ),
-                    orderPath: SemanticScreen.Container(
+                    orderPath: InterfaceTree.Container(
                         container: order,
                         path: orderPath,
                         containerName: "order_entry",
                         contentFrame: nil
                     ),
-                    libraryPath: SemanticScreen.Container(
+                    libraryPath: InterfaceTree.Container(
                         container: library,
                         path: libraryPath,
                         containerName: "library",
@@ -544,7 +544,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen)
+        let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(orderIdentifier)))
         let evidence = try XCTUnwrap(PredicateEvaluationEvidence(
             trace: AccessibilityTrace(captures: [
@@ -563,7 +563,7 @@ final class WireConverterTests: XCTestCase {
     func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [
                 "first_button": first,
                 "second_button": second,
@@ -578,7 +578,7 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let interface = WireConversion.toSemanticInterface(from: screen)
+        let interface = WireConversion.toSemanticInterface(from: screen.tree)
 
         let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "Second"))
@@ -596,7 +596,7 @@ final class WireConverterTests: XCTestCase {
             type: .semanticGroup(label: "Actions", value: nil), identifier: nil,
             frame: .zero
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [
                 "first_button": first,
                 "second_button": second,
@@ -614,7 +614,7 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let interface = WireConversion.toInterface(from: screen)
+        let interface = WireConversion.toInterface(from: screen.tree)
 
         let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
             subtree: .container(.label("Actions"))
@@ -651,16 +651,16 @@ final class WireConverterTests: XCTestCase {
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [
-                "aardvark_staticText": Screen.ScreenElement(
+                "aardvark_staticText": InterfaceTree.Element(
                     heistId: "aardvark_staticText",
-                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                     element: visible
                 ),
-                "zymurgy_staticText": Screen.ScreenElement(
+                "zymurgy_staticText": InterfaceTree.Element(
                     heistId: "zymurgy_staticText",
-                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
                     element: offViewport
                 ),
             ],
@@ -674,7 +674,7 @@ final class WireConverterTests: XCTestCase {
             firstResponderHeistId: nil,
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen)
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -703,26 +703,26 @@ final class WireConverterTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 20, y: 700, width: 280, height: 240))
         )
         let nestedWord = makeElement(label: "interstitial", traits: [.staticText])
-        let liveScreen = Screen(
+        let liveScreen = InterfaceObservation(
             elements: [:],
             hierarchy: [.container(outer, children: [])],
             containerNamesByPath: [TreePath([0]): "outer_words"],
             firstResponderHeistId: nil,
         )
-        var containers = liveScreen.semantic.containers
-        containers[TreePath([0, 0])] = SemanticScreen.Container(
+        var containers = liveScreen.tree.containers
+        containers[TreePath([0, 0])] = InterfaceTree.Container(
             container: inner,
             path: TreePath([0, 0]),
             containerName: "inner_words",
             contentFrame: nil,
-            scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0)
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
         )
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [
-                    "interstitial_staticText": SemanticScreen.Element(
+                    "interstitial_staticText": InterfaceTree.Element(
                         heistId: "interstitial_staticText",
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0, 0]), index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0, 0]), index: 0),
                         element: nestedWord
                     ),
                 ],
@@ -731,7 +731,7 @@ final class WireConverterTests: XCTestCase {
             liveCapture: liveScreen.liveCapture
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen)
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
 
         guard case .container(_, let outerChildren) = interface.tree.first else {
             return XCTFail("Expected outer container")
@@ -757,22 +757,22 @@ final class WireConverterTests: XCTestCase {
             frameWidth: 393,
             frameHeight: 64
         )
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [
-                    "recycled_cell": SemanticScreen.Element(
+                    "recycled_cell": InterfaceTree.Element(
                         heistId: "recycled_cell",
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: recycledCell
                     ),
-                    "stale_recycled_cell_path": SemanticScreen.Element(
+                    "stale_recycled_cell_path": InterfaceTree.Element(
                         heistId: "recycled_cell",
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: recycledCell
                     ),
                 ],
                 containers: [
-                    TreePath([0]): SemanticScreen.Container(
+                    TreePath([0]): InterfaceTree.Container(
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
@@ -788,7 +788,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen)
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -820,22 +820,22 @@ final class WireConverterTests: XCTestCase {
             frameWidth: 393,
             frameHeight: 64
         )
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [
-                    "repeat_button": SemanticScreen.Element(
+                    "repeat_button": InterfaceTree.Element(
                         heistId: "repeat_button",
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: firstCell
                     ),
-                    "repeat_button_1": SemanticScreen.Element(
+                    "repeat_button_1": InterfaceTree.Element(
                         heistId: "repeat_button_1",
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
                         element: secondCell
                     ),
                 ],
                 containers: [
-                    TreePath([0]): SemanticScreen.Container(
+                    TreePath([0]): InterfaceTree.Container(
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
@@ -851,7 +851,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen)
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -871,29 +871,29 @@ final class WireConverterTests: XCTestCase {
             type: .semanticGroup(label: "Saved carts", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 640, width: 320, height: 120))
         )
-        let screen = Screen(
-            semantic: SemanticScreen(
+        let screen = InterfaceObservation(
+            tree: InterfaceTree(
                 elements: [:],
                 containers: [
-                    TreePath([0]): SemanticScreen.Container(
+                    TreePath([0]): InterfaceTree.Container(
                         container: rootContainer,
                         path: TreePath([0]),
                         containerName: "transactions_list",
                         contentFrame: nil
                     ),
-                    TreePath([0, 0]): SemanticScreen.Container(
+                    TreePath([0, 0]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 0]),
                         containerName: "saved_carts_group",
                         contentFrame: nil,
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0)
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
                     ),
-                    TreePath([0, 1]): SemanticScreen.Container(
+                    TreePath([0, 1]): InterfaceTree.Container(
                         container: recycledContainer,
                         path: TreePath([0, 1]),
                         containerName: "saved_carts_group",
                         contentFrame: nil,
-                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 1)
+                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1)
                     ),
                 ]
             ),
@@ -905,7 +905,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen)
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -935,7 +935,7 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testEmptySnapshotsReturnNoChange() {
-        let empty: [TheStash.ScreenElement] = []
+        let empty: [InterfaceTree.Element] = []
         let delta = computeDelta(
             before: empty, after: empty, afterTree: [], isScreenChange: false
         )
@@ -1103,7 +1103,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.updatedOptional)
     }
 
-    // MARK: - Delta: Screen Change
+    // MARK: - Delta: InterfaceObservation Change
 
     func testScreenChangeReturnsFull() {
         let before = [makeScreenElement(heistId: "button_ok")]
@@ -1372,10 +1372,10 @@ final class WireConverterTests: XCTestCase {
     // MARK: - Delta: Empty Diff Coerced to noChange
 
     func testNoDifferencesCoercedToNoChange() {
-        let screenElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
+        let treeElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
 
         let delta = computeDelta(
-            before: [screenElement], after: [screenElement], afterTree: [], isScreenChange: false
+            before: [treeElement], after: [treeElement], afterTree: [], isScreenChange: false
         )
         XCTAssertNotScreenChanged(delta)
         XCTAssertTrue(delta.changeFacts.isEmpty)

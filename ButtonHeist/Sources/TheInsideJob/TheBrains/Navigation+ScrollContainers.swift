@@ -88,7 +88,7 @@ extension Navigation {
         var message: String {
             switch self {
             case .elementKnownButNotVisible(command: let command):
-                return "\(command.diagnosticName) failed: target is known but not currently visible; "
+                return "\(command.diagnosticName) failed: target exists in the interface tree but is outside the current viewport; "
                     + "target the element you want made actionable, or use scroll_to_visible as an explicit viewport inspection step."
             case .elementAmbiguous(let facts, command: let command):
                 return "\(command.diagnosticName) failed: target is not uniquely resolved in the visible hierarchy; "
@@ -138,10 +138,10 @@ extension Navigation {
         switch selection {
         case .element(let target):
             let visibleResolution = stash.resolveVisibleTarget(target)
-            let resolved: TheStash.ScreenElement
+            let resolved: InterfaceTree.Element
             switch visibleResolution {
-            case .resolved(let screenElement):
-                resolved = screenElement
+            case .resolved(let treeElement):
+                resolved = treeElement
             case .notFound, .ambiguous:
                 return .failed(liveScrollElementFailure(target, command: command))
             }

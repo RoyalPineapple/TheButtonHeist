@@ -64,15 +64,15 @@ final class PostActionObservation {
 
     /// State captured before an action for delta computation.
     struct BeforeState {
-        let screen: Screen
+        let screen: InterfaceObservation
         let capture: AccessibilityTrace.Capture
         let tripwireSignal: TheTripwire.TripwireSignal
         let settledObservationSequence: SettledObservationSequence?
 
         var elements: [AccessibilityElement] { screen.orderedElements.map(\.element) }
         var interface: Interface { capture.interface }
-        var semanticHash: String { screen.semantic.semanticHash }
-        @MainActor var screenSnapshot: ScreenClassifier.Snapshot { ScreenClassifier.snapshot(of: screen) }
+        var interfaceHash: String { screen.tree.interfaceHash }
+        @MainActor var screenSnapshot: ScreenClassifier.Snapshot { ScreenClassifier.snapshot(of: screen.tree) }
         var screenId: String? { screen.id }
     }
 
@@ -165,7 +165,7 @@ final class PostActionObservation {
 
     func semanticObservation(from event: SettledSemanticObservationEvent) -> HeistSemanticObservation {
         let screen = event.scope == .visible
-            ? event.observation.screen.visibleOnly
+            ? event.observation.screen.viewportOnly
             : event.observation.screen
         let current = captureSemanticState(
             from: screen,
@@ -274,7 +274,7 @@ final class PostActionObservation {
     }
 
     func captureSemanticState(
-        from screen: Screen,
+        from screen: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         settledObservationSequence: SettledObservationSequence?,
         interfaceProjection: StateInterfaceProjection = .semantic
@@ -296,7 +296,7 @@ final class PostActionObservation {
     }
 
     private func interfaceSnapshot(
-        for screen: Screen,
+        for screen: InterfaceObservation,
         projection: StateInterfaceProjection
     ) -> TheStash.SemanticInterfaceSnapshot {
         switch projection {
@@ -314,14 +314,14 @@ final class PostActionObservation {
     ) -> Bool {
         classification.isScreenChange
             || current.capture.context != baseline.capture.context
-            || current.semanticHash != baseline.semanticHash
+            || current.interfaceHash != baseline.interfaceHash
     }
 
     func makeTraceCapture(
         interface: Interface,
         sequence: Int = 1,
         parentHash: String? = nil,
-        screen: Screen? = nil,
+        screen: InterfaceObservation? = nil,
         tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil,
         transition: AccessibilityTrace.Transition = .empty
@@ -396,7 +396,7 @@ final class PostActionObservation {
     private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) -> BeforeState {
         let observation = visibleEvent.observation
         let screen = visibleEvent.scope == .visible
-            ? observation.screen.visibleOnly
+            ? observation.screen.viewportOnly
             : observation.screen
         return captureSemanticState(
             from: screen,
@@ -503,7 +503,7 @@ final class PostActionObservation {
     }
 
     private func makeCaptureContext(
-        screen: Screen?,
+        screen: InterfaceObservation?,
         tripwireSignal: TheTripwire.TripwireSignal,
         screenId: String? = nil
     ) -> AccessibilityTrace.Context {
@@ -522,7 +522,7 @@ final class PostActionObservation {
         )
     }
 
-    private func firstResponderTarget(in screen: Screen) -> AccessibilityTarget? {
+    private func firstResponderTarget(in screen: InterfaceObservation) -> AccessibilityTarget? {
         guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
         let elements = screen.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
@@ -595,7 +595,7 @@ final class PostActionObservation {
     // MARK: - Observation Helpers
 
     static func observationSummary(_ state: BeforeState) -> String {
-        var parts = ["known: \(state.interface.projectedElements.count) elements"]
+        var parts = ["interface: \(state.interface.projectedElements.count) elements"]
         if let screenId = state.screenId {
             parts.insert("screen: \(screenId)", at: 0)
         }
@@ -737,22 +737,22 @@ private extension PostActionObservation.ActionOutcome {
     }
 }
 
-extension Screen {
-    func removingElements(withIds removedIds: Set<HeistId>) -> Screen {
+extension InterfaceObservation {
+    func removingElements(withIds removedIds: Set<HeistId>) -> InterfaceObservation {
         guard !removedIds.isEmpty else { return self }
         let removal = liveCapture.removingElementsWithPathMap(withIds: removedIds)
-        return Screen(
-            semantic: semantic.removingElements(withIds: removedIds, using: removal.pathMap),
+        return InterfaceObservation(
+            tree: tree.removingElements(withIds: removedIds, using: removal.pathMap),
             liveCapture: removal.liveCapture
         )
     }
 }
 
-private extension SemanticScreen {
+private extension InterfaceTree {
     func removingElements(
         withIds removedIds: Set<HeistId>,
         using pathMap: [TreePath: TreePath]
-    ) -> SemanticScreen {
+    ) -> InterfaceTree {
         var remappedElements: [HeistId: Element] = [:]
         remappedElements.reserveCapacity(elements.count)
         for (heistId, entry) in elements where !removedIds.contains(heistId) {
@@ -778,7 +778,7 @@ private extension SemanticScreen {
                 scrollInventory: entry.scrollInventory
             )
         }
-        return SemanticScreen(elements: remappedElements, containers: remappedContainers)
+        return InterfaceTree(elements: remappedElements, containers: remappedContainers)
     }
 
     private func remap(
@@ -843,9 +843,9 @@ private extension LiveCapture {
     }
 
     private static func remapMemberships(
-        _ memberships: [TreePath: SemanticScreen.ScrollMembership],
+        _ memberships: [TreePath: InterfaceTree.ScrollMembership],
         using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: SemanticScreen.ScrollMembership] {
+    ) -> [TreePath: InterfaceTree.ScrollMembership] {
         Dictionary(
             uniqueKeysWithValues: memberships.compactMap { path, membership in
                 guard let remappedPath = pathMap[path],
@@ -853,7 +853,7 @@ private extension LiveCapture {
                 else { return nil }
                 return (
                     remappedPath,
-                    SemanticScreen.ScrollMembership(
+                    InterfaceTree.ScrollMembership(
                         containerPath: remappedContainerPath,
                         index: membership.index
                     )

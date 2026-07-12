@@ -75,16 +75,16 @@ extension Navigation {
         return nil
     }
 
-    private func sortedPendingContainers(in exploration: SemanticExploration) -> [SemanticScreen.Container] {
+    private func sortedPendingContainers(in exploration: SemanticExploration) -> [InterfaceTree.Container] {
         exploration.manifest.pendingScrollPaths
-            .compactMap { exploration.screen.semantic.containers[$0] }
+            .compactMap { exploration.screen.tree.containers[$0] }
             .map { PendingContainer(container: $0, overflow: totalOverflow(of: $0.container)) }
             .sorted { $0.overflow > $1.overflow }
             .map(\.container)
     }
 
     private func prepareContainerExploration(
-        for semanticContainer: SemanticScreen.Container
+        for semanticContainer: InterfaceTree.Container
     ) -> ContainerExploration? {
         let container = semanticContainer.container
         guard let contentSize = container.scrollableContentSize else { return nil }
@@ -302,7 +302,7 @@ extension Navigation {
 
     private func scanGoalTerminal(
         _ goal: ScrollScanGoal,
-        in screen: Screen
+        in screen: InterfaceObservation
     ) -> ScrollTraversalTerminal? {
         switch goal {
         case .exhaust:
@@ -311,7 +311,7 @@ extension Navigation {
             guard screen.liveCapture.contains(heistId: targetHeistId) else { return nil }
             return .foundHeistId(targetHeistId)
         case .findTarget(let target):
-            guard hasVisibleTerminalExplorationResolution(target, in: screen) else { return nil }
+            guard hasVisibleTerminalExplorationResolution(target, in: screen.tree) else { return nil }
             return .foundTarget(target)
         }
     }
@@ -399,7 +399,7 @@ extension Navigation {
     }
 
     private struct PendingContainer {
-        let container: SemanticScreen.Container
+        let container: InterfaceTree.Container
         let overflow: CGFloat
     }
 

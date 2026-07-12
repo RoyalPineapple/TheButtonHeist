@@ -18,7 +18,7 @@ struct ActivationPolicy {
 
     enum RefreshResult {
         case resolved(
-            screenElement: TheStash.ScreenElement,
+            treeElement: InterfaceTree.Element,
             liveTarget: TheStash.LiveActionTarget
         )
         case failure(TheSafecracker.ActionDispatchOutcome)
@@ -28,15 +28,15 @@ struct ActivationPolicy {
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var activationPointDispatch: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
-    var textEntryActivationFailure: @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
+    var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
 
     @MainActor
     func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        let screenElement: TheStash.ScreenElement
+        let treeElement: InterfaceTree.Element
         let refreshedLiveTarget: TheStash.LiveActionTarget
         switch await refreshAndResolve() {
         case .resolved(let resolvedElement, let liveTarget):
-            screenElement = resolvedElement
+            treeElement = resolvedElement
             refreshedLiveTarget = liveTarget
         case .failure(let result):
             return result.withActivationTrace(ActivationTrace(.refreshFailed))
@@ -46,7 +46,7 @@ struct ActivationPolicy {
         if activateOutcome == .success {
             showFingerprint(refreshedLiveTarget.activationPoint)
             let trace = ActivationTrace(.accessibilityActivate)
-            if let failure = await textEntryActivationFailure(screenElement, trace) {
+            if let failure = await textEntryActivationFailure(treeElement, trace) {
                 return failure
             }
             return .success(
@@ -63,7 +63,7 @@ struct ActivationPolicy {
             tapActivationSucceeded: tapActivationSucceeded
         ))
         if tapActivationSucceeded {
-            if let failure = await textEntryActivationFailure(screenElement, trace) {
+            if let failure = await textEntryActivationFailure(treeElement, trace) {
                 return failure
             }
             return .success(method: .activate, activationTrace: trace)
@@ -71,14 +71,14 @@ struct ActivationPolicy {
 
         return .failure(
             .activate,
-            message: activationFailureMessage(screenElement: screenElement, activateOutcome: activateOutcome),
+            message: activationFailureMessage(treeElement: treeElement, activateOutcome: activateOutcome),
             activationTrace: trace
         )
     }
 
     @MainActor
     private func activationFailureMessage(
-        screenElement: TheStash.ScreenElement,
+        treeElement: InterfaceTree.Element,
         activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
     ) -> String {
         let observed: String
@@ -92,7 +92,7 @@ struct ActivationPolicy {
         }
         return "activate failed: \(observed); activation-point dispatch was attempted at the fresh " +
             "accessibility activation point and did not complete for " +
-            "\(ActionCapabilityDiagnostic.elementObservation(screenElement)); correction: target an element " +
+            "\(ActionCapabilityDiagnostic.elementObservation(treeElement)); correction: target an element " +
             "with primary accessibility activation, or use an explicit mechanical gesture when the " +
             "test intent is viewport coordinate delivery"
     }

@@ -30,11 +30,11 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
-    private func makeParseResult(_ elements: [AccessibilityElement]) -> Screen {
+    private func makeParseResult(_ elements: [AccessibilityElement]) -> InterfaceObservation {
         let hierarchy: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
             .element(element, traversalIndex: index)
         }
-        return Screen(
+        return InterfaceObservation(
             elements: [:],
             hierarchy: hierarchy,
             firstResponderHeistId: nil,
@@ -42,14 +42,14 @@ final class SettleSessionTests: XCTestCase {
     }
 
     private func recordedObservation(
-        _ screen: Screen,
+        _ screen: InterfaceObservation,
         ledger: inout SettleObservationLedger
     ) -> SettleRecordedObservation {
         ledger.record(screen)
     }
 
     private func reduceObservation(
-        _ screen: Screen,
+        _ screen: InterfaceObservation,
         elapsedMs: Int,
         machine: SettleLoopMachine,
         ledger: inout SettleObservationLedger,
@@ -96,7 +96,7 @@ final class SettleSessionTests: XCTestCase {
     /// The baseline signal is passed explicitly to `run(...)` so the provider
     /// never has to answer for the pre-action snapshot.
     private func makeSession(
-        script: [Screen?],
+        script: [InterfaceObservation?],
         cyclesRequired: Int = 3,
         cycleIntervalMs: Int = 1,
         timeoutMs: Int = 200,
@@ -172,7 +172,7 @@ final class SettleSessionTests: XCTestCase {
     }
 
     private func makeQuietSession(
-        script: [Screen?],
+        script: [InterfaceObservation?],
         clock: ManualClock,
         frameMs: Int = 10,
         quietWindowMs: Int = 30,
@@ -919,7 +919,7 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertTrue(diagnostic.contains("frame"), diagnostic)
     }
 
-    // MARK: - Screen Change
+    // MARK: - InterfaceObservation Change
 
     func testTripwireTriggerResetsBaselineAndSettlesCleanly() async {
         let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])

@@ -55,7 +55,7 @@ extension TheStash {
         var parts = [
             "timed out after \(elapsed)s waiting for \(expected)",
             "expected: \(waitForTargetDescription(target))",
-            "known: \(knownElementCount) elements",
+            "interface: \(interfaceElementCount) elements",
         ]
         if let screenId = lastScreenId {
             parts.append("screen: \(screenId)")
@@ -95,7 +95,7 @@ extension TheStash {
 
     static func matcherNotFound(
         _ predicate: ElementPredicate,
-        screenElements: [Screen.ScreenElement],
+        treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
     ) -> String {
@@ -103,13 +103,13 @@ extension TheStash {
         let formattedQuery = query.isEmpty ? "<empty predicate>" : query
 
         // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
-        if let nearMiss = findNearMiss(for: predicate, in: screenElements, visibleHeistIds: visibleHeistIds) {
+        if let nearMiss = findNearMiss(for: predicate, in: treeElements, visibleHeistIds: visibleHeistIds) {
             return "No match for: \(formattedQuery) (scope: \(resolutionScope.rawValue))\n\(nearMiss)"
         }
 
         // Tier 2: Nothing close — dump a compact summary.
         let summary = compactElementSummary(
-            screenElements: screenElements,
+            treeElements: treeElements,
             visibleHeistIds: visibleHeistIds,
             resolutionScope: resolutionScope.rawValue
         )
@@ -202,7 +202,7 @@ extension TheStash {
     /// in the separate failure-capture diagnostic pipeline.
     static func findNearMiss(
         for predicate: ElementPredicate,
-        in screenElements: [Screen.ScreenElement],
+        in treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
         let relaxations = predicate.checks.enumerated().compactMap { index, check -> Relaxation? in
@@ -219,7 +219,7 @@ extension TheStash {
         let suggestionCap = 3
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates else { continue }
-            let hits = matchCandidates(relaxation.relaxed, in: screenElements, limit: suggestionCap + 1)
+            let hits = matchCandidates(relaxation.relaxed, in: treeElements, limit: suggestionCap + 1)
             guard !hits.isEmpty else { continue }
             let deduped = hits.map {
                 suggestionValue(
@@ -332,23 +332,23 @@ extension TheStash {
         }).description
     }
 
-    /// Compact summary of known elements for total-miss diagnostics.
+    /// Compact summary of interface elements for total-miss diagnostics.
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
-        screenElements: [Screen.ScreenElement],
+        treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>,
-        resolutionScope: String = "known"
+        resolutionScope: String = "interface"
     ) -> String {
         let cap = 20
-        if screenElements.isEmpty {
+        if treeElements.isEmpty {
             return """
                 \(resolutionScope) hierarchy is empty (0 elements)
                 Next: wait for the target to appear, then retry with an exact label, identifier, or value.
                 """
         }
-        let noun = screenElements.count == 1 ? "element" : "elements"
-        var lines = ["\(screenElements.count) \(resolutionScope) \(noun):"]
-        for entry in screenElements.prefix(cap) {
+        let noun = treeElements.count == 1 ? "element" : "elements"
+        var lines = ["\(treeElements.count) \(resolutionScope) \(noun):"]
+        for entry in treeElements.prefix(cap) {
             let element = entry.element
             let summary = ElementDiagnosticSummary(
                 label: element.label,
@@ -359,8 +359,8 @@ extension TheStash {
             )
             lines.append("  \(summary.rendered(using: .compactStash))")
         }
-        if screenElements.count > cap {
-            lines.append("  ... and \(screenElements.count - cap) more")
+        if treeElements.count > cap {
+            lines.append("  ... and \(treeElements.count - cap) more")
         }
         lines.append(
             "Next: target one listed element by exact label, identifier, or value; "
@@ -371,12 +371,12 @@ extension TheStash {
 
     private static func matchCandidates(
         _ predicate: ElementPredicate,
-        in screenElements: [Screen.ScreenElement],
+        in treeElements: [InterfaceTree.Element],
         limit: Int
-    ) -> [Screen.ScreenElement] {
+    ) -> [InterfaceTree.Element] {
         guard limit > 0 else { return [] }
         return Array(
-            ElementPredicateGraph(subjects: screenElements, identity: \.heistId)
+            ElementPredicateGraph(subjects: treeElements, identity: \.heistId)
                 .resolve(predicate)
                 .subjects
                 .prefix(limit)
@@ -386,7 +386,7 @@ extension TheStash {
     private static func suggestionValue(
         field: String,
         actual: String,
-        candidate: Screen.ScreenElement,
+        candidate: InterfaceTree.Element,
         visibleHeistIds: Set<HeistId>
     ) -> String {
         let summary = ElementDiagnosticSummary(
@@ -397,7 +397,7 @@ extension TheStash {
     }
 
     static func availability(
-        for candidate: Screen.ScreenElement,
+        for candidate: InterfaceTree.Element,
         visibleHeistIds: Set<HeistId>
     ) -> ElementDiagnosticSummary.Availability {
         if visibleHeistIds.contains(candidate.heistId) {

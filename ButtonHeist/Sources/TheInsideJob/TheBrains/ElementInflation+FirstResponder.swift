@@ -7,8 +7,8 @@ import ThePlans
 extension ElementInflation {
 
     internal func inflateFirstResponder(method: ActionMethod) async -> ElementInflationFailure? {
-        guard let screenElement = stash.firstResponderScreenElement(),
-              let target = stash.minimumUniqueTarget(for: screenElement) else { return nil }
+        guard let treeElement = stash.firstResponderInterfaceElement(),
+              let target = stash.minimumUniqueTarget(for: treeElement) else { return nil }
         switch await inflate(
             for: target,
             method: method,

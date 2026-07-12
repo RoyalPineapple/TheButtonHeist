@@ -345,7 +345,7 @@ final class Navigation {
             discoveryLimitHit = true
         }
 
-        mutating func addPendingContainers(_ containers: [SemanticScreen.Container]) {
+        mutating func addPendingContainers(_ containers: [InterfaceTree.Container]) {
             addPendingScrollPaths(containers.map(\.path))
         }
 
@@ -376,7 +376,7 @@ final class Navigation {
         }
 
         func interfaceDiagnostics(
-            for screen: Screen,
+            for screen: InterfaceObservation,
             includedElementCount: Int
         ) -> InterfaceDiagnostics {
             let omittedContainerDetails = omittedContainerDiagnostics(in: screen)
@@ -421,7 +421,7 @@ final class Navigation {
             return "Retry get_interface with a narrower subtree or after manually scrolling the omitted container."
         }
 
-        private func omittedContainerDiagnostics(in screen: Screen) -> [InterfaceDiscoveryOmittedContainer] {
+        private func omittedContainerDiagnostics(in screen: InterfaceObservation) -> [InterfaceDiscoveryOmittedContainer] {
             var containers = omittedScrollPathReasons
             let pendingReason: ExplorationOmissionReason = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
             for containerPath in pendingScrollPaths where !exploredScrollPaths.contains(containerPath) {
@@ -439,9 +439,9 @@ final class Navigation {
         private func omittedContainerDiagnostic(
             _ containerPath: TreePath,
             reasons: Set<ExplorationOmissionReason>,
-            screen: Screen
+            screen: InterfaceObservation
         ) -> InterfaceDiscoveryOmittedContainer? {
-            guard let semanticContainer = screen.semantic.containers[containerPath] else { return nil }
+            guard let semanticContainer = screen.tree.containers[containerPath] else { return nil }
             let container = semanticContainer.container
             let frame = container.frame
             let containerName = semanticContainer.containerName

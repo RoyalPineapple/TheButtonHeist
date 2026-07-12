@@ -46,9 +46,9 @@ final class TheStashRotorTests: XCTestCase {
     }
 
     private func liveTarget(
-        for screenElement: TheStash.ScreenElement
+        for treeElement: InterfaceTree.Element
     ) -> TheStash.LiveActionTarget? {
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement) else {
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {
             return nil
         }
         return liveTarget
@@ -109,8 +109,8 @@ final class TheStashRotorTests: XCTestCase {
             return
         }
         XCTAssertEqual(hit.rotor, "Errors")
-        XCTAssertEqual(hit.screenElement?.element.identifier, "missing_amount")
-        XCTAssertEqual(hit.screenElement?.element.label, "Missing amount")
+        XCTAssertEqual(hit.treeElement?.element.identifier, "missing_amount")
+        XCTAssertEqual(hit.treeElement?.element.label, "Missing amount")
         XCTAssertNil(hit.textRange)
     }
 
@@ -172,7 +172,7 @@ final class TheStashRotorTests: XCTestCase {
             return
         }
         XCTAssertEqual(hit.rotor, "Links")
-        XCTAssertEqual(hit.screenElement?.element.identifier, "open_docs")
+        XCTAssertEqual(hit.treeElement?.element.identifier, "open_docs")
     }
 
     func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
@@ -273,8 +273,8 @@ final class TheStashRotorTests: XCTestCase {
         }
 
         let cachedHeistId = HeistId(rawValue: "cached_virtual_result")
-        var elements = screen.semantic.elements
-        elements[cachedHeistId] = Screen.ScreenElement(
+        var elements = screen.tree.elements
+        elements[cachedHeistId] = InterfaceTree.Element(
             heistId: cachedHeistId,
             scrollMembership: nil,
             element: AccessibilityElement.make(
@@ -284,8 +284,8 @@ final class TheStashRotorTests: XCTestCase {
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )
         )
-        brains.stash.installScreenForTesting(Screen(
-            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+        brains.stash.installScreenForTesting(InterfaceObservation(
+            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
 
@@ -316,7 +316,7 @@ final class TheStashRotorTests: XCTestCase {
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             customRotors: [.init(name: "Warnings", resultMarkers: [], limit: .none)]
         )
-        let screenElement = Screen.ScreenElement(
+        let treeElement = InterfaceTree.Element(
             heistId: "rotor_host",
             scrollMembership: nil,
             element: element
@@ -324,12 +324,12 @@ final class TheStashRotorTests: XCTestCase {
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
-        stash.installScreenForTesting(Screen(
-            elements: [screenElement.heistId: screenElement],
+        stash.installScreenForTesting(InterfaceObservation(
+            elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(element, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): screenElement.heistId],
+            heistIdsByPath: [TreePath([0]): treeElement.heistId],
             elementRefs: [
-                screenElement.heistId: .init(object: host, scrollView: nil)
+                treeElement.heistId: .init(object: host, scrollView: nil)
             ],
             firstResponderHeistId: nil,
         ))
@@ -337,7 +337,7 @@ final class TheStashRotorTests: XCTestCase {
         let outcome = stash.performRotor(
             selection: .named("Errors"),
             direction: .next,
-            on: try XCTUnwrap(liveTarget(for: screenElement))
+            on: try XCTUnwrap(liveTarget(for: treeElement))
         )
 
         guard case .noSuchRotor(let available) = outcome else {

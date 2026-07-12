@@ -24,10 +24,10 @@ extension Navigation {
         case identifier(String)
         case element
 
-        init(_ screenElement: TheStash.ScreenElement) {
-            if let label = screenElement.element.label, !label.isEmpty {
+        init(_ treeElement: InterfaceTree.Element) {
+            if let label = treeElement.element.label, !label.isEmpty {
                 self = .label(label)
-            } else if let identifier = screenElement.element.identifier, !identifier.isEmpty {
+            } else if let identifier = treeElement.element.identifier, !identifier.isEmpty {
                 self = .identifier(identifier)
             } else {
                 self = .element

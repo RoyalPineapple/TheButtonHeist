@@ -173,7 +173,7 @@ internal struct PredicatePollingEngine<Evaluation> {
 
 extension HeistSemanticObservation {
     internal var visibleFingerprint: String {
-        state.screen.visibleOnly.semanticHash
+        state.screen.viewportOnly.interfaceHash
     }
 }
 

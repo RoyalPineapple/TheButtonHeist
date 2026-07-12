@@ -6,19 +6,11 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// Main-actor state cache for Button Heist's current view of the app.
+/// Main-actor owner of Button Heist's current accessibility interface.
 ///
-/// The stash separates four kinds of state:
-/// - latest observed capture: raw parser output from the most recent
-///   accessibility read;
-/// - settled world: durable semantic state promoted by observation;
-/// - visible live view: UIKit refs, live geometry, and viewport-tied lookup
-///   state used only for dispatch/actionability;
-/// - semantic projection: wire/report-facing values derived from the settled
-///   world, never stored as live handles.
-///
-/// It does not own the observation lifecycle or decide when an observation is
-/// settled; `SemanticObservationStream` owns promotion into settled world.
+/// The interface tree is the only target-resolution authority. The latest
+/// observation carries disposable UIKit evidence for actionability, while a
+/// failed observation may be retained only for diagnostics.
 @MainActor
 final class TheStash {
 
@@ -36,24 +28,20 @@ final class TheStash {
     /// Pending accessibility notifications captured while semantic observation is active.
     let accessibilityNotifications = AccessibilityNotificationBus()
 
-    // MARK: - State Stores
+    // MARK: - Interface State
 
-    var observedState = ObservedState()
-    var liveLookup = LiveLookup()
-    var worldStore = WorldStore()
-
-    var latestObservedSemanticWorld: SemanticScreen {
-        observedState.semanticWorld
-    }
+    var interfaceTree: InterfaceTree = .empty
+    var latestObservation: InterfaceObservation = .empty
+    var diagnosticObservation: InterfaceObservation?
 
     var currentLiveCapture: LiveCapture {
-        liveLookup.liveCapture
+        latestObservation.liveCapture
     }
 
-    /// Unit-test fixture for the next explicit visible refresh. Production
-    /// refreshes always parse UIKit; synthetic tests can install one screen as
+    /// Unit-test fixture for the next explicit viewport refresh. Production
+    /// refreshes always parse UIKit; synthetic tests can install one observation as
     /// the current tree without retaining any live object strongly.
-    var nextVisibleRefreshScreenForTesting: Screen?
+    var nextVisibleRefreshScreenForTesting: InterfaceObservation?
 
     // MARK: - Observation Scheduling
 
@@ -98,28 +86,10 @@ final class TheStash {
         rotorCursor = nil
     }
 
-    /// Last settled world Button Heist believes. Semantic resolution and normal
-    /// interface reads use this as durable truth. Its live-capture half is a
-    /// value-only projection scaffold with dispatch refs stripped.
-    var settledSemanticScreen: Screen {
-        worldStore.screen
+    /// Last failed observation retained for reporting, never target resolution.
+    var latestFailedSettleDiagnosticEvidence: InterfaceObservation? {
+        diagnosticObservation
     }
-
-    /// Current visible live view. Use this only for visible/debug reads and
-    /// actionability, never as settled semantic truth.
-    var liveVisibleScreen: Screen {
-        liveLookup.visibleScreen(observedSemanticWorld: observedState.semanticWorld)
-    }
-
-    /// Last non-clean settle evidence. Reporting and trace code may consume it;
-    /// semantic target resolution must not.
-    var latestFailedSettleDiagnosticEvidence: Screen? {
-        observedState.failedSettleDiagnosticEvidence
-    }
-
-    // MARK: - Aliases
-
-    typealias ScreenElement = Screen.ScreenElement
 
     // MARK: - Computed Accessors
 
@@ -127,88 +97,78 @@ final class TheStash {
     /// clarity: reads, matchers, scroll dispatch, and tab-bar geometry all need
     /// it without spelling out live-capture internals every time.
     var latestObservedLiveHierarchy: [AccessibilityHierarchy] {
-        liveLookup.hierarchy
+        currentLiveCapture.hierarchy
     }
 
     /// Scrollable container paths paired with their backing UIScrollView from the
     /// visible live view. Unwraps the weak ref wrapper for call sites that need
     /// a live scroll view.
     var scrollableContainerViewsByPath: [TreePath: UIScrollView] {
-        liveLookup.scrollableContainerViewsByPath
+        Dictionary(
+            uniqueKeysWithValues: currentLiveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
+                reference.view.map { (path, $0) }
+            }
+        )
     }
 
-    /// HeistIds of all known elements in the settled world.
-    ///
-    /// After an exploration commit this includes elements that were observed
-    /// during scrolling and are no longer on-screen. Use `visibleIds` when
-    /// you specifically need the latest parsed on-screen ids.
-    var knownIds: Set<HeistId> {
-        ids(in: .known)
+    /// Elements retained in the interface tree, including explored off-viewport elements.
+    var interfaceElementIDs: Set<HeistId> {
+        ids(in: .interface)
     }
 
-    /// HeistIds of elements present in the hierarchy from the most recent
-    /// parse. Strictly a subset of `knownIds` after an exploration union has
-    /// been committed.
-    var visibleIds: Set<HeistId> {
-        ids(in: .visible)
+    /// Elements backed by the latest viewport observation.
+    var viewportElementIDs: Set<HeistId> {
+        ids(in: .viewport)
     }
 
-    /// Number of elements retained in committed semantic memory.
-    var knownElementCount: Int {
-        worldStore.elementCount
+    var interfaceElementCount: Int {
+        interfaceTree.elementCount
     }
 
-    /// HeistIds retained in committed semantic memory.
-    var knownElementIds: Set<HeistId> {
-        worldStore.heistIds
+    func interfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
+        interfaceTree.findElement(heistId: heistId)
     }
 
-    /// HeistIds backed by the latest live parse.
-    var visibleElementIds: Set<HeistId> {
-        liveLookup.heistIds
-    }
-
-    /// O(1) lookup in committed semantic memory.
-    func knownElement(heistId: HeistId) -> ScreenElement? {
-        worldStore.element(heistId: heistId)
-    }
-
-    /// Latest observed capture payload for a visible heistId.
+    /// Latest observed capture payload for a viewport heistId.
     ///
     /// The parsed accessibility element, live handles, and reveal metadata are
-    /// observational evidence only. For visible live entries, the newest parse
-    /// owns viewport metadata; cached settled metadata must not override it.
-    func liveScreenElement(heistId: HeistId) -> ScreenElement? {
-        liveLookup.screenElement(
+    /// observational evidence only. For live entries, the newest parse owns
+    /// viewport metadata; retained interface metadata must not override it.
+    func liveInterfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
+        guard let liveEntry = currentLiveCapture.elementEntry(for: heistId),
+              let observedEntry = latestObservation.tree.findElement(heistId: heistId)
+        else { return nil }
+        return InterfaceTree.Element(
             heistId: heistId,
-            observedSemanticWorld: observedState.semanticWorld
+            path: liveEntry.path,
+            scrollMembership: observedEntry.scrollMembership,
+            observedScrollContentActivationPoint: observedEntry.observedScrollContentActivationPoint,
+            element: liveEntry.element
         )
     }
 
     /// Elements in matcher/diagnostic order.
-    var orderedSemanticElements: [ScreenElement] {
-        worldStore.orderedElements
+    var orderedInterfaceElements: [InterfaceTree.Element] {
+        interfaceTree.orderedElements
     }
 
-    /// Hash of the settled world. Deliberately excludes live viewport geometry
-    /// so scroll position alone does not produce semantic history.
-    var semanticHash: String {
-        worldStore.semanticHash
+    var interfaceHash: String {
+        interfaceTree.interfaceHash
     }
 
     /// HeistId of the element whose live object is currently first responder.
     var firstResponderHeistId: HeistId? {
-        liveLookup.firstResponderHeistId
+        currentLiveCapture.firstResponderHeistId
     }
 
-    /// Screen name from the settled screen (first header element by traversal order).
+    /// Current screen name derived from the interface tree's viewport capture.
     var lastScreenName: String? {
-        worldStore.screenName
+        interfaceTree.name
     }
 
     /// Slugified screen name for machine use (e.g. "controls_demo").
     var lastScreenId: String? {
-        worldStore.screenId
+        interfaceTree.id
     }
 
 }

@@ -11,7 +11,7 @@ import ThePlans
 extension Navigation {
 
     struct ContainerExploration {
-        let semanticContainer: SemanticScreen.Container
+        let semanticContainer: InterfaceTree.Container
         let scrollView: UIScrollView
         let hasHOverflow: Bool
         let hasVOverflow: Bool
@@ -183,16 +183,16 @@ extension Navigation {
     }
 
     struct ExploredScreen {
-        let screen: Screen
+        let screen: InterfaceObservation
         let manifest: ScreenManifest
     }
 
     struct SemanticExploration {
-        var screen: Screen
+        var screen: InterfaceObservation
         var manifest: ScreenManifest
 
         init(
-            baseline: Screen,
+            baseline: InterfaceObservation,
             maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
         ) {
@@ -203,17 +203,20 @@ extension Navigation {
             )
         }
 
-        mutating func absorb(_ parsed: Screen?) {
+        mutating func absorb(_ parsed: InterfaceObservation?) {
             guard let parsed else { return }
-            screen = screen.merging(parsed)
+            screen = InterfaceObservation(
+                tree: screen.tree.merging(parsed.tree),
+                liveCapture: parsed.liveCapture
+            )
             addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
         }
 
-        mutating func markExplored(_ container: SemanticScreen.Container) {
+        mutating func markExplored(_ container: InterfaceTree.Container) {
             manifest.markExplored(container.path)
         }
 
-        mutating func addDiscoveredContainers(_ containers: [SemanticScreen.Container]) {
+        mutating func addDiscoveredContainers(_ containers: [InterfaceTree.Container]) {
             let newContainers = containers.filter {
                 !manifest.exploredScrollPaths.contains($0.path)
                     && !manifest.pendingScrollPaths.contains($0.path)

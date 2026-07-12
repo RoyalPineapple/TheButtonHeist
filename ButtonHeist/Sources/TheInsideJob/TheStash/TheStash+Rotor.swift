@@ -13,7 +13,7 @@ extension TheStash {
 
     struct RotorHit {
         let rotor: String
-        let screenElement: ScreenElement?
+        let treeElement: InterfaceTree.Element?
         let textRange: RotorTextRange?
     }
 
@@ -68,7 +68,7 @@ extension TheStash {
         }
 
         let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)
-        let hostHeistId = liveTarget.screenElement.heistId
+        let hostHeistId = liveTarget.treeElement.heistId
 
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
@@ -96,33 +96,33 @@ extension TheStash {
         }
         // Hold the new selection as the rotor cursor for the next step.
         rotorCursor = RotorCursor(hostHeistId: hostHeistId, rotorName: rotorName, currentSelection: resultObject)
-        return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed, textRange: textRange))
+        return .succeeded(RotorHit(rotor: rotorName, treeElement: parsed, textRange: textRange))
     }
 }
 
 private extension TheStash {
 
-    /// Return the known `ScreenElement` corresponding to a UIKit accessibility
+    /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility
     /// object by live object identity.
-    func knownObject(_ object: NSObject) -> ScreenElement? {
+    func knownObject(_ object: NSObject) -> InterfaceTree.Element? {
         guard let heistId = liveElementHeistId(matching: object),
-            let cached = knownElement(heistId: heistId)
+            let cached = interfaceElement(heistId: heistId)
         else {
             return nil
         }
         return cached
     }
 
-    /// Parse the live hierarchy and return the `ScreenElement` corresponding to
+    /// Parse the live hierarchy and return the `InterfaceTree.Element` corresponding to
     /// a UIKit accessibility object. Used by live custom rotor steps so the
     /// returned rotor target flows through the same parser as `get_interface`.
-    func parseLiveObject(_ object: NSObject) -> ScreenElement? {
+    func parseLiveObject(_ object: NSObject) -> InterfaceTree.Element? {
         guard let screen = parse() else { return nil }
         guard let heistId = screen.liveCapture.heistId(matching: object) else { return nil }
         return screen.findElement(heistId: heistId)
     }
 
-    func parseRotorResultObject(_ object: NSObject) -> ScreenElement? {
+    func parseRotorResultObject(_ object: NSObject) -> InterfaceTree.Element? {
         if let known = knownObject(object) {
             return known
         }

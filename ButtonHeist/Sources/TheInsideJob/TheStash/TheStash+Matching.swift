@@ -118,7 +118,7 @@ extension AccessibilityElement: PredicateSelectionSubject {
     }
 }
 
-extension SemanticScreen.Element: ElementPredicateSubjectBacked {
+extension InterfaceTree.Element: ElementPredicateSubjectBacked {
     package var predicateSubject: AccessibilityElement { element }
 }
 
@@ -139,28 +139,28 @@ extension TheStash {
     /// returned in the committed screen's semantic order: live hierarchy
     /// entries first, then known entries retained from exploration. Viewport
     /// reachability is handled by action execution, not by target resolution.
-    func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [ScreenElement] {
-        matchScreenElements(predicate, limit: limit, in: settledSemanticScreen)
+    func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [InterfaceTree.Element] {
+        matchScreenElements(predicate, limit: limit, in: interfaceTree)
     }
 
     func matchScreenElements(
         _ predicate: ElementPredicate,
         limit: Int,
-        in screen: Screen
-    ) -> [ScreenElement] {
+        in tree: InterfaceTree
+    ) -> [InterfaceTree.Element] {
         guard limit > 0, predicate.hasPredicates else { return [] }
-        let projection = WireConversion.semanticInterfaceProjection(from: screen)
+        let projection = WireConversion.semanticInterfaceProjection(from: tree)
         let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
-        return Array(projection.screenElements(matching: matches).prefix(limit))
+        return Array(projection.treeElements(matching: matches).prefix(limit))
     }
 
     /// All matching screen elements in traversal order. Use when diagnostics
     /// need the exact match-set size rather than an early-exit prefix.
-    func matchScreenElements(_ predicate: ElementPredicate, in screen: Screen) -> [ScreenElement] {
+    func matchScreenElements(_ predicate: ElementPredicate, in tree: InterfaceTree) -> [InterfaceTree.Element] {
         guard predicate.hasPredicates else { return [] }
-        let projection = WireConversion.semanticInterfaceProjection(from: screen)
+        let projection = WireConversion.semanticInterfaceProjection(from: tree)
         let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
-        return projection.screenElements(matching: matches)
+        return projection.treeElements(matching: matches)
     }
 
 }
