@@ -524,9 +524,14 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
     }
 }
 
-public enum ActionSettlementEvidence: Codable, Sendable, Equatable {
-    case settled(durationMs: Int)
-    case timedOut(durationMs: Int)
+public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
+    private enum State: Sendable, Equatable {
+        case settled
+        case timedOut
+    }
+
+    private let state: State
+    public let durationMs: Int
 
     private enum Kind: String, Codable {
         case settled
@@ -538,26 +543,33 @@ public enum ActionSettlementEvidence: Codable, Sendable, Equatable {
         case durationMs
     }
 
-    public var durationMs: Int {
-        switch self {
-        case .settled(let durationMs), .timedOut(let durationMs):
-            return durationMs
-        }
+    public static func settled(durationMs: Int) -> ActionSettlementEvidence {
+        ActionSettlementEvidence(state: .settled, durationMs: durationMs)
+    }
+
+    public static func timedOut(durationMs: Int) -> ActionSettlementEvidence {
+        ActionSettlementEvidence(state: .timedOut, durationMs: durationMs)
     }
 
     public var settled: Bool {
-        if case .settled = self { return true }
+        if case .settled = state { return true }
         return false
     }
 
     fileprivate func replacingDurationMs(_ durationMs: Int?) -> ActionSettlementEvidence {
         guard let durationMs else { return self }
-        switch self {
+        switch state {
         case .settled:
             return .settled(durationMs: durationMs)
         case .timedOut:
             return .timedOut(durationMs: durationMs)
         }
+    }
+
+    private init(state: State, durationMs: Int) {
+        precondition(durationMs >= 0, "action settlement duration must not be negative")
+        self.state = state
+        self.durationMs = durationMs
     }
 
     public init(from decoder: Decoder) throws {
@@ -573,15 +585,15 @@ public enum ActionSettlementEvidence: Codable, Sendable, Equatable {
         }
         switch try container.decode(Kind.self, forKey: .kind) {
         case .settled:
-            self = .settled(durationMs: durationMs)
+            self.init(state: .settled, durationMs: durationMs)
         case .timedOut:
-            self = .timedOut(durationMs: durationMs)
+            self.init(state: .timedOut, durationMs: durationMs)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
+        switch state {
         case .settled:
             try container.encode(Kind.settled, forKey: .kind)
         case .timedOut:
@@ -591,56 +603,334 @@ public enum ActionSettlementEvidence: Codable, Sendable, Equatable {
     }
 }
 
-/// Independent evidence attached to one action result.
-public struct ActionResultEvidence: Codable, Sendable, Equatable {
-    public let accessibilityTrace: AccessibilityTrace?
-    public let settlement: ActionSettlementEvidence?
+public struct ActionResultObservationEvidence: Codable, Sendable, Equatable {
+    private enum Storage: Sendable, Equatable {
+        case none
+        case announcement(String)
+        case trace(AccessibilityTrace, settlement: ActionSettlementEvidence?)
+    }
+
+    private let storage: Storage
+
+    public static let none = ActionResultObservationEvidence(storage: .none)
+
+    public static func announcement(_ text: String) -> ActionResultObservationEvidence {
+        precondition(!text.isEmpty, "action announcement must not be empty")
+        return ActionResultObservationEvidence(storage: .announcement(text))
+    }
+
+    public static func trace(
+        _ trace: AccessibilityTrace,
+        settlement: ActionSettlementEvidence? = nil
+    ) -> ActionResultObservationEvidence {
+        ActionResultObservationEvidence(storage: .trace(trace, settlement: settlement))
+    }
+
+    public var accessibilityTrace: AccessibilityTrace? {
+        guard case .trace(let trace, _) = storage else { return nil }
+        return trace
+    }
+
+    public var settlement: ActionSettlementEvidence? {
+        guard case .trace(_, let settlement) = storage else { return nil }
+        return settlement
+    }
+
+    public var announcement: String? {
+        switch storage {
+        case .none:
+            return nil
+        case .announcement(let text):
+            return text
+        case .trace(let trace, _):
+            return trace.capturedAnnouncements.first?.text
+        }
+    }
+
+    private enum Kind: String, Codable {
+        case none
+        case announcement
+        case trace
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind
+        case announcement
+        case accessibilityTrace
+        case settlement
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResultObservationEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .none:
+            try Self.rejectFields(except: [.kind], in: container, kind: .none)
+            self = .none
+        case .announcement:
+            try Self.rejectFields(except: [.kind, .announcement], in: container, kind: .announcement)
+            let text = try container.decode(String.self, forKey: .announcement)
+            guard !text.isEmpty else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .announcement,
+                    in: container,
+                    debugDescription: "action announcement must not be empty"
+                )
+            }
+            self = .announcement(text)
+        case .trace:
+            try Self.rejectFields(
+                except: [.kind, .accessibilityTrace, .settlement],
+                in: container,
+                kind: .trace
+            )
+            self = .trace(
+                try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace),
+                settlement: try container.decodeIfPresent(
+                    ActionSettlementEvidence.self,
+                    forKey: .settlement
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch storage {
+        case .none:
+            try container.encode(Kind.none, forKey: .kind)
+        case .announcement(let text):
+            try container.encode(Kind.announcement, forKey: .kind)
+            try container.encode(text, forKey: .announcement)
+        case .trace(let trace, let settlement):
+            try container.encode(Kind.trace, forKey: .kind)
+            try container.encode(trace, forKey: .accessibilityTrace)
+            try container.encodeIfPresent(settlement, forKey: .settlement)
+        }
+    }
+
+    fileprivate func replacingSettlementDuration(_ durationMs: Int?) -> ActionResultObservationEvidence {
+        guard let durationMs else { return self }
+        guard case .trace(let trace, let settlement?) = storage else {
+            preconditionFailure("settle timing requires trace settlement evidence")
+        }
+        return .trace(trace, settlement: settlement.replacingDurationMs(durationMs))
+    }
+
+    private static func rejectFields(
+        except allowed: Set<CodingKeys>,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        kind: Kind
+    ) throws {
+        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "\(kind.rawValue) action observation cannot include \(key.stringValue)"
+            )
+        }
+    }
+}
+
+public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
+    public let observation: ActionResultObservationEvidence
     public let subjectEvidence: ActionSubjectEvidence?
     public let activationTrace: ActivationTrace?
     public let timing: ActionPerformanceTiming?
-    public let announcement: String?
+    public let warning: HeistActionWarning?
+
+    public static let none = ActionResultSuccessEvidence(observation: .none)
 
     public init(
-        accessibilityTrace: AccessibilityTrace? = nil,
-        settlement: ActionSettlementEvidence? = nil,
+        observation: ActionResultObservationEvidence,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil,
-        announcement: String? = nil
+        warning: HeistActionWarning? = nil
     ) {
-        if let timingDurationMs = timing?.settleMs {
-            precondition(
-                timingDurationMs == settlement?.durationMs,
-                "timing.settleMs must match ActionSettlementEvidence"
-            )
-        }
-        let traceAnnouncement = accessibilityTrace?.capturedAnnouncements.first
-        if let announcement, let traceAnnouncement {
-            precondition(
-                announcement == traceAnnouncement.text,
-                "announcement must match accessibilityTrace captured announcement"
-            )
-        }
-        self.accessibilityTrace = accessibilityTrace
-        self.settlement = settlement
+        precondition(timing?.settleMs == nil, "settlement duration belongs to action observation")
+        self.observation = observation
         self.subjectEvidence = subjectEvidence
         self.activationTrace = activationTrace
-        self.timing = timing?.replacingSettleMs(nil)
-        self.announcement = traceAnnouncement?.text ?? announcement
+        self.timing = timing
+        self.warning = warning
     }
 
-    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidence {
-        let settlement = settlement?.replacingDurationMs(timing.settleMs)
-        precondition(timing.settleMs == nil || settlement != nil, "settle timing requires settlement evidence")
-        return ActionResultEvidence(
-            accessibilityTrace: accessibilityTrace,
-            settlement: settlement,
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case observation
+        case subjectEvidence
+        case activationTrace
+        case timing
+        case warning
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResultSuccessEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
+        try Self.rejectSettlementTiming(timing, in: container)
+        self.init(
+            observation: try container.decode(ActionResultObservationEvidence.self, forKey: .observation),
+            subjectEvidence: try container.decodeIfPresent(
+                ActionSubjectEvidence.self,
+                forKey: .subjectEvidence
+            ),
+            activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
+            timing: timing,
+            warning: try container.decodeIfPresent(HeistActionWarning.self, forKey: .warning)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(observation, forKey: .observation)
+        try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
+        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
+        try container.encodeIfPresent(timing, forKey: .timing)
+        try container.encodeIfPresent(warning, forKey: .warning)
+    }
+
+    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultSuccessEvidence {
+        ActionResultSuccessEvidence(
+            observation: observation.replacingSettlementDuration(timing.settleMs),
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
             timing: self.timing?.merging(timing).replacingSettleMs(nil)
                 ?? timing.replacingSettleMs(nil),
-            announcement: announcement
+            warning: warning
         )
+    }
+
+    private static func rejectSettlementTiming(
+        _ timing: ActionPerformanceTiming?,
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) throws {
+        guard timing?.settleMs != nil else { return }
+        throw DecodingError.dataCorruptedError(
+            forKey: .timing,
+            in: container,
+            debugDescription: "settlement duration belongs to action observation"
+        )
+    }
+}
+
+public struct ActionResultFailureEvidence: Codable, Sendable, Equatable {
+    public let observation: ActionResultObservationEvidence
+    public let subjectEvidence: ActionSubjectEvidence?
+    public let activationTrace: ActivationTrace?
+    public let timing: ActionPerformanceTiming?
+
+    public static let none = ActionResultFailureEvidence(observation: .none)
+
+    public init(
+        observation: ActionResultObservationEvidence,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        precondition(timing?.settleMs == nil, "settlement duration belongs to action observation")
+        self.observation = observation
+        self.subjectEvidence = subjectEvidence
+        self.activationTrace = activationTrace
+        self.timing = timing
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case observation
+        case subjectEvidence
+        case activationTrace
+        case timing
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResultFailureEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
+        guard timing?.settleMs == nil else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .timing,
+                in: container,
+                debugDescription: "settlement duration belongs to action observation"
+            )
+        }
+        self.init(
+            observation: try container.decode(ActionResultObservationEvidence.self, forKey: .observation),
+            subjectEvidence: try container.decodeIfPresent(
+                ActionSubjectEvidence.self,
+                forKey: .subjectEvidence
+            ),
+            activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
+            timing: timing
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(observation, forKey: .observation)
+        try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
+        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
+        try container.encodeIfPresent(timing, forKey: .timing)
+    }
+
+    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultFailureEvidence {
+        ActionResultFailureEvidence(
+            observation: observation.replacingSettlementDuration(timing.settleMs),
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: self.timing?.merging(timing).replacingSettleMs(nil)
+                ?? timing.replacingSettleMs(nil)
+        )
+    }
+}
+
+/// Outcome-bound evidence attached to one action result.
+public enum ActionResultEvidence: Sendable, Equatable {
+    case success(ActionResultSuccessEvidence)
+    case failure(ActionResultFailureEvidence)
+
+    public var accessibilityTrace: AccessibilityTrace? { observation.accessibilityTrace }
+    public var settlement: ActionSettlementEvidence? { observation.settlement }
+    public var announcement: String? { observation.announcement }
+
+    public var subjectEvidence: ActionSubjectEvidence? {
+        switch self {
+        case .success(let evidence):
+            return evidence.subjectEvidence
+        case .failure(let evidence):
+            return evidence.subjectEvidence
+        }
+    }
+
+    public var activationTrace: ActivationTrace? {
+        switch self {
+        case .success(let evidence):
+            return evidence.activationTrace
+        case .failure(let evidence):
+            return evidence.activationTrace
+        }
+    }
+
+    public var timing: ActionPerformanceTiming? {
+        switch self {
+        case .success(let evidence):
+            return evidence.timing
+        case .failure(let evidence):
+            return evidence.timing
+        }
+    }
+
+    public var warning: HeistActionWarning? {
+        guard case .success(let evidence) = self else { return nil }
+        return evidence.warning
+    }
+
+    private var observation: ActionResultObservationEvidence {
+        switch self {
+        case .success(let evidence):
+            return evidence.observation
+        case .failure(let evidence):
+            return evidence.observation
+        }
     }
 }
 
@@ -691,17 +981,42 @@ public struct ActionResult: Codable, Sendable, Equatable {
         }
     }
 
+    private enum OutcomeAndEvidence: Sendable, Equatable {
+        case success(ActionResultSuccessEvidence)
+        case failure(ErrorKind, ActionResultFailureEvidence)
+
+        var outcome: ActionResultOutcome {
+            switch self {
+            case .success:
+                return .success
+            case .failure(let errorKind, _):
+                return .failure(errorKind)
+            }
+        }
+
+        var evidence: ActionResultEvidence {
+            switch self {
+            case .success(let evidence):
+                return .success(evidence)
+            case .failure(_, let evidence):
+                return .failure(evidence)
+            }
+        }
+    }
+
     // MARK: - Properties
 
-    public let outcome: ActionResultOutcome
+    private let outcomeAndEvidence: OutcomeAndEvidence
     private let methodAndPayload: MethodAndPayload
+    public var outcome: ActionResultOutcome { outcomeAndEvidence.outcome }
 
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
     public var method: ActionMethod { methodAndPayload.method }
     public let message: String?
-    public let evidence: ActionResultEvidence
+    public var evidence: ActionResultEvidence { outcomeAndEvidence.evidence }
+    public var warning: HeistActionWarning? { evidence.warning }
     public var announcement: String? { evidence.announcement }
     public var capturedAnnouncement: CapturedAnnouncement? {
         evidence.accessibilityTrace?.capturedAnnouncements.first
@@ -737,95 +1052,79 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public static func success(
         method: ActionMethod,
         message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
+        evidence: ActionResultSuccessEvidence
     ) -> ActionResult {
-        ActionResult(
-            outcome: .success,
-            method: method,
+        make(
+            methodAndPayload: .methodOnly(method),
             message: message,
-            evidence: evidence
+            outcomeAndEvidence: .success(evidence)
         )
     }
 
     public static func success(
         payload: ActionResultPayload,
         message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
+        evidence: ActionResultSuccessEvidence
     ) -> ActionResult {
-        ActionResult(
-            outcome: .success,
-            payload: payload,
-            message: message,
-            evidence: evidence
-        )
-    }
-
-    public static func failure(
-        method: ActionMethod,
-        errorKind: ErrorKind,
-        message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
-    ) -> ActionResult {
-        ActionResult(
-            outcome: .failure(errorKind),
-            method: method,
-            message: message,
-            evidence: evidence
-        )
-    }
-
-    public static func failure(
-        payload: ActionResultPayload,
-        errorKind: ErrorKind,
-        message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
-    ) -> ActionResult {
-        ActionResult(
-            outcome: .failure(errorKind),
-            payload: payload,
-            message: message,
-            evidence: evidence
-        )
-    }
-
-    package init(
-        outcome: ActionResultOutcome,
-        method: ActionMethod,
-        message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
-    ) {
-        self.init(
-            outcome: outcome,
-            methodAndPayload: .methodOnly(method),
-            message: message,
-            evidence: evidence
-        )
-    }
-
-    package init(
-        outcome: ActionResultOutcome,
-        payload: ActionResultPayload,
-        message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
-    ) {
-        self.init(
-            outcome: outcome,
+        make(
             methodAndPayload: .payload(payload),
             message: message,
-            evidence: evidence
+            outcomeAndEvidence: .success(evidence)
+        )
+    }
+
+    public static func failure(
+        method: ActionMethod,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        evidence: ActionResultFailureEvidence
+    ) -> ActionResult {
+        make(
+            methodAndPayload: .methodOnly(method),
+            message: message,
+            outcomeAndEvidence: .failure(errorKind, evidence)
+        )
+    }
+
+    public static func failure(
+        payload: ActionResultPayload,
+        errorKind: ErrorKind,
+        message: String? = nil,
+        evidence: ActionResultFailureEvidence
+    ) -> ActionResult {
+        make(
+            methodAndPayload: .payload(payload),
+            message: message,
+            outcomeAndEvidence: .failure(errorKind, evidence)
         )
     }
 
     private init(
-        outcome: ActionResultOutcome,
         methodAndPayload: MethodAndPayload,
-        message: String? = nil,
-        evidence: ActionResultEvidence = ActionResultEvidence()
+        message: String?,
+        outcomeAndEvidence: OutcomeAndEvidence
     ) {
-        self.outcome = outcome
+        self.outcomeAndEvidence = outcomeAndEvidence
         self.methodAndPayload = methodAndPayload
         self.message = message
-        self.evidence = evidence
+    }
+
+    private static func make(
+        methodAndPayload: MethodAndPayload,
+        message: String?,
+        outcomeAndEvidence: OutcomeAndEvidence
+    ) -> ActionResult {
+        if let validationMessage = evidenceValidationMessage(
+            method: methodAndPayload.method,
+            evidence: outcomeAndEvidence.evidence
+        ) {
+            preconditionFailure(validationMessage)
+        }
+        return ActionResult(
+            methodAndPayload: methodAndPayload,
+            message: message,
+            outcomeAndEvidence: outcomeAndEvidence
+        )
     }
 
     // MARK: - Coding
@@ -850,12 +1149,33 @@ public struct ActionResult: Codable, Sendable, Equatable {
             codingPath: container.codingPath + [CodingKeys.payload]
         )
 
+        let outcomeAndEvidence: OutcomeAndEvidence
+        switch outcome {
+        case .success:
+            outcomeAndEvidence = .success(
+                try container.decode(ActionResultSuccessEvidence.self, forKey: .evidence)
+            )
+        case .failure(let errorKind):
+            outcomeAndEvidence = .failure(
+                errorKind,
+                try container.decode(ActionResultFailureEvidence.self, forKey: .evidence)
+            )
+        }
+        if let validationMessage = Self.evidenceValidationMessage(
+            method: methodAndPayload.method,
+            evidence: outcomeAndEvidence.evidence
+        ) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .evidence,
+                in: container,
+                debugDescription: validationMessage
+            )
+        }
+
         self.init(
-            outcome: outcome,
             methodAndPayload: methodAndPayload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            evidence: try container.decodeIfPresent(ActionResultEvidence.self, forKey: .evidence)
-                ?? ActionResultEvidence()
+            outcomeAndEvidence: outcomeAndEvidence
         )
     }
 
@@ -865,18 +1185,43 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
         try container.encodeIfPresent(payload, forKey: .payload)
-        try container.encode(evidence, forKey: .evidence)
+        switch outcomeAndEvidence {
+        case .success(let evidence):
+            try container.encode(evidence, forKey: .evidence)
+        case .failure(_, let evidence):
+            try container.encode(evidence, forKey: .evidence)
+        }
     }
 
     // MARK: - Timing
 
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
-        return ActionResult(
-            outcome: outcome,
-            methodAndPayload: methodAndPayload,
-            message: message,
-            evidence: evidence.mergingTiming(timing)
-        )
+        let merged: OutcomeAndEvidence
+        switch outcomeAndEvidence {
+        case .success(let evidence):
+            merged = .success(evidence.mergingTiming(timing))
+        case .failure(let errorKind, let evidence):
+            merged = .failure(errorKind, evidence.mergingTiming(timing))
+        }
+        return ActionResult(methodAndPayload: methodAndPayload, message: message, outcomeAndEvidence: merged)
+    }
+
+    private static func evidenceValidationMessage(
+        method: ActionMethod,
+        evidence: ActionResultEvidence
+    ) -> String? {
+        if evidence.activationTrace != nil, method != .activate {
+            return "activationTrace is only valid for activate ActionResult evidence"
+        }
+        guard let warning = evidence.warning else { return nil }
+        switch warning {
+        case .activationWeakAffordance where method != .activate:
+            return "activation weak-affordance warning is only valid for activate ActionResult evidence"
+        case .textEntryWeakAffordance where method != .typeText:
+            return "text-entry weak-affordance warning is only valid for typeText ActionResult evidence"
+        case .activationWeakAffordance, .textEntryWeakAffordance:
+            return nil
+        }
     }
 }
