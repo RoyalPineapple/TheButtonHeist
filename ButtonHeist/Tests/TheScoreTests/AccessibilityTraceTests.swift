@@ -321,6 +321,7 @@ final class AccessibilityTraceTests: XCTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
+        XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
@@ -335,6 +336,7 @@ final class AccessibilityTraceTests: XCTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
+        XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
@@ -437,7 +439,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(valueChanges.contains(.value(old: "50", new: "100")))
     }
 
-    func testTraceKeepsElementFactBeforeScreenBoundaryFacts() throws {
+    func testTraceKeepsElementFactBeforeFallbackScreenBoundaryFacts() throws {
         let baseline = makeInterface(label: "Menu", saveValue: "0")
         let updated = makeInterface(label: "Menu", saveValue: "50")
         let final = makeInterface(label: "Settings", saveValue: "50")
@@ -448,6 +450,7 @@ final class AccessibilityTraceTests: XCTestCase {
                 transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
             )
 
+        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
             [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]
@@ -461,7 +464,7 @@ final class AccessibilityTraceTests: XCTestCase {
         }
     }
 
-    func testScreenChangeEdgeDoesNotProjectElementEdits() throws {
+    func testFallbackScreenChangeEdgeDoesNotProjectElementEdits() throws {
         let baseline = makeInterface(label: "Menu", saveValue: "0")
         let final = makeInterface(label: "Settings", saveValue: "50")
         let trace = AccessibilityTrace(first: baseline).appending(
@@ -469,6 +472,7 @@ final class AccessibilityTraceTests: XCTestCase {
             transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
         )
 
+        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
         guard case .elementsChanged(let disappearances) = trace.changeFacts[0] else {
             return XCTFail("Expected old interface disappearance fact")
@@ -485,7 +489,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(appearances.updated.isEmpty)
     }
 
-    func testScreenChangeDoesNotMergeEarlierElementFacts() throws {
+    func testFallbackScreenChangeDoesNotMergeEarlierElementFacts() throws {
         let baseline = makeInterface(label: "Menu", saveValue: "0")
         let outgoingUpdate = makeInterface(label: "Menu", saveValue: "1")
         let replacement = makeInterface(label: "Settings", saveValue: "0")
@@ -496,6 +500,7 @@ final class AccessibilityTraceTests: XCTestCase {
                 transition: AccessibilityTrace.Transition(fallbackReason: .primaryHeaderChanged)
             )
 
+        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(
             trace.changeFacts.map(\.kind),
             [.elementsChanged, .elementsChanged, .screenChanged, .elementsChanged]

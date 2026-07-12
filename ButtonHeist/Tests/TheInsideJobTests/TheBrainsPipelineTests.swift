@@ -108,7 +108,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {
+    func testFallbackScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {
         let persistent = AccessibilityElement.make(
             label: "Inbox",
             traits: .staticText,
@@ -515,7 +515,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.payload, .value("Saved"))
     }
 
-    func testActionResultWithDeltaSuccessReportsScreenChange() async {
+    func testActionResultWithDeltaReportsTypedFallbackScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
@@ -533,9 +533,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             result.accessibilityTrace?.changeFacts.map(\.kind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .primaryHeaderChanged
+        )
     }
 
-    func testScreenChangeReceiptRefinesMixedTransitionSurface() async throws {
+    func testFallbackScreenChangeReceiptRefinesMixedTransitionSurface() async throws {
         let beforeScreen = makeScreen(elements: [
             ("ButtonHeist Demo", .header, "root_header"),
             ("Controls Demo", .button, "controls_demo"),
@@ -574,6 +578,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             result.accessibilityTrace?.changeFacts.map(\.kind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .navigationMarkerChanged
+        )
         let labels = result.accessibilityTrace?.captures.last?.interface.projectedElements.compactMap { $0.label } ?? []
         XCTAssertTrue(labels.contains("Section A"), "Expected new screen labels: \(labels)")
         XCTAssertTrue(labels.contains("A acid"), "Expected new screen labels: \(labels)")
@@ -587,7 +595,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testScreenChangeNotificationReferencesAreRemappedAfterPruning() async throws {
+    func testElementChangedNotificationReferencesAreRemappedAfterPruning() async throws {
         let beforeScreen = makeScreen(elements: [
             ("ButtonHeist Demo", .header, "root_header"),
             ("Controls Demo", .button, "controls_demo"),
@@ -668,6 +676,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let notification = try XCTUnwrap(
             result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
         )
+        XCTAssertEqual(notification.kind, .elementChanged(.layout))
+        XCTAssertNil(result.accessibilityTrace?.captures.last?.transition.fallbackReason)
         guard case .element(let reference) = notification.notificationData else {
             return XCTFail("Expected notification data to resolve to final trace element, got \(notification.notificationData)")
         }
@@ -1626,18 +1636,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
-            notificationBatch: AccessibilityNotificationBatch(
-                events: [PendingAccessibilityNotificationEvent(
-                    sequence: 1,
-                    kind: .screenChanged,
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    notificationData: .none,
-                    associatedElement: .none
-                )],
-                through: AccessibilityNotificationCursor(sequence: 1),
-                scopedScreenChangedThrough: 1,
-                gap: nil
-            )
+            notificationBatch: notificationBatch(kind: .screenChanged)
         )
         let oldBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let transitionWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1646,6 +1645,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         ))
 
         XCTAssertNotEqual(newScreenEvent.generation, oldScreenEvent.generation)
+        XCTAssertNil(newScreenEvent.trace.captures.last?.transition.fallbackReason)
+        XCTAssertEqual(
+            newScreenEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.screenChanged]
+        )
         XCTAssertEqual(transitionWindow.completeness, .complete)
         XCTAssertEqual(
             transitionWindow.trace.changeFacts.map(\.kind),
@@ -1676,7 +1680,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertEqual(after.generation, before.generation)
         XCTAssertNil(after.trace.captures.last?.transition.fallbackReason)
-        XCTAssertFalse(after.trace.changeFacts.contains { if case .screenChanged = $0 { true } else { false } })
+        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged])
     }
 
     func testUnknownNotificationRequiresExplicitSnapshotFallbackForScreenChange() throws {
@@ -1694,7 +1698,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
             [.unknown(4_002)]
         )
-        XCTAssertTrue(after.trace.changeFacts.contains { if case .screenChanged = $0 { true } else { false } })
+        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
     }
 
     func testChangePredicatesReadScreenAndElementFactsSeparately() throws {
@@ -1702,7 +1706,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
         let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
-            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
         )
         let oldScreenBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let screenWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -2280,7 +2285,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 associatedElement: .none
             )],
             through: AccessibilityNotificationCursor(sequence: 1),
-            scopedScreenChangedThrough: 0,
+            scopedScreenChangedThrough: kind == .screenChanged ? 1 : 0,
             gap: nil
         )
     }
