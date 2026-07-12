@@ -74,20 +74,10 @@ package struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
         }
         try container.encode(body, forKey: .body)
     }
-
-    func runtimeSafetyPlan() -> HeistPlan {
-        HeistPlan(
-            runtimeValidatedVersion: version,
-            name: name,
-            parameter: parameter,
-            definitions: definitions.map { $0.runtimeSafetyPlan() },
-            body: body.map(\.runtimeSafetyStep)
-        )
-    }
 }
 
 package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
-    private let payload: HeistStepWirePayload<HeistPlanAdmissionCandidate>
+    let payload: HeistStepWirePayload<HeistPlanAdmissionCandidate>
 
     private init(_ payload: HeistStepWirePayload<HeistPlanAdmissionCandidate>) {
         self.payload = payload
@@ -140,7 +130,37 @@ package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
         Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.invoke(step))
     }
 
-    var runtimeSafetyStep: HeistStep {
+    package init(from decoder: Decoder) throws {
+        payload = try HeistStepWirePayload(from: decoder)
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        try payload.encode(to: encoder)
+    }
+}
+
+private struct HeistPlanRuntimeAdmission {}
+
+extension HeistPlanRuntimeSafetyValidator {
+    mutating func validate(_ candidate: HeistPlanAdmissionCandidate) throws -> HeistPlan {
+        inspect(candidate)
+        guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
+        return HeistPlan(candidate, admittedBy: HeistPlanRuntimeAdmission())
+    }
+}
+
+private extension HeistPlan {
+    init(_ candidate: HeistPlanAdmissionCandidate, admittedBy admission: HeistPlanRuntimeAdmission) {
+        version = candidate.version
+        name = candidate.name
+        parameter = candidate.parameter
+        definitions = candidate.definitions.map { HeistPlan($0, admittedBy: admission) }
+        body = candidate.body.map { $0.admittedStep(admission) }
+    }
+}
+
+private extension HeistStepAdmissionCandidate {
+    func admittedStep(_ admission: HeistPlanRuntimeAdmission) -> HeistStep {
         switch payload {
         case .action(let step): return .action(step)
         case .wait(let step): return .wait(step)
@@ -150,16 +170,8 @@ package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
         case .repeatUntil(let step): return .repeatUntil(step)
         case .warn(let step): return .warn(step)
         case .fail(let step): return .fail(step)
-        case .heist(let plan): return .heist(plan.runtimeSafetyPlan())
+        case .heist(let candidate): return .heist(HeistPlan(candidate, admittedBy: admission))
         case .invoke(let step): return .invoke(step)
         }
-    }
-
-    package init(from decoder: Decoder) throws {
-        payload = try HeistStepWirePayload(from: decoder)
-    }
-
-    package func encode(to encoder: Encoder) throws {
-        try payload.encode(to: encoder)
     }
 }

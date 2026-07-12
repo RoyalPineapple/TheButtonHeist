@@ -101,13 +101,7 @@ import Testing
             let expectedFailure = try #require(testCase.durabilityFailure)
             let failures = runtimeSafetyFailures(for: raw)
             expectNonDurableHeistActionFailure(failures, observed: expectedFailure)
-            let uncheckedPlan = HeistPlan(
-                runtimeValidatedVersion: HeistPlan.currentVersion,
-                body: [.action(try ActionStep(command: testCase.command))]
-            )
-            #expect(throws: HeistCanonicalSwiftDSLError.unsupportedAction(expectedFailure)) {
-                _ = try uncheckedPlan.canonicalSwiftDSL()
-            }
+            #expect(raw.semanticValidationResult().value == nil)
         }
     }
 }
