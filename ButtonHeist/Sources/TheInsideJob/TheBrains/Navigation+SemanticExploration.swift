@@ -186,7 +186,7 @@ extension Navigation {
         let screen: InterfaceObservation
         let manifest: ScreenManifest
 
-        fileprivate init(screen: InterfaceObservation, manifest: ScreenManifest) {
+        internal init(screen: InterfaceObservation, manifest: ScreenManifest) {
             self.screen = screen
             self.manifest = manifest
         }
