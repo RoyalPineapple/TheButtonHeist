@@ -461,6 +461,13 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testViewportRuntimeCommandsUseDemoAppThroughDirectDispatch() async throws {
+        addTeardownBlock {
+            let cleanupHeist = try await runHeist("DogfoodViewportRuntimeCleanup") {
+                try DemoNavigation.backToRoot()
+            }
+            XCTAssertEqual(cleanupHeist.result.steps.map(\.kind), [.invoke])
+        }
+
         let openHeist = try await runHeist("DogfoodOpenLongListForViewportRuntimeCommands") {
             try DogfoodHome.openScreen("Long List")
             try LongListScreen.openTopAnchor()
@@ -492,11 +499,30 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let visibleResult = results[3]
         XCTAssertTrue(visibleResult.outcome.isSuccess, visibleResult.message ?? "scroll_to_visible failed")
         XCTAssertEqual(visibleResult.method, .scrollToVisible)
+    }
 
-        let cleanupHeist = try await runHeist("DogfoodViewportRuntimeCleanup") {
-            try DemoNavigation.backToRoot()
+    func testDirectRuntimeSessionStopsResourcesAfterSuccessAndFailure() async throws {
+        var successfulJob: TheInsideJob?
+        let value = try await withDirectRuntimeSession { job in
+            successfulJob = job
+            return "success"
         }
-        XCTAssertEqual(cleanupHeist.result.steps.map(\.kind), [.invoke])
+
+        XCTAssertEqual(value, "success")
+        assertDirectRuntimeStopped(try XCTUnwrap(successfulJob))
+
+        var failedJob: TheInsideJob?
+        do {
+            let _: Void = try await withDirectRuntimeSession { job in
+                failedJob = job
+                throw DirectRuntimeSessionProbeError.expected
+            }
+            XCTFail("Expected direct runtime operation to throw")
+        } catch let error as DirectRuntimeSessionProbeError {
+            XCTAssertEqual(error, .expected)
+        }
+
+        assertDirectRuntimeStopped(try XCTUnwrap(failedJob))
     }
 
     func testFailedDogfoodHeistPreservesInspectableRunResult() async throws {
@@ -538,45 +564,62 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
 @MainActor
 private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async throws -> [ActionResult] {
-    let job = TheInsideJob.shared
-    let shouldRestoreRuntime = !job.brains.semanticObservationIsActive
-
-    if shouldRestoreRuntime {
-        job.tripwire.startPulse()
-        job.brains.startSemanticObservation()
-        job.brains.safecracker.startKeyboardObservation()
-        job.brains.stash.clearInterfaceForHeistBootstrap()
-        _ = await job.brains.interactionObservation.observeVisibleState(
-            timeout: SemanticObservationTiming.defaultTimeout
-        )
-    }
-
-    do {
+    try await withDirectRuntimeSession { job in
         var results: [ActionResult] = []
         for command in commands {
             let result = await job.brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
             results.append(result)
         }
-        if shouldRestoreRuntime {
-            await stopDirectRuntime(job, waitForAllClear: true)
-        }
         return results
-    } catch {
-        if shouldRestoreRuntime {
-            await stopDirectRuntime(job, waitForAllClear: false)
-        }
-        throw error
     }
 }
 
 @MainActor
-private func stopDirectRuntime(_ job: TheInsideJob, waitForAllClear: Bool) async {
-    if waitForAllClear {
-        _ = await job.tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
+private func withDirectRuntimeSession<Value>(
+    _ operation: @MainActor (TheInsideJob) async throws -> Value
+) async throws -> Value {
+    let job = TheInsideJob(token: "dogfood-direct-runtime")
+    job.tripwire.startPulse()
+    job.brains.startSemanticObservation()
+    job.brains.safecracker.startKeyboardObservation()
+    job.brains.stash.clearInterfaceForHeistBootstrap()
+    _ = await job.brains.interactionObservation.observeVisibleState(
+        timeout: SemanticObservationTiming.defaultTimeout
+    )
+
+    let outcome: Result<Value, Error>
+    do {
+        outcome = .success(try await operation(job))
+    } catch {
+        outcome = .failure(error)
     }
+
+    await stopDirectRuntime(job)
+    return try outcome.get()
+}
+
+@MainActor
+private func stopDirectRuntime(_ job: TheInsideJob) async {
+    _ = await job.tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
     job.brains.stopSemanticObservation()
     job.tripwire.stopPulse()
     job.brains.safecracker.stopKeyboardObservation()
+    job.brains.clearCache()
+}
+
+@MainActor
+private func assertDirectRuntimeStopped(
+    _ job: TheInsideJob,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    XCTAssertFalse(job.brains.semanticObservationIsActive, file: file, line: line)
+    XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
+    XCTAssertEqual(job.brains.stash.interfaceElementCount, 0, file: file, line: line)
+}
+
+private enum DirectRuntimeSessionProbeError: Error, Equatable {
+    case expected
 }
 
 private extension HeistExecutionResult {
