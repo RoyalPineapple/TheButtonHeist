@@ -232,7 +232,7 @@ final class ActivationPolicyTests: XCTestCase {
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
         activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
-        textEntryActivationFailure: @escaping @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.InteractionResult? = { _, _ in nil }
+        textEntryActivationFailure: @escaping @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome? = { _, _ in nil }
     ) -> ActivationPolicy {
         ActivationPolicy(
             accessibilityActivate: accessibilityActivate,

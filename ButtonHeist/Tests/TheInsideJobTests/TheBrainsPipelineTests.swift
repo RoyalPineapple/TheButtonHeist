@@ -166,7 +166,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() {
-        let result = TheSafecracker.InteractionResult.failure(
+        let result = TheSafecracker.ActionDispatchOutcome.failure(
             .activate,
             message: "target disappeared",
             failureKind: .targetUnavailable
@@ -177,7 +177,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionErrorKindPreservesTreeUnavailableFailureKind() {
-        let result = TheSafecracker.InteractionResult.failure(
+        let result = TheSafecracker.ActionDispatchOutcome.failure(
             .activate,
             message: TheBrains.treeUnavailableMessage,
             failureKind: .treeUnavailable
