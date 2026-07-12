@@ -6,8 +6,6 @@ let configuration = BumperConfiguration {
         "ButtonHeistCLI/Sources"
         "ButtonHeistMCP/Sources"
         "TestApp/Sources"
-        "TestApp/UIKitSources"
-        "TestApp/ResearchSources"
     }
 
     Excluded {
@@ -53,9 +51,10 @@ let configuration = BumperConfiguration {
             Owns(
                 "ButtonHeist/Sources/TheButtonHeist",
                 "ButtonHeist/Sources/TheInsideJob",
-                "ButtonHeist/Sources/ThePlant"
+                "ButtonHeist/Sources/ThePlant",
+                "ButtonHeist/Sources/ButtonHeistSupport"
             )
-            Modules("ButtonHeist", "TheInsideJob", "ThePlant")
+            Modules("ButtonHeist", "TheInsideJob", "ThePlant", "ButtonHeistSupport")
             MayDependOn(.plans, .score)
             Applies(.buttonHeistLiveRuntimeBoundary)
         }
@@ -70,10 +69,9 @@ let configuration = BumperConfiguration {
         Component(.tools) {
             Owns(
                 "ButtonHeist/Sources/HeistPlanTool",
-                "ButtonHeist/Sources/ButtonHeistDocGen",
                 "ButtonHeistCLI/Sources"
             )
-            Modules("HeistPlanTool", "ButtonHeistDocGen", "ButtonHeistCLI")
+            Modules("HeistPlanTool", "ButtonHeistCLI")
             MayDependOn(.plans, .score, .doctor, .runtime)
             Applies(.buttonHeistToolBoundary)
         }
@@ -86,11 +84,7 @@ let configuration = BumperConfiguration {
         }
 
         Component(.demo) {
-            Owns(
-                "TestApp/Sources",
-                "TestApp/UIKitSources",
-                "TestApp/ResearchSources"
-            )
+            Owns("TestApp/Sources")
             Modules("TestApp")
             MayDependOn(.plans, .score, .dsl, .runtime, .testing)
             Applies(.buttonHeistDemoSurface)

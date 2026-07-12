@@ -111,6 +111,7 @@ let project = Project(
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotCore"),
+                .external(name: "AccessibilitySnapshotModel"),
                 .external(name: "AccessibilitySnapshotParser"),
                 .external(name: "AccessibilitySnapshotPreviews"),
             ]
@@ -149,6 +150,7 @@ let project = Project(
                 .target(name: "ButtonHeistSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotModel"),
             ]
         ),
 
@@ -210,6 +212,7 @@ let project = Project(
                 .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotModel"),
             ]
         ),
 
@@ -239,10 +242,12 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistSupport"),
                 .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ButtonHeist"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotModel"),
             ]
         ),
 
@@ -262,6 +267,7 @@ let project = Project(
                 .target(name: "TheInsideJob"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
+                .external(name: "AccessibilitySnapshotModel"),
                 .project(target: "BH Demo", path: "TestApp"),
             ],
             settings: .settings(base: [
