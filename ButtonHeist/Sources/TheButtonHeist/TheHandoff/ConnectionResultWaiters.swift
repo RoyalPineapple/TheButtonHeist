@@ -36,11 +36,10 @@ final class ConnectionResultWaiters {
         waiter.resolve(with: .failure(failure))
     }
 
-    func resolve(_ transition: HandoffConnectionLifecycleTransition) {
-        guard let completion = transition.waiterCompletion else { return }
-        let matchingWaiters = waiters.removeAll { _, waiter in waiter.attemptID == completion.attemptID }
+    func resolve(attemptID: UUID, with result: Result<Void, Error>) {
+        let matchingWaiters = waiters.removeAll { _, waiter in waiter.attemptID == attemptID }
         for removal in matchingWaiters {
-            removal.waiter.resolve(with: completion.result)
+            removal.waiter.resolve(with: result)
         }
     }
 }
