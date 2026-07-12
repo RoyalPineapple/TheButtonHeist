@@ -45,8 +45,12 @@ extension ElementInflation {
                 )
             case .failure(let failure):
                 return .failed(failure)
-            case .screenElement, .timedOut, .cancelled:
+            case .screenElement, .timedOut:
                 return .retrying(failedAttempt: attempt, reason: reason)
+            case .cancelled:
+                return .failed(.cancelled(
+                    "stale live target refresh was cancelled after \(reason.failureDescription)"
+                ))
             }
         case .failure(let failure):
             return .failed(failure)
