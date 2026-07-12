@@ -1716,6 +1716,49 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
     }
 
+    func testScopedTargetResolutionUsesRepairedSemanticInterfaceProjection() {
+        let containerPath = TreePath([30])
+        let staleElementPath = TreePath([2])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Order Entry", value: nil), identifier: "order_entry_container",
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let reviewSale = element(label: "Review Sale", identifier: "review_sale", traits: .button)
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "review_sale": Screen.ScreenElement(
+                        heistId: "review_sale",
+                        path: staleElementPath,
+                        scrollMembership: Screen.ScrollMembership(containerPath: containerPath, index: 0),
+                        element: reviewSale
+                    ),
+                ],
+                containers: [
+                    containerPath: SemanticScreen.Container(
+                        container: container,
+                        path: containerPath,
+                        containerName: "order_entry_container",
+                        contentFrame: nil
+                    ),
+                ]
+            ),
+            liveCapture: .empty
+        )
+        bagman.installScreenForTesting(screen)
+        let target: ElementTarget = .within(
+            .identifier("order_entry_container"),
+            .predicate(ElementPredicate(identifier: "review_sale"))
+        )
+
+        let interfaceMatches = ElementMatchGraph(interface: TheStash.WireConversion.toSemanticInterface(from: screen))
+            .resolve(target)
+            .elements
+
+        XCTAssertEqual(interfaceMatches.map(\.identifier), ["review_sale"])
+        XCTAssertEqual(bagman.resolveTarget(target).resolved?.heistId, "review_sale")
+    }
+
     func testMatcherAmbiguousReturnsCandidates() {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")

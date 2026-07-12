@@ -28,11 +28,6 @@ struct WorldStore {
         screen.orderedElements
     }
 
-    var containersInTraversalOrder: [SemanticScreen.Container] {
-        semanticWorld.containers.values
-            .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
-    }
-
     var semanticHash: String {
         semanticWorld.semanticHash
     }

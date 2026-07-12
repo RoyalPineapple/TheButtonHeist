@@ -185,11 +185,6 @@ final class TheStash {
         )
     }
 
-    /// Semantic containers in deterministic traversal order.
-    var semanticContainersInTraversalOrder: [SemanticScreen.Container] {
-        worldStore.containersInTraversalOrder
-    }
-
     /// Elements in matcher/diagnostic order.
     var orderedSemanticElements: [ScreenElement] {
         worldStore.orderedElements
