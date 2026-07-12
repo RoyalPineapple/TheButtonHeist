@@ -67,8 +67,6 @@ while IFS= read -r manifest; do
     manifest_pin_count=$(printf '%s\n' "$manifest_pin" | sed '/^$/d' | wc -l | tr -d '[:space:]')
     [[ "$manifest_pin_count" == "1" ]] \
         || fail "$manifest must contain exactly one AccessibilitySnapshotBH exact pin"
-    [[ "$manifest_pin" == "$CURRENT_PIN" ]] \
-        || fail "$manifest pins AccessibilitySnapshotBH $manifest_pin; root $ROOT_MANIFEST pins $CURRENT_PIN"
 done < <(tracked_parser_files '*Package.swift')
 
 LOCKFILES=()
@@ -84,6 +82,7 @@ TARGET_TAG=$(git -C "$SUBMODULE_DIR" tag -l --points-at "$SUBMODULE_SHA" --sort=
     | grep -E "$SEMVER_REGEX" \
     | head -1 || true)
 
+NEEDS_TAG=false
 if [[ -z "$TARGET_TAG" ]]; then
     BRANCH_TIP=$(git -C "$SUBMODULE_DIR" rev-parse origin/main)
     [[ "$SUBMODULE_SHA" == "$BRANCH_TIP" ]] || fail "AccessibilitySnapshotBH submodule ${SUBMODULE_SHA:0:8} is untagged and is not parser origin/main ${BRANCH_TIP:0:8}"
@@ -95,20 +94,10 @@ if [[ -z "$TARGET_TAG" ]]; then
 
     IFS='.' read -r MAJOR MINOR _ <<< "$LATEST_TAG"
     TARGET_TAG="${MAJOR}.$((MINOR + 1)).0"
-
-    if [[ "$DRY_RUN" == false ]]; then
-        git -C "$SUBMODULE_DIR" tag "$TARGET_TAG" "$SUBMODULE_SHA"
-        git -C "$SUBMODULE_DIR" push origin "$TARGET_TAG"
-        echo "Tagged AccessibilitySnapshotBH $TARGET_TAG on ${SUBMODULE_SHA:0:8}"
-    fi
+    NEEDS_TAG=true
 fi
 
 echo "AccessibilitySnapshotBH: $CURRENT_PIN -> $TARGET_TAG (${SUBMODULE_SHA:0:8})"
-
-if [[ "$DRY_RUN" == true ]]; then
-    printf 'Would validate and align: %s\n' "${MANIFEST_FILES[*]} ${LOCKFILES[*]}"
-    exit 0
-fi
 
 TMP_DIR=$(mktemp -d)
 UPDATED=false
@@ -131,7 +120,8 @@ for file in "${MANIFEST_FILES[@]}" "${LOCKFILES[@]}"; do
 done
 
 for manifest in "${MANIFEST_FILES[@]}"; do
-    awk -v repo="$PARSER_REPO_URL" -v old="$CURRENT_PIN" -v new="$TARGET_TAG" '
+    manifest_pin=$(exact_parser_pin "$manifest")
+    awk -v repo="$PARSER_REPO_URL" -v old="$manifest_pin" -v new="$TARGET_TAG" '
         index($0, repo) {
             needle = "exact: \"" old "\""
             replacement = "exact: \"" new "\""
@@ -146,14 +136,22 @@ for manifest in "${MANIFEST_FILES[@]}"; do
         || fail "could not replace the single parser pin in $manifest"
 done
 
-LOCKFILE_PINS=$(LOCKFILES_JOINED="$(printf '%s\n' "${LOCKFILES[@]}")" \
-    PARSER_REPO_URL="$PARSER_REPO_URL" PARSER_IDENTITY="$PARSER_IDENTITY" python3 <<'PY'
+LOCKFILES_JOINED="$(printf '%s\n' "${LOCKFILES[@]}")" \
+    PARSER_REPO_URL="$PARSER_REPO_URL" \
+    PARSER_IDENTITY="$PARSER_IDENTITY" \
+    TARGET_TAG="$TARGET_TAG" \
+    TARGET_REVISION="$SUBMODULE_SHA" \
+    OUTPUT_ROOT="$TMP_DIR/updated" \
+    python3 <<'PY'
 import json
 import os
 import sys
 
 repo = os.environ["PARSER_REPO_URL"].rstrip("/")
 identity = os.environ["PARSER_IDENTITY"].lower()
+target_tag = os.environ["TARGET_TAG"]
+target_revision = os.environ["TARGET_REVISION"]
+output_root = os.environ["OUTPUT_ROOT"]
 
 for path in os.environ["LOCKFILES_JOINED"].splitlines():
     if not path:
@@ -165,34 +163,39 @@ for path in os.environ["LOCKFILES_JOINED"].splitlines():
         pins = document["object"].get("pins")
     matches = []
     for pin in pins or []:
+        if not isinstance(pin, dict):
+            continue
         pin_identity = str(pin.get("identity") or pin.get("package") or "").lower()
         location = str(pin.get("location") or pin.get("repositoryURL") or "").rstrip("/")
         if pin_identity == identity or location == repo:
-            state = pin.get("state") or {}
-            matches.append((state.get("version") or "", state.get("revision") or ""))
+            matches.append(pin)
     if len(matches) != 1:
         print(f"Error: {path} must contain exactly one parser pin, found {len(matches)}", file=sys.stderr)
         sys.exit(1)
-    version, revision = matches[0]
-    print(f"{path}\t{version}\t{revision}")
+    parser_pin = matches[0]
+    state = parser_pin.get("state")
+    if not isinstance(state, dict):
+        print(f"Error: {path} parser pin must contain a state object", file=sys.stderr)
+        sys.exit(1)
+    state["version"] = target_tag
+    state["revision"] = target_revision
+
+    output_path = os.path.join(output_root, path)
+    with open(output_path, "w", encoding="utf-8") as file:
+        json.dump(document, file, ensure_ascii=False, indent=2, separators=(",", " : "))
+        file.write("\n")
 PY
-)
 
-while IFS=$'\t' read -r lockfile old_version old_revision; do
-    [[ -n "$lockfile" ]] || continue
-    [[ "$old_version" == "$CURRENT_PIN" ]] \
-        || fail "$lockfile pins parser version $old_version, expected root pin $CURRENT_PIN"
-    [[ -n "$old_revision" ]] || fail "$lockfile parser pin has no revision"
+if [[ "$DRY_RUN" == true ]]; then
+    printf 'Would validate and align: %s\n' "${MANIFEST_FILES[*]} ${LOCKFILES[*]}"
+    exit 0
+fi
 
-    version_count=$(grep -Fc "\"version\" : \"$old_version\"" "$lockfile")
-    revision_count=$(grep -Fc "\"revision\" : \"$old_revision\"" "$lockfile")
-    [[ "$version_count" == "1" && "$revision_count" == "1" ]] \
-        || fail "$lockfile parser version/revision is not uniquely replaceable"
-
-    sed -e "s/\"version\" : \"$old_version\"/\"version\" : \"$TARGET_TAG\"/" \
-        -e "s/\"revision\" : \"$old_revision\"/\"revision\" : \"$SUBMODULE_SHA\"/" \
-        "$lockfile" > "$TMP_DIR/updated/$lockfile"
-done <<< "$LOCKFILE_PINS"
+if [[ "$NEEDS_TAG" == true ]]; then
+    git -C "$SUBMODULE_DIR" tag "$TARGET_TAG" "$SUBMODULE_SHA"
+    git -C "$SUBMODULE_DIR" push origin "$TARGET_TAG"
+    echo "Tagged AccessibilitySnapshotBH $TARGET_TAG on ${SUBMODULE_SHA:0:8}"
+fi
 
 UPDATED=true
 for file in "${MANIFEST_FILES[@]}" "${LOCKFILES[@]}"; do
