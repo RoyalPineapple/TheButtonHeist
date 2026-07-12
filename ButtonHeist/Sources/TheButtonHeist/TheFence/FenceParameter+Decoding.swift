@@ -1,3 +1,4 @@
+import Foundation
 import TheScore
 
 extension TheFence {
@@ -29,7 +30,17 @@ extension FenceParameter where Value == String {
             ),
             expectedTypeDescription: "string",
             defaultValue: defaultValue,
-            decodeValue: { value, field in try decodeString(value, field: field) },
+            decodeValue: { value, field in
+                let string = try decodeString(value, field: field)
+                if let minLength, string.count < minLength {
+                    throw SchemaValidationError(
+                        field: field,
+                        observed: value.schemaObservedDescription,
+                        expected: minLength == 1 ? "non-empty string" : "string with length >= \(minLength)"
+                    )
+                }
+                return string
+            },
             encodeValue: { .string($0) }
         )
     }
@@ -62,7 +73,17 @@ extension FenceParameter where Value == Int {
             ),
             expectedTypeDescription: "integer",
             defaultValue: defaultValue,
-            decodeValue: { value, field in try decodeInteger(value, field: field) },
+            decodeValue: { value, field in
+                let integer = try decodeInteger(value, field: field)
+                try validateInteger(
+                    integer,
+                    source: value,
+                    field: field,
+                    minimum: minimum,
+                    maximum: maximum
+                )
+                return integer
+            },
             encodeValue: { .int($0) }
         )
     }
@@ -95,7 +116,17 @@ extension FenceParameter where Value == Double {
             ),
             expectedTypeDescription: "number",
             defaultValue: defaultValue,
-            decodeValue: { value, field in try decodeNumber(value, field: field) },
+            decodeValue: { value, field in
+                let number = try decodeNumber(value, field: field)
+                try validateNumber(
+                    number,
+                    source: value,
+                    field: field,
+                    maximum: maximum,
+                    exclusiveMinimum: exclusiveMinimum
+                )
+                return number
+            },
             encodeValue: { jsonSchemaNumber($0) }
         )
     }
@@ -177,4 +208,72 @@ extension FenceParameter where Value: CaseIterable & RawRepresentable, Value.Raw
 internal func fenceEnumValues<E>(_ type: E.Type) -> [String]
 where E: CaseIterable & RawRepresentable, E.RawValue == String {
     type.allCases.map(\.rawValue)
+}
+
+private func validateInteger(
+    _ integer: Int,
+    source: HeistValue,
+    field: String,
+    minimum: Double?,
+    maximum: Double?
+) throws {
+    if let minimum, Double(integer) < minimum {
+        throw SchemaValidationError(
+            field: field,
+            observed: source.schemaObservedDescription,
+            expected: numericBoundsDescription(type: "integer", minimum: minimum, maximum: maximum)
+        )
+    }
+    if let maximum, Double(integer) > maximum {
+        throw SchemaValidationError(
+            field: field,
+            observed: source.schemaObservedDescription,
+            expected: numericBoundsDescription(type: "integer", minimum: minimum, maximum: maximum)
+        )
+    }
+}
+
+private func validateNumber(
+    _ number: Double,
+    source: HeistValue,
+    field: String,
+    maximum: Double?,
+    exclusiveMinimum: Double?
+) throws {
+    if let exclusiveMinimum, number <= exclusiveMinimum {
+        throw SchemaValidationError(
+            field: field,
+            observed: source.schemaObservedDescription,
+            expected: "number > \(formatConstraintNumber(exclusiveMinimum))"
+        )
+    }
+    if let maximum, number > maximum {
+        let expected = if let exclusiveMinimum {
+            "number in \(formatConstraintNumber(exclusiveMinimum))...\(formatNumberUpperBound(maximum))"
+        } else {
+            "number <= \(formatConstraintNumber(maximum))"
+        }
+        throw SchemaValidationError(field: field, observed: source.schemaObservedDescription, expected: expected)
+    }
+}
+
+private func numericBoundsDescription(type: String, minimum: Double?, maximum: Double?) -> String {
+    switch (minimum, maximum) {
+    case (.some(let minimum), .some(let maximum)):
+        return "\(type) between \(formatConstraintNumber(minimum)) and \(formatConstraintNumber(maximum))"
+    case (.some(let minimum), nil):
+        return "\(type) >= \(formatConstraintNumber(minimum))"
+    case (nil, .some(let maximum)):
+        return "\(type) <= \(formatConstraintNumber(maximum))"
+    case (nil, nil):
+        return type
+    }
+}
+
+private func formatNumberUpperBound(_ value: Double) -> String {
+    value != 0 && value.rounded(.towardZero) == value ? String(format: "%.1f", value) : formatConstraintNumber(value)
+}
+
+private func formatConstraintNumber(_ value: Double) -> String {
+    value.rounded(.towardZero) == value ? String(format: "%.0f", value) : String(value)
 }

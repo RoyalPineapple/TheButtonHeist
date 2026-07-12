@@ -169,7 +169,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryPublicCommandHasOneDescriptorValidatedRuntimeAdmission() async throws {
+    func testEveryPublicCommandHasOneRuntimeAdmission() async throws {
         let (fence, _) = makeConnectedFence()
 
         for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
@@ -177,11 +177,77 @@ final class WireCommandParityTests: XCTestCase {
                 command: descriptor.command,
                 arguments: .init(values: sampleArguments(for: descriptor.command))
             )
-            try input.validatePublicContract()
-
             let request = try fence.admit(input)
 
             XCTAssertEqual(request.command, descriptor.command, descriptor.command.rawValue)
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryProjectedParameterMutationIsEnforcedByRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                for mutation in invalidValues(for: parameter) {
+                    var arguments = sampleArguments(for: descriptor.command)
+                    arguments[parameter.key] = mutation
+
+                    XCTAssertThrowsError(
+                        try fence.admit(FenceCommandInput(
+                            command: descriptor.command,
+                            arguments: .init(values: arguments)
+                        )),
+                        "\(descriptor.command.rawValue).\(parameter.key): \(mutation)"
+                    )
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryRequiredProjectedParameterIsRequiredByRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters where parameter.required {
+                var arguments = sampleArguments(for: descriptor.command)
+                guard arguments.removeValue(forKey: parameter.key) != nil else { continue }
+
+                XCTAssertThrowsError(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: arguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key)"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesExecuteTheSameAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.mcpExposure == .directTool {
+            let arguments = TheFence.CommandArgumentEnvelope(values: sampleArguments(for: descriptor.command))
+            let input = try TheFence.Command.routeToolRequest(
+                named: descriptor.command.rawValue,
+                arguments: arguments
+            ).get()
+
+            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
+        }
+
+        for descriptor in TheFence.Command.descriptors where descriptor.cliExposure == .directCommand {
+            var values = sampleArguments(for: descriptor.command)
+            values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+            let input = try TheFence.Command.routeCLICommandEnvelope(
+                .init(values: values),
+                context: "test"
+            ).get()
+
+            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
         }
     }
 
@@ -371,6 +437,42 @@ final class WireCommandParityTests: XCTestCase {
             ]
         case .connect:
             return ["target": .string("default")]
+        }
+    }
+
+    private func invalidValues(for parameter: FenceParameterSpec) -> [HeistValue] {
+        var values = [incompatibleValue(for: parameter.type)]
+        if let minLength = parameter.minLength {
+            values.append(.string(String(repeating: "x", count: max(0, minLength - 1))))
+        }
+        if let minimum = parameter.minimum {
+            values.append(parameter.type == .integer ? .int(Int(minimum) - 1) : .double(minimum - 1))
+        }
+        if let exclusiveMinimum = parameter.exclusiveMinimum {
+            values.append(.double(exclusiveMinimum))
+        }
+        if let maximum = parameter.maximum {
+            values.append(parameter.type == .integer ? .int(Int(maximum) + 1) : .double(maximum + 1))
+        }
+        if let minItems = parameter.minItems {
+            values.append(.array(Array(repeating: .string("item"), count: max(0, minItems - 1))))
+        }
+        if let maxItems = parameter.maxItems {
+            values.append(.array(Array(repeating: .string("item"), count: maxItems + 1)))
+        }
+        return values
+    }
+
+    private func incompatibleValue(for type: FenceParameterSpec.ParamType) -> HeistValue {
+        switch type {
+        case .string:
+            .object([:])
+        case .integer, .number, .boolean:
+            .string("wrong type")
+        case .stringArray, .array:
+            .object([:])
+        case .stringMatch, .object:
+            .string("wrong type")
         }
     }
 

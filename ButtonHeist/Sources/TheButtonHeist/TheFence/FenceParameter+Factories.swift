@@ -237,9 +237,7 @@ private let semanticContainerPredicateProperties: [FenceParameterSpec] = [
 private let semanticContainerPredicateKindValues: [String] = [
     SemanticContainerPredicate<String>.label("sample"),
     SemanticContainerPredicate<String>.value("sample"),
-].map { semanticPredicate in
-    wireDiscriminatorValue(semanticPredicate, discriminator: FenceParameterKey.kind.rawValue)
-}
+].map(\.wireKindValue)
 
 private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     param(
@@ -257,13 +255,15 @@ private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     unconstrainedParam(.value, validation: .customPayload),
 ]
 
-internal func wireDiscriminatorValue<Value: Encodable>(
-    _ value: Value,
-    discriminator: String
-) -> String {
-    guard case .object(let object) = try? TheFence.HeistValuePayloadEncoder.encode(value),
-          case .string(let rawValue)? = object[discriminator] else {
-        preconditionFailure("Unable to derive \(discriminator) discriminator from \(Value.self)")
+private extension SemanticContainerPredicate {
+    var wireKindValue: String {
+        switch self {
+        case .label:
+            "label"
+        case .value:
+            "value"
+        case .identifier:
+            "identifier"
+        }
     }
-    return rawValue
 }

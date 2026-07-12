@@ -7,7 +7,6 @@ extension TheFence.Command {
         case .oneFingerTap:
             return makeDescriptor(
                 family: .spatialAction,
-                requestDecoder: TheFence.decodeOneFingerTapRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,
@@ -21,7 +20,6 @@ extension TheFence.Command {
         case .longPress:
             return makeDescriptor(
                 family: .spatialAction,
-                requestDecoder: TheFence.decodeLongPressRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
@@ -35,7 +33,6 @@ extension TheFence.Command {
         case .swipe:
             return makeDescriptor(
                 family: .spatialAction,
-                requestDecoder: TheFence.decodeSwipeRequest,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
@@ -49,7 +46,6 @@ extension TheFence.Command {
         case .drag:
             return makeDescriptor(
                 family: .spatialAction,
-                requestDecoder: TheFence.decodeDragRequest,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
@@ -73,7 +69,6 @@ extension TheFence.Command {
         case .scroll:
             return makeDescriptor(
                 family: .viewportDebug,
-                requestDecoder: TheFence.decodeScrollRequest,
                 parameters: FenceParameterBlocks.target + [
                     param(.containerName, .string),
                     FenceParameters.scrollDirection.spec,
@@ -90,7 +85,6 @@ extension TheFence.Command {
         case .scrollToVisible:
             return makeDescriptor(
                 family: .viewportDebug,
-                requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 parameters: FenceParameterBlocks.target + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
                 responseProjection: .action,
@@ -103,7 +97,6 @@ extension TheFence.Command {
         case .scrollToEdge:
             return makeDescriptor(
                 family: .viewportDebug,
-                requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 parameters: FenceParameterBlocks.target + [
                     param(.containerName, .string),
                     FenceParameters.scrollEdge.spec,
@@ -130,7 +123,6 @@ extension TheFence.Command {
         case .activate:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeActivateRequest,
                 parameters: FenceParameterBlocks.target
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
@@ -144,7 +136,6 @@ extension TheFence.Command {
         case .rotor:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeRotorRequest,
                 parameters: FenceParameterBlocks.target + [
                     FenceParameters.rotorName.spec,
                     FenceParameters.rotorIndex.spec,
@@ -162,7 +153,6 @@ extension TheFence.Command {
         case .typeText:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeTypeTextRequest,
                 parameters: FenceParameterBlocks.target + [
                     FenceParameters.text.spec,
                     FenceParameters.replacingExisting.spec,
@@ -177,7 +167,6 @@ extension TheFence.Command {
         case .editAction:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeEditActionRequest,
                 parameters: [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,
@@ -187,7 +176,6 @@ extension TheFence.Command {
         case .setPasteboard:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeSetPasteboardRequest,
                 parameters: [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,
@@ -197,7 +185,6 @@ extension TheFence.Command {
         case .dismissKeyboard:
             return makeDescriptor(
                 family: .semanticAction,
-                requestDecoder: TheFence.decodeDismissKeyboardRequest,
                 parameters: FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,

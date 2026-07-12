@@ -111,25 +111,6 @@ final class ElementActionRequestContractTests: XCTestCase {
         XCTAssertNotNil(object["target"])
     }
 
-    func testNormalParametersNamedLikeCustomPayloadsStillUseSchemaValidation() throws {
-        for key in [FenceParameterKey.target, .predicate, .expect, .argument] {
-            let descriptor = schemaValidationDescriptor(parameter: param(key, .string, required: true))
-            XCTAssertThrowsError(
-                try descriptor.validatePublicRequestArguments(TheFence.CommandArgumentEnvelope(values: [
-                    key.rawValue: .object([:]),
-                ])),
-                key.rawValue
-            ) { error in
-                guard let error = error as? SchemaValidationError else {
-                    return XCTFail("Expected SchemaValidationError, got \(error)")
-                }
-                XCTAssertEqual(error.field, key.rawValue)
-                XCTAssertEqual(error.observed, "object")
-                XCTAssertEqual(error.expected, "string")
-            }
-        }
-    }
-
     @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
@@ -236,17 +217,6 @@ final class ElementActionRequestContractTests: XCTestCase {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
         }
     }
-}
-
-private func schemaValidationDescriptor(parameter: FenceParameterSpec) -> FenceCommandDescriptor {
-    TheFence.Command.ping.makeDescriptor(
-        family: .session,
-        requestDecoder: { _, _, _, _ in fatalError("unused") },
-        requiresConnectionBeforeDispatch: false,
-        parameters: [parameter],
-        responseProjection: .pong,
-        projection: .cliOnly("test")
-    )
 }
 
 private func projectedJSONSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {

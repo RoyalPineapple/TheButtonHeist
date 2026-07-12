@@ -7,7 +7,6 @@ extension TheFence.Command {
         case .getInterface:
             return makeDescriptor(
                 family: .observation,
-                requestDecoder: TheFence.decodeGetInterfaceRequest,
                 parameters: [
                     FenceParameterBlocks.interfaceSubtree,
                     FenceParameters.interfaceDetail.spec,
@@ -39,7 +38,6 @@ extension TheFence.Command {
         case .getScreen:
             return makeDescriptor(
                 family: .observation,
-                requestDecoder: TheFence.decodeGetScreenRequest,
                 parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec, FenceParameters.screenMode.spec],
                 timeout: .fixed(.screenCapture),
                 responseProjection: .screenshot,
@@ -51,7 +49,6 @@ extension TheFence.Command {
         case .getPasteboard:
             return makeDescriptor(
                 family: .observation,
-                requestDecoder: TheFence.decodeGetPasteboardRequest,
                 timeout: .fixed(.health),
                 responseProjection: .action,
                 projection: .cliAndMCP(
@@ -62,7 +59,6 @@ extension TheFence.Command {
         case .getAnnouncements:
             return makeDescriptor(
                 family: .observation,
-                requestDecoder: TheFence.decodeGetAnnouncementsRequest,
                 timeout: .fixed(.health),
                 responseProjection: .announcements,
                 projection: .cliAndMCP(
@@ -86,7 +82,6 @@ extension TheFence.Command {
         }
         return makeDescriptor(
             family: .assertion,
-            requestDecoder: TheFence.decodeWaitRequest,
             parameters: FenceParameterBlocks.wait,
             timeout: .wait,
             responseProjection: .heistExecution,

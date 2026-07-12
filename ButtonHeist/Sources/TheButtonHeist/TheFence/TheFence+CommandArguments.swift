@@ -99,9 +99,7 @@ enum HeistValuePayloadDataCorruptedHandling {
 }
 
 extension TheFence {
-    /// Canonical descriptor/projection bridge for turning typed JSON contracts
-    /// into `HeistValue`. Raw public request envelopes still must pass their
-    /// byte/depth/key admission checks before being converted into `HeistValue`.
+    /// Serialize typed CLI/MCP values into the raw public JSON boundary currency.
     @_spi(ButtonHeistTooling) public enum HeistValuePayloadEncoder {
         @_spi(ButtonHeistTooling) public static func encode<Value: Encodable>(_ value: Value) throws -> HeistValue {
             let data = try JSONEncoder().encode(value)
@@ -269,22 +267,6 @@ extension TheFence.CommandArgumentEnvelope {
         defaultFrom descriptor: FenceCommandDescriptor
     ) throws -> Value {
         try value(parameter) ?? descriptor.requiredDefaultValue(for: parameter)
-    }
-
-    func nonNegativeValue(_ parameter: FenceParameter<Int>) throws -> Int? {
-        guard let integer = try value(parameter) else { return nil }
-        guard integer >= 0 else {
-            throw SchemaValidationError(field: field(parameter.key), observed: integer, expected: "integer >= 0")
-        }
-        return integer
-    }
-
-    func nonEmptyValue(_ parameter: FenceParameter<String>) throws -> String {
-        let value = try requiredValue(parameter)
-        if value.isEmpty {
-            throw SchemaValidationError(field: field(parameter.key), observed: "string \"\"", expected: "non-empty string")
-        }
-        return value
     }
 
     func optionalNonEmptyValue(_ parameter: FenceParameter<String>) throws -> String? {

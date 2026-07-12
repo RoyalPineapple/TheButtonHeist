@@ -27,6 +27,7 @@ import TheScore
         self.arguments = arguments
     }
 
+    /// Validate only routing-level shape. Typed parameter decoding belongs to `TheFence.admit(_:)`.
     @_spi(ButtonHeistTooling) public func validatePublicContract() throws {
         guard command.descriptor.isPublicRequestContract else {
             throw SchemaValidationError(
@@ -36,23 +37,10 @@ import TheScore
             )
         }
 
-        if let requestId = arguments.value(for: .requestId) {
-            guard case .string = requestId else {
-                throw SchemaValidationError(
-                    field: FenceParameterKey.requestId.rawValue,
-                    observed: requestId.schemaObservedDescription,
-                    expected: "string"
-                )
-            }
-        }
-
-        let metadataKeys = Set([FenceParameterKey.requestId.rawValue])
-        let allowedKeys = metadataKeys.union(command.descriptor.topLevelParameterKeys)
+        let allowedKeys = command.descriptor.topLevelParameterKeys.union([FenceParameterKey.requestId.rawValue])
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            try command.descriptor.validatePublicRequestArguments(arguments)
             return
         }
-
         throw SchemaValidationError(
             field: arguments.field(forUnknownKey: unexpectedKey),
             observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
