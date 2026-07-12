@@ -54,18 +54,11 @@ private func makeTestTree(
 }
 
 extension LiveCapture {
-
-    static var empty: LiveCapture {
-        requireValidTestValue {
-            try LiveCapture.build(validating: .empty)
-        }
-    }
-
-    init(
-        hierarchy: [AccessibilityHierarchy],
+    static func makeForTests(
+        hierarchy: [AccessibilityHierarchy] = [],
         containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdsByPath: [TreePath: HeistId] = [:],
-        elementRefs: [HeistId: ElementRef],
+        elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: ContentRect] = [:],
         containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
@@ -73,9 +66,9 @@ extension LiveCapture {
             TreePath: InterfaceTree.ObservedScrollContentActivationPoint
         ] = [:],
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
-        firstResponderHeistId: HeistId?,
+        firstResponderHeistId: HeistId? = nil,
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
-    ) {
+    ) -> LiveCapture {
         let snapshot = Snapshot(
             hierarchy: hierarchy,
             containerNamesByPath: containerNamesByPath,
@@ -83,9 +76,10 @@ extension LiveCapture {
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollMembershipsByPath: containerScrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath
+            scrollInventoriesByPath: scrollInventoriesByPath,
+            firstResponderHeistId: firstResponderHeistId
         )
-        self = requireValidTestValue {
+        return requireValidTestValue {
             try LiveCapture.build(
                 validating: makeTestTree(snapshot: snapshot),
                 dispatchReferences: DispatchReferences(
@@ -98,11 +92,11 @@ extension LiveCapture {
         }
     }
 
-    init(
+    static func makeForTests(
         snapshot: Snapshot,
         dispatchReferences: DispatchReferences = .empty
-    ) {
-        self = requireValidTestValue {
+    ) -> LiveCapture {
+        requireValidTestValue {
             try LiveCapture.build(
                 validating: makeTestTree(snapshot: snapshot),
                 dispatchReferences: dispatchReferences
@@ -121,11 +115,10 @@ extension LiveCapture {
 /// sees them) but are not present in the live hierarchy — modeling an element
 /// retained from a previous exploration that has since scrolled out of view.
 extension InterfaceObservation {
-
-    init(
+    static func makeForTests(
         tree: InterfaceTree,
         liveCapture: LiveCapture
-    ) {
+    ) -> InterfaceObservation {
         let snapshotTree = makeTestTree(
             snapshot: liveCapture.snapshot,
             elements: tree.elements
@@ -135,7 +128,7 @@ extension InterfaceObservation {
             containers: tree.containers.merging(snapshotTree.containers) { current, _ in current },
             viewportCapture: liveCapture.snapshot
         )
-        self = requireValidTestValue {
+        return requireValidTestValue {
             try InterfaceObservation.build(
                 tree: alignedTree,
                 dispatchReferences: liveCapture.dispatchReferences
@@ -143,24 +136,7 @@ extension InterfaceObservation {
         }
     }
 
-    init(
-        elements: [HeistId: InterfaceTree.Element],
-        hierarchy: [AccessibilityHierarchy],
-        elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
-        firstResponderHeistId: HeistId?,
-        scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
-    ) {
-        self.init(
-            elements: elements,
-            hierarchy: hierarchy,
-            heistIdsByPath: [:],
-            elementRefs: elementRefs,
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        )
-    }
-
-    init(
+    static func makeForTests(
         elements: [HeistId: InterfaceTree.Element],
         hierarchy: [AccessibilityHierarchy],
         containerNamesByPath: [TreePath: ContainerName] = [:],
@@ -175,7 +151,7 @@ extension InterfaceObservation {
         scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
-    ) {
+    ) -> InterfaceObservation {
         let snapshot = LiveCapture.Snapshot(
             hierarchy: hierarchy,
             containerNamesByPath: containerNamesByPath,
@@ -183,9 +159,10 @@ extension InterfaceObservation {
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollMembershipsByPath: containerScrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath
+            scrollInventoriesByPath: scrollInventoriesByPath,
+            firstResponderHeistId: firstResponderHeistId
         )
-        self = requireValidTestValue {
+        return requireValidTestValue {
             try InterfaceObservation.build(
                 tree: makeTestTree(snapshot: snapshot, elements: elements),
                 dispatchReferences: LiveCapture.DispatchReferences(
@@ -303,7 +280,7 @@ extension InterfaceObservation {
                 element: entry.element
             )
         }
-        return InterfaceObservation(
+        return InterfaceObservation.makeForTests(
             elements: treeElements,
             hierarchy: hierarchy,
             heistIdsByPath: heistIdsByPath,

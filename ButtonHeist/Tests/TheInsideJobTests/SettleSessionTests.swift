@@ -34,7 +34,7 @@ final class SettleSessionTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
             .element(element, traversalIndex: index)
         }
-        return InterfaceObservation(
+        return InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: hierarchy,
             firstResponderHeistId: nil,

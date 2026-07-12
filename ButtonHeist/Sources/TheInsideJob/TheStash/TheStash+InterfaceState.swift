@@ -115,10 +115,16 @@ extension TheStash {
     /// viewport capture is the evidence that belongs to this committed state;
     /// a fresh parser read replaces it before exploration performs live work.
     func explorationBaseline() -> InterfaceObservation {
-        InterfaceObservation(
-            tree: interfaceTree,
-            liveCapture: LiveCapture(snapshot: interfaceTree.viewportCapture)
-        )
+        do {
+            return try InterfaceObservation.build(
+                tree: interfaceTree,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    firstResponderHeistId: firstResponderHeistId
+                )
+            )
+        } catch {
+            preconditionFailure("Exploration baseline failed validation: \(error)")
+        }
     }
 
     /// Starting value for public interface discovery after a visible settle.
@@ -214,10 +220,16 @@ extension TheStash {
     }
 
     private var currentInterfaceObservation: InterfaceObservation {
-        InterfaceObservation(
-            tree: interfaceTree,
-            liveCapture: LiveCapture(snapshot: interfaceTree.viewportCapture)
-        )
+        do {
+            return try InterfaceObservation.build(
+                tree: interfaceTree,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    firstResponderHeistId: firstResponderHeistId
+                )
+            )
+        } catch {
+            preconditionFailure("Committed interface observation failed validation: \(error)")
+        }
     }
 
     private func finishCommit(observation: InterfaceObservation) -> InterfaceObservation {

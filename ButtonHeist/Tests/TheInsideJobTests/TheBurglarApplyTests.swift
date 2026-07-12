@@ -72,6 +72,7 @@ final class TheBurglarApplyTests: XCTestCase {
         // live identity is keyed by tree path, not element value equality.
         XCTAssertEqual(screen.tree.elements.count, 2)
         XCTAssertEqual(Set(screen.tree.elements.keys), ["item_button_1", "item_button_2"])
+        XCTAssertEqual(Set(screen.tree.elements.values.map(\.path)), [TreePath([0]), TreePath([1])])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
     }
 

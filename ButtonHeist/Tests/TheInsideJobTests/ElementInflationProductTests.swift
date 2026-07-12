@@ -689,7 +689,7 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        targetBrains.stash.installScreenForTesting(InterfaceObservation(
+        targetBrains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
@@ -725,7 +725,7 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
@@ -744,7 +744,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         var elements = tree.elements
         elements[heistId] = entry
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: tree.containers),
             liveCapture: brains.stash.latestObservation.liveCapture
         ))
@@ -809,7 +809,7 @@ final class ElementInflationProductTests: XCTestCase {
             observedScrollContentActivationPoint: observedContainerActivationPoint
         )
 
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: screen.liveCapture
         ))

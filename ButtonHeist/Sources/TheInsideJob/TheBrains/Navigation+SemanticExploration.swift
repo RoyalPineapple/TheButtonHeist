@@ -205,10 +205,14 @@ extension Navigation {
 
         mutating func absorb(_ parsed: InterfaceObservation?) {
             guard let parsed else { return }
-            screen = InterfaceObservation(
-                tree: screen.tree.merging(parsed.tree),
-                liveCapture: parsed.liveCapture
-            )
+            do {
+                screen = try InterfaceObservation.build(
+                    tree: screen.tree.merging(parsed.tree),
+                    dispatchReferences: parsed.liveCapture.dispatchReferences
+                )
+            } catch {
+                preconditionFailure("Exploration observation failed validation: \(error)")
+            }
             addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
         }
 

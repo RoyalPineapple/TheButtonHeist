@@ -310,7 +310,7 @@ final class ScreenClassifierTests: XCTestCase {
 
     private func screen(hierarchy: [AccessibilityHierarchy]) -> InterfaceObservation {
         let elements = hierarchy.sortedElements
-        return InterfaceObservation(
+        return InterfaceObservation.makeForTests(
             elements: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
                 let heistId = HeistId(rawValue: "element_\(index)")
                 return (

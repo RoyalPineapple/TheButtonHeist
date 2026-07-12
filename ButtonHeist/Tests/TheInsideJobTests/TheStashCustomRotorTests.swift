@@ -284,7 +284,7 @@ final class TheStashRotorTests: XCTestCase {
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
@@ -324,7 +324,7 @@ final class TheStashRotorTests: XCTestCase {
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
-        stash.installScreenForTesting(InterfaceObservation(
+        stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],

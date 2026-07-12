@@ -10,10 +10,19 @@ struct SettledSemanticObservation: Sendable {
     let scope: SemanticObservationScope
     let tripwireSignal: TheTripwire.TripwireSignal
     private let tree: InterfaceTree
-    private let captureSnapshot: LiveCapture.Snapshot
+    private let firstResponderHeistId: HeistId?
 
     var screen: InterfaceObservation {
-        InterfaceObservation(tree: tree, liveCapture: LiveCapture(snapshot: captureSnapshot))
+        do {
+            return try InterfaceObservation.build(
+                tree: tree,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    firstResponderHeistId: firstResponderHeistId
+                )
+            )
+        } catch {
+            preconditionFailure("Settled semantic observation failed validation: \(error)")
+        }
     }
 
     init(
@@ -26,7 +35,7 @@ struct SettledSemanticObservation: Sendable {
         self.scope = scope
         self.tripwireSignal = tripwireSignal
         self.tree = screen.tree
-        self.captureSnapshot = screen.liveCapture.snapshot
+        self.firstResponderHeistId = screen.liveCapture.firstResponderHeistId
     }
 }
 
@@ -123,10 +132,14 @@ struct InterfaceObservationProof {
     }
 
     func mergingSemanticTree(_ tree: InterfaceTree) -> InterfaceObservationProof {
-        InterfaceObservationProof(screen: InterfaceObservation(
-            tree: tree.merging(screen.tree),
-            liveCapture: screen.liveCapture
-        ))
+        do {
+            return InterfaceObservationProof(screen: try InterfaceObservation.build(
+                tree: tree.merging(screen.tree),
+                dispatchReferences: screen.liveCapture.dispatchReferences
+            ))
+        } catch {
+            preconditionFailure("Settled discovery merge failed validation: \(error)")
+        }
     }
 }
 
@@ -773,15 +786,23 @@ final class SemanticObservationStream {
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
+        let settledScreen: InterfaceObservation
+        do {
+            settledScreen = try InterfaceObservation.build(
+                tree: stash.interfaceTree,
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    firstResponderHeistId: stash.firstResponderHeistId
+                )
+            )
+        } catch {
+            preconditionFailure("Published semantic observation failed validation: \(error)")
+        }
         let publication = fulfillmentState.publish(
             sourceScope: scope,
             sequence: settledSequence,
             generation: observationGeneration,
             notificationBatch: notificationBatch,
-            screen: InterfaceObservation(
-                tree: stash.interfaceTree,
-                liveCapture: LiveCapture(snapshot: stash.interfaceTree.viewportCapture)
-            ),
+            screen: settledScreen,
             tripwireSignal: tripwire.tripwireSignal(),
             stash: stash,
             notificationIdentityScreen: notificationIdentityScreen

@@ -3857,7 +3857,7 @@ final class TheBrainsActionTests: XCTestCase {
             },
         ]
 
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,

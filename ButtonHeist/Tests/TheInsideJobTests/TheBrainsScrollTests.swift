@@ -318,7 +318,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: duplicate
         )
 
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -352,7 +352,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: element
         )
         var object: NSObject? = NSObject()
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -440,7 +440,7 @@ final class TheBrainsScrollTests: XCTestCase {
             observedScrollContentActivationPoint: offscreen.observedActivationPoint,
             element: offscreen.element
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 visibleEntry.heistId: visibleEntry,
                 offscreenEntry.heistId: offscreenEntry,
@@ -495,7 +495,7 @@ final class TheBrainsScrollTests: XCTestCase {
             observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(x: 0, y: 100)),
             element: target
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [
                 .container(container, children: [
@@ -604,7 +604,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 ),
             ]
         )
-        let liveCapture = LiveCapture(
+        let liveCapture = LiveCapture.makeForTests(
             hierarchy: [
                 .container(parentContainer, children: [
                     .element(makeElement(label: "Visible"), traversalIndex: 0),
@@ -629,7 +629,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 liveChildPath: .init(view: childScrollView),
             ]
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: semantic,
             liveCapture: liveCapture
         ))
@@ -1078,7 +1078,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: element
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -1116,7 +1116,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: element
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -1324,7 +1324,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
             element: staleRootRow
         )
-        let staleScreen = InterfaceObservation(
+        let staleScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [staleEntry.heistId: staleEntry],
                 containers: visibleScreen.tree.containers
@@ -1445,7 +1445,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: recoveredTarget
         )
-        let recoveredScreen = InterfaceObservation(
+        let recoveredScreen = InterfaceObservation.makeForTests(
             elements: [recoveredEntry.heistId: recoveredEntry],
             hierarchy: [.element(recoveredTarget, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): recoveredEntry.heistId],
@@ -1512,7 +1512,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
             element: recoveredTarget
         )
-        let recoveredScreen = InterfaceObservation(
+        let recoveredScreen = InterfaceObservation.makeForTests(
             elements: [recoveredEntry.heistId: recoveredEntry],
             hierarchy: [
                 .container(makeScrollableContainer(), children: [
@@ -1697,7 +1697,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -1716,7 +1716,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset.y = 600
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -1734,7 +1734,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -1755,7 +1755,7 @@ final class TheBrainsScrollTests: XCTestCase {
         secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -1790,7 +1790,7 @@ final class TheBrainsScrollTests: XCTestCase {
         secondScrollView.contentOffset.y = 500
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -1828,7 +1828,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
 
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(repeatedContainer, children: []),
@@ -1858,7 +1858,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
         installScrollableContainers([firstContainer, secondContainer])
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -1893,7 +1893,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: second
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -1991,7 +1991,7 @@ final class TheBrainsScrollTests: XCTestCase {
             )),
             element: interfaceElement
         )
-        let knownScreen = InterfaceObservation(
+        let knownScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [knownEntry.heistId: knownEntry],
                 containers: liveScreen.tree.containers
@@ -2028,7 +2028,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],
@@ -2232,7 +2232,7 @@ final class TheBrainsScrollTests: XCTestCase {
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             firstResponderHeistId: nil
@@ -2258,7 +2258,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let contentSize = AccessibilitySize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
         let path = TreePath([0])
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [path: "main_scroll"],
@@ -2318,7 +2318,7 @@ final class TheBrainsScrollTests: XCTestCase {
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,
@@ -2369,7 +2369,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     private func installScrollableContainers(_ containers: [AccessibilityContainer]) {
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
             firstResponderHeistId: nil,
@@ -2385,7 +2385,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
         )
-        brains.stash.installScreenForTesting(InterfaceObservation(
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [
                 .container(container, children: [

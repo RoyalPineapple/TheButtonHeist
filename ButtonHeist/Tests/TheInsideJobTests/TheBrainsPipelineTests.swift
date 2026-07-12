@@ -1957,7 +1957,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "visible_button": InterfaceTree.Element(
@@ -1995,7 +1995,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [
                     .container(rootContainer, children: [
                         .element(visible, traversalIndex: 0),
@@ -2185,7 +2185,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 180, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
-        let page = InterfaceObservation(
+        let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(outer, children: [
@@ -2211,7 +2211,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 520, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
-        let page = InterfaceObservation(
+        let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(outer, children: [

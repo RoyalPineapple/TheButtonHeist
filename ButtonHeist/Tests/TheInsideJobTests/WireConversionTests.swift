@@ -400,7 +400,7 @@ final class WireConverterTests: XCTestCase {
             traits: [.button],
             respondsToUserInteraction: true
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             elements: ["checkout_button": treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "checkout_button"],
@@ -424,7 +424,7 @@ final class WireConverterTests: XCTestCase {
         )
         let first = makeElement(label: "First row", traits: [.staticText])
         let second = makeElement(label: "Second row", traits: [.staticText])
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "first_row_staticText": InterfaceTree.Element(
@@ -449,7 +449,7 @@ final class WireConverterTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(container, children: [
                     .element(second, traversalIndex: 0),
                 ])],
@@ -499,7 +499,7 @@ final class WireConverterTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 0, y: 96, width: 820, height: 672))
         )
         let row = makeElement(label: "Search all items", identifier: "LibraryListScreen-SearchField", traits: [.searchField])
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "library_search_searchField": InterfaceTree.Element(
@@ -536,7 +536,7 @@ final class WireConverterTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(root, children: [])],
                 containerNamesByPath: [rootPath: "root"],
                 elementRefs: [:],
@@ -563,7 +563,7 @@ final class WireConverterTests: XCTestCase {
     func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
         let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
         let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             elements: [
                 "first_button": first,
                 "second_button": second,
@@ -596,7 +596,7 @@ final class WireConverterTests: XCTestCase {
             type: .semanticGroup(label: "Actions", value: nil), identifier: nil,
             frame: .zero
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             elements: [
                 "first_button": first,
                 "second_button": second,
@@ -651,7 +651,7 @@ final class WireConverterTests: XCTestCase {
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             elements: [
                 "aardvark_staticText": InterfaceTree.Element(
                     heistId: "aardvark_staticText",
@@ -703,7 +703,7 @@ final class WireConverterTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 20, y: 700, width: 280, height: 240))
         )
         let nestedWord = makeElement(label: "interstitial", traits: [.staticText])
-        let liveScreen = InterfaceObservation(
+        let liveScreen = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(outer, children: [])],
             containerNamesByPath: [TreePath([0]): "outer_words"],
@@ -717,7 +717,7 @@ final class WireConverterTests: XCTestCase {
             contentFrame: nil,
             scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0)
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "interstitial_staticText": InterfaceTree.Element(
@@ -757,7 +757,7 @@ final class WireConverterTests: XCTestCase {
             frameWidth: 393,
             frameHeight: 64
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "recycled_cell": InterfaceTree.Element(
@@ -780,7 +780,7 @@ final class WireConverterTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
@@ -820,7 +820,7 @@ final class WireConverterTests: XCTestCase {
             frameWidth: 393,
             frameHeight: 64
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "repeat_button": InterfaceTree.Element(
@@ -843,7 +843,7 @@ final class WireConverterTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
@@ -871,7 +871,7 @@ final class WireConverterTests: XCTestCase {
             type: .semanticGroup(label: "Saved carts", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 640, width: 320, height: 120))
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [:],
                 containers: [
@@ -897,7 +897,7 @@ final class WireConverterTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(rootContainer, children: [])],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
                 elementRefs: [:],
