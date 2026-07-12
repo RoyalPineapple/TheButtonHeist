@@ -87,7 +87,7 @@ struct LiveCaptureTests {
         )
     }
 
-    @Test func `drops first responder id outside viewport entries`() {
+    @Test func `rejects first responder id outside viewport entries`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let snapshot = LiveCapture.Snapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
@@ -95,7 +95,10 @@ struct LiveCaptureTests {
             firstResponderHeistId: "missing_button"
         )
 
-        #expect(snapshot.firstResponderHeistId == nil)
+        expectValidationError(
+            .invalidFirstResponderHeistId(heistId: "missing_button"),
+            tree: makeTree(snapshot: snapshot)
+        )
     }
 
     @Test func `rejects container refs for missing paths`() {

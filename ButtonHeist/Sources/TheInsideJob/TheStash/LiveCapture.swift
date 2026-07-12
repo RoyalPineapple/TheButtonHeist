@@ -208,9 +208,7 @@ struct LiveCapture: Equatable {
             self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
             self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
             self.scrollInventoriesByPath = scrollInventoriesByPath
-            self.firstResponderHeistId = firstResponderHeistId.flatMap { heistId in
-                heistIdsByPath.values.contains(heistId) ? heistId : nil
-            }
+            self.firstResponderHeistId = firstResponderHeistId
         }
 
         static let empty = Snapshot(
@@ -454,6 +452,13 @@ struct LiveCapture: Equatable {
                 throw LiveElementTableValidationError.strayElementRef(heistId: heistId)
             }
 
+            if let firstResponderHeistId = snapshot.firstResponderHeistId,
+               !liveHeistIds.contains(firstResponderHeistId) {
+                throw LiveElementTableValidationError.invalidFirstResponderHeistId(
+                    heistId: firstResponderHeistId
+                )
+            }
+
             for path in dispatchReferences.containerRefsByPath.keys.sorted() {
                 switch snapshot.hierarchy.node(at: path) {
                 case nil:
@@ -489,6 +494,7 @@ struct LiveCapture: Equatable {
         case treeElementPathMismatch(heistId: HeistId, snapshotPath: TreePath, treePath: TreePath)
         case treeElementMismatch(heistId: HeistId, path: TreePath)
         case strayElementRef(heistId: HeistId)
+        case invalidFirstResponderHeistId(heistId: HeistId)
         case containerRefForMissingPath(path: TreePath)
         case containerRefForElementPath(path: TreePath)
         case scrollableViewForMissingPath(path: TreePath)
@@ -547,6 +553,12 @@ struct LiveCapture: Equatable {
                 return """
                 LiveElementIndex cannot attach stray element ref for HeistId \
                 "\(heistId.rawValue)"; every live element ref must be backed by a live entry.
+                """
+
+            case .invalidFirstResponderHeistId(let heistId):
+                return """
+                LiveElementIndex cannot attach first responder HeistId "\(heistId.rawValue)"; \
+                first responder state must reference a live element entry.
                 """
 
             case .containerRefForMissingPath(let path):

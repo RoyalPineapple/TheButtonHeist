@@ -780,7 +780,9 @@ extension InterfaceObservation {
                 using: pathMap
             ),
             scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap),
-            firstResponderHeistId: liveCapture.firstResponderHeistId
+            firstResponderHeistId: liveCapture.firstResponderHeistId.flatMap {
+                removedIds.contains($0) ? nil : $0
+            }
         )
         let dispatchReferences = LiveCapture.DispatchReferences(
             elementRefs: liveCapture.elementRefs.filter { !removedIds.contains($0.key) },
