@@ -25,6 +25,73 @@ final class ElementInflationProductTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testMovingGeometryRequiresOneMatchingQuietSample() {
+        let initial = geometrySample(x: 20)
+        let moved = geometrySample(x: 44)
+        let stabilization = ElementInflation.LiveGeometryStabilization(
+            initial: initial,
+            requiresOnscreen: true
+        )
+
+        guard case .awaiting(let movedStabilization) = stabilization.reduce(
+            .sample(moved, viewport: geometryViewport)
+        ) else {
+            return XCTFail("Moving geometry must restart the quiet window")
+        }
+        guard case .stable = movedStabilization.reduce(.sample(moved, viewport: geometryViewport)) else {
+            return XCTFail("One unchanged sample must complete the quiet window")
+        }
+    }
+
+    func testUnchangedGeometrySettlesDespiteLayerAnimation() {
+        let view = UIView()
+        view.layer.add(CABasicAnimation(keyPath: "opacity"), forKey: "test-animation")
+        let sample = geometrySample(x: 20)
+        let stabilization = ElementInflation.LiveGeometryStabilization(
+            initial: sample,
+            requiresOnscreen: true
+        )
+
+        XCTAssertNotNil(view.layer.animation(forKey: "test-animation"))
+        guard case .stable = stabilization.reduce(.sample(sample, viewport: geometryViewport)) else {
+            return XCTFail("Layer-only animation must not delay stable live geometry")
+        }
+    }
+
+    func testOffscreenActivationPointAfterPlacementIsTerminal() {
+        let sample = geometrySample(x: 20)
+        let stabilization = ElementInflation.LiveGeometryStabilization(
+            initial: sample,
+            requiresOnscreen: true
+        )
+
+        guard case .offscreen = stabilization.reduce(.sample(sample, viewport: .zero)) else {
+            return XCTFail("An offscreen activation point must fail after placement")
+        }
+    }
+
+    func testGeometryStabilizationDeadlineIsTerminal() {
+        let stabilization = ElementInflation.LiveGeometryStabilization(
+            initial: geometrySample(x: 20),
+            requiresOnscreen: true
+        )
+
+        guard case .timedOut = stabilization.reduce(.deadlineExpired) else {
+            return XCTFail("The operation deadline must terminate geometry stabilization")
+        }
+    }
+
+    func testGeometryStabilizationCancellationIsTerminal() {
+        let stabilization = ElementInflation.LiveGeometryStabilization(
+            initial: geometrySample(x: 20),
+            requiresOnscreen: true
+        )
+
+        guard case .cancelled = stabilization.reduce(.cancelled) else {
+            return XCTFail("Cancellation must terminate geometry stabilization")
+        }
+    }
+
     func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async {
         let result = await brains.navigation.elementInflation.inflate(
             for: .container(.identifier("content")),
@@ -37,6 +104,17 @@ final class ElementInflationProductTests: XCTestCase {
         }
         XCTAssertEqual(failure.failedStep, .targetResolution)
         XCTAssertEqual(failure.targetResolutionFailure, .containerTarget)
+    }
+
+    private func geometrySample(x: CGFloat) -> ElementInflation.LiveGeometrySample {
+        ElementInflation.LiveGeometrySample(
+            frame: CGRect(x: x, y: 40, width: 100, height: 44),
+            activationPoint: CGPoint(x: x + 50, y: 62)
+        )
+    }
+
+    private var geometryViewport: CGRect {
+        CGRect(x: 0, y: 0, width: 320, height: 640)
     }
 
     func testElementInflationRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {

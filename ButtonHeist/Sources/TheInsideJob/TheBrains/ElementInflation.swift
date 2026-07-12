@@ -48,16 +48,35 @@ internal final class ElementInflation {
         deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
+        guard !Task.isCancelled else {
+            return .failed(.cancelled("element inflation was cancelled before resolution"))
+        }
+        let deadline = SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent(),
+            timeoutSeconds: SemanticObservationTiming.defaultTimeout
+        )
+        return await inflateBeforeDeadline(
+            for: target,
+            method: method,
+            deallocatedBoundary: deallocatedBoundary,
+            activationPointPolicy: activationPointPolicy,
+            deadline: deadline
+        )
+    }
+
+    private func inflateBeforeDeadline(
+        for target: AccessibilityTarget,
+        method: ActionMethod,
+        deallocatedBoundary: String,
+        activationPointPolicy: ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
+    ) async -> ElementInflationResult {
         let resolvedTarget: AccessibilityTarget
         do {
             resolvedTarget = try target.validatedForElementAction()
         } catch {
             return .failed(.targetResolution(error))
         }
-        let deadline = SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent(),
-            timeoutSeconds: SemanticObservationTiming.defaultTimeout
-        )
         var state: State = .resolving
 
         while true {

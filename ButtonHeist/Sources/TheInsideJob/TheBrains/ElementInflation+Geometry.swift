@@ -14,12 +14,14 @@ extension ElementInflation {
     internal func stateAfterResolvedFreshTarget(
         _ inflatedTarget: InflatedElementTarget,
         didReveal: Bool,
-        activationPointPolicy: ActivationPointPolicy
+        activationPointPolicy: ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
     ) async -> State {
         if activationPointPolicy == .liveObjectOnly {
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: false
+                requireOnscreenActivationPoint: false,
+                deadline: deadline
             )
         }
         return .placing(inflatedTarget: inflatedTarget, didReveal: didReveal)
@@ -35,7 +37,8 @@ extension ElementInflation {
         if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: true
+                requireOnscreenActivationPoint: true,
+                deadline: deadline
             )
         }
         if didReveal {
@@ -65,7 +68,8 @@ extension ElementInflation {
         case .success(.alreadyInPosition):
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: true
+                requireOnscreenActivationPoint: true,
+                deadline: deadline
             )
         case .success(.moved):
             switch await awaitLiveTargetRefresh(
@@ -77,7 +81,8 @@ extension ElementInflation {
             case .inflated(let refreshedTarget):
                 return await stateAfterStableLiveGeometry(
                     refreshedTarget,
-                    requireOnscreenActivationPoint: true
+                    requireOnscreenActivationPoint: true,
+                    deadline: deadline
                 )
             case .failure(let failure):
                 return .failed(failure)
@@ -143,54 +148,171 @@ extension ElementInflation {
         }
     }
 
+    internal struct LiveGeometrySample {
+        internal let frame: CGRect
+        internal let activationPoint: CGPoint
+
+        internal init(frame: CGRect, activationPoint: CGPoint) {
+            self.frame = frame
+            self.activationPoint = activationPoint
+        }
+
+        fileprivate init(_ target: TheStash.LiveActionTarget) {
+            frame = target.frame
+            activationPoint = target.activationPoint
+        }
+
+        fileprivate func matches(_ other: LiveGeometrySample) -> Bool {
+            frame.matchesForActionHandoff(other.frame)
+                && activationPoint.matchesForActionHandoff(other.activationPoint)
+        }
+    }
+
+    internal enum LiveGeometryStabilizationEvent {
+        case sample(LiveGeometrySample, viewport: CGRect)
+        case deadlineExpired
+        case cancelled
+    }
+
+    internal enum LiveGeometryStabilizationReduction {
+        case awaiting(LiveGeometryStabilization)
+        case stable
+        case offscreen
+        case timedOut
+        case cancelled
+    }
+
+    internal struct LiveGeometryStabilization {
+        private let previous: LiveGeometrySample
+        private let requiresOnscreen: Bool
+
+        internal init(initial: LiveGeometrySample, requiresOnscreen: Bool) {
+            previous = initial
+            self.requiresOnscreen = requiresOnscreen
+        }
+
+        internal func reduce(
+            _ event: LiveGeometryStabilizationEvent
+        ) -> LiveGeometryStabilizationReduction {
+            switch event {
+            case .sample(let current, let viewport):
+                guard !requiresOnscreen || viewport.contains(current.activationPoint) else {
+                    return .offscreen
+                }
+                guard current.matches(previous) else {
+                    return .awaiting(Self(initial: current, requiresOnscreen: requiresOnscreen))
+                }
+                return .stable
+            case .deadlineExpired:
+                return .timedOut
+            case .cancelled:
+                return .cancelled
+            }
+        }
+    }
+
     private func stateAfterStableLiveGeometry(
         _ inflatedTarget: InflatedElementTarget,
-        requireOnscreenActivationPoint: Bool
+        requireOnscreenActivationPoint: Bool,
+        deadline: SemanticObservationDeadline
     ) async -> State {
         if !canRefreshLiveGeometryThroughWindow(inflatedTarget.liveTarget.object) {
             await tripwire.yieldRealFrames(1)
-            if requireOnscreenActivationPoint,
-               !ScreenMetrics.current.bounds.contains(inflatedTarget.liveTarget.activationPoint) {
+            guard !Task.isCancelled else {
+                return .failed(.cancelled(
+                    "live geometry stabilization was cancelled for target "
+                        + Navigation.ScrollTargetDescription(inflatedTarget.treeElement).description
+                ))
+            }
+            guard !requireOnscreenActivationPoint else {
                 return .failed(.geometryNotActionable(
                     "target \(Navigation.ScrollTargetDescription(inflatedTarget.treeElement).description) "
-                        + "activation point stayed off-screen"
+                        + "live geometry could not be refreshed through its window"
                 ))
             }
             return .inflated(inflatedTarget)
         }
+        var stableTarget = inflatedTarget
+        var stabilization = LiveGeometryStabilization(
+            initial: LiveGeometrySample(inflatedTarget.liveTarget),
+            requiresOnscreen: requireOnscreenActivationPoint
+        )
 
-        await tripwire.yieldRealFrames(1)
-        guard stash.refreshLiveCapture() != nil else {
-            return .failed(.geometryNotActionable(
-                "target \(Navigation.ScrollTargetDescription(inflatedTarget.treeElement).description) "
-                    + "live geometry refresh was unavailable"
-            ))
+        while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+            guard !Task.isCancelled else {
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            }
+            await tripwire.yieldRealFrames(1)
+            guard !Task.isCancelled else {
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            }
+            guard stash.refreshLiveCapture() != nil else { continue }
+            switch visibleTargetResolution(inflatedTarget.target) {
+            case .success(let currentTreeElement)?:
+                guard let currentTarget = stableActionTarget(
+                    target: inflatedTarget.target,
+                    treeElement: currentTreeElement
+                ) else {
+                    return .failed(.staleRefresh(
+                        "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
+                            + "could not be proven against the current live capture"
+                    ))
+                }
+                stableTarget = currentTarget
+                switch stabilization.reduce(.sample(
+                    LiveGeometrySample(currentTarget.liveTarget),
+                    viewport: ScreenMetrics.current.bounds
+                )) {
+                case .awaiting(let next):
+                    stabilization = next
+                case .stable:
+                    return .inflated(currentTarget)
+                case .offscreen:
+                    return .failed(.geometryNotActionable(
+                        "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
+                            + "activation point stayed off-screen after placement; "
+                            + Self.liveGeometrySummary(currentTarget.liveTarget)
+                    ))
+                case .timedOut, .cancelled:
+                    preconditionFailure("A geometry sample cannot reduce to timeout or cancellation")
+                }
+            case .failure(let failure)?:
+                return .failed(failure)
+            case nil:
+                continue
+            }
         }
-        switch visibleTargetResolution(inflatedTarget.target) {
-        case .success(let currentTreeElement)?:
-            guard let currentTarget = stableActionTarget(
-                target: inflatedTarget.target,
-                treeElement: currentTreeElement
-            ) else {
-                return .failed(.staleRefresh(
-                    "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
-                        + "could not be proven against the current live capture"
-                ))
-            }
-            if requireOnscreenActivationPoint,
-               !ScreenMetrics.current.bounds.contains(currentTarget.liveTarget.activationPoint) {
-                return .failed(.geometryNotActionable(
-                    "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
-                        + "activation point stayed off-screen"
-                ))
-            }
-            return .inflated(currentTarget)
-        case .failure(let failure)?:
-            return .failed(failure)
-        case nil:
-            return .failed(.staleRefresh(
-                "settled target was unavailable after refreshing live geometry"
+
+        return stateAfterGeometryReduction(
+            stabilization.reduce(.deadlineExpired),
+            target: stableTarget
+        )
+    }
+
+    private func stateAfterGeometryReduction(
+        _ reduction: LiveGeometryStabilizationReduction,
+        target: InflatedElementTarget
+    ) -> State {
+        switch reduction {
+        case .timedOut:
+            return .failed(.geometryNotActionable(
+                "target \(Navigation.ScrollTargetDescription(target.treeElement).description) "
+                    + "live geometry did not settle before the action deadline; "
+                    + Self.liveGeometrySummary(target.liveTarget)
             ))
+        case .cancelled:
+            return .failed(.cancelled(
+                "live geometry stabilization was cancelled for target "
+                    + Navigation.ScrollTargetDescription(target.treeElement).description
+            ))
+        case .awaiting, .stable, .offscreen:
+            preconditionFailure("Only terminal deadline events are handled here")
         }
     }
 
@@ -199,24 +321,40 @@ extension ElementInflation {
         treeElement: InterfaceTree.Element
     ) -> InflatedElementTarget? {
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement),
-              retainedInterfaceElement(liveTarget.treeElement, matches: target)
+              retainedInterfaceElement(treeElement, matches: target)
         else { return nil }
+        let semanticLiveTarget = TheStash.LiveActionTarget(
+            treeElement: treeElement,
+            object: liveTarget.object,
+            frame: liveTarget.frame,
+            activationPoint: liveTarget.activationPoint
+        )
         return InflatedElementTarget(
             target: target,
-            treeElement: liveTarget.treeElement,
-            liveTarget: liveTarget
+            treeElement: treeElement,
+            liveTarget: semanticLiveTarget
         )
     }
+}
 
-    private func canRefreshLiveGeometryThroughWindow(_ object: NSObject) -> Bool {
-        if let view = object as? UIView {
-            return view.window != nil
-        }
-        if let element = object as? UIAccessibilityElement,
-           let view = element.accessibilityContainer as? UIView {
-            return view.window != nil
-        }
-        return false
+extension CGRect {
+    fileprivate func matchesForActionHandoff(_ other: CGRect) -> Bool {
+        origin.matchesForActionHandoff(other.origin)
+            && size.matchesForActionHandoff(other.size)
+    }
+}
+
+extension CGPoint {
+    fileprivate func matchesForActionHandoff(_ other: CGPoint) -> Bool {
+        abs(x - other.x) < 0.5
+            && abs(y - other.y) < 0.5
+    }
+}
+
+extension CGSize {
+    fileprivate func matchesForActionHandoff(_ other: CGSize) -> Bool {
+        abs(width - other.width) < 0.5
+            && abs(height - other.height) < 0.5
     }
 }
 

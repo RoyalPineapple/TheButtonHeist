@@ -25,7 +25,8 @@ extension ElementInflation {
             return await stateAfterResolvedFreshTarget(
                 inflatedTarget,
                 didReveal: didReveal,
-                activationPointPolicy: activationPointPolicy
+                activationPointPolicy: activationPointPolicy,
+                deadline: deadline
             )
         case .retry(let reason):
             switch await awaitLiveTargetRefresh(
@@ -38,7 +39,8 @@ extension ElementInflation {
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
                     didReveal: didReveal,
-                    activationPointPolicy: activationPointPolicy
+                    activationPointPolicy: activationPointPolicy,
+                    deadline: deadline
                 )
             case .failure(let failure):
                 return .failed(failure)
