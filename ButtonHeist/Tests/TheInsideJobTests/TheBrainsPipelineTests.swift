@@ -1592,6 +1592,12 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertEqual(window.completeness, .complete)
         XCTAssertEqual(window.trace.captures.count, 3)
+        guard case .noChange? = window.trace.endpointDelta else {
+            return XCTFail(
+                "Expected endpoint noChange after round trip, got "
+                    + "\(String(describing: window.trace.endpointDelta))"
+            )
+        }
         guard case .changed(let facts)? = window.verdict else {
             return XCTFail("Expected fast round trip to retain a changed verdict")
         }
@@ -1599,6 +1605,39 @@ final class TheBrainsPipelineTests: XCTestCase {
             if case .elementsChanged = $0 { return true }
             return false
         })
+        XCTAssertEqual(facts.accumulatedDelta.kindDescription, "elementsChanged")
+    }
+
+    func testCompleteObservationWindowProducesUnchangedProof() throws {
+        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        let current = try XCTUnwrap(currentEvent.settledCapture)
+        let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
+            from: baseline,
+            through: currentEvent,
+            projection: .semantic
+        ))
+
+        XCTAssertEqual(window.completeness, .complete)
+        guard case .unchanged(let evidence)? = window.verdict else {
+            return XCTFail("Expected complete unchanged proof, got \(String(describing: window.verdict))")
+        }
+        XCTAssertEqual(evidence.baseline, baseline.cursor)
+        XCTAssertEqual(evidence.current, current.cursor)
+        XCTAssertEqual(evidence.elementCount, 1)
+
+        let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
+        let predicateResult = PredicateObservationEvidence(
+            observation: observation,
+            baseline: baseline,
+            window: window
+        ).evaluate(.noChange)
+        XCTAssertTrue(predicateResult.met)
     }
 
     func testIncompleteObservationWindowDoesNotProduceUnchangedVerdict() throws {
@@ -1620,6 +1659,32 @@ final class TheBrainsPipelineTests: XCTestCase {
             return XCTFail("Expected generation reset to make the window incomplete")
         }
         XCTAssertNil(window.verdict)
+    }
+
+    func testNoChangePredicateRequiresCompleteObservationWindow() throws {
+        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let baseline = try XCTUnwrap(baselineEvent.settledCapture)
+        brains.stash.semanticObservationStream.clearSettledObservationHistory()
+        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
+            from: baseline,
+            through: currentEvent,
+            projection: .semantic
+        ))
+        let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
+
+        let predicateResult = PredicateObservationEvidence(
+            observation: observation,
+            baseline: baseline,
+            window: window
+        ).evaluate(.noChange)
+
+        XCTAssertFalse(predicateResult.met)
+        XCTAssertEqual(predicateResult.actual, "observation history incomplete")
     }
 
     func testScreenAppearanceStartsNewObservationGeneration() throws {
@@ -1670,6 +1735,93 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertEqual(nextEvent.generation, newScreenEvent.generation)
         XCTAssertEqual(newScreenWindow.completeness, .complete)
+    }
+
+    func testChangePredicatesReadScreenAndElementFactsSeparately() throws {
+        let oldScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            makeScreen(elements: [("Menu", .header, "menu_header")])
+        )
+        let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+        let oldScreenBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
+        let screenWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
+            from: oldScreenBaseline,
+            through: newScreenEvent,
+            projection: .semantic
+        ))
+        let screenEvidence = PredicateObservationEvidence(
+            observation: brains.postActionObservation.semanticObservation(from: newScreenEvent),
+            baseline: oldScreenBaseline,
+            window: screenWindow
+        )
+
+        let screenPredicate = screenEvidence.evaluate(.change(.screenChanged))
+        let elementPredicateAgainstScreen = screenEvidence.evaluate(.change(.elements()))
+        XCTAssertTrue(screenPredicate.met)
+        XCTAssertFalse(elementPredicateAgainstScreen.met)
+        XCTAssertEqual(elementPredicateAgainstScreen.actual, "screenChanged")
+
+        let elementBaselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let elementCurrentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "60%")
+        )
+        let elementBaseline = try XCTUnwrap(elementBaselineEvent.settledCapture)
+        let elementWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
+            from: elementBaseline,
+            through: elementCurrentEvent,
+            projection: .semantic
+        ))
+        let elementEvidence = PredicateObservationEvidence(
+            observation: brains.postActionObservation.semanticObservation(from: elementCurrentEvent),
+            baseline: elementBaseline,
+            window: elementWindow
+        )
+
+        let elementPredicate = elementEvidence.evaluate(.change(.elements()))
+        let screenPredicateAgainstElement = elementEvidence.evaluate(.change(.screenChanged))
+        XCTAssertTrue(elementPredicate.met)
+        XCTAssertFalse(screenPredicateAgainstElement.met)
+        XCTAssertEqual(screenPredicateAgainstElement.actual, "elementsChanged")
+    }
+
+    func testPredicateObservationStreamPreservesChangeBaselineAcrossReductions() throws {
+        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "50%")
+        )
+        let intermediateEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "60%")
+        )
+        let finalEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            volumeScreen(value: "70%")
+        )
+
+        var stream = PredicateObservationStreamState()
+        let seeded = stream.reducing(
+            brains.postActionObservation.semanticObservation(from: baselineEvent),
+            predicate: .change(),
+            baselineSeed: .currentObservation
+        )
+        stream = seeded.state
+
+        let intermediate = stream.reducing(
+            brains.postActionObservation.semanticObservation(from: intermediateEvent),
+            predicate: .change(),
+            baselineSeed: .preserve
+        )
+        stream = intermediate.state
+        let final = stream.reducing(
+            brains.postActionObservation.semanticObservation(from: finalEvent),
+            predicate: .change(),
+            baselineSeed: .preserve
+        )
+
+        XCTAssertEqual(intermediate.reduction.changeBaseline?.cursor.sequence, baselineEvent.sequence)
+        XCTAssertEqual(final.reduction.changeBaseline?.cursor.sequence, baselineEvent.sequence)
+        XCTAssertEqual(final.reduction.observationWindow?.baseline.cursor.sequence, baselineEvent.sequence)
+        XCTAssertEqual(final.reduction.observationWindow?.current.cursor.sequence, finalEvent.sequence)
     }
 
     func testWaitObservationPlanUsesDiscoveryForElementAndContainerPredicates() {

@@ -77,78 +77,69 @@ final class PostActionObservation {
         var screenId: String? { screen.id }
     }
 
-    enum SettleEvidence {
-        case cancelled(cancelMs: Int)
-        case unavailable(settleTimeMs: Int)
-        case committed(SettleSession.Outcome, SettledSemanticObservationEvent)
-        case observedUnsettled(SettleSession.Outcome, Screen)
+    enum SettledObservationResult {
+        case observed(settle: SettleSession.Outcome, finalState: BeforeState, trace: AccessibilityTrace)
+        case unavailable(
+            settle: SettleSession.Outcome,
+            baselineCapture: AccessibilityTrace.Capture,
+            failureMessage: String
+        )
 
-        var didSettleCleanly: Bool {
-            if case .committed = self { return true }
-            return false
-        }
-
-        var timeMs: Int {
+        var accessibilityTrace: AccessibilityTrace {
             switch self {
-            case .cancelled(let timeMs), .unavailable(let timeMs):
-                return timeMs
-            case .committed(let outcome, _), .observedUnsettled(let outcome, _):
-                return outcome.outcome.timeMs
+            case .observed(_, _, let trace):
+                return trace
+            case .unavailable(_, let baselineCapture, _):
+                return AccessibilityTrace(capture: baselineCapture)
             }
         }
 
-        var accessibilityNotifications: [AccessibilityNotificationEvidence] {
+        var settled: Bool {
+            settle.outcome.didSettleCleanly
+        }
+
+        var settleTimeMs: Int {
+            settle.outcome.timeMs
+        }
+
+        private var settle: SettleSession.Outcome {
             switch self {
-            case .committed(_, let event):
-                return event.trace.captures.last?.transition.accessibilityNotifications ?? []
-            case .cancelled, .unavailable, .observedUnsettled:
-                return []
+            case .observed(let settle, _, _),
+                 .unavailable(let settle, _, _):
+                return settle
             }
         }
 
-        var failureMessage: String? {
+        func message(explicit message: String?) -> String? {
             switch self {
-            case .cancelled(let cancelMs):
-                return "cancelled after \(cancelMs)ms"
+            case .observed:
+                return message
+            case .unavailable(_, _, let failureMessage):
+                return failureMessage
+            }
+        }
+
+        func resultOutcome(
+            for outcome: PostActionObservation.ActionOutcome
+        ) -> ActionResultOutcome {
+            switch self {
+            case .observed:
+                return outcome.resultOutcome
             case .unavailable:
-                return "Could not parse post-action accessibility tree"
-            case .committed, .observedUnsettled:
-                return nil
+                return .failure(.actionFailed)
             }
         }
 
-        init(_ observation: PostActionSettleObservation) {
-            let settle = observation.settle
-            switch observation.result {
-            case .committed(let event):
-                precondition(settle.outcome.didSettleCleanly, "committed observation requires clean settle")
-                self = .committed(settle, event)
-            case .observedUnsettled(let screen):
-                guard case .timedOut = settle.outcome else {
-                    preconditionFailure("unsettled observation requires settle timeout")
-                }
-                self = .observedUnsettled(settle, screen)
+        func payload(
+            for outcome: PostActionObservation.ActionOutcome
+        ) -> ActionResultPayload? {
+            switch self {
+            case .observed(_, let finalState, _):
+                return outcome.resolvedPayload(after: finalState)
             case .unavailable:
-                switch settle.outcome {
-                case .cancelled(let timeMs):
-                    self = .cancelled(cancelMs: timeMs)
-                case .timedOut(let timeMs):
-                    self = .unavailable(settleTimeMs: timeMs)
-                case .settled:
-                    preconditionFailure("clean settle requires committed observation")
-                }
+                return outcome.immediatePayload
             }
         }
-    }
-
-    struct FinalEvidence {
-        let state: BeforeState
-        let trace: AccessibilityTrace
-    }
-
-    enum ObservationOutcome {
-        case unavailable
-        case observed(FinalEvidence)
     }
 
     init(stash: TheStash, safecracker: TheSafecracker) {
@@ -192,53 +183,96 @@ final class PostActionObservation {
         )
     }
 
-    func settleEvidence(
+    func settleObservation(
         before: BeforeState,
         commitScope: SemanticObservationScope = .visible,
         outcome: SettleSession.Outcome?,
         notificationWindow: AccessibilityNotificationActionWindow? = nil
-    ) async -> SettleEvidence {
-        let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
+    ) async -> PostActionSettleObservation {
+        await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
             commitScope: commitScope,
             settleOutcome: outcome,
             notificationWindow: notificationWindow
         )
-        return SettleEvidence(settledObservation)
     }
 
-    func observationOutcome(
+    func settledObservationResult(
         before: BeforeState,
-        settleEvidence: SettleEvidence
-    ) async -> ObservationOutcome {
-        let observed: (state: BeforeState, settle: SettleSession.Outcome)
-        switch settleEvidence {
-        case .cancelled, .unavailable:
-            return .unavailable
-        case .committed(let settle, let event):
-            observed = (captureFinalSemanticState(after: event), settle)
-        case .observedUnsettled(let settle, let screen):
-            observed = (
-                captureSemanticState(
-                    from: screen,
-                    tripwireSignal: before.tripwireSignal,
-                    settledObservationSequence: nil
-                ),
-                settle
+        observation: PostActionSettleObservation
+    ) -> SettledObservationResult {
+        switch observation.result {
+        case .committed(let event):
+            precondition(
+                observation.settle.outcome.didSettleCleanly,
+                "committed observation requires clean settle"
             )
+            let finalState = captureFinalSemanticState(after: event)
+            return observedResult(
+                before: before,
+                finalState: finalState,
+                settle: observation.settle,
+                accessibilityNotifications: event.trace.captures.last?.transition.accessibilityNotifications ?? []
+            )
+
+        case .observedUnsettled(let screen):
+            guard case .timedOut = observation.settle.outcome else {
+                preconditionFailure("unsettled observation requires settle timeout")
+            }
+            let finalState = captureSemanticState(
+                from: screen,
+                tripwireSignal: before.tripwireSignal,
+                settledObservationSequence: nil
+            )
+            return observedResult(
+                before: before,
+                finalState: finalState,
+                settle: observation.settle,
+                accessibilityNotifications: []
+            )
+
+        case .unavailable:
+            switch observation.settle.outcome {
+            case .cancelled(let timeMs):
+                return .unavailable(
+                    settle: observation.settle,
+                    baselineCapture: before.capture,
+                    failureMessage: "cancelled after \(timeMs)ms"
+                )
+            case .timedOut:
+                return .unavailable(
+                    settle: observation.settle,
+                    baselineCapture: before.capture,
+                    failureMessage: "Could not parse post-action accessibility tree"
+                )
+            case .settled:
+                preconditionFailure("clean settle requires committed observation")
+            }
         }
+    }
+
+    private func observedResult(
+        before: BeforeState,
+        finalState: BeforeState,
+        settle: SettleSession.Outcome,
+        accessibilityNotifications: [AccessibilityNotificationEvidence]
+    ) -> SettledObservationResult {
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
-            settleEvidence.accessibilityNotifications,
-            from: observed.state,
-            to: observed.state
+            accessibilityNotifications,
+            from: finalState,
+            to: finalState
         )
         let trace = buildPostActionTrace(
             before: before,
-            final: observed.state,
-            settleOutcome: observed.settle,
+            final: finalState,
+            settleOutcome: settle,
             accessibilityNotifications: accessibilityNotifications
         )
-        return .observed(FinalEvidence(state: observed.state, trace: trace))
+        return .observed(
+            settle: settle,
+            finalState: finalState,
+            trace: trace
+        )
     }
 
     func captureSemanticState(
@@ -604,161 +638,34 @@ extension ActionResult {
         postActionMethod method: ActionMethod,
         outcome: PostActionObservation.ActionOutcome,
         message: String?,
-        before: PostActionObservation.BeforeState,
-        settleEvidence: PostActionObservation.SettleEvidence,
-        observationOutcome: PostActionObservation.ObservationOutcome
+        settledObservation: PostActionObservation.SettledObservationResult
     ) {
-        self = PostActionResultReceipt(
-            method: method,
-            outcome: outcome,
-            message: message,
-            before: before,
-            settleEvidence: settleEvidence,
-            observationOutcome: observationOutcome
-        ).actionResult
-    }
-}
-
-private struct PostActionResultReceipt {
-    let method: ActionMethod
-    let outcome: PostActionObservation.ActionOutcome
-    let explicitMessage: String?
-    let evidence: PostActionReceiptEvidence
-
-    init(
-        method: ActionMethod,
-        outcome: PostActionObservation.ActionOutcome,
-        message: String?,
-        before: PostActionObservation.BeforeState,
-        settleEvidence: PostActionObservation.SettleEvidence,
-        observationOutcome: PostActionObservation.ObservationOutcome
-    ) {
-        let evidence = PostActionReceiptEvidence(
-            before: before,
-            settleEvidence: settleEvidence,
-            observationOutcome: observationOutcome
-        )
-        self.method = method
-        self.outcome = outcome
-        self.explicitMessage = message
-        self.evidence = evidence
-    }
-
-    var actionResult: ActionResult {
-        let resultOutcome = evidence.resultOutcome(for: outcome)
-        let message = evidence.message(explicit: explicitMessage)
-        let payload = evidence.payload(for: outcome)
+        let resultOutcome = settledObservation.resultOutcome(for: outcome)
+        let message = settledObservation.message(explicit: message)
+        let payload = settledObservation.payload(for: outcome)
         if let payload {
-            return ActionResult(
+            self = ActionResult(
                 outcome: resultOutcome,
                 payload: payload,
                 message: message,
-                accessibilityTrace: evidence.accessibilityTrace,
-                settled: evidence.settled,
-                settleTimeMs: evidence.settleTimeMs,
+                accessibilityTrace: settledObservation.accessibilityTrace,
+                settled: settledObservation.settled,
+                settleTimeMs: settledObservation.settleTimeMs,
                 subjectEvidence: outcome.subjectEvidence,
                 activationTrace: outcome.activationTrace
             )
+            return
         }
-        return ActionResult(
+        self = ActionResult(
             outcome: resultOutcome,
             method: method,
             message: message,
-            accessibilityTrace: evidence.accessibilityTrace,
-            settled: evidence.settled,
-            settleTimeMs: evidence.settleTimeMs,
+            accessibilityTrace: settledObservation.accessibilityTrace,
+            settled: settledObservation.settled,
+            settleTimeMs: settledObservation.settleTimeMs,
             subjectEvidence: outcome.subjectEvidence,
             activationTrace: outcome.activationTrace
         )
-    }
-}
-
-private enum PostActionReceiptEvidence {
-    case observed(
-        finalEvidence: PostActionObservation.FinalEvidence,
-        settleEvidence: PostActionObservation.SettleEvidence
-    )
-    case unavailable(
-        baselineCapture: AccessibilityTrace.Capture,
-        settleEvidence: PostActionObservation.SettleEvidence
-    )
-
-    init(
-        before: PostActionObservation.BeforeState,
-        settleEvidence: PostActionObservation.SettleEvidence,
-        observationOutcome: PostActionObservation.ObservationOutcome
-    ) {
-        switch observationOutcome {
-        case .observed(let finalEvidence):
-            self = .observed(
-                finalEvidence: finalEvidence,
-                settleEvidence: settleEvidence
-            )
-        case .unavailable:
-            precondition(
-                settleEvidence.failureMessage != nil,
-                "unavailable observation requires settle failure"
-            )
-            self = .unavailable(
-                baselineCapture: before.capture,
-                settleEvidence: settleEvidence
-            )
-        }
-    }
-
-    var accessibilityTrace: AccessibilityTrace {
-        switch self {
-        case .observed(let finalEvidence, _):
-            return finalEvidence.trace
-        case .unavailable(let baselineCapture, _):
-            return AccessibilityTrace(capture: baselineCapture)
-        }
-    }
-
-    var settled: Bool {
-        settleEvidence.didSettleCleanly
-    }
-
-    var settleTimeMs: Int {
-        settleEvidence.timeMs
-    }
-
-    private var settleEvidence: PostActionObservation.SettleEvidence {
-        switch self {
-        case .observed(_, let settleEvidence), .unavailable(_, let settleEvidence):
-            return settleEvidence
-        }
-    }
-
-    func message(explicit message: String?) -> String? {
-        switch self {
-        case .observed:
-            return message
-        case .unavailable:
-            return settleEvidence.failureMessage
-        }
-    }
-
-    func resultOutcome(
-        for outcome: PostActionObservation.ActionOutcome
-    ) -> ActionResultOutcome {
-        switch self {
-        case .observed:
-            return outcome.resultOutcome
-        case .unavailable:
-            return .failure(.actionFailed)
-        }
-    }
-
-    func payload(
-        for outcome: PostActionObservation.ActionOutcome
-    ) -> ActionResultPayload? {
-        switch self {
-        case .observed(let finalEvidence, _):
-            return outcome.resolvedPayload(after: finalEvidence.state)
-        case .unavailable:
-            return outcome.immediatePayload
-        }
     }
 }
 
