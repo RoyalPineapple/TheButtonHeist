@@ -4647,18 +4647,19 @@ private func makeWaitActionResult(
     message: String?,
     accessibilityTrace: AccessibilityTrace?
 ) -> ActionResult {
+    let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
     if met {
         return ActionResult.success(
             method: .wait,
             message: message,
-            evidence: ActionResultSuccessEvidence(observation: .trace(accessibilityTrace))
+            evidence: ActionResultSuccessEvidence(observation: observation)
         )
     }
     return ActionResult.failure(
         method: .wait,
         errorKind: .timeout,
         message: message,
-        evidence: ActionResultFailureEvidence(observation: .trace(accessibilityTrace))
+        evidence: ActionResultFailureEvidence(observation: observation)
     )
 }
 
