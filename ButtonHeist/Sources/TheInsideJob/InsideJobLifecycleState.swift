@@ -382,7 +382,17 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
                 ]
             )
         case .resuming(let attempt):
-            return .changed(to: state, effects: [.cancelResume(attempt)])
+            return .changed(
+                to: .stopping(stopAttempt),
+                effects: [
+                    .cancelResume(attempt),
+                    .releaseResources(
+                        policy: .stop,
+                        idleTimerBaseline: attempt.suspendedRuntime.idleTimerBaseline
+                    ),
+                    .tearDownRuntimeServices,
+                ]
+            )
         }
     }
 
@@ -401,14 +411,10 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     }
 
     private func stopFinished(_ state: State, id: UUID) -> Change {
-        switch state {
-        case .stopping(let attempt) where attempt.id == id:
-            return .changed(to: .stopped)
-        case .stopping:
+        guard case .stopping(let attempt) = state, attempt.id == id else {
             return .rejected(.staleStopAttempt, stayingIn: state)
-        case .stopped, .starting, .running, .suspending, .suspended, .resuming:
-            return .changed(to: state)
         }
+        return .changed(to: .stopped)
     }
 
     private func suspendRequested(_ state: State, suspension: TheInsideJob.InsideJobSuspension?) -> Change {
