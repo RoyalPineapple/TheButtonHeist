@@ -29,33 +29,26 @@ func assertPublicHeistSummary(
 
 func assertPublicInteractionDigest(
     _ digest: JSONProbe,
-    elementCountBefore: Int,
-    elementCountAfter: Int,
-    elementCountChanged: Bool,
-    elementSetChanged: Bool,
-    screenIdBefore: String?,
-    screenIdAfter: String?,
-    screenIdChanged: Bool,
-    firstResponderChanged: Bool,
+    expected: AccessibilityTrace.InteractionDigest,
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
-    XCTAssertEqual(try digest.int("elementCountBefore"), elementCountBefore, file: file, line: line)
-    XCTAssertEqual(try digest.int("elementCountAfter"), elementCountAfter, file: file, line: line)
-    XCTAssertEqual(try digest.bool("elementCountChanged"), elementCountChanged, file: file, line: line)
-    XCTAssertEqual(try digest.bool("elementSetChanged"), elementSetChanged, file: file, line: line)
-    if let screenIdBefore {
+    XCTAssertEqual(try digest.int("elementCountBefore"), expected.elementCountBefore, file: file, line: line)
+    XCTAssertEqual(try digest.int("elementCountAfter"), expected.elementCountAfter, file: file, line: line)
+    XCTAssertEqual(try digest.bool("elementCountChanged"), expected.elementCountChanged, file: file, line: line)
+    XCTAssertEqual(try digest.bool("elementSetChanged"), expected.elementSetChanged, file: file, line: line)
+    if let screenIdBefore = expected.screenIdBefore {
         XCTAssertEqual(try digest.string("screenIdBefore"), screenIdBefore, file: file, line: line)
     } else {
         try digest.assertMissing("screenIdBefore")
     }
-    if let screenIdAfter {
+    if let screenIdAfter = expected.screenIdAfter {
         XCTAssertEqual(try digest.string("screenIdAfter"), screenIdAfter, file: file, line: line)
     } else {
         try digest.assertMissing("screenIdAfter")
     }
-    XCTAssertEqual(try digest.bool("screenIdChanged"), screenIdChanged, file: file, line: line)
-    XCTAssertEqual(try digest.bool("firstResponderChanged"), firstResponderChanged, file: file, line: line)
+    XCTAssertEqual(try digest.bool("screenIdChanged"), expected.screenIdChanged, file: file, line: line)
+    XCTAssertEqual(try digest.bool("firstResponderChanged"), expected.firstResponderChanged, file: file, line: line)
 }
 
 func assertPublicElement(

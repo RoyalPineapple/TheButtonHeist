@@ -371,14 +371,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try delta.int("elementCount"), 4)
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
-            elementCountBefore: 3,
-            elementCountAfter: 4,
-            elementCountChanged: true,
-            elementSetChanged: true,
-            screenIdBefore: "screen",
-            screenIdAfter: "screen",
-            screenIdChanged: false,
-            firstResponderChanged: false
+            expected: AccessibilityTrace.InteractionDigest(
+                elementCountBefore: 3,
+                elementCountAfter: 4,
+                elementSetChanged: true,
+                screenIdBefore: "screen",
+                screenIdAfter: "screen",
+                firstResponderChanged: false
+            )
         )
         let added = try delta.object("edits").array("added")
         XCTAssertEqual(added.count, 1)
@@ -439,14 +439,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try delta.int("elementCount"), 8)
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
-            elementCountBefore: 0,
-            elementCountAfter: 8,
-            elementCountChanged: true,
-            elementSetChanged: true,
-            screenIdBefore: "screen",
-            screenIdAfter: "screen",
-            screenIdChanged: false,
-            firstResponderChanged: false
+            expected: AccessibilityTrace.InteractionDigest(
+                elementCountBefore: 0,
+                elementCountAfter: 8,
+                elementSetChanged: true,
+                screenIdBefore: "screen",
+                screenIdAfter: "screen",
+                firstResponderChanged: false
+            )
         )
         XCTAssertEqual(added.count, 5)
         for index in 0..<5 {
@@ -513,14 +513,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try delta.int("elementCount"), 8)
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
-            elementCountBefore: 0,
-            elementCountAfter: 8,
-            elementCountChanged: true,
-            elementSetChanged: true,
-            screenIdBefore: "before",
-            screenIdAfter: "checkout",
-            screenIdChanged: true,
-            firstResponderChanged: false
+            expected: AccessibilityTrace.InteractionDigest(
+                elementCountBefore: 0,
+                elementCountAfter: 8,
+                elementSetChanged: true,
+                screenIdBefore: "before",
+                screenIdAfter: "checkout",
+                firstResponderChanged: false
+            )
         )
         XCTAssertEqual(try screen.int("elementCount"), 8)
         XCTAssertEqual(elements.count, 5)
