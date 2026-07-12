@@ -11,8 +11,7 @@ final class AutoSettleFieldsTests: XCTestCase {
     func testActionResultRoundTripsWithSettleFields() throws {
         let result = ActionResult.success(
             method: .activate,
-            settled: true,
-            settleTimeMs: 1234
+            evidence: ActionResultEvidence(settlement: .settled(durationMs: 1234))
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -25,8 +24,7 @@ final class AutoSettleFieldsTests: XCTestCase {
             method: .wait,
             errorKind: .timeout,
             message: "timed out",
-            settled: false,
-            settleTimeMs: 750
+            evidence: ActionResultEvidence(settlement: .timedOut(durationMs: 750))
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -36,12 +34,13 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(decoded.settleTimeMs, 750)
     }
 
-    func testSettleDurationHasOneCanonicalValueAcrossCompatibilityProjections() throws {
+    func testSettleDurationHasOneCanonicalStoredValue() throws {
         let result = ActionResult.success(
             method: .activate,
-            settled: true,
-            settleTimeMs: 125,
-            timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+            evidence: ActionResultEvidence(
+                settlement: .settled(durationMs: 125),
+                timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+            )
         )
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
@@ -87,7 +86,10 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let trace = AccessibilityTrace(captures: [first, second])
 
-        let result = ActionResult.success(method: .activate, accessibilityTrace: trace)
+        let result = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
+        )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
@@ -121,7 +123,9 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: AccessibilityTrace(captures: [first, second])
+            evidence: ActionResultEvidence(
+                accessibilityTrace: AccessibilityTrace(captures: [first, second])
+            )
         )
         let encoded = try JSONEncoder().encode(result)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])

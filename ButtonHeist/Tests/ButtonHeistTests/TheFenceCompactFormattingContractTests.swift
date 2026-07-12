@@ -298,7 +298,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -315,14 +318,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let interface = makeReceiptTestInterface(elementCount: 1)
         let first = AccessibilityNotificationEvidence(
             sequence: 7,
-            kind: .valueChanged,
+            kind: .elementChanged(.value),
             timestamp: Date(timeIntervalSince1970: 7),
             notificationData: .none,
             associatedElement: .none
         )
         let second = AccessibilityNotificationEvidence(
             sequence: 8,
-            kind: .layoutChanged,
+            kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 8),
             notificationData: .none,
             associatedElement: .none
@@ -342,7 +345,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -352,9 +358,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         try delta.assertMissing("edits")
         XCTAssertEqual(try notifications.map { try $0.int("sequence") }, [7, 8])
-        XCTAssertEqual(try notifications.map { try $0.string("kind") }, ["valueChanged", "elementChanged"])
-        XCTAssertTrue(compact.contains("accessibility notification valueChanged #7"), compact)
-        XCTAssertTrue(compact.contains("accessibility notification elementChanged #8"), compact)
+        let kinds = try notifications.map { try $0.object("kind") }
+        XCTAssertEqual(try kinds.map { try $0.string("type") }, ["elementChanged", "elementChanged"])
+        XCTAssertEqual(try kinds.map { try $0.string("notification") }, ["value", "layout"])
+        XCTAssertTrue(compact.contains("accessibility notification elementChanged(value) #7"), compact)
+        XCTAssertTrue(compact.contains("accessibility notification elementChanged(layout) #8"), compact)
     }
 
     func testScreenChangedActionOutputIncludesDestinationSummaryTree() throws {
@@ -370,7 +378,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -416,7 +427,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let trace = AccessibilityTrace(captures: [before, elementChange, after])
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultEvidence(accessibilityTrace: trace)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -447,7 +461,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: command,
-                    result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                    result: ActionResult.success(
+                        method: .activate,
+                        evidence: ActionResultEvidence(accessibilityTrace: trace)
+                    )
                 ),
             ],
             durationMs: 8
@@ -526,7 +543,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(
+                            method: .activate,
+                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        )
                     ),
                 ],
                 durationMs: 8
@@ -601,7 +621,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(
+                            method: .activate,
+                            evidence: ActionResultEvidence(accessibilityTrace: trace)
+                        )
                     ),
                 ],
                 durationMs: 8
@@ -673,7 +696,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .activate,
                         errorKind: .actionFailed,
                         message: "target stopped responding",
-                        accessibilityTrace: trace
+                        evidence: ActionResultEvidence(accessibilityTrace: trace)
                     ),
                     failure: HeistFailureDetail(
                         category: .action,
@@ -711,7 +734,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                             method: .activate,
                             errorKind: .actionFailed,
                             message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
-                            activationTrace: activationTrace
+                            evidence: ActionResultEvidence(activationTrace: activationTrace)
                         ),
                         failure: HeistFailureDetail(
                             category: .action,
@@ -787,7 +810,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
-                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -864,11 +887,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
+                        evidence: ActionResultEvidence(
+                            timing: ActionPerformanceTiming(targetResolutionMs: 1, totalMs: 5)
+                        )
                     ),
                     expectationActionResult: ActionResult.success(
                         method: .wait,
-                        timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                        evidence: ActionResultEvidence(
+                            settlement: .settled(durationMs: 7),
+                            timing: ActionPerformanceTiming(settleMs: 7, totalMs: 9)
+                        )
                     ),
                     expectation: ExpectationResult(met: true, predicate: expected)
                 ),
@@ -1073,7 +1101,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
-                                result: ExpectationResult(met: true, predicate: casePredicateRuntime)
+                                met: true
                             ),
                         ],
                         outcome: .matchedCase(index: 0),
@@ -1102,7 +1130,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         try json.assertMissing("results")
         XCTAssertEqual(try root.string("path"), "$.body[0]")
-        XCTAssertEqual(try root.string("kind"), "if")
+        XCTAssertEqual(try root.string("kind"), "conditional")
         try caseSelection.assertPresent("outcome")
         try caseSelection.assertMissing("selectedCaseIndex")
         try caseSelection.assertMissing("timedOut")
@@ -1148,7 +1176,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: runtimePredicate,
-                                result: ExpectationResult(met: false, predicate: runtimePredicate)
+                                met: false
                             ),
                         ],
                         outcome: .elseBranch(reason: .noMatch),
@@ -1169,11 +1197,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let child = try XCTUnwrap(children.first)
         let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
 
-        XCTAssertEqual(try root.string("kind"), "if")
+        XCTAssertEqual(try root.string("kind"), "conditional")
         XCTAssertEqual(try root.string("status"), "passed")
         try evidence.assertPresent("caseSelection")
         XCTAssertEqual(try child.string("path"), "$.body[0].conditional.else_body[0]")
-        XCTAssertTrue(compact.contains("[0] if"), compact)
+        XCTAssertTrue(compact.contains("[0] conditional"), compact)
         XCTAssertTrue(compact.contains("[1] activate"), compact)
     }
 
@@ -2005,13 +2033,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 command: command,
                 dispatchResult: result,
                 expectationResult: expectationActionResult,
-                expectation: expectation
+                expectation: expectation,
+                warning: nil
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
             evidence = command.map {
-                .dispatch(command: $0, dispatchResult: result)
-            } ?? .dispatch(dispatchResult: result)
+                .dispatch(command: $0, dispatchResult: result, warning: nil)
+            } ?? .commandlessDispatch(dispatchResult: result)
         }
 
         let intent = command.map {

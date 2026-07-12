@@ -9,8 +9,8 @@ extension TheBrains.RepeatUntil.Terminal {
     internal static func initialObservationUnavailableExpectation(
         step: ResolvedRepeatUntilStep,
         receipt: HeistWaitReceipt
-    ) -> UnmetExpectationResult {
-        UnmetExpectationResult(receipt.expectation) ?? UnmetExpectationResult(
+    ) -> ExpectationResult.Unmet {
+        ExpectationResult.Unmet(receipt.expectation) ?? ExpectationResult.Unmet(
             predicate: step.predicate,
             actual: "initial observation unavailable"
         )
@@ -18,7 +18,7 @@ extension TheBrains.RepeatUntil.Terminal {
 
     internal static func timeoutReason(
         step: ResolvedRepeatUntilStep,
-        expectation: UnmetExpectationResult
+        expectation: ExpectationResult.Unmet
     ) -> String {
         let timeout = String(
             format: "%.1f",

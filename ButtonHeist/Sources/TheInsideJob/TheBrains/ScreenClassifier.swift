@@ -50,6 +50,7 @@ import TheScore
         case landmark
         case dataTable
         case tabBar
+        case series
     }
 
     enum ElementRootShapeRole: Equatable, Hashable {
@@ -186,6 +187,8 @@ import TheScore
             return Marker(label: "scrollable", value: nil, identifier: stableIdentifier(container.identifier))
         case .tabBar:
             return Marker(label: "tabBar", value: nil, identifier: stableIdentifier(container.identifier))
+        case .series:
+            return Marker(label: "series", value: nil, identifier: stableIdentifier(container.identifier))
         }
     }
 
@@ -302,6 +305,8 @@ import TheScore
             return .none
         case .tabBar:
             return .tabBar
+        case .series:
+            return .series
         }
     }
 

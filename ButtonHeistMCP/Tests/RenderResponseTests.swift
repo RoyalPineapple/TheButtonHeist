@@ -60,8 +60,9 @@ struct RenderResponseTests {
                             command: command,
                             dispatchResult: .success(
                                 method: .activate,
-                                accessibilityTrace: trace
-                            )
+                                evidence: ActionResultEvidence(accessibilityTrace: trace)
+                            ),
+                            warning: nil
                         )
                     ),
                 ],

@@ -7,10 +7,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testGroupedEvidenceStoresSettleDurationOnceAndProjectsItToBothPublicFields() {
         let result = ActionResult.success(
             method: .activate,
-            timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+            evidence: ActionResultEvidence(
+                settlement: .settled(durationMs: 125),
+                timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+            )
         )
 
-        XCTAssertEqual(result.evidence.settleTimeMs, 125)
+        XCTAssertEqual(result.evidence.settlement?.durationMs, 125)
         XCTAssertNil(result.evidence.timing?.settleMs)
         XCTAssertEqual(result.settleTimeMs, 125)
         XCTAssertEqual(result.timing?.settleMs, 125)
@@ -20,7 +23,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let trace = traceWithAnnouncement("Checkout")
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
         )
 
         XCTAssertEqual(result.evidence.announcement, "Checkout")
@@ -41,32 +44,30 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8)))
     }
 
-    func testActionResultKeepsGroupedEvidenceFlattenedAtTheExistingJSONBoundary() throws {
+    func testActionResultEncodesOneNestedEvidenceContract() throws {
         let result = ActionResult.success(
             method: .activate,
             message: "done",
-            settled: true,
-            settleTimeMs: 125,
-            timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125),
-            announcement: "Checkout"
+            evidence: ActionResultEvidence(
+                settlement: .settled(durationMs: 125),
+                timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125),
+                announcement: "Checkout"
+            )
         )
 
         let encoded = try JSONEncoder().encode(result)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        let timing = try XCTUnwrap(object["timing"] as? [String: Any])
+        let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
+        let settlement = try XCTUnwrap(evidence["settlement"] as? [String: Any])
+        let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
-        XCTAssertEqual(Set(object.keys), Set([
-            "outcome",
-            "method",
-            "message",
-            "announcement",
-            "settled",
-            "settleTimeMs",
-            "timing",
-        ]))
-        XCTAssertNil(object["evidence"])
-        XCTAssertEqual(object["settleTimeMs"] as? Int, 125)
-        XCTAssertEqual(timing["settleMs"] as? Int, 125)
+        XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
+        XCTAssertNil(object["settled"])
+        XCTAssertNil(object["settleTimeMs"])
+        XCTAssertEqual(settlement["kind"] as? String, "settled")
+        XCTAssertEqual(settlement["durationMs"] as? Int, 125)
+        XCTAssertEqual(timing["actionDispatchMs"] as? Int, 4)
+        XCTAssertNil(timing["settleMs"])
     }
 
     private func traceWithAnnouncement(_ text: String) -> AccessibilityTrace {

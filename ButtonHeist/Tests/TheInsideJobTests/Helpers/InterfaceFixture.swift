@@ -36,7 +36,20 @@ enum TestInterfaceNode {
     }
 
     static func heistElement(_ element: HeistElement) -> TestInterfaceNode {
-        .element(
+        let activationPoint: AccessibilityPoint
+        let usesDefaultActivationPoint: Bool
+        switch element.activationPointEvidence {
+        case .explicit(let point):
+            activationPoint = AccessibilityPoint(x: point.x, y: point.y)
+            usesDefaultActivationPoint = false
+        case .defaultCenter(let point):
+            activationPoint = AccessibilityPoint(x: point.x, y: point.y)
+            usesDefaultActivationPoint = true
+        case .unavailable:
+            activationPoint = AccessibilityPoint(x: .nan, y: .nan)
+            usesDefaultActivationPoint = false
+        }
+        return .element(
             AccessibilityElement(
                 description: element.description,
                 label: element.label,
@@ -51,8 +64,8 @@ enum TestInterfaceNode {
                     width: element.frameWidth,
                     height: element.frameHeight
                 )),
-                activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-                usesDefaultActivationPoint: true,
+                activationPoint: activationPoint,
+                usesDefaultActivationPoint: usesDefaultActivationPoint,
                 customActions: [],
                 customContent: [],
                 customRotors: [],
@@ -188,8 +201,7 @@ func makeTestHeistElement(
     frameY: Double = 0,
     frameWidth: Double = 100,
     frameHeight: Double = 44,
-    activationPointX: Double? = nil,
-    activationPointY: Double? = nil,
+    activationPointEvidence: ActivationPointEvidence? = nil,
     respondsToUserInteraction: Bool = true,
     actions: [ElementAction]? = nil
 ) -> HeistElement {
@@ -204,8 +216,10 @@ func makeTestHeistElement(
         frameY: frameY,
         frameWidth: frameWidth,
         frameHeight: frameHeight,
-        activationPointX: activationPointX,
-        activationPointY: activationPointY,
+        activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
+            x: frameX + (frameWidth / 2),
+            y: frameY + (frameHeight / 2)
+        )),
         respondsToUserInteraction: respondsToUserInteraction,
         actions: actions ?? (traits.contains(.button) ? [.activate] : [])
     )

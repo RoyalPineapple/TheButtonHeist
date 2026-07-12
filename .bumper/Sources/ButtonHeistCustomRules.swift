@@ -214,6 +214,17 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
+    override func visit(_ node: AttributedTypeSyntax) -> SyntaxVisitorContinueKind {
+        recordUncheckedSendableUse(node)
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        recordOwnedPipelineConstruction(node)
+        recordRawNotificationNormalization(node)
+        return .visitChildren
+    }
+
     override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
         let observed = node.baseName.text
         recordJSONBoundaryUse(node, observed: observed)
@@ -453,6 +464,31 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         )
     }
 
+    private func recordUncheckedSendableUse(_ node: AttributedTypeSyntax) {
+        guard !filePath.hasPrefix(insideJobSourcePrefix),
+              node.baseType.as(IdentifierTypeSyntax.self)?.name.text == "Sendable",
+              node.attributes.contains(where: { element in
+                  guard let attribute = element.as(AttributeSyntax.self),
+                        let name = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name else {
+                      return false
+                  }
+                  return name.tokenKind == .keyword(.unchecked)
+              }) else {
+            return
+        }
+
+        failures.append(
+            file.failure(
+                at: node,
+                message: "@unchecked Sendable outside TheInsideJob platform boundary",
+                evidence: ViolationEvidence(
+                    observed: node.trimmedDescription,
+                    expectation: "@unchecked Sendable is allowed only under \(insideJobSourcePrefix)"
+                )
+            )
+        )
+    }
+
     private func recordJSONBoundaryUse(_ node: some SyntaxProtocol, observed: String) {
         guard jsonBoundarySymbols.contains(observed),
               !jsonBoundaryAllowedPaths.contains(filePath) else {
@@ -488,6 +524,45 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 evidence: ViolationEvidence(
                     observed: observed,
                     expectation: "reducers and evaluation pipelines stay pure; boundary code performs effects"
+                )
+            )
+        )
+    }
+
+    private func recordOwnedPipelineConstruction(_ node: FunctionCallExprSyntax) {
+        guard filePath.hasPrefix("ButtonHeist/Sources/"),
+              let ownership = pipelineConstructionOwnership[node.calledExpression.trimmedDescription],
+              !ownership.allowedPaths.contains(filePath) else {
+            return
+        }
+
+        failures.append(
+            file.failure(
+                at: node.calledExpression,
+                message: "pipeline value constructed outside its canonical owner",
+                evidence: ViolationEvidence(
+                    observed: "\(ownership.symbol) in \(filePath)",
+                    expectation: ownership.expectation
+                )
+            )
+        )
+    }
+
+    private func recordRawNotificationNormalization(_ node: FunctionCallExprSyntax) {
+        guard filePath.hasPrefix("ButtonHeist/Sources/"),
+              node.calledExpression.trimmedDescription == "AccessibilityNotificationKind",
+              node.arguments.contains(where: { $0.label?.text == "rawCode" }),
+              filePath != accessibilityNotificationRawCodeOwnerPath else {
+            return
+        }
+
+        failures.append(
+            file.failure(
+                at: node,
+                message: "raw accessibility notification normalized outside Tripwire",
+                evidence: ViolationEvidence(
+                    observed: filePath,
+                    expectation: "raw UIKit notification codes enter through \(accessibilityNotificationRawCodeOwnerPath)"
                 )
             )
         )
@@ -537,6 +612,41 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         )
     }
 }
+
+private struct PipelineConstructionOwnership {
+    let symbol: String
+    let allowedPaths: Set<String>
+    let expectation: String
+}
+
+private let reportPipelineOwnerPath =
+    "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"
+
+private let pipelineConstructionOwnership: [String: PipelineConstructionOwnership] = [
+    "HeistExecutionEvidenceRollup": PipelineConstructionOwnership(
+        symbol: "HeistExecutionEvidenceRollup",
+        allowedPaths: [reportPipelineOwnerPath],
+        expectation: "execution evidence rollup construction stays in \(reportPipelineOwnerPath)"
+    ),
+    "HeistExecutionStepReportFacts": PipelineConstructionOwnership(
+        symbol: "HeistExecutionStepReportFacts",
+        allowedPaths: [reportPipelineOwnerPath],
+        expectation: "step report fact construction stays in \(reportPipelineOwnerPath)"
+    ),
+    "ActionResultEvidence": PipelineConstructionOwnership(
+        symbol: "ActionResultEvidence",
+        allowedPaths: [
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift",
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift",
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+ScreenCapture.swift",
+            "ButtonHeist/Sources/TheScore/Reports/ActionResultPayloads.swift",
+        ],
+        expectation: "action result evidence is assembled only by its value owner or runtime evidence producers"
+    ),
+]
+
+private let accessibilityNotificationRawCodeOwnerPath =
+    "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift"
 
 private func scoreFolderAllowedImports(for path: String) -> Set<String>? {
     if path.hasPrefix("ButtonHeist/Sources/TheScore/Wire/") {
@@ -769,6 +879,8 @@ private let anyBoundaryAllowedPaths: Set<String> = [
     "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift",
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift",
 ]
+
+private let insideJobSourcePrefix = "ButtonHeist/Sources/TheInsideJob/"
 
 private let jsonBoundarySymbols: Set<String> = [
     "JSONDecoder",

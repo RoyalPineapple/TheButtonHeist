@@ -986,7 +986,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
@@ -1011,7 +1010,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
@@ -1042,7 +1040,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
-        XCTAssertNil(receipt.warning)
     }
 
     func testFromToUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
@@ -1076,10 +1073,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(receipt.expectation.met, false)
-        XCTAssertNil(receipt.warning)
     }
 
-    func testDisappearedWaitDoesNotWarnWhenTransitionIsObserved() async throws {
+    func testDisappearedWaitSucceedsWhenTransitionIsObserved() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let loadingScreen = Screen.makeForTests(elements: [
@@ -1103,7 +1099,6 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.expectation.met, true)
-        XCTAssertNil(receipt.warning)
     }
 
     func testPredicatePollingReducerFinishesVisibleMatch() {
@@ -1863,14 +1858,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.screenId, screen.id)
     }
 
-    func testNotificationRemapPreservesUnknownRawCode() throws {
+    func testNotificationRemapPreservesUnknownNotificationKind() throws {
         let screen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(screen)
         let state = brains.postActionObservation.captureSemanticState()
         let notification = AccessibilityNotificationEvidence(
             sequence: 1,
-            kind: .unknown,
-            rawCode: 4_242,
+            kind: .unknown(4_242),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
             associatedElement: .none
@@ -1883,8 +1877,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let result = try XCTUnwrap(remapped.first)
-        XCTAssertEqual(result.kind, .unknown)
-        XCTAssertEqual(result.rawCode, 4_242)
+        XCTAssertEqual(result.kind, .unknown(4_242))
     }
 
     func testDiscoveryObservationStateUsesDiscoveryInterfaceWhileTraceStaysSemantic() {

@@ -209,8 +209,7 @@ struct TestHeistElementBuilder {
     var frameY: Double
     var frameWidth: Double
     var frameHeight: Double
-    var activationPointX: Double?
-    var activationPointY: Double?
+    var activationPointEvidence: ActivationPointEvidence?
     var respondsToUserInteraction: Bool
     var customContent: [HeistCustomContent]?
     var rotors: [HeistRotor]?
@@ -226,8 +225,7 @@ struct TestHeistElementBuilder {
         frameY: Double = 0,
         frameWidth: Double = 100,
         frameHeight: Double = 44,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPointEvidence: ActivationPointEvidence? = nil,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
@@ -243,8 +241,7 @@ struct TestHeistElementBuilder {
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
-        self.activationPointX = activationPointX
-        self.activationPointY = activationPointY
+        self.activationPointEvidence = activationPointEvidence
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
@@ -263,8 +260,10 @@ struct TestHeistElementBuilder {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPointX,
-            activationPointY: activationPointY,
+            activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
+                x: frameX + frameWidth / 2,
+                y: frameY + frameHeight / 2
+            )),
             respondsToUserInteraction: respondsToUserInteraction,
             customContent: customContent,
             rotors: rotors,
@@ -574,13 +573,14 @@ func makeTestHeistActionStep(
             command: command,
             dispatchResult: result,
             expectationResult: expectationActionResult,
-            expectation: expectation
+            expectation: expectation,
+            warning: nil
         )
     } else {
         precondition(expectationActionResult == nil && expectation == nil)
         evidence = command.map {
-            .dispatch(command: $0, dispatchResult: result)
-        } ?? .dispatch(dispatchResult: result)
+            .dispatch(command: $0, dispatchResult: result, warning: nil)
+        } ?? .commandlessDispatch(dispatchResult: result)
     }
 
     guard !result.outcome.isSuccess else {

@@ -9,32 +9,32 @@ import TheScore
         let met = ExpectationResult(met: true, predicate: predicate)
         let unmet = ExpectationResult(met: false, predicate: predicate, actual: "not found")
 
-        switch PredicateExpectationCheck(met) {
+        switch met {
         case .met(let expectation):
             #expect(expectation.result == met)
         case .unmet:
             Issue.record("Expected met predicate check")
         }
 
-        switch PredicateExpectationCheck(unmet) {
+        switch unmet {
         case .met:
             Issue.record("Expected unmet predicate check")
         case .unmet(let expectation):
             #expect(expectation.result == unmet)
         }
 
-        #expect(MetExpectationResult(unmet) == nil)
-        #expect(UnmetExpectationResult(met) == nil)
-        let convertedMet = try #require(MetExpectationResult(met))
-        let convertedUnmet = try #require(UnmetExpectationResult(unmet))
+        #expect(ExpectationResult.Met(unmet) == nil)
+        #expect(ExpectationResult.Unmet(met) == nil)
+        let convertedMet = try #require(ExpectationResult.Met(met))
+        let convertedUnmet = try #require(ExpectationResult.Unmet(unmet))
         #expect(convertedMet.result == met)
         #expect(convertedUnmet.result == unmet)
     }
 
     @Test func `terminal evidence factories return evidence for typed polarity`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let met = try #require(MetExpectationResult(ExpectationResult(met: true, predicate: predicate)))
-        let unmet = try #require(UnmetExpectationResult(ExpectationResult(
+        let met = try #require(ExpectationResult.Met(ExpectationResult(met: true, predicate: predicate)))
+        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
             met: false,
             predicate: predicate,
             actual: "not found"
@@ -102,8 +102,8 @@ import TheScore
 
     @Test func `iteration evidence factories return evidence for typed polarity`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let met = try #require(MetExpectationResult(ExpectationResult(met: true, predicate: predicate)))
-        let unmet = try #require(UnmetExpectationResult(ExpectationResult(
+        let met = try #require(ExpectationResult.Met(ExpectationResult(met: true, predicate: predicate)))
+        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
             met: false,
             predicate: predicate,
             actual: "not found"
@@ -148,7 +148,7 @@ import TheScore
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
-            expectation: MetExpectationResult(predicate: predicate)
+            expectation: ExpectationResult.Met(predicate: predicate)
         )
         var invalidFixture = RepeatUntilEvidenceFixture(evidence)
         invalidFixture.expectation = ExpectationResult(

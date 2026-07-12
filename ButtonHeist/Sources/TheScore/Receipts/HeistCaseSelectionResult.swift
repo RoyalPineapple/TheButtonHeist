@@ -179,48 +179,44 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
 }
 
 public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
-    public let result: ExpectationResult
-    public var predicate: AccessibilityPredicate<RootContext> {
-        guard let predicate = result.predicate else {
-            preconditionFailure("HeistCaseMatchResult requires a predicate")
-        }
-        return predicate
+    public let predicate: AccessibilityPredicate<RootContext>
+    public let met: Bool
+    public let actual: String?
+
+    public var result: ExpectationResult {
+        ExpectationResult(met: met, predicate: predicate, actual: actual)
     }
 
     public init(
         predicate: AccessibilityPredicate<RootContext>,
-        result: ExpectationResult
+        met: Bool,
+        actual: String? = nil
     ) {
-        precondition(
-            result.predicate == Optional(predicate),
-            "HeistCaseMatchResult result predicate must match predicate"
-        )
-        self.result = result
+        self.predicate = predicate
+        self.met = met
+        self.actual = actual
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate
-        case result
+        case met
+        case actual
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case match result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
-        let result = try container.decode(ExpectationResult.self, forKey: .result)
-        guard result.predicate == Optional(predicate) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .result,
-                in: container,
-                debugDescription: "heist case match result predicate must match nested expectation result predicate"
-            )
-        }
-        self.result = result
+        self.init(
+            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            met: try container.decode(Bool.self, forKey: .met),
+            actual: try container.decodeIfPresent(String.self, forKey: .actual)
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(predicate, forKey: .predicate)
-        try container.encode(result, forKey: .result)
+        try container.encode(met, forKey: .met)
+        try container.encodeIfPresent(actual, forKey: .actual)
     }
 }

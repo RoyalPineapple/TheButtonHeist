@@ -27,7 +27,6 @@ extension TheStash {
                 AccessibilityNotificationEvidence(
                     sequence: event.sequence,
                     kind: event.kind,
-                    rawCode: event.rawCode,
                     timestamp: event.timestamp,
                     notificationData: resolveAccessibilityNotificationPayload(
                         event.notificationData,

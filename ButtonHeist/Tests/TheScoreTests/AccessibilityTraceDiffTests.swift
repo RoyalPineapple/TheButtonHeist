@@ -375,7 +375,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
-        let notification = notification(kind: .layoutChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.layout), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -400,7 +400,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testValueChangedNotificationProducesNotificationOnlyElementFactWithoutValueDiff() throws {
-        let notification = notification(kind: .valueChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.value), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -418,7 +418,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
-        let notification = notification(kind: .valueChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.value), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -436,7 +436,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
     }
 
-    func testAnnouncementProducesElementChangeEvidenceForUIKitValueControls() {
+    func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() {
         let notification = notification(kind: .announcement, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
@@ -448,17 +448,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
-            return XCTFail("Expected announcement-backed elementsChanged fact")
-        }
-        XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
+        XCTAssertTrue(AccessibilityTrace.ChangeFact.between(before, after).isEmpty)
     }
 
     func testUIKitValueSignalsAllConfirmChangesByRereadingAccessibilityValue() throws {
         for kind in [
-            AccessibilityNotificationKind.valueChanged,
-            .layoutChanged,
+            AccessibilityNotificationKind.elementChanged(.value),
+            .elementChanged(.layout),
             .announcement,
         ] {
             let evidence = notification(kind: kind, sequence: 1)
@@ -482,7 +478,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
             XCTAssertEqual(update.before.value, "50%", "notification: \(kind)")
             XCTAssertEqual(update.after.value, "75%", "notification: \(kind)")
-            XCTAssertEqual(facts.first?.metadata.accessibilityNotifications, [evidence])
+            let expectedNotifications: [AccessibilityNotificationEvidence]
+            if case .elementChanged = kind {
+                expectedNotifications = [evidence]
+            } else {
+                expectedNotifications = []
+            }
+            XCTAssertEqual(facts.first?.metadata.accessibilityNotifications, expectedNotifications)
         }
     }
 
@@ -553,8 +555,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 0,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 50,
-                activationPointY: 22
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 22))
             ),
         ])
         let afterInterface = makeTestInterface(elements: [
@@ -565,8 +566,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 20,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 60,
-                activationPointY: 42
+                activationPointEvidence: .explicit(ScreenPoint(x: 60, y: 42))
             ),
         ])
         let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
@@ -590,8 +590,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 0,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 50,
-                activationPointY: 22
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 22))
             ),
         ])
         let afterInterface = makeTestInterface(elements: [
@@ -602,8 +601,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 20,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 60,
-                activationPointY: 42
+                activationPointEvidence: .explicit(ScreenPoint(x: 60, y: 42))
             ),
         ])
         let trace = AccessibilityTrace(first: beforeInterface).appending(afterInterface)
@@ -650,7 +648,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             explicitProjection.activationPointEvidence,
             .explicit(ScreenPoint(x: 12, y: 34))
         )
-        XCTAssertEqual(unavailableProjection.activationPointEvidence.source, .unavailable)
+        XCTAssertEqual(unavailableProjection.activationPointEvidence, .unavailable)
         XCTAssertNil(unavailableProjection.activationPointEvidence.point)
         XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
     }
@@ -878,14 +876,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             old: makeElement(
                 label: "Button",
                 traits: [.button],
-                activationPointX: 50,
-                activationPointY: 25
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 25))
             ),
             new: makeElement(
                 label: "Button",
                 traits: [.button],
-                activationPointX: 75,
-                activationPointY: 40
+                activationPointEvidence: .explicit(ScreenPoint(x: 75, y: 40))
             )
         ))
         XCTAssertEqual(activationPoint.oldValue, .activationPoint(ElementPropertyPoint(x: 50, y: 25)))
@@ -943,8 +939,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 100,
         frameHeight: Double = 44,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPointEvidence: ActivationPointEvidence? = nil,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction] = []
@@ -960,8 +955,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPointX,
-            activationPointY: activationPointY,
+            activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
+                x: frameX + frameWidth / 2,
+                y: frameY + frameHeight / 2
+            )),
             customContent: customContent,
             rotors: rotors,
             actions: actions

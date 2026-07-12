@@ -75,7 +75,7 @@ extension FenceResponse {
         let now = Date()
         return announcements.enumerated().map { index, announcement in
             let age = max(0, now.timeIntervalSince(announcement.timestamp))
-            return "[\(index)] \(String(format: "%.1f", age))s ago: \"\(announcement.text)\" (\(announcement.kind.rawValue))"
+            return "[\(index)] \(String(format: "%.1f", age))s ago: \"\(announcement.text)\" (\(announcement.kind))"
         }.joined(separator: "\n")
     }
 
@@ -317,6 +317,8 @@ extension FenceResponse {
             parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
+        case .series:
+            parts = ["series"]
         }
         if let containerName {
             parts.append("containerName: \(containerName)")

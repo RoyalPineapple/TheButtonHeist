@@ -95,6 +95,8 @@ struct PublicContainer: Encodable {
             fields = Fields(type: .none, identifier: container.identifier)
         case .tabBar:
             fields = Fields(type: .tabBar, identifier: container.identifier)
+        case .series:
+            fields = Fields(type: .series, identifier: container.identifier)
         }
 
         if let scrollableContentSize = container.scrollableContentSize {

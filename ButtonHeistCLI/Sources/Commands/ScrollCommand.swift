@@ -2,8 +2,6 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-typealias ScrollSelection = ScrollContainerSelection
-
 struct ScrollSelectionInput: ParsableArguments {
     @OptionGroup var element: AccessibilityTargetOptions
 
@@ -14,7 +12,7 @@ struct ScrollSelectionInput: ParsableArguments {
         _ = try scrollSelection()
     }
 
-    func scrollSelection() throws -> ScrollSelection {
+    func scrollSelection() throws -> ScrollContainerSelection {
         if let containerName {
             guard let containerName = ContainerName(parsing: containerName) else {
                 throw ValidationError("--container-name must not be empty")
@@ -31,7 +29,7 @@ struct ScrollSelectionInput: ParsableArguments {
     }
 }
 
-extension ScrollSelection {
+extension ScrollContainerSelection {
     var cliTarget: AccessibilityTarget? {
         guard case .element(let target) = self else { return nil }
         return target

@@ -87,8 +87,7 @@ final class ElementDiagnosticSummaryTests: XCTestCase {
             frameY: 2,
             frameWidth: 100,
             frameHeight: 44,
-            activationPointX: 51,
-            activationPointY: 24,
+            activationPointEvidence: .explicit(ScreenPoint(x: 51, y: 24)),
             rotors: [HeistRotor(name: "Errors")],
             actions: [.activate]
         )

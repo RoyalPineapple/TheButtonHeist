@@ -31,12 +31,12 @@ extension TheBrains.RepeatUntil {
 
     internal struct MetCheck {
         internal let observation: Observation
-        internal let expectation: MetExpectationResult
+        internal let expectation: ExpectationResult.Met
         internal let receipt: HeistWaitReceipt
 
         internal init(
             observation: Observation,
-            expectation: MetExpectationResult,
+            expectation: ExpectationResult.Met,
             receipt: HeistWaitReceipt
         ) {
             self.observation = observation
@@ -47,12 +47,12 @@ extension TheBrains.RepeatUntil {
 
     internal struct UnmetCheck {
         internal let observation: Observation
-        internal let expectation: UnmetExpectationResult
+        internal let expectation: ExpectationResult.Unmet
         internal let receipt: HeistWaitReceipt
 
         internal init(
             observation: Observation,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             receipt: HeistWaitReceipt
         ) {
             self.observation = observation
@@ -72,14 +72,14 @@ extension TheBrains.RepeatUntil {
             guard let observation = Observation(receipt) else { return nil }
             self.init(
                 observation: observation,
-                check: PredicateExpectationCheck(expectation ?? receipt.expectation),
+                check: expectation ?? receipt.expectation,
                 receipt: receipt
             )
         }
 
         internal init(
             observation: Observation,
-            check: PredicateExpectationCheck,
+            check: ExpectationResult,
             receipt: HeistWaitReceipt
         ) {
             switch check {
@@ -118,10 +118,10 @@ extension TheBrains.RepeatUntil {
     }
 
     internal enum PostBodyCheck {
-        case deadlineElapsed(UnmetExpectationResult)
+        case deadlineElapsed(ExpectationResult.Unmet)
         case changedMet(MetCheck)
         case changedUnmet(UnmetCheck)
-        case noProgress(observation: Observation?, expectation: UnmetExpectationResult, receipt: HeistWaitReceipt)
+        case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, receipt: HeistWaitReceipt)
 
         internal var iterationOutcome: IterationOutcome {
             switch self {
@@ -191,7 +191,7 @@ extension TheBrains {
 
         let remaining = deadline - CFAbsoluteTimeGetCurrent()
         guard remaining > 0 else {
-            return .deadlineElapsed(UnmetExpectationResult(
+            return .deadlineElapsed(ExpectationResult.Unmet(
                 predicate: step.predicate,
                 actual: "repeat_until deadline elapsed"
             ))
@@ -208,16 +208,16 @@ extension TheBrains {
             isComplete: true,
             fallback: receipt.message ?? receipt.expectation.actual
         )
-        let stopCheck = PredicateExpectationCheck(expectation)
+        let stopCheck = expectation
         let observedCheck = RepeatUntil.Observation(receipt).map {
             RepeatUntil.ObservedCheck(observation: $0, check: stopCheck, receipt: receipt)
         }
         guard receipt.succeeded,
               let check = observedCheck else {
-            let noProgressExpectation: UnmetExpectationResult
+            let noProgressExpectation: ExpectationResult.Unmet
             switch stopCheck {
             case .met(let metExpectation):
-                noProgressExpectation = UnmetExpectationResult(
+                noProgressExpectation = ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: receipt.observedSequence == nil
                         ? "repeat_until post-body check matched without settled observation"
@@ -272,7 +272,7 @@ extension TheBrains {
         )
         let check = RepeatUntil.ObservedCheck(
             observation: actionObservation,
-            check: PredicateExpectationCheck(stopExpectation),
+            check: stopExpectation,
             receipt: receipt
         )
         switch check {

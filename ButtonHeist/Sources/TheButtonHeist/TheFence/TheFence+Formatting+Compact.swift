@@ -116,7 +116,7 @@ extension FenceResponse {
         let now = Date()
         return announcements.enumerated().map { index, announcement in
             let age = max(0, now.timeIntervalSince(announcement.timestamp))
-            return "[\(index)] \(String(format: "%.1f", age))s ago \(announcement.kind.rawValue): \"\(announcement.text)\""
+            return "[\(index)] \(String(format: "%.1f", age))s ago \(announcement.kind): \"\(announcement.text)\""
         }.joined(separator: "\n")
     }
 

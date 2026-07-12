@@ -56,7 +56,6 @@ struct HeistWaitReceipt {
         let expectation: ExpectationResult
         let observedSequence: SettledObservationSequence?
         let observationSummary: String?
-        let warning: HeistPredicateWarning?
         let announcement: String?
     }
 
@@ -150,11 +149,6 @@ struct HeistWaitReceipt {
         }
     }
 
-    var warning: HeistPredicateWarning? {
-        guard case .matched(let evidence) = outcome else { return nil }
-        return evidence.warning
-    }
-
     var announcement: String? {
         switch outcome {
         case .matched(let evidence):
@@ -180,7 +174,6 @@ struct HeistWaitReceipt {
         expectation: ExpectationResult,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        warning: HeistPredicateWarning? = nil,
         announcement: String? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(outcome: .matched(MatchedEvidence(
@@ -189,7 +182,6 @@ struct HeistWaitReceipt {
             expectation: expectation,
             observedSequence: observedSequence,
             observationSummary: observationSummary,
-            warning: warning,
             announcement: announcement
         )))
     }
@@ -227,29 +219,30 @@ struct HeistWaitReceipt {
     }
 
     func makeActionResult(method: ActionMethod = .wait) -> ActionResult {
+        let evidence = ActionResultEvidence(
+            accessibilityTrace: accessibilityTrace,
+            announcement: announcement
+        )
         switch status {
         case .matched:
             return ActionResult.success(
                 method: method,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         case .timedOut:
             return ActionResult.failure(
                 method: method,
                 errorKind: .timeout,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         case .failed(let errorKind):
             return ActionResult.failure(
                 method: method,
                 errorKind: errorKind,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         }
     }

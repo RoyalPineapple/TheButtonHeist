@@ -294,7 +294,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                     path: HeistInvocationPath.preconditionValidated(components: invoke.path),
                     argument: invoke.argument
                 ),
-                evidence: .invocation(invoke, name: invoke.path.joined(separator: "."))
+                evidence: .invocation(
+                    invocation: invoke,
+                    name: invoke.path.joined(separator: "."),
+                    argument: nil,
+                    outcome: .completed(expectation: nil)
+                )
             )
         case .warn(let warn):
             return .passed(
@@ -349,9 +354,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 command: action.command,
                 dispatchResult: actionResult,
                 expectationResult: $0.actionResult,
-                expectation: $0.result
+                expectation: $0.result,
+                warning: nil
             )
-        } ?? .dispatch(command: action.command, dispatchResult: actionResult)
+        } ?? .dispatch(command: action.command, dispatchResult: actionResult, warning: nil)
         if let failure {
             return .failed(
                 path: path,
@@ -406,7 +412,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             : nil
         let waitEvidence: HeistWaitEvidence
         if failure == nil {
-            guard let metExpectation = MetExpectationResult(expectation) else {
+            guard let metExpectation = ExpectationResult.Met(expectation) else {
                 preconditionFailure("Passed wait mock fixture requires a met expectation")
             }
             guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
@@ -520,7 +526,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
-                expectation: MetExpectationResult(predicate: predicate)
+                expectation: ExpectationResult.Met(predicate: predicate)
             )
         )
     }
@@ -532,7 +538,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             let predicate = screenPredicate.rootPredicate
             return HeistCaseMatchResult(
                 predicate: predicate,
-                result: ExpectationResult(met: false, predicate: predicate)
+                met: false,
+                actual: nil
             )
         }
     }

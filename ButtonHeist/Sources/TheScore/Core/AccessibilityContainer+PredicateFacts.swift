@@ -68,6 +68,12 @@ public extension AccessibilityContainer {
             value = nil
             rowCount = nil
             columnCount = nil
+        case .series:
+            kind = .series
+            label = nil
+            value = nil
+            rowCount = nil
+            columnCount = nil
         }
         return ContainerPredicateFacts(
             type: kind,

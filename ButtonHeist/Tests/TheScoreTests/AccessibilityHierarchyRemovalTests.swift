@@ -1,5 +1,6 @@
 import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
+import ThePlans
 import XCTest
 @testable import TheScore
 
@@ -90,8 +91,10 @@ final class AccessibilityHierarchyRemovalTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPoint.x,
-            activationPointY: activationPoint.y,
+            activationPointEvidence: .defaultCenter(ScreenPoint(
+                x: activationPoint.x,
+                y: activationPoint.y
+            )),
             actions: [.activate]
         )
     }

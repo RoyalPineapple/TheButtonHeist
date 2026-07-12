@@ -147,7 +147,6 @@ final class InteractionObservation {
             settledObservation: settledResult
         )
         return result.withTiming(ActionPerformanceTiming(
-            settleMs: settledResult.settleTimeMs,
             finalSemanticEvidenceMs: finalSemanticEvidenceMs,
             receiptGenerationMs: elapsedMilliseconds(since: receiptStart)
         ))

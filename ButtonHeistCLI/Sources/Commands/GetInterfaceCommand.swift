@@ -44,7 +44,7 @@ struct InterfaceDiscoveryLimitOptions: ParsableArguments {
     @Option(name: .long, help: "Maximum total page-scroll attempts during interface discovery.")
     var maxScrollsPerDiscovery: Int?
 
-    var parameters: CLIRequestParameters {
+    var parameters: CLIRequestFields {
         CommandArgumentWriter.parameters(
             CommandArgumentWriter.optional(.maxScrollsPerContainer, maxScrollsPerContainer),
             CommandArgumentWriter.optional(.maxScrollsPerDiscovery, maxScrollsPerDiscovery)

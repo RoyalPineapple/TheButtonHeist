@@ -73,8 +73,8 @@ struct HeistActionEvidenceProjection: Sendable {
         self.profile = profile
     }
 
-    var commandName: String? {
-        actionEvidence.command?.wireType.rawValue
+    var command: HeistActionCommandType? {
+        actionEvidence.command?.wireType
     }
 
     var target: AccessibilityTarget? {
@@ -83,9 +83,7 @@ struct HeistActionEvidenceProjection: Sendable {
 
     var evidence: HeistActionResultEvidenceProjection {
         HeistActionResultEvidenceProjection(
-            resultEvidence: actionEvidence.resultEvidence,
-            command: actionEvidence.command,
-            warning: actionEvidence.warning,
+            evidence: actionEvidence,
             profile: profile
         )
     }
@@ -102,39 +100,47 @@ enum HeistActionResultEvidenceProjection: Sendable {
     )
 
     init(
-        resultEvidence: HeistActionEvidence.ResultEvidence,
-        command: HeistActionCommand?,
-        warning: HeistActionWarning?,
+        evidence: HeistActionEvidence,
         profile: ProjectionProfile
     ) {
-        switch resultEvidence {
+        switch evidence {
         case .commandResolutionFailure:
-            self = .commandResolutionFailure(warning: warning)
-        case .dispatch(let evidence):
+            self = .commandResolutionFailure(warning: nil)
+        case .dispatch(let command, let dispatchResult, let warning):
             self = .dispatch(
                 result: ActionProjection(
-                    actionMethod: command.map(ActionMethodProjection.heist) ?? .result(evidence.dispatchResult.method),
-                    result: evidence.dispatchResult,
+                    actionMethod: .heist(command),
+                    result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
                 ),
                 warning: warning
             )
-        case .expectation(let evidence):
+        case .commandlessDispatch(let dispatchResult):
+            self = .dispatch(
+                result: ActionProjection(
+                    actionMethod: .result(dispatchResult.method),
+                    result: dispatchResult,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                warning: nil
+            )
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation, let warning):
             self = .expectation(
                 dispatchResult: ActionProjection(
-                    actionMethod: command.map(ActionMethodProjection.heist) ?? .result(evidence.dispatchResult.method),
-                    result: evidence.dispatchResult,
+                    actionMethod: .heist(command),
+                    result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
                 ),
                 expectationResult: ActionProjection(
-                    actionMethod: .result(evidence.expectationResult.method),
-                    result: evidence.expectationResult,
+                    actionMethod: .result(expectationResult.method),
+                    result: expectationResult,
                     profile: profile,
                     includeOmissions: true
                 ),
-                expectation: ExpectationProjection(result: evidence.expectation),
+                expectation: ExpectationProjection(result: expectation),
                 warning: warning
             )
         }
@@ -147,7 +153,6 @@ struct HeistWaitEvidenceProjection: Sendable {
     let expectation: ExpectationProjection
     let baselineSummary: String?
     let finalSummary: String?
-    let warning: HeistPredicateWarning?
 
     init(evidence: HeistWaitEvidence, profile: ProjectionProfile) {
         outcome = evidence.outcome
@@ -160,7 +165,6 @@ struct HeistWaitEvidenceProjection: Sendable {
         expectation = ExpectationProjection(result: evidence.expectation)
         baselineSummary = evidence.baselineSummary
         finalSummary = evidence.finalSummary
-        warning = evidence.warning
     }
 }
 
@@ -285,7 +289,7 @@ struct HeistInvocationEvidenceProjection: Sendable {
             ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         expectation = evidence.expectation.map { ExpectationProjection(result: $0) }
-        expectationEvidence = evidence.expectationEvidence.map {
+        expectationEvidence = evidence.waitEvidence.map {
             HeistWaitEvidenceProjection(evidence: $0, profile: profile)
         }
     }

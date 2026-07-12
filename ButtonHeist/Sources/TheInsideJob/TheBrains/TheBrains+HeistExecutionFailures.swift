@@ -27,7 +27,7 @@ extension TheBrains {
             : await executeTakeScreenshot(mode: mode)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
-        let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result)
+        let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result, warning: nil)
         return heistActionReceipt(
             path: "\(failedPath).failure.actions[0]",
             durationMs: elapsedMilliseconds(since: start),

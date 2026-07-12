@@ -83,12 +83,11 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public let frameHeight: Double
     /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
     public let activationPointEvidence: ActivationPointEvidence
-    private let unavailableActivationPointFallback: ScreenPoint?
     public var activationPointX: Double {
-        activationPointEvidence.point?.x ?? unavailableActivationPointFallback?.x ?? frameCenter.x
+        activationPointEvidence.point?.x ?? sanitizedDouble(frameX + (frameWidth / 2))
     }
     public var activationPointY: Double {
-        activationPointEvidence.point?.y ?? unavailableActivationPointFallback?.y ?? frameCenter.y
+        activationPointEvidence.point?.y ?? sanitizedDouble(frameY + (frameHeight / 2))
     }
     public let respondsToUserInteraction: Bool
     public let customContent: [HeistCustomContent]?
@@ -106,9 +105,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
-        activationPointEvidence: ActivationPointEvidence? = nil,
+        activationPointEvidence: ActivationPointEvidence = .unavailable,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
@@ -124,34 +121,12 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
-        precondition((activationPointX == nil) == (activationPointY == nil), "activationPointX and activationPointY must be provided together")
-        let fallbackPoint = ScreenPoint(
-            x: sanitizedDouble(activationPointX ?? frameX + (frameWidth / 2)),
-            y: sanitizedDouble(activationPointY ?? frameY + (frameHeight / 2))
-        )
-        let resolvedEvidence: ActivationPointEvidence
-        if let activationPointEvidence {
-            if let point = activationPointEvidence.point,
-               activationPointX != nil,
-               point != fallbackPoint {
-                preconditionFailure("Activation point compatibility coordinates must match activationPointEvidence")
-            }
-            resolvedEvidence = activationPointEvidence
-        } else if let activationPointX, let activationPointY {
-            resolvedEvidence = activationPointX.isFinite && activationPointY.isFinite
-                ? .explicit(ScreenPoint(x: activationPointX, y: activationPointY))
-                : .unavailable
-        } else {
-            resolvedEvidence = .defaultCenter(fallbackPoint)
-        }
-        self.activationPointEvidence = resolvedEvidence
-        self.unavailableActivationPointFallback = resolvedEvidence.point == nil ? fallbackPoint : nil
+        self.activationPointEvidence = activationPointEvidence
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
         self.actions = actions.canonicalElementActionArray
     }
-
 }
 
 public extension HeistElement {
@@ -163,27 +138,23 @@ public extension HeistElement {
             height: frameHeight
         )
     }
-
-    private var frameCenter: ScreenPoint {
-        ScreenPoint(x: frameX + (frameWidth / 2), y: frameY + (frameHeight / 2))
-    }
 }
 
 // MARK: - HeistElement Codable
 
 extension HeistElement {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case description
         case label, value, identifier, hint
         case traits
         case frameX, frameY, frameWidth, frameHeight
-        case activationPointX, activationPointY
         case activationPointEvidence
         case respondsToUserInteraction
         case customContent, rotors, actions
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "HeistElement")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let description = try container.decode(String.self, forKey: .description)
         let label = try container.decodeIfPresent(String.self, forKey: .label)
@@ -195,23 +166,6 @@ extension HeistElement {
         let frameY = try container.decode(Double.self, forKey: .frameY)
         let frameWidth = try container.decode(Double.self, forKey: .frameWidth)
         let frameHeight = try container.decode(Double.self, forKey: .frameHeight)
-        let activationPointX = try container.decode(Double.self, forKey: .activationPointX)
-        let activationPointY = try container.decode(Double.self, forKey: .activationPointY)
-        let activationPointEvidence = try container.decodeIfPresent(
-            ActivationPointEvidence.self,
-            forKey: .activationPointEvidence
-        ) ?? .explicit(ScreenPoint(
-            x: sanitizedDouble(activationPointX),
-            y: sanitizedDouble(activationPointY)
-        ))
-        if let evidencePoint = activationPointEvidence.point,
-           evidencePoint != ScreenPoint(x: activationPointX, y: activationPointY) {
-            throw DecodingError.dataCorruptedError(
-                forKey: .activationPointEvidence,
-                in: container,
-                debugDescription: "activationPointEvidence point must match activationPointX and activationPointY"
-            )
-        }
         self.init(
             description: description,
             label: label,
@@ -223,9 +177,10 @@ extension HeistElement {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPointX,
-            activationPointY: activationPointY,
-            activationPointEvidence: activationPointEvidence,
+            activationPointEvidence: try container.decode(
+                ActivationPointEvidence.self,
+                forKey: .activationPointEvidence
+            ),
             respondsToUserInteraction: try container.decode(Bool.self, forKey: .respondsToUserInteraction),
             customContent: try container.decodeIfPresent([HeistCustomContent].self, forKey: .customContent),
             rotors: try container.decodeIfPresent([HeistRotor].self, forKey: .rotors),
@@ -245,8 +200,6 @@ extension HeistElement {
         try container.encode(frameY, forKey: .frameY)
         try container.encode(frameWidth, forKey: .frameWidth)
         try container.encode(frameHeight, forKey: .frameHeight)
-        try container.encode(activationPointX, forKey: .activationPointX)
-        try container.encode(activationPointY, forKey: .activationPointY)
         try container.encode(activationPointEvidence, forKey: .activationPointEvidence)
         try container.encode(respondsToUserInteraction, forKey: .respondsToUserInteraction)
         try container.encodeIfPresent(customContent, forKey: .customContent)
@@ -279,8 +232,6 @@ public extension HeistElement {
             frameY: sanitizedDouble(frame.origin.y),
             frameWidth: sanitizedDouble(frame.size.width),
             frameHeight: sanitizedDouble(frame.size.height),
-            activationPointX: activationPoint.point?.x,
-            activationPointY: activationPoint.point?.y,
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {

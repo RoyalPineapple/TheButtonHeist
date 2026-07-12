@@ -47,8 +47,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence.invocation(
-                context.invoke,
-                name: context.requestedName
+                invocation: context.invoke,
+                name: context.requestedName,
+                argument: nil,
+                outcome: .completed(expectation: nil)
             )),
             failure: HeistFailureDetail(
                 category: .invocation,
@@ -67,8 +69,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence.invocation(
-                context.invoke,
-                name: context.requestedName
+                invocation: context.invoke,
+                name: context.requestedName,
+                argument: nil,
+                outcome: .completed(expectation: nil)
             )),
             failure: HeistFailureDetail(
                 category: .invocation,
@@ -89,8 +93,10 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence.invocation(
-                context.invoke,
-                name: context.requestedName
+                invocation: context.invoke,
+                name: context.requestedName,
+                argument: nil,
+                outcome: .completed(expectation: nil)
             )),
             failure: HeistFailureDetail(
                 category: .validation,
@@ -121,13 +127,13 @@ extension TheBrains {
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence.invocation(
-                context.invoke,
+                invocation: context.invoke,
                 name: context.requestedName,
                 argument: context.argumentSummary,
-                expectation: .init(
+                outcome: .completed(expectation: .result(
                     actionResult: expectationActionResult,
                     expectation: expectationResult
-                )
+                ))
             )),
             failure: HeistFailureDetail(
                 category: .expectation,
@@ -148,18 +154,16 @@ extension TheBrains {
             invocationExpectationEvidence(receipt: $0, context: expectationContext)
         }
         let invocationExpectation = expectationEvidence.map {
-            HeistInvocationEvidence.InvocationExpectationEvidence(
-                actionResult: $0.actionResult,
-                expectation: $0.expectation,
-                waitEvidence: $0
-            )
+            HeistInvocationEvidence.InvocationExpectationEvidence.wait($0)
         }
+        let outcome: HeistInvocationEvidence.InvocationOutcome = childExecution.abortedAtChildPath.map {
+            .childFailed(path: $0)
+        } ?? .completed(expectation: invocationExpectation)
         let evidence = HeistInvocationEvidence.invocation(
-            context.invoke,
+            invocation: context.invoke,
             name: context.requestedName,
             argument: context.argumentSummary,
-            childFailedPath: childExecution.abortedAtChildPath,
-            expectation: invocationExpectation
+            outcome: outcome
         )
         let failure: HeistFailureDetail? = switch expectationOutcome {
         case .notEvaluated, .matched:
@@ -185,7 +189,7 @@ extension TheBrains {
         context: InvocationExpectationContext?
     ) -> HeistWaitEvidence {
         let finalSummary = receipt.observationSummary ?? receipt.expectation.actual
-        if let expectation = MetExpectationResult(receipt.expectation),
+        if let expectation = ExpectationResult.Met(receipt.expectation),
            let check = HeistWaitEvidence.MatchedCheck(
                actionResult: receipt.actionResult,
                expectation: expectation
@@ -193,8 +197,7 @@ extension TheBrains {
             return .matched(
                 check,
                 baselineSummary: context?.baseline.observationSummary,
-                finalSummary: finalSummary,
-                warning: receipt.warning
+                finalSummary: finalSummary
             )
         }
         guard let check = HeistWaitEvidence.UnmatchedCheck(
@@ -206,8 +209,7 @@ extension TheBrains {
         return .failed(
             check,
             baselineSummary: context?.baseline.observationSummary,
-            finalSummary: finalSummary,
-            warning: receipt.warning
+            finalSummary: finalSummary
         )
     }
 

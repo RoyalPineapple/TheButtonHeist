@@ -6,8 +6,8 @@ import TheScore
 @Suite struct HeistWaitEvidenceFactoryTests {
     @Test func `wait evidence factories bind outcome to result polarity`() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let met = MetExpectationResult(predicate: predicate)
-        let unmet = UnmetExpectationResult(predicate: predicate, actual: "not found")
+        let met = ExpectationResult.Met(predicate: predicate)
+        let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
         let success = ActionResult.success(method: .wait)
         let timeout = ActionResult.failure(method: .wait, errorKind: .timeout)
 
@@ -43,7 +43,7 @@ import TheScore
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(method: .wait),
-            expectation: MetExpectationResult(predicate: predicate)
+            expectation: ExpectationResult.Met(predicate: predicate)
         ))
         let evidence = HeistWaitEvidence.matched(check)
         var invalidFixture = WaitEvidenceFixture(evidence)
@@ -63,7 +63,7 @@ import TheScore
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.UnmatchedCheck(
             actionResult: .success(method: .wait),
-            expectation: .unmet(UnmetExpectationResult(predicate: predicate, actual: "not found"))
+            expectation: .unmet(ExpectationResult.Unmet(predicate: predicate, actual: "not found"))
         ))
         var invalidFixture = WaitEvidenceFixture(HeistWaitEvidence.failed(check))
         invalidFixture.outcome = .continued
@@ -71,6 +71,26 @@ import TheScore
 
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(HeistWaitEvidence.self, from: invalidData)
+        }
+    }
+
+    @Test func `decode rejects legacy wait warning`() throws {
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let check = try #require(HeistWaitEvidence.MatchedCheck(
+            actionResult: .success(method: .wait),
+            expectation: ExpectationResult.Met(predicate: predicate)
+        ))
+        let encoded = try JSONEncoder().encode(HeistWaitEvidence.matched(check))
+        var legacyObject = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacyObject["warning"] = [
+            "code": "transition_not_observed_final_state_satisfied",
+            "predicate": predicate.description,
+            "message": "final state was already satisfied",
+        ]
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistWaitEvidence.self, from: legacyData)
         }
     }
 }
@@ -81,7 +101,6 @@ private struct WaitEvidenceFixture: Codable {
     var expectation: ExpectationResult
     var baselineSummary: String?
     var finalSummary: String?
-    var warning: HeistPredicateWarning?
 
     init(_ evidence: HeistWaitEvidence) {
         outcome = evidence.outcome
@@ -89,6 +108,5 @@ private struct WaitEvidenceFixture: Codable {
         expectation = evidence.expectation
         baselineSummary = evidence.baselineSummary
         finalSummary = evidence.finalSummary
-        warning = evidence.warning
     }
 }

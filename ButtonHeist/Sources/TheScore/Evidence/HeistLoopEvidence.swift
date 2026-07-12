@@ -275,21 +275,21 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     private enum Storage: Sendable, Equatable {
         case matched(
             iterationOrdinal: Int?,
-            expectation: MetExpectationResult,
+            expectation: ExpectationResult.Met,
             actionResult: ActionResult?
         )
         case continued(
             iterationOrdinal: Int,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             actionResult: ActionResult?
         )
         case handledElse(
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             failureReason: String?
         )
         case failed(
             iterationOrdinal: Int?,
-            expectation: UnmetExpectationResult,
+            expectation: ExpectationResult.Unmet,
             failureReason: String
         )
     }
@@ -370,7 +370,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
-        expectation: MetExpectationResult,
+        expectation: ExpectationResult.Met,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
@@ -392,7 +392,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
@@ -413,7 +413,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
@@ -434,7 +434,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
@@ -454,7 +454,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public static func initialObservationUnavailable(
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
@@ -476,7 +476,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
@@ -497,7 +497,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String? = nil
     ) -> HeistRepeatUntilEvidence {
@@ -517,7 +517,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
-        expectation: UnmetExpectationResult,
+        expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
@@ -596,7 +596,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String?,
         codingPath: [CodingKey]
     ) throws -> Storage {
-        switch (outcome, PredicateExpectationCheck(expectation)) {
+        switch (outcome, expectation) {
         case (.matched, .met(let expectation)) where failureReason == nil:
             return .matched(
                 iterationOrdinal: iterationOrdinal,

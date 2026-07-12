@@ -103,10 +103,10 @@ struct HeistReportNodeProjection: Sendable {
     private var results: HeistExecutionStepReportResults { report.results }
 
     var path: String { report.path }
-    var kind: String { report.kind }
+    var kind: HeistExecutionStepKind { report.kind }
     var capability: String? { report.capabilityName }
-    var displayName: String { report.displayName }
-    var commandName: String? { report.commandName }
+    var invocationDisplayName: String? { report.invocationDisplayName }
+    var command: HeistActionCommandType? { report.command }
     var target: AccessibilityTarget? { report.target }
     var status: HeistExecutionStepStatus { report.status }
     var message: String? { report.message }

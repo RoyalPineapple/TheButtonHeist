@@ -46,10 +46,10 @@ final class TheTripwire {
     }
 
     static var singleTickSettleTimeout: TimeInterval {
-        InsideJobRuntimeKnobs.current.singleTripwireTickSettleTimeout
+        ButtonHeistRuntimeKnobs.current.singleTripwireTickSettleTimeout
     }
 
-    static func pulseFrameRateRange(knobs: InsideJobRuntimeKnobs) -> CAFrameRateRange {
+    static func pulseFrameRateRange(knobs: ButtonHeistRuntimeKnobs) -> CAFrameRateRange {
         let preferred = knobs.tripwirePulseFramesPerSecond
         let minimum = max(1, Int((Double(preferred) * 0.8).rounded(.down)))
         let maximum = max(preferred, Int((Double(preferred) * 1.2).rounded(.up)))

@@ -303,11 +303,14 @@ final class ServerMessageTests: XCTestCase {
             element: element,
             settledObservationSequence: 12
         )
-        let result = ActionResult.success(method: .activate, subjectEvidence: evidence)
+        let result = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultEvidence(subjectEvidence: evidence)
+        )
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
-        let subjectEvidence = try json.object("subjectEvidence")
+        let subjectEvidence = try json.object("evidence").object("subjectEvidence")
         XCTAssertEqual(try subjectEvidence.string("source"), "resolvedSemanticTarget")
         XCTAssertEqual(try subjectEvidence.string("phase"), "resolvedBeforeDispatch")
         XCTAssertEqual(try subjectEvidence.int("settledObservationSequence"), 12)
@@ -342,8 +345,7 @@ final class ServerMessageTests: XCTestCase {
             "frameY": 0,
             "frameWidth": 100,
             "frameHeight": 44,
-            "activationPointX": 50,
-            "activationPointY": 22,
+            "activationPointEvidence": {"source": "unavailable"},
             "respondsToUserInteraction": true,
             "actions": ["activate"]
           },
@@ -412,13 +414,13 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
         )
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
 
-        _ = try json.object("accessibilityTrace")
+        _ = try json.object("evidence").object("accessibilityTrace")
     }
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
@@ -442,7 +444,7 @@ final class ServerMessageTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
         )
 
         XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
@@ -458,7 +460,7 @@ final class ServerMessageTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
         )
 
         let data = try JSONEncoder().encode(result)
@@ -476,7 +478,7 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult.success(
             method: .activate,
-            accessibilityTrace: trace
+            evidence: ActionResultEvidence(accessibilityTrace: trace)
         )
 
         XCTAssertNil(result.accessibilityTrace?.endpointScreenName)
@@ -680,8 +682,7 @@ final class ServerMessageTests: XCTestCase {
             frameY: 700,
             frameWidth: 160,
             frameHeight: 48,
-            activationPointX: 100,
-            activationPointY: 724,
+            activationPointEvidence: .explicit(ScreenPoint(x: 100, y: 724)),
             actions: [.activate]
         )
         let payload = ScreenPayload(
@@ -715,7 +716,11 @@ final class ServerMessageTests: XCTestCase {
     private struct StoredActionResultScreenContextFixture: Encodable {
         let outcome = ActionResultOutcome.success
         let method = ActionMethod.activate
-        let accessibilityTrace: AccessibilityTrace
+        let evidence: ActionResultEvidence
+
+        init(accessibilityTrace: AccessibilityTrace) {
+            evidence = ActionResultEvidence(accessibilityTrace: accessibilityTrace)
+        }
     }
 
     private func interfaceWithHeader(

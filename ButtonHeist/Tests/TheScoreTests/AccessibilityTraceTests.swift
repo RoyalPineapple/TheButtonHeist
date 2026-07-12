@@ -116,8 +116,7 @@ final class AccessibilityTraceTests: XCTestCase {
             frameY: .infinity,
             frameWidth: -.infinity,
             frameHeight: 44,
-            activationPointX: .nan,
-            activationPointY: .infinity,
+            activationPointEvidence: .unavailable,
             actions: [.activate]
         )
         let interface = makeTestInterface(elements: [element])
@@ -177,7 +176,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let notifications = [
             AccessibilityNotificationEvidence(
                 sequence: 7,
-                kind: .layoutChanged,
+                kind: .elementChanged(.layout),
                 timestamp: Date(timeIntervalSince1970: 7),
                 notificationData: .unresolvedObject(AccessibilityNotificationObjectPayload(
                     className: "UICollectionView",
@@ -210,12 +209,18 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(decoded.transition.accessibilityNotifications, notifications)
         XCTAssertEqual(
             decoded.transition.accessibilityNotifications.map(\.kind),
-            [.layoutChanged, .screenChanged]
+            [.elementChanged(.layout), .screenChanged]
         )
     }
 
-    func testNotificationEvidenceNamesLayoutChangedInSwiftButKeepsLegacyWireSpelling() throws {
-        let notifications = AccessibilityNotificationKind.allCases.enumerated().map { offset, kind in
+    func testNotificationEvidenceUsesCanonicalNestedIdentity() throws {
+        let kinds: [AccessibilityNotificationKind] = [
+            .screenChanged,
+            .elementChanged(.layout),
+            .elementChanged(.value),
+            .announcement,
+        ]
+        let notifications = kinds.enumerated().map { offset, kind in
             AccessibilityNotificationEvidence(
                 sequence: UInt64(offset + 1),
                 kind: kind,
@@ -229,20 +234,22 @@ final class AccessibilityTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode([AccessibilityNotificationEvidence].self, from: data)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
 
-        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .layoutChanged, .valueChanged, .announcement])
+        XCTAssertEqual(decoded.map(\.kind), kinds)
         XCTAssertEqual(
-            json.compactMap { $0["kind"] as? String },
-            ["screenChanged", "elementChanged", "valueChanged", "announcement"]
+            json.compactMap { ($0["kind"] as? [String: Any])?["type"] as? String },
+            ["screenChanged", "elementChanged", "elementChanged", "announcement"]
         )
-        XCTAssertTrue(json.allSatisfy { $0["code"] == nil })
-        XCTAssertTrue(json.allSatisfy { $0["name"] == nil })
+        XCTAssertEqual(
+            json.compactMap { ($0["kind"] as? [String: Any])?["notification"] as? String },
+            ["layout", "value"]
+        )
+        XCTAssertTrue(json.allSatisfy { $0["rawCode"] == nil })
     }
 
     func testUnknownNotificationEvidencePreservesRawCodeAndPayload() throws {
         let notification = AccessibilityNotificationEvidence(
             sequence: 9,
-            kind: .unknown,
-            rawCode: 4002,
+            kind: .unknown(4002),
             timestamp: Date(timeIntervalSince1970: 9),
             notificationData: .string("private notification"),
             associatedElement: .unresolvedObject(AccessibilityNotificationObjectPayload(
@@ -255,8 +262,10 @@ final class AccessibilityTraceTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let decoded = try JSONDecoder().decode(AccessibilityNotificationEvidence.self, from: data)
 
-        XCTAssertEqual(json["kind"] as? String, "unknown")
-        XCTAssertEqual(json["rawCode"] as? Int, 4002)
+        let kind = try XCTUnwrap(json["kind"] as? [String: Any])
+        XCTAssertEqual(kind["type"] as? String, "unknown")
+        XCTAssertEqual(kind["rawCode"] as? Int, 4002)
+        XCTAssertNil(json["rawCode"])
         XCTAssertEqual(decoded, notification)
     }
 
@@ -378,7 +387,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: interface)
         let notification = AccessibilityNotificationEvidence(
             sequence: 1,
-            kind: .layoutChanged,
+            kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 1),
             notificationData: .none,
             associatedElement: .none

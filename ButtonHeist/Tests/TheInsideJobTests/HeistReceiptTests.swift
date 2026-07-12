@@ -146,15 +146,16 @@ final class HeistReceiptTests: XCTestCase {
     private func receiptActionEvidence(success: Bool = true) -> HeistActionEvidence {
         let result: ActionResult
         if success {
-            result = ActionResult.success(method: .activate)
+            result = ActionResult.success(method: .activate, evidence: ActionResultEvidence())
         } else {
             result = ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
-                message: "failed"
+                message: "failed",
+                evidence: ActionResultEvidence()
             )
         }
-        return .dispatch(dispatchResult: result)
+        return .commandlessDispatch(dispatchResult: result)
     }
 
     private func receiptFailure(observed: String) -> HeistFailureDetail {
@@ -391,7 +392,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment)
+            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -428,7 +429,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment)
+            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -538,7 +539,11 @@ final class HeistReceiptTests: XCTestCase {
                     intent: .action(command: .takeScreenshot),
                     evidence: .dispatch(
                         command: .takeScreenshot,
-                        dispatchResult: ActionResult.success(payload: .screenshot(screenshot))
+                        dispatchResult: ActionResult.success(
+                            payload: .screenshot(screenshot),
+                            evidence: ActionResultEvidence()
+                        ),
+                        warning: nil
                     )
                 ),
             ],

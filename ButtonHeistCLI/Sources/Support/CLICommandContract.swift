@@ -86,39 +86,36 @@ struct CLIRequestFields: Equatable {
     }
 }
 
-typealias CLIRequestParameters = CLIRequestFields
-typealias CLIRequestObject = CLIRequestFields
-
 enum CommandArgumentWriter {
     struct Field: Equatable {
         let key: FenceParameterKey
         let value: HeistValue
     }
 
-    static func parameters(_ fields: Field?...) -> CLIRequestParameters {
+    static func parameters(_ fields: Field?...) -> CLIRequestFields {
         parameters(fields)
     }
 
-    static func parameters(_ fields: [Field]) -> CLIRequestParameters {
+    static func parameters(_ fields: [Field]) -> CLIRequestFields {
         parameters(fields.map(Optional.some))
     }
 
-    static func parameters(_ fields: [Field?]) -> CLIRequestParameters {
-        CLIRequestParameters(fields.compactMap { field in
+    static func parameters(_ fields: [Field?]) -> CLIRequestFields {
+        CLIRequestFields(fields.compactMap { field in
             field.map { ($0.key, $0.value) }
         })
     }
 
-    static func object(_ fields: Field?...) -> CLIRequestObject {
+    static func object(_ fields: Field?...) -> CLIRequestFields {
         object(fields)
     }
 
-    static func object(_ fields: [Field]) -> CLIRequestObject {
+    static func object(_ fields: [Field]) -> CLIRequestFields {
         object(fields.map(Optional.some))
     }
 
-    static func object(_ fields: [Field?]) -> CLIRequestObject {
-        CLIRequestObject(fields.compactMap { field in
+    static func object(_ fields: [Field?]) -> CLIRequestFields {
+        CLIRequestFields(fields.compactMap { field in
             field.map { ($0.key, $0.value) }
         })
     }
@@ -127,7 +124,7 @@ enum CommandArgumentWriter {
         Field(key: key, value: value)
     }
 
-    static func value(_ key: FenceParameterKey, _ value: CLIRequestObject) -> Field {
+    static func value(_ key: FenceParameterKey, _ value: CLIRequestFields) -> Field {
         self.value(key, value.heistValue)
     }
 
@@ -159,7 +156,7 @@ enum CommandArgumentWriter {
         value.map { self.value(key, $0) }
     }
 
-    static func optional(_ key: FenceParameterKey, _ value: CLIRequestObject?) -> Field? {
+    static func optional(_ key: FenceParameterKey, _ value: CLIRequestFields?) -> Field? {
         value.map { self.value(key, $0) }
     }
 
@@ -307,7 +304,7 @@ extension CLICommandContract {
     }
 
     static func fenceArguments(
-        _ parameters: CLIRequestParameters = CLIRequestParameters(),
+        _ parameters: CLIRequestFields = CLIRequestFields(),
         target: AccessibilityTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         CLIRequestBuilder.arguments(parameters: parameters, target: target)

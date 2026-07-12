@@ -67,7 +67,7 @@ extension HeistDoctor {
             changeFacts: trace.changeFacts,
             actionResult: dispatchResult,
             actionEvidence: actionEvidence,
-            expectation: actionEvidence.expectation
+            expectation: actionEvidence.checkedExpectation
         )
     }
 
@@ -81,7 +81,7 @@ extension HeistDoctor {
     ) -> String? {
         step.failure?.observed
             ?? evidence.reportedResult?.message
-            ?? evidence.expectation?.actual
+            ?? evidence.checkedExpectation?.actual
     }
 }
 

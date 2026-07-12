@@ -338,6 +338,7 @@ private enum StableCaptureContainerType: Codable {
     case landmark
     case dataTable(rowCount: Int, columnCount: Int)
     case tabBar
+    case series
     case scrollable
 
     init(_ type: AccessibilityContainer.ContainerType) {
@@ -354,6 +355,8 @@ private enum StableCaptureContainerType: Codable {
             self = .dataTable(rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
             self = .tabBar
+        case .series:
+            self = .series
         case .scrollable:
             self = .scrollable
         }

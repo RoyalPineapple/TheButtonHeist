@@ -7,7 +7,7 @@ struct GetAnnouncementsCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "Read recent accessibility announcements",
         discussion: """
             Read recent spoken accessibility text captured from announcement,
-            layoutChanged, or screenChanged notifications.
+            elementChanged, or screenChanged notifications.
 
             Examples:
               buttonheist get_announcements

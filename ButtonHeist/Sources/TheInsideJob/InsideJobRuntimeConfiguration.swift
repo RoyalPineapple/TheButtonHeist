@@ -128,8 +128,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     }
 }
 
-typealias InsideJobRuntimeKnobs = ButtonHeistRuntimeKnobs
-
 struct InsideJobSessionIdentity: Equatable, Sendable {
     let sessionId: UUID
     let installationId: String
