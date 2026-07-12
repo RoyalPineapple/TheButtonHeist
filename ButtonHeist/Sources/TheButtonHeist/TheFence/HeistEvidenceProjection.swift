@@ -40,17 +40,27 @@ enum HeistReportEvidenceProjection: Sendable {
 }
 
 struct HeistActionEvidenceProjection: Sendable {
-    let commandName: String?
-    let target: ElementTarget?
-    let evidence: HeistActionResultEvidenceProjection
+    private let actionEvidence: HeistActionEvidence
+    private let profile: ProjectionProfile
 
     init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
-        commandName = evidence.command?.wireType.rawValue
-        target = evidence.command?.reportTarget
-        self.evidence = HeistActionResultEvidenceProjection(
-            resultEvidence: evidence.resultEvidence,
-            command: evidence.command,
-            warning: evidence.warning,
+        actionEvidence = evidence
+        self.profile = profile
+    }
+
+    var commandName: String? {
+        actionEvidence.command?.wireType.rawValue
+    }
+
+    var target: ElementTarget? {
+        actionEvidence.command?.reportTarget
+    }
+
+    var evidence: HeistActionResultEvidenceProjection {
+        HeistActionResultEvidenceProjection(
+            resultEvidence: actionEvidence.resultEvidence,
+            command: actionEvidence.command,
+            warning: actionEvidence.warning,
             profile: profile
         )
     }

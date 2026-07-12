@@ -18,8 +18,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             self.path = path
         }
 
-        init(sample: PublicHeistReportMetricSampleDTO) {
-            self.init(name: sample.name, valueMs: sample.valueMs, path: sample.path)
+        init(sample: HeistExecutionMetricSample) {
+            self.init(name: sample.name.rawValue, valueMs: sample.valueMs, path: sample.path)
         }
     }
 
@@ -345,56 +345,52 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let compact = response.compactFormatted()
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
+        let report = try publicHeistReportJSON(response)
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        let action = try node.object("evidence").object("action")
+        let actionResult = try action.object("result")
+        let delta = try actionResult.object("delta")
 
-        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+        try assertPublicHeistSummary(
+            report.object("summary"),
             executedTopLevelStepCount: 1,
             executedNodeCount: 1,
             outputReceiptNodeCount: 1,
             durationMs: 8,
             abortedAtPath: nil
-        ))
-        XCTAssertEqual(report.nodes, [
-            PublicHeistReportNodeDTO(
-                path: "$.body[0]",
-                kind: "action",
-                status: "passed",
-                durationMs: 1,
-                evidence: PublicHeistReportEvidenceDTO(action: PublicHeistActionEvidenceDTO(
-                    commandName: "activate",
-                    result: PublicHeistActionResultDTO(
-                        status: "ok",
-                        method: "activate",
-                        screenId: "screen",
-                        delta: PublicHeistDeltaDTO(
-                            kind: "elementsChanged",
-                            elementCount: 4,
-                            interactionDigest: PublicHeistInteractionDigestDTO(
-                                elementCountBefore: 3,
-                                elementCountAfter: 4,
-                                elementCountChanged: true,
-                                elementSetChanged: true,
-                                screenIdBefore: "screen",
-                                screenIdAfter: "screen",
-                                screenIdChanged: false,
-                                firstResponderChanged: false
-                            ),
-                            edits: PublicHeistElementEditsDTO(added: [
-                                PublicHeistElementDTO(
-                                    traits: ["staticText"],
-                                    label: "Lazy Row",
-                                    value: "Loaded by scroll",
-                                    identifier: "lazy_row"
-                                ),
-                            ])
-                        ),
-                        omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
-                    )
-                ))
-            ),
-        ])
-        XCTAssertFalse(node.containsKey("action"))
+        )
+        XCTAssertEqual(try node.string("path"), "$.body[0]")
+        XCTAssertEqual(try node.string("kind"), "action")
+        XCTAssertEqual(try node.string("status"), "passed")
+        XCTAssertEqual(try node.int("durationMs"), 1)
+        XCTAssertEqual(try action.string("commandName"), "activate")
+        XCTAssertEqual(try actionResult.string("status"), "ok")
+        XCTAssertEqual(try actionResult.string("method"), "activate")
+        XCTAssertEqual(try actionResult.string("screenId"), "screen")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(try delta.int("elementCount"), 4)
+        try assertPublicInteractionDigest(
+            delta.object("interactionDigest"),
+            elementCountBefore: 3,
+            elementCountAfter: 4,
+            elementCountChanged: true,
+            elementSetChanged: true,
+            screenIdBefore: "screen",
+            screenIdAfter: "screen",
+            screenIdChanged: false,
+            firstResponderChanged: false
+        )
+        let added = try delta.object("edits").array("added")
+        XCTAssertEqual(added.count, 1)
+        try assertPublicElement(
+            try XCTUnwrap(added.first),
+            traits: ["staticText"],
+            label: "Lazy Row",
+            value: "Loaded by scroll",
+            identifier: "lazy_row"
+        )
+        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
+        try node.assertMissing("action")
         XCTAssertTrue(compact.contains("-> elements changed"), compact)
         XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
     }
@@ -427,61 +423,49 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
-        let action = try XCTUnwrap(node.evidence?.action)
-        let actionResult = try XCTUnwrap(action.result)
-        let delta = try XCTUnwrap(actionResult.delta)
         let json = try publicJSONProbe(response)
+        let report = try json.object("report")
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        let actionResult = try node.object("evidence").object("action").object("result")
+        let delta = try actionResult.object("delta")
+        let edits = try delta.object("edits")
+        let added = try edits.array("added")
+        let omitted = try edits.object("omitted")
 
-        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
-            status: "ok",
-            method: "activate",
-            screenId: "screen",
-            delta: PublicHeistDeltaDTO(
-                kind: "elementsChanged",
-                elementCount: 8,
-                interactionDigest: PublicHeistInteractionDigestDTO(
-                    elementCountBefore: 0,
-                    elementCountAfter: 8,
-                    elementCountChanged: true,
-                    elementSetChanged: true,
-                    screenIdBefore: "screen",
-                    screenIdAfter: "screen",
-                    screenIdChanged: false,
-                    firstResponderChanged: false
-                ),
-                edits: PublicHeistElementEditsDTO(
-                    added: (0..<5).map { index in
-                        PublicHeistElementDTO(
-                            traits: ["staticText"],
-                            label: "Lazy Row \(index)",
-                            value: "Loaded \(index)",
-                            identifier: "lazy_row_\(index)"
-                        )
-                    },
-                    omitted: PublicHeistElementEditOmissionsDTO(
-                        added: 3,
-                        addedKeys: [
-                            "identifier:lazy_row_5",
-                            "identifier:lazy_row_6",
-                            "identifier:lazy_row_7",
-                        ]
-                    )
-                )
-            ),
-            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
-        ))
-        XCTAssertFalse(node.containsKey("action"))
-        XCTAssertFalse(delta.containsKey("newInterface"))
-        XCTAssertEqual(
-            actionResult.omitted?.accessibilityTrace,
-            PublicHeistProjectionOmissionDTO(
-                reason: "raw accessibility trace omitted from public heist report",
-                projectedAs: "delta",
-                omittedCount: 2
-            )
+        XCTAssertEqual(try actionResult.string("status"), "ok")
+        XCTAssertEqual(try actionResult.string("method"), "activate")
+        XCTAssertEqual(try actionResult.string("screenId"), "screen")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(try delta.int("elementCount"), 8)
+        try assertPublicInteractionDigest(
+            delta.object("interactionDigest"),
+            elementCountBefore: 0,
+            elementCountAfter: 8,
+            elementCountChanged: true,
+            elementSetChanged: true,
+            screenIdBefore: "screen",
+            screenIdAfter: "screen",
+            screenIdChanged: false,
+            firstResponderChanged: false
         )
+        XCTAssertEqual(added.count, 5)
+        for index in 0..<5 {
+            try assertPublicElement(
+                added[index],
+                traits: ["staticText"],
+                label: "Lazy Row \(index)",
+                value: "Loaded \(index)",
+                identifier: "lazy_row_\(index)"
+            )
+        }
+        XCTAssertEqual(try omitted.int("added"), 3)
+        XCTAssertEqual(
+            try omitted.strings("addedKeys"),
+            ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
+        )
+        try node.assertMissing("action")
+        try delta.assertMissing("newInterface")
+        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
         try json.assertRecursivelyMissingKeys(["captures"])
     }
 
@@ -514,45 +498,44 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
-        let actionResult = try XCTUnwrap(node.evidence?.action?.result)
-        let delta = try XCTUnwrap(actionResult.delta)
         let json = try publicJSONProbe(response)
+        let report = try json.object("report")
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        let actionResult = try node.object("evidence").object("action").object("result")
+        let delta = try actionResult.object("delta")
+        let screen = try delta.object("screen")
+        let elements = try screen.array("elements")
 
-        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
-            status: "ok",
-            method: "activate",
-            screenId: "checkout",
-            delta: PublicHeistDeltaDTO(
-                kind: "screenChanged",
-                elementCount: 8,
-                interactionDigest: PublicHeistInteractionDigestDTO(
-                    elementCountBefore: 0,
-                    elementCountAfter: 8,
-                    elementCountChanged: true,
-                    elementSetChanged: true,
-                    screenIdBefore: "before",
-                    screenIdAfter: "checkout",
-                    screenIdChanged: true,
-                    firstResponderChanged: false
-                ),
-                screen: PublicHeistScreenDTO(
-                    elementCount: 8,
-                    elements: (0..<5).map { index in
-                        PublicHeistElementDTO(
-                            traits: ["staticText"],
-                            label: "Checkout Row \(index)",
-                            identifier: "checkout_row_\(index)"
-                        )
-                    },
-                    omittedElementCount: 3
-                )
-            ),
-            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
-        ))
-        XCTAssertFalse(node.containsKey("action"))
-        XCTAssertFalse(delta.containsKey("newInterface"))
+        XCTAssertEqual(try actionResult.string("status"), "ok")
+        XCTAssertEqual(try actionResult.string("method"), "activate")
+        XCTAssertEqual(try actionResult.string("screenId"), "checkout")
+        XCTAssertEqual(try delta.string("kind"), "screenChanged")
+        XCTAssertEqual(try delta.int("elementCount"), 8)
+        try assertPublicInteractionDigest(
+            delta.object("interactionDigest"),
+            elementCountBefore: 0,
+            elementCountAfter: 8,
+            elementCountChanged: true,
+            elementSetChanged: true,
+            screenIdBefore: "before",
+            screenIdAfter: "checkout",
+            screenIdChanged: true,
+            firstResponderChanged: false
+        )
+        XCTAssertEqual(try screen.int("elementCount"), 8)
+        XCTAssertEqual(elements.count, 5)
+        for index in 0..<5 {
+            try assertPublicElement(
+                elements[index],
+                traits: ["staticText"],
+                label: "Checkout Row \(index)",
+                identifier: "checkout_row_\(index)"
+            )
+        }
+        XCTAssertEqual(try screen.int("omittedElementCount"), 3)
+        try assertAccessibilityTraceProjectedAsDelta(actionResult, omittedCount: 2)
+        try node.assertMissing("action")
+        try delta.assertMissing("newInterface")
         try json.assertRecursivelyMissingKeys(["tree", "captures"])
     }
 
@@ -736,17 +719,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let json = try publicJSONProbe(response)
-        let report = try publicHeistReportResponseDTO(response).report
+        let report = try json.object("report")
         let reportExpectations = try json.object("report").object("summary").object("expectations")
 
         try assertHeistReportRootOmitsSummaryDuplicates(json)
-        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+        try assertPublicHeistSummary(
+            report.object("summary"),
             executedTopLevelStepCount: 2,
             executedNodeCount: 2,
             outputReceiptNodeCount: 2,
             durationMs: 5,
             abortedAtPath: nil
-        ))
+        )
         XCTAssertEqual(try reportExpectations.int("checked"), 1)
         XCTAssertEqual(try reportExpectations.int("met"), 1)
         XCTAssertTrue(response.compactFormatted().contains("heist: 2 top-level steps in 5ms"))
@@ -782,9 +766,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             durationMs: 12
         )
 
-        let metrics = try publicHeistReportResponseDTO(
+        let metrics = try publicHeistReportJSON(
             FenceResponse.heistExecution(plan: plan, result: result)
-        ).report.metrics
+        ).object("metrics").decode(HeistExecutionMetricProjection.self)
 
         XCTAssertEqual(metrics.samples.map(MetricSampleExpectation.init(sample:)), [
             MetricSampleExpectation(name: "heistDurationMs", valueMs: 12, path: nil),
@@ -843,13 +827,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
 
         let json = try publicJSONProbe(response)
-        let report = try publicHeistReportResponseDTO(response).report
         let reportProbe = try json.object("report")
         let netDeltaProbe = try reportProbe.object("netDelta")
 
         try assertHeistReportRootOmitsSummaryDuplicates(json)
-        XCTAssertEqual(report.netDelta?.kind, "elementsChanged")
-        XCTAssertEqual(report.netDelta?.elementCount, 2)
         XCTAssertEqual(try netDeltaProbe.string("kind"), "elementsChanged")
         XCTAssertEqual(try netDeltaProbe.int("elementCount"), 2)
     }
@@ -881,15 +862,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let json = try publicJSONProbe(response)
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
+        let node = try XCTUnwrap(try json.object("report").array("nodes").first)
 
         XCTAssertEqual(try json.string("status"), "partial")
         try json.assertMissing("results")
-        XCTAssertEqual(node.path, "$.body[0]")
-        XCTAssertEqual(node.kind, "fail")
-        XCTAssertEqual(node.status, "failed")
-        XCTAssertEqual(node.message, "Unknown screen")
+        XCTAssertEqual(try node.string("path"), "$.body[0]")
+        XCTAssertEqual(try node.string("kind"), "fail")
+        XCTAssertEqual(try node.string("status"), "failed")
+        XCTAssertEqual(try node.string("message"), "Unknown screen")
     }
 
     func testAbortedHeistOutputCountsOnlyReceiptNodes() throws {
@@ -924,20 +904,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let json = try publicJSONProbe(response)
-        let report = try publicHeistReportResponseDTO(response).report
+        let report = try json.object("report")
+        let nodes = try report.array("nodes")
         let compact = response.compactFormatted()
 
         try assertHeistReportRootOmitsSummaryDuplicates(json)
-        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+        try assertPublicHeistSummary(
+            report.object("summary"),
             executedTopLevelStepCount: 2,
             executedNodeCount: 2,
             outputReceiptNodeCount: 3,
             durationMs: 2,
             abortedAtPath: "$.body[1]"
-        ))
-        XCTAssertEqual(report.nodes.count, 3)
-        XCTAssertEqual(report.nodes.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
-        XCTAssertEqual(report.nodes.map(\.status), ["passed", "failed", "skipped"])
+        )
+        XCTAssertEqual(nodes.count, 3)
+        XCTAssertEqual(try nodes.map { try $0.string("path") }, ["$.body[0]", "$.body[1]", "$.body[2]"])
+        XCTAssertEqual(try nodes.map { try $0.string("status") }, ["passed", "failed", "skipped"])
         XCTAssertTrue(compact.contains("heist: 2 top-level steps"), compact)
         XCTAssertTrue(compact.contains("[0] warn -> warning: before"), compact)
         XCTAssertTrue(compact.contains("[2] warn -> skipped"), compact)
@@ -1153,8 +1135,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let json = try publicJSONProbe(response)
-        let report = try publicHeistReportResponseDTO(response).report
-        let root = try XCTUnwrap(report.nodes.first)
+        let report = try json.object("report")
         let nodeProbes = try json.object("report").array("nodes")
         let rootProbe = try XCTUnwrap(nodeProbes.first)
         let evidence = try rootProbe.object("evidence")
@@ -1162,14 +1143,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let compact = response.compactFormatted()
 
         try assertHeistReportRootOmitsSummaryDuplicates(json)
-        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+        try assertPublicHeistSummary(
+            report.object("summary"),
             executedTopLevelStepCount: 1,
             executedNodeCount: 5,
             outputReceiptNodeCount: 5,
             durationMs: 30,
             abortedAtPath: failedActionPath
-        ))
-        XCTAssertEqual(root.kind, "for_each_string")
+        )
+        XCTAssertEqual(try rootProbe.string("kind"), "for_each_string")
         try evidence.assertPresent("forEachString")
         XCTAssertEqual(try rootProbe.string("abortedAtChildPath"), failedActionPath)
         XCTAssertEqual(try children.map { try $0.string("kind") }, ["for_each_iteration", "for_each_iteration"])

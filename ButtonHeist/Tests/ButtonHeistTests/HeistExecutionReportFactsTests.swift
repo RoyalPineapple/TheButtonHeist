@@ -966,11 +966,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 plan: plan,
                 result: HeistExecutionResult(steps: [testCase.step], durationMs: testCase.step.durationMs)
             )
-            let report = try publicHeistReportResponseDTO(response).report
-            let reportNode = try XCTUnwrap(report.nodes.first, testCase.name)
-            let evidence = try XCTUnwrap(reportNode.evidence, testCase.name)
+            let report = try publicHeistReportJSON(response)
+            let reportNode = try XCTUnwrap(try report.array("nodes").first, testCase.name)
+            let evidence = try reportNode.object("evidence")
 
-            XCTAssertEqual(evidence.encodedVariantKeys, Set([testCase.expectedKey]), testCase.name)
+            XCTAssertEqual(try evidenceVariantKeys(evidence), Set([testCase.expectedKey]), testCase.name)
             try testCase.assertEvidence(evidence)
         }
     }
@@ -1011,8 +1011,16 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         name: String,
         step: HeistExecutionStepResult,
         expectedKey: String,
-        assertEvidence: (PublicHeistReportEvidenceDTO) throws -> Void
+        assertEvidence: (JSONProbe) throws -> Void
     )
+
+    private func evidenceVariantKeys(_ evidence: JSONProbe) throws -> Set<String> {
+        guard case .object(let object) = try evidence.decode(JSONValue.self) else {
+            XCTFail("Expected evidence object")
+            return []
+        }
+        return Set(object.keys)
+    }
 
     private func evidenceProjectionCases() -> [EvidenceProjectionCase] {
         [
@@ -1048,12 +1056,18 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "action",
             assertEvidence: { evidence in
-                let action = try XCTUnwrap(evidence.action)
-                XCTAssertEqual(action.commandName, "activate")
-                XCTAssertNotNil(action.result)
-                XCTAssertEqual(action.warning?.code, HeistActionWarning.activationWeakAffordanceEvidenceCode)
-                XCTAssertEqual(action.warning?.evidence, #"label="Button" traits=[staticText] actions=[activate]"#)
-                XCTAssertNil(evidence.warning)
+                let action = try evidence.object("action")
+                XCTAssertEqual(try action.string("commandName"), "activate")
+                try action.assertPresent("result")
+                XCTAssertEqual(
+                    try action.object("warning").string("code"),
+                    HeistActionWarning.activationWeakAffordanceEvidenceCode
+                )
+                XCTAssertEqual(
+                    try action.object("warning").string("evidence"),
+                    #"label="Button" traits=[staticText] actions=[activate]"#
+                )
+                try evidence.assertMissing("warning")
             }
         )
     }
@@ -1072,10 +1086,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "wait",
             assertEvidence: { evidence in
-                let wait = try XCTUnwrap(evidence.wait)
-                XCTAssertEqual(wait.result.method, "wait")
-                XCTAssertEqual(wait.expectation.met, true)
-                XCTAssertEqual(wait.warning?.code, "transition_not_observed_final_state_satisfied")
+                let wait = try evidence.object("wait")
+                XCTAssertEqual(try wait.object("result").string("method"), "wait")
+                XCTAssertEqual(try wait.object("expectation").bool("met"), true)
+                XCTAssertEqual(
+                    try wait.object("warning").string("code"),
+                    "transition_not_observed_final_state_satisfied"
+                )
             }
         )
     }
@@ -1094,10 +1111,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "caseSelection",
             assertEvidence: { evidence in
-                let caseSelection = try XCTUnwrap(evidence.caseSelection)
-                XCTAssertEqual(caseSelection.caseCount, 1)
-                let cases = try XCTUnwrap(caseSelection.cases)
-                XCTAssertEqual(cases.count, 1)
+                let caseSelection = try evidence.object("caseSelection")
+                XCTAssertEqual(try caseSelection.int("caseCount"), 1)
+                XCTAssertEqual(try caseSelection.array("cases").count, 1)
             }
         )
     }
@@ -1120,9 +1136,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "forEachString",
             assertEvidence: { evidence in
-                let forEachString = try XCTUnwrap(evidence.forEachString)
-                XCTAssertEqual(forEachString.parameter, "item")
-                XCTAssertEqual(forEachString.value, "Milk")
+                let forEachString = try evidence.object("forEachString")
+                XCTAssertEqual(try forEachString.string("parameter"), "item")
+                XCTAssertEqual(try forEachString.string("value"), "Milk")
             }
         )
     }
@@ -1148,10 +1164,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "forEachElement",
             assertEvidence: { evidence in
-                let forEachElement = try XCTUnwrap(evidence.forEachElement)
-                XCTAssertEqual(forEachElement.parameter, "row")
-                XCTAssertEqual(forEachElement.matchedCount, 2)
-                XCTAssertEqual(forEachElement.targetSummary, "\"Row\" staticText")
+                let forEachElement = try evidence.object("forEachElement")
+                XCTAssertEqual(try forEachElement.string("parameter"), "row")
+                XCTAssertEqual(try forEachElement.int("matchedCount"), 2)
+                XCTAssertEqual(try forEachElement.string("targetSummary"), "\"Row\" staticText")
             }
         )
     }
@@ -1176,10 +1192,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "repeatUntil",
             assertEvidence: { evidence in
-                let repeatUntil = try XCTUnwrap(evidence.repeatUntil)
-                XCTAssertEqual(repeatUntil.timeout, 2.0)
-                XCTAssertEqual(repeatUntil.iterationCount, 1)
-                XCTAssertEqual(repeatUntil.lastObservedSummary, "Ready")
+                let repeatUntil = try evidence.object("repeatUntil")
+                XCTAssertEqual(try repeatUntil.double("timeout"), 2.0)
+                XCTAssertEqual(try repeatUntil.int("iterationCount"), 1)
+                XCTAssertEqual(try repeatUntil.string("lastObservedSummary"), "Ready")
             }
         )
     }
@@ -1196,8 +1212,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "invocation",
             assertEvidence: { evidence in
-                let invocation = try XCTUnwrap(evidence.invocation)
-                XCTAssertEqual(invocation.name, "Nested")
+                let invocation = try evidence.object("invocation")
+                XCTAssertEqual(try invocation.string("name"), "Nested")
             }
         )
     }
@@ -1240,13 +1256,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ),
             expectedKey: "invocation",
             assertEvidence: { evidence in
-                let invocation = try XCTUnwrap(evidence.invocation)
-                XCTAssertEqual(invocation.capability, "LibraryScreen.addToCart")
-                XCTAssertEqual(invocation.argument, "Milk")
-                XCTAssertEqual(invocation.expectationEvidence?.outcome, "matched")
-                XCTAssertEqual(invocation.expectationEvidence?.result.method, "wait")
-                XCTAssertEqual(invocation.expectationEvidence?.baselineSummary, "before addToCart")
-                XCTAssertEqual(invocation.expectationEvidence?.finalSummary, "Ready")
+                let invocation = try evidence.object("invocation")
+                let expectationEvidence = try invocation.object("expectationEvidence")
+                XCTAssertEqual(try invocation.string("capability"), "LibraryScreen.addToCart")
+                XCTAssertEqual(try invocation.string("argument"), "Milk")
+                XCTAssertEqual(try expectationEvidence.string("outcome"), "matched")
+                XCTAssertEqual(try expectationEvidence.object("result").string("method"), "wait")
+                XCTAssertEqual(try expectationEvidence.string("baselineSummary"), "before addToCart")
+                XCTAssertEqual(try expectationEvidence.string("finalSummary"), "Ready")
             }
         )
     }
@@ -1257,9 +1274,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             step: warnStep(message: "Heads up"),
             expectedKey: "warning",
             assertEvidence: { evidence in
-                let warning = try XCTUnwrap(evidence.warning)
-                XCTAssertEqual(warning.path, "$.body[0]")
-                XCTAssertEqual(warning.message, "Heads up")
+                let warning = try evidence.object("warning")
+                XCTAssertEqual(try warning.string("path"), "$.body[0]")
+                XCTAssertEqual(try warning.string("message"), "Heads up")
             }
         )
     }

@@ -1102,12 +1102,10 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")
-        let report = try publicHeistReportResponseDTO(response).report
-        let firstNode = try XCTUnwrap(report.nodes.first)
-        XCTAssertEqual(firstNode.kind, "action")
-        XCTAssertFalse(firstNode.containsKey("action"))
-        let evidence = try XCTUnwrap(firstNode.evidence)
-        XCTAssertNotNil(evidence.action)
+        let firstNode = try XCTUnwrap(try json.object("report").array("nodes").first)
+        XCTAssertEqual(try firstNode.string("kind"), "action")
+        try firstNode.assertMissing("action")
+        try firstNode.object("evidence").assertPresent("action")
     }
 
     @ButtonHeistActor
