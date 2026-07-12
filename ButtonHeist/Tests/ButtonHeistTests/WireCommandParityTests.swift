@@ -226,6 +226,83 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testEveryPublicCommandRejectsUnknownParametersAtRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+        let unknownKey = "__unknown_parameter__"
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            var arguments = sampleArguments(for: descriptor.command)
+            arguments[unknownKey] = .bool(true)
+
+            XCTAssertThrowsError(
+                try fence.admit(FenceCommandInput(
+                    command: descriptor.command,
+                    arguments: .init(values: arguments)
+                )),
+                descriptor.command.rawValue
+            ) { error in
+                XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryProjectedDefaultIsAcceptedOmittedAndExplicitly() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                guard let defaultValue = parameter.defaultValue else { continue }
+                var omittedArguments = sampleArguments(for: descriptor.command)
+                omittedArguments.removeValue(forKey: parameter.key)
+                var explicitArguments = omittedArguments
+                explicitArguments[parameter.key] = defaultValue
+
+                XCTAssertNoThrow(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: omittedArguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key) omitted"
+                )
+                XCTAssertNoThrow(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: explicitArguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key) explicit"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryCommandWithAccessibilityTargetSchemaRejectsMalformedNestedTarget() async throws {
+        let (fence, _) = makeConnectedFence()
+        let cases = try malformedNestedTargets().flatMap(nestedTargetMutationCases)
+        let commandsWithTargetSchema = Set(
+            TheFence.Command.descriptors
+                .filter { $0.parameters.contains(where: containsAccessibilityTargetSchema) }
+                .map(\.command)
+        )
+
+        XCTAssertEqual(Set(cases.map(\.command)), commandsWithTargetSchema)
+
+        for mutation in cases {
+            XCTAssertThrowsError(
+                try fence.admit(FenceCommandInput(
+                    command: mutation.command,
+                    arguments: .init(values: mutation.arguments)
+                )),
+                mutation.command.rawValue
+            ) { error in
+                let field = (error as? SchemaValidationError)?.field
+                XCTAssertTrue(field?.contains("target") == true, "\(mutation.command.rawValue): \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testCLIAndMCPRoutesExecuteTheSameAdmission() async throws {
         let (fence, _) = makeConnectedFence()
 
@@ -252,44 +329,42 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCLIAndMCPRoutesShareAdmissionFailures() async throws {
+    func testCLIAndMCPRoutesDeferEveryUnknownParameterFailureToAdmission() async throws {
         let (fence, _) = makeConnectedFence()
-        let invalidMode = HeistValue.string("invalid-mode")
-        let mcpInput = try TheFence.Command.routeToolRequest(
-            named: TheFence.Command.getScreen.rawValue,
-            arguments: .init(values: [FenceParameterKey.mode.rawValue: invalidMode])
-        ).get()
-        let cliInput = try TheFence.Command.routeCLICommandEnvelope(
-            .init(values: [
-                FenceParameterKey.command.rawValue: .string(TheFence.Command.getScreen.rawValue),
-                FenceParameterKey.mode.rawValue: invalidMode,
-            ]),
-            context: "test"
-        ).get()
+        let unknownKey = "__unknown_parameter__"
 
-        for input in [mcpInput, cliInput] {
-            XCTAssertThrowsError(try fence.admit(input)) { error in
-                XCTAssertEqual((error as? SchemaValidationError)?.field, FenceParameterKey.mode.rawValue)
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            var values = sampleArguments(for: descriptor.command)
+            values[unknownKey] = .bool(true)
+            var routedInputs: [FenceCommandInput] = []
+
+            if descriptor.mcpExposure == .directTool {
+                routedInputs.append(try TheFence.Command.routeToolRequest(
+                    named: descriptor.command.rawValue,
+                    arguments: .init(values: values)
+                ).get())
+            }
+            if descriptor.cliExposure == .directCommand {
+                values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                    .init(values: values),
+                    context: "test"
+                ).get())
+            }
+
+            XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+            for input in routedInputs {
+                XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                    XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
+                }
             }
         }
     }
 
     @ButtonHeistActor
-    func testAdmissionRejectsUnknownMalformedAndMissingFields() async throws {
+    func testAdmissionRejectsMalformedMetadataAndSemanticRequirements() async throws {
         let (fence, _) = makeConnectedFence()
 
-        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
-            command: .ping,
-            arguments: .init(values: ["unknown": .bool(true)])
-        ))) { error in
-            XCTAssertEqual((error as? SchemaValidationError)?.field, "unknown")
-        }
-        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
-            command: .typeText,
-            arguments: .init(values: ["text": .int(7)])
-        ))) { error in
-            XCTAssertEqual((error as? SchemaValidationError)?.field, "text")
-        }
         XCTAssertThrowsError(try fence.admit(FenceCommandInput(
             command: .ping,
             arguments: .init(values: ["requestId": .int(7)])
@@ -502,6 +577,107 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
+    private func nestedTargetMutationCases(_ malformedTarget: HeistValue) -> [NestedTargetMutationCase] {
+        let expectation = HeistValue.object([
+            "type": .string("exists"),
+            "target": malformedTarget,
+        ])
+        let plan = HeistValue.string("""
+            HeistPlan("entry") {
+                Warn("ready")
+            }
+            """)
+
+        return [
+            NestedTargetMutationCase(command: .getInterface, arguments: ["subtree": malformedTarget]),
+            NestedTargetMutationCase(command: .wait, arguments: [
+                "predicate": expectation,
+            ]),
+            NestedTargetMutationCase(command: .oneFingerTap, arguments: ["element": malformedTarget]),
+            NestedTargetMutationCase(command: .longPress, arguments: ["element": malformedTarget]),
+            NestedTargetMutationCase(command: .swipe, arguments: [
+                "elementDirection": .object([
+                    "element": malformedTarget,
+                    "direction": .string(SwipeDirection.left.rawValue),
+                ]),
+            ]),
+            NestedTargetMutationCase(command: .drag, arguments: [
+                "elementToPoint": .object([
+                    "element": malformedTarget,
+                    "end": .object(["x": .double(120), "y": .double(240)]),
+                ]),
+            ]),
+            NestedTargetMutationCase(command: .scroll, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .scrollToVisible, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .scrollToEdge, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .activate, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .rotor, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .typeText, arguments: [
+                "target": malformedTarget,
+                "text": .string("hello"),
+            ]),
+            NestedTargetMutationCase(command: .editAction, arguments: [
+                "action": .string(EditAction.paste.rawValue),
+                "expect": expectation,
+            ]),
+            NestedTargetMutationCase(command: .setPasteboard, arguments: [
+                "text": .string("clipboard"),
+                "expect": expectation,
+            ]),
+            NestedTargetMutationCase(command: .dismissKeyboard, arguments: ["expect": expectation]),
+            NestedTargetMutationCase(command: .runHeist, arguments: [
+                "argument": .object([
+                    "type": .string(HeistParameterKind.accessibilityTarget.rawValue),
+                    "target": malformedTarget,
+                ]),
+                "plan": plan,
+            ]),
+        ]
+    }
+
+    private func malformedNestedTargets() throws -> [HeistValue] {
+        let target = AccessibilityTarget.within(
+            container: .identifier("container"),
+            .identifier("target")
+        )
+        guard case .object(let root) = try TheFence.HeistValuePayloadEncoder.encode(target),
+              case .object(let nested)? = root["target"],
+              case .array(let checks)? = nested["checks"],
+              case .object(let firstCheck)? = checks.first else {
+            XCTFail("Canonical scoped target must encode a nested target check")
+            return [.object([:])]
+        }
+
+        var missingRequiredCheck = firstCheck
+        missingRequiredCheck.removeValue(forKey: "kind")
+        var invalidEnumCheck = firstCheck
+        invalidEnumCheck["kind"] = .string("__invalid_enum_value__")
+        var unknownKeyTarget = nested
+        unknownKeyTarget["__unknown_parameter__"] = .bool(true)
+        var wrongTypeTarget = nested
+        wrongTypeTarget["ordinal"] = .string("wrong type")
+
+        return [
+            nested.merging(["checks": .array([.object(missingRequiredCheck)])]) { _, new in new },
+            nested.merging(["checks": .array([.object(invalidEnumCheck)])]) { _, new in new },
+            unknownKeyTarget,
+            wrongTypeTarget,
+        ].map { nestedTarget in
+            var scopedTarget = root
+            scopedTarget["target"] = .object(nestedTarget)
+            return .object(scopedTarget)
+        }
+    }
+
+    private func containsAccessibilityTargetSchema(_ parameter: FenceParameterSpec) -> Bool {
+        let targetKeys = Set(["checks", "ref", "ordinal", "container", "target"])
+        if parameter.objectPropertyKeys == targetKeys {
+            return true
+        }
+        return parameter.objectProperties.contains(where: containsAccessibilityTargetSchema)
+            || parameter.arrayItemProperties.contains(where: containsAccessibilityTargetSchema)
+    }
+
     private func sampleClientMessages() throws -> [ClientMessage] {
         return [
             .clientHello,
@@ -566,4 +742,9 @@ final class WireCommandParityTests: XCTestCase {
 
 private struct EncodedClientType: Decodable {
     let type: ClientWireMessageType
+}
+
+private struct NestedTargetMutationCase {
+    let command: TheFence.Command
+    let arguments: [String: HeistValue]
 }
