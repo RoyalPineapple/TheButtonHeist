@@ -524,6 +524,52 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
     }
 }
 
+/// Observation evidence attached to one action result.
+///
+/// Keeping post-action fields together gives construction and validation one
+/// owner. The public JSON encoder still flattens these fields at its existing
+/// action-result boundary.
+public struct ActionResultEvidence: Codable, Sendable, Equatable {
+    public let accessibilityTrace: AccessibilityTrace?
+    public let settled: Bool?
+    public let settleTimeMs: Int?
+    public let subjectEvidence: ActionSubjectEvidence?
+    public let activationTrace: ActivationTrace?
+    public let timing: ActionPerformanceTiming?
+    public let announcement: String?
+
+    public init(
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil,
+        announcement: String? = nil
+    ) {
+        if let settleTimeMs, let timingSettleMs = timing?.settleMs {
+            precondition(
+                settleTimeMs == timingSettleMs,
+                "settleTimeMs must match timing.settleMs"
+            )
+        }
+        let traceAnnouncement = accessibilityTrace?.capturedAnnouncements.first
+        if let announcement, let traceAnnouncement {
+            precondition(
+                announcement == traceAnnouncement.text,
+                "announcement must match accessibilityTrace captured announcement"
+            )
+        }
+        self.accessibilityTrace = accessibilityTrace
+        self.settled = settled
+        self.settleTimeMs = settleTimeMs
+        self.subjectEvidence = subjectEvidence
+        self.activationTrace = activationTrace
+        self.timing = timing
+        self.announcement = traceAnnouncement?.text ?? announcement
+    }
+}
+
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     // MARK: - Nested Types
@@ -581,34 +627,33 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// Explicit mechanical tap commands report the mechanical tap method.
     public var method: ActionMethod { methodAndPayload.method }
     public let message: String?
-    /// First spoken accessibility text observed during this action, sourced
-    /// from string payloads on announcement, element-changed, or screen-changed notifications.
-    private let legacyAnnouncement: String?
-    public var announcement: String? { capturedAnnouncement?.text ?? legacyAnnouncement }
-    public let capturedAnnouncement: CapturedAnnouncement?
+    public let evidence: ActionResultEvidence
+    public var announcement: String? { evidence.announcement }
+    public var capturedAnnouncement: CapturedAnnouncement? {
+        evidence.accessibilityTrace?.capturedAnnouncements.first
+    }
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload? { methodAndPayload.resultPayload }
     /// Source-of-truth accessibility capture receipt for this action.
-    public let accessibilityTrace: AccessibilityTrace?
+    public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
     /// endpoint delta projection may not be a final state.
-    public let settled: Bool?
+    public var settled: Bool? { evidence.settled }
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
-    private let settlementDurationMs: Int?
-    public var settleTimeMs: Int? { settlementDurationMs }
+    public var settleTimeMs: Int? { evidence.settleTimeMs }
     /// Semantic subject the runtime resolved before dispatching the action.
-    public let subjectEvidence: ActionSubjectEvidence?
+    public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
-    public let activationTrace: ActivationTrace?
+    public var activationTrace: ActivationTrace? { evidence.activationTrace }
     /// Optional measured durations for the local observed action pipeline.
-    private let performanceTiming: ActionPerformanceTiming?
+    private var performanceTiming: ActionPerformanceTiming? { evidence.timing }
     public var timing: ActionPerformanceTiming? {
-        performanceTiming?.replacingSettleMs(settlementDurationMs)
+        performanceTiming?.replacingSettleMs(evidence.settleTimeMs)
     }
 
     // MARK: - Init
@@ -779,30 +824,18 @@ public struct ActionResult: Codable, Sendable, Equatable {
         timing: ActionPerformanceTiming? = nil,
         announcement: String? = nil
     ) {
-        if let settleTimeMs, let timingSettleMs = timing?.settleMs {
-            precondition(
-                settleTimeMs == timingSettleMs,
-                "settleTimeMs must match timing.settleMs"
-            )
-        }
-        let traceAnnouncement = accessibilityTrace?.capturedAnnouncements.first
-        if let announcement, let traceAnnouncement {
-            precondition(
-                announcement == traceAnnouncement.text,
-                "announcement must match accessibilityTrace captured announcement"
-            )
-        }
         self.outcome = outcome
         self.methodAndPayload = methodAndPayload
         self.message = message
-        self.capturedAnnouncement = traceAnnouncement
-        self.legacyAnnouncement = traceAnnouncement == nil ? announcement : nil
-        self.accessibilityTrace = accessibilityTrace
-        self.settled = settled
-        self.settlementDurationMs = timing?.settleMs ?? settleTimeMs
-        self.subjectEvidence = subjectEvidence
-        self.activationTrace = activationTrace
-        self.performanceTiming = timing?.replacingSettleMs(nil)
+        self.evidence = ActionResultEvidence(
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs ?? timing?.settleMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing?.replacingSettleMs(nil),
+            announcement: announcement
+        )
     }
 
     // MARK: - Coding

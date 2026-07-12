@@ -82,6 +82,13 @@ enum SettleLoopYieldFailure: Equatable, Sendable {
     case error
 }
 
+/// The settle loop has one reducer and one runner. This policy only selects
+/// the stability proof and sampling cadence used by that runner.
+enum SettlePolicy: Equatable, Sendable {
+    case consecutiveCycles(required: Int)
+    case quietWindow(milliseconds: Int)
+}
+
 struct SettleObservationSample: Equatable, Sendable {
     let fingerprint: Int
 }
@@ -91,18 +98,19 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
         case consecutiveCycles(ConsecutiveCycleState)
         case quietWindow(QuietWindowState)
 
-        init(consecutiveCyclesRequired required: Int, tripwireBaseline: TheTripwire.TripwireSignal) {
-            self = .consecutiveCycles(ConsecutiveCycleState(
-                required: required,
-                progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
-            ))
-        }
-
-        init(quietWindowMilliseconds milliseconds: Int, tripwireBaseline: TheTripwire.TripwireSignal) {
-            self = .quietWindow(QuietWindowState(
-                milliseconds: milliseconds,
-                progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
-            ))
+        init(policy: SettlePolicy, tripwireBaseline: TheTripwire.TripwireSignal) {
+            switch policy {
+            case .consecutiveCycles(let required):
+                self = .consecutiveCycles(ConsecutiveCycleState(
+                    required: required,
+                    progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
+                ))
+            case .quietWindow(let milliseconds):
+                self = .quietWindow(QuietWindowState(
+                    milliseconds: milliseconds,
+                    progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
+                ))
+            }
         }
 
         var events: [SettleEvent] {
@@ -312,10 +320,10 @@ where State == SettleLoopMachine.State,
 /// changing, regardless of ongoing visual motion (analog clocks, animated
 /// gradients, Lottie loops).
 ///
-/// **Settle signal boundary.** SettleSession is the legacy fixed-cadence AX
-/// quiet loop for passive observation. Active heists/actions use
-/// `SemanticQuietSettleSession` below, which watches the same AX semantics
-/// through the Stash parser at frame cadence. `TheTripwire.waitForAllClear`
+/// **Settle signal boundary.** SettleSession watches settled AX semantics for
+/// both passive observation and active heists. Its policy selects consecutive
+/// fingerprint cycles or a quiet wall-clock window; the reducer and runner are
+/// shared. `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
 /// state. `SettleSwipeLoopState` (Navigation.swift) is also AX-tree driven
@@ -369,13 +377,31 @@ where State == SettleLoopMachine.State,
     typealias ParseProvider = @MainActor () -> Screen?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async throws -> Void
+    typealias ObservationYield = @MainActor () async throws -> Void
+    typealias Clock = @MainActor () -> CFAbsoluteTime
 
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
-    let sleeper: Sleeper
-    let cyclesRequired: Int
-    let cycleIntervalMs: Int
+    let observationYield: ObservationYield
+    let policy: SettlePolicy
+    let clock: Clock
     let timeoutMs: Int
+
+    private init(
+        parseProvider: @escaping ParseProvider,
+        tripwireSignalProvider: @escaping TripwireSignalProvider,
+        observationYield: @escaping ObservationYield,
+        policy: SettlePolicy,
+        clock: @escaping Clock,
+        timeoutMs: Int
+    ) {
+        self.parseProvider = parseProvider
+        self.tripwireSignalProvider = tripwireSignalProvider
+        self.observationYield = observationYield
+        self.policy = policy
+        self.clock = clock
+        self.timeoutMs = timeoutMs
+    }
 
     init(
         parseProvider: @escaping ParseProvider,
@@ -385,26 +411,58 @@ where State == SettleLoopMachine.State,
         cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
         timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) {
-        self.parseProvider = parseProvider
-        self.tripwireSignalProvider = tripwireSignalProvider
-        self.sleeper = sleeper
-        self.cyclesRequired = cyclesRequired
-        self.cycleIntervalMs = cycleIntervalMs
-        self.timeoutMs = timeoutMs
+        self.init(
+            parseProvider: parseProvider,
+            tripwireSignalProvider: tripwireSignalProvider,
+            observationYield: {
+                try await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
+            },
+            policy: .consecutiveCycles(required: cyclesRequired),
+            clock: { CFAbsoluteTimeGetCurrent() },
+            timeoutMs: timeoutMs
+        )
     }
 
-    /// Live wiring against the real stash/tripwire. The default `sleeper`
-    /// is `Task.sleep(nanoseconds:)`, which throws `CancellationError`
-    /// when the surrounding task is cancelled — that propagates to
-    /// `SettleOutcome.cancelled`.
+    init(
+        parseProvider: @escaping ParseProvider,
+        tripwireSignalProvider: @escaping TripwireSignalProvider,
+        observationYield: @escaping ObservationYield,
+        clock: @escaping Clock,
+        quietWindowMs: Int,
+        timeoutMs: Int
+    ) {
+        self.init(
+            parseProvider: parseProvider,
+            tripwireSignalProvider: tripwireSignalProvider,
+            observationYield: observationYield,
+            policy: .quietWindow(milliseconds: quietWindowMs),
+            clock: clock,
+            timeoutMs: timeoutMs
+        )
+    }
+
+    /// Live wiring against the real stash/tripwire. The policy selects the
+    /// stability proof while this type continues to own the entire loop.
     static func live(
         stash: TheStash,
         tripwire: TheTripwire,
-        timeoutMs: Int = SettleSession.defaultTimeoutMs
+        timeoutMs: Int = SettleSession.defaultTimeoutMs,
+        policy: SettlePolicy = .consecutiveCycles(
+            required: SettleSession.defaultCyclesRequired
+        )
     ) -> SettleSession {
-        SettleSession(
+        let observationYield: ObservationYield = switch policy {
+        case .consecutiveCycles:
+            { try await Task.sleep(nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000) }
+        case .quietWindow:
+            { await tripwire.yieldRealFrames(1) }
+        }
+        return SettleSession(
             parseProvider: { stash.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
+            observationYield: observationYield,
+            policy: policy,
+            clock: { CFAbsoluteTimeGetCurrent() },
             timeoutMs: timeoutMs
         )
     }
@@ -452,15 +510,14 @@ where State == SettleLoopMachine.State,
     /// the way so callers can suppress transition transients without treating
     /// the signal itself as a screen-change classification.
     func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
-        let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         return await SettleLoopRunner(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
-            observationYield: { try await sleeper(cycleNs) },
-            clock: { CFAbsoluteTimeGetCurrent() },
+            observationYield: observationYield,
+            clock: clock,
             timeoutMs: timeoutMs,
             initial: SettleLoopMachine.State(
-                consecutiveCyclesRequired: cyclesRequired,
+                policy: policy,
                 tripwireBaseline: baselineTripwireSignal
             )
         ).run(start: start)
@@ -586,75 +643,6 @@ private struct SettleLoopRunner {
 
         let transition = driver.send(.timeout(elapsedMs: deadline.elapsedMilliseconds(at: clock())))
         return SettleSession.outcome(for: transition, observations: observations)!
-    }
-}
-
-/// Accessibility-tree settle loop driven by the semantic observation stream.
-///
-/// This uses the same parser/Stash path as normal observations, but samples at
-/// the caller-provided frame cadence and declares settle once the semantic
-/// fingerprint has remained unchanged for a quiet wall-clock window.
-@MainActor struct SemanticQuietSettleSession { // swiftlint:disable:this agent_main_actor_value_type
-    static let defaultQuietWindowMs: Int = 60
-
-    typealias ParseProvider = @MainActor () -> Screen?
-    typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
-    typealias ObservationYield = @MainActor () async throws -> Void
-    typealias Clock = @MainActor () -> CFAbsoluteTime
-
-    let parseProvider: ParseProvider
-    let tripwireSignalProvider: TripwireSignalProvider
-    let observationYield: ObservationYield
-    let clock: Clock
-    let quietWindowMs: Int
-    let timeoutMs: Int
-
-    init(
-        parseProvider: @escaping ParseProvider,
-        tripwireSignalProvider: @escaping TripwireSignalProvider,
-        observationYield: @escaping ObservationYield,
-        clock: @escaping Clock = { CFAbsoluteTimeGetCurrent() },
-        quietWindowMs: Int = SemanticQuietSettleSession.defaultQuietWindowMs,
-        timeoutMs: Int = SettleSession.defaultTimeoutMs
-    ) {
-        self.parseProvider = parseProvider
-        self.tripwireSignalProvider = tripwireSignalProvider
-        self.observationYield = observationYield
-        self.clock = clock
-        self.quietWindowMs = quietWindowMs
-        self.timeoutMs = timeoutMs
-    }
-
-    static func live(
-        stash: TheStash,
-        tripwire: TheTripwire,
-        quietWindowMs: Int = SemanticQuietSettleSession.defaultQuietWindowMs,
-        timeoutMs: Int = SettleSession.defaultTimeoutMs
-    ) -> SemanticQuietSettleSession {
-        SemanticQuietSettleSession(
-            parseProvider: { stash.semanticObservationForSettle() },
-            tripwireSignalProvider: { tripwire.tripwireSignal() },
-            observationYield: { await tripwire.yieldRealFrames(1) },
-            quietWindowMs: quietWindowMs,
-            timeoutMs: timeoutMs
-        )
-    }
-
-    func run(
-        start: CFAbsoluteTime,
-        baselineTripwireSignal: TheTripwire.TripwireSignal
-    ) async -> SettleSession.Outcome {
-        await SettleLoopRunner(
-            parseProvider: parseProvider,
-            tripwireSignalProvider: tripwireSignalProvider,
-            observationYield: observationYield,
-            clock: clock,
-            timeoutMs: timeoutMs,
-            initial: SettleLoopMachine.State(
-                quietWindowMilliseconds: quietWindowMs,
-                tripwireBaseline: baselineTripwireSignal
-            )
-        ).run(start: start)
     }
 }
 

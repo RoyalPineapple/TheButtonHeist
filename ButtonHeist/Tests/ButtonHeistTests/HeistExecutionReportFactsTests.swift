@@ -235,6 +235,72 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(expectationResult.actionMethod.rawValue, "wait")
     }
 
+    func testReportProjectionUsesCanonicalActionEvidenceDelta() throws {
+        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let dispatchTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2),
+            beforeScreenId: "start",
+            afterScreenId: "dispatch"
+        )
+        let expectationTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 2),
+            after: makeReceiptTestInterface(elementCount: 3),
+            beforeScreenId: "dispatch",
+            afterScreenId: "settled"
+        )
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
+        let result = HeistExecutionResult(
+            steps: [
+                .failed(
+                    path: "$.body[0]",
+                    receiptKind: .action,
+                    durationMs: 5,
+                    intent: .action(command: command),
+                    evidence: .expectation(
+                        command: command,
+                        dispatchResult: ActionResult.success(
+                            method: .activate,
+                            accessibilityTrace: dispatchTrace
+                        ),
+                        expectationResult: ActionResult.failure(
+                            method: .wait,
+                            errorKind: .timeout,
+                            message: "timed out waiting for checkout",
+                            accessibilityTrace: expectationTrace
+                        ),
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "timed out"
+                        )
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .expectation,
+                        contract: "action expectation is met",
+                        observed: "timed out waiting for checkout",
+                        expected: predicate.description
+                    )
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+        let reportFacts = try XCTUnwrap(result.evidenceRollup.nodes.first?.reportFacts)
+        let projection = HeistReportProjection(result: result, accessibilityTrace: nil, profile: .mcp)
+        let reportNode = try XCTUnwrap(projection.outputNodes.first)
+
+        XCTAssertEqual(reportNode.status, reportFacts.status)
+        XCTAssertEqual(reportNode.message, reportFacts.message)
+        XCTAssertEqual(reportNode.failureMessage, reportFacts.failureMessage)
+        guard case .action(let actionEvidence)? = reportNode.evidence,
+              case .expectation(_, let expectationResult, _, _) = actionEvidence.evidence else {
+            return XCTFail("Expected projected action expectation evidence")
+        }
+        XCTAssertEqual(reportNode.traceDelta?.kind.rawValue, expectationResult.delta?.kind.rawValue)
+        XCTAssertEqual(reportNode.actionErrorKind, reportFacts.results.actionErrorKind)
+    }
+
     func testActionEvidenceStrictlyDecodesActionWarnings() throws {
         let evidence = HeistActionEvidence.dispatch(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),

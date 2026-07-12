@@ -128,15 +128,6 @@ struct HeistReportNodeProjection: Sendable {
     var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
     var actionErrorKind: ErrorKind? { results.actionErrorKind }
     var traceDelta: DeltaProjection? {
-        results.traceEvidenceResult.flatMap { result in
-            result.accessibilityTrace.flatMap {
-                DeltaProjection(
-                    trace: $0,
-                    isComplete: result.settled != false,
-                    profile: profile,
-                    includeScreenInterface: true
-                )
-            }
-        }
+        evidence?.traceDelta
     }
 }

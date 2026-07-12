@@ -57,6 +57,11 @@ notifications. Notifications are edge evidence, not a second state model, and
 any of those notifications prevents the edge from being classified as
 fact-free `noChange`.
 
+Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
+`SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
+cadence for that pair; it does not create another settle pipeline. UIKit and
+ObjC signals may trigger or reset sampling, but they never classify the AX tree.
+
 A screen notification starts a new observation generation. The screen boundary
 is normalized as old-tree departures, a `screenChanged` marker, then new-tree
 arrivals. Layout, value, and announcement notifications trigger same-generation
@@ -128,6 +133,21 @@ The approved long-lived owners are:
 single capture and must not become stable identity. Transport registries and
 auth registries may share a client key, but they stay separate: transport does
 not own authentication semantics.
+
+### Report and Action Evidence Have One Owner
+
+`HeistExecutionStepReportFacts` is the canonical typed projection of report
+facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
+consume that projection; they do not rebuild report facts from plan siblings or
+parallel result fields.
+
+`ActionResult` owns one `ActionResultEvidence` envelope for post-action
+evidence. `PostActionObservation` coordinates capture and settle proof, then
+supplies that envelope; it does not publish a second post-action evidence shape.
+
+UIKit/ObjC `@unchecked Sendable` is a platform-boundary escape hatch only. Such
+uses stay in TheInsideJob, require an exact source-shape allowlist entry and a
+justification, and must not cross into the typed core or wire/report layers.
 
 ### One Driver Owns the Session
 

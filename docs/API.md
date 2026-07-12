@@ -407,6 +407,10 @@ command payload, accessibility trace, trace-folded public delta, and expectation
 result when one was requested. Failures carry their typed action error inside
 `outcome.errorKind`.
 
+`ActionResultEvidence` is the internal/source grouping for the action's
+observation evidence. It is not an additional public JSON envelope: `ActionResult`
+continues to flatten those fields at their existing top-level keys.
+
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
 present. For `screenChanged`, public responses include the destination

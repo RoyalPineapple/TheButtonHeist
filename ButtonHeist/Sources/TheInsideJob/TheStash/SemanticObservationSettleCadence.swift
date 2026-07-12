@@ -4,6 +4,7 @@ import Foundation
 
 enum SemanticObservationSettleCadence {
     static let activePassiveSettleTimeoutMs = 1_000
+    static let activeQuietWindowMs = 60
 
     @MainActor
     static func settleVisibleObservationForCurrentDemand(
@@ -56,11 +57,11 @@ enum SemanticObservationSettleCadence {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int
     ) async -> SettleSession.Outcome {
-        let settleSession = SemanticQuietSettleSession.live(
+        let settleSession = SettleSession.live(
             stash: stash,
             tripwire: tripwire,
-            quietWindowMs: SemanticQuietSettleSession.defaultQuietWindowMs,
-            timeoutMs: timeoutMs
+            timeoutMs: timeoutMs,
+            policy: .quietWindow(milliseconds: activeQuietWindowMs)
         )
         return await settleSession.run(
             start: CFAbsoluteTimeGetCurrent(),

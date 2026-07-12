@@ -37,6 +37,31 @@ enum HeistReportEvidenceProjection: Sendable {
         guard case .warning(let warning) = self else { return nil }
         return warning
     }
+
+    /// Delta from the result that contributes to this node's trace. Action and
+    /// predicate evidence already project that result through `ActionProjection`;
+    /// report rows must reuse its delta instead of rebuilding it from the raw trace.
+    var traceDelta: DeltaProjection? {
+        switch self {
+        case .action(let projection):
+            switch projection.evidence {
+            case .commandResolutionFailure:
+                return nil
+            case .dispatch(let result, _):
+                return result.delta
+            case .expectation(_, let expectationResult, _, _):
+                return expectationResult.delta
+            }
+        case .wait(let projection):
+            return projection.result.delta
+        case .repeatUntil(let projection):
+            return projection.result?.delta
+        case .invocation(let projection):
+            return projection.expectationResult?.delta ?? projection.expectationEvidence?.result.delta
+        case .caseSelection, .forEachString, .forEachElement, .warning:
+            return nil
+        }
+    }
 }
 
 struct HeistActionEvidenceProjection: Sendable {
