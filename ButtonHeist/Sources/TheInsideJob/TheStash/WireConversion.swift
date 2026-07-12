@@ -33,7 +33,7 @@ extension Double {
 extension TheStash {
 
     /// Convert internal accessibility types (`AccessibilityElement`,
-    /// `AccessibilityHierarchy`, `Screen`) to their wire-facing projections.
+    /// `AccessibilityHierarchy`, `InterfaceObservation`) to their wire-facing projections.
     /// Pure transform — no stored state. Delta projection is capture-backed in
     /// TheScore.
     @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
@@ -97,43 +97,43 @@ extension TheStash {
 
     // MARK: - Interface Conversion
 
-    /// Convert a Screen into the canonical interface capture. The parser
+    /// Convert the interface tree into the canonical wire capture. The parser
     /// hierarchy remains the tree; Button Heist metadata is attached as
     /// annotations keyed by capture-local tree path.
-    static func toInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
+    static func toInterface(from tree: InterfaceTree, timestamp: Date = Date()) -> Interface {
         Interface(
             timestamp: timestamp,
-            tree: screen.liveCapture.hierarchy,
+            tree: tree.viewportCapture.hierarchy,
             annotations: InterfaceAnnotations(
-                elements: elementAnnotations(from: screen),
-                containers: containerAnnotations(from: screen)
+                elements: elementAnnotations(from: tree),
+                containers: containerAnnotations(from: tree)
             ),
-            traceIdentities: traceIdentities(from: screen)
+            traceIdentities: traceIdentities(from: tree)
         )
     }
 
-    /// Convert a Screen into the public discovery interface.
+    /// Convert a InterfaceObservation into the public discovery interface.
     ///
     /// The latest live capture is still the tree authority. Known off-viewport
     /// elements and containers discovered by scroll exploration are grafted
     /// under their owning semantic scroll container so public `get_interface`
     /// does not discard the command's exploration work.
-    static func toDiscoveryInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
-        var elementAnnotations = elementAnnotations(from: screen)
-        var containerAnnotations = containerAnnotations(from: screen)
-        var traceIdentitiesByPath = traceIdentities(from: screen).byPath
+    static func toDiscoveryInterface(from tree: InterfaceTree, timestamp: Date = Date()) -> Interface {
+        var elementAnnotations = elementAnnotations(from: tree)
+        var containerAnnotations = containerAnnotations(from: tree)
+        var traceIdentitiesByPath = traceIdentities(from: tree).byPath
         let containerAnnotationsByPath = Dictionary(
             containerAnnotations.map { ($0.path, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
-        let liveIds = screen.liveCapture.heistIds
+        let liveIds = tree.viewportElementIDs
         let liveContainerPaths = Set(containerAnnotations.map(\.path))
         var emittedHeistIds = liveIds
         var emittedContainerPaths = liveContainerPaths
-        var nextTraversalIndex = (screen.liveCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
+        var nextTraversalIndex = (tree.viewportCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
 
         var childrenByContainerPath = DiscoveryChildren(
-            screen: screen,
+            tree: tree,
             liveIds: liveIds,
             liveContainerPaths: liveContainerPaths
         )
@@ -191,12 +191,12 @@ extension TheStash {
             }
         }
 
-        let tree = screen.liveCapture.hierarchy.enumerated().map { index, node in
+        let hierarchy = tree.viewportCapture.hierarchy.enumerated().map { index, node in
             convert(node, path: TreePath([index]))
         }
         return Interface(
             timestamp: timestamp,
-            tree: tree,
+            tree: hierarchy,
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations,
                 containers: containerAnnotations
@@ -208,30 +208,29 @@ extension TheStash {
     /// Convert the committed semantic screen into a trace-facing interface.
     ///
     /// Exploration commits the full targetable element set into
-    /// `screen.knownInterface`; the latest live capture remains viewport-local
+    /// the full interface tree; the latest live capture remains viewport-local
     /// evidence for action dispatch. Post-action traces compare semantic
     /// captures, so known off-viewport elements must be present here even when
     /// they are absent from the latest live parser hierarchy.
-    static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
-        semanticInterfaceProjection(from: screen, timestamp: timestamp).interface
+    static func toSemanticInterface(from tree: InterfaceTree, timestamp: Date = Date()) -> Interface {
+        semanticInterfaceProjection(from: tree, timestamp: timestamp).interface
     }
 
     static func semanticInterfaceProjection(
-        from screen: Screen,
+        from tree: InterfaceTree,
         timestamp: Date = Date()
     ) -> SemanticInterfaceProjection {
-        let entries = screen.orderedElements
-        return semanticInterfaceProjection(entries: entries, screen: screen, timestamp: timestamp)
+        semanticInterfaceProjection(entries: tree.orderedElements, tree: tree, timestamp: timestamp)
     }
 
     private static func semanticInterfaceProjection(
-        entries: [SemanticScreen.Element],
-        screen: Screen,
+        entries: [InterfaceTree.Element],
+        tree: InterfaceTree,
         timestamp: Date
     ) -> SemanticInterfaceProjection {
         var pathAllocator = SemanticProjectionPathAllocator()
         let containerPlacements = semanticContainerPlacements(
-            containersByPath: screen.semantic.containers,
+            containersByPath: tree.containers,
             pathAllocator: &pathAllocator
         )
         let containersByProjectedPath = Dictionary(
@@ -307,7 +306,7 @@ extension TheStash {
     }
 
     private static func semanticContainerPlacements(
-        containersByPath: [TreePath: SemanticScreen.Container],
+        containersByPath: [TreePath: InterfaceTree.Container],
         pathAllocator: inout SemanticProjectionPathAllocator
     ) -> [SemanticContainerPlacement] {
         var projectedPathByOriginalPath: [TreePath: TreePath] = [:]
@@ -326,7 +325,7 @@ extension TheStash {
     }
 
     private static func semanticElementPlacements(
-        entries: [SemanticScreen.Element],
+        entries: [InterfaceTree.Element],
         projectedContainerPathByOriginalPath: [TreePath: TreePath],
         pathAllocator: inout SemanticProjectionPathAllocator
     ) -> [SemanticElementPlacement] {
@@ -341,7 +340,7 @@ extension TheStash {
     }
 
     private static func semanticContainerRepairParent(
-        for entry: SemanticScreen.Container,
+        for entry: InterfaceTree.Container,
         projectedPathByOriginalPath: [TreePath: TreePath]
     ) -> TreePath {
         if let containerPath = entry.scrollMembership?.containerPath,
@@ -361,7 +360,7 @@ extension TheStash {
     }
 
     private static func semanticElementRepairParent(
-        for entry: SemanticScreen.Element,
+        for entry: InterfaceTree.Element,
         projectedContainerPathByOriginalPath: [TreePath: TreePath]
     ) -> TreePath {
         if let containerPath = entry.scrollMembership?.containerPath,
@@ -382,8 +381,8 @@ extension TheStash {
 
     // MARK: - Private Helpers
 
-    private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
-        screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
+    private static func elementAnnotations(from tree: InterfaceTree) -> [InterfaceElementAnnotation] {
+        tree.viewportCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
             return InterfaceElementAnnotation(
                 path: path,
@@ -392,19 +391,19 @@ extension TheStash {
         }
     }
 
-    private static func traceIdentities(from screen: Screen) -> InterfaceTraceIdentities {
-        InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: screen.liveCapture.heistIdsByPath.map { path, heistId in
+    private static func traceIdentities(from tree: InterfaceTree) -> InterfaceTraceIdentities {
+        InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: tree.viewportCapture.heistIdsByPath.map { path, heistId in
             (path, heistId.traceElementIdentity)
         }))
     }
 
-    private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
-        screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
+    private static func containerAnnotations(from tree: InterfaceTree) -> [InterfaceContainerAnnotation] {
+        tree.viewportCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .container = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                containerName: screen.liveCapture.containerNamesByPath[path],
-                scrollInventory: screen.liveCapture.scrollInventory(forPath: path)
+                containerName: tree.viewportCapture.containerNamesByPath[path],
+                scrollInventory: tree.viewportCapture.scrollInventory(forPath: path)
             )
         }
     }
@@ -413,25 +412,25 @@ extension TheStash {
 
 struct SemanticInterfaceProjection {
     let interface: Interface
-    let elementByProjectedPath: [TreePath: SemanticScreen.Element]
-    let containerByProjectedPath: [TreePath: SemanticScreen.Container]
+    let elementByProjectedPath: [TreePath: InterfaceTree.Element]
+    let containerByProjectedPath: [TreePath: InterfaceTree.Container]
 }
 
 extension SemanticInterfaceProjection {
-    func screenElements(matching matchSet: ElementMatchSet) -> [SemanticScreen.Element] {
+    func treeElements(matching matchSet: ElementMatchSet) -> [InterfaceTree.Element] {
         matchSet.matches.map { match in
-            guard let screenElement = elementByProjectedPath[match.path] else {
+            guard let treeElement = elementByProjectedPath[match.path] else {
                 preconditionFailure("Semantic interface match path is not backed by a screen element")
             }
-            return screenElement
+            return treeElement
         }
     }
 
-    func screenElements(scopedBy target: AccessibilityTarget) -> [SemanticScreen.Element] {
-        screenElements(scopedBy: target, ancestorPaths: nil)
+    func treeElements(scopedBy target: AccessibilityTarget) -> [InterfaceTree.Element] {
+        treeElements(scopedBy: target, ancestorPaths: nil)
     }
 
-    func containers(matching predicate: ContainerPredicate) -> [SemanticScreen.Container] {
+    func containers(matching predicate: ContainerPredicate) -> [InterfaceTree.Container] {
         containerPaths(matching: predicate, ancestorPaths: nil).map { path in
             guard let container = containerByProjectedPath[path] else {
                 preconditionFailure("Semantic interface container path is not backed by a screen container")
@@ -440,38 +439,38 @@ extension SemanticInterfaceProjection {
         }
     }
 
-    private func screenElements(
+    private func treeElements(
         scopedBy target: AccessibilityTarget,
         ancestorPaths: [TreePath]?
-    ) -> [SemanticScreen.Element] {
+    ) -> [InterfaceTree.Element] {
         switch target {
         case .predicate:
-            return screenElements(ancestorPaths: ancestorPaths)
+            return treeElements(ancestorPaths: ancestorPaths)
         case .within(let container, let nestedTarget):
             guard let predicate = try? container.resolve(in: .empty) else { return [] }
             let matchedContainerPaths = containerPaths(matching: predicate, ancestorPaths: ancestorPaths)
             guard !matchedContainerPaths.isEmpty else { return [] }
-            return screenElements(scopedBy: nestedTarget, ancestorPaths: matchedContainerPaths)
+            return treeElements(scopedBy: nestedTarget, ancestorPaths: matchedContainerPaths)
         case .container(let container, let ordinal):
             guard let predicate = try? container.resolve(in: .empty) else { return [] }
             let matchedContainerPaths = containerPaths(matching: predicate, ancestorPaths: ancestorPaths)
             if let ordinal {
                 guard matchedContainerPaths.indices.contains(ordinal) else { return [] }
-                return screenElements(ancestorPaths: [matchedContainerPaths[ordinal]])
+                return treeElements(ancestorPaths: [matchedContainerPaths[ordinal]])
             }
-            return screenElements(ancestorPaths: matchedContainerPaths)
+            return treeElements(ancestorPaths: matchedContainerPaths)
         case .ref:
             return []
         }
     }
 
-    private func screenElements(ancestorPaths: [TreePath]?) -> [SemanticScreen.Element] {
+    private func treeElements(ancestorPaths: [TreePath]?) -> [InterfaceTree.Element] {
         interface.graph.elementsInTraversalOrder.map { record in
             guard record.path.isDescendant(ofAny: ancestorPaths) else { return nil }
-            guard let screenElement = elementByProjectedPath[record.path] else {
+            guard let treeElement = elementByProjectedPath[record.path] else {
                 preconditionFailure("Semantic interface element path is not backed by a screen element")
             }
-            return screenElement
+            return treeElement
         }.compactMap { $0 }
     }
 
@@ -498,12 +497,12 @@ private extension TreePath {
 
 private struct SemanticElementPlacement {
     let path: TreePath
-    let entry: SemanticScreen.Element
+    let entry: InterfaceTree.Element
 }
 
 private struct SemanticContainerPlacement {
     let path: TreePath
-    let entry: SemanticScreen.Container
+    let entry: InterfaceTree.Container
 }
 
 private struct SemanticProjectionPathAllocator {
@@ -518,8 +517,8 @@ private struct SemanticProjectionPathAllocator {
 
 private struct DiscoveryChildren {
     enum ChildKind {
-        case element(SemanticScreen.Element)
-        case container(SemanticScreen.Container)
+        case element(InterfaceTree.Element)
+        case container(InterfaceTree.Container)
     }
 
     struct Child {
@@ -549,12 +548,12 @@ private struct DiscoveryChildren {
     private var childrenByParent: [TreePath: [Child]]
 
     init(
-        screen: Screen,
+        tree: InterfaceTree,
         liveIds: Set<HeistId>,
         liveContainerPaths: Set<TreePath>
     ) {
         var childrenByParent: [TreePath: [Child]] = [:]
-        for entry in screen.semantic.elements.values {
+        for entry in tree.elements.values {
             guard !liveIds.contains(entry.heistId),
                   let membership = entry.scrollMembership
             else { continue }
@@ -566,7 +565,7 @@ private struct DiscoveryChildren {
                 kind: .element(entry)
             ))
         }
-        for entry in screen.semantic.containers.values {
+        for entry in tree.containers.values {
             guard !liveContainerPaths.contains(entry.path),
                   let membership = entry.scrollMembership
             else { continue }

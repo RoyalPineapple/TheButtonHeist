@@ -62,7 +62,7 @@ final class ElementInflationProductTests: XCTestCase {
             label: "Submit Order"
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(fixture)
+        try seedOffViewportTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
@@ -84,7 +84,7 @@ final class ElementInflationProductTests: XCTestCase {
             nestedInGroup: true
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(fixture)
+        try seedOffViewportTarget(fixture)
 
         let result = await brains.executeRuntimeAction(.activate(
             literalTarget(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
@@ -103,7 +103,7 @@ final class ElementInflationProductTests: XCTestCase {
             label: "Delivery Note"
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTextInputTarget(fixture)
+        try seedOffViewportTextInputTarget(fixture)
 
         let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [stash = brains.stash] in
             stash.invalidateSettledObservationFromTripwire()
@@ -222,7 +222,7 @@ final class ElementInflationProductTests: XCTestCase {
             label: "Duplicate Submit"
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(fixture)
+        try seedOffViewportTarget(fixture)
         seedKnownUnreachableDuplicate(
             label: fixture.label,
             identifier: "stale_\(fixture.identifier)",
@@ -250,7 +250,7 @@ final class ElementInflationProductTests: XCTestCase {
             label: "Live Decoy"
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(
+        try seedOffViewportTarget(
             fixture,
             semanticIdentifier: "unrevealable_submit",
             semanticLabel: "Submit Order",
@@ -341,7 +341,7 @@ final class ElementInflationProductTests: XCTestCase {
             label: label
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(fixture, in: localBrains)
+        try seedOffViewportTarget(fixture, in: localBrains)
 
         if heist {
             let plan = try HeistPlan(body: [
@@ -651,7 +651,7 @@ final class ElementInflationProductTests: XCTestCase {
         return window
     }
 
-    private func seedKnownOffscreenTarget(
+    private func seedOffViewportTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
         semanticIdentifier: String? = nil,
@@ -683,22 +683,22 @@ final class ElementInflationProductTests: XCTestCase {
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size
         )
-        let entry = Screen.ScreenElement(
+        let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
-            scrollMembership: Screen.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
             observedScrollContentActivationPoint: observedActivationPoint,
             element: element
         )
-        var elements = screen.semantic.elements
+        var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        targetBrains.stash.installScreenForTesting(Screen(
-            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+        targetBrains.stash.installScreenForTesting(InterfaceObservation(
+            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
     }
 
-    private func seedKnownOffscreenTextInputTarget(
+    private func seedOffViewportTextInputTarget(
         _ fixture: TextInputRevealFixture
     ) throws {
         let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
@@ -719,17 +719,17 @@ final class ElementInflationProductTests: XCTestCase {
             origin: fixture.frameOrigin,
             size: fixture.target.bounds.size
         )
-        let entry = Screen.ScreenElement(
+        let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
-            scrollMembership: Screen.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: nil),
             observedScrollContentActivationPoint: observedActivationPoint,
             element: element
         )
-        var elements = screen.semantic.elements
+        var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        brains.stash.installScreenForTesting(Screen(
-            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+        brains.stash.installScreenForTesting(InterfaceObservation(
+            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
     }
@@ -739,17 +739,17 @@ final class ElementInflationProductTests: XCTestCase {
         identifier: String,
         heistId: HeistId
     ) {
-        let screen = brains.stash.settledSemanticScreen
-        let entry = Screen.ScreenElement(
+        let tree = brains.stash.interfaceTree
+        let entry = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
             element: makeElement(label: label, identifier: identifier)
         )
-        var elements = screen.semantic.elements
+        var elements = tree.elements
         elements[heistId] = entry
-        brains.stash.installScreenForTesting(Screen(
-            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
-            liveCapture: screen.liveCapture
+        brains.stash.installScreenForTesting(InterfaceObservation(
+            tree: InterfaceTree(elements: elements, containers: tree.containers),
+            liveCapture: brains.stash.latestObservation.liveCapture
         ))
     }
 
@@ -766,7 +766,7 @@ final class ElementInflationProductTests: XCTestCase {
             below: outerContainerPath,
             in: screen
         )
-        let capturedInnerContainer = screen.semantic.containers[innerContainerPath]
+        let capturedInnerContainer = screen.tree.containers[innerContainerPath]
         let innerContainer = capturedInnerContainer?.container ?? AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(fixture.innerScrollView.contentSize),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
@@ -787,33 +787,33 @@ final class ElementInflationProductTests: XCTestCase {
             origin: fixture.targetFrameOrigin,
             size: fixture.target.bounds.size
         )
-        let entry = Screen.ScreenElement(
+        let entry = InterfaceTree.Element(
             heistId: fixture.knownHeistId,
-            scrollMembership: Screen.ScrollMembership(containerPath: innerContainerPath, index: nil),
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: innerContainerPath, index: nil),
             observedScrollContentActivationPoint: observedTargetActivationPoint,
             element: element
         )
-        var elements = screen.semantic.elements
+        var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        var containers = screen.semantic.containers
+        var containers = screen.tree.containers
         let observedContainerActivationPoint = try capturedInnerContainer?.observedScrollContentActivationPoint
             ?? observedContentActivationPoint(
             origin: fixture.innerFrameOrigin,
             size: fixture.innerScrollView.frame.size
         )
-        containers[innerContainerPath] = SemanticScreen.Container(
+        containers[innerContainerPath] = InterfaceTree.Container(
             container: innerContainer,
             path: innerContainerPath,
             containerName: innerContainerName,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
             scrollMembership: capturedInnerContainer?.scrollMembership
-                ?? Screen.ScrollMembership(containerPath: outerContainerPath, index: nil),
+                ?? InterfaceTree.ScrollMembership(containerPath: outerContainerPath, index: nil),
             observedScrollContentActivationPoint: observedContainerActivationPoint
         )
 
-        brains.stash.installScreenForTesting(Screen(
-            semantic: SemanticScreen(elements: elements, containers: containers),
+        brains.stash.installScreenForTesting(InterfaceObservation(
+            tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: screen.liveCapture
         ))
     }
@@ -821,14 +821,14 @@ final class ElementInflationProductTests: XCTestCase {
     private func observedContentActivationPoint(
         origin: CGPoint,
         size: CGSize
-    ) throws -> Screen.ObservedScrollContentActivationPoint {
-        try XCTUnwrap(Screen.ObservedScrollContentActivationPoint(CGPoint(
+    ) throws -> InterfaceTree.ObservedScrollContentActivationPoint {
+        try XCTUnwrap(InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(
             x: origin.x + size.width / 2,
             y: origin.y + size.height / 2
         )))
     }
 
-    private func firstLiveScrollableContainerPath(in screen: Screen) -> TreePath? {
+    private func firstLiveScrollableContainerPath(in screen: InterfaceObservation) -> TreePath? {
         for item in screen.liveCapture.hierarchy.scrollablePathIndexedContainers {
             guard screen.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
             return item.path
@@ -836,7 +836,7 @@ final class ElementInflationProductTests: XCTestCase {
         return nil
     }
 
-    private func liveScrollableContainerPath(for scrollView: UIScrollView, in screen: Screen) -> TreePath? {
+    private func liveScrollableContainerPath(for scrollView: UIScrollView, in screen: InterfaceObservation) -> TreePath? {
         let matchingPaths = screen.liveCapture.scrollableContainerViewsByPath
             .compactMap { path, ref -> TreePath? in
                 guard ref.view === scrollView else { return nil }
@@ -851,7 +851,7 @@ final class ElementInflationProductTests: XCTestCase {
     private func nestedInnerScrollContainerPath(
         for scrollView: UIScrollView,
         below outerContainerPath: TreePath,
-        in screen: Screen
+        in screen: InterfaceObservation
     ) -> TreePath {
         if let path = liveScrollableContainerPath(for: scrollView, in: screen) {
             return path
@@ -862,7 +862,7 @@ final class ElementInflationProductTests: XCTestCase {
         return outerContainerPath.appending(0)
     }
 
-    private func scrollContainerDiagnostics(in screen: Screen) -> String {
+    private func scrollContainerDiagnostics(in screen: InterfaceObservation) -> String {
         let summaries = screen.liveCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
                 let name = screen.liveCapture.containerNamesByPath[item.path]

@@ -13,21 +13,21 @@ extension ElementInflation {
     }
 
     private enum TargetRefreshGraceResolution {
-        case screenElement(TheStash.ScreenElement, didReveal: Bool)
+        case treeElement(InterfaceTree.Element, didReveal: Bool)
         case liveTarget(InflatedElementTarget)
         case failed(ElementInflationFailure)
         case missing
     }
 
     internal func stateAfterReveal(
-        _ treeElement: TheStash.ScreenElement,
+        _ treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
         attempt: Int
     ) async -> State {
         if case .success(let visible)? = visibleTargetResolution(target) {
             return .refreshing(
                 target: target,
-                screenElement: visible,
+                treeElement: visible,
                 attempt: attempt,
                 didReveal: false
             )
@@ -39,7 +39,7 @@ extension ElementInflation {
             case .success(let visible)?:
                 return .refreshing(
                     target: target,
-                    screenElement: visible,
+                    treeElement: visible,
                     attempt: attempt,
                     didReveal: false
                 )
@@ -49,10 +49,10 @@ extension ElementInflation {
                 break
             }
             switch await awaitTargetRefreshGrace(for: target, mode: .revealPath) {
-            case .screenElement(let resolved, let didReveal):
+            case .treeElement(let resolved, let didReveal):
                 return .refreshing(
                     target: target,
-                    screenElement: resolved,
+                    treeElement: resolved,
                     attempt: attempt,
                     didReveal: didReveal
                 )
@@ -61,7 +61,7 @@ extension ElementInflation {
             case .inflated(let inflatedTarget):
                 return .refreshing(
                     target: target,
-                    screenElement: inflatedTarget.screenElement,
+                    treeElement: inflatedTarget.treeElement,
                     attempt: attempt,
                     didReveal: false
                 )
@@ -79,7 +79,7 @@ extension ElementInflation {
         }
         return .refreshing(
             target: target,
-            screenElement: treeElement,
+            treeElement: treeElement,
             attempt: attempt,
             didReveal: reveal.didReveal
         )
@@ -102,7 +102,7 @@ extension ElementInflation {
 
     private func refreshedVisibleTargetResolution(
         _ target: AccessibilityTarget
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
+    ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
         guard stash.refreshCurrentVisibleTree() != nil else { return nil }
         return visibleTargetResolution(target)
     }
@@ -162,12 +162,12 @@ extension ElementInflation {
 
             case .resolveVisibleTarget:
                 switch targetRefreshGraceResolution(target: target, mode: mode) {
-                case .screenElement(let visible, let didReveal):
+                case .treeElement(let visible, let didReveal):
                     guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
                     else {
                         preconditionFailure("Reveal path grace visible resolution did not finish as resolved.")
                     }
-                    return .screenElement(visible, didReveal: didReveal)
+                    return .treeElement(visible, didReveal: didReveal)
                 case .liveTarget(let inflatedTarget):
                     guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
                     else {
@@ -209,7 +209,7 @@ extension ElementInflation {
                         ).revealPathGraceEffect else {
                             preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
                         }
-                        return .screenElement(fresh, didReveal: effectDidReveal)
+                        return .treeElement(fresh, didReveal: effectDidReveal)
                     }
 
                 case .liveTarget:
@@ -235,7 +235,7 @@ extension ElementInflation {
     private func targetRefreshGraceRefreshResult(
         mode: TargetRefreshGraceMode
     ) -> RevealPathGraceVisibleTreeRefreshResult {
-        let refreshedScreen: Screen?
+        let refreshedScreen: InterfaceObservation?
         switch mode {
         case .revealPath:
             refreshedScreen = stash.refreshCurrentVisibleTree()
@@ -253,7 +253,7 @@ extension ElementInflation {
         case .revealPath:
             switch visibleTargetResolution(target) {
             case .success(let visible)?:
-                return .screenElement(visible, didReveal: false)
+                return .treeElement(visible, didReveal: false)
             case .failure(let failure)?:
                 return .failed(failure)
             case nil:
@@ -292,7 +292,7 @@ extension ElementInflation {
     private enum RevealPathGraceKnownTargetAttempt {
         case unavailable
         case failed
-        case revealed(TheStash.ScreenElement, didReveal: Bool)
+        case revealed(InterfaceTree.Element, didReveal: Bool)
     }
 
     private func attemptRevealPathGraceKnownTarget(

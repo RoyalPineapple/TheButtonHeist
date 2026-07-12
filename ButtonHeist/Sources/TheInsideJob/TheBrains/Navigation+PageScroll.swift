@@ -73,7 +73,7 @@ extension Navigation {
             }
             let proof = await performViewportTransition(
                 primitiveResult: safecracker.scrollToEdge(scrollView, edge: edge, animated: false),
-                previousVisibleIds: stash.visibleIds,
+                previousVisibleIds: stash.viewportElementIDs,
                 animated: false,
                 commitViewportMoves: true
             )
@@ -99,7 +99,7 @@ extension Navigation {
         animated: Bool = true,
         commitViewportMoves: Bool = true
     ) async -> ScrollSettleProof {
-        let before = stash.visibleIds
+        let before = stash.viewportElementIDs
 
         switch target {
         case .uiScrollView(let sv):
@@ -137,7 +137,7 @@ extension Navigation {
     }
 
     @discardableResult
-    func observeViewportAfterScroll(commitViewportMoves: Bool) -> Screen? {
+    func observeViewportAfterScroll(commitViewportMoves: Bool) -> InterfaceObservation? {
         commitViewportMoves
             ? stash.refreshTreeAfterViewportMove()
             : stash.semanticPageForExploration()

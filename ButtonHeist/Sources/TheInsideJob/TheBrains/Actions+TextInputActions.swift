@@ -237,7 +237,7 @@ extension Actions {
         _ inflatedTarget: ElementInflation.InflatedElementTarget
     ) -> Bool {
         guard safecracker.hasActiveTextInput() else { return false }
-        if stash.firstResponderHeistId == inflatedTarget.screenElement.heistId {
+        if stash.firstResponderHeistId == inflatedTarget.treeElement.heistId {
             return true
         }
         if let searchBar = inflatedTarget.liveTarget.object as? UISearchBar {
@@ -261,7 +261,7 @@ extension Actions {
     ) -> FocusedTextInput {
         FocusedTextInput(
             subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
-            resolvedElementId: inflatedTarget.screenElement.heistId,
+            resolvedElementId: inflatedTarget.treeElement.heistId,
             resolvedObject: inflatedTarget.liveTarget.object,
             currentValue: inflatedTarget.liveTarget.element.value
         )

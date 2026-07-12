@@ -4,13 +4,13 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-// MARK: - Regression: duplicate-heistId disambiguation through buildScreen
+// MARK: - Regression: duplicate-heistId disambiguation through buildObservation
 
-/// `TheBurglar.buildScreen(from:)` is the production path that turns parsed
+/// `TheBurglar.buildObservation(from:)` is the production path that turns parsed
 /// accessibility elements into externally visible heistIds. These cases lock
 /// the current duplicate-disambiguation contract for scrollable content:
 /// duplicated synthesized ids get traversal-order `_N` suffixes through
-/// `IdAssignment.assign`, and `buildScreen` does not emit `_at_X_Y` content
+/// `IdAssignment.assign`, and `buildObservation` does not emit `_at_X_Y` content
 /// position suffixes for these observable cases.
 @MainActor
 final class HeistIdDisambiguationTests: XCTestCase {
@@ -75,14 +75,14 @@ final class HeistIdDisambiguationTests: XCTestCase {
     private static let contentPositionSuffixRegex = /_at_-?\d+_-?\d+$/
 
     private func assertNoContentPositionSuffix(
-        in screen: Screen,
+        in screen: InterfaceObservation,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        for heistId in screen.semantic.elements.keys {
+        for heistId in screen.tree.elements.keys {
             XCTAssertNil(
                 heistId.rawValue.firstMatch(of: Self.contentPositionSuffixRegex),
-                "buildScreen produced an `_at_X_Y` suffix: \(heistId)",
+                "buildObservation produced an `_at_X_Y` suffix: \(heistId)",
                 file: file,
                 line: line
             )
@@ -98,9 +98,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let lower = makeButton(label: "Row", frame: CGRect(x: 0, y: 400, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [upper, lower])
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 2,
+        XCTAssertEqual(screen.tree.elements.count, 2,
                        "Both elements should survive disambiguation")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "row_button_1")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "row_button_2")
@@ -114,9 +114,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let third = makeButton(label: "Item", frame: CGRect(x: 0, y: 250, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [first, second, third])
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 3,
+        XCTAssertEqual(screen.tree.elements.count, 3,
                        "All three same-matcher rows should produce distinct heistIds")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "item_button_1")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "item_button_2")
@@ -132,9 +132,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let second = makeButton(label: "Cell", frame: CGRect(x: 0, y: 0.3, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [first, second])
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 2,
+        XCTAssertEqual(screen.tree.elements.count, 2,
                        "Phase 2 distinct-ifies before content-position epsilon collapse applies")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "cell_button_1")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "cell_button_2")
@@ -162,9 +162,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         )
 
         let result = makeScrollableParseResult(elements: [first, second])
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 2)
+        XCTAssertEqual(screen.tree.elements.count, 2)
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "thing_element_1",
                        "Different-matcher collisions resolve via Phase 2 `_N` suffixes")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "thing_element_2")

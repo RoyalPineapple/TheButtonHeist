@@ -10,23 +10,23 @@ import AccessibilitySnapshotParser
 
 extension TheBurglar {
 
-    // MARK: - Build Screen From Parse
+    // MARK: - Build Interface Observation From Parse
 
-    /// Build a Screen value from a ParseResult. UIKit/Objective-C reads are
+    /// Build an `InterfaceObservation` from a parse result. UIKit/Objective-C reads are
     /// extracted into typed facts first; projection then assigns heistIds,
     /// resolves context, computes container names, and applies live facts.
-    static func buildScreen(from result: ParseResult) -> Screen {
+    static func buildObservation(from result: ParseResult) -> InterfaceObservation {
         let hierarchy = screenCoordinateHierarchy(from: result)
-        let facts = ScreenBuildFacts.extract(
+        let facts = InterfaceObservationBuildFacts.extract(
             from: result,
             screenCoordinateHierarchy: hierarchy
         )
-        let projection = buildScreenProjection(
+        let projection = buildObservationProjection(
             hierarchy: hierarchy,
             facts: facts
         )
-        logScreenBuildEvents(projection.logEvents)
-        return buildScreen(
+        logObservationBuildEvents(projection.logEvents)
+        return buildObservation(
             from: projection,
             result: result
         )
@@ -34,21 +34,21 @@ extension TheBurglar {
 
     /// Entry used by focused tests with synthetic facts. Projection stays pure;
     /// live refs are attached afterward at the live-capture boundary.
-    static func buildScreen(from result: ParseResult, facts: ScreenBuildFacts) -> Screen {
-        let projection = buildScreenProjection(
+    static func buildObservation(from result: ParseResult, facts: InterfaceObservationBuildFacts) -> InterfaceObservation {
+        let projection = buildObservationProjection(
             hierarchy: screenCoordinateHierarchy(from: result),
             facts: facts
         )
-        return buildScreen(
+        return buildObservation(
             from: projection,
             result: result
         )
     }
 
-    private static func buildScreenProjection(
+    private static func buildObservationProjection(
         hierarchy: [AccessibilityHierarchy],
-        facts: ScreenBuildFacts
-    ) -> ScreenBuildProjection {
+        facts: InterfaceObservationBuildFacts
+    ) -> InterfaceObservationBuildProjection {
         let indexedElements = hierarchy.pathIndexedElements
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
@@ -59,15 +59,15 @@ extension TheBurglar {
             identityContext: identityContext
         )
 
-        let entries = buildScreenEntries(
+        let entries = buildObservationEntries(
             indexedElements: indexedElements,
             facts: facts
         )
 
-        var logEvents: [ScreenBuildLogEvent] = []
+        var logEvents: [InterfaceObservationBuildLogEvent] = []
         for entry in entries {
-            if let observedScrollContentActivationPoint = entry.screenElement.observedScrollContentActivationPoint,
-               let scrollMembership = entry.screenElement.scrollMembership {
+            if let observedScrollContentActivationPoint = entry.treeElement.observedScrollContentActivationPoint,
+               let scrollMembership = entry.treeElement.scrollMembership {
                 logEvents.append(
                     .capturedObservedScrollContentActivationPoint(
                         heistId: entry.heistId,
@@ -96,9 +96,9 @@ extension TheBurglar {
             containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
             scrollInventoriesByPath: facts.scroll.inventoriesByPath
         )
-        let semantic = SemanticScreen(
+        let tree = InterfaceTree(
             elements: Dictionary(
-                uniqueKeysWithValues: entries.map { ($0.heistId, $0.screenElement) }
+                uniqueKeysWithValues: entries.map { ($0.heistId, $0.treeElement) }
             ),
             containers: semanticContainers(
                 hierarchy: hierarchy,
@@ -107,21 +107,22 @@ extension TheBurglar {
                 containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
                 containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
                 scrollInventoriesByPath: facts.scroll.inventoriesByPath
-            )
+            ),
+            viewportCapture: snapshot
         )
-        return ScreenBuildProjection(
-            semantic: semantic,
+        return InterfaceObservationBuildProjection(
+            tree: tree,
             snapshot: snapshot,
             entries: entries,
             logEvents: logEvents
         )
     }
 
-    private static func buildScreen(
-        from projection: ScreenBuildProjection,
+    private static func buildObservation(
+        from projection: InterfaceObservationBuildProjection,
         result: ParseResult
-    ) -> Screen {
-        let liveReferences = ScreenBuildLiveReferences(
+    ) -> InterfaceObservation {
+        let liveReferences = InterfaceObservationBuildLiveReferences(
             result: result,
             hierarchy: projection.snapshot.hierarchy,
             entries: projection.entries
@@ -136,16 +137,16 @@ extension TheBurglar {
             containerRefsByPath: liveReferences.containerRefsByPath,
             scrollableContainerViewsByPath: liveReferences.scrollableContainerViewsByPath
         )
-        return Screen(
-            semantic: projection.semantic,
+        return InterfaceObservation(
+            tree: projection.tree,
             liveCapture: liveCapture
         )
     }
 
-    private static func buildScreenEntries(
+    private static func buildObservationEntries(
         indexedElements: [PathIndexedAccessibilityElement],
-        facts: ScreenBuildFacts
-    ) -> [ScreenBuildEntry] {
+        facts: InterfaceObservationBuildFacts
+    ) -> [InterfaceObservationBuildEntry] {
         let heistIds = TheStash.IdAssignment.assign(indexedElements.map(\.element))
         precondition(
             heistIds.count == indexedElements.count,
@@ -155,9 +156,9 @@ extension TheBurglar {
             let indexedElement = indexedElements[index]
             let heistId = heistIds[index]
             let scrollFacts = facts.scroll.element(at: indexedElement.path)
-            return ScreenBuildEntry(
+            return InterfaceObservationBuildEntry(
                 path: indexedElement.path,
-                screenElement: Screen.ScreenElement(
+                treeElement: InterfaceTree.Element(
                     heistId: heistId,
                     scrollMembership: scrollFacts?.membership,
                     observedScrollContentActivationPoint: scrollFacts?.observedScrollContentActivationPoint,
@@ -169,14 +170,14 @@ extension TheBurglar {
     }
 
     private static func makeLiveElementTable(
-        entries: [ScreenBuildEntry],
-        liveReferences: ScreenBuildLiveReferences
+        entries: [InterfaceObservationBuildEntry],
+        liveReferences: InterfaceObservationBuildLiveReferences
     ) -> LiveCapture.LiveElementTable {
         do {
             return try LiveCapture.LiveElementTable(entries: entries.map { entry in
                 LiveCapture.LiveElementEntry(
                     path: entry.path,
-                    screenElement: entry.screenElement,
+                    treeElement: entry.treeElement,
                     ref: liveReferences.elementRef(for: entry),
                     isFirstResponder: entry.isFirstResponder
                 )
@@ -184,7 +185,7 @@ extension TheBurglar {
         } catch let error as LiveCapture.LiveElementTableValidationError {
             preconditionFailure(error.description)
         } catch {
-            preconditionFailure("Screen build failed to validate live element table: \(error)")
+            preconditionFailure("InterfaceObservation build failed to validate live element table: \(error)")
         }
     }
 
@@ -192,15 +193,15 @@ extension TheBurglar {
         hierarchy: [AccessibilityHierarchy],
         containerNamesByPath: [TreePath: ContainerName],
         containerContentFramesByPath: [TreePath: ContentRect],
-        containerScrollMembershipsByPath: [TreePath: Screen.ScrollMembership],
-        containerObservedScrollContentActivationPointsByPath: [TreePath: Screen.ObservedScrollContentActivationPoint],
+        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership],
+        containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint],
         scrollInventoriesByPath: [TreePath: ScrollInventory]
-    ) -> [TreePath: SemanticScreen.Container] {
+    ) -> [TreePath: InterfaceTree.Container] {
         Dictionary(
             uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
                 (
                     item.path,
-                    SemanticScreen.Container(
+                    InterfaceTree.Container(
                         container: item.container,
                         path: item.path,
                         containerName: containerNamesByPath[item.path],
@@ -215,7 +216,7 @@ extension TheBurglar {
     }
 
     /// The snapshot parser emits geometry in its parsing root's local
-    /// coordinate space. Button Heist's world model and wire/element-inflation
+    /// coordinate space. Button Heist's interface tree and wire/element-inflation
     /// surfaces need UIKit accessibility screen coordinates, so restore those by
     /// applying each parse root's screen offset at the parser boundary.
     private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
@@ -259,7 +260,7 @@ extension TheBurglar {
         }
     }
 
-    private static func logScreenBuildEvents(_ events: [ScreenBuildLogEvent]) {
+    private static func logObservationBuildEvents(_ events: [InterfaceObservationBuildLogEvent]) {
         for event in events {
             switch event {
             case .capturedObservedScrollContentActivationPoint(let heistId, let containerPath, let index, let point):
@@ -368,37 +369,37 @@ extension TheBurglar {
         let subtree: AccessibilityHierarchy
     }
 
-    private struct ScreenBuildEntry: Equatable {
+    private struct InterfaceObservationBuildEntry: Equatable {
         let path: TreePath
-        let screenElement: Screen.ScreenElement
+        let treeElement: InterfaceTree.Element
         let isFirstResponder: Bool
 
         var heistId: HeistId {
-            screenElement.heistId
+            treeElement.heistId
         }
     }
 
-    private struct ScreenBuildLiveReferences {
+    private struct InterfaceObservationBuildLiveReferences {
         private let objectsByPath: [TreePath: NSObject]
         private let scrollViewsByPath: [TreePath: UIScrollView]
-        let containerRefsByPath: [TreePath: Screen.ContainerRef]
-        let scrollableContainerViewsByPath: [TreePath: Screen.ScrollableViewRef]
+        let containerRefsByPath: [TreePath: LiveCapture.ContainerRef]
+        let scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef]
 
         init(
             result: ParseResult,
             hierarchy: [AccessibilityHierarchy],
-            entries: [ScreenBuildEntry]
+            entries: [InterfaceObservationBuildEntry]
         ) {
             let elementPaths = Set(entries.map(\.path))
             for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
                 preconditionFailure(
-                    "Screen build received live element object for non-element entry path \(path.indices)"
+                    "InterfaceObservation build received live element object for non-element entry path \(path.indices)"
                 )
             }
             for path in result.containerObjectsByPath.keys.sorted() {
                 guard case .container = hierarchy.node(at: path) else {
                     preconditionFailure(
-                        "Screen build received live container object for non-container path \(path.indices)"
+                        "InterfaceObservation build received live container object for non-container path \(path.indices)"
                     )
                 }
             }
@@ -406,7 +407,7 @@ extension TheBurglar {
                 guard case .container(let container, _) = hierarchy.node(at: path),
                       container.isScrollable else {
                     preconditionFailure(
-                        "Screen build received live scroll view for non-scrollable container path \(path.indices)"
+                        "InterfaceObservation build received live scroll view for non-scrollable container path \(path.indices)"
                     )
                 }
             }
@@ -414,34 +415,34 @@ extension TheBurglar {
             objectsByPath = result.objectsByPath
             scrollViewsByPath = result.scrollViewsByPath
             containerRefsByPath = result.containerObjectsByPath.mapValues {
-                Screen.ContainerRef(object: $0)
+                LiveCapture.ContainerRef(object: $0)
             }
             scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
-                Screen.ScrollableViewRef(view: $0)
+                LiveCapture.ScrollableViewRef(view: $0)
             }
         }
 
-        func elementRef(for entry: ScreenBuildEntry) -> Screen.ElementRef? {
+        func elementRef(for entry: InterfaceObservationBuildEntry) -> LiveCapture.ElementRef? {
             let object = objectsByPath[entry.path]
-            let scrollView = entry.screenElement.scrollMembership.flatMap { membership in
+            let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
                 scrollViewsByPath[membership.containerPath]
             }
             guard object != nil || scrollView != nil else { return nil }
-            return Screen.ElementRef(
+            return LiveCapture.ElementRef(
                 object: object,
                 scrollView: scrollView
             )
         }
     }
 
-    private struct ScreenBuildProjection {
-        let semantic: SemanticScreen
+    private struct InterfaceObservationBuildProjection {
+        let tree: InterfaceTree
         let snapshot: LiveCapture.Snapshot
-        let entries: [ScreenBuildEntry]
-        let logEvents: [ScreenBuildLogEvent]
+        let entries: [InterfaceObservationBuildEntry]
+        let logEvents: [InterfaceObservationBuildLogEvent]
     }
 
-    private enum ScreenBuildLogEvent: Equatable {
+    private enum InterfaceObservationBuildLogEvent: Equatable {
         case capturedObservedScrollContentActivationPoint(
             heistId: HeistId,
             containerPath: TreePath,

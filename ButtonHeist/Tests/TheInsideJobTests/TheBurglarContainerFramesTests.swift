@@ -169,7 +169,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let firstScrollView = UIScrollView(frame: frame)
         let secondScrollView = UIScrollView(frame: frame)
 
-        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
             hierarchy: [
                 .container(firstContainer, children: [.element(firstElement, traversalIndex: 0)]),
                 .container(secondContainer, children: [.element(secondElement, traversalIndex: 1)]),
@@ -179,7 +179,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                 TreePath([1]): secondScrollView,
             ]
         ))
-        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
 
@@ -242,7 +242,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let pageScrollView = UIScrollView(frame: frame)
         let listScrollView = UIScrollView(frame: frame)
 
-        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
             hierarchy: [
                 .container(outer, children: [
                     .container(pager, children: [
@@ -261,7 +261,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                 TreePath([0, 0, 0, 0]): listScrollView,
             ]
         ))
-        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
         let pagerName = ContainerName(rawValue: "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))")
@@ -285,13 +285,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
-        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
             hierarchy: [
                 .container(container, children: [.element(makeElement(), traversalIndex: 0)]),
             ],
         ))
 
-        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,

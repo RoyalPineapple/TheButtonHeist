@@ -69,7 +69,7 @@ enum TargetResolutionDiagnostics {
         case .noMatches:
             return TheStash.Diagnostics.matcherNotFound(
                 facts.predicate,
-                screenElements: facts.screenElements,
+                treeElements: facts.treeElements,
                 visibleHeistIds: facts.visibleHeistIds,
                 resolutionScope: facts.resolutionScope
             )

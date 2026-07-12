@@ -6,16 +6,16 @@ import UIKit
 import ThePlans
 @testable import TheScore
 
-/// Test-only `Screen` factory.
+/// Test-only `InterfaceObservation` factory.
 ///
 /// Replaces the per-file `installScreen` / `seedScreen` /
 /// `installScreenWithOffViewportEntry` helpers that all rebuilt the same
-/// `Screen` value from a list of `(AccessibilityElement, heistId)` pairs.
+/// `InterfaceObservation` value from a list of `(AccessibilityElement, heistId)` pairs.
 ///
-/// Known-only entries live in `Screen.semantic.elements` (so target resolution
+/// Off-viewport entries live in `InterfaceObservation.tree.elements` (so target resolution
 /// sees them) but are not present in the live hierarchy — modeling an element
 /// retained from a previous exploration that has since scrolled out of view.
-extension Screen {
+extension InterfaceObservation {
 
     struct TestEntry {
         let element: AccessibilityElement
@@ -56,11 +56,11 @@ extension Screen {
     }
 
     /// An entry that is registered but is not in the live hierarchy. Used to
-    /// simulate known semantic state without a real scrollable container.
+    /// simulate off-viewport interface state without a real scrollable container.
     struct OffViewportEntry {
         let element: AccessibilityElement
         let heistId: HeistId
-        let scrollMembership: ScrollMembership?
+        let scrollMembership: InterfaceTree.ScrollMembership?
 
         init(
             _ element: AccessibilityElement,
@@ -71,19 +71,19 @@ extension Screen {
             self.element = element
             self.heistId = heistId
             self.scrollMembership = scrollContainerPath.map {
-                ScrollMembership(containerPath: $0, index: scrollIndex)
+                InterfaceTree.ScrollMembership(containerPath: $0, index: scrollIndex)
             }
         }
     }
 
-    /// Build a `Screen` from a flat list of `(element, heistId)` pairs. The
-    /// hierarchy is constructed from the live pairs in order; known-only
+    /// Build a `InterfaceObservation` from a flat list of `(element, heistId)` pairs. The
+    /// hierarchy is constructed from the live pairs in order; off-viewport
     /// entries are added to `elements` but not to `hierarchy`.
     static func makeForTests(
         _ entries: [TestEntry],
         offViewport: [OffViewportEntry] = [],
         firstResponderHeistId: HeistId? = nil
-    ) -> Screen {
+    ) -> InterfaceObservation {
         makeForTests(
             elements: entries.map { (element: $0.element, heistId: $0.heistId) },
             objects: Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.object) }),
@@ -97,18 +97,18 @@ extension Screen {
         objects: [HeistId: NSObject?] = [:],
         offViewport: [OffViewportEntry] = [],
         firstResponderHeistId: HeistId? = nil
-    ) -> Screen {
-        var screenElements: [HeistId: ScreenElement] = [:]
+    ) -> InterfaceObservation {
+        var treeElements: [HeistId: InterfaceTree.Element] = [:]
         var hierarchy: [AccessibilityHierarchy] = []
         var heistIdsByPath: [TreePath: HeistId] = [:]
-        var elementRefs: [HeistId: ElementRef] = [:]
+        var elementRefs: [HeistId: LiveCapture.ElementRef] = [:]
         for (index, pair) in liveElements.enumerated() {
-            screenElements[pair.heistId] = ScreenElement(
+            treeElements[pair.heistId] = InterfaceTree.Element(
                 heistId: pair.heistId,
                 scrollMembership: nil,
                 element: pair.element
             )
-            elementRefs[pair.heistId] = ElementRef(
+            elementRefs[pair.heistId] = LiveCapture.ElementRef(
                 object: objects[pair.heistId] ?? nil,
                 scrollView: nil
             )
@@ -116,14 +116,14 @@ extension Screen {
             heistIdsByPath[TreePath([index])] = pair.heistId
         }
         for entry in offViewport {
-            screenElements[entry.heistId] = ScreenElement(
+            treeElements[entry.heistId] = InterfaceTree.Element(
                 heistId: entry.heistId,
                 scrollMembership: entry.scrollMembership,
                 element: entry.element
             )
         }
-        return Screen(
-            elements: screenElements,
+        return InterfaceObservation(
+            elements: treeElements,
             hierarchy: hierarchy,
             heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,

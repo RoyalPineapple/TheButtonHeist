@@ -17,24 +17,24 @@ flowchart TD
     CMATCH --> RESOLVEDNODE["resolved container node"]
     WITHIN --> MATCH
 
-    MATCH -- "0 matches" --> NOTFOUND[".notFound(TargetNotFoundFacts)<br/>reason .noMatches<br/>+ known elements in scope as suggestions"]
-    MATCH -- "1 match, no ordinal" --> RESOLVED[".resolved(ScreenElement)"]
+    MATCH -- "0 matches" --> NOTFOUND[".notFound(TargetNotFoundFacts)<br/>reason .noMatches<br/>+ interface elements in scope as suggestions"]
+    MATCH -- "1 match, no ordinal" --> RESOLVED[".resolved(InterfaceTree.Element)"]
     MATCH -- "2+ matches, no ordinal" --> AMBIG[".ambiguous(TargetAmbiguityFacts)<br/>first candidates listed —<br/>ordinal required to proceed"]
     MATCH -- "ordinal given, in range" --> RESOLVED
     MATCH -- "ordinal given, out of range" --> NOTFOUND2[".notFound<br/>reason .ordinalOutOfRange / .ordinalNegative"]
 
     RESOLVED --> LIVE{"live geometry<br/>available?"}
     LIVE -- "visible in latest capture" --> ACT["LiveActionTarget<br/>frame + activationPoint from live element"]
-    LIVE -- "known but offscreen,<br/>has scrollMembership" --> REVEAL["auto-reveal scroll<br/>(ElementInflation .revealing:<br/>revealPathGraceTimeout grace window,<br/>silent re-parse every 0.15 s)"]
+    LIVE -- "off-viewport,<br/>has scrollMembership" --> REVEAL["auto-reveal scroll<br/>(ElementInflation .revealing:<br/>revealPathGraceTimeout grace window,<br/>silent re-parse every 0.15 s)"]
     REVEAL -- "target becomes visible" --> ACT
     REVEAL -- "grace window exhausted" --> MISS["failure with diagnostics"]
 ```
 
 Notes:
 
-- Resolution reads the **settled world only** (`settledSemanticScreen`). Live capture proves actionability and geometry for a settled element; it is not a second search space.
+- Resolution reads the **interface tree only** (`TheStash.interfaceTree`). Live capture proves current actionability and geometry for an interface element; it is not a second search space.
 - Container-only targets are valid for predicates and subtree queries. Element-
   only actions reject a resolved container with a typed target-kind error.
-- Matching is **exact or miss**: string checks are case-insensitive with typography folding (smart quotes, dashes, ellipsis fold to ASCII), traits compare as sets. On a miss the resolver returns structured facts — the known elements in scope — through the diagnostic path; there is no fuzzy fallback.
-- The reveal path is bounded: lazily-instantiated content has no elements until UIKit realizes it, so a target that never enters the settled world cannot be revealed — the grace window (`revealPathGraceTimeout`, with `revealPathSilentReparseInterval = 0.15` s re-parses) covers async-loaded targets that are already known, not content that does not exist yet.
+- Matching is **exact or miss**: string checks are case-insensitive with typography folding (smart quotes, dashes, ellipsis fold to ASCII), traits compare as sets. On a miss the resolver returns structured facts — the interface elements in scope — through the diagnostic path; there is no fuzzy fallback.
+- The reveal path is bounded: lazily-instantiated content has no elements until UIKit realizes it, so a target absent from the interface tree cannot be revealed. The grace window (`revealPathGraceTimeout`, with `revealPathSilentReparseInterval = 0.15` s re-parses) covers async-loaded targets that have entered the tree, not content that does not exist yet.
 - The ordinal is a disambiguator over a semantic base selector, never a selector by itself.

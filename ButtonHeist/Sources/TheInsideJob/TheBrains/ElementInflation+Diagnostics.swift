@@ -13,12 +13,12 @@ extension ElementInflation {
 
     func semanticRevealFailureMessage(
         _ failure: SemanticRevealFailure,
-        entry: Screen.ScreenElement
+        entry: InterfaceTree.Element
     ) -> String {
         let description = Self.semanticTargetDescription(entry)
         switch failure {
         case .missingScrollMembership:
-            return "known target \(description) has no scroll membership"
+            return "off-viewport target \(description) has no scroll membership"
         case .noLiveScrollableAncestor:
             let scrollContainer: String
             if let path = entry.scrollMembership?.containerPath {
@@ -26,15 +26,15 @@ extension ElementInflation {
             } else {
                 scrollContainer = ""
             }
-            return "known target \(description) has no live scrollable ancestor in the current semantic graph;"
+            return "off-viewport target \(description) has no live scrollable ancestor in the interface tree;"
                 + scrollContainer
                 + " \(stash.liveScrollContainerDiagnostics())"
         case .scanDidNotRevealTarget:
-            return "known target \(description) was not visible after scroll scan"
+            return "off-viewport target \(description) was not visible after scroll scan"
         }
     }
 
-    private static func semanticTargetDescription(_ entry: Screen.ScreenElement) -> String {
+    private static func semanticTargetDescription(_ entry: InterfaceTree.Element) -> String {
         let primaryDescription = Navigation.ScrollTargetDescription(entry).description
         let element = entry.element
         let summary = ElementDiagnosticSummary(

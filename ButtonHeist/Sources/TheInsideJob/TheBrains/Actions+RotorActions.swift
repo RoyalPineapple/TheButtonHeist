@@ -43,20 +43,20 @@ extension Actions {
     }
 
     private func exposeRotorResultIfPossible(_ hit: TheStash.RotorHit) async {
-        guard let screenElement = hit.screenElement else { return }
+        guard let treeElement = hit.treeElement else { return }
 
-        if case .objectUnavailable = stash.resolveLiveActionTarget(for: screenElement) {
-            _ = await navigation.elementInflation.revealSemanticTarget(screenElement)
+        if case .objectUnavailable = stash.resolveLiveActionTarget(for: treeElement) {
+            _ = await navigation.elementInflation.revealSemanticTarget(treeElement)
         }
 
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement) else {
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {
             return
         }
 
-        let description = Navigation.ScrollTargetDescription(liveTarget.screenElement).description
+        let description = Navigation.ScrollTargetDescription(liveTarget.treeElement).description
         _ = await navigation.elementInflation.scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(for: liveTarget.screenElement),
+            in: stash.liveScrollView(for: liveTarget.treeElement),
             method: .rotor,
             noScrollViewFailure: .geometryNotActionable(
                 "rotor result \(description) has no live scrollable ancestor to make activation point actionable"
@@ -75,7 +75,7 @@ extension Actions {
         direction: RotorDirection,
         liveTarget: TheStash.LiveActionTarget
     ) -> TheSafecracker.ActionDispatchOutcome {
-        let element = liveTarget.screenElement
+        let element = liveTarget.treeElement
         let liveObject = liveTarget.object
         switch outcome {
         case .succeeded(let hit):
@@ -161,7 +161,7 @@ extension Actions {
         _ hit: TheStash.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.ActionDispatchOutcome {
-        let foundElement = hit.screenElement.map { HeistElement(accessibilityElement: $0.element) }
+        let foundElement = hit.treeElement.map { HeistElement(accessibilityElement: $0.element) }
         var message = "Rotor '\(hit.rotor)' found"
         if let describedElement = foundElement?.label ?? foundElement?.description {
             message += " \(describedElement)"
@@ -185,7 +185,7 @@ extension Actions {
         rotor: String?,
         rotorIndex: Int?,
         direction: RotorDirection,
-        element: TheStash.ScreenElement,
+        element: InterfaceTree.Element,
         liveObject: NSObject,
         suggestion: String,
         failureKind: TheSafecracker.FailureKind = .actionFailed
@@ -210,7 +210,7 @@ extension Actions {
         rotor: String?,
         rotorIndex: Int?,
         direction: RotorDirection,
-        element: TheStash.ScreenElement,
+        element: InterfaceTree.Element,
         liveObject: NSObject,
         suggestion: String
     ) -> String {

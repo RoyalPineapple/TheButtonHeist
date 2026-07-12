@@ -466,7 +466,7 @@ struct PredicatePollingState: Sendable, Equatable {
         self.observedSequence = observedSequence
         switch scope {
         case .visible:
-            self.probeState = .visibleOnly
+            self.probeState = .viewportOnly
         case .discovery:
             self.probeState = .discovery(needsInitialProbe
                 ? .probeDue(fingerprint: initialVisibleFingerprint, visibleTicksSinceProbe: .zero)
@@ -477,7 +477,7 @@ struct PredicatePollingState: Sendable, Equatable {
 
     var nextProbe: PredicateNextProbe {
         switch probeState {
-        case .visibleOnly:
+        case .viewportOnly:
             return .visible
         case .discovery(let discovery):
             return discovery.nextProbe
@@ -520,7 +520,7 @@ struct PredicatePollingState: Sendable, Equatable {
 }
 
 private enum PredicatePollingProbeState: Sendable, Equatable {
-    case visibleOnly
+    case viewportOnly
     case discovery(PredicateDiscoveryPollingState)
 }
 

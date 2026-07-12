@@ -4,8 +4,8 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Tests for `TheBurglar.buildScreen(from:)`. Validates that a `ParseResult`
-/// is converted into a `Screen` value with the current semantics: heistId
+/// Tests for `TheBurglar.buildObservation(from:)`. Validates that a `ParseResult`
+/// is converted into a `InterfaceObservation` value with the current semantics: heistId
 /// assignment, scroll membership, first-responder detection, and
 /// screen-name derivation.
 @MainActor
@@ -23,9 +23,9 @@ final class TheBurglarApplyTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - buildScreen populates elements
+    // MARK: - buildObservation populates elements
 
-    func testBuildScreenPopulatesElements() {
+    func testBuildObservationPopulatesElements() {
         let elementA = makeElement(label: "Save", traits: .button)
         let elementB = makeElement(label: "Cancel", traits: .button)
         let result = TheBurglar.ParseResult(
@@ -35,27 +35,27 @@ final class TheBurglarApplyTests: XCTestCase {
             ],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 2, "Screen should have one entry per parsed element")
-        for heistId in screen.semantic.elements.keys {
+        XCTAssertEqual(screen.tree.elements.count, 2, "InterfaceObservation should have one entry per parsed element")
+        for heistId in screen.tree.elements.keys {
             XCTAssertNotNil(screen.findElement(heistId: heistId),
                             "Each heistId should map to an entry")
         }
     }
 
-    func testBuildScreenPopulatesHeistIdsByPath() {
+    func testBuildObservationPopulatesHeistIdsByPath() {
         let element = makeElement(label: "OK", traits: .button)
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "ok_button")
     }
 
-    func testBuildScreenKeepsDistinctEntriesForValueEqualElements() {
+    func testBuildObservationKeepsDistinctEntriesForValueEqualElements() {
         let first = makeElement(label: "Item", traits: .button)
         let second = makeElement(label: "Item", traits: .button)
         let result = TheBurglar.ParseResult(
@@ -65,29 +65,29 @@ final class TheBurglarApplyTests: XCTestCase {
             ],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
-        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let screen = TheBurglar.buildObservation(from: result)
+        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
 
         // Value-equal elements still get distinct synthesized heistIds because
         // live identity is keyed by tree path, not element value equality.
-        XCTAssertEqual(screen.semantic.elements.count, 2)
-        XCTAssertEqual(Set(screen.semantic.elements.keys), ["item_button_1", "item_button_2"])
+        XCTAssertEqual(screen.tree.elements.count, 2)
+        XCTAssertEqual(Set(screen.tree.elements.keys), ["item_button_1", "item_button_2"])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
     }
 
-    func testBuildScreenSetsHierarchy() {
+    func testBuildObservationSetsHierarchy() {
         let element = makeElement(label: "Item")
         let hierarchy: [AccessibilityHierarchy] = [.element(element, traversalIndex: 0)]
         let result = TheBurglar.ParseResult(
             hierarchy: hierarchy
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertEqual(screen.liveCapture.hierarchy.count, 1)
     }
 
-    // MARK: - Screen name derivation
+    // MARK: - InterfaceObservation name derivation
 
     func testScreenNameFromFirstHeader() {
         let header = makeElement(label: "Settings", traits: .header)
@@ -99,7 +99,7 @@ final class TheBurglarApplyTests: XCTestCase {
             ]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertEqual(screen.name, "Settings")
     }
@@ -110,7 +110,7 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [.element(header, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertEqual(screen.id, TheScore.slugify("My Profile"))
     }
@@ -121,7 +121,7 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [.element(button, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertNil(screen.name)
         XCTAssertNil(screen.id)
@@ -137,7 +137,7 @@ final class TheBurglarApplyTests: XCTestCase {
             ]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertNil(screen.name)
     }
@@ -157,7 +157,7 @@ final class TheBurglarApplyTests: XCTestCase {
             objectsByPath: [TreePath([0]): textField],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertNotNil(screen.liveCapture.firstResponderHeistId)
 
@@ -174,12 +174,12 @@ final class TheBurglarApplyTests: XCTestCase {
             objectsByPath: [TreePath([0]): label],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertNil(screen.liveCapture.firstResponderHeistId)
     }
 
-    func testBuildScreenUsesSyntheticFirstResponderFacts() {
+    func testBuildObservationUsesSyntheticFirstResponderFacts() {
         let first = makeElement(label: "Email")
         let second = makeElement(label: "Password")
         let firstPath = TreePath([0])
@@ -194,11 +194,11 @@ final class TheBurglarApplyTests: XCTestCase {
                 secondPath: NSObject(),
             ]
         )
-        let facts = TheBurglar.ScreenBuildFacts(
-            focus: TheBurglar.ScreenBuildFocusFacts(firstResponderPaths: [secondPath])
+        let facts = TheBurglar.InterfaceObservationBuildFacts(
+            focus: TheBurglar.InterfaceObservationBuildFocusFacts(firstResponderPaths: [secondPath])
         )
 
-        let screen = TheBurglar.buildScreen(from: result, facts: facts)
+        let screen = TheBurglar.buildObservation(from: result, facts: facts)
 
         XCTAssertEqual(
             screen.liveCapture.firstResponderHeistId,
@@ -214,10 +214,10 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [.element(button, traversalIndex: 0)]
         )
 
-        let first = TheBurglar.buildScreen(from: result)
-        let second = TheBurglar.buildScreen(from: result)
+        let first = TheBurglar.buildObservation(from: result)
+        let second = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(Set(first.semantic.elements.keys), Set(second.semantic.elements.keys),
+        XCTAssertEqual(Set(first.tree.elements.keys), Set(second.tree.elements.keys),
                        "Same elements should produce same heistIds")
     }
 
@@ -237,10 +237,10 @@ final class TheBurglarApplyTests: XCTestCase {
             ]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.semantic.elements.count, 2)
-        XCTAssertEqual(screen.semantic.elements.count, 2,
+        XCTAssertEqual(screen.tree.elements.count, 2)
+        XCTAssertEqual(screen.tree.elements.count, 2,
                        "Duplicate labels should produce two distinct entries")
     }
 
@@ -256,13 +256,13 @@ final class TheBurglarApplyTests: XCTestCase {
             ],
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
 
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([1])), "row_button_1")
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "row_button_2")
     }
 
-    func testBuildScreenRestoresScreenCoordinateGeometryFromParseRootOffset() throws {
+    func testBuildObservationRestoresScreenCoordinateGeometryFromParseRootOffset() throws {
         let parseRootOffset = CGPoint(x: 180, y: 24)
         let rootLocalFrame = CGRect(x: 64, y: 372, width: 155, height: 72)
         let screenFrame = rootLocalFrame.offsetBy(dx: parseRootOffset.x, dy: parseRootOffset.y)
@@ -283,9 +283,9 @@ final class TheBurglarApplyTests: XCTestCase {
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
         let element = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
-        let projected = try XCTUnwrap(TheStash.WireConversion.toInterface(from: screen).projectedElements.first)
+        let projected = try XCTUnwrap(TheStash.WireConversion.toInterface(from: screen.tree).projectedElements.first)
 
         XCTAssertEqual(element.shape.frame, screenFrame)
         XCTAssertEqual(element.bhResolvedActivationPoint, screenActivationPoint)
@@ -297,7 +297,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(projected.activationPointY, screenActivationPoint.y)
     }
 
-    func testBuildScreenRestoresPathGeometryFromParseRootOffset() throws {
+    func testBuildObservationRestoresPathGeometryFromParseRootOffset() throws {
         let parseRootOffset = CGPoint(x: 20, y: 30)
         let pathElement = AccessibilityElement(
             description: "Path Button",
@@ -328,7 +328,7 @@ final class TheBurglarApplyTests: XCTestCase {
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
         let translated = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
 
         guard case .path(let elements) = translated.shape else {
@@ -338,7 +338,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(translated.bhResolvedActivationPoint, CGPoint(x: 50, y: 60))
     }
 
-    func testBuildScreenTranslationPreservesContainerFacts() throws {
+    func testBuildObservationTranslationPreservesContainerFacts() throws {
         let parseRootOffset = CGPoint(x: 12, y: 34)
         let containerPath = TreePath([0])
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 80, width: 320, height: 400))
@@ -363,7 +363,7 @@ final class TheBurglarApplyTests: XCTestCase {
             screenCoordinateOffsetsByPath: [containerPath: parseRootOffset]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
+        let screen = TheBurglar.buildObservation(from: result)
         let translated = try XCTUnwrap(screen.liveCapture.hierarchy.first)
         guard case .container(let translatedContainer, _) = translated else {
             return XCTFail("Expected translated container")
@@ -396,8 +396,8 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViewsByPath: [TreePath([0]): scrollView]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.semantic.elements.keys.first else {
+        let screen = TheBurglar.buildObservation(from: result)
+        guard let heistId = screen.tree.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
@@ -412,8 +412,8 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [.element(element, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.semantic.elements.keys.first else {
+        let screen = TheBurglar.buildObservation(from: result)
+        guard let heistId = screen.tree.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
@@ -421,7 +421,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertNil(screen.findElement(heistId: heistId)?.scrollMembership)
     }
 
-    func testBuildScreenUsesSyntheticScrollFactsForPureProjection() throws {
+    func testBuildObservationUsesSyntheticScrollFactsForPureProjection() throws {
         let scrollPath = TreePath([0])
         let nestedContainerPath = TreePath([0, 0])
         let childPath = TreePath([0, 0, 0])
@@ -439,10 +439,10 @@ final class TheBurglarApplyTests: XCTestCase {
             frame: CGRect(x: 10, y: 160, width: 120, height: 44)
         )
         let observedElementPoint = try XCTUnwrap(
-            Screen.ObservedScrollContentActivationPoint(CGPoint(x: 70, y: 180))
+            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 70, y: 180))
         )
         let observedContainerPoint = try XCTUnwrap(
-            Screen.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
+            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
         )
         let inventory = ScrollInventory(totalElementCount: 20, visibleIndices: [7])
         let result = TheBurglar.ParseResult(
@@ -454,11 +454,11 @@ final class TheBurglarApplyTests: XCTestCase {
                 ]),
             ]
         )
-        let facts = TheBurglar.ScreenBuildFacts(
-            scroll: TheBurglar.ScreenBuildScrollFacts(
+        let facts = TheBurglar.InterfaceObservationBuildFacts(
+            scroll: TheBurglar.InterfaceObservationBuildScrollFacts(
                 contextContainerPaths: [scrollPath],
                 elementsByPath: [
-                    childPath: TheBurglar.ScreenBuildElementScrollFacts(
+                    childPath: TheBurglar.InterfaceObservationBuildElementScrollFacts(
                         containerPath: scrollPath,
                         index: 7,
                         observedScrollContentActivationPoint: observedElementPoint
@@ -471,19 +471,19 @@ final class TheBurglarApplyTests: XCTestCase {
             )
         )
 
-        let screen = TheBurglar.buildScreen(from: result, facts: facts)
+        let screen = TheBurglar.buildObservation(from: result, facts: facts)
         let heistId = try XCTUnwrap(screen.liveCapture.heistId(forPath: childPath))
         let element = try XCTUnwrap(screen.findElement(heistId: heistId))
 
         XCTAssertEqual(
             element.scrollMembership,
-            Screen.ScrollMembership(containerPath: scrollPath, index: 7)
+            InterfaceTree.ScrollMembership(containerPath: scrollPath, index: 7)
         )
         XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
         XCTAssertEqual(screen.liveCapture.scrollInventory(forPath: scrollPath), inventory)
         XCTAssertEqual(
             screen.liveCapture.containerScrollMembership(forPath: nestedContainerPath),
-            Screen.ScrollMembership(containerPath: scrollPath, index: nil)
+            InterfaceTree.ScrollMembership(containerPath: scrollPath, index: nil)
         )
         XCTAssertEqual(
             screen.liveCapture.containerObservedScrollContentActivationPoint(forPath: nestedContainerPath),

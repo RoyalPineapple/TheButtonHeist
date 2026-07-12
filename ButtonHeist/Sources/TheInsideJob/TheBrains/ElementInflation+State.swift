@@ -8,16 +8,16 @@ extension ElementInflation {
 
     internal struct InflatedElementTarget {
         internal let target: AccessibilityTarget
-        internal let screenElement: TheStash.ScreenElement
+        internal let treeElement: InterfaceTree.Element
         internal let liveTarget: TheStash.LiveActionTarget
 
         internal init(
             target: AccessibilityTarget,
-            screenElement: TheStash.ScreenElement,
+            treeElement: InterfaceTree.Element,
             liveTarget: TheStash.LiveActionTarget
         ) {
             self.target = target
-            self.screenElement = screenElement
+            self.treeElement = treeElement
             self.liveTarget = liveTarget
         }
     }
@@ -33,8 +33,8 @@ extension ElementInflation {
     }
 
     internal enum TreeTargetMatch {
-        case visible(TheStash.ScreenElement)
-        case known(TheStash.ScreenElement)
+        case visible(InterfaceTree.Element)
+        case known(InterfaceTree.Element)
     }
 
     internal enum RetryReason: String, CustomStringConvertible, Sendable, Equatable {
@@ -83,10 +83,10 @@ extension ElementInflation {
 
     internal enum State: CustomStringConvertible {
         case resolving(ResolutionPass)
-        case revealing(treeElement: TheStash.ScreenElement, attempt: Int)
+        case revealing(treeElement: InterfaceTree.Element, attempt: Int)
         case refreshing(
             target: AccessibilityTarget,
-            screenElement: TheStash.ScreenElement,
+            treeElement: InterfaceTree.Element,
             attempt: Int,
             didReveal: Bool
         )
@@ -101,14 +101,14 @@ extension ElementInflation {
                 return "resolving"
             case .revealing(let treeElement, let attempt):
                 return "revealing(element: \(treeElement.heistId), attempt: \(attempt))"
-            case .refreshing(_, let screenElement, let attempt, let didReveal):
-                return "refreshing(element: \(screenElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
+            case .refreshing(_, let treeElement, let attempt, let didReveal):
+                return "refreshing(element: \(treeElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
             case .placing(let inflatedTarget, let attempt, let didReveal):
-                return "placing(element: \(inflatedTarget.screenElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
+                return "placing(element: \(inflatedTarget.treeElement.heistId), didReveal: \(didReveal), attempt: \(attempt))"
             case .retrying(let failedAttempt, let reason):
                 return "retrying(failedAttempt: \(failedAttempt), reason: \(reason.description))"
             case .inflated(let inflatedTarget):
-                return "inflated(element: \(inflatedTarget.screenElement.heistId))"
+                return "inflated(element: \(inflatedTarget.treeElement.heistId))"
             case .failed(let failure):
                 return "failed(step: \(failure.failedStep.rawValue))"
             }
@@ -122,7 +122,7 @@ extension ElementInflation {
     }
 
     internal enum TargetRefreshGraceTerminal {
-        case screenElement(TheStash.ScreenElement, didReveal: Bool)
+        case treeElement(InterfaceTree.Element, didReveal: Bool)
         case inflated(InflatedElementTarget)
         case failure(ElementInflationFailure)
         case timedOut
@@ -136,7 +136,7 @@ extension ElementInflation.InflatedElementTarget {
         ActionSubjectEvidence(
             source: source,
             target: target,
-            element: TheStash.WireConversion.convert(screenElement.element)
+            element: TheStash.WireConversion.convert(treeElement.element)
         )
     }
 }

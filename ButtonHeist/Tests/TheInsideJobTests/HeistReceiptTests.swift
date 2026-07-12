@@ -272,9 +272,9 @@ final class HeistReceiptTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        let staleDiscovery = Screen.makeForTests(
+        let staleDiscovery = InterfaceObservation.makeForTests(
             elements: [(staleHeader, "controls_demo")],
-            offViewport: [Screen.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
+            offViewport: [InterfaceObservation.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
         )
         job.brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleDiscovery)
 
@@ -283,7 +283,7 @@ final class HeistReceiptTests: XCTestCase {
             traits: .header,
             respondsToUserInteraction: false
         )
-        let currentScreen = Screen.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
+        let currentScreen = InterfaceObservation.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
         job.brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
 
         let plan = try HeistPlan {
@@ -293,8 +293,8 @@ final class HeistReceiptTests: XCTestCase {
         _ = try await Heist(plan, runtime: .insideJob(job))
 
         XCTAssertEqual(job.brains.stash.lastScreenName, "ButtonHeist Demo")
-        XCTAssertEqual(job.brains.stash.knownElementIds, ["buttonheist_demo"])
-        XCTAssertNil(job.brains.stash.knownElement(heistId: "stale_row"))
+        XCTAssertEqual(job.brains.stash.interfaceElementIDs, ["buttonheist_demo"])
+        XCTAssertNil(job.brains.stash.interfaceElement(heistId: "stale_row"))
     }
 
     func testSingleStringRootHeistBindsOneRootArgument() async throws {
@@ -670,7 +670,7 @@ private final class ReceiptWaitScript {
                 accessibilityTrace: trace,
                 expectation: expectation,
                 observedSequence: nextSequence,
-                observationSummary: "known: \(state.interface.projectedElements.count) elements"
+                observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
         }
         return .timedOut(
@@ -678,7 +678,7 @@ private final class ReceiptWaitScript {
             accessibilityTrace: trace,
             expectation: expectation,
             observedSequence: nextSequence,
-            observationSummary: "known: \(state.interface.projectedElements.count) elements"
+            observationSummary: "interface: \(state.interface.projectedElements.count) elements"
         )
     }
 }

@@ -8,7 +8,7 @@ import TheScore
 extension TheStash {
     func resolveAccessibilityNotificationEvidence(
         _ pendingEvents: [PendingAccessibilityNotificationEvent],
-        in screen: Screen
+        in screen: InterfaceObservation
     ) -> [AccessibilityNotificationEvidence] {
         resolveAccessibilityNotificationEvidence(
             pendingEvents,
@@ -19,8 +19,8 @@ extension TheStash {
 
     func resolveAccessibilityNotificationEvidence(
         _ pendingEvents: [PendingAccessibilityNotificationEvent],
-        identityScreen: Screen,
-        referenceScreen: Screen
+        identityScreen: InterfaceObservation,
+        referenceScreen: InterfaceObservation
     ) -> [AccessibilityNotificationEvidence] {
         pendingEvents.map { event in
             autoreleasepool {
@@ -45,8 +45,8 @@ extension TheStash {
 
     private func resolveAccessibilityNotificationPayload(
         _ payload: PendingAccessibilityNotificationPayload,
-        identityScreen: Screen,
-        referenceScreen: Screen
+        identityScreen: InterfaceObservation,
+        referenceScreen: InterfaceObservation
     ) -> AccessibilityNotificationPayload {
         switch payload {
         case .none:
@@ -84,7 +84,7 @@ extension TheStash {
 
     private func traceElementReference(
         for heistId: HeistId,
-        in screen: Screen,
+        in screen: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
         for (index, element) in screen.orderedElements.enumerated() where element.heistId == heistId {
@@ -99,7 +99,7 @@ extension TheStash {
 
     private func uniqueTraceElementReference(
         matching parsedElement: AccessibilityElement,
-        in screen: Screen,
+        in screen: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
         var match: AccessibilityNotificationElementReference?

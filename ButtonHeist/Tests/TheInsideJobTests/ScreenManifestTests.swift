@@ -25,8 +25,8 @@ final class ScreenManifestTests: XCTestCase {
         _ container: AccessibilityContainer,
         path: TreePath,
         containerName: ContainerName? = nil
-    ) -> SemanticScreen.Container {
-        SemanticScreen.Container(
+    ) -> InterfaceTree.Container {
+        InterfaceTree.Container(
             container: container,
             path: path,
             containerName: containerName,
@@ -169,7 +169,7 @@ final class ScreenManifestTests: XCTestCase {
             contentSize: CGSize(width: 320, height: 2_000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],

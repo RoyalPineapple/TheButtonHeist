@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 
-// MARK: - Screen Capture
+// MARK: - InterfaceObservation Capture
 
 extension TheStash {
 

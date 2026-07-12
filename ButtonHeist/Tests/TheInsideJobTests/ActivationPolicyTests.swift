@@ -56,12 +56,12 @@ final class ActivationPolicyTests: XCTestCase {
 
         let result = await makePolicy(
             accessibilityActivate: { target in
-                events.append("activate:\(target.screenElement.heistId)")
+                events.append("activate:\(target.treeElement.heistId)")
                 return .success
             },
             refreshAndResolve: {
                 events.append("refresh")
-                return .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+                return .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -119,7 +119,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -150,7 +150,7 @@ final class ActivationPolicyTests: XCTestCase {
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, trace in
@@ -182,7 +182,7 @@ final class ActivationPolicyTests: XCTestCase {
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, _ in
@@ -213,7 +213,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
+                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -251,7 +251,7 @@ final class ActivationPolicyTests: XCTestCase {
         activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
         textEntryActivationFailure: @escaping @MainActor (
-            TheStash.ScreenElement,
+            InterfaceTree.Element,
             ActivationTrace
         ) async -> TheSafecracker.ActionDispatchOutcome? = { _, _ in nil }
     ) -> ActivationPolicy {
@@ -260,9 +260,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: refreshAndResolve,
             activationPointDispatch: activationPointDispatch,
             showFingerprint: showFingerprint,
-            textEntryActivationFailure: { screenElement, trace in
-                guard screenElement.element.traits.contains(.textEntry) else { return nil }
-                return await textEntryActivationFailure(screenElement, trace)
+            textEntryActivationFailure: { treeElement, trace in
+                guard treeElement.element.traits.contains(.textEntry) else { return nil }
+                return await textEntryActivationFailure(treeElement, trace)
             }
         )
     }
@@ -281,7 +281,7 @@ final class ActivationPolicyTests: XCTestCase {
             activationPoint: activationPoint,
             respondsToUserInteraction: false
         )
-        let screenElement = TheStash.ScreenElement(
+        let treeElement = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
             element: element
@@ -289,7 +289,7 @@ final class ActivationPolicyTests: XCTestCase {
         let object = ActivationObject()
         object.accessibilityFrame = frame
         return TheStash.LiveActionTarget(
-            screenElement: screenElement,
+            treeElement: treeElement,
             object: object,
             frame: frame,
             activationPoint: activationPoint

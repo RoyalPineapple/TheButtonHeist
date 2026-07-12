@@ -13,7 +13,7 @@ import AccessibilitySnapshotParser
 
     static func nonAdjustableAction(
         _ method: ActionMethod,
-        element: TheStash.ScreenElement
+        element: InterfaceTree.Element
     ) -> String {
         "\(adjustableBoundary(method)) failed: observed \(elementObservation(element)); "
             + "try target an element with trait adjustable before calling \(method.rawValue)."
@@ -21,7 +21,7 @@ import AccessibilitySnapshotParser
 
     static func elementDeallocated(
         boundary: String,
-        element: TheStash.ScreenElement,
+        element: InterfaceTree.Element,
         isInflated: Bool
     ) -> String {
         let observed = elementObservation(
@@ -34,7 +34,7 @@ import AccessibilitySnapshotParser
 
     static func unsupportedElementAction(
         _ method: ActionMethod,
-        element: TheStash.ScreenElement
+        element: InterfaceTree.Element
     ) -> String {
         "\(method.rawValue) failed: observed \(elementObservation(element)); "
             + "try retarget an element whose actions include \(method.rawValue)."
@@ -42,7 +42,7 @@ import AccessibilitySnapshotParser
 
     static func missingCustomAction(
         _ requestedAction: String,
-        element: TheStash.ScreenElement
+        element: InterfaceTree.Element
     ) -> String {
         let customActions = availableCustomActions(for: element)
         let suggestion = customActions.isEmpty
@@ -54,7 +54,7 @@ import AccessibilitySnapshotParser
 
     static func declinedCustomAction(
         _ requestedAction: String,
-        element: TheStash.ScreenElement
+        element: InterfaceTree.Element
     ) -> String {
         let alternatives = availableCustomActions(for: element).filter { $0 != requestedAction }
         let suggestion = alternatives.isEmpty
@@ -108,7 +108,7 @@ import AccessibilitySnapshotParser
 
     static func gestureTargetUnavailable(
         method: ActionMethod,
-        element: TheStash.ScreenElement,
+        element: InterfaceTree.Element,
         isVisible: Bool
     ) -> String {
         "gesture target unavailable: observed method=\(method.rawValue) phase=targeting "
@@ -130,18 +130,18 @@ import AccessibilitySnapshotParser
     }
 
     static func elementObservation(
-        _ screenElement: TheStash.ScreenElement,
+        _ treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil,
         includeLiveState: Bool = false,
         missingLiveObjectState: String = "notInflated"
     ) -> String {
-        let element = screenElement.element
+        let element = treeElement.element
         let summary = ElementDiagnosticSummary(
             label: element.label,
             identifier: element.identifier,
             value: element.value,
             traits: element.traits.heistTraits,
-            actions: availableActions(for: screenElement, liveObject: liveObject),
+            actions: availableActions(for: treeElement, liveObject: liveObject),
             liveObjectState: liveObject == nil ? missingLiveObjectState : nil
         )
         return summary.rendered(using: .actionCapability(includeLiveState: includeLiveState))
@@ -159,7 +159,7 @@ import AccessibilitySnapshotParser
 
     private static func formatFirstResponder(stash: TheStash) -> String {
         guard let heistId = stash.firstResponderHeistId else { return "none" }
-        guard let element = stash.firstResponderScreenElement() else {
+        guard let element = stash.firstResponderInterfaceElement() else {
             return "focused element \(stringProfile.renderString(heistId.description)) liveObject=unknown"
         }
         return elementObservation(element)
@@ -194,11 +194,11 @@ import AccessibilitySnapshotParser
     }
 
     private static func availableActions(
-        for screenElement: TheStash.ScreenElement,
+        for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
     ) -> [ElementAction] {
         var actions: [ElementAction] = []
-        let element = screenElement.element
+        let element = treeElement.element
         let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: liveObject)
         if isInteractive {
             actions.append(.activate)
@@ -221,10 +221,10 @@ import AccessibilitySnapshotParser
     }
 
     private static func availableCustomActions(
-        for screenElement: TheStash.ScreenElement,
+        for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
     ) -> [String] {
-        var names = screenElement.element.customActions.map { $0.name }.filter { !$0.isEmpty }
+        var names = treeElement.element.customActions.map { $0.name }.filter { !$0.isEmpty }
         let liveNames = liveObject?.accessibilityCustomActions?
             .map { $0.name }
             .filter { !$0.isEmpty } ?? []
@@ -233,10 +233,10 @@ import AccessibilitySnapshotParser
     }
 
     static func availableRotors(
-        for screenElement: TheStash.ScreenElement,
+        for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
     ) -> [String] {
-        var names = screenElement.element.customRotors.map { $0.name }.filter { !$0.isEmpty }
+        var names = treeElement.element.customRotors.map { $0.name }.filter { !$0.isEmpty }
         let liveNames = liveObject?.accessibilityCustomRotors?
             .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
             .filter { !$0.isEmpty } ?? []

@@ -1138,7 +1138,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                         ],
                         outcome: .matchedCase(index: 0),
                         elapsedMs: 2,
-                        lastObservedSummary: "screen: login; known: 3 elements"
+                        lastObservedSummary: "screen: login; interface: 3 elements"
                     )),
                     failure: HeistFailureDetail(
                         category: .invocation,

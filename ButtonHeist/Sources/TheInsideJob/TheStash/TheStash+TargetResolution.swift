@@ -13,16 +13,14 @@ extension TheStash {
 
     /// Which part of the interface state a lookup should read.
     enum InterfaceElementScope {
-        /// Elements in the observed live accessibility hierarchy from the most recent parse.
-        case visible
-        /// Elements retained in settled semantic truth, including an exploration union.
-        case known
+        case viewport
+        case interface
     }
 
     enum ResolutionScope: String {
-        case known
+        case interface
         case provided
-        case visible
+        case viewport
     }
 
     struct TargetCandidateFacts {
@@ -32,13 +30,13 @@ extension TheStash {
         let isVisible: Bool
         let isReachable: Bool
 
-        init(screenElement: ScreenElement, visibleHeistIds: Set<HeistId>) {
-            let element = screenElement.element
+        init(treeElement: InterfaceTree.Element, visibleHeistIds: Set<HeistId>) {
+            let element = treeElement.element
             label = element.label
             identifier = element.identifier
             value = element.value
-            isVisible = visibleHeistIds.contains(screenElement.heistId)
-            isReachable = screenElement.scrollMembership != nil
+            isVisible = visibleHeistIds.contains(treeElement.heistId)
+            isReachable = treeElement.scrollMembership != nil
         }
     }
 
@@ -53,7 +51,7 @@ extension TheStash {
         let ordinal: Int?
         let reason: TargetNotFoundReason
         let resolutionScope: ResolutionScope
-        let screenElements: [ScreenElement]
+        let treeElements: [InterfaceTree.Element]
         let visibleHeistIds: Set<HeistId>
     }
 
@@ -72,7 +70,7 @@ extension TheStash {
         let identifier: String?
         let isModalBoundary: Bool
 
-        init(container: SemanticScreen.Container) {
+        init(container: InterfaceTree.Container) {
             let accessibilityContainer = container.container
             containerName = container.containerName
             let facts = accessibilityContainer.containerPredicateFacts
@@ -107,11 +105,11 @@ extension TheStash {
     /// Three-case result from `resolveTarget`. Resolution returns facts;
     /// diagnostic wording is projected separately.
     enum TargetResolution {
-        case resolved(ScreenElement)
+        case resolved(InterfaceTree.Element)
         case notFound(TargetNotFoundFacts)
         case ambiguous(TargetAmbiguityFacts)
 
-        var resolved: ScreenElement? {
+        var resolved: InterfaceTree.Element? {
             if case .resolved(let resolved) = self { return resolved }
             return nil
         }
@@ -127,7 +125,7 @@ extension TheStash {
     }
 
     enum ContainerTargetResolution {
-        case resolved(SemanticScreen.Container)
+        case resolved(InterfaceTree.Container)
         case notFound(ContainerNotFoundFacts)
         case ambiguous(ContainerAmbiguityFacts)
 
@@ -144,32 +142,31 @@ extension TheStash {
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
-    /// Resolution reads settled semantic memory. If an element is not known,
+    /// Resolution reads the interface tree. If an element is absent,
     /// resolution fails with a near-miss suggestion. Live coordinate
     /// revalidation happens later in action execution.
     func resolveTarget(_ target: AccessibilityTarget) -> TargetResolution {
-        resolveTarget(target, in: settledSemanticScreen, resolutionScope: .known)
+        resolveTarget(target, in: interfaceTree, resolutionScope: .interface)
     }
 
-    /// Resolve a target against a caller-provided observation value. Used by
-    /// exploration before its local semantic union has been committed.
-    func resolveTarget(_ target: AccessibilityTarget, in screen: Screen) -> TargetResolution {
-        resolveTarget(target, in: screen, resolutionScope: .provided)
+    /// Resolve a target against a caller-provided tree during exploration.
+    func resolveTarget(_ target: AccessibilityTarget, in tree: InterfaceTree) -> TargetResolution {
+        resolveTarget(target, in: tree, resolutionScope: .provided)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
-    /// known-only entries retained from exploration.
+    /// off-viewport entries retained from exploration.
     func resolveVisibleTarget(_ target: AccessibilityTarget) -> TargetResolution {
-        resolveTarget(target, in: liveVisibleScreen.visibleOnly, resolutionScope: .visible)
+        resolveTarget(target, in: latestObservation.tree.viewportOnly, resolutionScope: .viewport)
     }
 
     func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
         resolveContainerTarget(
             predicate,
             ordinal: ordinal,
-            in: WireConversion.semanticInterfaceProjection(from: settledSemanticScreen),
-            resolutionScope: .known
+            in: WireConversion.semanticInterfaceProjection(from: interfaceTree),
+            resolutionScope: .interface
         )
     }
 
@@ -219,46 +216,46 @@ extension TheStash {
         }
     }
 
-    /// HeistIds for either the live hierarchy or the committed known screen.
+    /// HeistIds for either the viewport or the full interface tree.
     func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
-        case .visible:
-            return visibleElementIds
-        case .known:
-            return knownElementIds
+        case .viewport:
+            return latestObservation.viewportElementIDs
+        case .interface:
+            return interfaceTree.elementIDs
         }
     }
 
     /// Looks up an element by heistId in the selected scope.
     ///
-    /// `.known` reads settled semantic truth, including any exploration union.
+    /// `.interface` reads the full interface tree, including any exploration union.
     /// `.visible` reads the latest observed parser output and only returns ids
     /// backed by the latest live hierarchy parse.
-    func screenElement(heistId: HeistId, in scope: InterfaceElementScope) -> ScreenElement? {
+    func treeElement(heistId: HeistId, in scope: InterfaceElementScope) -> InterfaceTree.Element? {
         switch scope {
-        case .visible:
-            return liveContains(heistId: heistId) ? liveScreenElement(heistId: heistId) : nil
-        case .known:
-            return knownElement(heistId: heistId)
+        case .viewport:
+            return liveInterfaceElement(heistId: heistId)
+        case .interface:
+            return interfaceElement(heistId: heistId)
         }
     }
 
     /// Resolve a target using first-match semantics against only the live hierarchy.
-    func resolveFirstVisibleMatch(_ target: AccessibilityTarget) -> ScreenElement? {
+    func resolveFirstVisibleMatch(_ target: AccessibilityTarget) -> InterfaceTree.Element? {
         resolveVisibleTarget(target.firstMatchTarget).resolved
     }
 
-    /// All elements in the supplied screen, or in settled world when omitted.
+    /// All elements in the supplied tree, or in the current interface tree when omitted.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
-    /// any known heistIds not present in the live
+    /// any interface heistIds not present in the viewport
     /// hierarchy (post-exploration union) appear after, sorted by heistId so
     /// the snapshot order is stable across runs.
-    func selectElements(in screen: Screen? = nil) -> [ScreenElement] {
-        if let screen {
-            return screen.orderedElements
+    func selectElements(in tree: InterfaceTree? = nil) -> [InterfaceTree.Element] {
+        if let tree {
+            return tree.orderedElements
         }
-        return orderedSemanticElements
+        return orderedInterfaceElements
     }
 }
 
@@ -266,28 +263,28 @@ private extension TheStash {
 
     func resolveTarget(
         _ target: AccessibilityTarget,
-        in screen: Screen,
+        in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let projection = WireConversion.semanticInterfaceProjection(from: screen)
-        return resolveTarget(target, in: projection, screen: screen, resolutionScope: resolutionScope)
+        let projection = WireConversion.semanticInterfaceProjection(from: tree)
+        return resolveTarget(target, in: projection, tree: tree, resolutionScope: resolutionScope)
     }
 
     func resolveTarget(
         _ target: AccessibilityTarget,
         in projection: SemanticInterfaceProjection,
-        screen: Screen,
+        tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let screenElements = projection.screenElements(scopedBy: target)
+        let treeElements = projection.treeElements(scopedBy: target)
         guard let selection = target.terminalSelection else {
             return .notFound(TargetNotFoundFacts(
                 predicate: ElementPredicate(),
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
-                screenElements: screenElements,
-                visibleHeistIds: screen.visibleIds
+                treeElements: treeElements,
+                visibleHeistIds: tree.viewportElementIDs
             ))
         }
         if let ordinal = selection.ordinal, ordinal < 0 {
@@ -296,12 +293,12 @@ private extension TheStash {
                 ordinal: ordinal,
                 reason: .ordinalNegative(ordinal),
                 resolutionScope: resolutionScope,
-                screenElements: screenElements,
-                visibleHeistIds: screen.visibleIds
+                treeElements: treeElements,
+                visibleHeistIds: tree.viewportElementIDs
             ))
         }
 
-        let matches = screenElements.filter { selection.predicate.matches($0.element) }
+        let matches = treeElements.filter { selection.predicate.matches($0.element) }
         if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
@@ -309,8 +306,8 @@ private extension TheStash {
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
-                    screenElements: matches,
-                    visibleHeistIds: screen.visibleIds
+                    treeElements: matches,
+                    visibleHeistIds: tree.viewportElementIDs
                 ))
             }
             return .resolved(matches[ordinal])
@@ -322,8 +319,8 @@ private extension TheStash {
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
-                screenElements: screenElements,
-                visibleHeistIds: screen.visibleIds
+                treeElements: treeElements,
+                visibleHeistIds: tree.viewportElementIDs
             ))
         case 1:
             return .resolved(matches[0])
@@ -331,7 +328,7 @@ private extension TheStash {
             return .ambiguous(TargetAmbiguityFacts(
                 predicate: selection.predicate,
                 candidates: matches.prefix(10).map {
-                    TargetCandidateFacts(screenElement: $0, visibleHeistIds: screen.visibleIds)
+                    TargetCandidateFacts(treeElement: $0, visibleHeistIds: tree.viewportElementIDs)
                 },
                 matchedCount: matches.count,
                 resolutionScope: resolutionScope

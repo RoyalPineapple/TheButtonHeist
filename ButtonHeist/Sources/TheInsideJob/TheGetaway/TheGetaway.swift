@@ -209,19 +209,19 @@ final class TheGetaway {
         }
     }
 
-    // MARK: - Screen Capture
+    // MARK: - InterfaceObservation Capture
 
     func handleScreen(
         mode: ScreenCaptureMode = .raw,
         requestId: String? = nil,
         respond: @escaping SocketResponseHandler
     ) async {
-        insideJobLogger.debug("Screen requested")
+        insideJobLogger.debug("InterfaceObservation requested")
 
         switch await brains.captureScreenPayload(mode: mode) {
         case .success(let payload):
             await sendMessage(.screen(payload), requestId: requestId, respond: respond)
-            insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
+            insideJobLogger.debug("InterfaceObservation sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
             await sendMessage(
                 .error(ServerError(kind: .general, message: failure.message)),

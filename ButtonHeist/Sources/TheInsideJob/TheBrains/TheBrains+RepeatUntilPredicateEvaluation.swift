@@ -307,7 +307,7 @@ extension TheBrains {
         guard let elementCount = trace.captures.last?.interface.projectedElements.count else {
             return nil
         }
-        return "known: \(elementCount) elements"
+        return "interface: \(elementCount) elements"
     }
 
     private func repeatUntilStopExpectation(

@@ -374,7 +374,7 @@ where State == SettleLoopMachine.State,
     /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
 
-    typealias ParseProvider = @MainActor () -> Screen?
+    typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async throws -> Void
     typealias ObservationYield = @MainActor () async throws -> Void
@@ -476,7 +476,7 @@ where State == SettleLoopMachine.State,
         let events: [SettleEvent]
         /// Last parsed screen observed by the settle loop. On `.settled`, this
         /// is the AX tree whose fingerprint completed the stability proof.
-        let finalScreen: Screen?
+        let finalScreen: InterfaceObservation?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
@@ -487,7 +487,7 @@ where State == SettleLoopMachine.State,
         init(
             outcome: SettleOutcome,
             events: [SettleEvent],
-            finalScreen: Screen?,
+            finalScreen: InterfaceObservation?,
             elementsByKey: [TimelineKey: AccessibilityElement],
             instabilityDescription: String? = nil
         ) {

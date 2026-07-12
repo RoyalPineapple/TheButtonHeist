@@ -42,7 +42,7 @@ final class DiagnosticsTests: XCTestCase {
 
     func testCompactSummaryEmptyScreen() {
         let summary = Diagnostics.compactElementSummary(
-            screenElements: [],
+            treeElements: [],
             visibleHeistIds: []
         )
         XCTAssertTrue(summary.contains("empty"))
@@ -51,17 +51,17 @@ final class DiagnosticsTests: XCTestCase {
 
     func testCompactSummaryShowsElementCount() {
         let element = makeElement(label: "Hello")
-        let screenElement = TheStash.ScreenElement(
+        let treeElement = InterfaceTree.Element(
             heistId: "hello",
             scrollMembership: nil,
             element: element
         )
 
         let summary = Diagnostics.compactElementSummary(
-            screenElements: [screenElement],
+            treeElements: [treeElement],
             visibleHeistIds: ["hello"]
         )
-        XCTAssertTrue(summary.contains("1 known element"))
+        XCTAssertTrue(summary.contains("1 interface element"))
         XCTAssertTrue(summary.contains("Hello"))
         XCTAssertTrue(summary.contains("visible"))
         XCTAssertTrue(summary.contains("Next:"))

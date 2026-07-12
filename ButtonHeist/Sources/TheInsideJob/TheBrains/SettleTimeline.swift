@@ -52,7 +52,7 @@ extension AccessibilityElement {
         self.bucket = bucket
     }
 
-    mutating func record(_ screen: Screen) -> SettleRecordedObservation {
+    mutating func record(_ screen: InterfaceObservation) -> SettleRecordedObservation {
         let elements = screen.liveCapture.hierarchy.sortedElements
         if let previousElements {
             latestChangeDescription = SettleTimeline.changeDescription(
@@ -81,7 +81,7 @@ extension AccessibilityElement {
 }
 
 struct SettleRecordedObservation: Equatable {
-    let screen: Screen
+    let screen: InterfaceObservation
     let fingerprint: Int
     let elementsByKey: [TimelineKey: AccessibilityElement]
     let instabilityDescription: String?

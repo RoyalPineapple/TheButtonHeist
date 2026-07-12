@@ -24,29 +24,29 @@ extension ElementInflation {
         }
     }
 
-    /// Reveal a known target from the current graph. Known-only semantic
+    /// Reveal an off-viewport target from the interface tree. Off-viewport
     /// elements carry no executable scroll authority unless the parser
     /// retained a live scroll ancestor.
     @discardableResult
-    func revealSemanticTarget(_ screenElement: TheStash.ScreenElement) async -> SemanticRevealResult {
-        if let visible = stash.liveScreenElement(heistId: screenElement.heistId),
-           visible.element.representsSameSemanticElement(as: screenElement.element) {
+    func revealSemanticTarget(_ treeElement: InterfaceTree.Element) async -> SemanticRevealResult {
+        if let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
+           visible.element.representsSameSemanticElement(as: treeElement.element) {
             return .alreadyVisible
         }
 
-        guard screenElement.scrollMembership != nil else {
+        guard treeElement.scrollMembership != nil else {
             return .failed(.missingScrollMembership)
         }
-        if await revealScrollAncestors(for: screenElement),
-           await moveToObservedContentActivationPoint(screenElement) {
+        if await revealScrollAncestors(for: treeElement),
+           await moveToObservedContentActivationPoint(treeElement) {
             return .revealed
         }
-        guard let revealedScreen = await revealKnownTarget?(screenElement.heistId) else {
+        guard let revealedScreen = await revealKnownTarget?(treeElement.heistId) else {
             return .failed(.noLiveScrollableAncestor)
         }
         stash.semanticObservationStream.commitSettledDiscoveryObservation(revealedScreen)
-        guard let visible = stash.liveScreenElement(heistId: screenElement.heistId),
-              visible.element.representsSameSemanticElement(as: screenElement.element)
+        guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
+              visible.element.representsSameSemanticElement(as: treeElement.element)
         else {
             return .failed(.scanDidNotRevealTarget)
         }
@@ -54,7 +54,7 @@ extension ElementInflation {
     }
 
     static func semanticRevealTargetOffset(
-        for observedActivationPoint: Screen.ObservedScrollContentActivationPoint,
+        for observedActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint,
         in scrollView: UIScrollView
     ) -> CGPoint {
         let contentActivationPoint = observedActivationPoint.point.cgPoint
@@ -76,9 +76,9 @@ extension ElementInflation {
         )
     }
 
-    private func moveToObservedContentActivationPoint(_ screenElement: TheStash.ScreenElement) async -> Bool {
-        guard let observedActivationPoint = screenElement.observedScrollContentActivationPoint,
-              let scrollView = liveScrollView(for: screenElement)
+    private func moveToObservedContentActivationPoint(_ treeElement: InterfaceTree.Element) async -> Bool {
+        guard let observedActivationPoint = treeElement.observedScrollContentActivationPoint,
+              let scrollView = liveScrollView(for: treeElement)
         else { return false }
 
         scrollView.setContentOffset(
@@ -90,8 +90,8 @@ extension ElementInflation {
         return true
     }
 
-    private func revealScrollAncestors(for screenElement: TheStash.ScreenElement) async -> Bool {
-        guard let scrollContainerPath = screenElement.scrollContainerPath else { return false }
+    private func revealScrollAncestors(for treeElement: InterfaceTree.Element) async -> Bool {
+        guard let scrollContainerPath = treeElement.scrollContainerPath else { return false }
         return await revealScrollContainer(at: scrollContainerPath, depth: 0)
     }
 
@@ -117,12 +117,12 @@ extension ElementInflation {
         return liveScrollView(forScrollContainerPath: path) != nil
     }
 
-    private func liveScrollView(for screenElement: TheStash.ScreenElement) -> UIScrollView? {
-        guard let scrollContainerPath = screenElement.scrollContainerPath else {
-            return stash.liveScrollView(for: screenElement)
+    private func liveScrollView(for treeElement: InterfaceTree.Element) -> UIScrollView? {
+        guard let scrollContainerPath = treeElement.scrollContainerPath else {
+            return stash.liveScrollView(for: treeElement)
         }
         return liveScrollView(forScrollContainerPath: scrollContainerPath)
-            ?? stash.liveScrollView(for: screenElement)
+            ?? stash.liveScrollView(for: treeElement)
     }
 
     private func liveScrollView(forScrollContainerPath path: TreePath) -> UIScrollView? {
@@ -155,14 +155,14 @@ extension ElementInflation {
         return matches.count == 1 ? matches[0] : nil
     }
 
-    private func semanticContainer(at path: TreePath) -> SemanticScreen.Container? {
-        stash.settledSemanticScreen.semantic.containers[path]
-            ?? stash.latestObservedSemanticWorld.containers[path]
+    private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
+        stash.interfaceTree.containers[path]
+            ?? stash.latestObservation.tree.containers[path]
     }
 }
 
-private extension SemanticScreen.Container {
-    func matchesScrollIdentity(of other: SemanticScreen.Container) -> Bool {
+private extension InterfaceTree.Container {
+    func matchesScrollIdentity(of other: InterfaceTree.Container) -> Bool {
         container.semanticRevealScrollContentSize == other.container.semanticRevealScrollContentSize
             && contentFrame == other.contentFrame
     }

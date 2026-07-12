@@ -17,13 +17,13 @@ extension TheBurglar {
     /// evidence and must not feed generated container names or interface hashes.
     struct ContainerIdentityContext {
         let contentFramesByPath: [TreePath: ContentRect]
-        let scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership]
+        let scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
         let nestedInScrollViewPaths: Set<TreePath>
     }
 
     private struct ContainerIdentityAccumulator {
         var contentFramesByPath: [TreePath: ContentRect] = [:]
-        var scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:]
+        var scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:]
         var nestedInScrollViewPaths = Set<TreePath>()
     }
 
@@ -61,7 +61,7 @@ extension TheBurglar {
         let contentFrame: ContentRect
         if let parentScrollContext {
             contentFrame = ContentRect(CGRect(origin: .zero, size: frame.size))
-            accumulator.scrollMembershipsByPath[path] = SemanticScreen.ScrollMembership(
+            accumulator.scrollMembershipsByPath[path] = InterfaceTree.ScrollMembership(
                 containerPath: parentScrollContext.containerPath,
                 index: nil
             )
@@ -98,7 +98,7 @@ extension TheBurglar {
     // MARK: - Element Context Building
 
     struct ElementContext {
-        let scrollMembership: SemanticScreen.ScrollMembership?
+        let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
     private struct ScrollContext {
@@ -155,7 +155,7 @@ extension TheBurglar {
         case .element(let element, _):
             let context = ElementContext(
                 scrollMembership: parentScrollContext.map {
-                    SemanticScreen.ScrollMembership(containerPath: $0.containerPath, index: nil)
+                    InterfaceTree.ScrollMembership(containerPath: $0.containerPath, index: nil)
                 }
             )
             contexts[element] = context

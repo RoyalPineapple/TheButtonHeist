@@ -871,7 +871,8 @@ private let architectureCurrencyOwnerPaths: [String: String] = [
     "SettleLoopMachine": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
     "SettleLoopRunner": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
     "SettlePolicy": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
-    "Screen": "ButtonHeist/Sources/TheInsideJob/TheStash/Screen.swift",
+    "InterfaceObservation": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
+    "InterfaceTree": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift",
 ]
 
 private let anyBoundaryAllowedPaths: Set<String> = [
@@ -903,8 +904,8 @@ private let jsonBoundaryAllowedPaths: Set<String> = [
     "ButtonHeist/Sources/TheButtonHeist/TheHandoff/NetworkBoundary/DeviceConnection+Messages.swift",
     "ButtonHeist/Sources/TheButtonHeist/TheHandoff/NetworkBoundary/DeviceConnectionSending.swift",
     "ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SimpleSocketServer+Sending.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheBurglar/TheBurglar+ScreenBuilding.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticScreen.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBurglar/TheBurglar+InterfaceObservationBuilding.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift",
     "ButtonHeist/Sources/ThePlans/Compilation/HeistPlanning.swift",
     "ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftFileCompiler.swift",
     "ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift",

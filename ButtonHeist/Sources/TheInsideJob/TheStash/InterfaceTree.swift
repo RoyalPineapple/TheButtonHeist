@@ -8,30 +8,41 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-// MARK: - Semantic Screen
+// MARK: - Interface Tree
 
-/// Durable settled-world UI state retained across exploration.
+/// Button Heist's durable, targetable representation of the accessibility tree.
 ///
-/// `SemanticScreen` contains targetable accessibility identity and value-only
-/// reveal evidence. It must not hold UIKit objects, viewport geometry as live
-/// authority, live activation points, or weak refs. Live action geometry is
-/// acquired from `LiveCapture` for each operation.
-struct SemanticScreen: Sendable, Equatable {
+/// `InterfaceTree` contains targetable accessibility identity and value-only
+/// reveal evidence. Its viewport snapshot is value-only bookkeeping used to
+/// reconcile the next observation. Live UIKit references remain in
+/// `InterfaceObservation.liveCapture` and are reacquired for every action.
+struct InterfaceTree: Sendable, Equatable {
     let elements: [HeistId: Element]
     let containers: [TreePath: Container]
+    let viewportCapture: LiveCapture.Snapshot
 
-    static let empty = SemanticScreen(elements: [:], containers: [:])
+    static let empty = InterfaceTree(elements: [:], containers: [:], viewportCapture: .empty)
 
     init(
         elements: [HeistId: Element],
-        containers: [TreePath: Container] = [:]
+        containers: [TreePath: Container] = [:],
+        viewportCapture: LiveCapture.Snapshot = .empty
     ) {
         self.elements = elements
         self.containers = containers
+        self.viewportCapture = viewportCapture
     }
 
-    var heistIds: Set<HeistId> {
+    var elementIDs: Set<HeistId> {
         Set(elements.keys)
+    }
+
+    var viewportElementIDs: Set<HeistId> {
+        viewportCapture.heistIds
+    }
+
+    var elementCount: Int {
+        elements.count
     }
 
     func findElement(heistId: HeistId) -> Element? {
@@ -41,7 +52,7 @@ struct SemanticScreen: Sendable, Equatable {
     /// Hash of semantic accessibility state. Deliberately excludes
     /// viewport-only facts like live object refs, visible ids, current scroll
     /// offset, and live geometry.
-    var semanticHash: String {
+    var interfaceHash: String {
         let fingerprints = elements.values
             .map(Self.semanticElementFingerprint)
             .sorted { $0.heistId < $1.heistId }
@@ -54,6 +65,113 @@ struct SemanticScreen: Sendable, Equatable {
         )
         let data = Self.stableSemanticHashData(fingerprints, encoder: encoder)
         return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    var summaryElement: AccessibilityElement? {
+        let viewportElements = viewportCapture.hierarchy.sortedElements
+        if let explicit = viewportElements.first(where: { $0.traits.contains(.summaryElement) }) {
+            return explicit
+        }
+        return viewportElements
+            .enumerated()
+            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
+                guard element.traits.contains(.header), element.label != nil else { return nil }
+                return (index, element)
+            }
+            .min { left, right in
+                let leftFrame = left.element.shape.frame
+                let rightFrame = right.element.shape.frame
+                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
+                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                return left.index < right.index
+            }?
+            .element
+    }
+
+    var name: String? {
+        summaryElement?.label
+    }
+
+    var id: String? {
+        TheScore.slugify(name)
+    }
+
+    var orderedContainers: [Container] {
+        containers.values.sorted { left, right in
+            left.path.indices.lexicographicallyPrecedes(right.path.indices)
+        }
+    }
+
+    var orderedElements: [Element] {
+        var seen = Set<HeistId>()
+        let visible = viewportCapture.hierarchy.pathIndexedElements.compactMap { indexed -> Element? in
+            guard let heistID = viewportCapture.heistIdsByPath[indexed.path],
+                  let element = elements[heistID],
+                  seen.insert(heistID).inserted
+            else { return nil }
+            return element
+        }
+        let offViewport = elements
+            .filter { !seen.contains($0.key) }
+            .map(\.value)
+            .sorted { $0.heistId < $1.heistId }
+        return visible + offViewport
+    }
+
+    var viewportOnly: InterfaceTree {
+        let containerPaths = Set(viewportCapture.hierarchy.pathIndexedContainers.map(\.path))
+        return InterfaceTree(
+            elements: elements.filter { viewportElementIDs.contains($0.key) },
+            containers: containers.filter { containerPaths.contains($0.key) },
+            viewportCapture: viewportCapture
+        )
+    }
+
+    func merging(_ other: InterfaceTree) -> InterfaceTree {
+        InterfaceTree(
+            elements: elements.merging(other.elements) { _, new in new },
+            containers: containers.merging(other.containers) { _, new in new },
+            viewportCapture: other.viewportCapture
+        )
+    }
+
+    @MainActor
+    func updatingViewport(with observation: InterfaceObservation) -> InterfaceTree {
+        let observed = observation.tree
+        guard !observed.viewportElementIDs.isEmpty else { return observed }
+        if let currentID = id, let observedID = observed.id, currentID != observedID {
+            return observed
+        }
+
+        let offViewportIDs = elementIDs.subtracting(viewportElementIDs)
+        guard observationPairsWithCurrentViewport(observed, offViewportIDs: offViewportIDs) else {
+            return observed
+        }
+
+        let disappearedIDs = viewportElementIDs.subtracting(observed.viewportElementIDs)
+        return InterfaceTree(
+            elements: elements
+                .merging(observed.elements) { _, new in new }
+                .filter { !disappearedIDs.contains($0.key) },
+            containers: containers.merging(observed.containers) { _, new in new },
+            viewportCapture: observed.viewportCapture
+        )
+    }
+
+    @MainActor
+    private func observationPairsWithCurrentViewport(
+        _ observation: InterfaceTree,
+        offViewportIDs: Set<HeistId>
+    ) -> Bool {
+        if !viewportElementIDs.isDisjoint(with: observation.viewportElementIDs) {
+            return true
+        }
+        if !offViewportIDs.isEmpty && viewportElementIDs.isEmpty {
+            return true
+        }
+        let previous = viewportElementIDs.compactMap { elements[$0]?.element }
+        let current = observation.viewportElementIDs.compactMap { observation.elements[$0]?.element }
+        return previous.sharesElementPairing(with: current)
     }
 
     // MARK: - Element Entry
@@ -93,7 +211,7 @@ struct SemanticScreen: Sendable, Equatable {
         let path: TreePath
         let scrollMembership: ScrollMembership?
         let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
-        /// Parsed accessibility identity/value retained in the settled world.
+        /// Parsed accessibility identity/value retained in the interface tree.
         /// Do not treat its frame or activation point as live action geometry.
         let element: AccessibilityElement
 
@@ -122,7 +240,7 @@ struct SemanticScreen: Sendable, Equatable {
 
     // MARK: - Container Entry
 
-    /// Durable settled-world container identity and scroll inventory evidence.
+    /// Durable interface-tree container identity and scroll inventory evidence.
     ///
     /// UIKit object refs and live activation geometry remain in `LiveCapture`
     /// and are acquired only at dispatch time.

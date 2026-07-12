@@ -82,18 +82,18 @@ import TheScore
         }
     }
 
-    static func snapshot(of screen: Screen) -> Snapshot {
+    static func snapshot(of tree: InterfaceTree) -> Snapshot {
         Snapshot(
             signature: signature(
-                hierarchy: screen.liveCapture.hierarchy,
-                elements: screen.liveCapture.hierarchy.sortedElements
+                hierarchy: tree.viewportCapture.hierarchy,
+                elements: tree.viewportCapture.hierarchy.sortedElements
             ),
-            firstResponderHeistId: screen.liveCapture.firstResponderHeistId
+            firstResponderHeistId: nil
         )
     }
 
     static func snapshot(of stash: TheStash) -> Snapshot {
-        snapshot(of: stash.settledSemanticScreen)
+        snapshot(of: stash.interfaceTree)
     }
 
     static func classify(before: Snapshot, after: Snapshot) -> Classification {

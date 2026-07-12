@@ -163,10 +163,10 @@ final class ScreenClassifierTests: XCTestCase {
 
         let before = ScreenClassifier.snapshot(of: screen(hierarchy: [
             .container(nonModal, children: []),
-        ]))
+        ]).tree)
         let after = ScreenClassifier.snapshot(of: screen(hierarchy: [
             .container(modal, children: []),
-        ]))
+        ]).tree)
 
         XCTAssertNotEqual(before.signature.rootShape, after.signature.rootShape)
     }
@@ -216,18 +216,18 @@ final class ScreenClassifierTests: XCTestCase {
         XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
     }
 
-    private func classify(before: Screen, after: Screen) -> ScreenClassifier.Classification {
+    private func classify(before: InterfaceObservation, after: InterfaceObservation) -> ScreenClassifier.Classification {
         ScreenClassifier.classify(
-            before: ScreenClassifier.snapshot(of: before),
-            after: ScreenClassifier.snapshot(of: after)
+            before: ScreenClassifier.snapshot(of: before.tree),
+            after: ScreenClassifier.snapshot(of: after.tree)
         )
     }
 
     private func screen(
         elements: [AccessibilityElement],
         firstResponderHeistId: HeistId? = nil
-    ) -> Screen {
-        Screen.makeForTests(
+    ) -> InterfaceObservation {
+        InterfaceObservation.makeForTests(
             elements: elements.enumerated().map { index, element in
                 (element: element, heistId: HeistId(rawValue: "element_\(index)"))
             },
@@ -235,14 +235,14 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    private func screen(hierarchy: [AccessibilityHierarchy]) -> Screen {
+    private func screen(hierarchy: [AccessibilityHierarchy]) -> InterfaceObservation {
         let elements = hierarchy.sortedElements
-        return Screen(
+        return InterfaceObservation(
             elements: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
                 let heistId = HeistId(rawValue: "element_\(index)")
                 return (
                     heistId,
-                    Screen.ScreenElement(
+                    InterfaceTree.Element(
                         heistId: heistId,
                         scrollMembership: nil,
                         element: element

@@ -66,11 +66,11 @@ extension Navigation {
             profile: profile,
             previousVisibleIds: previousVisibleIds
         )
-        var seenVisibleIds = stash.visibleIds
+        var seenVisibleIds = stash.viewportElementIDs
 
         while true {
             observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
-            let currentVisibleIds = stash.visibleIds
+            let currentVisibleIds = stash.viewportElementIDs
             let newHeistIds = currentVisibleIds.subtracting(seenVisibleIds)
             seenVisibleIds.formUnion(newHeistIds)
 

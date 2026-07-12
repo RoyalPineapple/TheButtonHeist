@@ -8,7 +8,7 @@ extension ElementInflation {
 
     internal func stateAfterRefresh(
         target: AccessibilityTarget,
-        screenElement: TheStash.ScreenElement,
+        treeElement: InterfaceTree.Element,
         didReveal: Bool,
         attempt: Int,
         method: ActionMethod,
@@ -17,7 +17,7 @@ extension ElementInflation {
     ) async -> State {
         switch resolveFreshElementTarget(
             target: target,
-            screenElement: screenElement,
+            treeElement: treeElement,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         ) {
@@ -45,7 +45,7 @@ extension ElementInflation {
                 )
             case .failure(let failure):
                 return .failed(failure)
-            case .screenElement, .timedOut:
+            case .treeElement, .timedOut:
                 return .retrying(failedAttempt: attempt, reason: reason)
             case .cancelled:
                 return .failed(.cancelled(
@@ -75,7 +75,7 @@ extension ElementInflation {
         }
         if let screen = await discoverTarget?(target) {
             stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
-            switch visibleTargetResolution(target, in: screen) {
+            switch visibleTargetResolution(target, in: screen.tree) {
             case .success(let visible):
                 return .success(.visible(visible))
             case .failure(let failure):
@@ -88,8 +88,8 @@ extension ElementInflation {
             return currentVisibleTargetFailure(target)
         }
         switch knownSemanticTarget(target) {
-        case .success(let screenElement):
-            return .success(.known(screenElement))
+        case .success(let treeElement):
+            return .success(.known(treeElement))
         case .failure(let failure):
             return .failure(failure)
         }
@@ -97,10 +97,10 @@ extension ElementInflation {
 
     internal func knownSemanticTarget(
         _ target: AccessibilityTarget
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+    ) -> Result<InterfaceTree.Element, ElementInflationFailure> {
         switch stash.resolveTarget(target) {
-        case .resolved(let screenElement):
-            return .success(screenElement)
+        case .resolved(let treeElement):
+            return .success(treeElement)
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound(let facts):
@@ -110,17 +110,17 @@ extension ElementInflation {
 
     internal func visibleTargetResolution(
         _ target: AccessibilityTarget
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
-        visibleTargetResolution(target, in: stash.liveVisibleScreen)
+    ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
+        visibleTargetResolution(target, in: stash.latestObservation.tree)
     }
 
     internal func visibleTargetResolution(
         _ target: AccessibilityTarget,
-        in screen: Screen
-    ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
-        switch stash.resolveTarget(target, in: screen.visibleOnly) {
-        case .resolved(let screenElement):
-            return .success(screenElement)
+        in tree: InterfaceTree
+    ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
+        switch stash.resolveTarget(target, in: tree.viewportOnly) {
+        case .resolved(let treeElement):
+            return .success(treeElement)
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound:
@@ -133,15 +133,15 @@ extension ElementInflation {
         method: ActionMethod
     ) -> FreshElementTargetResolution? {
         switch visibleTargetResolution(target) {
-        case .success(let screenElement)?:
-            switch stash.resolveLiveActionTarget(for: screenElement) {
+        case .success(let treeElement)?:
+            switch stash.resolveLiveActionTarget(for: treeElement) {
             case .resolved(let liveTarget):
-                guard retainedScreenElement(liveTarget.screenElement, matches: target) else {
+                guard retainedInterfaceElement(liveTarget.treeElement, matches: target) else {
                     return .retry(.staleTarget)
                 }
                 return .success(InflatedElementTarget(
                     target: target,
-                    screenElement: liveTarget.screenElement,
+                    treeElement: liveTarget.treeElement,
                     liveTarget: liveTarget
                 ))
             case .objectUnavailable:
@@ -150,8 +150,8 @@ extension ElementInflation {
                 return .failure(.geometryNotActionable(
                     ActionCapabilityDiagnostic.gestureTargetUnavailable(
                         method: method,
-                        element: screenElement,
-                        isVisible: stash.visibleIds.contains(screenElement.heistId)
+                        element: treeElement,
+                        isVisible: stash.viewportElementIDs.contains(treeElement.heistId)
                     )
                 ))
             }
@@ -162,23 +162,23 @@ extension ElementInflation {
         }
     }
 
-    internal func retainedScreenElement(
-        _ screenElement: TheStash.ScreenElement,
+    internal func retainedInterfaceElement(
+        _ treeElement: InterfaceTree.Element,
         matches target: AccessibilityTarget
     ) -> Bool {
         switch target {
         case .predicate(let template, _):
             guard let predicate = try? template.resolve(in: .empty) else { return false }
-            return !ElementPredicateGraph<HeistId, TheStash.ScreenElement>(
-                subjects: [screenElement],
+            return !ElementPredicateGraph<HeistId, InterfaceTree.Element>(
+                subjects: [treeElement],
                 identity: \.heistId
             )
             .resolve(predicate)
             .isEmpty
         case .within:
             guard let resolved = stash.resolveVisibleTarget(target).resolved else { return false }
-            return resolved.heistId == screenElement.heistId
-                && resolved.path == screenElement.path
+            return resolved.heistId == treeElement.heistId
+                && resolved.path == treeElement.path
         case .container, .ref:
             return false
         }
@@ -188,8 +188,8 @@ extension ElementInflation {
         _ target: AccessibilityTarget
     ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch knownSemanticTarget(target) {
-        case .success(let screenElement):
-            return .success(.known(screenElement))
+        case .success(let treeElement):
+            return .success(.known(treeElement))
         case .failure(let failure) where failure.failedStep == .notFound:
             return .failure(failure)
         case .failure(let failure):
@@ -201,8 +201,8 @@ extension ElementInflation {
         _ target: AccessibilityTarget
     ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch stash.resolveVisibleTarget(target) {
-        case .resolved(let screenElement):
-            return .success(.visible(screenElement))
+        case .resolved(let treeElement):
+            return .success(.visible(treeElement))
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound(let facts):
@@ -215,13 +215,13 @@ extension ElementInflation {
 
     private func resolveFreshElementTarget(
         target: AccessibilityTarget,
-        screenElement: TheStash.ScreenElement,
+        treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deallocatedBoundary: String
     ) -> FreshElementTargetResolution {
         resolveLiveElementTarget(
             target: target,
-            screenElement: screenElement,
+            treeElement: treeElement,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         )
@@ -229,13 +229,13 @@ extension ElementInflation {
 
     private func resolveLiveElementTarget(
         target: AccessibilityTarget,
-        screenElement: TheStash.ScreenElement,
+        treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deallocatedBoundary: String
     ) -> FreshElementTargetResolution {
-        switch stash.resolveLiveActionTarget(for: screenElement) {
+        switch stash.resolveLiveActionTarget(for: treeElement) {
         case .resolved(let liveTarget):
-            guard retainedScreenElement(liveTarget.screenElement, matches: target) else {
+            guard retainedInterfaceElement(liveTarget.treeElement, matches: target) else {
                 if let currentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
                     target: target,
                     method: method
@@ -253,7 +253,7 @@ extension ElementInflation {
             }
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: liveTarget.screenElement,
+                treeElement: liveTarget.treeElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
@@ -275,8 +275,8 @@ extension ElementInflation {
             return .failure(.geometryNotActionable(
                 ActionCapabilityDiagnostic.gestureTargetUnavailable(
                     method: method,
-                    element: screenElement,
-                    isVisible: stash.visibleIds.contains(screenElement.heistId)
+                    element: treeElement,
+                    isVisible: stash.viewportElementIDs.contains(treeElement.heistId)
                 )
             ))
         }

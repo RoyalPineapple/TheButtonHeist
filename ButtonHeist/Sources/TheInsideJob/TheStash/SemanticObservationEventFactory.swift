@@ -12,7 +12,7 @@ enum SemanticObservationEventFactory {
         notificationSequence: UInt64,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
-        notificationIdentityScreen: Screen? = nil,
+        notificationIdentityScreen: InterfaceObservation? = nil,
         fallbackReason: AccessibilityObservationFallbackReason? = nil
     ) -> SettledSemanticObservationEvent {
         let previousCapture = previous?.trace.captures.last
@@ -51,12 +51,12 @@ enum SemanticObservationEventFactory {
         generation: ObservationGeneration,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
-        notificationIdentityScreen: Screen?,
+        notificationIdentityScreen: InterfaceObservation?,
         fallbackReason: AccessibilityObservationFallbackReason?
     ) -> AccessibilityTrace.Capture {
         let screen = switch observation.scope {
         case .visible:
-            observation.screen.visibleOnly
+            observation.screen.viewportOnly
         case .discovery:
             observation.screen
         }

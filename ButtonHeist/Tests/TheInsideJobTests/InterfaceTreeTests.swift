@@ -5,7 +5,7 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class ScreenTests: XCTestCase {
+final class InterfaceTreeTests: XCTestCase {
 
     // MARK: - Helpers
 
@@ -24,84 +24,84 @@ final class ScreenTests: XCTestCase {
         label: String? = nil,
         scrollContainerPath: TreePath? = nil,
         scrollIndex: Int? = nil
-    ) -> Screen.ScreenElement {
-        Screen.ScreenElement(
+    ) -> InterfaceTree.Element {
+        InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: scrollContainerPath.map {
-                Screen.ScrollMembership(containerPath: $0, index: scrollIndex)
+                InterfaceTree.ScrollMembership(containerPath: $0, index: scrollIndex)
             },
             element: makeElement(label: label ?? heistId.description)
         )
     }
 
-    private func commitVisibleRefresh(from settled: Screen, with refresh: Screen) -> WorldStore.CommitResult {
-        var worldStore = WorldStore()
-        worldStore.commitDiscovery(settled)
-        return worldStore.commitVisible(refresh)
+    private func updateViewport(
+        of tree: InterfaceTree,
+        with observation: InterfaceObservation
+    ) -> InterfaceTree {
+        tree.updatingViewport(with: observation)
     }
 
     // MARK: - .empty
 
     func testEmptyHasNoElements() {
-        XCTAssertTrue(Screen.empty.semantic.elements.isEmpty)
+        XCTAssertTrue(InterfaceObservation.empty.tree.elements.isEmpty)
     }
 
     func testEmptyHasNoHierarchy() {
-        XCTAssertTrue(Screen.empty.liveCapture.hierarchy.isEmpty)
+        XCTAssertTrue(InterfaceObservation.empty.liveCapture.hierarchy.isEmpty)
     }
 
     func testEmptyHasNoFirstResponder() {
-        XCTAssertNil(Screen.empty.liveCapture.firstResponderHeistId)
+        XCTAssertNil(InterfaceObservation.empty.liveCapture.firstResponderHeistId)
     }
 
     func testEmptyHasNoName() {
-        XCTAssertNil(Screen.empty.name)
-        XCTAssertNil(Screen.empty.id)
+        XCTAssertNil(InterfaceObservation.empty.name)
+        XCTAssertNil(InterfaceObservation.empty.id)
     }
 
-    func testEmptyKnownIdsIsEmpty() {
-        XCTAssertTrue(Screen.empty.knownIds.isEmpty)
+    func testEmptyInterfaceIdsIsEmpty() {
+        XCTAssertTrue(InterfaceObservation.empty.elementIDs.isEmpty)
     }
 
-    func testEmptyVisibleIdsIsEmpty() {
-        XCTAssertTrue(Screen.empty.visibleIds.isEmpty)
+    func testEmptyViewportIdsIsEmpty() {
+        XCTAssertTrue(InterfaceObservation.empty.viewportElementIDs.isEmpty)
     }
 
-    // MARK: - KnownInterface / LiveInterface
+    // MARK: - InterfaceTree / LiveInterface
 
-    func testKnownInterfaceIncludesKnownEntriesOutsideLatestParse() {
+    func testInterfaceTreeIncludesOffViewportEntriesOutsideLatestParse() {
         let visible = makeElement(label: "Visible", traits: .button)
-        let knownOnly = makeElement(label: "Known", traits: .button)
-        let screen = Screen.makeForTests(
+        let offViewport = makeElement(label: "Known", traits: .button)
+        let screen = InterfaceObservation.makeForTests(
             elements: [(visible, "button_visible")],
             offViewport: [
-                Screen.OffViewportEntry(
-                    knownOnly,
+                InterfaceObservation.OffViewportEntry(
+                    offViewport,
                     heistId: "button_known",
                     scrollContainerPath: TreePath([0])
                 )
             ]
         )
 
-        XCTAssertEqual(screen.knownInterface.heistIds, ["button_visible", "button_known"])
+        XCTAssertEqual(screen.tree.elementIDs, ["button_visible", "button_known"])
         XCTAssertEqual(screen.liveCapture.heistIds, ["button_visible"])
-        XCTAssertEqual(screen.knownInterface.findElement(heistId: "button_known")?.element.label, "Known")
+        XCTAssertEqual(screen.tree.findElement(heistId: "button_known")?.element.label, "Known")
         XCTAssertFalse(screen.liveCapture.contains(heistId: "button_known"))
     }
 
-    func testMergingUnionsKnownInterfaceButTakesLatestLiveInterface() {
+    func testMergingUnionsElementsAndTakesLatestViewport() {
         let first = makeElement(label: "First", traits: .button)
         let second = makeElement(label: "Second", traits: .button)
-        let oldPage = Screen.makeForTests(elements: [(first, "button_first")])
-        let newPage = Screen.makeForTests(elements: [(second, "button_second")])
+        let oldPage = InterfaceObservation.makeForTests(elements: [(first, "button_first")])
+        let newPage = InterfaceObservation.makeForTests(elements: [(second, "button_second")])
 
-        let merged = oldPage.merging(newPage)
+        let merged = oldPage.tree.merging(newPage.tree)
 
-        XCTAssertEqual(merged.knownInterface.heistIds, ["button_first", "button_second"])
-        XCTAssertEqual(merged.liveCapture.heistIds, ["button_second"])
-        XCTAssertNil(merged.liveCapture.element(for: "button_first"))
-        XCTAssertEqual(merged.liveCapture.heistId(forPath: TreePath([0])), "button_second")
-        XCTAssertEqual(merged.liveCapture.element(for: "button_second"), second)
+        XCTAssertEqual(merged.elementIDs, ["button_first", "button_second"])
+        XCTAssertEqual(merged.viewportElementIDs, ["button_second"])
+        XCTAssertNil(merged.viewportCapture.element(for: "button_first"))
+        XCTAssertEqual(merged.viewportCapture.element(for: "button_second"), second)
     }
 
     func testRemovingElementsRemapsLiveSemanticAndAnnotationPaths() {
@@ -119,16 +119,16 @@ final class ScreenTests: XCTestCase {
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [
-                "old": Screen.ScreenElement(
+                "old": InterfaceTree.Element(
                     heistId: "old",
                     scrollMembership: nil,
                     element: removed
                 ),
-                "kept": Screen.ScreenElement(
+                "kept": InterfaceTree.Element(
                     heistId: "kept",
-                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([1]), index: nil),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([1]), index: nil),
                     element: kept
                 ),
             ],
@@ -147,27 +147,27 @@ final class ScreenTests: XCTestCase {
         )
 
         let pruned = screen.removingElements(withIds: ["old"])
-        let interface = TheStash.WireConversion.toInterface(from: pruned)
+        let interface = TheStash.WireConversion.toInterface(from: pruned.tree)
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
         XCTAssertEqual(pruned.liveCapture.containerNamesByPath[TreePath([0])], "feed")
-        XCTAssertEqual(pruned.semantic.containers[TreePath([0])]?.containerName, "feed")
-        XCTAssertNil(pruned.semantic.containers[TreePath([1])])
-        XCTAssertEqual(pruned.semantic.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
+        XCTAssertEqual(pruned.tree.containers[TreePath([0])]?.containerName, "feed")
+        XCTAssertNil(pruned.tree.containers[TreePath([1])])
+        XCTAssertEqual(pruned.tree.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
         XCTAssertEqual(interface.annotations.containerByPath[TreePath([0])]?.containerName, "feed")
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
         XCTAssertNil(interface.annotations.elementByPath[TreePath([1, 0])])
     }
 
-    func testVisibleOnlyFiltersKnownEntriesOutsideLatestParse() {
+    func testViewportOnlyFiltersOffViewportEntriesOutsideLatestParse() {
         let visible = makeElement(label: "Visible", traits: .button)
-        let knownOnly = makeElement(label: "Known", traits: .button)
-        let screen = Screen.makeForTests(
+        let offViewport = makeElement(label: "Known", traits: .button)
+        let screen = InterfaceObservation.makeForTests(
             elements: [(visible, "button_visible")],
             offViewport: [
-                Screen.OffViewportEntry(
-                    knownOnly,
+                InterfaceObservation.OffViewportEntry(
+                    offViewport,
                     heistId: "button_known",
                     scrollContainerPath: TreePath([0])
                 )
@@ -175,10 +175,10 @@ final class ScreenTests: XCTestCase {
             firstResponderHeistId: "button_visible"
         )
 
-        let visibleOnly = screen.visibleOnly
+        let visibleOnly = screen.viewportOnly
 
-        XCTAssertEqual(visibleOnly.knownIds, ["button_visible"])
-        XCTAssertEqual(visibleOnly.visibleIds, ["button_visible"])
+        XCTAssertEqual(visibleOnly.elementIDs, ["button_visible"])
+        XCTAssertEqual(visibleOnly.viewportElementIDs, ["button_visible"])
         XCTAssertEqual(visibleOnly.liveCapture.hierarchy, screen.liveCapture.hierarchy)
         XCTAssertEqual(visibleOnly.liveCapture.firstResponderHeistId, "button_visible")
         XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
@@ -197,37 +197,37 @@ final class ScreenTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 0, y: -300, width: 200, height: 44))),
             activationPoint: CGPoint(x: 100, y: -278)
         )
-        let before = Screen.makeForTests(elements: [(top, "chicken_tikka_button")])
-        let after = Screen.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
-        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: before))
-        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after))
+        let before = InterfaceObservation.makeForTests(elements: [(top, "chicken_tikka_button")])
+        let after = InterfaceObservation.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
+        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: before.tree))
+        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after.tree))
 
         XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
-        XCTAssertEqual(before.semanticHash, after.semanticHash)
+        XCTAssertEqual(before.interfaceHash, after.interfaceHash)
     }
 
     func testSemanticHashChangesForAccessibilityState() {
         let oldTotal = makeElement(label: "Total", value: "$4.00", traits: .staticText)
         let newTotal = makeElement(label: "Total", value: "$8.00", traits: .staticText)
-        let before = Screen.makeForTests(elements: [(oldTotal, "total_staticText")])
-        let after = Screen.makeForTests(elements: [(newTotal, "total_staticText")])
+        let before = InterfaceObservation.makeForTests(elements: [(oldTotal, "total_staticText")])
+        let after = InterfaceObservation.makeForTests(elements: [(newTotal, "total_staticText")])
 
-        XCTAssertNotEqual(before.semanticHash, after.semanticHash)
+        XCTAssertNotEqual(before.interfaceHash, after.interfaceHash)
     }
 
-    func testOrderedElementsReturnsLiveOrderThenKnownOnlySortedByHeistId() {
+    func testOrderedElementsReturnsViewportOrderThenOffViewportSortedByHeistId() {
         let firstLive = makeElement(label: "First", traits: .button)
         let secondLive = makeElement(label: "Second", traits: .button)
         let aKnown = makeElement(label: "A Known", traits: .button)
         let zKnown = makeElement(label: "Z Known", traits: .button)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [
                 (secondLive, "button_second"),
                 (firstLive, "button_first"),
             ],
             offViewport: [
-                Screen.OffViewportEntry(zKnown, heistId: "z_known"),
-                Screen.OffViewportEntry(aKnown, heistId: "a_known"),
+                InterfaceObservation.OffViewportEntry(zKnown, heistId: "z_known"),
+                InterfaceObservation.OffViewportEntry(aKnown, heistId: "a_known"),
             ]
         )
 
@@ -240,7 +240,7 @@ final class ScreenTests: XCTestCase {
     // MARK: - findElement
 
     func testFindElementReturnsNilForUnknownId() {
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: ["a_button": makeEntry(heistId: "a_button")],
             hierarchy: [],
             firstResponderHeistId: nil,
@@ -248,9 +248,9 @@ final class ScreenTests: XCTestCase {
         XCTAssertNil(screen.findElement(heistId: "missing"))
     }
 
-    func testFindElementReturnsEntryForKnownId() {
+    func testFindElementReturnsEntryForExistingId() {
         let entry = makeEntry(heistId: "save_button")
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [entry.heistId: entry],
             hierarchy: [],
             firstResponderHeistId: nil,
@@ -263,7 +263,7 @@ final class ScreenTests: XCTestCase {
     func testNameDerivesFromFirstHeaderInHierarchy() {
         let header = makeElement(label: "Controls Demo", traits: .header)
         let button = makeElement(label: "Save", traits: .button)
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [
                 .element(header, traversalIndex: 0),
@@ -286,7 +286,7 @@ final class ScreenTests: XCTestCase {
             traits: .header,
             shape: .frame(AccessibilityRect(CGRect(x: 120, y: 72, width: 100, height: 44)))
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [
                 .element(contentHeader, traversalIndex: 0),
@@ -310,7 +310,7 @@ final class ScreenTests: XCTestCase {
             traits: .summaryElement,
             shape: .frame(AccessibilityRect(CGRect(x: 20, y: 240, width: 200, height: 44)))
         )
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [
                 .element(navigationTitle, traversalIndex: 0),
@@ -327,7 +327,7 @@ final class ScreenTests: XCTestCase {
     func testNameIgnoresHeaderWithoutLabel() {
         let nilHeader = makeElement(label: nil, traits: .header)
         let realHeader = makeElement(label: "Page Title", traits: .header)
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [
                 .element(nilHeader, traversalIndex: 0),
@@ -339,7 +339,7 @@ final class ScreenTests: XCTestCase {
     }
 
     func testNameNilWhenNoHeader() {
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [:],
             hierarchy: [.element(makeElement(label: "Body"), traversalIndex: 0)],
             firstResponderHeistId: nil,
@@ -351,7 +351,7 @@ final class ScreenTests: XCTestCase {
     // MARK: - merging — disjoint sets
 
     func testMergingDisjointSetsProducesUnion() {
-        let lhs = Screen(
+        let lhs = InterfaceObservation(
             elements: [
                 "a_button": makeEntry(heistId: "a_button"),
                 "b_button": makeEntry(heistId: "b_button"),
@@ -359,7 +359,7 @@ final class ScreenTests: XCTestCase {
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        let rhs = Screen(
+        let rhs = InterfaceObservation(
             elements: [
                 "c_button": makeEntry(heistId: "c_button"),
                 "d_button": makeEntry(heistId: "d_button"),
@@ -368,36 +368,36 @@ final class ScreenTests: XCTestCase {
             firstResponderHeistId: nil,
         )
 
-        let merged = lhs.merging(rhs)
+        let merged = lhs.tree.merging(rhs.tree)
 
-        XCTAssertEqual(merged.knownIds, ["a_button", "b_button", "c_button", "d_button"])
+        XCTAssertEqual(merged.elementIDs, ["a_button", "b_button", "c_button", "d_button"])
     }
 
     // MARK: - merging — conflict rule
 
     func testMergingTakesOtherElementOnConflict() {
-        let oldEntry = Screen.ScreenElement(
+        let oldEntry = InterfaceTree.Element(
             heistId: "save_button",
             scrollMembership: nil,
             element: makeElement(label: "Save", traits: .button)
         )
-        let newEntry = Screen.ScreenElement(
+        let newEntry = InterfaceTree.Element(
             heistId: "save_button",
             scrollMembership: nil,
             element: makeElement(label: "Save Changes", traits: .button)
         )
-        let lhs = Screen(
+        let lhs = InterfaceObservation(
             elements: ["save_button": oldEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        let rhs = Screen(
+        let rhs = InterfaceObservation(
             elements: ["save_button": newEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
 
-        let merged = lhs.merging(rhs)
+        let merged = lhs.tree.merging(rhs.tree)
 
         XCTAssertEqual(merged.findElement(heistId: "save_button")?.element.label, "Save Changes",
                        "Conflict resolver should take `other`'s element payload")
@@ -413,18 +413,18 @@ final class ScreenTests: XCTestCase {
         let rhsEntry = makeEntry(
             heistId: "scrolled_row"
         )
-        let lhs = Screen(
+        let lhs = InterfaceObservation(
             elements: ["scrolled_row": lhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        let rhs = Screen(
+        let rhs = InterfaceObservation(
             elements: ["scrolled_row": rhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
 
-        let merged = lhs.merging(rhs)
+        let merged = lhs.tree.merging(rhs.tree)
 
         XCTAssertNil(merged.findElement(heistId: "scrolled_row")?.scrollMembership,
                      "Last-read-wins: `other`'s nil membership replaces `self`'s value")
@@ -441,18 +441,18 @@ final class ScreenTests: XCTestCase {
             scrollContainerPath: TreePath([0]),
             scrollIndex: 500
         )
-        let lhs = Screen(
+        let lhs = InterfaceObservation(
             elements: ["row": lhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        let rhs = Screen(
+        let rhs = InterfaceObservation(
             elements: ["row": rhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
         )
 
-        let merged = lhs.merging(rhs)
+        let merged = lhs.tree.merging(rhs.tree)
 
         XCTAssertEqual(merged.findElement(heistId: "row")?.scrollMembership?.index, 500,
                        "When both screens have membership, `other`'s wins (newer parse)")
@@ -467,183 +467,167 @@ final class ScreenTests: XCTestCase {
         let newHierarchy: [AccessibilityHierarchy] = [
             .element(makeElement(label: "New"), traversalIndex: 0),
         ]
-        let lhs = Screen(
+        let lhs = InterfaceObservation(
             elements: [:],
             hierarchy: oldHierarchy,
             firstResponderHeistId: nil,
         )
-        let rhs = Screen(
+        let rhs = InterfaceObservation(
             elements: [:],
             hierarchy: newHierarchy,
             firstResponderHeistId: nil,
         )
 
-        let merged = lhs.merging(rhs)
+        let merged = lhs.tree.merging(rhs.tree)
 
-        XCTAssertEqual(merged.liveCapture.hierarchy.count, 1)
-        if case .element(let element, _) = merged.liveCapture.hierarchy[0] {
+        XCTAssertEqual(merged.viewportCapture.hierarchy.count, 1)
+        if case .element(let element, _) = merged.viewportCapture.hierarchy[0] {
             XCTAssertEqual(element.label, "New")
         } else {
             XCTFail("Expected element node")
         }
     }
 
-    func testMergingTakesOtherFirstResponder() {
-        let lhs = Screen(
-            elements: [:],
-            hierarchy: [],
-            firstResponderHeistId: "old_field",
-        )
-        let rhs = Screen(
-            elements: [:],
-            hierarchy: [],
-            firstResponderHeistId: "new_field",
-        )
+    // MARK: - InterfaceTree viewport updates
 
-        XCTAssertEqual(lhs.merging(rhs).liveCapture.firstResponderHeistId, "new_field")
-    }
-
-    // MARK: - WorldStore visible commits
-
-    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryWhenVisibleIdsAreKnown() {
+    func testInterfaceTreeViewportUpdatePreservesDiscoveryMemoryWhenVisibleIdsAreKnown() {
         let visible = makeElement(label: "Visible", traits: .button)
-        let knownOnly = makeElement(label: "Known", traits: .button)
+        let offViewport = makeElement(label: "Known", traits: .button)
         let refreshedVisible = makeElement(label: "Visible", traits: .button)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [(visible, "button_visible")],
             offViewport: [
-                Screen.OffViewportEntry(
-                    knownOnly,
+                InterfaceObservation.OffViewportEntry(
+                    offViewport,
                     heistId: "button_known",
                     scrollContainerPath: TreePath([0])
                 )
             ]
         )
-        let refresh = Screen.makeForTests(
+        let refresh = InterfaceObservation.makeForTests(
             elements: [(refreshedVisible, "button_visible")],
             firstResponderHeistId: "button_visible"
         )
 
-        let result = commitVisibleRefresh(from: screen, with: refresh)
-        let updated = result.settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.knownIds, ["button_visible", "button_known"])
-        XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(result.observedEvidence.liveCapture.firstResponderHeistId, "button_visible")
-        XCTAssertNil(updated.liveCapture.firstResponderHeistId)
+        XCTAssertEqual(updated.elementIDs, ["button_visible", "button_known"])
+        XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
+        XCTAssertEqual(refresh.liveCapture.firstResponderHeistId, "button_visible")
+        XCTAssertNil(LiveCapture(snapshot: updated.viewportCapture).firstResponderHeistId)
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 
-    func testWorldStoreVisibleCommitSlotsVisibleUpdatesWithoutTouchingDiscoveryMemory() {
+    func testInterfaceTreeViewportUpdateSlotsVisibleUpdatesWithoutTouchingDiscoveryMemory() {
         let counter = makeElement(label: "Total", value: "$4.00", traits: .staticText)
-        let knownOnly = makeElement(label: "Below Fold", value: "old", traits: .button)
+        let offViewport = makeElement(label: "Below Fold", value: "old", traits: .button)
         let updatedCounter = makeElement(label: "Total", value: "$8.00", traits: .staticText)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [(counter, "total_staticText")],
             offViewport: [
-                Screen.OffViewportEntry(
-                    knownOnly,
+                InterfaceObservation.OffViewportEntry(
+                    offViewport,
                     heistId: "below_fold_button",
                     scrollContainerPath: TreePath([0])
                 )
             ]
         )
-        let refresh = Screen.makeForTests(elements: [(updatedCounter, "total_staticText")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(updatedCounter, "total_staticText")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
         XCTAssertEqual(updated.findElement(heistId: "total_staticText")?.element.value, "$8.00")
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.value, "old")
-        XCTAssertEqual(updated.visibleIds, ["total_staticText"])
-        XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
+        XCTAssertEqual(updated.viewportElementIDs, ["total_staticText"])
+        XCTAssertEqual(updated.elementIDs, ["below_fold_button", "total_staticText"])
     }
 
-    func testWorldStoreVisibleCommitDoesNotPreserveDiscoveryMemoryForDisjointKnownViewport() {
+    func testInterfaceTreeViewportUpdateDoesNotPreserveDiscoveryMemoryForDisjointCommittedViewport() {
         let oldVisible = makeElement(label: "Old Visible", traits: .button)
-        let staleKnownOnly = makeElement(label: "Stale Below Fold", traits: .button)
+        let staleOffViewport = makeElement(label: "Stale Below Fold", traits: .button)
         let freshVisible = makeElement(label: "Fresh Visible", traits: .button)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [(oldVisible, "old_visible")],
             offViewport: [
-                Screen.OffViewportEntry(
-                    staleKnownOnly,
+                InterfaceObservation.OffViewportEntry(
+                    staleOffViewport,
                     heistId: "stale_below_fold",
                     scrollContainerPath: TreePath([0])
                 ),
             ]
         )
-        let refresh = Screen.makeForTests(elements: [(freshVisible, "stale_below_fold")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(freshVisible, "stale_below_fold")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.visibleIds, ["stale_below_fold"])
-        XCTAssertEqual(updated.knownIds, ["stale_below_fold"])
+        XCTAssertEqual(updated.viewportElementIDs, ["stale_below_fold"])
+        XCTAssertEqual(updated.elementIDs, ["stale_below_fold"])
         XCTAssertEqual(updated.findElement(heistId: "stale_below_fold")?.element.label, "Fresh Visible")
     }
 
-    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryFromKnownOnlyBaseline() {
-        let knownOnly = makeElement(label: "Below Fold", traits: .button)
+    func testInterfaceTreeViewportUpdatePreservesDiscoveryMemoryFromOffViewportBaseline() {
+        let offViewport = makeElement(label: "Below Fold", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
-        let screen = Screen.makeForTests(
-            offViewport: [Screen.OffViewportEntry(knownOnly, heistId: "below_fold_button")]
+        let screen = InterfaceObservation.makeForTests(
+            offViewport: [InterfaceObservation.OffViewportEntry(offViewport, heistId: "below_fold_button")]
         )
-        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_visible"])
+        XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
+        XCTAssertEqual(updated.elementIDs, ["below_fold_button", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
     }
 
-    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryWhenKnownViewportAddsElement() {
+    func testInterfaceTreeViewportUpdatePreservesDiscoveryMemoryWhenCommittedViewportAddsElement() {
         let visible = makeElement(label: "Visible", traits: .button)
         let added = makeElement(label: "Added", traits: .button)
-        let knownOnly = makeElement(label: "Below Fold", traits: .button)
-        let screen = Screen.makeForTests(
+        let offViewport = makeElement(label: "Below Fold", traits: .button)
+        let screen = InterfaceObservation.makeForTests(
             elements: [(visible, "button_visible")],
-            offViewport: [Screen.OffViewportEntry(knownOnly, heistId: "below_fold_button")]
+            offViewport: [InterfaceObservation.OffViewportEntry(offViewport, heistId: "below_fold_button")]
         )
-        let refresh = Screen.makeForTests(elements: [
+        let refresh = InterfaceObservation.makeForTests(elements: [
             (visible, "button_visible"),
             (added, "button_added")
         ])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.visibleIds, ["button_added", "button_visible"])
-        XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_added", "button_visible"])
+        XCTAssertEqual(updated.viewportElementIDs, ["button_added", "button_visible"])
+        XCTAssertEqual(updated.elementIDs, ["below_fold_button", "button_added", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
     }
 
-    func testWorldStoreVisibleCommitDropsDisappearedVisibleNonScrollElements() {
+    func testInterfaceTreeViewportUpdateDropsDisappearedVisibleNonScrollElements() {
         let disappearing = makeElement(label: "Disappearing", traits: .staticText)
         let visible = makeElement(label: "Visible", traits: .button)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [
                 (disappearing, "disappearing_staticText"),
                 (visible, "button_visible")
             ]
         )
-        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.knownIds, ["button_visible"])
+        XCTAssertEqual(updated.elementIDs, ["button_visible"])
         XCTAssertNil(updated.findElement(heistId: "disappearing_staticText"))
     }
 
-    func testWorldStoreVisibleCommitDropsDisappearedVisibleScrollElements() {
+    func testInterfaceTreeViewportUpdateDropsDisappearedVisibleScrollElements() {
         let scrolledAway = makeElement(label: "Scrolled Away", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
-        let screen = Screen(
+        let screen = InterfaceObservation(
             elements: [
-                "button_scrolled_away": Screen.ScreenElement(
+                "button_scrolled_away": InterfaceTree.Element(
                     heistId: "button_scrolled_away",
-                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: nil),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
                     element: scrolledAway
                 ),
-                "button_visible": Screen.ScreenElement(
+                "button_visible": InterfaceTree.Element(
                     heistId: "button_visible",
                     scrollMembership: nil,
                     element: visible
@@ -659,44 +643,44 @@ final class ScreenTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
         )
-        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.knownIds, ["button_visible"])
-        XCTAssertEqual(updated.visibleIds, ["button_visible"])
+        XCTAssertEqual(updated.elementIDs, ["button_visible"])
+        XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
         XCTAssertNil(updated.findElement(heistId: "button_scrolled_away"))
     }
 
-    func testWorldStoreVisibleCommitReplacesWorldForUnrelatedVisibleRefresh() {
+    func testInterfaceTreeViewportUpdateReplacesInterfaceTreeForUnrelatedVisibleRefresh() {
         let old = makeElement(label: "Old", traits: .button)
-        let knownOnly = makeElement(label: "Known", traits: .button)
+        let offViewport = makeElement(label: "Known", traits: .button)
         let replacement = makeElement(label: "Replacement", traits: .button)
-        let screen = Screen.makeForTests(
+        let screen = InterfaceObservation.makeForTests(
             elements: [(old, "button_old")],
             offViewport: [
-                Screen.OffViewportEntry(knownOnly, heistId: "button_known")
+                InterfaceObservation.OffViewportEntry(offViewport, heistId: "button_known")
             ]
         )
-        let refresh = Screen.makeForTests(elements: [(replacement, "button_replacement")])
+        let refresh = InterfaceObservation.makeForTests(elements: [(replacement, "button_replacement")])
 
-        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
+        let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.knownIds, ["button_replacement"])
+        XCTAssertEqual(updated.elementIDs, ["button_replacement"])
         XCTAssertNil(updated.findElement(heistId: "button_known"))
     }
 
-    func testWorldStoreVisibleCommitReplacesWorldForEmptyRefresh() {
+    func testInterfaceTreeViewportUpdateReplacesInterfaceTreeForEmptyRefresh() {
         let old = makeElement(label: "Old", traits: .button)
-        let screen = Screen.makeForTests(elements: [(old, "button_old")])
+        let screen = InterfaceObservation.makeForTests(elements: [(old, "button_old")])
 
-        let updated = commitVisibleRefresh(from: screen, with: .empty).settledScreen
+        let updated = updateViewport(of: screen.tree, with: .empty)
 
-        XCTAssertTrue(updated.knownIds.isEmpty)
-        XCTAssertTrue(updated.visibleIds.isEmpty)
+        XCTAssertTrue(updated.elementIDs.isEmpty)
+        XCTAssertTrue(updated.viewportElementIDs.isEmpty)
     }
 
-    // MARK: - Screen Capture Plan
+    // MARK: - InterfaceObservation Capture Plan
 
     func testCapturePlanUsesLandscapeFrameForRotatedWindow() throws {
         let window = TheStash.ScreenCaptureWindowGeometry(

@@ -20,14 +20,14 @@ internal final class ElementInflation {
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
-    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> Screen?)?
-    internal var revealKnownTarget: (@MainActor (HeistId) async -> Screen?)?
+    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> InterfaceObservation?)?
+    internal var revealKnownTarget: (@MainActor (HeistId) async -> InterfaceObservation?)?
 
     /// Bounded window inflation waits for a target whose reveal failed, or
     /// whose visible live object was recycled, to become resolvable before
     /// failing the active recovery path.
     ///
-    /// Async-loaded destinations can produce a settled world that knows the
+    /// Async-loaded destinations can produce an interface tree containing the
     /// target before its live scroll geometry is wired, so a reveal failure at
     /// the dispatch instant is not proof of unreachability — the very next
     /// settled capture can show the target framed and reachable. The wait is
@@ -82,7 +82,7 @@ internal final class ElementInflation {
                         &state,
                         to: .refreshing(
                             target: resolvedTarget,
-                            screenElement: treeElement,
+                            treeElement: treeElement,
                             attempt: pass.attempt,
                             didReveal: false
                         )
@@ -96,12 +96,12 @@ internal final class ElementInflation {
             case .revealing(let treeElement, let attempt):
                 transition(&state, to: await stateAfterReveal(treeElement, target: resolvedTarget, attempt: attempt))
 
-            case .refreshing(let target, let screenElement, let attempt, let didReveal):
+            case .refreshing(let target, let treeElement, let attempt, let didReveal):
                 transition(
                     &state,
                     to: await stateAfterRefresh(
                         target: target,
-                        screenElement: screenElement,
+                        treeElement: treeElement,
                         didReveal: didReveal,
                         attempt: attempt,
                         method: method,

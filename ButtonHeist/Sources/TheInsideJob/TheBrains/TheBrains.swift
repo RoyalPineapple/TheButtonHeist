@@ -102,12 +102,12 @@ final class TheBrains {
         }
     }
 
-    enum InterfaceObservation {
+    enum InterfaceQueryResult {
         case success(Interface)
-        case failure(InterfaceObservationError)
+        case failure(InterfaceQueryFailure)
     }
 
-    enum InterfaceObservationError: Error, Equatable {
+    enum InterfaceQueryFailure: Error, Equatable {
         case rootViewUnavailable
         case inactiveRuntime
         case selection(InterfaceSelectionError)
@@ -188,7 +188,7 @@ final class TheBrains {
         stash.stopPassiveSemanticObservation()
     }
 
-    func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
+    func observeInterface(_ query: InterfaceQuery) async -> InterfaceQueryResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
@@ -201,7 +201,7 @@ final class TheBrains {
             maxScrollsPerContainer: query.maxScrollsPerContainer,
             maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
         )
-        _ = stash.commitSettledDiscoveryWorld(exploration.screen)
+        _ = stash.commitDiscoveryInterface(exploration.screen)
 
         do {
             let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)

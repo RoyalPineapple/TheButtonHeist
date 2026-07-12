@@ -6,7 +6,7 @@ import TheScore
 
 extension Actions {
 
-    // MARK: - Screen Actions
+    // MARK: - InterfaceObservation Actions
 
     func availableScreenActions() -> [ScreenAction] {
         accessibilityActions.availableScreenActions(
@@ -38,8 +38,8 @@ extension Actions {
     }
 
     private func screenActionStartingObject() -> NSObject? {
-        guard let screenElement = stash.firstResponderScreenElement() else { return nil }
-        return stash.liveObject(for: screenElement)
+        guard let treeElement = stash.firstResponderInterfaceElement() else { return nil }
+        return stash.liveObject(for: treeElement)
     }
 
     private func screenActionResult(
