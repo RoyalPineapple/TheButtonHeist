@@ -2,12 +2,12 @@ import Foundation
 
 public protocol HeistContent {
     var heistSteps: [HeistStep] { get }
-    var heistDefinitions: [HeistPlan] { get }
+    var heistDefinitions: [HeistPlanAdmissionCandidate] { get }
     var heistBuildDiagnostics: [HeistBuildDiagnostic] { get }
 }
 
 public extension HeistContent {
-    var heistDefinitions: [HeistPlan] { [] }
+    var heistDefinitions: [HeistPlanAdmissionCandidate] { [] }
     var heistBuildDiagnostics: [HeistBuildDiagnostic] { [] }
 }
 
@@ -93,12 +93,17 @@ private extension HeistPlan {
                 debugDescription: "HeistPlan requires a non-empty body or definitions"
             ))
         }
-        try self.init(name: name, parameter: parameter, definitions: content.heistDefinitions, body: content.heistSteps)
+        self = try HeistPlanAdmissionCandidate(
+            name: name,
+            parameter: parameter,
+            definitions: content.heistDefinitions,
+            body: content.heistSteps.map(HeistStepAdmissionCandidate.init)
+        ).validatedSemantics()
     }
 
     static func validatedDSLPlan(
         name: String? = nil,
-        definitions: [HeistPlan] = [],
+        definitions: [HeistPlanAdmissionCandidate] = [],
         body: [HeistStep]
     ) throws -> HeistPlan {
         guard !body.isEmpty || !definitions.isEmpty else {
@@ -107,7 +112,11 @@ private extension HeistPlan {
                 debugDescription: "HeistPlan requires a non-empty body or definitions"
             ))
         }
-        return try HeistPlan(name: name, definitions: definitions, body: body)
+        return try HeistPlanAdmissionCandidate(
+            name: name,
+            definitions: definitions,
+            body: body.map(HeistStepAdmissionCandidate.init)
+        ).validatedSemantics()
     }
 
     static func throwIfBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) throws {
@@ -148,12 +157,14 @@ extension HeistStep: HeistContent {
 
 extension HeistPlan: HeistContent {
     public var heistSteps: [HeistStep] { body }
-    public var heistDefinitions: [HeistPlan] { definitions }
+    public var heistDefinitions: [HeistPlanAdmissionCandidate] {
+        definitions.map(HeistPlanAdmissionCandidate.init)
+    }
 }
 
 public struct EmptyHeistContent: HeistContent {
     public let heistSteps: [HeistStep] = []
-    public let heistDefinitions: [HeistPlan] = []
+    public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
     public let heistBuildDiagnostics: [HeistBuildDiagnostic] = []
 
     public init() {}
@@ -181,19 +192,21 @@ public enum HeistBuilder {
         )
     }
 
-    private static func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
+    private static func mergeDefinitions(
+        _ definitions: [HeistPlanAdmissionCandidate]
+    ) -> [HeistPlanAdmissionCandidate] {
         HeistDefinitionMerger.merge(definitions, duplicatePolicy: .discardIdentical)
     }
 }
 
 private struct HeistStepList: HeistContent {
     let heistSteps: [HeistStep]
-    let heistDefinitions: [HeistPlan]
+    let heistDefinitions: [HeistPlanAdmissionCandidate]
     let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     init(
         _ heistSteps: [HeistStep],
-        definitions: [HeistPlan] = [],
+        definitions: [HeistPlanAdmissionCandidate] = [],
         diagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.heistSteps = heistSteps
@@ -205,7 +218,7 @@ private struct HeistStepList: HeistContent {
 public struct HeistDef<Input>: Sendable {
     public let path: [String]
     public let parameter: HeistParameter
-    private let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
+    private let definitionResult: ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic>
 
     public init<Content: HeistContent>(
         _ path: String,
@@ -303,7 +316,7 @@ public struct HeistDef<Input>: Sendable {
         path: [String],
         parameter: HeistParameter,
         _ content: () throws -> any HeistContent
-    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+    ) -> ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic> {
         let renderedPath = HeistDefinitionPath.render(path)
         do {
             let content = try content()
@@ -314,7 +327,7 @@ public struct HeistDef<Input>: Sendable {
                 path: path,
                 parameter: parameter,
                 definitions: content.heistDefinitions,
-                body: content.heistSteps
+                body: content.heistSteps.map(HeistStepAdmissionCandidate.init)
             ), diagnostics: [])
         } catch {
             return .failure([.dslBuild(
@@ -328,12 +341,11 @@ public struct HeistDef<Input>: Sendable {
     private static func makeDefinition(
         path: [String],
         parameter: HeistParameter,
-        definitions: [HeistPlan],
-        body: [HeistStep]
-    ) -> HeistPlan {
+        definitions: [HeistPlanAdmissionCandidate],
+        body: [HeistStepAdmissionCandidate]
+    ) -> HeistPlanAdmissionCandidate {
         guard let first = path.first else {
-            return HeistPlan(
-                runtimeValidatedVersion: HeistPlan.currentVersion,
+            return HeistPlanAdmissionCandidate(
                 name: nil,
                 parameter: parameter,
                 definitions: definitions,
@@ -341,8 +353,7 @@ public struct HeistDef<Input>: Sendable {
             )
         }
         guard path.count > 1 else {
-            return HeistPlan(
-                runtimeValidatedVersion: HeistPlan.currentVersion,
+            return HeistPlanAdmissionCandidate(
                 name: first,
                 parameter: parameter,
                 definitions: definitions,
@@ -355,8 +366,7 @@ public struct HeistDef<Input>: Sendable {
             definitions: definitions,
             body: body
         )
-        return HeistPlan(
-            runtimeValidatedVersion: HeistPlan.currentVersion,
+        return HeistPlanAdmissionCandidate(
             name: first,
             definitions: [child],
             body: []
@@ -392,7 +402,7 @@ public struct HeistInvocationContent: HeistContent {
     }()
 
     public let invocation: HeistInvocationStep
-    public let heistDefinitions: [HeistPlan]
+    public let heistDefinitions: [HeistPlanAdmissionCandidate]
     let explicitExpectationTimeout: Double?
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     private let emitsInvocationStep: Bool
@@ -415,7 +425,7 @@ public struct HeistInvocationContent: HeistContent {
 
     init(
         invocation: HeistInvocationStep,
-        heistDefinitions: [HeistPlan],
+        heistDefinitions: [HeistPlanAdmissionCandidate],
         explicitExpectationTimeout: Double? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
@@ -487,7 +497,7 @@ public extension HeistDef where Input == Void {
 extension HeistDef: HeistContent {
     public var heistSteps: [HeistStep] { [] }
 
-    public var heistDefinitions: [HeistPlan] {
+    public var heistDefinitions: [HeistPlanAdmissionCandidate] {
         definitionResult.value.map { [$0] } ?? []
     }
 
@@ -574,7 +584,7 @@ private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgu
 
 public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan]
+    public let heistDefinitions: [HeistPlanAdmissionCandidate]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     private init(

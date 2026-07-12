@@ -817,11 +817,20 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
         Activate(.label("Add to Cart"))
     }
 
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        try HeistPlan {
+    do {
+        _ = try HeistPlan {
             try first("Milk")
             try second("Bread")
         }
+        Issue.record("Expected conflicting nested definitions to fail admission")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        let failure = try #require(error.failures.first)
+        #expect(error.failures.count == 1)
+        #expect(failure.path == "$.definitions[0].definitions[1].name")
+        #expect(failure.contract == "duplicate heist definition names are not allowed in the same scope")
+        #expect(failure.observed == #""addToCart""#)
+    } catch {
+        Issue.record("Expected HeistPlanRuntimeSafetyError, got \(error)")
     }
 }
 

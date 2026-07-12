@@ -6,6 +6,7 @@ public typealias HeistPlan = ThePlans.HeistPlan
 public typealias HeistContent = ThePlans.HeistContent
 public typealias HeistBuilder = ThePlans.HeistBuilder
 public typealias HeistPlanBuildError = ThePlans.HeistPlanBuildError
+public typealias HeistPlanAdmissionCandidate = ThePlans.HeistPlanAdmissionCandidate
 
 // MARK: - Values And References
 

@@ -10,7 +10,7 @@ public extension Double {
 
 public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan]
+    public let heistDefinitions: [HeistPlanAdmissionCandidate]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
@@ -44,7 +44,7 @@ public struct WaitFor: HeistContent {
         predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         elseBody: [HeistStep]?,
-        definitions: [HeistPlan],
+        definitions: [HeistPlanAdmissionCandidate],
         diagnostics: [HeistBuildDiagnostic]
     ) {
         heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout, elseBody: elseBody))]
@@ -55,7 +55,7 @@ public struct WaitFor: HeistContent {
 
 public struct RepeatUntil: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan]
+    public let heistDefinitions: [HeistPlanAdmissionCandidate]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
@@ -100,7 +100,7 @@ public struct RepeatUntil: HeistContent {
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]?,
-        definitions: [HeistPlan],
+        definitions: [HeistPlanAdmissionCandidate],
         diagnostics: [HeistBuildDiagnostic]
     ) {
         do {
@@ -125,7 +125,7 @@ public struct RepeatUntil: HeistContent {
 
 public struct If: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan]
+    public let heistDefinitions: [HeistPlanAdmissionCandidate]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
@@ -175,7 +175,7 @@ public struct If: HeistContent {
     private init(
         cases: [PredicateCase],
         elseBody: [HeistStep]?,
-        definitions: [HeistPlan],
+        definitions: [HeistPlanAdmissionCandidate],
         diagnostics: [HeistBuildDiagnostic]
     ) {
         heistSteps = [.conditional(makeConditionalStep(
@@ -220,7 +220,7 @@ public struct Else {
 
 public struct Warn: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan] = []
+    public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
 
     public init(_ message: String) {
         heistSteps = [.warn(WarnStep(message: message))]
@@ -229,7 +229,7 @@ public struct Warn: HeistContent {
 
 public struct Fail: HeistContent {
     public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlan] = []
+    public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
 
     public init(_ message: String) {
         heistSteps = [.fail(FailStep(message: message))]
@@ -237,14 +237,22 @@ public struct Fail: HeistContent {
 }
 
 public enum PredicateBranch {
-    case `case`(PredicateCase, definitions: [HeistPlan], diagnostics: [HeistBuildDiagnostic])
-    case `else`([HeistStep], definitions: [HeistPlan], diagnostics: [HeistBuildDiagnostic])
+    case `case`(
+        PredicateCase,
+        definitions: [HeistPlanAdmissionCandidate],
+        diagnostics: [HeistBuildDiagnostic]
+    )
+    case `else`(
+        [HeistStep],
+        definitions: [HeistPlanAdmissionCandidate],
+        diagnostics: [HeistBuildDiagnostic]
+    )
 }
 
 public struct PredicateBranches {
     public let cases: [PredicateCase]
     public let elseBody: [HeistStep]?
-    public let definitions: [HeistPlan]
+    public let definitions: [HeistPlanAdmissionCandidate]
     public let diagnostics: [HeistBuildDiagnostic]
 }
 
@@ -265,7 +273,7 @@ public enum PredicateBranchBuilder {
     public static func buildFinalResult(_ branches: [PredicateBranch]) -> PredicateBranches {
         var cases: [PredicateCase] = []
         var elseBody: [HeistStep]?
-        var definitions: [HeistPlan] = []
+        var definitions: [HeistPlanAdmissionCandidate] = []
         var diagnostics: [HeistBuildDiagnostic] = []
         for branch in branches {
             switch branch {

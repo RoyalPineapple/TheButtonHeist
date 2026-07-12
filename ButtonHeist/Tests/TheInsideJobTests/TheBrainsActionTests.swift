@@ -2508,27 +2508,21 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenValidationIsBypassed() async throws {
-        let runtime = heistRuntime(observations: [])
+    func testHeistAdmissionRejectsSelfInvocationOutsideLocalScope() throws {
         let recursiveName = "repeatHeist"
-        let plan = HeistPlan(runtimeValidatedVersion: HeistPlan.currentVersion, definitions: [
-            HeistPlan(runtimeValidatedVersion: HeistPlan.currentVersion, name: recursiveName, body: [
+        let candidate = HeistPlanAdmissionCandidate(definitions: [
+            HeistPlanAdmissionCandidate(name: recursiveName, body: [
                 .invoke(HeistInvocationStep(path: [recursiveName])),
             ]),
         ], body: [])
 
-        let results = await brains.executeHeistSteps(
-            [.invoke(HeistInvocationStep(path: [recursiveName]))],
-            runtime: runtime,
-            environment: .empty,
-            scope: TheBrains.HeistExecutionScope(plan: plan)
-        )
-
-        let topLevel = try XCTUnwrap(results.first)
-        let recursive = try XCTUnwrap(topLevel.children.first)
-        XCTAssertTrue(topLevel.isFailure)
-        XCTAssertEqual(recursive.kind, .invoke)
-        XCTAssertEqual(recursive.failure?.observed, "unknown heist run \(recursiveName)")
+        XCTAssertThrowsError(try candidate.validatedSemantics()) { error in
+            guard let admissionError = error as? HeistPlanRuntimeSafetyError else {
+                return XCTFail("Expected HeistPlanRuntimeSafetyError, got \(error)")
+            }
+            XCTAssertEqual(admissionError.failures.first?.contract, "heist runs must not be recursive")
+            XCTAssertEqual(admissionError.failures.first?.observed, "repeatHeist -> repeatHeist")
+        }
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {

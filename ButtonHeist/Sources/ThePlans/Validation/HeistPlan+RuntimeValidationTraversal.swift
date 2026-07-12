@@ -244,18 +244,19 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func walk(
-        _ wait: WaitStep,
+        _ wait: HeistWaitAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {
         let waitContext = context.child(path: context.path.child(.wait))
-        validateResolvedStringLoopWait(wait, context: waitContext)
-        validateWait(wait, path: waitContext.path, scope: context.scope, environment: context.environment)
+        let waitStep = WaitStep(predicate: wait.predicate, timeout: wait.timeout)
+        validateResolvedStringLoopWait(waitStep, context: waitContext)
+        validateWait(waitStep, path: waitContext.path, scope: context.scope, environment: context.environment)
         guard let elseBody = wait.elseBody else { return }
         walk(elseBody, context: context.child(path: waitContext.path.child(.elseBody), depth: context.depth + 1))
     }
 
     private mutating func walk(
-        _ conditional: ConditionalStep,
+        _ conditional: HeistConditionalAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {
         let conditionalContext = context.child(path: context.path.child(.conditional))
@@ -287,7 +288,7 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func walk(
-        _ forEach: ForEachElementStep,
+        _ forEach: HeistForEachElementAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {
         let forEachContext = context.child(path: context.path.child(.forEachElement))
@@ -311,7 +312,7 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func walk(
-        _ forEach: ForEachStringStep,
+        _ forEach: HeistForEachStringAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {
         let forEachContext = context.child(path: context.path.child(.forEachString))
@@ -342,7 +343,7 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     private mutating func walk(
-        _ repeatUntil: RepeatUntilStep,
+        _ repeatUntil: HeistRepeatUntilAdmissionCandidate,
         context: HeistPlanAdmissionTraversalContext
     ) {
         let repeatContext = context.child(path: context.path.child(.repeatUntil))
@@ -718,7 +719,7 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validatePredicateCase(
-        _ predicateCase: PredicateCase,
+        _ predicateCase: HeistPredicateCaseAdmissionCandidate,
         path: HeistTraversalPath,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
@@ -750,7 +751,7 @@ struct HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateForEachElement(
-        _ step: ForEachElementStep,
+        _ step: HeistForEachElementAdmissionCandidate,
         path: HeistTraversalPath
     ) {
         validateElementPredicate(step.matching, path: path.child(.matching).description)
@@ -765,7 +766,10 @@ struct HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateForEachString(_ step: ForEachStringStep, path: HeistTraversalPath) {
+    private mutating func validateForEachString(
+        _ step: HeistForEachStringAdmissionCandidate,
+        path: HeistTraversalPath
+    ) {
         validateParameter(step.parameter, path: path.child(.parameter).description, role: "for_each_string parameter")
         if step.values.count > limits.maxForEachStringValues {
             fail(
@@ -780,7 +784,10 @@ struct HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateRepeatUntil(_ step: RepeatUntilStep, path: HeistTraversalPath) {
+    mutating func validateRepeatUntil(
+        _ step: HeistRepeatUntilAdmissionCandidate,
+        path: HeistTraversalPath
+    ) {
         guard step.timeout.isFinite else {
             fail(
                 path: path.child(.timeout).description,

@@ -842,6 +842,32 @@ import Testing
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `nested namespace duplicate definitions return typed admission diagnostics`() {
+    let diagnostic = compileDiagnostic("""
+    HeistPlan {
+        Namespace("lib") {
+            Namespace("checkout") {
+                HeistDef<Void>("pay") {
+                    Warn("first")
+                }
+
+                HeistDef<Void>("pay") {
+                    Warn("second")
+                }
+            }
+        }
+
+        Warn("root")
+    }
+    """)
+
+    #expect(diagnostic.code == .planRuntimeSafety)
+    #expect(diagnostic.phase == .planValidation)
+    #expect(diagnostic.path == "$.definitions[0].definitions[0].definitions[1].name")
+    #expect(diagnostic.message.contains("duplicate heist definition names are not allowed in the same scope"))
+    #expect(diagnostic.hint == "Rename one definition or put it in a different namespace.")
+}
+
 @Test func `qualified namespace calls fail clearly when the export is missing`() throws {
     let diagnostic = compileError("""
     HeistPlan {
