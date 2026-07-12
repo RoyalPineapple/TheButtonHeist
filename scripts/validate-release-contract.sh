@@ -42,19 +42,18 @@ extract_formula_version() {
         | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
-VERSION_FILE=$(single_value "$BUTTONHEIST_RELEASE_VERSION_FILE" "$(read_version_file || true)")
-CODE_VERSION=$(single_value "$BUTTONHEIST_CODE_VERSION_FILE buttonHeistVersion" "$(extract_code_version || true)")
-FORMULA_VERSION=$(single_value "$BUTTONHEIST_FORMULA_TEMPLATE version" "$(extract_formula_version || true)")
+CANONICAL_VERSION=$(single_value "$BUTTONHEIST_CODE_VERSION_FILE buttonHeistVersion" "$(extract_code_version || true)")
+RELEASE_VERSION_MIRROR=$(single_value "$BUTTONHEIST_RELEASE_VERSION_FILE" "$(read_version_file || true)")
+FORMULA_VERSION_MIRROR=$(single_value "$BUTTONHEIST_FORMULA_TEMPLATE version" "$(extract_formula_version || true)")
 
-[[ -n "$VERSION_FILE" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE is empty"
-[[ "$VERSION_FILE" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) is not MAJOR.MINOR.PATCH"
-[[ "$CODE_VERSION" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_CODE_VERSION_FILE ($CODE_VERSION) is not MAJOR.MINOR.PATCH"
-[[ "$FORMULA_VERSION" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION) is not MAJOR.MINOR.PATCH"
-[[ "$VERSION_FILE" == "$CODE_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_CODE_VERSION_FILE ($CODE_VERSION)"
-[[ "$VERSION_FILE" == "$FORMULA_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION)"
+[[ "$CANONICAL_VERSION" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_CODE_VERSION_FILE ($CANONICAL_VERSION) is not MAJOR.MINOR.PATCH"
+[[ "$RELEASE_VERSION_MIRROR" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($RELEASE_VERSION_MIRROR) is not MAJOR.MINOR.PATCH"
+[[ "$FORMULA_VERSION_MIRROR" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION_MIRROR) is not MAJOR.MINOR.PATCH"
+[[ "$RELEASE_VERSION_MIRROR" == "$CANONICAL_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($RELEASE_VERSION_MIRROR) != canonical $BUTTONHEIST_CODE_VERSION_FILE ($CANONICAL_VERSION)"
+[[ "$FORMULA_VERSION_MIRROR" == "$CANONICAL_VERSION" ]] || fail "$BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION_MIRROR) != canonical $BUTTONHEIST_CODE_VERSION_FILE ($CANONICAL_VERSION)"
 
-if grep -Fq "$VERSION_FILE" "$BUTTONHEIST_API_DOCS_FILE"; then
-    fail "$BUTTONHEIST_API_DOCS_FILE must not duplicate release version $VERSION_FILE"
+if grep -Fq "$CANONICAL_VERSION" "$BUTTONHEIST_API_DOCS_FILE"; then
+    fail "$BUTTONHEIST_API_DOCS_FILE must not duplicate release version $CANONICAL_VERSION"
 fi
 if grep -Eq "$SEMVER_GREP" "$BUTTONHEIST_API_DOCS_FILE"; then
     fail "$BUTTONHEIST_API_DOCS_FILE must use placeholders instead of concrete release versions"
@@ -69,8 +68,8 @@ if awk '
     fail "$BUTTONHEIST_API_DOCS_FILE must not duplicate the CLI release version"
 fi
 
-if grep -Fq "$VERSION_FILE" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
-    fail "$BUTTONHEIST_DEMO_VERSION_FILE must not duplicate release version $VERSION_FILE"
+if grep -Fq "$CANONICAL_VERSION" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
+    fail "$BUTTONHEIST_DEMO_VERSION_FILE must not duplicate release version $CANONICAL_VERSION"
 fi
 
 if grep -Eq "\"$SEMVER_GREP\"" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
@@ -148,7 +147,7 @@ trap 'rm -f "$TMP_FORMULA"' EXIT
 DUMMY_CLI_SHA="1111111111111111111111111111111111111111111111111111111111111111"
 DUMMY_MCP_SHA="2222222222222222222222222222222222222222222222222222222222222222"
 
-"$SCRIPT_DIR/render-homebrew-formula.sh" "$VERSION_FILE" "$DUMMY_CLI_SHA" "$DUMMY_MCP_SHA" "$TMP_FORMULA"
+"$SCRIPT_DIR/render-homebrew-formula.sh" "$CANONICAL_VERSION" "$DUMMY_CLI_SHA" "$DUMMY_MCP_SHA" "$TMP_FORMULA"
 
 assert_rendered_url_checksum_pair() {
     local label="$1"
@@ -197,20 +196,20 @@ assert_rendered_url_checksum_pair() {
     ' "$TMP_FORMULA" || fail "rendered formula does not bind $label checksum to matching URL"
 }
 
-grep -Fq "version \"$VERSION_FILE\"" "$TMP_FORMULA" \
-    || fail "rendered formula version does not match $VERSION_FILE"
-grep -Fq "url \"$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_cli_archive_name "$VERSION_FILE")\"" "$TMP_FORMULA" \
+grep -Fq "version \"$CANONICAL_VERSION\"" "$TMP_FORMULA" \
+    || fail "rendered formula version does not match $CANONICAL_VERSION"
+grep -Fq "url \"$(buttonheist_release_url "$CANONICAL_VERSION")/$(buttonheist_cli_archive_name "$CANONICAL_VERSION")\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing concrete CLI URL"
-grep -Fq "url \"$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_mcp_archive_name "$VERSION_FILE")\"" "$TMP_FORMULA" \
+grep -Fq "url \"$(buttonheist_release_url "$CANONICAL_VERSION")/$(buttonheist_mcp_archive_name "$CANONICAL_VERSION")\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing concrete MCP URL"
 grep -Fq "sha256 \"$DUMMY_CLI_SHA\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing CLI checksum"
 grep -Fq "sha256 \"$DUMMY_MCP_SHA\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing MCP checksum"
-assert_rendered_url_checksum_pair "CLI" "$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_cli_archive_name "$VERSION_FILE")" "$DUMMY_CLI_SHA"
-assert_rendered_url_checksum_pair "MCP" "$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_mcp_archive_name "$VERSION_FILE")" "$DUMMY_MCP_SHA"
+assert_rendered_url_checksum_pair "CLI" "$(buttonheist_release_url "$CANONICAL_VERSION")/$(buttonheist_cli_archive_name "$CANONICAL_VERSION")" "$DUMMY_CLI_SHA"
+assert_rendered_url_checksum_pair "MCP" "$(buttonheist_release_url "$CANONICAL_VERSION")/$(buttonheist_mcp_archive_name "$CANONICAL_VERSION")" "$DUMMY_MCP_SHA"
 if grep -Fq 'PLACEHOLDER' "$TMP_FORMULA"; then
     fail "rendered formula still contains checksum placeholder"
 fi
 
-echo "Release contract verified for $VERSION_FILE"
+echo "Release contract verified for $CANONICAL_VERSION"

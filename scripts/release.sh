@@ -3,7 +3,7 @@
 #
 # Performs the full release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
-#   2. Bump version across release truth files + regenerate Xcode projects
+#   2. Prepare parser projections and derive version mirrors from TheScore
 #   3. Build CLI + MCP (in parallel)
 #   4. Rebase onto latest origin, commit, push source to main, and wait for CI
 #   5. Tag the exact green main commit and wait for release packaging
@@ -141,7 +141,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Read current version
+# Read the canonical current version.
 CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
 
 if [[ "$TAG_CURRENT" == true ]]; then
@@ -197,30 +197,22 @@ if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     exit 1
 fi
 
-# Bump parser dependency if the submodule needs a new tag or Package.swift is stale.
-SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
-if [[ -d "$SUBMODULE_DIR" ]]; then
-    git submodule update --init --recursive "$SUBMODULE_DIR"
-    BEFORE_PARSER_BUMP=$(git rev-parse HEAD)
-    if [[ "$DRY_RUN" == true ]]; then
-        "$SCRIPT_DIR/bump-parser.sh" --dry-run
-    else
-        "$SCRIPT_DIR/bump-parser.sh"
-    fi
-    AFTER_PARSER_BUMP=$(git rev-parse HEAD)
-    if [[ "$BEFORE_PARSER_BUMP" != "$AFTER_PARSER_BUMP" ]]; then
-        if [[ "$DRY_RUN" == true ]]; then
-            echo "Error: parser dry-run changed HEAD from $BEFORE_PARSER_BUMP to $AFTER_PARSER_BUMP"
-            exit 1
-        fi
-        git push origin main
-        LOCAL_SHA="$AFTER_PARSER_BUMP"
-        echo "  ✓ Parser dependency bumped, new HEAD: $(echo "$LOCAL_SHA" | cut -c1-8)"
-    fi
+# The release may now create only its own derived working-tree changes.
+if [[ -n $(git status --porcelain) ]]; then
+    echo "Error: worktree is not clean"
+    echo "  git status"
+    exit 1
 fi
 
-"$SCRIPT_DIR/check-parser-contract.sh"
-echo "  Parser dependency: valid"
+cleanup_release_changes() {
+    if [[ -n $(git status --porcelain) ]]; then
+        echo ""
+        echo "  Reverting uncommitted release changes..."
+        git checkout -- .
+        echo "  ✓ Worktree restored to clean state"
+    fi
+}
+trap cleanup_release_changes EXIT
 
 CURRENT_VERSION_TAG_EXISTS=false
 if remote_release_tag_exists "$CURRENT_VERSION"; then
@@ -274,13 +266,6 @@ if [[ "$RUN_TESTS" == false ]]; then
     echo "  CI: passed on $(echo "$LOCAL_SHA" | cut -c1-8)"
 fi
 
-# Clean worktree
-if [[ -n $(git status --porcelain) ]]; then
-    echo "Error: worktree is not clean"
-    echo "  git status"
-    exit 1
-fi
-
 if [[ "$TAG_CURRENT" == true ]]; then
     if [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
         echo "Error: tag v$NEW_VERSION already exists; $NEW_VERSION is already released."
@@ -299,8 +284,32 @@ elif [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
     exit 1
 fi
 
+# Prepare every parser dependency projection only after main and release state
+# have passed their side-effect-free gates.
+SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
+if [[ -d "$SUBMODULE_DIR" ]]; then
+    git submodule update --init --recursive "$SUBMODULE_DIR"
+    if [[ "$DRY_RUN" == true ]]; then
+        "$SCRIPT_DIR/bump-parser.sh" --dry-run
+    else
+        "$SCRIPT_DIR/bump-parser.sh"
+    fi
+    if [[ "$TAG_CURRENT" == true && -n $(git status --porcelain) ]]; then
+        echo "Error: --tag-current cannot change parser dependency projections."
+        echo "  Commit the parser alignment through a normal release first."
+        exit 1
+    fi
+fi
+
+if [[ "$DRY_RUN" == false ]]; then
+    "$SCRIPT_DIR/check-parser-contract.sh"
+    echo "  Parser dependency: valid"
+else
+    echo "  Parser dependency: dry-run projection checked"
+fi
+
 echo "  HEAD: in sync with origin/main"
-echo "  Worktree: clean"
+echo "  Release inputs: prepared"
 if [[ "$TAG_CURRENT" == true ]]; then
     echo "  Version: $CURRENT_VERSION (tag current source)"
 else
@@ -315,7 +324,7 @@ if [[ "$DRY_RUN" == true ]]; then
     if [[ "$TAG_CURRENT" == true ]]; then
         echo "  1. Validate current version in RELEASE_VERSION, source, formula, Homebrew rendering, and parser contract"
     else
-        echo "  1. Bump version in RELEASE_VERSION, source, and formula + regenerate Xcode projects"
+        echo "  1. Bump the canonical source version and derive RELEASE_VERSION and formula mirrors"
     fi
     echo "  2. Build CLI + MCP (parallel)"
     if [[ "$RUN_TESTS" == true ]]; then
@@ -351,44 +360,10 @@ if [[ "$TAG_CURRENT" == true ]]; then
 else
     echo "==> Phase 2: Bumping version"
 
-# From this point, any failure should revert uncommitted version bumps
-cleanup_version_bump() {
-    if [[ -n $(git status --porcelain) ]]; then
-        echo ""
-        echo "  Reverting uncommitted version bump..."
-        git checkout -- .
-        echo "  ✓ Worktree restored to clean state"
-    fi
-}
-trap cleanup_version_bump EXIT
+    "$SCRIPT_DIR/bump-version.sh" "$NEW_VERSION"
+    echo "  ✓ canonical version and derived mirrors"
 
-escape_sed_pattern() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/\./\\./g; s/[*\[\]^$+?(){}|]/\\&/g'
-}
-escape_sed_replacement() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/&/\\&/g'
-}
-
-CURRENT_ESC=$(escape_sed_pattern "$CURRENT_VERSION")
-NEW_ESC=$(escape_sed_replacement "$NEW_VERSION")
-
-# 1. TheScore/Wire/Messages.swift (canonical source of truth)
-sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_ESC\"/" \
-    ButtonHeist/Sources/TheScore/Wire/Messages.swift
-echo "  ✓ Messages.swift"
-
-# 2. RELEASE_VERSION file
-echo "$NEW_VERSION" > "$BUTTONHEIST_RELEASE_VERSION_FILE"
-echo "  ✓ $BUTTONHEIST_RELEASE_VERSION_FILE"
-
-# 3. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
-sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" "$BUTTONHEIST_FORMULA_TEMPLATE"
-echo "  ✓ $BUTTONHEIST_FORMULA_TEMPLATE"
-
-"$SCRIPT_DIR/validate-release-contract.sh"
-echo "  ✓ release contract"
-
-echo ""
+    echo ""
 fi
 
 # --------------------------------------------------------------------------
@@ -512,7 +487,16 @@ else
         "$BUTTONHEIST_RELEASE_VERSION_FILE" \
         "$BUTTONHEIST_FORMULA_TEMPLATE"
 
+    while IFS= read -r parser_projection; do
+        [[ -n "$parser_projection" ]] || continue
+        git add -- "$parser_projection"
+    done < <(git diff --name-only -- '*Package.swift' '*Package.resolved')
+
     git commit -m "Release $NEW_VERSION"
+
+    # Release inputs are committed. Rebase failures must preserve their state
+    # for diagnosis rather than invoking working-tree cleanup.
+    trap - EXIT
 
     # Rebase onto latest origin to avoid push rejection if main moved
     git fetch origin main --quiet
@@ -521,9 +505,6 @@ else
         git rebase origin/main
         echo "  ✓ Rebased onto latest origin/main"
     fi
-
-    # Version bump is committed — disable the cleanup trap
-    trap - EXIT
 
     RELEASE_SHA=$(git rev-parse HEAD)
     echo "  Publishing release source commit to main..."
