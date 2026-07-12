@@ -90,13 +90,17 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         guard AccessibilityNotificationObserver.shared.isInstalled else {
             throw XCTSkip("_AXAddNotificationCallback is unavailable in this runtime")
         }
-        bus.clearPendingEvents()
+        let cursor = AccessibilityNotificationCursor(sequence: bus.latestSequence)
 
         UIAccessibility.post(
             notification: .announcement,
             argument: "BH announcement string payload"
         )
-        let announcement = try await waitForNotification(kind: .announcement, in: bus)
+        let announcement = try await waitForNotification(
+            kind: .announcement,
+            after: cursor,
+            in: bus
+        )
         XCTAssertEqual(announcement.kind, .announcement)
         guard case .string(let value) = announcement.notificationData else {
             return XCTFail("Expected string notification data, got \(announcement.notificationData)")
@@ -107,7 +111,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let element = UIAccessibilityElement(accessibilityContainer: container)
         element.accessibilityLabel = "BH layout element payload"
         UIAccessibility.post(notification: .layoutChanged, argument: element)
-        let layoutChange = try await waitForNotification(kind: .elementChanged(.layout), in: bus)
+        let layoutChange = try await waitForNotification(
+            kind: .elementChanged(.layout),
+            after: cursor,
+            in: bus
+        )
         XCTAssertEqual(layoutChange.kind, .elementChanged(.layout))
         guard case .object(let objectIdentity) = layoutChange.notificationData else {
             return XCTFail("Expected element notification data, got \(layoutChange.notificationData)")
@@ -119,18 +127,23 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
 
         UIAccessibility.post(notification: .screenChanged, argument: nil)
-        let screenChange = try await waitForNotification(kind: .screenChanged, in: bus)
+        let screenChange = try await waitForNotification(
+            kind: .screenChanged,
+            after: cursor,
+            in: bus
+        )
         XCTAssertEqual(screenChange.kind, .screenChanged)
         guard case .none = screenChange.notificationData else {
             return XCTFail("Expected nil screen-change notification data, got \(screenChange.notificationData)")
         }
     }
 
-    func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() {
+    func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() throws {
         let bus = AccessibilityNotificationBus()
         bus.record(code: 1001, notificationData: .none, associatedElement: .none)
 
         let action = bus.beginActionWindow()
+        XCTAssertEqual(action.cursor.sequence, 1)
         bus.record(code: 1005, notificationData: .none, associatedElement: .none)
         bus.record(
             code: 1008,
@@ -138,14 +151,38 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let claimed = action.capture()?.events ?? []
+        let firstBatch = try XCTUnwrap(action.capture())
+        let secondBatch = try XCTUnwrap(action.capture())
         action.cancel()
 
-        XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(firstBatch.events.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(firstBatch.events.map(\.sequence), [2, 3])
+        XCTAssertEqual(firstBatch.through.sequence, 3)
+        XCTAssertNil(firstBatch.gap)
+        XCTAssertEqual(secondBatch.events.map(\.sequence), firstBatch.events.map(\.sequence))
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
             [.elementChanged(.layout), .elementChanged(.value), .announcement]
         )
+    }
+
+    func testActionWindowReportsHistoryGapWithoutDrainingRetainedEvents() throws {
+        let bus = AccessibilityNotificationBus()
+        let action = bus.beginActionWindow()
+
+        for _ in 0..<65 {
+            bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        }
+
+        let batch = try XCTUnwrap(action.capture())
+        let retainedSequences = bus.pendingEvents().map(\.sequence)
+        action.cancel()
+
+        XCTAssertEqual(action.cursor.sequence, 0)
+        XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 1))
+        XCTAssertEqual(batch.through.sequence, 65)
+        XCTAssertEqual(batch.events.map(\.sequence), Array(UInt64(2)...UInt64(65)))
+        XCTAssertEqual(retainedSequences, batch.events.map(\.sequence))
     }
 
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
@@ -442,12 +479,13 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
     private func waitForNotification(
         kind: AccessibilityNotificationKind,
+        after cursor: AccessibilityNotificationCursor,
         in bus: AccessibilityNotificationBus,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws -> PendingAccessibilityNotificationEvent {
         for _ in 0..<100 {
-            if let event = bus.pendingEvents().first(where: { $0.kind == kind }) {
+            if let event = bus.pendingEvents(after: cursor).first(where: { $0.kind == kind }) {
                 return event
             }
             await Task.yield()
@@ -468,7 +506,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 return
             }
             await Task.yield()
-            _ = await Task.cancellableSleep(for: .milliseconds(1))
         }
         XCTAssertEqual(bus.transitionWaiterCount, expectedCount, file: file, line: line)
     }

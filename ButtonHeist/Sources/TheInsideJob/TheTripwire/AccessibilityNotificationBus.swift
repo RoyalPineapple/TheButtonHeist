@@ -314,7 +314,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     }
 
     private func recordLocked(_ event: PendingAccessibilityNotificationEvent) -> NotificationResumptions {
-        latestSequenceStorage = max(latestSequenceStorage, event.sequence)
+        precondition(
+            event.sequence > latestSequenceStorage,
+            "Accessibility notification sequence must advance"
+        )
+        latestSequenceStorage = event.sequence
         bufferedEvents.append(event)
         if bufferedEvents.count > maxBufferedEvents {
             let removed = bufferedEvents.prefix(bufferedEvents.count - maxBufferedEvents)
