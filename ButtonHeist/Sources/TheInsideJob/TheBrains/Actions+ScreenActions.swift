@@ -15,7 +15,7 @@ extension Actions {
         )
     }
 
-    func executeDismiss() async -> TheSafecracker.InteractionResult {
+    func executeDismiss() async -> TheSafecracker.ActionDispatchOutcome {
         screenActionResult(
             accessibilityActions.dismiss(
                 startingAt: screenActionStartingObject(),
@@ -26,7 +26,7 @@ extension Actions {
         )
     }
 
-    func executeMagicTap() async -> TheSafecracker.InteractionResult {
+    func executeMagicTap() async -> TheSafecracker.ActionDispatchOutcome {
         screenActionResult(
             accessibilityActions.magicTap(
                 startingAt: screenActionStartingObject(),
@@ -46,7 +46,7 @@ extension Actions {
         _ outcome: AccessibilityActionDispatcher.ScreenActionOutcome,
         method: ActionMethod,
         missingHandlerMessage: String
-    ) -> TheSafecracker.InteractionResult {
+    ) -> TheSafecracker.ActionDispatchOutcome {
         switch outcome {
         case .succeeded(let handler):
             return .success(method: method, message: "Handler: \(handler)")

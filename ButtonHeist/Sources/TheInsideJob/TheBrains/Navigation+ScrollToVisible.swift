@@ -10,13 +10,13 @@ extension Navigation {
     /// `scroll_to_visible` is the explicit viewport command wrapper over the
     /// product element inflation path. It does not own separate reveal or geometry
     /// behavior.
-    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
+    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScrollToVisible(elementTarget: target.elementTarget)
     }
 
     func executeScrollToVisible(
         elementTarget: ElementTarget?
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         guard let elementTarget else {
             return .failure(
                 .scrollToVisible,
@@ -33,7 +33,7 @@ extension Navigation {
         case .inflated:
             return .success(method: .scrollToVisible)
         case .failed(let failure):
-            return failure.interactionResult(commandMethod: .scrollToVisible)
+            return failure.actionDispatchOutcome(commandMethod: .scrollToVisible)
         }
     }
 }

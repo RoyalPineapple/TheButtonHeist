@@ -121,10 +121,12 @@ extension ElementInflation {
         case failure(ElementInflationFailure)
     }
 
-    internal enum StaleLiveTargetGraceResult {
-        case success(InflatedElementTarget)
+    internal enum TargetRefreshGraceTerminal {
+        case screenElement(TheStash.ScreenElement, didReveal: Bool)
+        case inflated(InflatedElementTarget)
         case failure(ElementInflationFailure)
-        case retry
+        case timedOut
+        case cancelled
     }
 }
 

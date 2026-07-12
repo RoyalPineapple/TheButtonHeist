@@ -186,7 +186,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(TheBrains.actionErrorKind(for: result), .accessibilityTreeUnavailable)
     }
 
-    func testInteractionResultDecoratorsPreserveExistingFieldsAndMergeTiming() {
+    func testActionDispatchOutcomeDecoratorsPreserveExistingFieldsAndMergeTiming() {
         let element = HeistElement(
             description: "Checkout",
             label: "Checkout",
@@ -214,7 +214,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             tapActivationPoint: ScreenPoint(x: 50, y: 22),
             tapActivationSucceeded: true
         ))
-        let success = TheSafecracker.InteractionResult.success(
+        let success = TheSafecracker.ActionDispatchOutcome.success(
             payload: .setPasteboard("ok"),
             message: "completed",
             subjectEvidence: originalEvidence,
@@ -238,7 +238,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             totalMs: 30
         ))
 
-        let failure = TheSafecracker.InteractionResult.failure(
+        let failure = TheSafecracker.ActionDispatchOutcome.failure(
             .activate,
             message: "missing",
             failureKind: .targetUnavailable

@@ -10,9 +10,9 @@ extension Actions {
 
     // MARK: - Edit / Pasteboard / Responder
 
-    func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
+    func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
         if let failure = await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
-            return failure.interactionResult(commandMethod: .editAction)
+            return failure.actionDispatchOutcome(commandMethod: .editAction)
         }
         let success = safecracker.performEditAction(target.action)
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
@@ -25,15 +25,15 @@ extension Actions {
             : .failure(.editAction, message: message ?? "edit action failed")
     }
 
-    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
+    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.ActionDispatchOutcome {
         if let failure = await navigation.elementInflation.inflateFirstResponder(method: .setPasteboard) {
-            return failure.interactionResult(commandMethod: .setPasteboard)
+            return failure.actionDispatchOutcome(commandMethod: .setPasteboard)
         }
         UIPasteboard.general.string = target.text
         return .success(payload: .setPasteboard(target.text))
     }
 
-    func executeGetPasteboard() -> TheSafecracker.InteractionResult {
+    func executeGetPasteboard() -> TheSafecracker.ActionDispatchOutcome {
         let text = UIPasteboard.general.string
         guard let text else {
             return .success(
@@ -44,9 +44,9 @@ extension Actions {
         return .success(payload: .getPasteboard(text))
     }
 
-    func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
+    func executeResignFirstResponder() async -> TheSafecracker.ActionDispatchOutcome {
         if let failure = await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
-            return failure.interactionResult(commandMethod: .resignFirstResponder)
+            return failure.actionDispatchOutcome(commandMethod: .resignFirstResponder)
         }
         let success = safecracker.resignFirstResponder()
         if success { return .success(method: .resignFirstResponder) }
@@ -63,7 +63,7 @@ extension Actions {
 
     func executeTypeText(
         _ target: TypeTextTarget
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         guard target.replacingExisting || !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
@@ -82,7 +82,7 @@ extension Actions {
     private func executeTypeText(
         _ target: TypeTextTarget,
         using focusedInput: FocusedTextInput?
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         if target.replacingExisting {
             let clearResult = await safecracker.clearText(existingValue: focusedInput?.currentValue)
             if let diagnostic = clearResult.diagnostic {
@@ -141,7 +141,7 @@ extension Actions {
     private enum TextInputFocusResult {
         case alreadyFocused
         case focused(FocusedTextInput)
-        case failed(TheSafecracker.InteractionResult)
+        case failed(TheSafecracker.ActionDispatchOutcome)
     }
 
     private struct FocusedTextInput {
@@ -178,7 +178,7 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         case .failed(let failure):
-            return .failed(failure.interactionResult(commandMethod: .typeText))
+            return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
         }
 
         if isResolvedTextInputFocused(inflatedTarget) {
@@ -196,7 +196,7 @@ extension Actions {
         case .inflated(let target):
             refreshedTarget = target
         case .failed(let failure):
-            return .failed(failure.interactionResult(commandMethod: .typeText))
+            return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
         }
 
         let activateOutcome = accessibilityActions.activate(refreshedTarget.liveTarget)

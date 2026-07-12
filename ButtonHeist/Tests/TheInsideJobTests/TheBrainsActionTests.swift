@@ -4108,8 +4108,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func assertSameInteraction(
         _ name: String,
-        single singleResult: TheSafecracker.InteractionResult,
-        heist heistResult: TheSafecracker.InteractionResult,
+        single singleResult: TheSafecracker.ActionDispatchOutcome,
+        heist heistResult: TheSafecracker.ActionDispatchOutcome,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {

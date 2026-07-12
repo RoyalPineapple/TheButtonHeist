@@ -67,15 +67,19 @@ extension ElementInflation {
             scrollFailedMessage: "target \(description) activation point could not be brought on-screen"
         )
         switch placement {
-        case .success(false):
+        case .success(.alreadyInPosition):
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
                 attempt: attempt,
                 method: method,
                 requireOnscreenActivationPoint: true
             )
-        case .success(true):
+        case .success(.moved):
             return .retrying(failedAttempt: attempt, reason: .activationPointOffscreen)
+        case .success(.unavailable):
+            return .failed(.geometryNotActionable(
+                "target \(description) activation point could not be brought on-screen"
+            ))
         case .failure(let failure):
             return .failed(failure)
         }
@@ -88,38 +92,42 @@ extension ElementInflation {
         noScrollViewFailure: ElementInflationFailure,
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String
-    ) async -> Result<Bool, ElementInflationFailure> {
+    ) async -> Result<TheSafecracker.ScrollPrimitiveResult, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
-            return .success(false)
+            return .success(.alreadyInPosition)
         }
         guard let scrollView else {
             if ScreenMetrics.current.bounds.contains(activationPoint) {
-                return .success(false)
+                return .success(.alreadyInPosition)
             }
             return .failure(noScrollViewFailure)
         }
         if scrollView.bhIsUnsafeForProgrammaticScrolling,
            let unsafeProgrammaticScrollMessage {
             if ScreenMetrics.current.bounds.contains(activationPoint) {
-                return .success(false)
+                return .success(.alreadyInPosition)
             }
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
-        guard safecracker.scrollToMakeScreenPointVisible(
+        switch safecracker.scrollToMakeScreenPointVisible(
             activationPoint,
             in: scrollView,
             animated: false,
             preferredScreenRect: Self.interactionComfortZone,
             minimumScreenRect: ScreenMetrics.current.bounds
-        ) else {
+        ) {
+        case .alreadyInPosition:
+            return .success(.alreadyInPosition)
+        case .unavailable:
             if ScreenMetrics.current.bounds.contains(activationPoint) {
-                return .success(false)
+                return .success(.alreadyInPosition)
             }
             return .failure(.geometryNotActionable(scrollFailedMessage))
+        case .moved:
+            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+            stash.refreshTreeAfterViewportMove()
+            return .success(.moved)
         }
-        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.refreshTreeAfterViewportMove()
-        return .success(true)
     }
 
     private struct LiveGeometrySample {

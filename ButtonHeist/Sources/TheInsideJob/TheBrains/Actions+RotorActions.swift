@@ -13,7 +13,7 @@ extension Actions {
 
     func executeRotor(
         _ target: RotorTarget
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         let direction = target.direction
         let rotor = target.selection.rotorName
         let rotorIndex = target.selection.rotorIndex
@@ -32,7 +32,7 @@ extension Actions {
             if case .succeeded(let hit) = outcome {
                 await self.exposeRotorResultIfPossible(hit)
             }
-            return Self.rotorInteractionResult(
+            return Self.rotorDispatchOutcome(
                 outcome: outcome,
                 rotor: rotor,
                 rotorIndex: rotorIndex,
@@ -68,13 +68,13 @@ extension Actions {
 
     // MARK: - Diagnostic Helpers
 
-    private static func rotorInteractionResult(
+    private static func rotorDispatchOutcome(
         outcome: TheStash.RotorOutcome,
         rotor: String?,
         rotorIndex: Int?,
         direction: RotorDirection,
         liveTarget: TheStash.LiveActionTarget
-    ) -> TheSafecracker.InteractionResult {
+    ) -> TheSafecracker.ActionDispatchOutcome {
         let element = liveTarget.screenElement
         let liveObject = liveTarget.object
         switch outcome {
@@ -160,7 +160,7 @@ extension Actions {
     private static func rotorSuccessResult(
         _ hit: TheStash.RotorHit,
         direction: RotorDirection
-    ) -> TheSafecracker.InteractionResult {
+    ) -> TheSafecracker.ActionDispatchOutcome {
         let foundElement = hit.screenElement.map { HeistElement(accessibilityElement: $0.element) }
         var message = "Rotor '\(hit.rotor)' found"
         if let describedElement = foundElement?.label ?? foundElement?.description {
@@ -189,7 +189,7 @@ extension Actions {
         liveObject: NSObject,
         suggestion: String,
         failureKind: TheSafecracker.FailureKind = .actionFailed
-    ) -> TheSafecracker.InteractionResult {
+    ) -> TheSafecracker.ActionDispatchOutcome {
         .failure(
             .rotor,
             message: rotorDiagnostic(

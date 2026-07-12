@@ -10,9 +10,9 @@ import ThePlans
 /// entering this file.
 extension TheSafecracker {
 
-    enum EdgeScrollResult: Equatable {
+    enum ScrollPrimitiveResult: Equatable {
         case moved
-        case alreadyAtEdge
+        case alreadyInPosition
         case unavailable
     }
 
@@ -22,13 +22,12 @@ extension TheSafecracker {
     }
 
     /// Scroll by one page in the given direction with a 44pt overlap.
-    /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
-    ) -> Bool {
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+    ) -> ScrollPrimitiveResult {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
         let size = scrollView.frame.size
@@ -55,12 +54,12 @@ extension TheSafecracker {
         case .previous:
             newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
         @unknown default:
-            return false
+            return .unavailable
         }
 
-        if newOffset.x == offset.x && newOffset.y == offset.y { return false }
+        if newOffset.x == offset.x && newOffset.y == offset.y { return .alreadyInPosition }
         scrollView.setContentOffset(newOffset, animated: animated)
-        return true
+        return .moved
     }
 
     /// Scrolls so a live screen point lands in the preferred screen rect when
@@ -71,8 +70,8 @@ extension TheSafecracker {
         animated: Bool = true,
         preferredScreenRect: CGRect,
         minimumScreenRect: CGRect
-    ) -> Bool {
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+    ) -> ScrollPrimitiveResult {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let pointInContent = scrollView.convert(screenPoint, from: nil)
         let currentOffset = scrollView.contentOffset
@@ -88,10 +87,10 @@ extension TheSafecracker {
             in: scrollView
         )
 
-        if preferredVisibleRect.contains(pointInContent) { return true }
+        if preferredVisibleRect.contains(pointInContent) { return .alreadyInPosition }
 
         let targetRect = preferredVisibleRect.isUsableForPoint ? preferredVisibleRect : minimumVisibleRect
-        guard targetRect.isUsableForPoint else { return false }
+        guard targetRect.isUsableForPoint else { return .unavailable }
 
         var newOffset = currentOffset
         if pointInContent.x < targetRect.minX || pointInContent.x >= targetRect.maxX {
@@ -115,12 +114,12 @@ extension TheSafecracker {
         let futureMinimumRect = minimumVisibleRect.offsetBy(dx: offsetDelta.x, dy: offsetDelta.y)
         guard futurePreferredRect.contains(pointInContent)
             || futureMinimumRect.contains(pointInContent)
-        else { return false }
+        else { return .unavailable }
 
-        if newOffset.x == currentOffset.x && newOffset.y == currentOffset.y { return true }
+        if newOffset.x == currentOffset.x && newOffset.y == currentOffset.y { return .alreadyInPosition }
 
         scrollView.setContentOffset(newOffset, animated: animated)
-        return true
+        return .moved
     }
 
     private func usableVisibleRect(
@@ -143,7 +142,11 @@ extension TheSafecracker {
     }
 
     /// Scroll to an absolute edge.
-    func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge, animated: Bool = true) -> EdgeScrollResult {
+    func scrollToEdge(
+        _ scrollView: UIScrollView,
+        edge: ScrollEdge,
+        animated: Bool = true
+    ) -> ScrollPrimitiveResult {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let insets = scrollView.adjustedContentInset
@@ -162,7 +165,7 @@ extension TheSafecracker {
 
         if newOffset.x == scrollView.contentOffset.x,
            newOffset.y == scrollView.contentOffset.y {
-            return .alreadyAtEdge
+            return .alreadyInPosition
         }
         scrollView.setContentOffset(newOffset, animated: animated)
         return .moved
@@ -176,9 +179,11 @@ extension TheSafecracker {
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
         duration: GestureDuration = .scrollSwipeDefault
-    ) async -> Bool {
-        guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else { return false }
-        return await swipe(from: path.start, to: path.end, duration: duration)
+    ) async -> ScrollPrimitiveResult {
+        guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else {
+            return .unavailable
+        }
+        return await swipe(from: path.start, to: path.end, duration: duration) ? .moved : .unavailable
     }
 
     private static func scrollFingerPath(
