@@ -21,7 +21,7 @@ import TheScore
         let modalMarkers: [Marker]
         let primaryHeader: String?
         let backButton: Marker?
-        let selectedTab: Marker?
+        let selectedTabs: Set<Marker>
         let rootShape: [RootShapeToken]
     }
 
@@ -70,16 +70,9 @@ import TheScore
         let isScrollable: Bool
     }
 
-    typealias Reason = AccessibilityObservationFallbackReason
-
-    struct Classification: Equatable {
-        let isScreenChange: Bool
-        let reason: Reason?
-
-        static let sameScreen = Classification(isScreenChange: false, reason: nil)
-        static func screenChanged(_ reason: Reason) -> Classification {
-            Classification(isScreenChange: true, reason: reason)
-        }
+    enum Classification: Equatable {
+        case sameGeneration
+        case inferredScreenChange(reason: AccessibilityObservationFallbackReason)
     }
 
     static func snapshot(of tree: InterfaceTree) -> Snapshot {
@@ -88,7 +81,7 @@ import TheScore
                 hierarchy: tree.viewportCapture.hierarchy,
                 elements: tree.viewportCapture.hierarchy.sortedElements
             ),
-            firstResponderHeistId: nil
+            firstResponderHeistId: tree.viewportCapture.firstResponderHeistId
         )
     }
 
@@ -101,23 +94,23 @@ import TheScore
         let afterSignature = after.signature
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
-            return .screenChanged(.modalBoundaryChanged)
+            return .inferredScreenChange(reason: .modalBoundaryChanged)
         }
-        if beforeSignature.selectedTab != afterSignature.selectedTab {
-            return .screenChanged(.selectedTabChanged)
+        if beforeSignature.selectedTabs != afterSignature.selectedTabs {
+            return .inferredScreenChange(reason: .selectedTabChanged)
         }
         if beforeSignature.backButton != afterSignature.backButton {
-            return .screenChanged(.navigationMarkerChanged)
+            return .inferredScreenChange(reason: .navigationMarkerChanged)
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader {
-            return .screenChanged(.primaryHeaderChanged)
+            return .inferredScreenChange(reason: .primaryHeaderChanged)
         }
         if beforeSignature.rootShape != afterSignature.rootShape,
            !hasStableInteractionContext(before: before, after: after),
            isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape) {
-            return .screenChanged(.rootShapeChanged)
+            return .inferredScreenChange(reason: .rootShapeChanged)
         }
-        return .sameScreen
+        return .sameGeneration
     }
 
     static func signature(
@@ -128,7 +121,7 @@ import TheScore
             modalMarkers: modalMarkers(in: hierarchy),
             primaryHeader: summaryElement(in: elements)?.label,
             backButton: elements.first(where: isBackButton).map(marker(for:)),
-            selectedTab: selectedTabMarker(in: hierarchy),
+            selectedTabs: selectedTabMarkers(in: hierarchy),
             rootShape: rootShapeTokens(in: hierarchy)
         )
     }
@@ -203,9 +196,8 @@ import TheScore
         }
     }
 
-    private static func selectedTabMarker(in hierarchy: [AccessibilityHierarchy]) -> Marker? {
-        let markers: [Marker] = hierarchy.compactMap(
-            first: 1,
+    private static func selectedTabMarkers(in hierarchy: [AccessibilityHierarchy]) -> Set<Marker> {
+        Set(hierarchy.compactMap(
             context: false,
             container: { isInTabBar, container in
                 if case .tabBar = container.type { return true }
@@ -215,8 +207,7 @@ import TheScore
                 guard isInTabBar, element.traits.contains(.selected) else { return nil }
                 return marker(for: element)
             }
-        )
-        return markers.first
+        ))
     }
 
     private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [RootShapeToken] {
@@ -230,7 +221,7 @@ import TheScore
                 into: &tokens
             )
         }
-        return Array(tokens.prefix(80))
+        return tokens
     }
 
     private static func appendShapeTokens(

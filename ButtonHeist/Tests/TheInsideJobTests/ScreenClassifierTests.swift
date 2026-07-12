@@ -7,16 +7,16 @@ import XCTest
 @MainActor
 final class ScreenClassifierTests: XCTestCase {
 
-    func testPrimaryHeaderChangeIsScreenChange() {
+    func testPrimaryHeaderChangeInfersScreenChange() {
         let before = screen(elements: [element(label: "Home", traits: .header)])
         let after = screen(elements: [element(label: "Settings", traits: .header)])
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.primaryHeaderChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .primaryHeaderChanged))
     }
 
-    func testExplicitSummaryElementDefinesPrimaryScreenIdentity() {
+    func testExplicitSummaryElementKeepsSameGeneration() {
         let before = screen(elements: [
             element(label: "Home Header", traits: .header),
             element(label: "Messages", traits: .summaryElement),
@@ -28,10 +28,10 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .sameScreen)
+        XCTAssertEqual(result, .sameGeneration)
     }
 
-    func testBackButtonChangeIsScreenChange() {
+    func testBackButtonChangeInfersScreenChange() {
         let before = screen(elements: [element(label: "Detail", traits: .header)])
         let after = screen(elements: [
             element(label: "Orders", traits: UIAccessibilityTraits.fromNames(["backButton"])),
@@ -40,10 +40,10 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.navigationMarkerChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .navigationMarkerChanged))
     }
 
-    func testSelectedTabChangeIsScreenChange() {
+    func testSelectedTabChangeInfersScreenChange() {
         let tabBar = AccessibilityContainer(type: .tabBar, frame: .zero)
         let before = screen(hierarchy: [
             .container(tabBar, children: [
@@ -60,10 +60,40 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.selectedTabChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .selectedTabChanged))
     }
 
-    func testModalBoundaryChangeIsScreenChange() {
+    func testSelectedTabComparisonIncludesEveryTabBar() {
+        let firstTabBar = AccessibilityContainer(type: .tabBar, identifier: "primary_tabs", frame: .zero)
+        let secondTabBar = AccessibilityContainer(type: .tabBar, identifier: "secondary_tabs", frame: .zero)
+        let before = screen(hierarchy: [
+            .container(firstTabBar, children: [
+                .element(element(label: "Home", traits: [.button, .selected]), traversalIndex: 0),
+                .element(element(label: "Settings", traits: .button), traversalIndex: 1),
+            ]),
+            .container(secondTabBar, children: [
+                .element(element(label: "Overview", traits: [.button, .selected]), traversalIndex: 2),
+                .element(element(label: "Details", traits: .button), traversalIndex: 3),
+            ]),
+        ])
+        let after = screen(hierarchy: [
+            .container(firstTabBar, children: [
+                .element(element(label: "Home", traits: [.button, .selected]), traversalIndex: 0),
+                .element(element(label: "Settings", traits: .button), traversalIndex: 1),
+            ]),
+            .container(secondTabBar, children: [
+                .element(element(label: "Overview", traits: .button), traversalIndex: 2),
+                .element(element(label: "Details", traits: [.button, .selected]), traversalIndex: 3),
+            ]),
+        ])
+
+        XCTAssertEqual(
+            classify(before: before, after: after),
+            .inferredScreenChange(reason: .selectedTabChanged)
+        )
+    }
+
+    func testModalBoundaryChangeInfersScreenChange() {
         let modal = AccessibilityContainer(
             type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
             frame: .zero,
@@ -78,10 +108,10 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.modalBoundaryChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .modalBoundaryChanged))
     }
 
-    func testRootShapeReplacementWithoutNavigationMarkersIsScreenChange() {
+    func testRootShapeReplacementWithoutNavigationMarkersInfersScreenChange() {
         let before = screen(elements: [element(label: "Search", traits: .searchField)])
         let after = screen(elements: [
             element(label: "Inbox", traits: .button),
@@ -91,10 +121,10 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .rootShapeChanged))
     }
 
-    func testRootShapeAdditionWithoutReplacementIsSameScreen() {
+    func testRootShapeAdditionWithoutReplacementKeepsSameGeneration() {
         let before = screen(elements: [
             element(label: "Search", traits: .searchField),
             element(label: "Save", traits: .button),
@@ -107,34 +137,44 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .sameScreen)
+        XCTAssertEqual(result, .sameGeneration)
     }
 
-    func testStableFirstResponderKeepsRootShapeChurnOnSameScreen() {
-        let before = screen(
+    func testStableFirstResponderAloneKeepsRootShapeChurnInSameGeneration() {
+        let before = focusedScreen(
             elements: [element(label: "Search", traits: .searchField)],
             firstResponderHeistId: "search"
         )
-        let after = screen(
+        let after = focusedScreen(
             elements: [
                 element(label: "Search", traits: .searchField),
-                element(label: "Filtered result", traits: .button),
+                element(label: "First result", traits: .button),
+                element(label: "Second result", traits: .button),
+                element(label: "Third result", traits: .button),
             ],
             firstResponderHeistId: "search"
         )
+        let afterWithoutFocus = screen(elements: [
+            element(label: "Search", traits: .searchField),
+            element(label: "First result", traits: .button),
+            element(label: "Second result", traits: .button),
+            element(label: "Third result", traits: .button),
+        ])
 
-        let result = classify(before: before, after: after)
-
-        XCTAssertEqual(result, .sameScreen)
+        XCTAssertEqual(classify(before: before, after: after), .sameGeneration)
+        XCTAssertEqual(
+            classify(before: before, after: afterWithoutFocus),
+            .inferredScreenChange(reason: .rootShapeChanged)
+        )
     }
 
-    func testLeafValueChangeIsSameScreen() {
+    func testLeafValueChangeKeepsSameGeneration() {
         let before = screen(elements: [element(label: "Total", value: "$1.00", traits: .staticText)])
         let after = screen(elements: [element(label: "Total", value: "$2.00", traits: .staticText)])
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .sameScreen)
+        XCTAssertEqual(result, .sameGeneration)
     }
 
     func testDelimiterLikeIdentifierDoesNotCollideWithSelectedState() {
@@ -147,7 +187,7 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .rootShapeChanged))
     }
 
     func testDelimiterLikeContainerIdentifierDoesNotCollideWithModalState() {
@@ -171,7 +211,7 @@ final class ScreenClassifierTests: XCTestCase {
         XCTAssertNotEqual(before.signature.rootShape, after.signature.rootShape)
     }
 
-    func testTopLevelMultiRootWrapperAroundSameContentIsSameScreen() {
+    func testTopLevelMultiRootWrapperAroundSameContentKeepsSameGeneration() {
         let before = screen(elements: [
             element(label: "Checkout", traits: .header),
             element(label: "Total", value: "$1.00", traits: .staticText),
@@ -194,7 +234,7 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .sameScreen)
+        XCTAssertEqual(result, .sameGeneration)
     }
 
     func testSingleTopLevelSemanticGroupAroundSameContentContributesToRootShape() {
@@ -213,7 +253,28 @@ final class ScreenClassifierTests: XCTestCase {
 
         let result = classify(before: before, after: after)
 
-        XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
+        XCTAssertEqual(result, .inferredScreenChange(reason: .rootShapeChanged))
+    }
+
+    func testRootShapeComparisonIncludesTokensBeyondFormerCap() {
+        let shared = (0..<80).map { index in
+            element(label: "Shared \(index)", identifier: "shared_\(index)", traits: .button)
+        }
+        let beforeElements = shared + (0..<121).map { index in
+            element(label: "Before \(index)", identifier: "before_\(index)", traits: .button)
+        }
+        let afterElements = shared + (0..<121).map { index in
+            element(label: "After \(index)", identifier: "after_\(index)", traits: .button)
+        }
+        let before = screen(elements: beforeElements)
+        let after = screen(elements: afterElements)
+
+        XCTAssertEqual(ScreenClassifier.snapshot(of: before.tree).signature.rootShape.count, 201)
+        XCTAssertEqual(ScreenClassifier.snapshot(of: after.tree).signature.rootShape.count, 201)
+        XCTAssertEqual(
+            classify(before: before, after: after),
+            .inferredScreenChange(reason: .rootShapeChanged)
+        )
     }
 
     private func classify(before: InterfaceObservation, after: InterfaceObservation) -> ScreenClassifier.Classification {
@@ -223,15 +284,27 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    private func screen(
+    private func focusedScreen(
         elements: [AccessibilityElement],
-        firstResponderHeistId: HeistId? = nil
+        firstResponderHeistId: HeistId
     ) -> InterfaceObservation {
+        precondition(!elements.isEmpty)
+        InterfaceObservation.makeForTests(
+            elements: elements.enumerated().map { index, element in
+                let heistId = index == 0
+                    ? firstResponderHeistId
+                    : HeistId(rawValue: "element_\(index)")
+                return (element: element, heistId: heistId)
+            },
+            firstResponderHeistId: firstResponderHeistId
+        )
+    }
+
+    private func screen(elements: [AccessibilityElement]) -> InterfaceObservation {
         InterfaceObservation.makeForTests(
             elements: elements.enumerated().map { index, element in
                 (element: element, heistId: HeistId(rawValue: "element_\(index)"))
-            },
-            firstResponderHeistId: firstResponderHeistId
+            }
         )
     }
 
