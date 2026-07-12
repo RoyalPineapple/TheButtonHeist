@@ -314,7 +314,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    package init(
+    private init(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int,
@@ -384,102 +384,47 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try container.encode(outcome, forKey: .outcome)
     }
 
-    private static func validatedOutcome(
-        kind: HeistExecutionStepKind,
-        status: HeistExecutionStepStatus,
-        evidence: HeistStepEvidence?,
-        failure: HeistFailureDetail?,
-        abortedAtChildPath: String?,
-        children: [HeistExecutionStepResult],
-        codingPath: [CodingKey]
-    ) throws -> HeistExecutionStepOutcome {
-        try validateEvidence(evidence, matches: kind, codingPath: codingPath)
-        try validateEvidence(evidence, matches: status, kind: kind, codingPath: codingPath)
-        let failedChildPath = children.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
-        try validateChildAbortPath(
-            abortedAtChildPath,
-            failedChildPath: failedChildPath,
-            codingPath: codingPath
-        )
-
-        switch status {
-        case .passed:
-            guard failure == nil else {
-                throw receiptError(
-                    "passed heist execution step must not include failure",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
-                )
-            }
-            guard failedChildPath == nil else {
-                throw receiptError(
-                    "passed heist execution step must not contain failed child \(failedChildPath ?? "")",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
-                )
-            }
-            return .passed(HeistExecutionStepPassedOutcome(evidence: evidence, children: children))
-        case .failed:
-            guard let failure else {
-                throw receiptError(
-                    "failed heist execution step must include failure",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
-                )
-            }
-            if let abortedAtChildPath {
-                guard let evidence else {
-                    throw receiptError(
-                        "child-aborted heist execution step must include evidence",
-                        codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
-                    )
-                }
-                return .childAborted(HeistExecutionStepChildAbortedOutcome(
-                    evidence: evidence,
-                    failure: failure,
-                    abortedAtChildPath: abortedAtChildPath,
-                    children: children
-                ))
-            }
-            return .failed(HeistExecutionStepFailedOutcome(
-                evidence: evidence,
-                failure: failure,
-                children: children
-            ))
-        case .skipped:
-            guard evidence == nil else {
-                throw receiptError(
-                    "skipped heist execution step must not include evidence",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
-                )
-            }
-            guard failure == nil else {
-                throw receiptError(
-                    "skipped heist execution step must not include failure",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.failure]
-                )
-            }
-            guard children.allSatisfy({ $0.status == .skipped }) else {
-                throw receiptError(
-                    "skipped heist execution step children must also be skipped",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
-                )
-            }
-            return .skipped(HeistExecutionStepSkippedOutcome(children: children))
-        }
-    }
-
     private static func validateOutcome(
         kind: HeistExecutionStepKind,
         outcome: HeistExecutionStepOutcome,
         codingPath: [CodingKey]
     ) throws {
-        _ = try validatedOutcome(
-            kind: kind,
-            status: outcome.status,
-            evidence: outcome.evidence,
-            failure: outcome.failure,
-            abortedAtChildPath: outcome.abortedAtChildPath,
-            children: outcome.children,
-            codingPath: codingPath
-        )
+        switch outcome {
+        case .passed(let passed):
+            try validateEvidence(passed.evidence, matches: kind, codingPath: codingPath)
+            try validatePassedEvidence(passed.evidence, kind: kind, codingPath: codingPath)
+            if let failedChildPath = firstFailedPath(in: passed.children) {
+                throw receiptError(
+                    "passed heist execution step must not contain failed child \(failedChildPath)",
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
+                )
+            }
+        case .failed(let failed):
+            try validateEvidence(failed.evidence, matches: kind, codingPath: codingPath)
+            try validateChildAbortPath(
+                nil,
+                failedChildPath: firstFailedPath(in: failed.children),
+                codingPath: codingPath
+            )
+        case .childAborted(let aborted):
+            try validateEvidence(aborted.evidence, matches: kind, codingPath: codingPath)
+            try validateChildAbortPath(
+                aborted.abortedAtChildPath,
+                failedChildPath: firstFailedPath(in: aborted.children),
+                codingPath: codingPath
+            )
+        case .skipped(let skipped):
+            guard skipped.children.allSatisfy({ $0.status == .skipped }) else {
+                throw receiptError(
+                    "skipped heist execution step children must also be skipped",
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
+                )
+            }
+        }
+    }
+
+    private static func firstFailedPath(in children: [HeistExecutionStepResult]) -> String? {
+        children.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
     }
 
     private static func validateEvidence(
@@ -550,13 +495,11 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         }
     }
 
-    private static func validateEvidence(
+    private static func validatePassedEvidence(
         _ evidence: HeistStepEvidence?,
-        matches status: HeistExecutionStepStatus,
         kind: HeistExecutionStepKind,
         codingPath: [CodingKey]
     ) throws {
-        guard status == .passed else { return }
         switch (kind, evidence) {
         case (.action, .action(let evidence)):
             try validatePassedActionEvidence(evidence, codingPath: codingPath)
