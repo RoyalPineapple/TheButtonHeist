@@ -7,16 +7,11 @@ import UIKit
 
 private let accessibilityNotificationLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
-private struct CapturedAccessibilityNotification {
-    let code: UInt32
-    let notificationData: CapturedAccessibilityNotificationPayload
-    let associatedElement: CapturedAccessibilityNotificationPayload
-}
-
-private struct AccessibilityNotificationPublication: Sendable {
-    let sequence: UInt64
-    let subscribers: [AccessibilityNotificationBus]
-}
+typealias AccessibilityNotificationCallback = @MainActor (
+    UInt32,
+    AnyObject?,
+    AnyObject?
+) -> Void
 
 enum AccessibilityNotificationObserverLifecycleState: Equatable {
     case unsubscribed
@@ -31,86 +26,21 @@ private struct WeakAccessibilityNotificationSubscriber {
     }
 }
 
-private final class AccessibilityNotificationFanout: Sendable {
-    private struct State {
-        var subscribers: [ObjectIdentifier: WeakAccessibilityNotificationSubscriber] = [:]
-        var latestSequence: UInt64 = 0
-
-        mutating func removeExpiredSubscribers() {
-            subscribers = subscribers.filter { $0.value.subscriber != nil }
-        }
-    }
-
-    private let state = OSAllocatedUnfairLock(initialState: State())
-
-    var latestSequence: UInt64 {
-        state.withLock { $0.latestSequence }
-    }
-
-    var hasSubscribers: Bool {
-        state.withLock { state in
-            state.removeExpiredSubscribers()
-            return !state.subscribers.isEmpty
-        }
-    }
-
-    func add(_ subscriber: AccessibilityNotificationBus) {
-        state.withLock { state in
-            state.removeExpiredSubscribers()
-            state.subscribers[ObjectIdentifier(subscriber)] = WeakAccessibilityNotificationSubscriber(subscriber)
-        }
-    }
-
-    func remove(_ subscriber: AccessibilityNotificationBus) {
-        state.withLock { state in
-            state.subscribers[ObjectIdentifier(subscriber)] = nil
-            state.removeExpiredSubscribers()
-        }
-    }
-
-    func removeAll() {
-        state.withLock { $0.subscribers.removeAll() }
-    }
-
-    func rebroadcast(_ notification: CapturedAccessibilityNotification) {
-        guard let publication = reservePublication() else { return }
-        let event = PendingAccessibilityNotificationEvent(
-            sequence: publication.sequence,
-            rawCode: notification.code,
-            timestamp: Date(),
-            notificationData: notification.notificationData.pendingPayload,
-            associatedElement: notification.associatedElement.pendingPayload
-        )
-        for subscriber in publication.subscribers {
-            subscriber.record(event)
-        }
-    }
-
-    private func reservePublication() -> AccessibilityNotificationPublication? {
-        state.withLock { state in
-            state.removeExpiredSubscribers()
-            let subscribers = state.subscribers.values.compactMap(\.subscriber)
-            guard !subscribers.isEmpty else { return nil }
-
-            state.latestSequence += 1
-            return AccessibilityNotificationPublication(
-                sequence: state.latestSequence,
-                subscribers: subscribers
-            )
-        }
-    }
-}
-
 @MainActor
 final class AccessibilityNotificationObserver {
-    private struct InstalledRegistration {
+    private struct CallbackInstallation {
         let source: String
         let uninstall: @MainActor () -> Void
     }
 
+    private struct InstalledRegistration {
+        let generation: UInt64
+        let installation: CallbackInstallation
+    }
+
     private enum RegistrationPhase {
         case uninstalled
-        case installing
+        case installing(generation: UInt64)
         case installed(InstalledRegistration)
         case uninstalling(InstalledRegistration)
         case installationUnavailable
@@ -126,23 +56,25 @@ final class AccessibilityNotificationObserver {
     }
 
     private typealias CallbackInstaller = @MainActor (
-        _ shouldCapture: @escaping () -> Bool,
-        _ handler: @escaping (CapturedAccessibilityNotification) -> Void
-    ) throws -> InstalledRegistration
+        _ callback: @escaping AccessibilityNotificationCallback
+    ) throws -> CallbackInstallation
 
     static let shared = AccessibilityNotificationObserver()
 
-    private let fanout = AccessibilityNotificationFanout()
     private let callbackInstaller: CallbackInstaller
+    private var subscribers: [ObjectIdentifier: WeakAccessibilityNotificationSubscriber] = [:]
+    private var latestSequenceStorage: UInt64 = 0
+    private var nextGeneration: UInt64 = 0
     private var registrationPhase: RegistrationPhase = .uninstalled
 
     var latestSequence: UInt64 {
-        fanout.latestSequence
+        latestSequenceStorage
     }
 
     var hasSubscribers: Bool {
+        removeExpiredSubscribers()
         reconcileRegistration()
-        return fanout.hasSubscribers
+        return !subscribers.isEmpty
     }
 
     var isInstalled: Bool {
@@ -151,23 +83,23 @@ final class AccessibilityNotificationObserver {
     }
 
     var lifecycleState: AccessibilityNotificationObserverLifecycleState {
+        removeExpiredSubscribers()
         reconcileRegistration()
-        guard fanout.hasSubscribers else { return .unsubscribed }
+        guard !subscribers.isEmpty else { return .unsubscribed }
         return .subscribed(callbackInstalled: registrationPhase.isInstalled)
     }
 
     private convenience init() {
-        self.init { shouldCapture, handler in
+        self.init { callback in
             if AccessibilityNotificationPrivateSPI.enableUnitTestModeIfAvailable() {
                 accessibilityNotificationLogger.info("Armed accessibility notification callback via private unit-test mode SPI")
             } else {
                 accessibilityNotificationLogger.debug("Private accessibility unit-test mode SPI is unavailable")
             }
             let callback = try AccessibilityNotificationPrivateSPI.installNotificationCallback(
-                shouldCapture: shouldCapture,
-                handler: handler
+                callback
             )
-            return InstalledRegistration(source: callback.source) {
+            return CallbackInstallation(source: callback.source) {
                 callback.uninstall()
             }
         }
@@ -181,9 +113,24 @@ final class AccessibilityNotificationObserver {
         installCallbackForTesting: @escaping @MainActor () -> Void,
         uninstallCallbackForTesting: @escaping @MainActor () -> Void
     ) {
-        self.init { _, _ in
+        self.init { _ in
             installCallbackForTesting()
-            return InstalledRegistration(
+            return CallbackInstallation(
+                source: "test",
+                uninstall: uninstallCallbackForTesting
+            )
+        }
+    }
+
+    convenience init(
+        installCallbackForTesting: @escaping @MainActor (
+            _ callback: @escaping AccessibilityNotificationCallback
+        ) -> Void,
+        uninstallCallbackForTesting: @escaping @MainActor () -> Void
+    ) {
+        self.init { callback in
+            installCallbackForTesting(callback)
+            return CallbackInstallation(
                 source: "test",
                 uninstall: uninstallCallbackForTesting
             )
@@ -191,22 +138,25 @@ final class AccessibilityNotificationObserver {
     }
 
     func subscribe(_ subscriber: AccessibilityNotificationBus) {
-        fanout.add(subscriber)
+        removeExpiredSubscribers()
+        subscribers[ObjectIdentifier(subscriber)] = WeakAccessibilityNotificationSubscriber(subscriber)
         reconcileRegistration()
     }
 
     func unsubscribe(_ subscriber: AccessibilityNotificationBus) {
-        fanout.remove(subscriber)
+        subscribers[ObjectIdentifier(subscriber)] = nil
+        removeExpiredSubscribers()
         reconcileRegistration()
     }
 
     func uninstall() {
-        fanout.removeAll()
+        subscribers.removeAll()
         reconcileRegistration()
     }
 
     private func reconcileRegistration() {
-        switch (fanout.hasSubscribers, registrationPhase) {
+        removeExpiredSubscribers()
+        switch (!subscribers.isEmpty, registrationPhase) {
         case (true, .uninstalled):
             installRegistration()
         case (false, .installed(let registration)):
@@ -223,16 +173,25 @@ final class AccessibilityNotificationObserver {
     }
 
     private func installRegistration() {
-        registrationPhase = .installing
-        let fanout = fanout
+        nextGeneration += 1
+        let generation = nextGeneration
+        registrationPhase = .installing(generation: generation)
         do {
-            let registration = try callbackInstaller(
-                { fanout.hasSubscribers },
-                { fanout.rebroadcast($0) }
+            let installation = try callbackInstaller { [weak self] code, notificationData, associatedElement in
+                self?.publish(
+                    code: code,
+                    notificationData: notificationData,
+                    associatedElement: associatedElement,
+                    generation: generation
+                )
+            }
+            let registration = InstalledRegistration(
+                generation: generation,
+                installation: installation
             )
             registrationPhase = .installed(registration)
             accessibilityNotificationLogger.info(
-                "Installed accessibility notification callback source=\(registration.source, privacy: .public)"
+                "Installed accessibility notification callback source=\(installation.source, privacy: .public)"
             )
             reconcileRegistration()
         } catch {
@@ -246,10 +205,49 @@ final class AccessibilityNotificationObserver {
 
     private func uninstallRegistration(_ registration: InstalledRegistration) {
         registrationPhase = .uninstalling(registration)
-        registration.uninstall()
+        registration.installation.uninstall()
         registrationPhase = .uninstalled
         accessibilityNotificationLogger.info("Removed accessibility notification callback")
         reconcileRegistration()
+    }
+
+    private func publish(
+        code: UInt32,
+        notificationData: AnyObject?,
+        associatedElement: AnyObject?,
+        generation: UInt64
+    ) {
+        guard acceptsCallback(generation: generation) else { return }
+        removeExpiredSubscribers()
+        let subscribers = subscribers.values.compactMap(\.subscriber)
+        guard !subscribers.isEmpty else { return }
+
+        latestSequenceStorage += 1
+        let event = PendingAccessibilityNotificationEvent(
+            sequence: latestSequenceStorage,
+            rawCode: code,
+            timestamp: Date(),
+            notificationData: CapturedAccessibilityNotificationPayload(notificationData).pendingPayload,
+            associatedElement: CapturedAccessibilityNotificationPayload(associatedElement).pendingPayload
+        )
+        for subscriber in subscribers {
+            subscriber.record(event)
+        }
+    }
+
+    private func acceptsCallback(generation: UInt64) -> Bool {
+        switch registrationPhase {
+        case .installing(let activeGeneration):
+            activeGeneration == generation
+        case .installed(let registration):
+            registration.generation == generation
+        case .uninstalled, .uninstalling, .installationUnavailable:
+            false
+        }
+    }
+
+    private func removeExpiredSubscribers() {
+        subscribers = subscribers.filter { $0.value.subscriber != nil }
     }
 }
 
@@ -271,8 +269,8 @@ final class AccessibilityNotificationObserver {
 /// casts are centralized in `ButtonHeistPrivateSPI`.
 ///
 /// Everything outside this wrapper gets safe Swift operations:
-/// `enableUnitTestModeIfAvailable()`, `installNotificationCallback(...)`, an
-/// `InstalledCallback` token, and `CapturedAccessibilityNotification` values.
+/// `enableUnitTestModeIfAvailable()`, `installNotificationCallback(...)`, and
+/// an `InstalledCallback` token.
 /// Live Objective-C payloads are converted inside an `autoreleasepool` before
 /// leaving the callback so strong references stay as short-lived as possible.
 ///
@@ -355,23 +353,16 @@ private enum AccessibilityNotificationPrivateSPI {
 
     @MainActor
     static func installNotificationCallback(
-        shouldCapture: @escaping () -> Bool,
-        handler: @escaping (CapturedAccessibilityNotification) -> Void
+        _ handler: @escaping AccessibilityNotificationCallback
     ) throws -> InstalledCallback {
         let symbols = try resolveSymbols()
         let observerKey = "com.buttonheist.accessibility-notification-observer" as NSString
         let callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock = { code, notificationData, associatedElement in
-            // Apple calls this from the broadcast path, normally on main after
-            // `AXPerformBlockOnMainThreadAfterDelay(..., 0)`. Keep the
-            // no-subscriber path close to a no-op: do not wrap objects or log.
-            guard shouldCapture() else { return }
-
             autoreleasepool {
-                handler(CapturedAccessibilityNotification(
-                    code: code,
-                    notificationData: CapturedAccessibilityNotificationPayload(notificationData),
-                    associatedElement: CapturedAccessibilityNotificationPayload(associatedElement)
-                ))
+                // UIAccessibility invokes registered callbacks on main; assert that contract before normalization.
+                MainActor.assumeIsolated {
+                    handler(code, notificationData, associatedElement)
+                }
             }
         }
 
