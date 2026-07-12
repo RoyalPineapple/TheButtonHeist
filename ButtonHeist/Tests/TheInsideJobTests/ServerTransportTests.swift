@@ -41,35 +41,90 @@ final class ServerTransportTests: XCTestCase {
     }
 
     @MainActor
-    func testStartAfterStopIsRejectedBecauseTransportIsSingleUse() async throws {
-        let transport = ServerTransport(token: "single-use-token")
+    func testStartAfterStopRestartsTransport() async throws {
+        let transport = ServerTransport(token: "restart-token")
         var startCount = 0
         var stopCount = 0
         transport.startOverride = { _, _ in
             startCount += 1
-            return 49152
+            return UInt16(49152 + startCount)
         }
         transport.stopOverride = {
             stopCount += 1
         }
 
-        let port = try await transport.start(port: 0, bindToLoopback: true)
+        let firstPort = try await transport.start(port: 0, bindToLoopback: true)
         await transport.stop()
+        let secondPort = try await transport.start(port: 0, bindToLoopback: true)
 
-        XCTAssertEqual(port, 49152)
-        XCTAssertEqual(startCount, 1)
+        XCTAssertEqual(firstPort, 49153)
+        XCTAssertEqual(secondPort, 49154)
+        XCTAssertEqual(startCount, 2)
         XCTAssertEqual(stopCount, 1)
+        await transport.stop()
+        XCTAssertEqual(stopCount, 2)
+    }
 
-        do {
-            _ = try await transport.start(port: 0, bindToLoopback: true)
-            XCTFail("Expected stopped ServerTransport to reject restart")
-        } catch let error as ServerTransportError {
-            XCTAssertEqual(error, .stopped)
-        } catch {
-            XCTFail("Expected ServerTransportError.stopped, got \(error)")
+    @MainActor
+    func testRestartWaitsForStopBeforeReplacingListener() async throws {
+        let transport = ServerTransport(token: "replacement-token")
+        let stopGate = TransportStartGate()
+        var startCount = 0
+        var stopCount = 0
+        transport.startOverride = { _, _ in
+            startCount += 1
+            return UInt16(50000 + startCount)
+        }
+        transport.stopOverride = {
+            stopCount += 1
+            await stopGate.enterAndWaitForRelease()
+        }
+
+        let firstPort = try await transport.start(port: 0, bindToLoopback: true)
+        let stopTask = Task { @MainActor in
+            await transport.stop()
+        }
+        await stopGate.waitUntilEntered()
+        let restartTask = Task { @MainActor in
+            try await transport.start(port: 0, bindToLoopback: true)
         }
 
         XCTAssertEqual(startCount, 1)
+        stopGate.release()
+        await stopTask.value
+        let secondPort = try await restartTask.value
+
+        XCTAssertEqual(firstPort, 50001)
+        XCTAssertEqual(secondPort, 50002)
+        XCTAssertEqual(stopCount, 1)
+        XCTAssertEqual(startCount, 2)
+        await transport.stop()
+        XCTAssertEqual(stopCount, 2)
+    }
+
+    @MainActor
+    func testStopDoesNotTerminateTransportEventStreamBeforeRestart() async throws {
+        let transport = ServerTransport(token: "event-stream-restart-token")
+        transport.startOverride = { _, _ in 49152 }
+        transport.stopOverride = {}
+
+        _ = try await transport.start(port: 0, bindToLoopback: true)
+        await transport.stop()
+        _ = try await transport.start(port: 0, bindToLoopback: true)
+        let iteratorTask = Task { @MainActor in
+            var iterator = transport.events.makeAsyncIterator()
+            return await iterator.next()
+        }
+
+        let callbacks = transport.makeCallbacks()
+        callbacks.onClientConnected?(7, "127.0.0.1")
+
+        guard case .clientConnected(let clientId, let remoteAddress) = await iteratorTask.value else {
+            return XCTFail("Expected restarted transport to keep delivering events")
+        }
+        XCTAssertEqual(clientId, 7)
+        XCTAssertEqual(remoteAddress, "127.0.0.1")
+        await transport.stop()
     }
 
     @MainActor
@@ -98,6 +153,7 @@ final class ServerTransportTests: XCTestCase {
         startGate.release()
         let port = try await startTask.value
         XCTAssertEqual(port, 49152)
+        await transport.stop()
     }
 
     @MainActor

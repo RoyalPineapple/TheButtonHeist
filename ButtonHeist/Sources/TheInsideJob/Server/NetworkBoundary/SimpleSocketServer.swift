@@ -122,6 +122,16 @@ actor SimpleSocketServer {
         self.sendContent = sendContent
     }
 
+    #if DEBUG
+    func insertClientForTesting(connection: NWConnection) -> Int {
+        clientRegistry.insert(connection: connection)
+    }
+
+    func clientPhaseForTesting(_ clientId: Int) -> SocketClientPhase? {
+        clientRegistry.phase(for: clientId)
+    }
+    #endif
+
     // MARK: - Public API (async, actor-isolated)
 
     /// Start the production server on the specified port with TLS.

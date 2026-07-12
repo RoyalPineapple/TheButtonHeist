@@ -69,10 +69,32 @@ extension SimpleSocketServer {
 
     private func routeMessageFrame(clientId: Int, messageData: Data) -> Bool {
         guard clientRegistry.client(clientId) != nil else { return false }
-        clientLifecycle.receivedData(clientId: clientId, data: messageData) { [weak self] response in
-            guard let self else { return }
-            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
-        }
+        clientLifecycle.receivedData(
+            clientId: clientId,
+            data: messageData,
+            respond: responseHandler(clientId: clientId)
+        )
         return true
     }
+
+    private func responseHandler(clientId: Int) -> SocketResponseHandler {
+        SocketResponseHandler(
+            deliver: { [weak self] response in
+                guard let self else { return .failed(.transportUnavailable) }
+                return await self.send(response, to: clientId)
+            },
+            sendInBackground: { [weak self] response in
+                guard let self else { return }
+                self.spawnTrackedTask { server in
+                    _ = await server.send(response, to: clientId)
+                }
+            }
+        )
+    }
+
+    #if DEBUG
+    func responseHandlerForTesting(clientId: Int) -> SocketResponseHandler {
+        responseHandler(clientId: clientId)
+    }
+    #endif
 }

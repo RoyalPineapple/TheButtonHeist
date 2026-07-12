@@ -1,14 +1,19 @@
 import ButtonHeistSupport
 import Foundation
 
-/// Synchronous outcome for handing bytes to a client socket.
+/// Outcome for a socket send after Network.framework reports content processing.
 enum ServerSendOutcome: Equatable, Sendable {
+    /// Retained spelling for existing callers; emitted only after send completion.
     case enqueued
     case failed(ServerSendFailure)
 
-    var didEnqueue: Bool {
+    var didCompleteSend: Bool {
         if case .enqueued = self { return true }
         return false
+    }
+
+    var didEnqueue: Bool {
+        didCompleteSend
     }
 }
 

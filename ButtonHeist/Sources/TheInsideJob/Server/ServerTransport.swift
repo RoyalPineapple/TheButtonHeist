@@ -24,7 +24,7 @@ enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
         case .alreadyRunning:
             return "Server transport is already running."
         case .stopped:
-            return "Server transport has been stopped and cannot be restarted; create a new transport."
+            return "Server transport stopped before startup completed."
         }
     }
 }
@@ -43,11 +43,10 @@ private struct ServerTransportStartAttempt: Equatable, Sendable {
 }
 
 private enum ServerTransportRuntimePhase: Equatable, Sendable {
-    case initialized
+    case idle
     case starting(ServerTransportStartAttempt)
     case running
     case stopping(ServerTransportStopAttempt)
-    case stopped
 }
 
 private struct ServerTransportLifecycleMachine: SimpleStateMachine {
@@ -74,55 +73,50 @@ private struct ServerTransportLifecycleMachine: SimpleStateMachine {
         with event: Event
     ) -> StateChange<ServerTransportRuntimePhase, Effect, Rejection> {
         switch (state, event) {
-        case (.initialized, .beginStarting(let attempt)):
+        case (.idle, .beginStarting(let attempt)):
             return .changed(to: .starting(attempt))
         case (.starting, .beginStarting),
              (.running, .beginStarting):
             return .rejected(.alreadyRunning, stayingIn: state)
-        case (.stopping, .beginStarting),
-             (.stopped, .beginStarting):
+        case (.stopping, .beginStarting):
             return .rejected(.stopped, stayingIn: state)
 
         case (.starting(let attempt), .finishStarting(let id)) where attempt.id == id:
             return .changed(to: .running)
-        case (.initialized, .finishStarting),
+        case (.idle, .finishStarting),
              (.starting, .finishStarting),
              (.running, .finishStarting),
-             (.stopping, .finishStarting),
-             (.stopped, .finishStarting):
+             (.stopping, .finishStarting):
             return .rejected(.staleStartAttempt, stayingIn: state)
 
         case (.starting(let attempt), .failStarting(let id)) where attempt.id == id:
-            return .changed(to: .initialized)
-        case (.initialized, .failStarting),
+            return .changed(to: .idle)
+        case (.idle, .failStarting),
              (.starting, .failStarting),
              (.running, .failStarting),
-             (.stopping, .failStarting),
-             (.stopped, .failStarting):
+             (.stopping, .failStarting):
             return .rejected(.staleStartAttempt, stayingIn: state)
 
-        case (.initialized, .beginStopping(nil)):
-            return .changed(to: .stopped)
+        case (.idle, .beginStopping(nil)):
+            return .changed(to: .idle)
         case (.starting, .beginStopping):
-            return .changed(to: .stopped)
-        case (.initialized, .beginStopping):
+            return .changed(to: .idle)
+        case (.idle, .beginStopping):
             return .rejected(.missingStopAttempt, stayingIn: state)
         case (.running, .beginStopping(.some(let attempt))):
             return .changed(to: .stopping(attempt))
         case (.running, .beginStopping(nil)):
             return .rejected(.missingStopAttempt, stayingIn: state)
-        case (.stopping, .beginStopping),
-             (.stopped, .beginStopping):
+        case (.stopping, .beginStopping):
             return .changed(to: state)
 
         case (.stopping(let attempt), .finishStopping(let id)) where attempt.id == id:
-            return .changed(to: .stopped)
+            return .changed(to: .idle)
         case (.stopping, .finishStopping):
             return .rejected(.staleStopAttempt, stayingIn: state)
-        case (.initialized, .finishStopping),
+        case (.idle, .finishStopping),
              (.starting, .finishStopping),
-             (.running, .finishStopping),
-             (.stopped, .finishStopping):
+             (.running, .finishStopping):
             return .changed(to: state)
         }
     }
@@ -143,11 +137,11 @@ final class ServerTransport {
     /// Token used to derive TLS pre-shared key material. Nil is accepted only for inert tests.
     private nonisolated let token: String?
 
-    /// Runtime lifecycle. This transport is single-use: `stop()` finishes the
-    /// event stream, so a later `start()` must fail instead of creating a
-    /// listener whose events cannot be consumed.
+    /// Runtime lifecycle. `stop()` is an intentional listener boundary: it
+    /// stops the current sockets and Bonjour advertisement, then returns to
+    /// idle so the same transport can publish a replacement listener.
     @MainActor private var lifecycle = StateDriver(
-        initial: ServerTransportRuntimePhase.initialized,
+        initial: ServerTransportRuntimePhase.idle,
         machine: ServerTransportLifecycleMachine()
     )
 
@@ -219,15 +213,13 @@ final class ServerTransport {
         }
 
         switch lifecycle.state {
-        case .initialized:
+        case .idle:
             break
         case .starting:
             throw ServerTransportError.alreadyRunning
         case .running:
             throw ServerTransportError.alreadyRunning
         case .stopping:
-            throw ServerTransportError.stopped
-        case .stopped:
             throw ServerTransportError.stopped
         }
 
@@ -284,16 +276,13 @@ final class ServerTransport {
     @MainActor
     func stop() async {
         advertisement.stop()
-        eventStream.finish()
 
         switch lifecycle.state {
-        case .initialized:
+        case .idle:
             lifecycle.send(.beginStopping(nil))
             return
         case .starting:
             lifecycle.send(.beginStopping(nil))
-            return
-        case .stopped:
             return
         case .stopping(let attempt):
             await attempt.task.value

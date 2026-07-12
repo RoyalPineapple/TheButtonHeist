@@ -46,13 +46,14 @@ final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:thi
             },
             onDataReceived: { clientId, data, respond in
                 Self.yieldEvent(
-                    .dataReceived(clientId: clientId, data: data, respond: respond),
+                    .dataReceived(
+                        clientId: clientId,
+                        data: data,
+                        respond: { response in respond(response) }
+                    ),
                     to: continuation,
                     onOverflow: onOverflow
                 )
-            },
-            onSendFailed: { clientId, failure in
-                Self.yieldEvent(.sendFailed(clientId: clientId, failure: failure), to: continuation, onOverflow: onOverflow)
             }
         )
     }
