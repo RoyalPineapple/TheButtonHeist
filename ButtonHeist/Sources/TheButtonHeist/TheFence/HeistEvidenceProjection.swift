@@ -44,14 +44,7 @@ enum HeistReportEvidenceProjection: Sendable {
     var traceDelta: DeltaProjection? {
         switch self {
         case .action(let projection):
-            switch projection.evidence {
-            case .commandResolutionFailure:
-                return nil
-            case .dispatch(let result):
-                return result.delta
-            case .expectation(_, let expectationResult, _):
-                return expectationResult.delta
-            }
+            return projection.traceDelta
         case .wait(let projection):
             return projection.result.delta
         case .repeatUntil(let projection):
@@ -65,81 +58,54 @@ enum HeistReportEvidenceProjection: Sendable {
 }
 
 struct HeistActionEvidenceProjection: Sendable {
-    private let actionEvidence: HeistActionEvidence
+    let evidence: HeistActionEvidence
     private let profile: ProjectionProfile
 
     init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
-        actionEvidence = evidence
+        self.evidence = evidence
         self.profile = profile
     }
 
     var command: HeistActionCommandType? {
-        actionEvidence.command?.wireType
+        evidence.command?.wireType
     }
 
     var target: AccessibilityTarget? {
-        actionEvidence.command?.reportTarget
+        evidence.command?.reportTarget
     }
 
-    var evidence: HeistActionResultEvidenceProjection {
-        HeistActionResultEvidenceProjection(
-            evidence: actionEvidence,
-            profile: profile
-        )
-    }
-}
-
-enum HeistActionResultEvidenceProjection: Sendable {
-    case commandResolutionFailure
-    case dispatch(result: ActionProjection)
-    case expectation(
-        dispatchResult: ActionProjection,
-        expectationResult: ActionProjection,
-        expectation: ExpectationProjection
-    )
-
-    init(
-        evidence: HeistActionEvidence,
-        profile: ProjectionProfile
-    ) {
+    var traceDelta: DeltaProjection? {
         switch evidence {
         case .commandResolutionFailure:
-            self = .commandResolutionFailure
-        case .dispatch(let command, let dispatchResult):
-            self = .dispatch(
-                result: ActionProjection(
-                    actionMethod: .heist(command),
-                    result: dispatchResult,
-                    profile: profile,
-                    includeOmissions: true
-                )
-            )
-        case .commandlessDispatch(let dispatchResult):
-            self = .dispatch(
-                result: ActionProjection(
-                    actionMethod: .result(dispatchResult.method),
-                    result: dispatchResult,
-                    profile: profile,
-                    includeOmissions: true
-                )
-            )
-        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
-            self = .expectation(
-                dispatchResult: ActionProjection(
-                    actionMethod: .heist(command),
-                    result: dispatchResult,
-                    profile: profile,
-                    includeOmissions: true
-                ),
-                expectationResult: ActionProjection(
-                    actionMethod: .result(expectationResult.method),
-                    result: expectationResult,
-                    profile: profile,
-                    includeOmissions: true
-                ),
-                expectation: ExpectationProjection(result: expectation)
-            )
+            return nil
+        case .dispatch(let command, let result):
+            return actionResultProjection(
+                result,
+                actionMethod: .heist(command)
+            ).delta
+        case .commandlessDispatch(let result):
+            return actionResultProjection(
+                result,
+                actionMethod: .result(result.method)
+            ).delta
+        case .expectation(_, _, let expectationResult, _):
+            return actionResultProjection(
+                expectationResult,
+                actionMethod: .result(expectationResult.method)
+            ).delta
         }
+    }
+
+    func actionResultProjection(
+        _ result: ActionResult,
+        actionMethod: ActionMethodProjection
+    ) -> ActionProjection {
+        ActionProjection(
+            actionMethod: actionMethod,
+            result: result,
+            profile: profile,
+            includeOmissions: true
+        )
     }
 }
 

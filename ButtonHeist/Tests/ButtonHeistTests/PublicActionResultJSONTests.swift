@@ -104,6 +104,24 @@ final class PublicActionResultJSONTests: XCTestCase {
         try result.assertMissing("heistExecution")
     }
 
+    func testStandaloneActionResponseProjectsOwnedWarning() throws {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultSuccessEvidence(
+                    observation: .none,
+                    warning: .activationWeakAffordance(evidence: "label=Continue")
+                )
+            )
+        )
+
+        let warning = try publicJSONProbe(response).object().object("warning")
+
+        XCTAssertEqual(try warning.string("code"), "activation_weak_affordance_evidence")
+        XCTAssertEqual(try warning.string("evidence"), "label=Continue")
+    }
+
     func testStandaloneActionResponseEncodesStructuredFailure() throws {
         let response = FenceResponse.action(
             command: .activate,

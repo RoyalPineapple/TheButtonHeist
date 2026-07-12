@@ -860,9 +860,6 @@ final class TheBrainsActionTests: XCTestCase {
         )
         XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[activate]"#)
         XCTAssertEqual(heist.warnings, [])
-        XCTAssertEqual(heist.evidenceRollup.warnings.all, [
-            .action(path: "$.body[0]", warning: warning),
-        ])
     }
 
     func testHeistTypeTextRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {

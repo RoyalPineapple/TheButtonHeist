@@ -35,7 +35,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
     }
 
-    func testEvidenceRollupUsesOneOrderedNodeShapeForSummaryActionsAndWarnings() {
+    func testEvidenceRollupUsesOneOrderedNodeShapeForSummaryAndActions() {
         let actionWarning = HeistActionWarning.activationWeakAffordance(
             evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#
         )
@@ -72,13 +72,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             "dispatch:$.body[0]:activate",
             "report:$.body[0]:activate",
             "trace:$.body[0]:activate",
-            "warning:$.body[0]:action",
             "visit:$.body[1]",
             "trace:$.body[1]:wait",
             "expectationChecked:$.body[1]:true",
             "expectationMet:$.body[1]",
             "visit:$.body[2]",
-            "warning:$.body[2]:explicit",
         ])
         XCTAssertEqual(rollup.outputReceiptNodes.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
         XCTAssertEqual(rollup.summary.executedTopLevelStepCount, 3)
@@ -87,12 +85,34 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(rollup.summary.expectationsMet, 1)
         XCTAssertEqual(rollup.actions.dispatchedResults.map(\.method), [.activate])
         XCTAssertEqual(rollup.actions.traceResultsInExecutionOrder.map(\.method), [.activate, .wait])
-        XCTAssertEqual(rollup.warnings.explicit, [
+        XCTAssertEqual(rollup.actions.dispatchedResults.first?.warning, actionWarning)
+        XCTAssertEqual(result.warnings, [
             HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
         ])
-        XCTAssertEqual(rollup.warnings.all, [
-            .action(path: "$.body[0]", warning: actionWarning),
-            .explicit(HeistExecutionWarning(path: "$.body[2]", message: "explicit warning")),
+    }
+
+    func testSummaryCountsTypedRootNodesInsteadOfParsingPaths() {
+        let result = HeistExecutionResult(
+            steps: [
+                .passed(
+                    path: "root-a",
+                    kind: .heist,
+                    durationMs: 1,
+                    children: [warnStep(path: "$.body[0]", message: "nested")]
+                ),
+                .passed(path: "root-b", kind: .heist, durationMs: 1),
+                .skipped(path: "$.body[1]", kind: .warn),
+            ],
+            durationMs: 2
+        )
+
+        XCTAssertEqual(result.executedTopLevelStepCount, 2)
+        XCTAssertEqual(result.executedNodeCount, 3)
+        XCTAssertEqual(result.outputReceiptNodes.map(\.path), [
+            "root-a",
+            "$.body[0]",
+            "root-b",
+            "$.body[1]",
         ])
     }
 
@@ -227,11 +247,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.evidenceRollup.summary.finalScreenId, "settled")
         XCTAssertEqual(projection.summary.finalScreenId, "settled")
         XCTAssertEqual(projectedNode.actionErrorKind, .timeout)
-        guard case .expectation(let dispatchResult, let expectationResult, _, _) = projectedAction.evidence else {
+        guard case .expectation(let command, let dispatchResult, let expectationResult, _) = projectedAction.evidence else {
             return XCTFail("Expected projected action expectation evidence")
         }
-        XCTAssertEqual(dispatchResult.actionMethod.rawValue, "activate")
-        XCTAssertEqual(expectationResult.actionMethod.rawValue, "wait")
+        XCTAssertEqual(command.wireType, .activate)
+        XCTAssertEqual(dispatchResult.method, .activate)
+        XCTAssertEqual(expectationResult.method, .wait)
     }
 
     func testReportProjectionUsesCanonicalActionEvidenceDelta() throws {
@@ -293,10 +314,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportNode.message, reportFacts.message)
         XCTAssertEqual(reportNode.failureMessage, reportFacts.failureMessage)
         guard case .action(let actionEvidence)? = reportNode.evidence,
-              case .expectation(_, let expectationResult, _, _) = actionEvidence.evidence else {
+              case .expectation(_, _, let expectationResult, _) = actionEvidence.evidence else {
             return XCTFail("Expected projected action expectation evidence")
         }
-        XCTAssertEqual(reportNode.traceDelta?.kind.rawValue, expectationResult.delta?.kind.rawValue)
+        XCTAssertEqual(expectationResult.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(reportNode.traceDelta?.kind.rawValue, "screenChanged")
         XCTAssertEqual(reportNode.actionErrorKind, reportFacts.results.actionErrorKind)
     }
 
@@ -1064,13 +1086,6 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             return "expectationChecked:\(path):\(expectation.met)"
         case .expectationMet(let path, _):
             return "expectationMet:\(path)"
-        case .warning(let warning):
-            switch warning {
-            case .action(let path, _):
-                return "warning:\(path):action"
-            case .explicit(let warning):
-                return "warning:\(warning.path):explicit"
-            }
         case .firstFailure(let step):
             return "firstFailure:\(step.path):\(step.kind.rawValue)"
         case .finalScreen(let path, let screenId):
@@ -1136,7 +1151,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             assertEvidence: { evidence in
                 let action = try evidence.object("action")
                 XCTAssertEqual(try action.string("commandName"), "activate")
-                try action.assertPresent("result")
+                let result = try action.object("result")
+                let warning = try result.object("warning")
+                XCTAssertEqual(try warning.string("code"), "activation_weak_affordance_evidence")
                 try action.assertMissing("warning")
                 try evidence.assertMissing("warning")
             }

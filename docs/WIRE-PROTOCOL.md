@@ -351,6 +351,16 @@ The strict predicate wire grammar is:
 accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
 `screenChanged`, alternate spellings, and flat target wrappers are invalid.
 
+Raw heist receipt steps use one tagged `outcome`; status-specific evidence,
+failure, abort path, and children live inside that case:
+
+```json
+{"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}},"children":[]}}
+```
+
+The former top-level `status` / `evidence` / `failure` / `children` step bag is
+invalid input, not a compatibility shape.
+
 ## Action Results
 
 Action responses use `actionResult`:
@@ -370,6 +380,8 @@ Captured announcements derive from the trace; standalone announcements use the
 Warnings are valid only in successful evidence and are not duplicated on a
 containing heist action receipt. Missing evidence, optional evidence bags, flat
 evidence fields, and sibling receipt warnings are invalid input.
+Fence projections surface that warning inside the projected action result, not
+beside the result on report evidence.
 
 `ActionResult.payload` is a tagged union when command-specific data is needed,
 for example:

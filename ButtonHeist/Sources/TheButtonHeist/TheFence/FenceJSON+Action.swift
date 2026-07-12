@@ -8,6 +8,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case status
     case method
     case message
+    case warning
     case announcement
     case value
     case rotor
@@ -84,6 +85,7 @@ struct PublicActionResultOutput: Encodable {
         try container.encode(PublicStatus(projection.status), forKey: .status)
         try container.encode(projection.actionMethod.rawValue, forKey: .method)
         try container.encodeIfPresent(projection.message, forKey: .message)
+        try container.encodeIfPresent(projection.warning, forKey: .warning)
         try container.encodeIfPresent(projection.announcement, forKey: .announcement)
         try encodePayload(to: &container)
         try container.encodeIfPresent(
@@ -526,21 +528,44 @@ struct PublicHeistActionEvidence: Encodable {
         switch projection.evidence {
         case .commandResolutionFailure:
             break
-        case .dispatch(let result):
+        case .dispatch(let command, let result):
             try container.encode(
-                PublicActionResultOutput(projection: result, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: projection.actionResultProjection(result, actionMethod: .heist(command)),
+                    context: .heistReportEvidence
+                ),
                 forKey: .result
             )
-        case .expectation(let dispatchResult, let expectationResult, let expectation):
+        case .commandlessDispatch(let result):
             try container.encode(
-                PublicActionResultOutput(projection: dispatchResult, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: projection.actionResultProjection(result, actionMethod: .result(result.method)),
+                    context: .heistReportEvidence
+                ),
+                forKey: .result
+            )
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
+            try container.encode(
+                PublicActionResultOutput(
+                    projection: projection.actionResultProjection(dispatchResult, actionMethod: .heist(command)),
+                    context: .heistReportEvidence
+                ),
                 forKey: .result
             )
             try container.encode(
-                PublicActionResultOutput(projection: expectationResult, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: projection.actionResultProjection(
+                        expectationResult,
+                        actionMethod: .result(expectationResult.method)
+                    ),
+                    context: .heistReportEvidence
+                ),
                 forKey: .expectationResult
             )
-            try container.encode(PublicExpectationResult(projection: expectation), forKey: .expectation)
+            try container.encode(
+                PublicExpectationResult(projection: ExpectationProjection(result: expectation)),
+                forKey: .expectation
+            )
         }
     }
 }
