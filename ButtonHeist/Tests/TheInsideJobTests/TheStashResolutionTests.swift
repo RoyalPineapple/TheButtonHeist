@@ -476,9 +476,10 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Timeout")
         XCTAssertTrue(bagman.latestSettledSemanticObservationInvalidated)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Timeout"))).resolved)
         XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Timeout"))).resolved?.element.label,
-            "Timeout"
+            bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Settled"))).resolved?.element.label,
+            "Settled"
         )
     }
 
@@ -945,6 +946,20 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testDiscoveryCommitClassifiesGenerationAgainstLatestVisibleObservation() {
+        let visible = InterfaceObservation.makeForTests(elements: [
+            (element(label: "Menu", traits: .header), "menu"),
+        ])
+        let visibleEvent = bagman.semanticObservationStream.commitVisibleObservationForTesting(visible)
+        let discoveryHeader = element(label: "Checkout", traits: .header)
+        let discovery = InterfaceObservation.makeForTests(elements: [(discoveryHeader, "checkout")])
+
+        let discoveryEvent = bagman.semanticObservationStream.commitDiscoveryObservationForTesting(discovery)
+
+        XCTAssertNotEqual(discoveryEvent.generation, visibleEvent.generation)
+        XCTAssertEqual(discoveryEvent.previous?.sequence, visibleEvent.sequence)
+    }
+
     func testPostActionFailedSettlePreservesPendingAccessibilityNotificationsDuringHeistScope() async {
         let heist = bagman.accessibilityNotifications.beginHeistScope()
         defer { heist.cancel() }
@@ -1007,10 +1022,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         XCTAssertEqual(bagman.interface().projectedElements.compactMap(\.label), ["Settled"])
         XCTAssertEqual(bagman.semanticInterface().projectedElements.compactMap(\.label), ["Settled"])
-        XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Timeout"))).resolved?.element.label,
-            "Timeout"
-        )
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Timeout"))).resolved)
     }
 
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
@@ -1213,7 +1225,7 @@ final class TheStashResolutionTests: XCTestCase {
         let cycles = SemanticObservationCycles()
 
         let visibleWaiter = Task { @MainActor in
-            await cycles.waitForNextCycle(scope: .visible, after: cycles.baselineCycle())
+            await cycles.waitForNextCycle(scope: .visible, after: cycles.cursor())
         }
         for _ in 0..<10 where cycles.waiterCount == 0 {
             await Task.yield()
@@ -1226,7 +1238,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(cycles.waiterCount, 0)
 
         let discoveryWaiter = Task { @MainActor in
-            await cycles.waitForNextCycle(scope: .discovery, after: cycles.baselineCycle())
+            await cycles.waitForNextCycle(scope: .discovery, after: cycles.cursor())
         }
         for _ in 0..<10 where cycles.waiterCount == 0 {
             await Task.yield()
@@ -1252,7 +1264,46 @@ final class TheStashResolutionTests: XCTestCase {
         let replacementCycle = startedCycle(cycles.beginCycle(scope: .visible))
         XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: true), .ignoredStaleToken)
         XCTAssertEqual(cycles.finishCycle(token: replacementCycle, didObserve: true), .completed)
-        XCTAssertEqual(cycles.baselineCycle(), 1)
+        XCTAssertEqual(cycles.cursor(), replacementCycle.cursor)
+    }
+
+    func testObservationCycleWithoutObservationCannotReuseStaleToken() {
+        let cycles = SemanticObservationCycles()
+        let staleCycle = startedCycle(cycles.beginCycle(scope: .visible))
+        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: false), .completed)
+
+        let replacementCycle = startedCycle(cycles.beginCycle(scope: .visible))
+
+        XCTAssertNotEqual(replacementCycle.cursor, staleCycle.cursor)
+        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: true), .ignoredStaleToken)
+        XCTAssertEqual(cycles.finishCycle(token: replacementCycle, didObserve: true), .completed)
+    }
+
+    func testObservationCycleCompletedBeforeWaitRegistrationIsNotLost() async {
+        let cycles = SemanticObservationCycles()
+        let cursor = cycles.cursor()
+        let cycle = startedCycle(cycles.beginCycle(scope: .discovery))
+        cycles.finishCycle(token: cycle, didObserve: true)
+
+        await cycles.waitForNextCycle(scope: .visible, after: cursor)
+
+        XCTAssertEqual(cycles.waiterCount, 0)
+    }
+
+    func testSettledEventAvailableDuringWaitRegistrationIsNotLost() async {
+        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Current"), "current")])
+        let event = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let waiters = SemanticObservationSettledWaiters()
+
+        let result = await waiters.wait(
+            scope: .visible,
+            afterSequence: 0,
+            timeout: nil,
+            currentEvent: { event }
+        )
+
+        XCTAssertEqual(result?.sequence, event.sequence)
+        XCTAssertEqual(waiters.count, 0)
     }
 
     func testDiscoveryProjectionMaintainsFullTrace() throws {

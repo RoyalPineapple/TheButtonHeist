@@ -170,7 +170,6 @@ private struct SemanticObservationFulfillmentState {
         case empty
         case observing(CurrentFulfillment)
         case invalidated(CurrentFulfillment?)
-        case replacing(CurrentFulfillment)
     }
 
     private var state: State = .empty
@@ -181,7 +180,7 @@ private struct SemanticObservationFulfillmentState {
 
     var latestSettledObservationInvalidated: Bool {
         switch state {
-        case .empty, .invalidated, .replacing:
+        case .empty, .invalidated:
             true
         case .observing:
             false
@@ -206,17 +205,6 @@ private struct SemanticObservationFulfillmentState {
             state = .invalidated(fulfillment)
         case .invalidated(.none):
             break
-        case .replacing:
-            break
-        }
-    }
-
-    mutating func beginReplacement() {
-        switch state {
-        case .observing(let fulfillment), .invalidated(.some(let fulfillment)):
-            state = .replacing(fulfillment)
-        case .empty, .invalidated(.none), .replacing:
-            break
         }
     }
 
@@ -234,6 +222,7 @@ private struct SemanticObservationFulfillmentState {
         let pendingAccessibilityNotifications = notificationBatch.events
         let notificationKinds = pendingAccessibilityNotifications.map(\.kind)
         let previousEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
+        let sourcePreviousEvent = previousEvents[sourceScope] ?? currentFulfillment?.sourceEvent
         let sourceObservation = SettledSemanticObservation(
             sequence: sequence,
             scope: sourceScope,
@@ -241,21 +230,19 @@ private struct SemanticObservationFulfillmentState {
             tripwireSignal: tripwireSignal
         )
         let sourceClassification = ScreenClassifier.classify(
-            before: previousEvents[sourceScope].map {
+            before: sourcePreviousEvent.map {
                 ScreenClassifier.snapshot(of: $0.observation.screen.tree)
             },
             after: ScreenClassifier.snapshot(of: sourceObservation.screen.tree),
             notifications: notificationKinds
         )
         let startsNewGeneration = sourceClassification.isScreenReplacement
-        if startsNewGeneration {
-            beginReplacement()
-        }
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
         var currentEvents = startsNewGeneration ? [:] : previousEvents
         var events: EventsByFulfilledScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
             let previousEvent = previousEvents[fulfilledScope]
+                ?? (fulfilledScope == sourceScope ? sourcePreviousEvent : nil)
             let observation = fulfilledScope == sourceScope
                 ? sourceObservation
                 : SettledSemanticObservation(
@@ -323,7 +310,7 @@ private struct SemanticObservationFulfillmentState {
         switch state {
         case .empty:
             return nil
-        case .observing(let fulfillment), .replacing(let fulfillment):
+        case .observing(let fulfillment):
             return fulfillment
         case .invalidated(let fulfillment):
             return fulfillment
@@ -527,13 +514,13 @@ final class SemanticObservationStream {
             if scope == .visible {
                 return cleanEvent(scope: scope, after: requiredSequence)
             }
-            await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
+            await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
             return cleanEvent(scope: scope, after: requiredSequence)
         }
 
         if sequence == nil, scope == .visible {
             if isActive {
-                await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
+                await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
             } else {
                 return await waitForNextSettledEvent(
                     scope: scope,
@@ -548,7 +535,7 @@ final class SemanticObservationStream {
         }
 
         if isActive {
-            await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
+            await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
             if let latest = cleanEvent(scope: scope, after: requiredSequence) {
                 return latest
             }
@@ -604,7 +591,7 @@ final class SemanticObservationStream {
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         publishCommittedObservation(
-            proof.screen,
+            proof,
             scope: .visible,
             notificationBatch: notificationBatch,
             notificationIdentityScreen: notificationIdentityScreen
@@ -617,7 +604,7 @@ final class SemanticObservationStream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledSemanticObservationEvent {
         publishCommittedObservation(
-            proof.screen,
+            proof,
             scope: .discovery,
             notificationBatch: notificationBatch
         )
@@ -646,7 +633,7 @@ final class SemanticObservationStream {
 
     @discardableResult
     private func publishCommittedObservation(
-        _ screen: InterfaceObservation,
+        _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityScreen: InterfaceObservation? = nil
@@ -656,9 +643,9 @@ final class SemanticObservationStream {
         }
         switch scope {
         case .visible:
-            stash.commitVisibleInterface(screen)
+            stash.commitVisibleInterface(proof.screen)
         case .discovery:
-            stash.commitDiscoveryInterface(screen)
+            stash.commitDiscoveryInterface(proof.screen)
         }
         return publishCurrentSettledObservation(
             scope: scope,
@@ -762,10 +749,6 @@ final class SemanticObservationStream {
         fulfillmentState.invalidate()
     }
 
-    private func beginScreenReplacement() {
-        fulfillmentState.beginReplacement()
-    }
-
     /// A scoped `screenChanged` notification recorded after the latest settled
     /// commit means the settled screen has already been replaced — the
     /// notification is a completion signal, so the invalidation is definitive,
@@ -784,7 +767,7 @@ final class SemanticObservationStream {
               stash.accessibilityNotifications.latestScopedScreenChangedSequence
               > lastCommittedScopedScreenChangedSequence
         else { return }
-        beginScreenReplacement()
+        fulfillmentState.invalidate()
     }
 
     private func publishCurrentSettledObservation(
@@ -905,7 +888,10 @@ final class SemanticObservationStream {
         return await settledWaiters.wait(
             scope: scope,
             afterSequence: requiredSequence,
-            timeout: timeout
+            timeout: timeout,
+            currentEvent: {
+                self.cleanEvent(scope: scope, after: requiredSequence)
+            }
         )
     }
 
