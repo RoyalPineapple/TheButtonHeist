@@ -1,6 +1,7 @@
 import ButtonHeistTestSupport
 import XCTest
 import Network
+import ButtonHeistSupport
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
@@ -814,7 +815,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testTransportSendFailureUsesNetworkDiagnosticShape() async throws {
         let (fence, mockConn) = makeConnectedFence(configuration: .init(autoReconnect: false))
-        mockConn.sendOutcome = .failed(.transportFailed(DeviceTransportFailure(.posix(.ECONNRESET))))
+        mockConn.sendOutcome = .failed(.transportFailed(NetworkTransportFailure(.posix(.ECONNRESET))))
 
         let response: FenceResponse
         do {

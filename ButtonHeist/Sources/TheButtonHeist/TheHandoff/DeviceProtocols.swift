@@ -1,5 +1,5 @@
+import ButtonHeistSupport
 import Foundation
-import Network
 
 // MARK: - Event Enums
 
@@ -25,73 +25,10 @@ struct DeviceEncodingFailure: Error, LocalizedError, Equatable, Sendable, Custom
     }
 }
 
-struct DeviceTransportFailure: Error, LocalizedError, Equatable, Sendable, CustomStringConvertible {
-    enum Reason: Equatable, Sendable {
-        case posix(code: Int)
-        case dns(code: Int)
-        case tls(status: Int)
-        case wifiAware(code: Int)
-        case unknown(String)
-    }
-
-    let reason: Reason
-    let underlyingDescription: String
-
-    init(_ error: NWError) {
-        let reason = Self.reason(for: error)
-        self.reason = reason
-        self.underlyingDescription = "\(reason.description): \(error.localizedDescription)"
-    }
-
-    var description: String {
-        underlyingDescription
-    }
-
-    var errorDescription: String? {
-        underlyingDescription
-    }
-
-    var isEmpty: Bool {
-        underlyingDescription.isEmpty
-    }
-
-    private static func reason(for error: NWError) -> Reason {
-        switch error {
-        case .posix(let code):
-            return .posix(code: Int(code.rawValue))
-        case .dns(let code):
-            return .dns(code: Int(code))
-        case .tls(let status):
-            return .tls(status: Int(status))
-        case .wifiAware(let code):
-            return .wifiAware(code: Int(code))
-        @unknown default:
-            return .unknown(String(describing: error))
-        }
-    }
-}
-
-extension DeviceTransportFailure.Reason: CustomStringConvertible {
-    var description: String {
-        switch self {
-        case .posix(let code):
-            return "posix(\(code))"
-        case .dns(let code):
-            return "dns(\(code))"
-        case .tls(let status):
-            return "tls(\(status))"
-        case .wifiAware(let code):
-            return "wifiAware(\(code))"
-        case .unknown(let description):
-            return "unknown(\(description))"
-        }
-    }
-}
-
 enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
     case notConnected
     case encodingFailed(DeviceEncodingFailure)
-    case transportFailed(DeviceTransportFailure)
+    case transportFailed(NetworkTransportFailure)
 
     var errorDescription: String? {
         switch self {

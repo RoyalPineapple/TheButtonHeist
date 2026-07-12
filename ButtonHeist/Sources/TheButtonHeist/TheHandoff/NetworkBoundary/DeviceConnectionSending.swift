@@ -41,6 +41,6 @@ extension DeviceConnection {
 
     func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection, sessionID: UUID?) {
         guard isCurrentSession(sessionID, connection: connection) else { return }
-        onEvent?(.sendFailed(.transportFailed(DeviceTransportFailure(error)), requestId: requestId))
+        onEvent?(.sendFailed(.transportFailed(NetworkTransportFailure(error)), requestId: requestId))
     }
 }

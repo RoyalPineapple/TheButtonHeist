@@ -51,7 +51,7 @@ extension SimpleSocketServer {
         if let error {
             clientLifecycle.sendFailed(
                 clientId,
-                failure: .transportFailed(clientId: clientId, diagnostic: ServerTransportFailure(error))
+                failure: .transportFailed(clientId: clientId, diagnostic: NetworkTransportFailure(error))
             )
         }
     }

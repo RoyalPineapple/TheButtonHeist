@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import ButtonHeistSupport
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeviceConnectionTLSTests: XCTestCase {
@@ -87,7 +88,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     func testDeviceTransportSendFailurePreservesNetworkDiagnosticReason() {
-        let diagnostic = DeviceTransportFailure(.posix(.ECONNRESET))
+        let diagnostic = NetworkTransportFailure(.posix(.ECONNRESET))
         let failure = DeviceSendFailure.transportFailed(diagnostic)
 
         guard case .transportFailed(let capturedDiagnostic) = failure else {

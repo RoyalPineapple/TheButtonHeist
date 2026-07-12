@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 import TheScore
 
@@ -28,7 +29,7 @@ extension FenceError {
 }
 
 private extension ConnectionFailure {
-    init(deviceTransportFailure failure: DeviceTransportFailure) {
+    init(deviceTransportFailure failure: NetworkTransportFailure) {
         let details = FailureDetails(code: .transportNetworkError)
         self.init(
             message: "Transport send failed: \(failure.description)",
