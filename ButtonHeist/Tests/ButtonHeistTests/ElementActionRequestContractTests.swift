@@ -47,6 +47,65 @@ final class ElementActionRequestContractTests: XCTestCase {
         }
     }
 
+    func testNestedElementTargetFenceSchemaFollowsCanonicalMetadata() throws {
+        let targetSpec = try XCTUnwrap(
+            TheFence.Command.activate.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue }
+        )
+        let nestedTargetSpec = try XCTUnwrap(
+            targetSpec.objectProperties.first { $0.key == FenceParameterKey.target.rawValue }
+        )
+
+        XCTAssertEqual(nestedTargetSpec.objectProperties.map(\.key), ElementTarget.inlineFieldNames)
+
+        let secondLevelTargetSpec = try XCTUnwrap(
+            nestedTargetSpec.objectProperties.first { $0.key == FenceParameterKey.target.rawValue }
+        )
+        XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: secondLevelTargetSpec), .bool(true))
+    }
+
+    func testAccessibilityPredicateFenceSchemaUsesCanonicalDiscriminators() throws {
+        let waitDescriptor = TheFence.Command.wait.descriptor
+        let predicateSpec = try XCTUnwrap(waitDescriptor.parameters.first { $0.key == FenceParameterKey.predicate.rawValue })
+        let predicateType = try XCTUnwrap(predicateSpec.objectProperties.first { $0.key == FenceParameterKey.type.rawValue })
+        XCTAssertEqual(predicateType.enumValues, AccessibilityPredicateContract.PredicateWireType.values)
+
+        let stateProperties = try arrayItemProperties(
+            named: .states,
+            in: predicateSpec,
+            file: #filePath,
+            line: #line
+        )
+        let stateType = try XCTUnwrap(stateProperties.first { $0.key == FenceParameterKey.type.rawValue })
+        XCTAssertEqual(stateType.enumValues, AccessibilityPredicateContract.StateWireType.values)
+
+        let scopeProperties = try arrayItemProperties(
+            named: .scopes,
+            in: predicateSpec,
+            file: #filePath,
+            line: #line
+        )
+        let scopeType = try XCTUnwrap(scopeProperties.first { $0.key == FenceParameterKey.type.rawValue })
+        XCTAssertEqual(scopeType.enumValues, AccessibilityPredicateContract.ChangeScopeWireType.values)
+
+        let assertionsSpec = try XCTUnwrap(scopeProperties.first { $0.key == FenceParameterKey.assertions.rawValue })
+        let assertionProperties = assertionsSpec.arrayItemProperties
+        let assertionType = try XCTUnwrap(assertionProperties.first { $0.key == FenceParameterKey.type.rawValue })
+        XCTAssertEqual(
+            assertionType.enumValues,
+            AccessibilityPredicateContract.StateWireType.values + canonicalElementDeltaPredicateTypeValues()
+        )
+    }
+
+    func testHeistValuePayloadEncoderBridgesEncodableContracts() throws {
+        let value = try TheFence.HeistValuePayloadEncoder.encode(AccessibilityPredicate.state(.exists(.label("Pay"))))
+
+        guard case .object(let object) = value else {
+            return XCTFail("Expected object bridge output")
+        }
+        XCTAssertEqual(object["type"], .string(AccessibilityPredicateContract.StateWireType.exists.rawValue))
+        XCTAssertNotNil(object["element"])
+    }
+
     func testNormalParametersNamedLikeCustomPayloadsStillUseSchemaValidation() throws {
         for key in [FenceParameterKey.target, .predicate, .expect, .argument] {
             let descriptor = schemaValidationDescriptor(parameter: param(key, .string, required: true))
@@ -175,12 +234,12 @@ final class ElementActionRequestContractTests: XCTestCase {
 }
 
 private func schemaValidationDescriptor(parameter: FenceParameterSpec) -> FenceCommandDescriptor {
-    TheFence.Command.commandDescriptor(
-        .ping,
+    TheFence.Command.ping.makeDescriptor(
         family: .session,
         requestDecoder: { _, _, _, _ in fatalError("unused") },
         requiresConnectionBeforeDispatch: false,
         parameters: [parameter],
+        responseProjection: .pong,
         projection: .cliOnly("test")
     )
 }
@@ -209,13 +268,7 @@ private func assertStringMatchObjectSchema(
     }
     XCTAssertEqual(properties["mode"], .object([
         "type": .string("string"),
-        "enum": .array([
-            .string("exact"),
-            .string("contains"),
-            .string("prefix"),
-            .string("suffix"),
-            .string("isEmpty"),
-        ]),
+        "enum": .array(StringMatch<String>.Mode.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
     XCTAssertEqual(properties["value"], .object(["type": .string("string")]), file: file, line: line)
 }
@@ -242,17 +295,7 @@ private func assertPredicateChecksSchema(
     }
     XCTAssertEqual(properties["kind"], .object([
         "type": .string("string"),
-        "enum": .array([
-            .string("label"),
-            .string("identifier"),
-            .string("value"),
-            .string("hint"),
-            .string("traits"),
-            .string("actions"),
-            .string("customContent"),
-            .string("rotors"),
-            .string("exclude"),
-        ]),
+        "enum": .array(ElementPredicateCheck<String>.Kind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
 
     guard case .object? = properties["match"] else {
@@ -294,26 +337,11 @@ private func assertContainerPredicateSchema(
     }
     XCTAssertEqual(checkProperties["kind"], .object([
         "type": .string("string"),
-        "enum": .array([
-            .string("type"),
-            .string("semantic"),
-            .string("rowCount"),
-            .string("columnCount"),
-            .string("modalBoundary"),
-            .string("scrollable"),
-            .string("actions"),
-        ]),
+        "enum": .array(ContainerPredicateCheck<String>.wireKindValues.map { .string($0) }),
     ]), file: file, line: line)
     XCTAssertEqual(checkProperties["type"], .object([
         "type": .string("string"),
-        "enum": .array([
-            .string("none"),
-            .string("semanticGroup"),
-            .string("list"),
-            .string("landmark"),
-            .string("dataTable"),
-            .string("tabBar"),
-        ]),
+        "enum": .array(AccessibilityContainerKind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
     guard case .object(let semantic)? = checkProperties["semantic"],
           case .object(let semanticProperties)? = semantic["properties"] else {
@@ -322,7 +350,7 @@ private func assertContainerPredicateSchema(
     XCTAssertEqual(semantic["required"], .array([.string("kind"), .string("match")]), file: file, line: line)
     XCTAssertEqual(semanticProperties["kind"], .object([
         "type": .string("string"),
-        "enum": .array([.string("label"), .string("value"), .string("identifier")]),
+        "enum": .array(canonicalSemanticContainerPredicateKindValues().map { .string($0) }),
     ]), file: file, line: line)
     guard case .object? = semanticProperties["match"] else {
         return XCTFail("Expected semantic match StringMatch object schema", file: file, line: line)
@@ -331,6 +359,36 @@ private func assertContainerPredicateSchema(
         return XCTFail("Expected container check values array schema", file: file, line: line)
     }
     XCTAssertNotNil(checkProperties["value"], file: file, line: line)
+}
+
+private func arrayItemProperties(
+    named key: FenceParameterKey,
+    in spec: FenceParameterSpec,
+    file: StaticString,
+    line: UInt
+) throws -> [FenceParameterSpec] {
+    let child = try XCTUnwrap(
+        spec.objectProperties.first { $0.key == key.rawValue },
+        file: file,
+        line: line
+    )
+    return child.arrayItemProperties
+}
+
+private func canonicalElementDeltaPredicateTypeValues() -> [String] {
+    [
+        ElementDeltaPredicate.appearedElement(.label("sample")),
+        ElementDeltaPredicate.disappearedElement(.label("sample")),
+        ElementDeltaPredicate.updatedElement(.any),
+    ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.type.rawValue) }
+}
+
+private func canonicalSemanticContainerPredicateKindValues() -> [String] {
+    [
+        SemanticContainerPredicate<String>.label("sample"),
+        SemanticContainerPredicate<String>.value("sample"),
+        SemanticContainerPredicate<String>.identifier("sample"),
+    ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.kind.rawValue) }
 }
 
 private func assertArraySchema(

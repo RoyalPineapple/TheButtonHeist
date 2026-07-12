@@ -1,19 +1,16 @@
 import TheScore
 import ThePlans
 
-enum SpatialActionCommand: String, CaseIterable, FenceCommand {
-    case oneFingerTap = "one_finger_tap"
-    case longPress = "long_press"
-    case swipe
-    case drag
-
-    var descriptor: FenceCommandDescriptor {
+extension TheFence.Command {
+    func makeSpatialActionDescriptor() -> FenceCommandDescriptor {
         switch self {
         case .oneFingerTap:
-            return TheFence.Command.commandDescriptor(
-                command, family: .spatialAction,
+            return makeDescriptor(
+                family: .spatialAction,
                 requestDecoder: TheFence.decodeOneFingerTapRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
@@ -22,11 +19,13 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .longPress:
-            return TheFence.Command.commandDescriptor(
-                command, family: .spatialAction,
+            return makeDescriptor(
+                family: .spatialAction,
                 requestDecoder: TheFence.decodeLongPressRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
@@ -34,11 +33,13 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .swipe:
-            return TheFence.Command.commandDescriptor(
-                command, family: .spatialAction,
+            return makeDescriptor(
+                family: .spatialAction,
                 requestDecoder: TheFence.decodeSwipeRequest,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial swipe using exactly one typed intent: "
@@ -46,36 +47,39 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .drag:
-            return TheFence.Command.commandDescriptor(
-                command, family: .spatialAction,
+            return makeDescriptor(
+                family: .spatialAction,
                 requestDecoder: TheFence.decodeDragRequest,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial drag using exactly one typed intent: "
                         + "elementToPoint (activation point or unit start override) or pointToPoint."
                 )
             )
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
+             .getSessionState, .connect, .listTargets, .wait, .scroll, .scrollToVisible, .scrollToEdge,
+             .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
+             .perform, .runHeist, .listHeists, .describeHeist:
+            preconditionFailure("\(rawValue) is not a spatial action command")
         }
     }
-}
 
-enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
-    case scroll
-    case scrollToVisible = "scroll_to_visible"
-    case scrollToEdge = "scroll_to_edge"
-
-    var descriptor: FenceCommandDescriptor {
+    func makeViewportDebugDescriptor() -> FenceCommandDescriptor {
         switch self {
         case .scroll:
-            return TheFence.Command.commandDescriptor(
-                command, family: .viewportDebug,
+            return makeDescriptor(
+                family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.containerName, .string),
                     FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
+                timeout: .fixed(.standardAction),
+                responseProjection: .action,
                 execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll one page in the visible viewport, "
@@ -84,10 +88,12 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .scrollToVisible:
-            return TheFence.Command.commandDescriptor(
-                command, family: .viewportDebug,
+            return makeDescriptor(
+                family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
+                timeout: .fixed(.standardAction),
+                responseProjection: .action,
                 execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: move the viewport until a "
@@ -95,13 +101,15 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .scrollToEdge:
-            return TheFence.Command.commandDescriptor(
-                command, family: .viewportDebug,
+            return makeDescriptor(
+                family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.containerName, .string),
                     FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
+                timeout: .fixed(.standardAction),
+                responseProjection: .action,
                 execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll the visible viewport, "
@@ -109,26 +117,24 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
                         + "a current containerName, to a requested edge."
                 )
             )
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
+             .getSessionState, .connect, .listTargets, .wait, .oneFingerTap, .longPress, .swipe, .drag,
+             .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
+             .perform, .runHeist, .listHeists, .describeHeist:
+            preconditionFailure("\(rawValue) is not a viewport debug command")
         }
     }
-}
 
-enum SemanticActionCommand: String, CaseIterable, FenceCommand {
-    case activate
-    case rotor
-    case typeText = "type_text"
-    case editAction = "edit_action"
-    case setPasteboard = "set_pasteboard"
-    case dismissKeyboard = "dismiss_keyboard"
-
-    var descriptor: FenceCommandDescriptor {
+    func makeSemanticActionDescriptor() -> FenceCommandDescriptor {
         switch self {
         case .activate:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeActivateRequest,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Perform primary accessibility activation on a semantic UI element, "
@@ -136,14 +142,16 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .rotor:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeRotorRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     FenceParameters.rotorName.spec,
                     FenceParameters.rotorIndex.spec,
                     FenceParameters.rotorDirection.spec,
                 ] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Move through an element rotor by direction. The server holds the rotor cursor "
@@ -152,42 +160,54 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .typeText:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     FenceParameters.text.spec,
                     FenceParameters.replacingExisting.spec,
                 ] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .longAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Type text. With replacingExisting=true, The Button Heist clears the focused field before typing."
                 )
             )
         case .editAction:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeEditActionRequest,
                 parameters: [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Perform an edit action on the current first responder.")
             )
         case .setPasteboard:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
                 parameters: [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )
         case .dismissKeyboard:
-            return TheFence.Command.commandDescriptor(
-                command, family: .semanticAction,
+            return makeDescriptor(
+                family: .semanticAction,
                 requestDecoder: TheFence.decodeDismissKeyboardRequest,
                 parameters: FenceParameterBlocks.expectation,
+                timeout: .singleStepAction(base: .standardAction),
+                responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Dismiss the on-screen keyboard through the current first responder or keyboard action path.")
             )
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
+             .getSessionState, .connect, .listTargets, .wait, .oneFingerTap, .longPress, .swipe, .drag,
+             .scroll, .scrollToVisible, .scrollToEdge, .perform, .runHeist, .listHeists, .describeHeist:
+            preconditionFailure("\(rawValue) is not a semantic action command")
         }
     }
 }

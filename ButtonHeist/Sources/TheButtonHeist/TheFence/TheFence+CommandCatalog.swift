@@ -11,89 +11,6 @@ import TheScore
     case heistRuntime
 }
 
-protocol FenceCommand: RawRepresentable, CaseIterable, Sendable
-where RawValue == String, AllCases: Sequence, AllCases.Element == Self {
-    static var descriptors: [FenceCommandDescriptor] { get }
-    var command: TheFence.Command { get }
-    var descriptor: FenceCommandDescriptor { get }
-}
-
-extension FenceCommand {
-    var command: TheFence.Command {
-        guard let command = TheFence.Command(rawValue: rawValue) else {
-            preconditionFailure("Fence command \(Self.self).\(rawValue) does not map to TheFence.Command")
-        }
-        return command
-    }
-}
-
-extension FenceCommand where AllCases: Sequence, AllCases.Element == Self {
-    static var descriptors: [FenceCommandDescriptor] {
-        allCases.map(\.descriptor)
-    }
-}
-
-struct FenceCommandFamilyRegistration: Sendable {
-    let family: FenceCommandFamily
-    let descriptors: [FenceCommandDescriptor]
-}
-
-enum FenceCommandRegistry {
-    static let families: [FenceCommandFamilyRegistration] = [
-        .init(family: .session, descriptors: SessionCommand.descriptors),
-        .init(family: .observation, descriptors: ObservationCommand.descriptors),
-        .init(family: .assertion, descriptors: AssertionCommand.descriptors),
-        .init(family: .semanticAction, descriptors: SemanticActionCommand.descriptors),
-        .init(family: .spatialAction, descriptors: SpatialActionCommand.descriptors),
-        .init(family: .viewportDebug, descriptors: ViewportDebugCommand.descriptors),
-        .init(family: .heistRuntime, descriptors: HeistRuntimeCommand.descriptors),
-    ]
-
-    static let descriptors: [FenceCommandDescriptor] = TheFence.Command.allCases.map(descriptor(for:))
-
-    static func family(for command: TheFence.Command) -> FenceCommandFamily {
-        descriptor(for: command).family
-    }
-
-    static func descriptor(for command: TheFence.Command) -> FenceCommandDescriptor {
-        guard let descriptor = descriptorLookup[command] else {
-            preconditionFailure("Missing descriptor for \(command.rawValue)")
-        }
-        return descriptor
-    }
-
-    static func dispatchesAppInteraction(_ command: TheFence.Command) -> Bool {
-        descriptor(for: command).execution.contains(.appInteraction)
-    }
-
-    static func lowersToHeistPrimitive(_ command: TheFence.Command) -> Bool {
-        descriptor(for: command).execution.contains(.heistPrimitive)
-    }
-
-    static func usesPayloadCheckedHeistPrimitive(_ command: TheFence.Command) -> Bool {
-        descriptor(for: command).execution.contains(.payloadCheckedHeistPrimitive)
-    }
-
-    static func viewportDebugCommand(for command: TheFence.Command) -> ViewportDebugCommand? {
-        ViewportDebugCommand(rawValue: command.rawValue)
-    }
-
-    private static let descriptorLookup: [TheFence.Command: FenceCommandDescriptor] = {
-        let familyDescriptors = families.flatMap(\.descriptors)
-        let commandCounts = Dictionary(grouping: familyDescriptors, by: \.command).mapValues(\.count)
-        let duplicates = commandCounts.filter { $0.value > 1 }.keys.map(\.rawValue).sorted()
-        precondition(duplicates.isEmpty, "Duplicate Fence command descriptors: \(duplicates.joined(separator: ", "))")
-
-        let missing = Set(TheFence.Command.allCases).subtracting(commandCounts.keys).map(\.rawValue).sorted()
-        precondition(missing.isEmpty, "Missing Fence command descriptors: \(missing.joined(separator: ", "))")
-
-        let extra = Set(commandCounts.keys).subtracting(TheFence.Command.allCases).map(\.rawValue).sorted()
-        precondition(extra.isEmpty, "Unknown Fence command descriptors: \(extra.joined(separator: ", "))")
-
-        return Dictionary(uniqueKeysWithValues: familyDescriptors.map { ($0.command, $0) })
-    }()
-}
-
 extension TheFence {
 
     public enum Command: String, CaseIterable, Sendable {
@@ -135,12 +52,97 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     static let payloadCheckedHeistPrimitive = FenceCommandExecution(rawValue: 1 << 2)
 }
 
+@_spi(ButtonHeistTooling) public enum FenceCommandFixedTimeout: String, Sendable, Equatable, CaseIterable {
+    case health
+    case standardAction
+    case longAction
+    case explore
+    case screenCapture
+
+    public var seconds: TimeInterval {
+        switch self {
+        case .health:
+            return 3
+        case .standardAction:
+            return 15
+        case .longAction:
+            return 30
+        case .explore:
+            return 60
+        case .screenCapture:
+            return 30
+        }
+    }
+}
+
+@_spi(ButtonHeistTooling) public enum FenceCommandTimeoutSemantics: Sendable, Equatable {
+    case none
+    case fixed(FenceCommandFixedTimeout)
+    case wait
+    case singleStepAction(base: FenceCommandFixedTimeout)
+    case performStep
+
+    public var fixedSeconds: TimeInterval? {
+        guard case .fixed(let timeout) = self else { return nil }
+        return timeout.seconds
+    }
+
+    public var singleStepBaseSeconds: TimeInterval? {
+        guard case .singleStepAction(let timeout) = self else { return nil }
+        return timeout.seconds
+    }
+
+    var requiredFixedSeconds: TimeInterval {
+        guard let seconds = fixedSeconds else {
+            preconditionFailure("Fence command timeout semantics are not fixed")
+        }
+        return seconds
+    }
+
+    var requiredSingleStepBaseSeconds: TimeInterval {
+        guard let seconds = singleStepBaseSeconds else {
+            preconditionFailure("Fence command timeout semantics are not single-step action")
+        }
+        return seconds
+    }
+
+    var requiredDirectDispatchSeconds: TimeInterval {
+        switch self {
+        case .fixed(let timeout), .singleStepAction(let timeout):
+            return timeout.seconds
+        case .none, .wait, .performStep:
+            preconditionFailure("Fence command timeout semantics cannot direct-dispatch")
+        }
+    }
+}
+
+@_spi(ButtonHeistTooling) public enum FenceCommandResponseProjection: String, Sendable, Equatable, CaseIterable {
+    case pong
+    case devices
+    case interface
+    case screenshot
+    case announcements
+    case action
+    case heistExecution
+    case heistCatalog
+    case heistDescription
+    case sessionState
+    case targets
+}
+
+@_spi(ButtonHeistTooling) public enum FenceCommandFailureProjection: String, Sendable, Equatable, CaseIterable {
+    case diagnosticFailure
+}
+
 @_spi(ButtonHeistTooling) public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let family: FenceCommandFamily
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
     public let projection: FenceCommandProjection
+    public let timeout: FenceCommandTimeoutSemantics
+    public let responseProjection: FenceCommandResponseProjection
+    public let failureProjection: FenceCommandFailureProjection
     let execution: FenceCommandExecution
     let requestDecoder: TheFence.RequestDecoder
 
@@ -197,6 +199,9 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
+        timeout: FenceCommandTimeoutSemantics = .none,
+        responseProjection: FenceCommandResponseProjection,
+        failureProjection: FenceCommandFailureProjection = .diagnosticFailure,
         execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) {
@@ -205,6 +210,9 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         self.requestDecoder = requestDecoder
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
+        self.timeout = timeout
+        self.responseProjection = responseProjection
+        self.failureProjection = failureProjection
         self.execution = execution
         self.projection = projection
     }
@@ -223,6 +231,9 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
             lhs.family == rhs.family &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
             lhs.parameters == rhs.parameters &&
+            lhs.timeout == rhs.timeout &&
+            lhs.responseProjection == rhs.responseProjection &&
+            lhs.failureProjection == rhs.failureProjection &&
             lhs.execution == rhs.execution &&
             lhs.projection == rhs.projection
     }
@@ -274,11 +285,28 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
 }
 
 @_spi(ButtonHeistTooling) public extension TheFence.Command {
-    var descriptor: FenceCommandDescriptor { FenceCommandRegistry.descriptor(for: self) }
+    var descriptor: FenceCommandDescriptor {
+        switch self {
+        case .ping, .listDevices, .getSessionState, .connect, .listTargets:
+            return makeSessionDescriptor()
+        case .getInterface, .getScreen, .getPasteboard, .getAnnouncements:
+            return makeObservationDescriptor()
+        case .wait:
+            return makeAssertionDescriptor()
+        case .oneFingerTap, .longPress, .swipe, .drag:
+            return makeSpatialActionDescriptor()
+        case .scroll, .scrollToVisible, .scrollToEdge:
+            return makeViewportDebugDescriptor()
+        case .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard:
+            return makeSemanticActionDescriptor()
+        case .perform, .runHeist, .listHeists, .describeHeist:
+            return makeHeistRuntimeDescriptor()
+        }
+    }
 
-    var family: FenceCommandFamily { FenceCommandRegistry.family(for: self) }
+    var family: FenceCommandFamily { descriptor.family }
 
-    static var descriptors: [FenceCommandDescriptor] { FenceCommandRegistry.descriptors }
+    static var descriptors: [FenceCommandDescriptor] { allCases.map(\.descriptor) }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
         descriptors.filter { $0.projection.cliExposure == .directCommand }
@@ -288,19 +316,19 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
 extension TheFence.Command {
 
     var dispatchesAppInteraction: Bool {
-        FenceCommandRegistry.dispatchesAppInteraction(self)
+        descriptor.execution.contains(.appInteraction)
     }
 
     var lowersToHeistPrimitive: Bool {
-        FenceCommandRegistry.lowersToHeistPrimitive(self)
+        descriptor.execution.contains(.heistPrimitive)
     }
 
     var usesPayloadCheckedHeistPrimitive: Bool {
-        FenceCommandRegistry.usesPayloadCheckedHeistPrimitive(self)
+        descriptor.execution.contains(.payloadCheckedHeistPrimitive)
     }
 
-    var viewportDebugCommand: ViewportDebugCommand? {
-        FenceCommandRegistry.viewportDebugCommand(for: self)
+    var isViewportDebugCommand: Bool {
+        descriptor.family == .viewportDebug
     }
 
     static var heistPrimitiveCases: [Self] {
@@ -312,24 +340,29 @@ extension TheFence.Command {
 
 extension TheFence.Command {
     static func descriptor(for command: Self) -> FenceCommandDescriptor {
-        FenceCommandRegistry.descriptor(for: command)
+        command.descriptor
     }
 
-    static func commandDescriptor(
-        _ command: Self,
+    func makeDescriptor(
         family: FenceCommandFamily,
         requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
+        timeout: FenceCommandTimeoutSemantics = .none,
+        responseProjection: FenceCommandResponseProjection,
+        failureProjection: FenceCommandFailureProjection = .diagnosticFailure,
         execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
-            command: command,
+            command: self,
             family: family,
             requestDecoder: requestDecoder,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
+            timeout: timeout,
+            responseProjection: responseProjection,
+            failureProjection: failureProjection,
             execution: execution,
             projection: projection
         )

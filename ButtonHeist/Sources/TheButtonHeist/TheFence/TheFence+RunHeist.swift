@@ -66,7 +66,11 @@ extension TheFence {
     // MARK: - Heist Execution and Session State
 
     func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
-        try await runHeistPlan(request.plan, argument: request.argument, timeout: Timeouts.longActionSeconds)
+        try await runHeistPlan(
+            request.plan,
+            argument: request.argument,
+            timeout: Command.runHeist.descriptor.timeout.requiredFixedSeconds
+        )
     }
 
     func handlePerform(_ request: PerformRequest) async throws -> FenceResponse {
@@ -108,9 +112,9 @@ extension TheFence {
     /// durable heist dispatch.
     func singleStepHeistPlan(for request: SingleStepHeistRequest) throws -> HeistPlan {
         switch request {
-        case .wait(let step):
+        case .wait(_, let step):
             return try HeistPlan(body: [.wait(step)])
-        case .actions(let actions, let expectationPayload):
+        case .actions(_, let actions, let expectationPayload):
             let expectationStep = expectationPayload.expectation.map {
                 WaitStep(predicate: $0, timeout: min(expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout))
             }
@@ -140,15 +144,10 @@ extension TheFence {
     private func singleStepTimeout(for request: SingleStepHeistRequest) -> TimeInterval {
         let actionBudget: TimeInterval
         switch request {
-        case .wait(let wait):
+        case .wait(_, let wait):
             return wait.timeout + config.postActionExpectationTimeoutBuffer
-        case .actions(let actions, let expectationPayload):
-            switch actions.first {
-            case .typeText:
-                actionBudget = Timeouts.longActionSeconds
-            default:
-                actionBudget = Timeouts.actionSeconds
-            }
+        case .actions(let command, _, let expectationPayload):
+            actionBudget = command.descriptor.timeout.requiredSingleStepBaseSeconds
             guard expectationPayload.expectation != nil else {
                 return max(actionBudget, expectationPayload.timeout.map { min($0, defaultWaitTimeout) } ?? actionBudget)
             }
@@ -162,15 +161,39 @@ extension TheFence {
         case .wait(let wait):
             return wait.timeout + config.postActionExpectationTimeoutBuffer
         case .action(let action):
-            let actionBudget: TimeInterval
-            switch action.command {
-            case .typeText:
-                actionBudget = Timeouts.longActionSeconds
-            default:
-                actionBudget = Timeouts.actionSeconds
-            }
+            let actionBudget = performActionTimeout(for: action.command)
             guard let expectation = action.expectationPolicy.expectedStep else { return actionBudget }
             return actionBudget + min(expectation.timeout, defaultWaitTimeout) + config.postActionExpectationTimeoutBuffer
+        }
+    }
+
+    private func performActionTimeout(for action: HeistActionCommand) -> TimeInterval {
+        performActionCommand(for: action).descriptor.timeout.requiredSingleStepBaseSeconds
+    }
+
+    private func performActionCommand(for action: HeistActionCommand) -> Command {
+        switch action {
+        case .typeText:
+            return .typeText
+        case .mechanicalTap:
+            return .oneFingerTap
+        case .mechanicalLongPress:
+            return .longPress
+        case .mechanicalSwipe:
+            return .swipe
+        case .mechanicalDrag:
+            return .drag
+        case .rotor:
+            return .rotor
+        case .editAction:
+            return .editAction
+        case .setPasteboard:
+            return .setPasteboard
+        case .dismissKeyboard:
+            return .dismissKeyboard
+        case .activate, .increment, .decrement, .customAction, .dismiss, .magicTap, .takeScreenshot,
+             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
+            return .activate
         }
     }
 
@@ -193,8 +216,8 @@ extension TheFence {
         let connection = sessionConnectionSnapshot
         return SessionStatePayload(
             state: connection.state,
-            actionTimeoutSeconds: Timeouts.actionSeconds,
-            longActionTimeoutSeconds: Timeouts.longActionSeconds
+            actionTimeoutSeconds: Command.activate.descriptor.timeout.requiredSingleStepBaseSeconds,
+            longActionTimeoutSeconds: Command.typeText.descriptor.timeout.requiredSingleStepBaseSeconds
         )
     }
 }

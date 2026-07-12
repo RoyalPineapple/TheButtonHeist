@@ -8,7 +8,7 @@ extension TheFence {
     func handleGetScreen(_ request: ScreenRequest) async throws -> FenceResponse {
         let screen = try await sendAndAwaitScreen(
             .requestScreen(ScreenRequestPayload(mode: request.mode)),
-            timeout: 30
+            timeout: Command.getScreen.descriptor.timeout.requiredFixedSeconds
         )
         let options = ScreenshotResponseOptions()
 

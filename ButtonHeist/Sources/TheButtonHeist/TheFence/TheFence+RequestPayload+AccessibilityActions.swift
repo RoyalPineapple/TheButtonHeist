@@ -12,7 +12,7 @@ extension TheFence {
         let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyValue(FenceParameters.actionName)
         return try appInteractionDispatch(
-            SemanticActionCommand.activate.command,
+            Command.activate,
             Self.accessibilityActionCommand(target: target, actionName: actionName),
             expectationPayload: expectationPayload
         )

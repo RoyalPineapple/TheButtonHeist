@@ -32,7 +32,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SemanticActionCommand.dismissKeyboard.command,
+            Command.dismissKeyboard,
             .dismissKeyboard,
             expectationPayload: expectationPayload
         )
@@ -53,7 +53,7 @@ extension TheFence {
             throw SchemaValidationError(field: input.field(.text), observed: "string \"\"", expected: "non-empty string")
         }
         return try appInteractionDispatch(
-            SemanticActionCommand.typeText.command,
+            Command.typeText,
             .typeText(
                 text: .literal(text),
                 target: try input.decodedElementTarget().map(ElementTargetExpr.target),
@@ -70,7 +70,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SemanticActionCommand.editAction.command,
+            Command.editAction,
             .editAction(EditActionTarget(
                 action: try input.requiredValue(FenceParameters.editAction)
             )),
@@ -86,7 +86,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         let text = try input.nonEmptyValue(FenceParameters.pasteboardText)
         return try appInteractionDispatch(
-            SemanticActionCommand.setPasteboard.command,
+            Command.setPasteboard,
             .setPasteboard(SetPasteboardTarget(text: text)),
             expectationPayload: expectationPayload
         )

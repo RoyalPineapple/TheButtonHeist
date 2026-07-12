@@ -9,25 +9,30 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handlePing() async throws -> FenceResponse {
-        let payload = try await sendAndAwaitPong(timeout: Timeouts.healthSeconds)
+        let payload = try await sendAndAwaitPong(timeout: Command.ping.descriptor.timeout.requiredFixedSeconds)
         return .pong(payload)
     }
 
     func handleGetInterface(_ request: GetInterfaceRequest) async throws -> FenceResponse {
         let interface = try await sendAndAwaitInterface(
             .requestInterface(request.query),
-            timeout: Timeouts.exploreSeconds
+            timeout: Command.getInterface.descriptor.timeout.requiredFixedSeconds
         )
         return .interface(interface, detail: request.detail)
     }
 
     func handleGetPasteboard() async throws -> FenceResponse {
-        let result = try await sendAndAwaitAction(.getPasteboard, timeout: Timeouts.healthSeconds)
+        let result = try await sendAndAwaitAction(
+            .getPasteboard,
+            timeout: Command.getPasteboard.descriptor.timeout.requiredFixedSeconds
+        )
         return .action(command: .getPasteboard, result: result)
     }
 
     func handleGetAnnouncements() async throws -> FenceResponse {
-        let payload = try await sendAndAwaitAnnouncements(timeout: Timeouts.healthSeconds)
+        let payload = try await sendAndAwaitAnnouncements(
+            timeout: Command.getAnnouncements.descriptor.timeout.requiredFixedSeconds
+        )
         return .announcements(payload.announcements)
     }
 
@@ -36,18 +41,9 @@ extension TheFence {
     func handleDirectActionRequest(_ request: DirectActionRequest) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(
             .runtimeAction(request.action),
-            timeout: directActionTimeout(for: request.action)
+            timeout: request.command.descriptor.timeout.requiredDirectDispatchSeconds
         )
         return .action(command: request.command, result: result)
-    }
-
-    private func directActionTimeout(for command: HeistActionCommand) -> TimeInterval {
-        switch command {
-        case .typeText:
-            return Timeouts.longActionSeconds
-        default:
-            return Timeouts.actionSeconds
-        }
     }
 
 }

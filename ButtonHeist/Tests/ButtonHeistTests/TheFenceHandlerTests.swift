@@ -767,7 +767,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failure.details.retryable, true)
     }
 
-    func testAmbiguousDeviceTargetDoesNotMapToNoMatchingDevice() throws {
+    func testAmbiguousDeviceTargetKeepsDistinctFailureProjection() throws {
         let response = FenceResponse.failure(HandoffConnectionError.ambiguousDeviceTarget(
             filter: "Demo",
             matches: ["Demo#one", "Demo#two"]
@@ -782,6 +782,12 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertFalse(failure.retryable)
         XCTAssertEqual(failure.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
         XCTAssertEqual(failure.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("code"), KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.discovery.rawValue)
+        XCTAssertEqual(try json.string("phase"), FailurePhase.discovery.rawValue)
     }
 
     func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
@@ -798,7 +804,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("posix"), failure.message)
         XCTAssertTrue(failure.message.contains("connection failed in transport"), failure.message)
     }
-
     func testAuthFailureMappingPreservesSourceHint() throws {
         let hint = "Retry with the configured token."
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(

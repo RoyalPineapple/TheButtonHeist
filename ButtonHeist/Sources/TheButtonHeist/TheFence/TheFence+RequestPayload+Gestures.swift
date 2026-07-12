@@ -12,7 +12,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SpatialActionCommand.oneFingerTap.command,
+            Command.oneFingerTap,
             .mechanicalTap(try fence.decodeTapTarget(arguments)),
             expectationPayload: expectationPayload
         )
@@ -25,7 +25,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SpatialActionCommand.longPress.command,
+            Command.longPress,
             .mechanicalLongPress(try fence.decodeLongPressTarget(arguments)),
             expectationPayload: expectationPayload
         )
@@ -38,7 +38,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SpatialActionCommand.swipe.command,
+            Command.swipe,
             .mechanicalSwipe(try fence.decodeSwipeTarget(arguments)),
             expectationPayload: expectationPayload
         )
@@ -51,7 +51,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SpatialActionCommand.drag.command,
+            Command.drag,
             .mechanicalDrag(try fence.decodeDragTarget(arguments)),
             expectationPayload: expectationPayload
         )

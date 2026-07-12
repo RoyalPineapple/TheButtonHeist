@@ -6,18 +6,6 @@ struct SessionConnectionSnapshot {
     let state: SessionConnectionState
 }
 
-/// Named timeout constants for TheFence operations.
-enum Timeouts {
-    /// Standard action timeout (15 seconds)
-    static let actionSeconds: TimeInterval = 15
-    /// Short health/read-control timeout (3 seconds)
-    static let healthSeconds: TimeInterval = 3
-    /// Long action timeout (30 seconds)
-    static let longActionSeconds: TimeInterval = 30
-    /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
-    static let exploreSeconds: TimeInterval = 60
-}
-
 /// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
 @ButtonHeistActor
 public final class TheFence {
