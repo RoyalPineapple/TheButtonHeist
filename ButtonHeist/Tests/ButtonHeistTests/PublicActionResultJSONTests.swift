@@ -122,6 +122,30 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertEqual(try warning.string("evidence"), "label=Continue")
     }
 
+    func testStandaloneAndNestedActionsShareWarningProjection() throws {
+        let actionResult = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultSuccessEvidence(
+                observation: .none,
+                warning: .activationWeakAffordance(evidence: "label=Continue")
+            )
+        )
+
+        let standalone = try publicJSONProbe(FenceResponse.action(
+            command: .activate,
+            result: actionResult
+        )).object().object("warning")
+        let nested = try nestedHeistActionResultJSON(
+            result: actionResult,
+            status: .passed
+        ).object("warning")
+
+        XCTAssertEqual(
+            try standalone.decode(JSONValue.self),
+            try nested.decode(JSONValue.self)
+        )
+    }
+
     func testStandaloneActionResponseEncodesStructuredFailure() throws {
         let response = FenceResponse.action(
             command: .activate,
@@ -390,11 +414,12 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func treeUnavailableActionResult(accessibilityTrace: AccessibilityTrace? = nil) -> ActionResult {
-        ActionResult.failure(
+        let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
+        return ActionResult.failure(
             method: .activate,
             errorKind: .accessibilityTreeUnavailable,
             message: Self.treeUnavailableMessage,
-            evidence: ActionResultFailureEvidence(observation: .trace(accessibilityTrace))
+            evidence: ActionResultFailureEvidence(observation: observation)
         )
     }
 

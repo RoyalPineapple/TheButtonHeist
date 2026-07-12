@@ -247,12 +247,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.evidenceRollup.summary.finalScreenId, "settled")
         XCTAssertEqual(projection.summary.finalScreenId, "settled")
         XCTAssertEqual(projectedNode.actionErrorKind, .timeout)
-        guard case .expectation(let command, let dispatchResult, let expectationResult, _) = projectedAction.evidence else {
+        guard case .expectation(_, let dispatchResult, let expectationResult, _) = projectedAction else {
             return XCTFail("Expected projected action expectation evidence")
         }
-        XCTAssertEqual(command.wireType, .activate)
-        XCTAssertEqual(dispatchResult.method, .activate)
-        XCTAssertEqual(expectationResult.method, .wait)
+        XCTAssertEqual(dispatchResult.actionMethod.rawValue, "activate")
+        XCTAssertEqual(dispatchResult.result.method, .activate)
+        XCTAssertEqual(expectationResult.actionMethod.rawValue, "wait")
+        XCTAssertEqual(expectationResult.result.method, .wait)
     }
 
     func testReportProjectionUsesCanonicalActionEvidenceDelta() throws {
@@ -314,11 +315,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(reportNode.message, reportFacts.message)
         XCTAssertEqual(reportNode.failureMessage, reportFacts.failureMessage)
         guard case .action(let actionEvidence)? = reportNode.evidence,
-              case .expectation(_, _, let expectationResult, _) = actionEvidence.evidence else {
+              case .expectation(_, _, let expectationResult, _) = actionEvidence else {
             return XCTFail("Expected projected action expectation evidence")
         }
-        XCTAssertEqual(expectationResult.accessibilityTrace?.endpointScreenId, "settled")
-        XCTAssertEqual(reportNode.traceDelta?.kind.rawValue, "screenChanged")
+        XCTAssertEqual(expectationResult.result.accessibilityTrace?.endpointScreenId, "settled")
+        XCTAssertEqual(reportNode.traceDelta?.kind, expectationResult.delta?.kind)
         XCTAssertEqual(reportNode.actionErrorKind, reportFacts.results.actionErrorKind)
     }
 

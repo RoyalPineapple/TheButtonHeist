@@ -3,6 +3,34 @@ import XCTest
 
 final class ActionResultEvidenceContractTests: XCTestCase {
 
+    func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
+        let trace = traceWithAnnouncement("Ready")
+        let observations: [ActionResultObservationEvidence] = [
+            .none,
+            .announcement("Ready"),
+            .trace(trace),
+            .settledTrace(trace, .settled(durationMs: 12)),
+        ]
+
+        for observation in observations {
+            let results = [
+                ActionResult.success(
+                    method: .wait,
+                    evidence: ActionResultSuccessEvidence(observation: observation)
+                ),
+                ActionResult.failure(
+                    method: .wait,
+                    errorKind: .timeout,
+                    evidence: ActionResultFailureEvidence(observation: observation)
+                ),
+            ]
+            for result in results {
+                let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
+                XCTAssertEqual(decoded, result)
+            }
+        }
+    }
+
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
         let trace = traceWithAnnouncement("Checkout")
         let result = ActionResult.success(
@@ -140,6 +168,46 @@ final class ActionResultEvidenceContractTests: XCTestCase {
           }
         }
         """)
+    }
+
+    func testDecodingRejectsLegacyPayloadAliases() {
+        assertActionResultRejects("""
+        {
+          "outcome": {"kind": "success"},
+          "method": "typeText",
+          "payload": {"kind": "value", "data": "Hello", "value": "Hello"},
+          "evidence": {"observation": {"kind": "none"}}
+        }
+        """)
+    }
+
+    func testEveryOutcomeRejectsMalformedObservationCrossCaseFields() {
+        let outcomes = [
+            #"{"kind":"success"}"#,
+            #"{"kind":"failure","errorKind":"timeout"}"#,
+        ]
+        let malformedObservations = [
+            #"{"kind":"none","announcement":"Ready"}"#,
+            #"{"kind":"announcement","announcement":"Ready","accessibilityTrace":{"captures":[]}}"#,
+            #"{"kind":"trace","accessibilityTrace":{"captures":[]},"settlement":{"kind":"settled","durationMs":1}}"#,
+            #"{"kind":"settledTrace","accessibilityTrace":{"captures":[]}}"#,
+            """
+            {"kind":"settledTrace","accessibilityTrace":{"captures":[]},
+             "settlement":{"kind":"settled","durationMs":1},"announcement":"Ready"}
+            """,
+        ]
+
+        for outcome in outcomes {
+            for observation in malformedObservations {
+                assertActionResultRejects("""
+                {
+                  "outcome": \(outcome),
+                  "method": "wait",
+                  "evidence": {"observation": \(observation)}
+                }
+                """)
+            }
+        }
     }
 
     func testDecodingRejectsImplicitSettledTrace() {
