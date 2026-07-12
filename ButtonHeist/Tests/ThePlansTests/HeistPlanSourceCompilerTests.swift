@@ -203,7 +203,7 @@ import Testing
         ),
         (
             "WaitFor(.exists(.container(.scrollable)))",
-            "expected symbol '('"
+            "expected '('"
         ),
         (
             "WaitFor(.exists(.container(.actions([.custom(\"Archive\")]))))",
