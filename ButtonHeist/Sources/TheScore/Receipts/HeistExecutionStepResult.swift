@@ -102,12 +102,11 @@ public enum HeistExecutionStepStatus: String, Codable, Sendable, Equatable {
 public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     /// JSON-style path to this execution node in the heist program tree.
     public let path: String
+    public let kind: HeistExecutionStepKind
     public let durationMs: Int
-    private let content: Content
 
-    public var kind: HeistExecutionStepKind { content.kind }
-    public var intent: HeistStepIntent? { content.intent }
-    public var outcome: HeistExecutionStepOutcome { content.outcome }
+    public let intent: HeistStepIntent?
+    public let outcome: HeistExecutionStepOutcome
 
     public var status: HeistExecutionStepStatus {
         outcome.status
@@ -323,11 +322,13 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         outcome: HeistExecutionStepOutcome
     ) {
         self.path = path
+        self.kind = kind
         self.durationMs = durationMs
+        self.intent = intent
+        self.outcome = outcome
         do {
             try Self.validateIntent(intent, matches: kind, codingPath: [])
             try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: [])
-            self.content = Content(kind: kind, intent: intent, outcome: outcome)
         } catch {
             preconditionFailure("Invalid heist execution step result at \(path): \(error)")
         }
@@ -368,8 +369,10 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try Self.validateIntent(intent, matches: kind, codingPath: container.codingPath + [CodingKeys.intent])
         try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: container.codingPath + [CodingKeys.outcome])
         self.path = path
+        self.kind = kind
         self.durationMs = durationMs
-        self.content = Content(kind: kind, intent: intent, outcome: outcome)
+        self.intent = intent
+        self.outcome = outcome
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -697,77 +700,6 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
 
     private static func receiptError(_ message: String, codingPath: [CodingKey]) -> DecodingError {
         .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
-    }
-
-    /// Canonical step identity. The wire's separate kind, intent, and evidence
-    /// fields are projections of this single associated-value model.
-    private enum Content: Sendable, Equatable {
-        struct Payload: Sendable, Equatable {
-            let intent: HeistStepIntent?
-            let outcome: HeistExecutionStepOutcome
-        }
-
-        case action(Payload)
-        case wait(Payload)
-        case conditional(Payload)
-        case forEachElement(Payload)
-        case forEachString(Payload)
-        case forEachIteration(Payload)
-        case repeatUntil(Payload)
-        case repeatUntilIteration(Payload)
-        case warn(Payload)
-        case fail(Payload)
-        case heist(Payload)
-        case invoke(Payload)
-
-        init(kind: HeistExecutionStepKind, intent: HeistStepIntent?, outcome: HeistExecutionStepOutcome) {
-            let payload = Payload(intent: intent, outcome: outcome)
-            switch kind {
-            case .action: self = .action(payload)
-            case .wait: self = .wait(payload)
-            case .conditional: self = .conditional(payload)
-            case .forEachElement: self = .forEachElement(payload)
-            case .forEachString: self = .forEachString(payload)
-            case .forEachIteration: self = .forEachIteration(payload)
-            case .repeatUntil: self = .repeatUntil(payload)
-            case .repeatUntilIteration: self = .repeatUntilIteration(payload)
-            case .warn: self = .warn(payload)
-            case .fail: self = .fail(payload)
-            case .heist: self = .heist(payload)
-            case .invoke: self = .invoke(payload)
-            }
-        }
-
-        var kind: HeistExecutionStepKind {
-            switch self {
-            case .action: .action
-            case .wait: .wait
-            case .conditional: .conditional
-            case .forEachElement: .forEachElement
-            case .forEachString: .forEachString
-            case .forEachIteration: .forEachIteration
-            case .repeatUntil: .repeatUntil
-            case .repeatUntilIteration: .repeatUntilIteration
-            case .warn: .warn
-            case .fail: .fail
-            case .heist: .heist
-            case .invoke: .invoke
-            }
-        }
-
-        private var payload: Payload {
-            switch self {
-            case .action(let payload), .wait(let payload), .conditional(let payload),
-                 .forEachElement(let payload), .forEachString(let payload),
-                 .forEachIteration(let payload), .repeatUntil(let payload),
-                 .repeatUntilIteration(let payload), .warn(let payload),
-                 .fail(let payload), .heist(let payload), .invoke(let payload):
-                payload
-            }
-        }
-
-        var intent: HeistStepIntent? { payload.intent }
-        var outcome: HeistExecutionStepOutcome { payload.outcome }
     }
 
 }
