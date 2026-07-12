@@ -41,10 +41,10 @@ extension ElementInflation {
            await moveToObservedContentActivationPoint(treeElement) {
             return .revealed
         }
-        guard let exploration = await revealKnownTarget?(treeElement.heistId) else {
+        guard let exploredScreen = await exploration.revealKnownTarget(treeElement.heistId) else {
             return .failed(.noLiveScrollableAncestor)
         }
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploration))
+        stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
         guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
               visible.element.representsSameSemanticElement(as: treeElement.element)
         else {

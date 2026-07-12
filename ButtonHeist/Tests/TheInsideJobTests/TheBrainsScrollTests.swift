@@ -744,22 +744,17 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         ])
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
             self.brains.stash.nextVisibleRefreshScreenForTesting = visibleScreen
             _ = self.brains.stash.refreshLiveCapture()
             return nil
         }
         var revealAttempts = 0
-        brains.navigation.elementInflation.revealKnownTarget = { _ in
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             return nil
         }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-            brains.navigation.elementInflation.revealKnownTarget = nil
-        }
-
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
@@ -803,13 +798,8 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: arrivedObject
             )
         ])
-        brains.navigation.elementInflation.discoverTarget = { _ in nil }
-        brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-            brains.navigation.elementInflation.revealKnownTarget = nil
-        }
-
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         let inflation = Task { @MainActor in
             await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
@@ -853,17 +843,12 @@ final class TheBrainsScrollTests: XCTestCase {
                 )
             ]
         )
-        brains.navigation.elementInflation.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
         var revealAttempts = 0
-        brains.navigation.elementInflation.revealKnownTarget = { _ in
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             return nil
         }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-            brains.navigation.elementInflation.revealKnownTarget = nil
-        }
-
         let inflation = Task { @MainActor in
             await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
@@ -900,13 +885,8 @@ final class TheBrainsScrollTests: XCTestCase {
             liveHierarchy: [(overviewVisible, "combo_overview_header")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
         )
-        brains.navigation.elementInflation.discoverTarget = { _ in nil }
-        brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-            brains.navigation.elementInflation.revealKnownTarget = nil
-        }
-
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
@@ -945,14 +925,10 @@ final class TheBrainsScrollTests: XCTestCase {
             objects: [HeistId(rawValue: "gone_target"): nil]
         )
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
             return staleScreen
         }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-        }
-
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Gone Target", traits: [.button])),
             method: .activate,
@@ -1221,7 +1197,7 @@ final class TheBrainsScrollTests: XCTestCase {
             (currentBackButton, "current_back_button"),
         ])
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
             return currentScreen
         }
@@ -1268,7 +1244,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.recordParsedObservedEvidence(currentScreen)
         brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
 
-        let discovered = await brains.navigation.elementInflation.discoverTarget?(
+        let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
             literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button]))
         )
 
@@ -1455,7 +1431,7 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
         )
         var discoveryAttempts = 0
-        brains.navigation.elementInflation.discoverTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
             return discoveryAttempts == 1 ? nil : recoveredScreen
         }
@@ -1530,7 +1506,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(recoveredScreen.viewportElementIDs.contains(recoveredEntry.heistId))
         XCTAssertNotNil(recoveredScreen.liveCapture.object(for: recoveredEntry.heistId))
         var revealAttempts = 0
-        brains.navigation.elementInflation.revealKnownTarget = { _ in
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             self.brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
             return nil
@@ -1602,8 +1578,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         ])
         var revealAttempts = 0
-        brains.navigation.elementInflation.discoverTarget = { _ in nil }
-        brains.navigation.elementInflation.revealKnownTarget = { _ in
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             revealAttempts += 1
             if revealAttempts == 1 {
                 self.brains.stash.nextVisibleRefreshScreenForTesting = retryOffViewportScreen
@@ -1611,11 +1587,6 @@ final class TheBrainsScrollTests: XCTestCase {
             }
             return recoveredScreen
         }
-        defer {
-            brains.navigation.elementInflation.discoverTarget = nil
-            brains.navigation.elementInflation.revealKnownTarget = nil
-        }
-
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .scrollToVisible,
@@ -1999,7 +1970,7 @@ final class TheBrainsScrollTests: XCTestCase {
             liveCapture: liveScreen.liveCapture
         )
         brains.stash.installScreenForTesting(knownScreen)
-        brains.navigation.elementInflation.discoverTarget = nil
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Jump Target")),

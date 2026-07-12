@@ -17,11 +17,15 @@ import ThePlans
 @MainActor
 internal final class ElementInflation {
 
+    internal struct Exploration {
+        internal var discoverTarget: @MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?
+        internal var revealKnownTarget: @MainActor (HeistId) async -> Navigation.ExploredScreen?
+    }
+
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
-    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?)?
-    internal var revealKnownTarget: (@MainActor (HeistId) async -> Navigation.ExploredScreen?)?
+    internal var exploration: Exploration
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     internal static let stableGeometryQuietFrames: Int = 2
@@ -31,11 +35,13 @@ internal final class ElementInflation {
     internal init(
         stash: TheStash,
         safecracker: TheSafecracker,
-        tripwire: TheTripwire
+        tripwire: TheTripwire,
+        exploration: Exploration
     ) {
         self.stash = stash
         self.safecracker = safecracker
         self.tripwire = tripwire
+        self.exploration = exploration
     }
 
     internal func inflate(

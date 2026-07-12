@@ -73,9 +73,9 @@ extension ElementInflation {
            failure.failedStep == .ambiguous {
             return .failure(failure)
         }
-        if let exploration = await discoverTarget?(target) {
-            let screen = exploration.screen
-            stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploration))
+        if let exploredScreen = await exploration.discoverTarget(target) {
+            let screen = exploredScreen.screen
+            stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
             switch visibleTargetResolution(target, in: screen.tree) {
             case .success(let visible):
                 return .success(.visible(visible))

@@ -21,7 +21,24 @@ final class Navigation {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
-    let elementInflation: ElementInflation
+    lazy var elementInflation = ElementInflation(
+        stash: stash,
+        safecracker: safecracker,
+        tripwire: tripwire,
+        exploration: ElementInflation.Exploration(
+            discoverTarget: { [weak self] target in
+                guard let self else { return nil }
+                return await self.exploreScreen(
+                    target: target,
+                    baseline: self.stash.actionDiscoveryBaseline()
+                )
+            },
+            revealKnownTarget: { [weak self] heistId in
+                guard let self else { return nil }
+                return await self.scanForHeistId(heistId)
+            }
+        )
+    )
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [SwipeTargetKey: UIAccessibilityScrollDirection] = [:]
@@ -36,22 +53,6 @@ final class Navigation {
         self.stash = stash
         self.safecracker = safecracker
         self.tripwire = tripwire
-        self.elementInflation = ElementInflation(
-            stash: stash,
-            safecracker: safecracker,
-            tripwire: tripwire
-        )
-        self.elementInflation.discoverTarget = { [weak self] target in
-            guard let self else { return nil }
-            return await self.exploreScreen(
-                target: target,
-                baseline: self.stash.actionDiscoveryBaseline()
-            )
-        }
-        self.elementInflation.revealKnownTarget = { [weak self] heistId in
-            guard let self else { return nil }
-            return await self.scanForHeistId(heistId)
-        }
     }
 
     // MARK: - Nested Types

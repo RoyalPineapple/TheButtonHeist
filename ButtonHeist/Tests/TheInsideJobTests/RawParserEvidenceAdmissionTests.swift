@@ -23,8 +23,8 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
-        brains.navigation.elementInflation.discoverTarget = nil
-        brains.navigation.elementInflation.revealKnownTarget = nil
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
     }
 
     override func tearDown() async throws {
