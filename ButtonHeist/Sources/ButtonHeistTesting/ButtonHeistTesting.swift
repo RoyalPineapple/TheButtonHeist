@@ -2,7 +2,6 @@
 #if DEBUG
 import Foundation
 import os
-import XCTest
 
 // Package contract: app-hosted tests import ButtonHeistTesting and author
 // heists directly. Re-exporting the DSL here is intentional and allowlisted by
@@ -273,7 +272,7 @@ public func joinHeist(
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard let session = startJoinedHeistSession(
+    guard let runtime = startJoinedHeistSession(
         token: token,
         port: port,
         addressFamily: addressFamily,
@@ -284,7 +283,7 @@ public func joinHeist(
         return
     }
 
-    print(session.readyMessage)
+    print(runtime.session.readyMessage)
     while true {
         _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.25))
     }
@@ -306,7 +305,7 @@ public func withJoinedHeistSession<Result>(
     line: UInt = #line,
     _ body: (JoinedHeistSession) throws -> Result
 ) rethrows -> Result? {
-    guard let session = startJoinedHeistSession(
+    guard let runtime = startJoinedHeistSession(
         token: token,
         port: port,
         addressFamily: addressFamily,
@@ -318,19 +317,19 @@ public func withJoinedHeistSession<Result>(
     }
 
     defer {
-        stopJoinedHeistSession(session, file: file, line: line)
+        stopJoinedHeistSession(runtime, file: file, line: line)
     }
-    return try body(session)
+    return try body(runtime.session)
 }
 
-func startJoinedHeistSession(
+private func startJoinedHeistSession(
     token: String,
     port: UInt16,
     addressFamily: ListenerAddressFamily,
     allowedScopes: Set<ConnectionScope>,
     file: StaticString,
     line: UInt
-) -> JoinedHeistSession? {
+) -> JoinedHeistRuntime? {
     runHeistSyncOperation(file: file, line: line) { @MainActor in
         let job = TheInsideJob(
             token: token,
@@ -342,25 +341,25 @@ func startJoinedHeistSession(
         guard let listeningPort = job.listeningPort else {
             throw JoinHeistError.listenerDidNotReportPort
         }
-        return JoinedHeistSession(
-            job: job,
+        let session = JoinedHeistSession(
             token: token,
             requestedPort: port,
             listeningPort: listeningPort,
             addressFamily: addressFamily,
             allowedScopes: allowedScopes
         )
+        return JoinedHeistRuntime(job: job, session: session)
     }
 }
 
-func stopJoinedHeistSession(
-    _ session: JoinedHeistSession,
+private func stopJoinedHeistSession(
+    _ runtime: JoinedHeistRuntime,
     file: StaticString,
     line: UInt
 ) {
     guard Thread.isMainThread else {
-        XCTFail(
-            "Joined heist sessions must stop on the main thread so the main run loop can be pumped.",
+        recordHeistXCTestIssue(
+            .joinedSessionRequiresMainThread,
             file: file,
             line: line
         )
@@ -368,7 +367,7 @@ func stopJoinedHeistSession(
     }
 
     runHeistSyncOperation(file: file, line: line) { @MainActor in
-        await session.stop()
+        await runtime.stop()
     }
 }
 
@@ -383,13 +382,13 @@ private func runHeistSyncRequest(
     do {
         request = try makeRequest()
     } catch {
-        XCTFail("Heist failed before execution: \(error)", file: file, line: line)
+        recordHeistXCTestIssue(.requestConstructionFailed(error), file: file, line: line)
         return nil
     }
 
     guard Thread.isMainThread else {
-        XCTFail(
-            "runHeistSync must be called on the main thread so it can pump the main run loop.",
+        recordHeistXCTestIssue(
+            .synchronousHeistRequiresMainThread,
             file: file,
             line: line
         )
@@ -432,8 +431,8 @@ func runHeistSyncOperation<Value: Sendable>(
     _ operation: @escaping @Sendable () async throws -> Value
 ) -> Value? {
     guard Thread.isMainThread else {
-        XCTFail(
-            "runHeistSyncOperation must be called on the main thread so it can pump the main run loop.",
+        recordHeistXCTestIssue(
+            .synchronousOperationRequiresMainThread,
             file: file,
             line: line
         )
@@ -466,7 +465,7 @@ private func waitForSynchronousResult<Value: Sendable>(
     case .success(let value):
         return value
     case .failure(let error):
-        XCTFail(String(describing: error), file: file, line: line)
+        recordHeistXCTestIssue(.operationFailed(error), file: file, line: line)
         return nil
     case nil:
         return nil
@@ -529,20 +528,13 @@ private struct HeistXCTestFailure: Error, CustomStringConvertible {
     }
 }
 
-/// Scoped join session metadata plus the main-actor runtime handle that owns the
-/// temporary in-process server.
+/// Immutable metadata for a scoped joined session.
 public struct JoinedHeistSession: Sendable {
-    let job: TheInsideJob
     public let token: String
     public let requestedPort: UInt16
     public let listeningPort: UInt16
     public let addressFamily: ListenerAddressFamily
     public let allowedScopes: Set<ConnectionScope>
-
-    @MainActor
-    func stop() async {
-        await job.stop()
-    }
 
     public var endpoint: String {
         "\(addressFamily.readyEndpointHost):\(listeningPort)"
@@ -563,6 +555,16 @@ public struct JoinedHeistSession: Sendable {
         }
         lines.append("ButtonHeist join note: If this endpoint is unreachable from the host, your launch system may require port forwarding.")
         return lines.joined(separator: "\n")
+    }
+}
+
+private struct JoinedHeistRuntime: Sendable {
+    let job: TheInsideJob
+    let session: JoinedHeistSession
+
+    @MainActor
+    func stop() async {
+        await job.stop()
     }
 }
 

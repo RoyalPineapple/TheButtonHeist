@@ -203,6 +203,30 @@ final class HeistReceiptTests: XCTestCase {
         }
     }
 
+    func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() {
+        let expectedMessage = "runHeistSyncOperation must be called on the main thread"
+        let expectedFile = String(describing: #filePath)
+        let expectedLine: UInt = 4_242
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.type == .assertionFailure
+                && issue.compactDescription.contains(expectedMessage)
+                && issue.sourceCodeContext.location?.fileURL.path == expectedFile
+                && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
+        }
+
+        XCTExpectFailure(
+            "Button Heist assertion failures must be recorded by XCTest",
+            options: options
+        ) {
+            recordHeistXCTestIssue(
+                .synchronousOperationRequiresMainThread,
+                file: #filePath,
+                line: expectedLine
+            )
+        }
+    }
+
     func testPublicRunHeistFacadeDottedNameRunsAsNamedCapability() async throws {
         let heist = try await runHeist("PublicFacade.warn") {
             Warn("ok")
