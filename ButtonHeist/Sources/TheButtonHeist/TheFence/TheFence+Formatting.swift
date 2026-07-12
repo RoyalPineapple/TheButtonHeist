@@ -317,6 +317,8 @@ extension FenceResponse {
             parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
+        case .series:
+            parts = ["series"]
         }
         if let containerName {
             parts.append("containerName: \(containerName)")

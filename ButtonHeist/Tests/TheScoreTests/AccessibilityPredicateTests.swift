@@ -52,18 +52,20 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testContainerIdentifierPredicatesMatchEveryContainerRole() {
-        let cases: [(AccessibilityContainer.ContainerType, String)] = [
-            (.none, "roleless-container"),
-            (.semanticGroup(label: "Checkout", value: nil), "checkout-group"),
-            (.list, "checkout-list"),
-            (.landmark, "checkout-landmark"),
-            (.dataTable(rowCount: 3, columnCount: 2, cells: []), "checkout-table"),
-            (.tabBar, "checkout-tabs"),
+        let cases: [(AccessibilityContainer.ContainerType, AccessibilityContainerKind, String)] = [
+            (.none, .none, "roleless-container"),
+            (.semanticGroup(label: "Checkout", value: nil), .semanticGroup, "checkout-group"),
+            (.list, .list, "checkout-list"),
+            (.landmark, .landmark, "checkout-landmark"),
+            (.dataTable(rowCount: 3, columnCount: 2, cells: []), .dataTable, "checkout-table"),
+            (.tabBar, .tabBar, "checkout-tabs"),
+            (.series, .series, "checkout-series"),
         ]
 
-        for (type, identifier) in cases {
+        for (type, expectedKind, identifier) in cases {
             let facts = makeTestAccessibilityContainer(type: type, identifier: identifier).containerPredicateFacts
 
+            XCTAssertEqual(facts.type, expectedKind)
             XCTAssertEqual(facts.identifier, identifier)
             XCTAssertTrue(ContainerPredicate.identifier(identifier).matches(facts), "\(type)")
             XCTAssertFalse(ContainerPredicate.identifier("other").matches(facts), "\(type)")

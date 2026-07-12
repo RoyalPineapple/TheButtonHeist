@@ -211,6 +211,8 @@ extension FenceResponse {
             parts = ["container"]
         case .tabBar:
             parts = ["tab_bar"]
+        case .series:
+            parts = ["series"]
         }
         if let containerName {
             parts.append(quotedString(containerName))
@@ -316,6 +318,8 @@ extension FenceResponse {
             return "container"
         case .tabBar:
             return "tab_bar"
+        case .series:
+            return "series"
         }
     }
 

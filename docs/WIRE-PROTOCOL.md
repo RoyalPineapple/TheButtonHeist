@@ -249,7 +249,7 @@ Checks include `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
 Container identifiers are matched on every delivered container type that
 carries the identifier. They are not restricted to semantic-group containers.
 Canonical container kinds are `none`, `scrollable`, `semanticGroup`, `list`,
-`landmark`, `dataTable`, and `tabBar`; parser `scrollable` containers are never
+`landmark`, `dataTable`, `tabBar`, and `series`; parser `scrollable` containers are never
 projected as `none`.
 Target resolution always walks the canonical delivered tree, including for
 `exists`, `missing`, and subtree queries.

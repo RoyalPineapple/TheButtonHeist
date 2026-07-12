@@ -10,6 +10,7 @@ public enum AccessibilityContainerKind: String, Codable, CaseIterable, Sendable 
     case landmark
     case dataTable
     case tabBar
+    case series
 }
 
 public enum SemanticContainerPredicate<Value: StringMatchPayload>: Sendable, Equatable, Hashable {

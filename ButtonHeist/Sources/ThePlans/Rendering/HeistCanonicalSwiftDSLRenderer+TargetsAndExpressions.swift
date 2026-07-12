@@ -195,6 +195,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".dataTable()"
         case .type(.tabBar):
             return ".tabBar"
+        case .type(.series):
+            return ".series"
         case .type(.scrollable):
             return ".type(.scrollable)"
         case .semantic(let predicate):
