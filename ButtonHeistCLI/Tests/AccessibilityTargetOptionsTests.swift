@@ -104,8 +104,8 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
         ]))
     }
 
-    func testCLIRequestObjectsAccumulateRepeatedTypedKeysBeforeWireRendering() {
-        var object = CLIRequestObject()
+    func testCLIRequestFieldsAccumulateRepeatedTypedKeysBeforeWireRendering() {
+        var object = CLIRequestFields()
 
         object.appendOneOrMany(.string("button"), for: .traits)
         object.appendOneOrMany(.string("selected"), for: .traits)
@@ -116,14 +116,14 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
         ])
     }
 
-    func testCLIRequestParametersSetNestedObjectsThroughTypedKeys() {
-        let targetObject = CLIRequestObject([
+    func testCLIRequestFieldsSetNestedValuesThroughTypedKeys() {
+        let targetObject = CLIRequestFields([
             (.label, .object([
                 FenceParameterKey.mode.rawValue: .string("exact"),
                 FenceParameterKey.value.rawValue: .string("Save"),
             ])),
         ])
-        var parameters = CLIRequestParameters()
+        var parameters = CLIRequestFields()
 
         parameters.set(.target, targetObject)
 

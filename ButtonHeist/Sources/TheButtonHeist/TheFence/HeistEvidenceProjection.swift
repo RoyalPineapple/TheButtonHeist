@@ -73,8 +73,8 @@ struct HeistActionEvidenceProjection: Sendable {
         self.profile = profile
     }
 
-    var commandName: String? {
-        actionEvidence.command?.wireType.rawValue
+    var command: HeistActionCommandType? {
+        actionEvidence.command?.wireType
     }
 
     var target: AccessibilityTarget? {

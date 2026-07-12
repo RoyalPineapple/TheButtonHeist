@@ -26,8 +26,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.expectationsChecked, 1)
         XCTAssertEqual(result.expectationsMet, 1)
         XCTAssertEqual(result.steps.map(\.path), ["$.body[0]"])
-        XCTAssertEqual(result.steps.first?.reportFacts.kind, "action")
-        XCTAssertEqual(result.steps.first?.reportFacts.commandName, "activate")
+        XCTAssertEqual(result.steps.first?.reportFacts.kind, .action)
+        XCTAssertEqual(result.steps.first?.reportFacts.command, .activate)
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.wait])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
@@ -337,8 +337,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         XCTAssertEqual(result.steps.map(\.path), ["$.body[9]"])
-        XCTAssertEqual(result.steps.first?.reportFacts.kind, "action")
-        XCTAssertEqual(result.steps.first?.reportFacts.commandName, "activate")
+        XCTAssertEqual(result.steps.first?.reportFacts.kind, .action)
+        XCTAssertEqual(result.steps.first?.reportFacts.command, .activate)
         XCTAssertEqual(result.steps.first?.reportFacts.target, .predicate(ElementPredicateTemplate(label: "Delete")))
     }
 
@@ -370,9 +370,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(summary.outputReceiptNodeCount, 1)
         XCTAssertEqual(summary.abortedAtPath, "$.body[0]")
         XCTAssertEqual(report.path, "$.body[0]")
-        XCTAssertEqual(report.kind, "action")
-        XCTAssertEqual(report.displayName, "activate")
-        XCTAssertEqual(report.commandName, "activate")
+        XCTAssertEqual(report.kind, .action)
+        XCTAssertNil(report.invocationDisplayName)
+        XCTAssertEqual(report.command, .activate)
         XCTAssertEqual(report.target, .predicate(ElementPredicateTemplate(label: "Delete")))
         XCTAssertEqual(report.status, .failed)
         XCTAssertEqual(report.message, "Delete not found")
@@ -425,7 +425,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         let node = result.steps[0]
         XCTAssertEqual(node.path, "$.body[0]")
-        XCTAssertEqual(node.reportFacts.kind, "wait")
+        XCTAssertEqual(node.reportFacts.kind, .wait)
         XCTAssertEqual(node.reportFacts.status, .passed)
         XCTAssertEqual(node.reportFacts.results.expectation?.met, true)
         XCTAssertEqual(node.reportFacts.results.actionResult?.method, .wait)
@@ -584,9 +584,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportFacts.kind, "if")
+        XCTAssertEqual(node.reportFacts.kind, .conditional)
         XCTAssertEqual(node.children.map(\.path), ["$.body[0].conditional.cases[0].body[0]"])
-        XCTAssertEqual(node.children.first?.reportFacts.commandName, "activate")
+        XCTAssertEqual(node.children.first?.reportFacts.command, .activate)
     }
 
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
@@ -610,7 +610,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportFacts.kind, "wait")
+        XCTAssertEqual(node.reportFacts.kind, .wait)
         XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(node.children.count, 0)
         XCTAssertEqual(node.reportFacts.results.expectation?.met, false)
@@ -703,7 +703,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             abortedAtPath: "$.body[1]"
         )
 
-        XCTAssertEqual(result.steps.map(\.reportFacts.kind), ["warn", "fail"])
+        XCTAssertEqual(result.steps.map(\.reportFacts.kind), [.warn, .fail])
         XCTAssertEqual(result.steps.map(\.reportFacts.status), [.passed, .failed])
         XCTAssertEqual(result.warnings.map(\.message), ["Heads up"])
         XCTAssertEqual(result.executedTopLevelStepCount, 2)
@@ -758,9 +758,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportFacts.kind, "invoke")
+        XCTAssertEqual(node.reportFacts.kind, .invoke)
         XCTAssertEqual(node.reportFacts.capabilityName, "LibraryScreen.addToCart")
-        XCTAssertEqual(node.reportFacts.displayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
+        XCTAssertEqual(node.reportFacts.invocationDisplayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(result.failedStepPath, child.path)

@@ -310,7 +310,7 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsUseDefaults() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: .empty)
+        let knobs = ButtonHeistRuntimeKnobs.resolve(environment: .empty)
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 3)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 10)
@@ -322,7 +322,7 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsReadEnvironmentFromOneResolver() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
+        let knobs = ButtonHeistRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
             .postScrollLayoutFrames: "0",
             .tripwirePulseFramesPerSecond: "60",
             .maxScrollsPerContainer: "25",
@@ -341,7 +341,7 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsReadTestRunnerPrefixedEnvironmentAndClamp() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
+        let knobs = ButtonHeistRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
             .postScrollLayoutFrames.testRunnerPrefixed: "99",
             .tripwirePulseFramesPerSecond.testRunnerPrefixed: "0",
             .maxScrollsPerContainer.testRunnerPrefixed: "9999",

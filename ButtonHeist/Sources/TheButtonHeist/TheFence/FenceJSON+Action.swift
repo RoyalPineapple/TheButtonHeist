@@ -423,7 +423,7 @@ struct PublicHeistReportNode: Encodable {
 
     init(projection: HeistReportNodeProjection) {
         self.path = projection.path
-        self.kind = projection.kind
+        self.kind = projection.kind.rawValue
         self.capability = projection.capability
         self.status = projection.status.rawValue
         self.message = projection.message
@@ -522,7 +522,7 @@ struct PublicHeistActionEvidence: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(projection.commandName, forKey: .commandName)
+        try container.encodeIfPresent(projection.command?.rawValue, forKey: .commandName)
         try container.encodeIfPresent(projection.target, forKey: .target)
         switch projection.evidence {
         case .commandResolutionFailure(let warning):

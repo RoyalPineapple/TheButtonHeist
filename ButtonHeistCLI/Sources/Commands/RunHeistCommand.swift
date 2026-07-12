@@ -146,7 +146,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         })
     }
 
-    static func planArguments(inline: String?) throws -> CLIRequestParameters {
+    static func planArguments(inline: String?) throws -> CLIRequestFields {
         try planArguments(inline: inline, path: nil, entry: nil)
     }
 
@@ -162,7 +162,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         entry: String?,
         argument: String? = nil,
         commandName: String = Self.cliCommandName
-    ) throws -> CLIRequestParameters {
+    ) throws -> CLIRequestFields {
         let suppliedSources = [inline != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
             if suppliedSources == 0 {

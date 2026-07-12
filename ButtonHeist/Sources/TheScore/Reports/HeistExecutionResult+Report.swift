@@ -326,14 +326,14 @@ package struct HeistExecutionMetricSample: Codable, Sendable, Equatable {
     package let name: HeistExecutionMetricName
     package let valueMs: Int
     package let path: String?
-    package let kind: String?
+    package let kind: HeistExecutionStepKind?
     package let status: HeistExecutionStepStatus?
 
     package init(
         name: HeistExecutionMetricName,
         valueMs: Int,
         path: String? = nil,
-        kind: String? = nil,
+        kind: HeistExecutionStepKind? = nil,
         status: HeistExecutionStepStatus? = nil
     ) {
         self.name = name
@@ -342,6 +342,7 @@ package struct HeistExecutionMetricSample: Codable, Sendable, Equatable {
         self.kind = kind
         self.status = status
     }
+
 }
 
 package enum HeistExecutionCeilingMetricSource: String, Codable, Sendable, Equatable, CaseIterable {
@@ -355,7 +356,7 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
     package let budgetMs: Int
     package let elapsedMs: Int
     package let path: String
-    package let kind: String
+    package let kind: HeistExecutionStepKind
     package let status: HeistExecutionStepStatus
 
     package init(
@@ -363,7 +364,7 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
         budgetMs: Int,
         elapsedMs: Int,
         path: String,
-        kind: String,
+        kind: HeistExecutionStepKind,
         status: HeistExecutionStepStatus
     ) {
         self.source = source
@@ -373,6 +374,7 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
         self.kind = kind
         self.status = status
     }
+
 }
 
 private struct HeistExecutionMetricProjectionBuilder {
@@ -538,9 +540,9 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
         }
     }
 
-    package var commandName: String? {
+    package var command: HeistActionCommandType? {
         guard case .action(let evidence) = self else { return nil }
-        return evidence.command?.wireType.rawValue
+        return evidence.command?.wireType
     }
 
     package var target: AccessibilityTarget? {
@@ -643,10 +645,10 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
 
 package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let path: String
-    package let kind: String
+    package let kind: HeistExecutionStepKind
     package let capabilityName: String?
-    package let displayName: String
-    package let commandName: String?
+    package let invocationDisplayName: String?
+    package let command: HeistActionCommandType?
     package let target: AccessibilityTarget?
     package let status: HeistExecutionStepStatus
     package let message: String?
@@ -656,49 +658,19 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
 
     package init(step: HeistExecutionStepResult) {
         let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)
-        let commandName = detail.commandName
         let results = detail.results
 
         path = step.path
-        kind = Self.stepName(for: step.kind)
+        kind = step.kind
         capabilityName = detail.capabilityName
-        displayName = detail.invocationDisplayName ?? commandName ?? kind
-        self.commandName = commandName
+        invocationDisplayName = detail.invocationDisplayName
+        command = detail.command
         target = detail.target
         status = step.status
         message = Self.message(for: step, detail: detail)
         failureMessage = Self.failureMessage(for: step)
         failureCategory = step.failure?.category
         self.results = results
-    }
-
-    private static func stepName(for kind: HeistExecutionStepKind) -> String {
-        switch kind {
-        case .action:
-            return "action"
-        case .wait:
-            return "wait"
-        case .conditional:
-            return "if"
-        case .forEachElement:
-            return "for_each_element"
-        case .forEachString:
-            return "for_each_string"
-        case .forEachIteration:
-            return "for_each_iteration"
-        case .repeatUntil:
-            return "repeat_until"
-        case .repeatUntilIteration:
-            return "repeat_until_iteration"
-        case .warn:
-            return "warn"
-        case .fail:
-            return "fail"
-        case .heist:
-            return "heist"
-        case .invoke:
-            return "invoke"
-        }
     }
 
     private static func message(for step: HeistExecutionStepResult, detail: HeistExecutionStepReportDetail) -> String? {
@@ -798,12 +770,12 @@ public extension HeistExecutionStepResult {
     /// Human-facing display label for a step. Invoke steps surface the product
     /// capability that ran rather than the bare `invoke` kind.
     var reportDisplayName: String {
-        reportFacts.displayName
+        reportFacts.invocationDisplayName ?? reportFacts.command?.rawValue ?? reportFacts.kind.rawValue
     }
 
     /// Wire command name for an action-kind step.
     var reportCommandName: String? {
-        reportFacts.commandName
+        reportFacts.command?.rawValue
     }
 
     /// Durable matcher target for an action-kind step, if any.

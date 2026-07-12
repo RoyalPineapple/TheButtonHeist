@@ -29,7 +29,7 @@ struct CLIRequestBuildError: Error, CustomStringConvertible {
 enum CLIRequestBuilder {
 
     static func arguments(
-        parameters: CLIRequestParameters = CLIRequestParameters(),
+        parameters: CLIRequestFields = CLIRequestFields(),
         target: AccessibilityTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         var parameters = parameters
@@ -111,12 +111,12 @@ enum CLIRequestBuilder {
         }
     }
 
-    static func targetObject(_ target: AccessibilityTarget) -> CLIRequestObject {
+    static func targetObject(_ target: AccessibilityTarget) -> CLIRequestFields {
         guard case .object(let fields) = targetValue(target) else {
             preconditionFailure("Canonical AccessibilityTarget payload did not encode as an object")
         }
 
-        return CLIRequestObject(fields.map { rawKey, value in
+        return CLIRequestFields(fields.map { rawKey, value in
             guard let key = FenceParameterKey(rawValue: rawKey) else {
                 preconditionFailure("Canonical AccessibilityTarget payload emitted unknown key \(rawKey)")
             }

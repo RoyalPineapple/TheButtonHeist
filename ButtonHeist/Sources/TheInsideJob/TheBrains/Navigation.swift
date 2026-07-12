@@ -64,7 +64,7 @@ final class Navigation {
     /// Empirical default: 3 frames covers a CATransaction flush plus a UIKit
     /// layout pass without waiting for animations.
     static var postScrollLayoutFrames: Int {
-        InsideJobRuntimeKnobs.current.postScrollLayoutFrames
+        ButtonHeistRuntimeKnobs.current.postScrollLayoutFrames
     }
 
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
@@ -304,12 +304,12 @@ final class Navigation {
 
         /// Safety cap on per-container scroll iterations.
         static var maxScrollsPerContainer: Int {
-            InsideJobRuntimeKnobs.current.maxScrollsPerContainer
+            ButtonHeistRuntimeKnobs.current.maxScrollsPerContainer
         }
 
         /// Safety cap on total scroll iterations across one discovery pass.
         static var maxScrollsPerDiscovery: Int {
-            InsideJobRuntimeKnobs.current.maxScrollsPerDiscovery
+            ButtonHeistRuntimeKnobs.current.maxScrollsPerDiscovery
         }
 
         // MARK: - Building

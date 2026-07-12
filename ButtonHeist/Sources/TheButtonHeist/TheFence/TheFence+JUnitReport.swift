@@ -39,7 +39,7 @@ extension TheFence {
         projection.outputNodes.enumerated().map { index, step in
             HeistJUnitReport.StepResult(
                 index: index,
-                command: step.commandName ?? step.kind,
+                command: step.command?.rawValue ?? step.kind.rawValue,
                 target: step.target,
                 timeSeconds: Double(step.durationMs) / 1000,
                 outcome: Self.junitOutcome(for: step, projection: projection)

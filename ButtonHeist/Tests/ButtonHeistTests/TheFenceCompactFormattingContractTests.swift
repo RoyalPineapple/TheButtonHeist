@@ -1102,7 +1102,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         try json.assertMissing("results")
         XCTAssertEqual(try root.string("path"), "$.body[0]")
-        XCTAssertEqual(try root.string("kind"), "if")
+        XCTAssertEqual(try root.string("kind"), "conditional")
         try caseSelection.assertPresent("outcome")
         try caseSelection.assertMissing("selectedCaseIndex")
         try caseSelection.assertMissing("timedOut")
@@ -1169,7 +1169,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let child = try XCTUnwrap(children.first)
         let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
 
-        XCTAssertEqual(try root.string("kind"), "if")
+        XCTAssertEqual(try root.string("kind"), "conditional")
         XCTAssertEqual(try root.string("status"), "passed")
         try evidence.assertPresent("caseSelection")
         XCTAssertEqual(try child.string("path"), "$.body[0].conditional.else_body[0]")

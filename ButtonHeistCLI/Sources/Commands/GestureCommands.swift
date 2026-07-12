@@ -13,7 +13,7 @@ struct CLIPointArgument: Equatable {
         return Self(x: x, y: y)
     }
 
-    var object: CLIRequestObject {
+    var object: CLIRequestFields {
         CommandArgumentWriter.object(
             CommandArgumentWriter.value(.x, x),
             CommandArgumentWriter.value(.y, y)
@@ -27,7 +27,7 @@ struct CLIPointArgument: Equatable {
 
 struct CLIGesturePayload: Equatable {
     let key: FenceParameterKey
-    let object: CLIRequestObject
+    let object: CLIRequestFields
 
     static func element(_ target: AccessibilityTarget) -> Self {
         Self(key: .element, object: CLIRequestBuilder.targetObject(target))
@@ -95,7 +95,7 @@ struct CLIGesturePayload: Equatable {
 
 extension GestureCLICommandContract {
     static func gestureRequest(
-        parameters: CLIRequestParameters = CLIRequestParameters(),
+        parameters: CLIRequestFields = CLIRequestFields(),
         _ payloads: CLIGesturePayload...
     ) throws -> TheFence.CommandArgumentEnvelope {
         fenceArguments(parameters.adding(payloads.map { payload in
@@ -103,7 +103,7 @@ extension GestureCLICommandContract {
         }))
     }
 
-    static func elementObject(_ target: AccessibilityTarget) -> CLIRequestObject {
+    static func elementObject(_ target: AccessibilityTarget) -> CLIRequestFields {
         CLIRequestBuilder.targetObject(target)
     }
 

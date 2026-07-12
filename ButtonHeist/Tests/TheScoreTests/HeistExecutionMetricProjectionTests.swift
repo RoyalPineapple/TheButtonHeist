@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import ThePlans
 import TheScore
@@ -40,7 +41,7 @@ import TheScore
         #expect(values(in: projection, named: .waitPipelineTotalMs) == [40, 95, 60])
         #expect(values(in: projection, named: .expectationWaitMs) == [40])
         #expect(projection.samples.filter { $0.path == "$.body[0]" }.allSatisfy {
-            $0.kind == "action" && $0.status == .passed
+            $0.kind == .action && $0.status == .passed
         })
         #expect(projection.ceilings == [
             HeistExecutionCeilingMetric(
@@ -48,7 +49,7 @@ import TheScore
                 budgetMs: 100,
                 elapsedMs: 95,
                 path: "$.body[1]",
-                kind: "wait",
+                kind: .wait,
                 status: .passed
             ),
             HeistExecutionCeilingMetric(
@@ -56,7 +57,7 @@ import TheScore
                 budgetMs: 50,
                 elapsedMs: 60,
                 path: "$.body[2]",
-                kind: "repeat_until",
+                kind: .repeatUntil,
                 status: .passed
             ),
             HeistExecutionCeilingMetric(
@@ -64,10 +65,15 @@ import TheScore
                 budgetMs: 500,
                 elapsedMs: 490,
                 path: "$.body[3]",
-                kind: "if",
+                kind: .conditional,
                 status: .passed
             ),
         ])
+
+        let encoded = try JSONEncoder().encode(projection)
+        let json = try #require(String(bytes: encoded, encoding: .utf8))
+        #expect(json.contains(#""kind":"conditional""#))
+        #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
     @Test func `summary excludes flattened failure actions from top level count`() {

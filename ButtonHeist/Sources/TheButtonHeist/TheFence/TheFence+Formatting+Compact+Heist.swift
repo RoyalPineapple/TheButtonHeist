@@ -19,7 +19,7 @@ extension FenceResponse {
             text = "\(lastScreenId) | \(text)"
         }
         for (index, step) in projection.outputNodes.enumerated() {
-            var line = "  [\(index)] \(step.displayName)"
+            var line = "  [\(index)] \(Self.compactHeistStepName(step))"
             var detailLines: [String] = []
             let delta = step.traceDelta
             if let failureMessage = step.failureMessage {
@@ -54,7 +54,7 @@ extension FenceResponse {
     ) -> String? {
         let renderedDelta = Self.compactDelta(
             delta,
-            method: step.commandName ?? step.displayName
+            method: Self.compactHeistStepName(step)
         )
         return renderedDelta
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -70,7 +70,7 @@ extension FenceResponse {
         guard let delta else { return [] }
         let renderedDelta = Self.compactDelta(
             delta,
-            method: step.commandName ?? step.displayName
+            method: Self.compactHeistStepName(step)
         )
         var deltaLines = renderedDelta
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -85,10 +85,14 @@ extension FenceResponse {
         _ summary: String,
         step: HeistReportNodeProjection
     ) -> String {
-        let method = step.commandName ?? step.displayName
+        let method = Self.compactHeistStepName(step)
         let prefix = "\(method): "
         guard summary.hasPrefix(prefix) else { return summary }
         return String(summary.dropFirst(prefix.count))
+    }
+
+    private static func compactHeistStepName(_ step: HeistReportNodeProjection) -> String {
+        step.invocationDisplayName ?? step.command?.rawValue ?? step.kind.rawValue
     }
 
 }
