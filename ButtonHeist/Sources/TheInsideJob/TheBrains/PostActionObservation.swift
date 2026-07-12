@@ -312,9 +312,13 @@ final class PostActionObservation {
         current: BeforeState,
         classification: ScreenClassifier.Classification
     ) -> Bool {
-        classification.isScreenChange
-            || current.capture.context != baseline.capture.context
-            || current.interfaceHash != baseline.interfaceHash
+        switch classification {
+        case .inferredScreenChange:
+            return true
+        case .sameGeneration:
+            return current.capture.context != baseline.capture.context
+                || current.interfaceHash != baseline.interfaceHash
+        }
     }
 
     func makeTraceCapture(
@@ -360,20 +364,28 @@ final class PostActionObservation {
         transient: [HeistElement] = [],
         accessibilityNotifications: [AccessibilityNotificationEvidence] = []
     ) -> AccessibilityTrace {
-        if let fallbackReason = classification.reason {
+        let transition: AccessibilityTrace.Transition
+        switch classification {
+        case .sameGeneration:
+            transition = AccessibilityTrace.Transition(
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
+            )
+        case .inferredScreenChange(let reason):
             AccessibilityObservationFallbackLog.record(
-                fallbackReason,
+                reason,
                 source: .postAction
+            )
+            transition = AccessibilityTrace.Transition(
+                fallbackReason: reason,
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications
             )
         }
         return makeAccessibilityTrace(
             afterInterface: afterInterface,
             parentCapture: parentCapture,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: classification.reason,
-                transient: transient,
-                accessibilityNotifications: accessibilityNotifications
-            )
+            transition: transition
         )
     }
 
@@ -382,12 +394,19 @@ final class PostActionObservation {
             before: parent.screenSnapshot,
             after: after.screenSnapshot
         )
+        let transition: AccessibilityTrace.Transition
+        switch classification {
+        case .sameGeneration:
+            transition = .empty
+        case .inferredScreenChange(let reason):
+            transition = AccessibilityTrace.Transition(fallbackReason: reason)
+        }
         let capture = AccessibilityTrace.Capture(
             sequence: after.capture.sequence,
             interface: after.capture.interface,
             parentHash: after.capture.parentHash,
             context: after.capture.context,
-            transition: AccessibilityTrace.Transition(fallbackReason: classification.reason),
+            transition: transition,
             hash: after.capture.hash
         )
         return AccessibilityTrace(captures: [parent.capture, capture])
@@ -512,13 +531,7 @@ final class PostActionObservation {
 
     private func firstResponderTarget(in screen: InterfaceObservation) -> AccessibilityTarget? {
         guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
-        let elements = screen.orderedElements.map {
-            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
-        }
-        return MinimumPredicateSelector.minimumUniquePredicate(
-            for: firstResponderHeistId.predicateSelectionElementId,
-            in: elements
-        )?.target
+        return stash.minimumUniqueTarget(for: firstResponderHeistId, in: screen.tree)
     }
 
     // MARK: - Result Building
@@ -596,7 +609,7 @@ final class PostActionObservation {
         final: BeforeState,
         classification: ScreenClassifier.Classification
     ) -> [HeistElement] {
-        guard !classification.isScreenChange,
+        guard case .sameGeneration = classification,
               !settleResult.events.containsTripwireSignalChange else {
             return []
         }

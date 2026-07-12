@@ -242,11 +242,16 @@ private struct SemanticObservationFulfillmentState {
                 screen: screen.semanticObservationProjection(for: fulfilledScope),
                 tripwireSignal: tripwireSignal
             )
-            let fallbackReason = previousEvent.flatMap { previousEvent in
-                ScreenClassifier.classify(
+            let fallbackReason = previousEvent.flatMap { previousEvent -> AccessibilityObservationFallbackReason? in
+                switch ScreenClassifier.classify(
                     before: ScreenClassifier.snapshot(of: previousEvent.observation.screen.tree),
                     after: ScreenClassifier.snapshot(of: observation.screen.tree)
-                ).reason
+                ) {
+                case .sameGeneration:
+                    return nil
+                case .inferredScreenChange(let reason):
+                    return reason
+                }
             }
             if let fallbackReason {
                 AccessibilityObservationFallbackLog.record(
@@ -258,10 +263,8 @@ private struct SemanticObservationFulfillmentState {
                 observation: observation,
                 previous: previousEvent,
                 generation: eventGeneration,
-                notificationSequence: notificationBatch.through.sequence,
+                notificationBatch: notificationBatch,
                 stash: stash,
-                pendingAccessibilityNotifications: pendingAccessibilityNotifications,
-                accessibilityNotificationGap: notificationBatch.gap,
                 notificationIdentityScreen: notificationIdentityScreen,
                 fallbackReason: fallbackReason
             )
@@ -370,8 +373,6 @@ final class SemanticObservationStream {
 
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
-    private static let rootUnavailableRecoveryTimeoutMs = 3_000
-
     // MARK: - Observation Bookkeeping
 
     private var scopePressure = SemanticObservationScopePressure()
@@ -541,19 +542,13 @@ final class SemanticObservationStream {
 
         guard let stash else { return nil }
 
-        let initialOutcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
+        let outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
             demandState: activeObservationDemandState,
             stash: stash,
             tripwire: tripwire,
             baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
-        let outcome = await recoverTransientRootUnavailableIfNeeded(
-            initialOutcome,
-            stash: stash,
-            timeoutMs: Self.timeoutMilliseconds(from: timeout)
-        )
-
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             recordNonActionFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
@@ -579,26 +574,6 @@ final class SemanticObservationStream {
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         recordNonActionFailedSettleDiagnosticEvidence(screen, stash: stash)
         return nil
-    }
-
-    private func recoverTransientRootUnavailableIfNeeded(
-        _ outcome: SettleSession.Outcome,
-        stash: TheStash,
-        timeoutMs: Int
-    ) async -> SettleSession.Outcome {
-        guard timeoutMs >= 1_000,
-              outcome.finalScreen == nil,
-              latestEvent != nil
-        else { return outcome }
-        if case .cancelled = outcome.outcome {
-            return outcome
-        }
-        return await SemanticObservationSettleCadence.settleVisibleObservationAtIdleCadence(
-            stash: stash,
-            tripwire: tripwire,
-            baselineTripwireSignal: tripwire.tripwireSignal(),
-            timeoutMs: Self.rootUnavailableRecoveryTimeoutMs
-        )
     }
 
     @discardableResult

@@ -112,7 +112,14 @@ extension ElementInflation {
     internal func visibleTargetResolution(
         _ target: AccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
-        visibleTargetResolution(target, in: stash.latestObservation.tree)
+        switch stash.resolveVisibleTarget(target) {
+        case .resolved(let treeElement):
+            return .success(treeElement)
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        case .notFound:
+            return nil
+        }
     }
 
     internal func visibleTargetResolution(

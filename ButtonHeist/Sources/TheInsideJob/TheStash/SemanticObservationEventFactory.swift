@@ -9,10 +9,8 @@ enum SemanticObservationEventFactory {
         observation: SettledSemanticObservation,
         previous: SettledSemanticObservationEvent?,
         generation: ObservationGeneration,
-        notificationSequence: UInt64,
+        notificationBatch: AccessibilityNotificationBatch,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent] = [],
-        accessibilityNotificationGap: AccessibilityNotificationGap? = nil,
         notificationIdentityScreen: InterfaceObservation? = nil,
         fallbackReason: AccessibilityObservationFallbackReason? = nil
     ) -> SettledSemanticObservationEvent {
@@ -23,8 +21,7 @@ enum SemanticObservationEventFactory {
             parentHash: previousCapture?.hash,
             generation: generation,
             stash: stash,
-            pendingAccessibilityNotifications: pendingAccessibilityNotifications,
-            accessibilityNotificationGap: accessibilityNotificationGap,
+            notificationBatch: notificationBatch,
             notificationIdentityScreen: notificationIdentityScreen,
             fallbackReason: fallbackReason
         )
@@ -40,7 +37,7 @@ enum SemanticObservationEventFactory {
             observation: observation,
             previous: previous?.observation,
             previousCursor: previous?.cursor,
-            notificationSequence: notificationSequence,
+            notificationSequence: notificationBatch.through.sequence,
             trace: trace
         )
     }
@@ -52,8 +49,7 @@ enum SemanticObservationEventFactory {
         parentHash: String?,
         generation: ObservationGeneration,
         stash: TheStash,
-        pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
-        accessibilityNotificationGap: AccessibilityNotificationGap?,
+        notificationBatch: AccessibilityNotificationBatch,
         notificationIdentityScreen: InterfaceObservation?,
         fallbackReason: AccessibilityObservationFallbackReason?
     ) -> AccessibilityTrace.Capture {
@@ -65,7 +61,7 @@ enum SemanticObservationEventFactory {
         }
         let interface = stash.semanticInterfaceWithHash(for: screen).interface
         let accessibilityNotifications = stash.resolveAccessibilityNotificationEvidence(
-            pendingAccessibilityNotifications,
+            notificationBatch.events,
             identityScreen: notificationIdentityScreen ?? screen,
             referenceScreen: screen
         )
@@ -81,6 +77,9 @@ enum SemanticObservationEventFactory {
             interface: interface,
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
+                firstResponder: screen.liveCapture.firstResponderHeistId.flatMap {
+                    stash.minimumUniqueTarget(for: $0, in: screen.tree)
+                },
                 screenId: screen.id,
                 observationGeneration: generation.rawValue,
                 windowStack: windows
@@ -88,7 +87,7 @@ enum SemanticObservationEventFactory {
             transition: AccessibilityTrace.Transition(
                 fallbackReason: fallbackReason,
                 accessibilityNotifications: accessibilityNotifications,
-                accessibilityNotificationGap: accessibilityNotificationGap
+                accessibilityNotificationGap: notificationBatch.gap
             )
         )
     }

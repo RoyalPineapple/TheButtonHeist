@@ -50,7 +50,6 @@ internal final class ElementInflation {
         } catch {
             return .failed(.targetResolution(error))
         }
-        stash.refreshLiveCapture()
         var state: State = .resolving(.initial)
         let maxAttempts = 2
 

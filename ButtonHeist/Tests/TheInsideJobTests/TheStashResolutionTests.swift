@@ -716,6 +716,21 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications.count, 64)
     }
 
+    func testCommittedTraceRetainsFirstResponderAsDurableTarget() {
+        let screen = InterfaceObservation.makeForTests(
+            [
+                .init(label: "Email", heistId: "email", traits: .textEntry),
+                .init(label: "Continue", heistId: "continue", traits: .button),
+            ],
+            firstResponderHeistId: "email"
+        )
+
+        let event = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+
+        XCTAssertNotNil(event.trace.captures.last?.context.firstResponder)
+        XCTAssertEqual(event.observation.screen.liveCapture.firstResponderHeistId, "email")
+    }
+
     func testFailedSettleClearsPendingAccessibilityNotifications() async {
         let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
         bagman.accessibilityNotifications.record(
