@@ -105,14 +105,8 @@ fi
 
 echo "AccessibilitySnapshotBH: $CURRENT_PIN -> $TARGET_TAG (${SUBMODULE_SHA:0:8})"
 
-if [[ "$CURRENT_PIN" == "$TARGET_TAG" ]]; then
-    "$SCRIPT_DIR/check-parser-contract.sh"
-    echo "Parser dependency projections are already current."
-    exit 0
-fi
-
 if [[ "$DRY_RUN" == true ]]; then
-    printf 'Would update: %s\n' "${MANIFEST_FILES[*]} ${LOCKFILES[*]}"
+    printf 'Would validate and align: %s\n' "${MANIFEST_FILES[*]} ${LOCKFILES[*]}"
     exit 0
 fi
 
