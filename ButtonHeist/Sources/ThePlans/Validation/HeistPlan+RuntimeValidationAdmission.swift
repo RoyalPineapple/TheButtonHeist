@@ -95,29 +95,50 @@ package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
 
     init(_ step: HeistStep) {
         switch step {
-        case .action(let step): self.init(.action(step))
-        case .wait(let step): self.init(.wait(step))
-        case .conditional(let step): self.init(.conditional(step))
-        case .forEachElement(let step): self.init(.forEachElement(step))
-        case .forEachString(let step): self.init(.forEachString(step))
-        case .repeatUntil(let step): self.init(.repeatUntil(step))
-        case .warn(let step): self.init(.warn(step))
-        case .fail(let step): self.init(.fail(step))
-        case .heist(let plan): self.init(.heist(HeistPlanAdmissionCandidate(plan)))
-        case .invoke(let step): self.init(.invoke(step))
+        case .action(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.action(step))
+        case .wait(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.wait(step))
+        case .conditional(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.conditional(step))
+        case .forEachElement(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachElement(step))
+        case .forEachString(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachString(step))
+        case .repeatUntil(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.repeatUntil(step))
+        case .warn(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.warn(step))
+        case .fail(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.fail(step))
+        case .heist(let plan):
+            self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.heist(HeistPlanAdmissionCandidate(plan)))
+        case .invoke(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.invoke(step))
         }
     }
 
-    package static func action(_ step: ActionStep) -> Self { Self(.action(step)) }
-    package static func wait(_ step: WaitStep) -> Self { Self(.wait(step)) }
-    package static func conditional(_ step: ConditionalStep) -> Self { Self(.conditional(step)) }
-    package static func forEachElement(_ step: ForEachElementStep) -> Self { Self(.forEachElement(step)) }
-    package static func forEachString(_ step: ForEachStringStep) -> Self { Self(.forEachString(step)) }
-    package static func repeatUntil(_ step: RepeatUntilStep) -> Self { Self(.repeatUntil(step)) }
-    package static func warn(_ step: WarnStep) -> Self { Self(.warn(step)) }
-    package static func fail(_ step: FailStep) -> Self { Self(.fail(step)) }
-    package static func heist(_ plan: HeistPlanAdmissionCandidate) -> Self { Self(.heist(plan)) }
-    package static func invoke(_ step: HeistInvocationStep) -> Self { Self(.invoke(step)) }
+    package static func action(_ step: ActionStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.action(step))
+    }
+    package static func wait(_ step: WaitStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.wait(step))
+    }
+    package static func conditional(_ step: ConditionalStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.conditional(step))
+    }
+    package static func forEachElement(_ step: ForEachElementStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachElement(step))
+    }
+    package static func forEachString(_ step: ForEachStringStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachString(step))
+    }
+    package static func repeatUntil(_ step: RepeatUntilStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.repeatUntil(step))
+    }
+    package static func warn(_ step: WarnStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.warn(step))
+    }
+    package static func fail(_ step: FailStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.fail(step))
+    }
+    package static func heist(_ plan: HeistPlanAdmissionCandidate) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.heist(plan))
+    }
+    package static func invoke(_ step: HeistInvocationStep) -> Self {
+        Self(HeistStepWirePayload<HeistPlanAdmissionCandidate>.invoke(step))
+    }
 
     var runtimeSafetyStep: HeistStep {
         switch payload {
