@@ -84,6 +84,13 @@ let customRules = CustomRuleSet {
         visitor.walk(file.syntax)
         return visitor.failures
     }
+
+    CustomSyntaxRule("buttonheist.insidejob_architectural_shape", severity: .error) { file in
+        guard file.path.rawValue.hasPrefix(insideJobSourcePrefix) else { return [] }
+        let visitor = InsideJobArchitecturalShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+        return visitor.failures
+    }
 }
 
 private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
@@ -613,6 +620,116 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 }
 
+private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
+    private let file: SourceFileContext
+    private(set) var failures: [CustomRuleFailure] = []
+
+    init(file: SourceFileContext, viewMode: SyntaxTreeViewMode) {
+        self.file = file
+        super.init(viewMode: viewMode)
+    }
+
+    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        for binding in node.bindings {
+            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
+            recordForbiddenReference(node: identifier, observed: identifier.identifier.text)
+        }
+        return .visitChildren
+    }
+
+    override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.name.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.baseName.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        recordForbiddenReference(node: node, observed: node.declName.baseName.text)
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        let callShape = node.calledExpression.trimmedDescription
+        guard interfaceObservationTestingCallShapes.contains(callShape),
+              enclosingFunctionName(of: node)?.hasSuffix("ForTesting") != true else {
+            return .visitChildren
+        }
+
+        recordFailure(
+            at: node.calledExpression,
+            observed: "InterfaceObservationProof.testing",
+            expectation: """
+            InterfaceObservationProof.testing calls stay inside explicit \
+            ForTesting fixture methods
+            """
+        )
+        return .visitChildren
+    }
+
+    private func recordForbiddenReference(node: some SyntaxProtocol, observed: String) {
+        guard forbiddenInsideJobArchitectureSymbols.contains(observed) else { return }
+        recordFailure(
+            at: node,
+            observed: observed,
+            expectation: """
+            reveal retries await settled visible observations, refresh live \
+            capture, and resolve before the action deadline
+            """
+        )
+    }
+
+    private func recordFailure(
+        at node: some SyntaxProtocol,
+        observed: String,
+        expectation: String
+    ) {
+        failures.append(file.failure(
+            at: node,
+            message: "forbidden InsideJob architectural source shape",
+            evidence: ViolationEvidence(observed: observed, expectation: expectation)
+        ))
+    }
+}
+
 private struct PipelineConstructionOwnership {
     let symbol: String
     let allowedPaths: Set<String>
@@ -883,6 +1000,19 @@ private let anyBoundaryAllowedPaths: Set<String> = [
 
 private let insideJobSourcePrefix = "ButtonHeist/Sources/TheInsideJob/"
 
+private let forbiddenInsideJobArchitectureSymbols: Set<String> = [
+    "RevealPathGraceMachine",
+    "refreshCurrentVisibleTree",
+    "refreshTreeAfterViewportMove",
+    "revealPathGraceTimeout",
+    "revealPathSilentReparseInterval",
+]
+
+private let interfaceObservationTestingCallShapes: Set<String> = [
+    ".testing",
+    "InterfaceObservationProof.testing",
+]
+
 private let jsonBoundarySymbols: Set<String> = [
     "JSONDecoder",
     "JSONEncoder",
@@ -990,6 +1120,17 @@ private func isTopLevel(_ node: some SyntaxProtocol) -> Bool {
         ancestor = current.parent
     }
     return false
+}
+
+private func enclosingFunctionName(of node: some SyntaxProtocol) -> String? {
+    var ancestor = Syntax(node).parent
+    while let current = ancestor {
+        if let function = current.as(FunctionDeclSyntax.self) {
+            return function.name.text
+        }
+        ancestor = current.parent
+    }
+    return nil
 }
 
 private func isTopLevelOrFirstLevelMember(_ node: some SyntaxProtocol) -> Bool {
