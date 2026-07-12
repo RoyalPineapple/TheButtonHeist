@@ -18,10 +18,10 @@ final class GesturePayloadDecodingTests: XCTestCase {
         )
 
         guard case .swipe(let target) = message,
-              case .elementDirection(let elementTarget, let direction) = target.selection else {
+              case .elementDirection(let target, let direction) = target.selection else {
             return XCTFail("Expected elementDirection swipe payload, got \(message)")
         }
-        XCTAssertEqual(elementTarget, .predicate(ElementPredicate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
         XCTAssertEqual(direction, .left)
     }
 
@@ -39,10 +39,10 @@ final class GesturePayloadDecodingTests: XCTestCase {
         )
 
         guard case .swipe(let target) = message,
-              case .unitElement(let elementTarget, let start, let end) = target.selection else {
+              case .unitElement(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementUnitPoints swipe payload, got \(message)")
         }
-        XCTAssertEqual(elementTarget, .predicate(ElementPredicate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
         XCTAssertEqual(start, UnitPoint(x: 0.8, y: 0.5))
         XCTAssertEqual(end, UnitPoint(x: 0.2, y: 0.5))
     }
@@ -127,10 +127,10 @@ final class GesturePayloadDecodingTests: XCTestCase {
         )
 
         guard case .drag(let target) = message,
-              case .elementToPoint(let elementTarget, let start, let end) = target.selection else {
+              case .elementToPoint(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementToPoint drag payload, got \(message)")
         }
-        XCTAssertEqual(elementTarget, .predicate(ElementPredicate(identifier: "source")))
+        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "source")))
         XCTAssertEqual(start, UnitPoint(x: 0.5, y: 0.5))
         XCTAssertEqual(end, ScreenPoint(x: 100, y: 200))
     }

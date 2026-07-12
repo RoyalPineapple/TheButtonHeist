@@ -9,7 +9,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     HeistRepairSuggestion(
         stepPath: "$.body[0]",
         failureKind: .missingTarget,
-        oldTarget: .predicate(ElementPredicate(label: "Delete")),
+        oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
         oldResolvedElement: ElementSummary(
             description: "Delete",
             label: "Delete",
@@ -22,7 +22,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             siblingText: ["Milk"],
             headerText: []
         ),
-        newTarget: .predicate(ElementPredicate(label: "Remove")),
+        newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
         newResolvedElement: ElementSummary(
             description: "Remove",
             label: "Remove",
@@ -133,10 +133,29 @@ private let expectedRepairJSONReportJSON = """
 """
 
 @Suite struct HeistRepairSuggesterTests {
+    @Test func `container-only targets are refused without element coercion`() {
+        let target = AccessibilityTarget.container(.label("Checkout"))
+        let interface = makeTestInterface(elements: [
+            element(label: "Checkout", traits: [.button], actions: [.activate]),
+        ])
+        let request = request(
+            passedEvidence(target: target, before: interface),
+            failedEvidence(target: target, before: interface)
+        )
+
+        guard case .refused(let diagnosis) = HeistRepairSuggester.diagnosis(for: request) else {
+            Issue.record("Expected container-only target refusal")
+            return
+        }
+
+        #expect(diagnosis.refusal.stage == .evidenceEligibility)
+        #expect(diagnosis.refusal.reason == .containerTargetUnsupported)
+        #expect(diagnosis.refusal.message == "container-only targets are not repairable as accessibility elements")
+    }
 
     @Test("Last success must resolve exactly once")
     func lastSuccessMustResolveExactlyOnce() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -156,7 +175,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Last success missing target returns no suggestion")
     func lastSuccessMissingTargetReturnsNoSuggestion() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -175,7 +194,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Evidence must belong to the same failing step")
     func evidenceMustBelongToTheSameFailingStep() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             stepPath: "$.steps[0]",
             target: target,
@@ -196,7 +215,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Incompatible heist fingerprints return no suggestion")
     func incompatibleHeistFingerprintsReturnNoSuggestion() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             heistFingerprint: "last-plan",
             target: target,
@@ -217,7 +236,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Current target that still resolves needs no target repair")
     func currentTargetThatStillResolvesNeedsNoTargetRepair() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let before = listInterface(rows: [
             ("Milk", "Delete"),
         ])
@@ -236,7 +255,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("No suggestion reason reports no target repair needed")
     func noSuggestionReasonReportsNoTargetRepairNeeded() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let before = listInterface(rows: [
             ("Milk", "Delete"),
         ])
@@ -256,7 +275,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("No suggestion reason reports missing target without a safe successor")
     func noSuggestionReasonReportsMissingTargetWithoutASafeSuccessor() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -279,17 +298,17 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Missing target suggests renamed equivalent using row context")
     func missingTargetSuggestsRenamedEquivalentUsingRowContext() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
                 ("Milk", "Delete"),
                 ("Bread", "Archive"),
             ]),
-            afterDelta: .elementsChanged(AccessibilityTrace.ElementsChanged(
-                elementCount: 1,
-                edits: ElementEdits(removed: [element(label: "Milk", traits: [.staticText])])
-            ))
+            changeFacts: changeFacts(
+                before: makeTestInterface(elements: [element(label: "Milk", traits: [.staticText])]),
+                after: makeTestInterface(elements: [])
+            )
         )
         let current = failedEvidence(
             target: target,
@@ -302,7 +321,7 @@ private let expectedRepairJSONReportJSON = """
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
         #expect(suggestion.newResolvedElement.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .medium)
@@ -310,7 +329,7 @@ private let expectedRepairJSONReportJSON = """
     }
 
     @Test func `diagnosis exposes validated suggestion pipeline`() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -336,7 +355,7 @@ private let expectedRepairJSONReportJSON = """
 
         #expect(diagnosis.failureKind == .missingTarget)
         #expect(diagnosis.currentMatchCount == 0)
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
         #expect(candidate.source == .semanticContinuityScan)
         #expect(candidate.validation == .suggested(target: suggestion.newTarget, confidence: suggestion.confidence))
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)) == diagnosis.suggestions)
@@ -344,7 +363,7 @@ private let expectedRepairJSONReportJSON = """
     }
 
     @Test func `diagnosis exposes typed candidate ranking refusal`() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -378,7 +397,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Missing target chooses renamed duplicate by neighbor context")
     func missingTargetChoosesRenamedDuplicateByNeighborContext() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -404,7 +423,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Missing target does not guess from the only compatible role")
     func missingTargetDoesNotGuessFromTheOnlyCompatibleRole() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -423,7 +442,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Missing target does not use traversal ordinal without matching neighbors")
     func missingTargetDoesNotUseTraversalOrdinalWithoutMatchingNeighbors() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -443,7 +462,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Missing target prefers contained label rename over broad screen context")
     func missingTargetPrefersContainedLabelRenameOverBroadScreenContext() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Checkout"))
         let last = passedEvidence(
             target: target,
             before: broadMenuInterface(primaryAction: "Checkout")
@@ -455,14 +474,14 @@ private let expectedRepairJSONReportJSON = """
 
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Go to Checkout")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Go to Checkout")))
         #expect(suggestion.newResolvedElement.label == "Go to Checkout")
         #expect(suggestion.reasons.contains(.scoring(.labelSemanticRename)))
     }
 
     @Test("Missing target rejects broad screen context without semantic successor")
     func missingTargetRejectsBroadScreenContextWithoutSemanticSuccessor() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Checkout"))
         let last = passedEvidence(
             target: target,
             before: broadMenuInterface(primaryAction: "Checkout")
@@ -477,7 +496,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
     func ambiguousDuplicateLabelsProduceMinimumDisambiguatingMatcher() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -498,7 +517,7 @@ private let expectedRepairJSONReportJSON = """
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
         #expect(suggestion.failureKind == .ambiguousTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]), ordinal: 0))
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .low)
         #expect(suggestion.caveats.contains(.ordinalDisambiguation))
@@ -508,7 +527,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Wrong action capability blocks unsupported suggestions")
     func wrongActionCapabilityBlocksUnsupportedSuggestions() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
         let last = passedEvidence(
             actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
@@ -529,7 +548,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Wrong action capability can suggest a compatible successor with lowered confidence")
     func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
         let last = passedEvidence(
             actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
@@ -549,7 +568,7 @@ private let expectedRepairJSONReportJSON = """
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
         #expect(suggestion.failureKind == .wrongCapability)
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Quantity stepper")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Quantity stepper")))
         #expect(suggestion.confidence == .low)
         #expect(suggestion.reasons.contains(.scoring(.elementSupportsSameActionFamily)))
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
@@ -557,7 +576,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Suggested payload excludes geometry and runtime identifiers")
     func suggestedPayloadExcludesGeometryAndRuntimeIdentifiers() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let runtimeIdentifier = "view-A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
         let last = passedEvidence(
             target: target,
@@ -648,7 +667,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Candidate scoring rejects compatible-only successors without continuity")
     func candidateScoringRejectsCompatibleOnlySuccessorsWithoutContinuity() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
@@ -669,7 +688,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Candidate generation preserves tied best score order")
     func candidateGenerationPreservesTiedBestScoreOrder() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
@@ -695,24 +714,21 @@ private let expectedRepairJSONReportJSON = """
         #expect(tiedBest.allSatisfy { $0.reasons.contains(.siblingRowContextPreserved) })
     }
 
-    @Test("After diff explains value changes without requiring full after snapshot")
-    func afterDiffExplainsValueChangesWithoutRequiringFullAfterSnapshot() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
+    @Test("Ordered change facts explain value changes without requiring full after snapshot")
+    func changeFactsExplainValueChangesWithoutRequiringFullAfterSnapshot() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
         let changed = element(label: "Quantity", value: "2", traits: [.staticText])
         let last = passedEvidence(
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.button], actions: [.activate]),
             ]),
-            afterDelta: .elementsChanged(AccessibilityTrace.ElementsChanged(
-                elementCount: 1,
-                edits: ElementEdits(updated: [
-                    ElementUpdate(before: element(label: "Quantity", value: "1", traits: [.button]), after: changed, changes: [
-                        .value(old: "1", new: "2"),
-                    ]),
-                ])
-            )),
-            afterSnapshot: nil,
+            changeFacts: changeFacts(
+                before: makeTestInterface(elements: [
+                    element(label: "Quantity", value: "1", traits: [.button]),
+                ]),
+                after: makeTestInterface(elements: [changed])
+            ),
             expectation: ExpectationResult(met: true, predicate: nil)
         )
         let current = failedEvidence(
@@ -720,53 +736,82 @@ private let expectedRepairJSONReportJSON = """
             before: makeTestInterface(elements: [
                 element(label: "Amount", value: "1", traits: [.button], actions: [.activate]),
             ]),
-            afterDelta: .noChange(AccessibilityTrace.NoChange(elementCount: 1)),
-            afterSnapshot: nil,
+            changeFacts: [],
             expectation: ExpectationResult(met: false, predicate: nil, actual: "Quantity stayed 1")
         )
 
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Amount")))
-        #expect(suggestion.reasons.contains(.afterDiff(.lastSuccess, .valueChange(old: "1", new: "2"))))
-        #expect(suggestion.reasons.contains(.afterDiff(.currentFailure, .noSemanticChange)))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Amount")))
+        #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .valueChange(old: "1", new: "2"))))
+        #expect(suggestion.reasons.contains(.changeFact(.currentFailure, .noSemanticChange)))
         #expect(suggestion.reasons.contains(.lastSuccessfulExpectationMet))
         #expect(suggestion.reasons.contains(.currentFailureExpectationUnmet))
         #expect(suggestion.caveats.isEmpty)
     }
 
-    @Test("Full after snapshot is optional escalation when compact diff is absent")
-    func fullAfterSnapshotIsOptionalEscalationWhenCompactDiffIsAbsent() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
-        let afterSnapshot = makeTestInterface(elements: [
-            element(label: "Done", traits: [.staticText]),
+    @Test("Screen-boundary repair reasons preserve canonical fact order")
+    func screenBoundaryRepairReasonsPreserveCanonicalFactOrder() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        let oldScreen = makeTestInterface(elements: [
+            element(label: "Delete", traits: [.button], actions: [.activate]),
         ])
+        let newScreen = makeTestInterface(elements: [
+            element(label: "Remove", traits: [.button], actions: [.activate]),
+        ])
+        let last = passedEvidence(
+            target: target,
+            before: oldScreen,
+            changeFacts: changeFacts(
+                before: oldScreen,
+                after: newScreen,
+                beforeScreenId: "cart",
+                afterScreenId: "checkout"
+            )
+        )
+        let current = failedEvidence(target: target, before: newScreen)
+
+        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let factReasons = suggestion.reasons.compactMap { reason -> RepairChangeFactObservation? in
+            guard case .changeFact(.lastSuccess, let observation) = reason else { return nil }
+            return observation
+        }
+
+        #expect(factReasons == [
+            .semanticElementsRemoved,
+            .screenChange,
+            .semanticElementsAdded,
+        ])
+    }
+
+    @Test("Empty change facts mean no semantic change")
+    func emptyChangeFactsMeanNoSemanticChange() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
             target: target,
             before: listInterface(rows: [
                 ("Milk", "Delete"),
             ]),
-            afterDelta: nil,
-            afterSnapshot: afterSnapshot
+            changeFacts: []
         )
         let current = failedEvidence(
             target: target,
             before: listInterface(rows: [
                 ("Milk", "Remove"),
             ]),
-            afterDelta: nil,
-            afterSnapshot: nil
+            changeFacts: []
         )
 
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
-        #expect(suggestion.caveats.contains(.lastSuccessfulFullAfterSnapshotFallback))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
+        #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .noSemanticChange)))
+        #expect(suggestion.caveats.isEmpty)
     }
 
     @Test("Doctor derives suggestions from receipt pair")
     func doctorDerivesSuggestionsFromReceiptPair() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let lastPass = receipt(
             path: "$.body[0]",
             status: .passed,
@@ -797,12 +842,12 @@ private let expectedRepairJSONReportJSON = """
 
         #expect(suggestion.stepPath == "$.body[0]")
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
+        #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
     }
 
     @Test func `doctor repair evidence uses action evidence result meanings`() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Pay"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Pay"))
         let before = makeTestInterface(elements: [
             element(label: "Pay", traits: [.button], actions: [.activate]),
         ])
@@ -814,7 +859,7 @@ private let expectedRepairJSONReportJSON = """
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
         let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
-        let predicate = AccessibilityPredicate.change(.screenChanged)
+        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",
@@ -825,9 +870,9 @@ private let expectedRepairJSONReportJSON = """
             path: "$.body[0]",
             receiptKind: .action,
             durationMs: 1,
-            intent: .action(command: .activate(.target(target))),
+            intent: .action(command: .activate(target)),
             evidence: .expectation(
-                command: .activate(.target(target)),
+                command: .activate(target),
                 dispatchResult: ActionResult.success(method: .activate, accessibilityTrace: dispatchTrace),
                 expectationResult: ActionResult.failure(
                     method: .wait,
@@ -847,7 +892,7 @@ private let expectedRepairJSONReportJSON = """
         let repairEvidence = try HeistDoctor.failedRepairEvidence(from: step)
 
         #expect(repairEvidence.beforeSnapshot == before)
-        #expect(repairEvidence.afterSnapshot == dispatchAfter)
+        #expect(repairEvidence.changeFacts == dispatchTrace.changeFacts)
         #expect(repairEvidence.result.method == .activate)
         #expect(repairEvidence.result.errorKind == .timeout)
         #expect(repairEvidence.result.message == "timed out waiting for checkout")
@@ -856,7 +901,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Doctor returns an error when no safe successor exists")
     func doctorReturnsErrorWhenNoSafeSuccessorExists() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let lastPass = receipt(
             path: "$.body[0]",
             status: .passed,
@@ -885,7 +930,7 @@ private let expectedRepairJSONReportJSON = """
     }
 
     @Test func `doctor diagnosis returns typed refusal for valid receipt pair`() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let lastPass = receipt(
             path: "$.body[0]",
             status: .passed,
@@ -921,7 +966,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Doctor returns an error when no target repair is needed")
     func doctorReturnsErrorWhenNoTargetRepairIsNeeded() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let before = listInterface(rows: [
             ("Milk", "Delete"),
         ])
@@ -950,7 +995,7 @@ private let expectedRepairJSONReportJSON = """
 
     @Test("Doctor suggestions do not mutate receipts")
     func doctorSuggestionsDoNotMutateReceipts() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let lastPass = receipt(
             path: "$.body[0]",
             status: .passed,
@@ -1039,10 +1084,9 @@ private let expectedRepairJSONReportJSON = """
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
         actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
-        target: ElementTarget,
+        target: AccessibilityTarget,
         before: Interface,
-        afterDelta: AccessibilityTrace.Delta? = nil,
-        afterSnapshot: Interface? = nil,
+        changeFacts: [AccessibilityTrace.ChangeFact] = [],
         expectation: ExpectationResult? = nil
     ) -> HeistPassedStepRepairEvidence {
         HeistPassedStepRepairEvidence(
@@ -1051,8 +1095,7 @@ private let expectedRepairJSONReportJSON = """
             actionIdentity: actionIdentity,
             target: target,
             beforeSnapshot: before,
-            afterDelta: afterDelta,
-            afterSnapshot: afterSnapshot,
+            changeFacts: changeFacts,
             result: RepairPassEvidence(
                 method: method(for: actionIdentity),
                 expectation: expectation
@@ -1064,10 +1107,9 @@ private let expectedRepairJSONReportJSON = """
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
         actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
-        target: ElementTarget,
+        target: AccessibilityTarget,
         before: Interface,
-        afterDelta: AccessibilityTrace.Delta? = nil,
-        afterSnapshot: Interface? = nil,
+        changeFacts: [AccessibilityTrace.ChangeFact] = [],
         expectation: ExpectationResult? = nil
     ) -> HeistFailedStepRepairEvidence {
         HeistFailedStepRepairEvidence(
@@ -1076,14 +1118,28 @@ private let expectedRepairJSONReportJSON = """
             actionIdentity: actionIdentity,
             target: target,
             beforeSnapshot: before,
-            afterDelta: afterDelta,
-            afterSnapshot: afterSnapshot,
+            changeFacts: changeFacts,
             result: RepairFailureEvidence(
                 method: method(for: actionIdentity),
                 errorKind: .elementNotFound,
                 expectation: expectation
             )
         )
+    }
+
+    private func changeFacts(
+        before: Interface,
+        after: Interface,
+        beforeScreenId: String? = nil,
+        afterScreenId: String? = nil
+    ) -> [AccessibilityTrace.ChangeFact] {
+        AccessibilityTrace(capture: AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: before,
+            context: AccessibilityTrace.Context(screenId: beforeScreenId)
+        ))
+        .appending(after, context: AccessibilityTrace.Context(screenId: afterScreenId))
+        .changeFacts
     }
 
     private func method(for actionIdentity: HeistRepairActionIdentity) -> ActionMethod? {
@@ -1131,16 +1187,17 @@ private let expectedRepairJSONReportJSON = """
         return makeTestInterface(elements: elements)
     }
 
-    private func resolvedCount(_ target: ElementTarget, in interface: Interface) -> Int {
+    private func resolvedCount(_ target: AccessibilityTarget, in interface: Interface) -> Int {
         let elements = interface.projectedElements
         switch target {
         case .predicate(let predicate, let ordinal):
+            guard let predicate = try? predicate.resolve(in: .empty) else { return 0 }
             let matches = elements.filter { $0.matches(predicate) }
             if let ordinal {
                 return matches.indices.contains(ordinal) ? 1 : 0
             }
             return matches.count
-        case .within:
+        case .container, .ref, .within:
             return 0
         }
     }
@@ -1148,7 +1205,7 @@ private let expectedRepairJSONReportJSON = """
     private func receipt(
         path: String,
         status: HeistExecutionStepStatus,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         before: Interface,
         after: Interface?,
         actionSucceeded: Bool
@@ -1170,7 +1227,7 @@ private let expectedRepairJSONReportJSON = """
             )
         }
         let evidence = HeistActionEvidence.dispatch(
-            command: .activate(.target(target)),
+            command: .activate(target),
             dispatchResult: actionResult
         )
         let step = status == .failed
@@ -1178,7 +1235,7 @@ private let expectedRepairJSONReportJSON = """
                 path: path,
                 receiptKind: .action,
                 durationMs: 1,
-                intent: .action(command: .activate(.target(target))),
+                intent: .action(command: .activate(target)),
                 evidence: evidence,
                 failure: HeistFailureDetail(
                     category: .targetResolution,
@@ -1191,7 +1248,7 @@ private let expectedRepairJSONReportJSON = """
                 path: path,
                 receiptKind: .action,
                 durationMs: 1,
-                intent: .action(command: .activate(.target(target))),
+                intent: .action(command: .activate(target)),
                 evidence: evidence
         )
         return HeistExecutionResult(

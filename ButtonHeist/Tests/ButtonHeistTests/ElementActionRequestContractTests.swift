@@ -4,106 +4,111 @@ import TheScore
 
 final class ElementActionRequestContractTests: XCTestCase {
 
-    func testElementTargetFenceSchemaFollowsCanonicalMetadata() throws {
+    func testAccessibilityTargetFenceSchemaUsesCanonicalFields() throws {
         let targetSpec = try XCTUnwrap(
             TheFence.Command.activate.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue }
         )
-        let schemaFields = ElementTarget.inlineSchemaFields
-
-        XCTAssertEqual(targetSpec.objectProperties.map(\.key), schemaFields.map(\.name))
-
         let specsByKey = Dictionary(uniqueKeysWithValues: targetSpec.objectProperties.map { ($0.key, $0) })
-        for field in schemaFields {
-            let spec = try XCTUnwrap(specsByKey[field.name])
-            switch field.kind {
-            case .predicateChecks:
-                XCTAssertEqual(spec.type, .array)
-                assertPredicateChecksSchema(spec, file: #filePath, line: #line)
-            case .string:
-                XCTAssertEqual(spec.type, .string)
-            case .stringMatch:
-                XCTAssertEqual(spec.type, .stringMatch)
-                assertStringMatchObjectSchema(spec, file: #filePath, line: #line)
-            case .stringArray:
-                XCTAssertEqual(spec.type, .stringArray)
-            case .stringMatchArray:
-                XCTAssertEqual(spec.type, .array)
-                assertArraySchema(spec, file: #filePath, line: #line)
-            case .actionArray:
-                XCTAssertEqual(spec.type, .array)
-                assertArraySchema(spec, file: #filePath, line: #line)
-            case .customContentMatch:
-                XCTAssertEqual(spec.type, .object)
-            case .nonNegativeInteger:
-                XCTAssertEqual(spec.type, .integer)
-                XCTAssertEqual(projectedJSONSchemaProperty("minimum", in: spec), .int(0))
-            case .containerPredicate:
-                XCTAssertEqual(spec.type, .object)
-                assertContainerPredicateSchema(spec, file: #filePath, line: #line)
-            case .nestedElementTarget:
-                XCTAssertEqual(spec.type, .object)
-                XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: spec), .bool(false))
-            }
+        XCTAssertEqual(targetSpec.objectProperties.map(\.key), AccessibilityTarget.inlineFieldNames)
+        assertPredicateChecksSchema(try XCTUnwrap(specsByKey["checks"]), file: #filePath, line: #line)
+        XCTAssertEqual(try XCTUnwrap(specsByKey["ref"]).type, .string)
+        XCTAssertEqual(try XCTUnwrap(specsByKey["ordinal"]).type, .integer)
+        XCTAssertEqual(projectedJSONSchemaProperty("minimum", in: try XCTUnwrap(specsByKey["ordinal"])), .int(0))
+        assertContainerPredicateSchema(try XCTUnwrap(specsByKey["container"]), file: #filePath, line: #line)
+        XCTAssertEqual(try XCTUnwrap(specsByKey["target"]).type, .object)
+    }
+
+    func testAccessibilityTargetFenceSchemaExpandsToPublicInputDepthLimit() throws {
+        let targetSpec = try XCTUnwrap(
+            TheFence.Command.activate.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue }
+        )
+        let terminalFieldNames = AccessibilityTarget.inlineFieldNames.filter {
+            $0 != FenceParameterKey.target.rawValue
+        }
+        let terminalSpec = try (1..<accessibilityTargetSchemaMaximumNestingDepth).reduce(targetSpec) { currentSpec, depth in
+            XCTAssertEqual(
+                currentSpec.objectProperties.map(\.key),
+                AccessibilityTarget.inlineFieldNames,
+                "depth \(depth)"
+            )
+            return try XCTUnwrap(
+                currentSpec.objectProperties.first { $0.key == FenceParameterKey.target.rawValue },
+                "depth \(depth)"
+            )
+        }
+
+        XCTAssertEqual(terminalSpec.objectProperties.map(\.key), terminalFieldNames)
+        XCTAssertFalse(terminalSpec.objectProperties.contains { $0.key == FenceParameterKey.target.rawValue })
+    }
+
+    func testRotorAndScrollSchemasNestCanonicalAccessibilityTarget() throws {
+        for command in [
+            TheFence.Command.rotor,
+            .scroll,
+            .scrollToVisible,
+            .scrollToEdge,
+        ] {
+            let target = try XCTUnwrap(
+                command.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue },
+                command.rawValue
+            )
+            XCTAssertEqual(target.objectProperties.map(\.key), AccessibilityTarget.inlineFieldNames, command.rawValue)
+            XCTAssertFalse(command.descriptor.parameters.contains { $0.key == "checks" }, command.rawValue)
         }
     }
 
-    func testNestedElementTargetFenceSchemaFollowsCanonicalMetadata() throws {
-        let targetSpec = try XCTUnwrap(
-            TheFence.Command.activate.descriptor.parameters.first { $0.key == FenceParameterKey.target.rawValue }
-        )
-        let nestedTargetSpec = try XCTUnwrap(
-            targetSpec.objectProperties.first { $0.key == FenceParameterKey.target.rawValue }
-        )
-
-        XCTAssertEqual(nestedTargetSpec.objectProperties.map(\.key), ElementTarget.inlineFieldNames)
-
-        let secondLevelTargetSpec = try XCTUnwrap(
-            nestedTargetSpec.objectProperties.first { $0.key == FenceParameterKey.target.rawValue }
-        )
-        XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: secondLevelTargetSpec), .bool(true))
+    @ButtonHeistActor
+    func testRotorAndScrollCommandsRejectFlatTargetFields() async {
+        for command in [
+            TheFence.Command.rotor,
+            .scroll,
+            .scrollToVisible,
+            .scrollToEdge,
+        ] {
+            await assertExecutionError(
+                command: command,
+                arguments: [
+                    "checks": .array([
+                        .object([
+                            "kind": .string("identifier"),
+                            "match": .object([
+                                "mode": .string("exact"),
+                                "value": .string("scroll_target"),
+                            ]),
+                        ]),
+                    ]),
+                ],
+                contains: "valid \(command.rawValue) parameter"
+            )
+        }
     }
 
     func testAccessibilityPredicateFenceSchemaUsesCanonicalDiscriminators() throws {
         let waitDescriptor = TheFence.Command.wait.descriptor
         let predicateSpec = try XCTUnwrap(waitDescriptor.parameters.first { $0.key == FenceParameterKey.predicate.rawValue })
         let predicateType = try XCTUnwrap(predicateSpec.objectProperties.first { $0.key == FenceParameterKey.type.rawValue })
-        XCTAssertEqual(predicateType.enumValues, AccessibilityPredicateContract.PredicateWireType.values)
-
-        let stateProperties = try arrayItemProperties(
-            named: .states,
+        XCTAssertEqual(predicateType.enumValues, ["exists", "missing", "announcement", "changed", "no_change"])
+        XCTAssertEqual(predicateSpec.objectProperties.map(\.key), ["type", "target", "match", "scope", "assertions"])
+        let scope = try XCTUnwrap(predicateSpec.objectProperties.first { $0.key == FenceParameterKey.scope.rawValue })
+        XCTAssertEqual(scope.enumValues, ["screen", "elements"])
+        let assertionProperties = try arrayItemProperties(
+            named: .assertions,
             in: predicateSpec,
             file: #filePath,
             line: #line
         )
-        let stateType = try XCTUnwrap(stateProperties.first { $0.key == FenceParameterKey.type.rawValue })
-        XCTAssertEqual(stateType.enumValues, AccessibilityPredicateContract.StateWireType.values)
-
-        let scopeProperties = try arrayItemProperties(
-            named: .scopes,
-            in: predicateSpec,
-            file: #filePath,
-            line: #line
-        )
-        let scopeType = try XCTUnwrap(scopeProperties.first { $0.key == FenceParameterKey.type.rawValue })
-        XCTAssertEqual(scopeType.enumValues, AccessibilityPredicateContract.ChangeScopeWireType.values)
-
-        let assertionsSpec = try XCTUnwrap(scopeProperties.first { $0.key == FenceParameterKey.assertions.rawValue })
-        let assertionProperties = assertionsSpec.arrayItemProperties
         let assertionType = try XCTUnwrap(assertionProperties.first { $0.key == FenceParameterKey.type.rawValue })
-        XCTAssertEqual(
-            assertionType.enumValues,
-            AccessibilityPredicateContract.StateWireType.values + canonicalElementDeltaPredicateTypeValues()
-        )
+        XCTAssertEqual(assertionType.enumValues, ["exists", "missing", "appeared", "disappeared", "updated"])
     }
 
     func testHeistValuePayloadEncoderBridgesEncodableContracts() throws {
-        let value = try TheFence.HeistValuePayloadEncoder.encode(AccessibilityPredicate.state(.exists(.label("Pay"))))
+        let value = try TheFence.HeistValuePayloadEncoder.encode(AccessibilityPredicate<RootContext>.exists(.label("Pay")))
 
         guard case .object(let object) = value else {
             return XCTFail("Expected object bridge output")
         }
-        XCTAssertEqual(object["type"], .string(AccessibilityPredicateContract.StateWireType.exists.rawValue))
-        XCTAssertNotNil(object["element"])
+        XCTAssertEqual(object["type"], .string("exists"))
+        XCTAssertNotNil(object["target"])
     }
 
     func testNormalParametersNamedLikeCustomPayloadsStillUseSchemaValidation() throws {
@@ -167,7 +172,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         await assertExecutionError(
             command: .activate,
             arguments: ["target": .object(["containerName": .string("main_scroll")])],
-            contains: "Unknown element target field \"containerName\""
+            contains: "Unknown accessibility target field \"containerName\""
         )
     }
 
@@ -189,7 +194,7 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceRejectsArrayItemUnknownPropertyThroughTypedSchema() async {
+    func testGetInterfaceRejectsLegacyTopLevelChecks() async {
         await assertExecutionError(
             command: .getInterface,
             arguments: [
@@ -200,7 +205,7 @@ final class ElementActionRequestContractTests: XCTestCase {
                     ]),
                 ]),
             ],
-            contains: "schema validation failed for checks[0].extra"
+            contains: "schema validation failed for checks"
         )
     }
 
@@ -373,14 +378,6 @@ private func arrayItemProperties(
         line: line
     )
     return child.arrayItemProperties
-}
-
-private func canonicalElementDeltaPredicateTypeValues() -> [String] {
-    [
-        ElementDeltaPredicate.appearedElement(.label("sample")),
-        ElementDeltaPredicate.disappearedElement(.label("sample")),
-        ElementDeltaPredicate.updatedElement(.any),
-    ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.type.rawValue) }
 }
 
 private func canonicalSemanticContainerPredicateKindValues() -> [String] {

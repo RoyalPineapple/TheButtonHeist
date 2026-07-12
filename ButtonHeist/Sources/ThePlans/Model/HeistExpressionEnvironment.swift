@@ -97,18 +97,18 @@ extension HeistReferenceName {
 public struct HeistExecutionEnvironment: Sendable, Equatable {
     public static let empty = HeistExecutionEnvironment()
 
-    public let targets: [HeistReferenceName: ElementTarget]
+    public let targets: [HeistReferenceName: AccessibilityTarget]
     public let strings: [HeistReferenceName: String]
 
     public init(
-        targets: [HeistReferenceName: ElementTarget] = [:],
+        targets: [HeistReferenceName: AccessibilityTarget] = [:],
         strings: [HeistReferenceName: String] = [:]
     ) {
         self.targets = targets
         self.strings = strings
     }
 
-    public func binding(target: ElementTarget, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
+    public func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
         var targets = self.targets
         targets[parameter] = target
         return HeistExecutionEnvironment(targets: targets, strings: strings)
@@ -131,11 +131,11 @@ struct HeistReferenceScope: Sendable, Equatable {
 struct HeistReferenceBinding: Sendable, Equatable {
     enum Value: Sendable, Equatable {
         case string(String)
-        case elementTarget(ElementTarget)
+        case accessibilityTarget(AccessibilityTarget)
     }
 
     static let runtimeSafetyStringPlaceholder = "__heist_parameter__"
-    static let runtimeSafetyElementTargetPlaceholder = ElementTarget.predicate(.identifier("__heist_parameter__"))
+    static let runtimeSafetyAccessibilityTargetPlaceholder = AccessibilityTarget.predicate(.identifier("__heist_parameter__"))
 
     let reference: HeistReferenceName
     let value: Value
@@ -146,8 +146,11 @@ struct HeistReferenceBinding: Sendable, Equatable {
             return nil
         case .string(let name):
             return HeistReferenceBinding(reference: name, value: .string(runtimeSafetyStringPlaceholder))
-        case .elementTarget(let name):
-            return HeistReferenceBinding(reference: name, value: .elementTarget(runtimeSafetyElementTargetPlaceholder))
+        case .accessibilityTarget(let name):
+            return HeistReferenceBinding(
+                reference: name,
+                value: .accessibilityTarget(runtimeSafetyAccessibilityTargetPlaceholder)
+            )
         }
     }
 }
@@ -166,20 +169,20 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
             switch binding.value {
             case .string:
                 scope.stringRefs.insert(binding.reference)
-            case .elementTarget:
+            case .accessibilityTarget:
                 scope.targetRefs.insert(binding.reference)
             }
         }
     }
 
     var environment: HeistExecutionEnvironment {
-        var targets: [HeistReferenceName: ElementTarget] = [:]
+        var targets: [HeistReferenceName: AccessibilityTarget] = [:]
         var strings: [HeistReferenceName: String] = [:]
         for binding in bindings {
             switch binding.value {
             case .string(let value):
                 strings[binding.reference] = value
-            case .elementTarget(let target):
+            case .accessibilityTarget(let target):
                 targets[binding.reference] = target
             }
         }
@@ -205,8 +208,8 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
         return failures
     }
 
-    func binding(target: ElementTarget, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
-        binding(HeistReferenceBinding(reference: parameter, value: .elementTarget(target)))
+    func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
+        binding(HeistReferenceBinding(reference: parameter, value: .accessibilityTarget(target)))
     }
 
     func binding(string: String, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
@@ -227,7 +230,7 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
             return self
         case (.string(let name), .string(let value)):
             return binding(string: try value.resolve(in: environment), to: name)
-        case (.elementTarget(let name), .elementTarget(let target)):
+        case (.accessibilityTarget(let name), .accessibilityTarget(let target)):
             return binding(target: try target.resolve(in: environment), to: name)
         default:
             throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
@@ -291,7 +294,7 @@ public extension HeistExecutionEnvironment {
             return self
         case (.string(let name), .string(let value)):
             return binding(string: try value.resolve(in: self), to: name)
-        case (.elementTarget(let name), .elementTarget(let target)):
+        case (.accessibilityTarget(let name), .accessibilityTarget(let target)):
             return binding(target: try target.resolve(in: self), to: name)
         default:
             throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)

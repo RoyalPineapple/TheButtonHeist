@@ -112,6 +112,49 @@ import Testing
     }
 }
 
+@Test func `action command refs encode as accessibility targets`() throws {
+    let commands: [HeistActionCommand] = [
+        .activate(.ref("field")),
+        .increment(.ref("field")),
+        .decrement(.ref("field")),
+        .customAction(name: "Archive", target: .ref("field")),
+        .rotor(selection: .named("Links"), target: .ref("field"), direction: .next),
+        .typeText(text: .literal("milk"), target: .ref("field")),
+        .viewportScrollToVisible(.ref("field")),
+    ]
+
+    for command in commands {
+        let data = try JSONEncoder().encode(command)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try #require(object["payload"] as? [String: Any])
+        let target = try #require(payload["target"] as? [String: Any])
+
+        #expect(target["ref"] as? String == "field", "\(command.wireType)")
+    }
+}
+
+@Test func `runtime action payloads encode the target key`() throws {
+    func expectCanonicalTargetKey<Payload: Encodable>(_ payload: Payload, name: String) throws {
+        let data = try JSONEncoder().encode(payload)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["target"] != nil, "\(name)")
+    }
+
+    try expectCanonicalTargetKey(
+        CustomActionTarget(target: .ref("field"), actionName: "Archive"),
+        name: "custom action"
+    )
+    try expectCanonicalTargetKey(
+        RotorTarget(target: .ref("field"), selection: .named("Links")),
+        name: "rotor"
+    )
+    try expectCanonicalTargetKey(
+        TypeTextTarget(text: "milk", target: .ref("field")),
+        name: "type text"
+    )
+}
+
 @Test func `wait timeout contract matrix covers DSL expectations and runtime payloads`() throws {
     let waitCases: [(String, HeistPlan, WaitStep)] = [
         (
@@ -136,11 +179,11 @@ import Testing
             WaitStep(predicate: .exists(.label("Home")), timeout: 45)
         ),
         (
-            "expect default predicate",
+            "expect any element delta",
             try HeistPlan {
-                Activate(.label("Pay")).expect()
+                Activate(.label("Pay")).expect(.changed(.elements()))
             },
-            WaitStep(predicate: .change(), timeout: 1)
+            WaitStep(predicate: .changed(.elements()), timeout: 1)
         ),
         (
             "expect default timeout",
@@ -170,7 +213,7 @@ import Testing
         #expect(actualWait == expectedWait, "\(name)")
     }
 
-    let predicate = AccessibilityPredicate.exists(.label("Home"))
+    let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
     let waitTargetCases: [(String, WaitTarget, Double?, Double)] = [
         ("default runtime timeout", WaitTarget(predicate: predicate), nil, defaultWaitTimeout),
         ("explicit runtime timeout", WaitTarget(predicate: predicate, timeout: 12), 12, 12),
@@ -203,7 +246,7 @@ import Testing
         {
           "predicate": {
             "type": "exists",
-            "element": {
+            "target": {
               "checks": [
                 { "kind": "label", "match": { "mode": "exact", "value": "Home" } }
               ]
@@ -235,7 +278,7 @@ import Testing
     expectDataCorrupted("runtime action payload", contains: "custom action name must not be empty") {
         _ = try JSONDecoder().decode(CustomActionTarget.self, from: Data("""
         {
-          "elementTarget": {
+          "target": {
             "checks": [
               { "kind": "label", "match": { "mode": "exact", "value": "Message" } }
             ]
@@ -290,11 +333,12 @@ import Testing
       "type": "typeText",
       "payload": {
         "text_ref": "item",
-        "target_ref": "field"
+        "target": { "ref": "field" }
       }
     }
     """.utf8))
     #expect(referenced == .typeText(text: .ref("item"), target: .ref("field")))
+
 }
 
 private struct EncodedCommandType: Decodable {
@@ -305,14 +349,14 @@ private struct TargetOccurrenceExpectation: Equatable {
     let role: HeistActionCommandTargetOccurrence.Role
     let path: HeistActionCommandTargetOccurrence.Path
     let renderedPath: String
-    let reportTarget: ElementTarget?
+    let reportTarget: AccessibilityTarget?
 }
 
 private struct ActionCommandContractCase {
     let wireType: HeistActionCommandType
     let command: HeistActionCommand
     let durabilityFailure: String?
-    let reportTarget: ElementTarget?
+    let reportTarget: AccessibilityTarget?
     let canonicalLine: String?
 }
 

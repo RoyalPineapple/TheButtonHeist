@@ -160,7 +160,7 @@ enum RepairCandidateScorer {
         into score: inout CandidateScore
     ) {
         if context.afterEvidence.matchesIdentityText(of: element) {
-            score.add(5, reason: .afterDiffEvidenceMatchesElement, signal: .afterEvidence)
+            score.add(5, reason: .changeFactEvidenceMatchesElement, signal: .afterEvidence)
         }
         if context.expectationEvidence.matchesIdentityText(of: element) {
             score.add(

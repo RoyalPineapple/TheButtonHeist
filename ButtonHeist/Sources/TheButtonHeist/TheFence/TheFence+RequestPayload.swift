@@ -12,7 +12,11 @@ extension TheFence {
         ExpectationPayload
     ) throws -> DecodedRequestDispatch
 
-    struct MissingElementTarget: Error {
+    struct MissingAccessibilityTarget: Error {
+        let command: Command
+    }
+
+    struct ContainerTargetRequiresElement: Error, Sendable, Equatable {
         let command: Command
     }
 

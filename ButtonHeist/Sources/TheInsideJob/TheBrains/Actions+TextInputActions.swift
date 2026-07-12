@@ -62,18 +62,18 @@ extension Actions {
     // MARK: - Text Entry
 
     func executeTypeText(
-        _ target: TypeTextTarget
+        _ request: TypeTextTarget
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        guard target.replacingExisting || !target.text.isEmpty else {
+        guard request.replacingExisting || !request.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        let elementTarget = target.elementTarget
-        let focusResult = await focusTextInput(elementTarget)
+        let target = request.target
+        let focusResult = await focusTextInput(target)
         switch focusResult {
         case .alreadyFocused:
-            return await executeTypeText(target, using: nil)
+            return await executeTypeText(request, using: nil)
         case .focused(let input):
-            return await executeTypeText(target, using: input)
+            return await executeTypeText(request, using: input)
         case .failed(let failure):
             return failure
         }
@@ -112,7 +112,7 @@ extension Actions {
     }
 
     func typeTextPayload(
-        for target: TypeTextTarget,
+        for request: TypeTextTarget,
         resolvedElementId: HeistId?,
         in afterState: PostActionObservation.BeforeState
     ) -> ActionResultPayload? {
@@ -120,8 +120,8 @@ extension Actions {
            let value = afterState.screen.findElement(heistId: resolvedElementId)?.element.value {
             return .typeText(value)
         }
-        guard let elementTarget = target.elementTarget else { return nil }
-        return Self.textInputValue(for: elementTarget, in: afterState.interface.projectedElements)
+        guard let target = request.target else { return nil }
+        return Self.textInputValue(for: target, in: afterState.interface.projectedElements)
             .map(ActionResultPayload.typeText)
     }
 
@@ -152,9 +152,9 @@ extension Actions {
     }
 
     private func focusTextInput(
-        _ elementTarget: ElementTarget?
+        _ target: AccessibilityTarget?
     ) async -> TextInputFocusResult {
-        guard let elementTarget else {
+        guard let target else {
             guard safecracker.hasActiveTextInput() else {
                 return .failed(.failure(
                     .typeText,
@@ -162,7 +162,7 @@ extension Actions {
                         operation: "initial focus check",
                         stash: stash,
                         safecracker: safecracker,
-                        suggestion: "provide elementTarget for a text field or focus an editable field before typing"
+                        suggestion: "provide target for a text field or focus an editable field before typing"
                     )
                 ))
             }
@@ -171,7 +171,7 @@ extension Actions {
 
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
-            for: elementTarget,
+            for: target,
             method: .typeText,
             deallocatedBoundary: "text input focus"
         ) {
@@ -189,7 +189,7 @@ extension Actions {
     }
 
     private func activateTextInputTarget(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateAfterActivationRefresh(for: target) {
@@ -267,9 +267,10 @@ extension Actions {
         )
     }
 
-    private static func textInputValue(for target: ElementTarget, in elements: [HeistElement]) -> String? {
+    private static func textInputValue(for target: AccessibilityTarget, in elements: [HeistElement]) -> String? {
         switch target {
-        case .predicate(let predicate, let ordinal):
+        case .predicate(let template, let ordinal):
+            guard let predicate = try? template.resolve(in: .empty) else { return nil }
             let matches = ElementMatchGraph(elements: elements).resolve(predicate).elements
             if let ordinal {
                 guard matches.indices.contains(ordinal) else { return nil }
@@ -277,7 +278,7 @@ extension Actions {
             }
             guard matches.count == 1 else { return nil }
             return matches[0].value
-        case .within:
+        case .container, .ref, .within:
             return nil
         }
     }

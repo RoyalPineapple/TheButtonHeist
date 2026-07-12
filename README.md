@@ -18,7 +18,7 @@ Begin with a single action:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.appeared(.label("Payment Complete")))
+    .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 ```
 
 This is not "tap Pay." It is a contract:
@@ -83,13 +83,13 @@ Now add `Eggs`, turning the observations from `Milk` into expectations:
 
 ```swift
 TypeText("Eggs", into: .label("Search Items"))
-    .expect(.updated(.label("Search Items"), .value("Eggs")))
+    .expect(.changed(.elements([.updated(.label("Search Items"), .value("Eggs"))])))
 
 Activate(.label("Eggs"))
-    .expect(.appeared(.element(
+    .expect(.changed(.elements([.appeared(.element(
         .label(.prefix("Eggs")),
         .identifier(.contains("cart"))
-    )))
+    ))])))
 ```
 
 That is expectation refinement: live observations become durable assertions.
@@ -98,13 +98,13 @@ Once the refined run passes, promote the workflow into product language:
 ```swift
 HeistDef<String>("Cart.addItem", parameter: "item") { item in
     TypeText(item, into: .label("Search Items"))
-        .expect(.updated(.label("Search Items"), .value(item)))
+        .expect(.changed(.elements([.updated(.label("Search Items"), .value(item))])))
 
     Activate(.label(item))
-        .expect(.appeared(.element(
+        .expect(.changed(.elements([.appeared(.element(
             .label(.prefix(item)),
             .identifier(.contains("cart"))
-        )))
+        ))])))
 }
 ```
 
@@ -119,26 +119,26 @@ func makeShopHeist() throws -> HeistPlan {
     try HeistPlan("shop") {
         HeistDef<String>("Cart.addItem", parameter: "item") { item in
             TypeText(item, into: .label("Search Items"))
-                .expect(.updated(.label("Search Items"), .value(item)))
+                .expect(.changed(.elements([.updated(.label("Search Items"), .value(item))])))
 
             Activate(.label(item))
-                .expect(.appeared(.element(
+                .expect(.changed(.elements([.appeared(.element(
                     .label(.prefix(item)),
                     .identifier(.contains("cart"))
-                )))
+                ))])))
         }
 
         RunHeist("Cart.addItem", "Milk")
-            .expect(.appeared(.element(
+            .expect(.changed(.elements([.appeared(.element(
                 .label("subtotal"),
                 .value(.contains("1 item"))
-            )))
+            ))])))
 
         RunHeist("Cart.addItem", "Eggs")
-            .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
+            .expect(.changed(.elements([.updated(.label("subtotal"), .value(.contains("2 items")))])))
 
         RunHeist("Cart.addItem", "Bread")
-            .expect(.updated(.label("subtotal"), .value(.contains("3 items"))))
+            .expect(.changed(.elements([.updated(.label("subtotal"), .value(.contains("3 items")))])))
     }
 }
 
@@ -168,7 +168,7 @@ A live agent can take one step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.appeared(.label("Payment Complete")))
+    .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 ```
 
 Send that source through `perform(step:)`.
@@ -178,7 +178,7 @@ A composed job can run as a plan:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.appeared(.label("Payment Complete")))
+        .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 }
 ```
 
@@ -196,7 +196,7 @@ final class CheckoutHeistTests: XCTestCase {
     func testCheckoutCompletes() async throws {
         try await runHeist("Checkout.pay") {
             Activate(.label("Pay"))
-                .expect(.appeared(.label("Payment Complete")))
+                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
     }
 }
@@ -214,7 +214,7 @@ final class CheckoutHeistTests: XCTestCase {
     func testCheckoutCompletes() {
         runHeistSync("Checkout.pay") {
             Activate(.label("Pay"))
-                .expect(.appeared(.label("Payment Complete")))
+                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
     }
 }
@@ -231,7 +231,7 @@ struct CheckoutHeistTests {
     func checkoutCompletes() async throws {
         try await runHeist("Checkout.pay") {
             Activate(.label("Pay"))
-                .expect(.appeared(.label("Payment Complete")))
+                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
     }
 }
@@ -297,7 +297,7 @@ The same product capability can live in source control:
 func makeCheckoutHeist() throws -> HeistPlan {
     try HeistPlan("checkout") {
         Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 }
 ```

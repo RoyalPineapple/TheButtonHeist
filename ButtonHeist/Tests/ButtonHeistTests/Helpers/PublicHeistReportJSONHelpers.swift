@@ -33,9 +33,9 @@ func assertPublicInteractionDigest(
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
-    XCTAssertEqual(try digest.int("elementCountBefore"), expected.elementCountBefore, file: file, line: line)
-    XCTAssertEqual(try digest.int("elementCountAfter"), expected.elementCountAfter, file: file, line: line)
-    XCTAssertEqual(try digest.bool("elementCountChanged"), expected.elementCountChanged, file: file, line: line)
+    XCTAssertEqual(try digest.int("nodeCountBefore"), expected.nodeCountBefore, file: file, line: line)
+    XCTAssertEqual(try digest.int("nodeCountAfter"), expected.nodeCountAfter, file: file, line: line)
+    XCTAssertEqual(try digest.bool("nodeCountChanged"), expected.nodeCountChanged, file: file, line: line)
     XCTAssertEqual(try digest.bool("elementSetChanged"), expected.elementSetChanged, file: file, line: line)
     if let screenIdBefore = expected.screenIdBefore {
         XCTAssertEqual(try digest.string("screenIdBefore"), screenIdBefore, file: file, line: line)

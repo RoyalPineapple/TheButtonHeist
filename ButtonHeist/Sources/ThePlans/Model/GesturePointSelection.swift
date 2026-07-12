@@ -101,8 +101,8 @@ extension KeyedDecodingContainer {
 }
 
 public enum GesturePointSelection: Codable, Sendable, Equatable, CustomStringConvertible {
-    case element(ElementTarget)
-    case elementUnitPoint(ElementTarget, UnitPoint)
+    case element(AccessibilityTarget)
+    case elementUnitPoint(AccessibilityTarget, UnitPoint)
     case coordinate(ScreenPoint)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -111,7 +111,7 @@ public enum GesturePointSelection: Codable, Sendable, Equatable, CustomStringCon
         case point
     }
 
-    public init(element: ElementTarget?, unitPoint: UnitPoint?, point: ScreenPoint?) throws {
+    public init(element: AccessibilityTarget?, unitPoint: UnitPoint?, point: ScreenPoint?) throws {
         switch (element, unitPoint, point) {
         case (.some(let element), nil, nil):
             self = .element(element)
@@ -130,7 +130,7 @@ public enum GesturePointSelection: Codable, Sendable, Equatable, CustomStringCon
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "gesture point selection")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            element: try container.decodeIfPresent(ElementTarget.self, forKey: .element),
+            element: try container.decodeIfPresent(AccessibilityTarget.self, forKey: .element),
             unitPoint: try container.decodeIfPresent(UnitPoint.self, forKey: .unitPoint),
             point: try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
         )

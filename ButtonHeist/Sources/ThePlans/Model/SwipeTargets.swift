@@ -13,8 +13,8 @@ public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConverti
 }
 
 public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible {
-    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint)
-    case elementDirection(ElementTarget, SwipeDirection)
+    case unitElement(AccessibilityTarget, start: UnitPoint, end: UnitPoint)
+    case elementDirection(AccessibilityTarget, SwipeDirection)
     case point(start: GesturePointSelection, destination: SwipeDestinationSelection)
 
     public var description: String {
@@ -96,10 +96,10 @@ private struct SwipeElementDirectionPayload: Codable, Sendable, Equatable {
         case direction
     }
 
-    let element: ElementTarget
+    let element: AccessibilityTarget
     let direction: SwipeDirection
 
-    init(element: ElementTarget, direction: SwipeDirection) {
+    init(element: AccessibilityTarget, direction: SwipeDirection) {
         self.element = element
         self.direction = direction
     }
@@ -108,7 +108,7 @@ private struct SwipeElementDirectionPayload: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element direction swipe")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            element: try container.decode(ElementTarget.self, forKey: .element),
+            element: try container.decode(AccessibilityTarget.self, forKey: .element),
             direction: try container.decode(SwipeDirection.self, forKey: .direction)
         )
     }
@@ -121,11 +121,11 @@ private struct SwipeElementUnitPointsPayload: Codable, Sendable, Equatable {
         case end
     }
 
-    let element: ElementTarget
+    let element: AccessibilityTarget
     let start: UnitPoint
     let end: UnitPoint
 
-    init(element: ElementTarget, start: UnitPoint, end: UnitPoint) {
+    init(element: AccessibilityTarget, start: UnitPoint, end: UnitPoint) {
         self.element = element
         self.start = start
         self.end = end
@@ -135,7 +135,7 @@ private struct SwipeElementUnitPointsPayload: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element unit-points swipe")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            element: try container.decode(ElementTarget.self, forKey: .element),
+            element: try container.decode(AccessibilityTarget.self, forKey: .element),
             start: try container.decode(UnitPoint.self, forKey: .start),
             end: try container.decode(UnitPoint.self, forKey: .end)
         )

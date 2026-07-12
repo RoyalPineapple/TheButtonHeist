@@ -40,12 +40,12 @@ struct ToolRoutingTests {
         let operation = try routed(
             TheFence.Command.perform.rawValue,
             [
-                "step": .string(#"Activate(.label("Pay")).expect(.screenChanged)"#),
+                "step": .string(#"Activate(.label("Pay")).expect(.changed(.screen()))"#),
             ]
         )
 
         #expect(operation.command == .perform)
-        #expect(operation.arguments.value(for: .step) == .string(#"Activate(.label("Pay")).expect(.screenChanged)"#))
+        #expect(operation.arguments.value(for: .step) == .string(#"Activate(.label("Pay")).expect(.changed(.screen()))"#))
     }
 
     @Test("granular action tools are not MCP tools")

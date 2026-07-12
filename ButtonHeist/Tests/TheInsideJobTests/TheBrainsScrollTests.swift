@@ -687,7 +687,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Missing Button")))
+            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Missing Button")))
         )
 
         XCTAssertFalse(result.success)
@@ -708,7 +708,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Offscreen")),
+            for: literalTarget(ElementPredicate(label: "Offscreen")),
             method: .activate,
             deallocatedBoundary: "test inflation"
         )
@@ -764,7 +764,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "test inflation"
         )
@@ -826,7 +826,7 @@ final class TheBrainsScrollTests: XCTestCase {
         defer { asyncLoadArrival.cancel() }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "activation dispatch"
         )
@@ -889,7 +889,7 @@ final class TheBrainsScrollTests: XCTestCase {
         defer { asyncLoadArrival.cancel() }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "activation dispatch"
         )
@@ -917,7 +917,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "activation dispatch"
         )
@@ -962,7 +962,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Gone Target", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Gone Target", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "test inflation"
         )
@@ -1016,7 +1016,7 @@ final class TheBrainsScrollTests: XCTestCase {
         defer { liveObjectArrival.cancel() }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Recycled Target", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -1047,7 +1047,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollContainerPath: TreePath([99])
         )
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Offscreen")),
+            for: literalTarget(ElementPredicate(label: "Offscreen")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -1094,7 +1094,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Escaped")),
+            for: literalTarget(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
             deallocatedBoundary: "test inflation"
         )
@@ -1132,7 +1132,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Escaped")),
+            for: literalTarget(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
             deallocatedBoundary: "test inflation"
         )
@@ -1154,7 +1154,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: .predicate(ElementPredicate(label: "Offscreen")),
+            target: literalTarget(ElementPredicate(label: "Offscreen")),
             method: .activate,
             requireInteractive: false
         ) { _ in
@@ -1194,7 +1194,7 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
         brains.stash.clearInstalledVisibleRefreshScreenForTesting()
 
-        let result = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
+        let result = await brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate(label: "Old Offscreen"))))
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
@@ -1234,7 +1234,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Controls Demo", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "test inflation"
         )
@@ -1276,7 +1276,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
 
         let discovered = await brains.navigation.elementInflation.discoverTarget?(
-            .predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))
+            literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button]))
         )
 
         XCTAssertNotNil(discovered?.findElement(heistId: "current_controls_header"))
@@ -1394,7 +1394,7 @@ final class TheBrainsScrollTests: XCTestCase {
         _ = brains.stash.refreshCurrentVisibleTree()
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Top Target")))
+            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Top Target")))
         )
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
@@ -1413,7 +1413,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")))
+            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Offscreen")))
         )
 
         XCTAssertFalse(result.success)
@@ -1468,7 +1468,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Target")),
+            for: literalTarget(ElementPredicate(label: "Target")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -1544,7 +1544,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .activate,
             deallocatedBoundary: "activation dispatch"
         )
@@ -1624,7 +1624,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Coke", traits: [.button])),
+            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -1656,7 +1656,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")), direction: .down)
+            ScrollTarget(target: literalTarget(ElementPredicate(label: "Offscreen")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
@@ -1686,7 +1686,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScrollToEdge(
-            ScrollToEdgeTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")), edge: .bottom)
+            ScrollToEdgeTarget(target: literalTarget(ElementPredicate(label: "Offscreen")), edge: .bottom)
         )
 
         XCTAssertFalse(result.success)
@@ -1913,7 +1913,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Duplicate")))
+            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Duplicate")))
         )
 
         XCTAssertFalse(result.success)
@@ -1941,7 +1941,7 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save"), ordinal: 3))
+            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Save"), ordinal: 3))
         )
 
         XCTAssertFalse(result.success)
@@ -2009,7 +2009,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.navigation.elementInflation.discoverTarget = nil
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: .predicate(ElementPredicate(label: "Jump Target")),
+            for: literalTarget(ElementPredicate(label: "Jump Target")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -2043,7 +2043,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
+            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
@@ -2066,7 +2066,7 @@ final class TheBrainsScrollTests: XCTestCase {
         installLiveScrollTarget(screenElement, scrollView: scrollView, containerName: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
+            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
@@ -2090,7 +2090,7 @@ final class TheBrainsScrollTests: XCTestCase {
         installLiveScrollTarget(screenElement, scrollView: scrollView, containerName: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
+            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertTrue(result.success, "Expected element scroll to succeed: \(String(describing: result.message))")

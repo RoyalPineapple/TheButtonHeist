@@ -11,13 +11,13 @@ final class WireTypeRoundTripTests: XCTestCase {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    // MARK: - AccessibilityPredicate
+    // MARK: - AccessibilityPredicate<RootContext>
 
     func testAccessibilityPredicateWireContractValuesStayStable() {
-        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "all", "no_change", "change", "announcement"])
-        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, AccessibilityPredicateContract.PredicateWireType.values)
-        XCTAssertEqual(AccessibilityPredicateContract.StateWireType.values, ["exists", "missing", "all"])
-        XCTAssertEqual(AccessibilityPredicateContract.ChangeScopeWireType.values, ["screen", "elements", "all"])
+        XCTAssertEqual(
+            AccessibilityPredicate<RootContext>.wireTypeValues,
+            ["exists", "missing", "announcement", "changed", "no_change"]
+        )
     }
 
     // MARK: - ScrollEdge
@@ -68,7 +68,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringRejectsEmptyResolvedText() throws {
         let command = HeistActionCommand.typeText(
             text: .ref("item"),
-            target: .target(.predicate(ElementPredicate(label: "Add item")))
+            target: .predicate(ElementPredicateTemplate(label: "Add item"))
         )
 
         XCTAssertThrowsError(try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))) { error in
@@ -79,7 +79,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextStringRefLoweringAllowsEmptyResolvedTextWhenReplacingExisting() throws {
         let command = HeistActionCommand.typeText(
             text: .ref("item"),
-            target: .target(.predicate(ElementPredicate(label: "Add item"))),
+            target: .predicate(ElementPredicateTemplate(label: "Add item")),
             replacingExisting: true
         )
 
@@ -168,7 +168,9 @@ final class WireTypeRoundTripTests: XCTestCase {
           "tapActivationDispatched": false
         }
         """
-        XCTAssertThrowsError(try decoder.decode(ActivationTrace.self, from: Data(declinedWithoutFallback.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(ActivationTrace.self, from: Data(declinedWithoutFallback.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["axActivateReturned=false requires activation-point fallback fields"])
         }
     }
@@ -263,24 +265,30 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testCustomActionTargetRoundTrip() throws {
         let target = CustomActionTarget(
-            elementTarget: .predicate(ElementPredicate(label: "btn_save")),
+            target: .predicate(ElementPredicateTemplate(label: "btn_save")),
             actionName: "Delete Item"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded, CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "btn_save")), actionName: "Delete Item"))
+        XCTAssertEqual(
+            decoded,
+            CustomActionTarget(
+                target: .predicate(ElementPredicateTemplate(label: "btn_save")),
+                actionName: "Delete Item"
+            )
+        )
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
     func testCustomActionTargetWithMatcher() throws {
         let target = CustomActionTarget(
-            elementTarget: .predicate(ElementPredicate(label: "Menu")),
+            target: .predicate(ElementPredicateTemplate(label: "Menu")),
             actionName: "Open Submenu"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(decoded, CustomActionTarget(
-            elementTarget: .predicate(ElementPredicate(label: "Menu")),
+            target: .predicate(ElementPredicateTemplate(label: "Menu")),
             actionName: "Open Submenu"
         ))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
@@ -303,12 +311,12 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
-            selection: .element(.predicate(ElementPredicate(label: "cell_1"))),
+            selection: .element(.predicate(ElementPredicateTemplate(label: "cell_1"))),
             duration: GestureDuration(seconds: 1.5)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "cell_1"))))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "cell_1"))))
         XCTAssertEqual(decoded.duration.seconds, 1.5)
     }
 
@@ -336,12 +344,16 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testTapAndLongPressRejectMixedPointAndElementIntents() {
-        let tapJSON = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"point":{"x":10,"y":20}}"#
+        let tapJSON =
+            #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"# +
+            #""point":{"x":10,"y":20}}"#
         XCTAssertThrowsError(try decoder.decode(TapTarget.self, from: Data(tapJSON.utf8))) { error in
             assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
 
-        let longPressJSON = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"point":{"x":10,"y":20},"duration":1}"#
+        let longPressJSON =
+            #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"# +
+            #""point":{"x":10,"y":20},"duration":1}"#
         XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(longPressJSON.utf8))) { error in
             assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
@@ -363,13 +375,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testDragTargetRoundTrip() throws {
         let target = DragTarget(
-            start: .element(.predicate(ElementPredicate(label: "handle"))),
+            start: .element(.predicate(ElementPredicateTemplate(label: "handle"))),
             end: ScreenPoint(x: 200, y: 300),
             duration: GestureDuration(seconds: 0.8)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
-        XCTAssertEqual(decoded.start, .element(.predicate(ElementPredicate(label: "handle"))))
+        XCTAssertEqual(decoded.start, .element(.predicate(ElementPredicateTemplate(label: "handle"))))
         XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration?.seconds, 0.8)
     }
@@ -436,7 +448,8 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testDragTargetRejectsUnknownNestedIntentField() {
-        let json = #"{"elementToPoint":{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Handle"}}]},"# +
+        let json = #"{"elementToPoint":{"element":{"checks":["# +
+            #"{"kind":"label","match":{"mode":"exact","value":"Handle"}}]},"# +
             #""end":{"x":30,"y":40},"offset":{"x":10,"y":20}}}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
             assertDecodingError(error, contains: ["Unknown element-to-point drag field", "offset"])
@@ -445,7 +458,10 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
-            SwipeTarget(selection: .point(start: .element(.predicate(ElementPredicate(label: "list"))), destination: .direction(.down))).resolvedDuration,
+            SwipeTarget(selection: .point(
+                start: .element(.predicate(ElementPredicateTemplate(label: "list"))),
+                destination: .direction(.down)
+            )).resolvedDuration,
             .swipeDefault
         )
         XCTAssertEqual(
@@ -458,22 +474,22 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetRoundTrip() throws {
         let target = ScrollTarget(
-            selection: .element(.predicate(ElementPredicate(label: "list"))),
+            selection: .element(.predicate(ElementPredicateTemplate(label: "list"))),
             direction: .down
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "list"))))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "list"))))
         XCTAssertEqual(decoded.direction, .down)
     }
 
-    func testScrollTargetRoundTripsScopedElementTarget() throws {
-        let elementTarget = ElementTarget.within(container: .scrollable, .label("Pay"))
-        let target = ScrollTarget(selection: .element(elementTarget), direction: .down)
-        let data = try encoder.encode(target)
+    func testScrollTargetRoundTripsScopedAccessibilityTarget() throws {
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let request = ScrollTarget(selection: .element(accessibilityTarget), direction: .down)
+        let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
 
-        XCTAssertEqual(decoded.selection, .element(elementTarget))
+        XCTAssertEqual(decoded.selection, .element(accessibilityTarget))
         XCTAssertEqual(decoded.direction, .down)
     }
 
@@ -497,14 +513,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollTargetRejectsLegacyContainerNameStringKey() throws {
         let data = Data(#"{"container":"main_scroll","direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires target"])
+            assertDecodingError(error, contains: [#"Unknown scroll target field "container""#])
         }
     }
 
     func testScrollTargetRejectsPartialScopedTargetContainer() throws {
         let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]},"direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires target"])
+            assertDecodingError(error, contains: [#"Unknown scroll target field "container""#])
         }
     }
 
@@ -516,9 +532,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollPrimitiveRequestEnvelopeIsRejected() throws {
-        let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","containerName":"main_scroll"}}
-        """.utf8)
+        let data = Data((
+            #"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"scroll","# +
+            #""payload":{"direction":"down","containerName":"main_scroll"}}"#
+        ).utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
             assertDecodingError(error, contains: ["Unsupported client wire message type"])
         }
@@ -529,23 +546,23 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollToEdgeTargetAllEdges() throws {
         for edge in ScrollEdge.allCases {
             let target = ScrollToEdgeTarget(
-                selection: .element(.predicate(ElementPredicate(label: "scroll_view"))),
+                selection: .element(.predicate(ElementPredicateTemplate(label: "scroll_view"))),
                 edge: edge
             )
             let data = try encoder.encode(target)
             let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
             XCTAssertEqual(decoded.edge, edge)
-            XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "scroll_view"))))
+            XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicateTemplate(label: "scroll_view"))))
         }
     }
 
-    func testScrollToEdgeTargetRoundTripsScopedElementTarget() throws {
-        let elementTarget = ElementTarget.within(container: .scrollable, .label("Pay"))
-        let target = ScrollToEdgeTarget(selection: .element(elementTarget), edge: .bottom)
-        let data = try encoder.encode(target)
+    func testScrollToEdgeTargetRoundTripsScopedAccessibilityTarget() throws {
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let request = ScrollToEdgeTarget(selection: .element(accessibilityTarget), edge: .bottom)
+        let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
 
-        XCTAssertEqual(decoded.selection, .element(elementTarget))
+        XCTAssertEqual(decoded.selection, .element(accessibilityTarget))
         XCTAssertEqual(decoded.edge, .bottom)
     }
 
@@ -560,14 +577,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollToEdgeTargetRejectsLegacyContainerNameStringKey() throws {
         let data = Data(#"{"container":"main_scroll","edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires target"])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "container""#])
         }
     }
 
     func testScrollToEdgeTargetRejectsPartialScopedTargetContainer() throws {
         let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]},"edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires target"])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "container""#])
         }
     }
 
@@ -579,9 +596,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollToEdgePrimitiveRequestEnvelopeIsRejected() throws {
-        let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","unexpected":"main_scroll"}}
-        """.utf8)
+        let data = Data((
+            #"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"scrollToEdge","# +
+            #""payload":{"edge":"bottom","unexpected":"main_scroll"}}"#
+        ).utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
             assertDecodingError(error, contains: ["Unsupported client wire message type"])
         }
@@ -663,16 +681,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testInterfaceQueryRejectsSubtreeAndMatcher() {
+    func testInterfaceQueryRejectsRemovedMatcherField() {
         let json = #"""
         {
-          "subtree": {
-            "element": {
-              "checks": [
-                { "kind": "label", "match": { "mode": "exact", "value": "Save" } }
-              ]
-            }
-          },
           "matcher": {
             "checks": [
               { "kind": "identifier", "match": { "mode": "exact", "value": "save" } }
@@ -682,24 +693,25 @@ final class WireTypeRoundTripTests: XCTestCase {
         """#
 
         XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
-            assertDecodingError(error, contains: ["interface query accepts subtree or matcher, not both"])
+            assertDecodingError(error, contains: ["matcher"])
         }
     }
 
-    // MARK: - SubtreeSelector
+    // MARK: - InterfaceQuery Subtree Targets
 
-    func testSubtreeSelectorElementUsesToolSchemaShape() throws {
-        let selector = SubtreeSelector.element(
-            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
+    func testInterfaceQueryElementSubtreeUsesCanonicalTargetShape() throws {
+        let query = InterfaceQuery(
+            subtree: .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 2)
         )
 
-        let data = try encoder.encode(selector)
+        let data = try encoder.encode(query)
         let payload = try JSONProbe(data: data)
-        XCTAssertEqual(try payload.int("ordinal"), 2)
-        let element = try payload.object("element")
-        try payload.assertMissing("container")
-        try element.assertMissing("heistId")
-        let checks = try element.array("checks")
+        let subtree = try payload.object("subtree")
+        XCTAssertEqual(try subtree.int("ordinal"), 2)
+        try subtree.assertMissing("element")
+        try subtree.assertMissing("container")
+        try subtree.assertMissing("heistId")
+        let checks = try subtree.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "label")
         let labelMatch = try checks[0].object("match")
@@ -707,37 +719,41 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try labelMatch.string("value"), "Save")
         XCTAssertEqual(try checks[1].string("kind"), "traits")
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
-        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+        XCTAssertEqual(try decoder.decode(InterfaceQuery.self, from: data), query)
     }
 
-    func testSubtreeSelectorElementPredicateShape() throws {
-        let selector = SubtreeSelector.element(.predicate(ElementPredicate(label: "Save")))
+    func testInterfaceQueryElementSubtreeOmitsAbsentOrdinal() throws {
+        let query = InterfaceQuery(subtree: .label("Save"))
 
-        let data = try encoder.encode(selector)
+        let data = try encoder.encode(query)
         let payload = try JSONProbe(data: data)
-        try payload.assertMissing("ordinal")
-        let element = try payload.object("element")
-        try element.assertMissing("heistId")
-        let checks = try element.array("checks")
+        let subtree = try payload.object("subtree")
+        try subtree.assertMissing("ordinal")
+        try subtree.assertMissing("element")
+        try subtree.assertMissing("heistId")
+        let checks = try subtree.array("checks")
         XCTAssertEqual(checks.count, 1)
         XCTAssertEqual(try checks[0].string("kind"), "label")
         let labelMatch = try checks[0].object("match")
         XCTAssertEqual(try labelMatch.string("mode"), "exact")
         XCTAssertEqual(try labelMatch.string("value"), "Save")
-        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+        XCTAssertEqual(try decoder.decode(InterfaceQuery.self, from: data), query)
     }
 
-    func testSubtreeSelectorContainerUsesToolSchemaShape() throws {
-        let selector = SubtreeSelector.container(
-            .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
-            ordinal: 1
+    func testInterfaceQueryContainerSubtreeUsesCanonicalTargetShape() throws {
+        let query = InterfaceQuery(
+            subtree: .container(
+                .matching(.type(.semanticGroup), .semantic(.label("Actions"))),
+                ordinal: 1
+            )
         )
 
-        let data = try encoder.encode(selector)
+        let data = try encoder.encode(query)
         let payload = try JSONProbe(data: data)
-        XCTAssertEqual(try payload.int("ordinal"), 1)
-        let container = try payload.object("container")
-        try payload.assertMissing("element")
+        let subtree = try payload.object("subtree")
+        XCTAssertEqual(try subtree.int("ordinal"), 1)
+        let container = try subtree.object("container")
+        try subtree.assertMissing("element")
         let checks = try container.array("checks")
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(try checks[0].string("kind"), "type")
@@ -748,43 +764,65 @@ final class WireTypeRoundTripTests: XCTestCase {
         let label = try semantic.object("match")
         XCTAssertEqual(try label.string("mode"), "exact")
         XCTAssertEqual(try label.string("value"), "Actions")
-        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+        XCTAssertEqual(try decoder.decode(InterfaceQuery.self, from: data), query)
     }
 
-    func testSubtreeSelectorContainerRequiresPredicateObject() throws {
-        // The MCP schema advertises subtree.container as an object-only predicate
-        // (no oneOf string/object adapter), so a bare string container name is
-        // no longer accepted at the wire boundary.
-        let data = Data(#"{"container":"semantic_actions"}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: data))
+    func testInterfaceQueryContainerSubtreeRequiresPredicateObject() throws {
+        let data = Data(#"{"subtree":{"container":"semantic_actions"}}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: data))
     }
 
-    func testSubtreeSelectorContainerAcceptsPredicateObject() throws {
-        let data = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]}}"#.utf8)
-        let decoded = try decoder.decode(SubtreeSelector.self, from: data)
+    func testInterfaceQueryContainerSubtreeAcceptsPredicateObject() throws {
+        let data = Data(#"{"subtree":{"container":{"checks":[{"kind":"scrollable","value":true}]}}}"#.utf8)
+        let decoded = try decoder.decode(InterfaceQuery.self, from: data)
 
-        XCTAssertEqual(decoded, .container(.scrollable))
+        XCTAssertEqual(decoded.subtree, .container(.scrollable))
     }
 
-    func testSubtreeSelectorElementRejectsHeistIdField() {
-        // heistId is no longer a targeting field — it is an unknown element key.
-        let json = #"{"element":{"heistId":"button_save","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}"#
-        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+    func testInterfaceQueryElementSubtreeRejectsHeistIdField() {
+        let json = #"{"subtree":{"heistId":"button_save","checks":["# +
+            #"{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
     }
 
-    func testSubtreeSelectorElementRejectsHeistIdOnlyField() {
-        let json = #"{"element":{"heistId":"button_save"},"ordinal":1}"#
-        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+    func testInterfaceQueryElementSubtreeRejectsHeistIdOnlyField() {
+        let json = #"{"subtree":{"heistId":"button_save","ordinal":1}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
     }
 
-    func testSubtreeSelectorElementRejectsUnknownTargetField() {
-        let json = #"{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"unexpectedTargetField":"button_save"}}"#
-        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+    func testInterfaceQueryElementSubtreeRejectsUnknownTargetField() {
+        let json = #"{"subtree":{"checks":["# +
+            #"{"kind":"label","match":{"mode":"exact","value":"Save"}}],"# +
+            #""unexpectedTargetField":"button_save"}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
+        }
+    }
+
+    func testInterfaceQuerySubtreeRejectsRemovedElementWrapperShape() {
+        let json = #"{"subtree":{"element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("element"), "\(error)")
+        }
+    }
+
+    func testInterfaceQueryContainerSubtreeRejectsNegativeOrdinal() {
+        let json = #"{"subtree":{"container":{"checks":[{"kind":"scrollable","value":true}]},"ordinal":-1}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("non-negative"), "\(error)")
+        }
+    }
+
+    func testInterfaceQueryScopedSubtreeRejectsOuterOrdinal() {
+        let json = #"{"subtree":{"container":{"checks":[{"kind":"scrollable","value":true}]},"# +
+            #""target":{"checks":["# +
+            #"{"kind":"label","match":{"mode":"exact","value":"Save"}}]},"ordinal":1}}"#
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("ordinal"), "\(error)")
         }
     }
 
@@ -855,8 +893,11 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Settings")), traits: [.button]), ordinal: 1)),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 2.5)))),
+                    command: .activate(.predicate(
+                        ElementPredicateTemplate(label: .exact(.literal("Settings")), traits: [.button]),
+                        ordinal: 1
+                    )),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
                 .action(try ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
                 )),
@@ -887,10 +928,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try checks[1].strings("values"), ["button"])
         let expectation = try action.object("expectation")
         let predicate = try expectation.object("predicate")
-        XCTAssertEqual(try predicate.string("type"), "change")
-        let scopes = try predicate.array("scopes")
-        let scope = try XCTUnwrap(scopes.first)
-        XCTAssertEqual(try scope.string("type"), "screen")
+        XCTAssertEqual(try predicate.string("type"), "changed")
+        XCTAssertEqual(try predicate.string("scope"), "screen")
+        XCTAssertTrue(try predicate.array("assertions").isEmpty)
         XCTAssertEqual(try expectation.double("timeout"), 2.5)
         XCTAssertEqual(try body[2].object("warn").string("message"), "optional step skipped")
         XCTAssertEqual(try body[3].object("fail").string("message"), "unexpected state")
@@ -900,7 +940,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Save"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Save")))
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
@@ -943,7 +983,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps.count, 1)
         XCTAssertEqual(decoded.steps[0].status, .failed)
         XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.wireType, .activate)
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.reportTarget, .predicate(ElementPredicate(label: "Save")))
+        XCTAssertEqual(
+            decoded.steps[0].actionEvidence?.command?.reportTarget,
+            .predicate(ElementPredicateTemplate(label: "Save"))
+        )
         XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.method, .activate)
         XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.outcome.errorKind, .elementNotFound)
         XCTAssertEqual(
@@ -1054,7 +1097,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
         let child = HeistExecutionStepResult.failed(
             path: "$.body[0].conditional.cases[0].body[0]",
             receiptKind: .action,
@@ -1118,8 +1161,8 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistCaseMatchResultRejectsMismatchedNestedPredicate() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
-        let mismatchedPredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Settings")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+        let mismatchedPredicate = AccessibilityPredicate<RootContext>.exists(.label("Settings"))
         let payload = HeistCaseMatchResultPayload(
             predicate: predicate,
             result: ExpectationResult(met: true, predicate: mismatchedPredicate)
@@ -1153,7 +1196,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let actionResult = ActionResult.success(method: .wait)
         let expectation = MetExpectationResult(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
@@ -1225,7 +1268,9 @@ final class WireTypeRoundTripTests: XCTestCase {
           "elapsedMs": 1
         }
         """
-        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(looseOutcome.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(HeistCaseSelectionResult.self, from: Data(looseOutcome.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["no_match", "index"])
         }
 
@@ -1238,7 +1283,9 @@ final class WireTypeRoundTripTests: XCTestCase {
           "elapsedMs": 1
         }
         """
-        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(missingMatchedIndex.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(HeistCaseSelectionResult.self, from: Data(missingMatchedIndex.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["matched_case", "requires index"])
         }
 
@@ -1252,7 +1299,9 @@ final class WireTypeRoundTripTests: XCTestCase {
           "elapsedMs": 1
         }
         """
-        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(outOfRangeMatchedIndex.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(HeistCaseSelectionResult.self, from: Data(outOfRangeMatchedIndex.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
         }
     }
@@ -1267,7 +1316,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
         """
 
-        XCTAssertThrowsError(try decoder.decode(HeistForEachStringEvidence.self, from: Data(missingValue.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(HeistForEachStringEvidence.self, from: Data(missingValue.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["requires iterationOrdinal and value together"])
         }
     }
@@ -1285,8 +1336,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
         """
 
-        XCTAssertThrowsError(try decoder.decode(HeistForEachElementEvidence.self, from: Data(missingTargetSummary.utf8))) { error in
-            assertDecodingError(error, contains: ["requires iterationOrdinal, targetOrdinal, and targetSummary together"])
+        XCTAssertThrowsError(
+            try decoder.decode(HeistForEachElementEvidence.self, from: Data(missingTargetSummary.utf8))
+        ) { error in
+            assertDecodingError(
+                error,
+                contains: ["requires iterationOrdinal, targetOrdinal, and targetSummary together"]
+            )
         }
     }
 
@@ -1311,7 +1367,9 @@ final class WireTypeRoundTripTests: XCTestCase {
           "argument": "Milk"
         }
         """
-        XCTAssertThrowsError(try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))) { error in
+        XCTAssertThrowsError(
+            try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))
+        ) { error in
             assertDecodingError(error, contains: ["inline heist invocation evidence", "invoke-only fields"])
         }
 
@@ -1332,8 +1390,13 @@ final class WireTypeRoundTripTests: XCTestCase {
           }
         }
         """
-        XCTAssertThrowsError(try decoder.decode(HeistInvocationEvidence.self, from: Data(childAbortWithExpectation.utf8))) { error in
-            assertDecodingError(error, contains: ["child-aborted invocation evidence", "must not include expectation evidence"])
+        XCTAssertThrowsError(
+            try decoder.decode(HeistInvocationEvidence.self, from: Data(childAbortWithExpectation.utf8))
+        ) { error in
+            assertDecodingError(
+                error,
+                contains: ["child-aborted invocation evidence", "must not include expectation evidence"]
+            )
         }
     }
 
@@ -1382,9 +1445,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertTrue(decoded.isImportant)
     }
 
-    // MARK: - AccessibilityTrace.Delta
+    // MARK: - AccessibilityTrace.ChangeFact
     //
-    // Coverage lives in AccessibilityTraceDeltaRoundTripTests.swift — this file's
+    // Coverage lives in AccessibilityTraceChangeFactRoundTripTests.swift; this file's
     // generic round-trip suite is for shapes without per-case Codable.
 
     // MARK: - PropertyChange / ElementUpdate
@@ -1495,27 +1558,27 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testWaitTargetRoundTrip() throws {
         let target = WaitTarget(
-            predicate: .state(.missing(ElementPredicate(label: "loading"))),
+            predicate: .missing(.label("loading")),
             timeout: 15
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(WaitTarget.self, from: data)
-        XCTAssertEqual(decoded.predicate, .state(.missing(ElementPredicate(label: "loading"))))
+        XCTAssertEqual(decoded.predicate, .missing(.label("loading")))
         XCTAssertEqual(decoded.timeout, 15)
     }
 
     func testWaitTargetResolvedDefaults() {
-        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(label: "x"))))
+        let target = WaitTarget(predicate: .exists(.label("x")))
         XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
     func testWaitTargetTimeoutCapsAt30() {
-        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(label: "x"))), timeout: 60)
+        let target = WaitTarget(predicate: .exists(.label("x")), timeout: 60)
         XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
     func testWaitTargetChangedResolvedDefaults() {
-        let target = WaitTarget(predicate: .change(.elements()))
+        let target = WaitTarget(predicate: .changed(.elements()))
         XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
@@ -1557,7 +1620,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     private struct HeistCaseMatchResultPayload: Encodable {
-        let predicate: AccessibilityPredicate
+        let predicate: AccessibilityPredicate<RootContext>
         let result: ExpectationResult
     }
 }

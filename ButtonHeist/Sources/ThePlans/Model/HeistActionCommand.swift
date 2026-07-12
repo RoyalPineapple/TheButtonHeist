@@ -11,20 +11,20 @@ public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equ
 }
 
 public enum HeistActionCommand: Codable, Sendable, Equatable {
-    case activate(ElementTargetExpr)
-    case increment(ElementTargetExpr)
-    case decrement(ElementTargetExpr)
-    case customAction(name: String, target: ElementTargetExpr)
-    case rotor(selection: RotorSelection, target: ElementTargetExpr, direction: RotorDirection)
+    case activate(AccessibilityTarget)
+    case increment(AccessibilityTarget)
+    case decrement(AccessibilityTarget)
+    case customAction(name: String, target: AccessibilityTarget)
+    case rotor(selection: RotorSelection, target: AccessibilityTarget, direction: RotorDirection)
     case dismiss
     case magicTap
-    case typeText(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false)
+    case typeText(text: StringExpr, target: AccessibilityTarget?, replacingExisting: Bool = false)
     case mechanicalTap(TapTarget)
     case mechanicalLongPress(LongPressTarget)
     case mechanicalSwipe(SwipeTarget)
     case mechanicalDrag(DragTarget)
     case viewportScroll(ScrollTarget)
-    case viewportScrollToVisible(ElementTargetExpr)
+    case viewportScrollToVisible(AccessibilityTarget)
     case viewportScrollToEdge(ScrollToEdgeTarget)
     case editAction(EditActionTarget)
     case setPasteboard(SetPasteboardTarget)
@@ -70,12 +70,12 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .customAction(let name, let target):
             try CustomActionTarget.validate(actionName: name)
             try roundTrip(CustomActionTarget(
-                elementTarget: try target.resolve(in: environment),
+                target: try target.resolve(in: environment),
                 actionName: name
             ))
         case .rotor(let selection, let target, let direction):
             try roundTrip(RotorTarget(
-                elementTarget: try target.resolve(in: environment),
+                target: try target.resolve(in: environment),
                 selection: selection,
                 direction: direction
             ))
@@ -83,7 +83,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             let resolvedText = try text.resolve(in: environment)
             try roundTrip(TypeTextTarget(
                 validatingText: resolvedText,
-                elementTarget: try target?.resolve(in: environment),
+                target: try target?.resolve(in: environment),
                 replacingExisting: replacingExisting
             ))
         case .mechanicalTap(let target):
@@ -97,7 +97,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .viewportScroll(let target):
             try roundTrip(target)
         case .viewportScrollToVisible(let target):
-            try roundTrip(ScrollToVisibleTarget(elementTarget: try target.resolve(in: environment)))
+            try roundTrip(ScrollToVisibleTarget(target: try target.resolve(in: environment)))
         case .viewportScrollToEdge(let target):
             try roundTrip(target)
         case .editAction(let target):
@@ -246,40 +246,38 @@ private func roundTrip<T: Codable>(_ payload: T) throws {
 // MARK: - Heist Action Command Payloads
 
 private struct TargetExprPayload: Codable, Sendable, Equatable {
-    let target: ElementTargetExpr
+    let target: AccessibilityTarget
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case target
-        case targetRef = "target_ref"
     }
 
-    init(target: ElementTargetExpr) {
+    init(target: AccessibilityTarget) {
         self.target = target
     }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        target = try Self.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
+        target = try container.decode(AccessibilityTarget.self, forKey: .target)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try Self.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
+        try container.encode(target, forKey: .target)
     }
 }
 
 private struct CustomActionExprPayload: Codable, Sendable, Equatable {
     let actionName: String
-    let target: ElementTargetExpr
+    let target: AccessibilityTarget
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case actionName
         case target
-        case targetRef = "target_ref"
     }
 
-    init(actionName: String, target: ElementTargetExpr) {
+    init(actionName: String, target: AccessibilityTarget) {
         self.actionName = actionName
         self.target = target
     }
@@ -298,19 +296,19 @@ private struct CustomActionExprPayload: Codable, Sendable, Equatable {
             )
         }
         actionName = decodedActionName
-        target = try TargetExprPayload.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
+        target = try container.decode(AccessibilityTarget.self, forKey: .target)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        try TargetExprPayload.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
+        try container.encode(target, forKey: .target)
     }
 }
 
 private struct RotorExprPayload: Codable, Sendable, Equatable {
     let selection: RotorSelection
-    let target: ElementTargetExpr
+    let target: AccessibilityTarget
     let direction: RotorDirection
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -318,10 +316,9 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
         case rotorIndex
         case direction
         case target
-        case targetRef = "target_ref"
     }
 
-    init(selection: RotorSelection, target: ElementTargetExpr, direction: RotorDirection) {
+    init(selection: RotorSelection, target: AccessibilityTarget, direction: RotorDirection) {
         self.selection = selection
         self.target = target
         self.direction = direction
@@ -334,31 +331,30 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
         selection = try RotorSelection.decode(name: rotor, index: rotorIndex, codingPath: container.codingPath)
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
-        target = try TargetExprPayload.decodeNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
+        target = try container.decode(AccessibilityTarget.self, forKey: .target)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try selection.encode(to: &container, nameKey: .rotor, indexKey: .rotorIndex)
         try container.encode(direction, forKey: .direction)
-        try TargetExprPayload.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
+        try container.encode(target, forKey: .target)
     }
 }
 
 private struct TypeTextExprPayload: Codable, Sendable, Equatable {
     let text: StringExpr
-    let target: ElementTargetExpr?
+    let target: AccessibilityTarget?
     let replacingExisting: Bool
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case text
         case textRef = "text_ref"
         case target
-        case targetRef = "target_ref"
         case replacingExisting
     }
 
-    init(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false) {
+    init(text: StringExpr, target: AccessibilityTarget?, replacingExisting: Bool = false) {
         self.text = text
         self.target = target
         self.replacingExisting = replacingExisting
@@ -397,7 +393,7 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
                 debugDescription: "type_text requires text or text_ref"
             )
         }
-        target = try TargetExprPayload.decodeOptionalNestedTarget(container: container, nestedKey: .target, refKey: .targetRef)
+        target = try container.decodeIfPresent(AccessibilityTarget.self, forKey: .target)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -409,71 +405,10 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
             try container.encode(reference, forKey: .textRef)
         }
         if let target {
-            try TargetExprPayload.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
+            try container.encode(target, forKey: .target)
         }
         if replacingExisting {
             try container.encode(replacingExisting, forKey: .replacingExisting)
-        }
-    }
-}
-
-private extension TargetExprPayload {
-    static func decodeNestedTarget<K: CodingKey>(
-        container: KeyedDecodingContainer<K>,
-        nestedKey: K,
-        refKey: K
-    ) throws -> ElementTargetExpr {
-        guard let target = try decodeOptionalNestedTarget(
-            container: container,
-            nestedKey: nestedKey,
-            refKey: refKey
-        ) else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "target payload requires target or target_ref"
-            ))
-        }
-        return target
-    }
-
-    static func decodeOptionalNestedTarget<K: CodingKey>(
-        container: KeyedDecodingContainer<K>,
-        nestedKey: K,
-        refKey: K
-    ) throws -> ElementTargetExpr? {
-        let hasNestedTarget = container.contains(nestedKey)
-        let hasTargetRef = container.contains(refKey)
-        let intentCount = [hasNestedTarget, hasTargetRef].filter { $0 }.count
-        guard intentCount <= 1 else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "target payload accepts only one of target or target_ref"
-            ))
-        }
-        if hasNestedTarget {
-            return try container.decode(ElementTargetExpr.self, forKey: nestedKey)
-        }
-        if hasTargetRef {
-            return .ref(try HeistReferenceName.decode(from: container, forKey: refKey))
-        }
-        return nil
-    }
-
-    static func encode<K: CodingKey>(
-        _ target: ElementTargetExpr,
-        into container: inout KeyedEncodingContainer<K>,
-        nestedKey: K,
-        refKey: K
-    ) throws {
-        switch target {
-        case .target(let target):
-            try container.encode(target, forKey: nestedKey)
-        case .predicate:
-            try container.encode(target, forKey: nestedKey)
-        case .ref(let reference):
-            try container.encode(reference, forKey: refKey)
-        case .within:
-            try container.encode(target, forKey: nestedKey)
         }
     }
 }

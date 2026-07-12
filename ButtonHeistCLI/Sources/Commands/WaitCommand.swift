@@ -16,7 +16,7 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist wait --exists -l "Welcome"
               buttonheist wait --missing -l "Loading" -t 5
               buttonheist wait --change screen
-              buttonheist wait --predicate '{"type":"exists","element":{"label":"Done"}}'
+              buttonheist wait --predicate '{"type":"no_change"}'
             """
     )
 
@@ -56,7 +56,6 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
 enum WaitChangeKind: String, CaseIterable, ExpressibleByArgument {
     case screen
     case elements
-    case updated
 
     static var allowedValuesDescription: String {
         allCases.map(\.rawValue).joined(separator: ", ")
@@ -64,7 +63,7 @@ enum WaitChangeKind: String, CaseIterable, ExpressibleByArgument {
 }
 
 struct WaitPredicateInput: ParsableArguments {
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Flag(
         exclusivity: .exclusive,
@@ -101,7 +100,7 @@ struct WaitPredicateInput: ParsableArguments {
         case (.some(let presence), nil, nil):
             return .accessibilityPredicate(try presence.predicate(element: element))
         case (nil, .some(let change), nil):
-            return .accessibilityPredicate(try change.predicate(element: element))
+            return .accessibilityPredicate(change.predicate())
         case (nil, nil, .some(let predicate)):
             return .rawPredicate(predicate)
         case (nil, nil, nil):
@@ -111,13 +110,13 @@ struct WaitPredicateInput: ParsableArguments {
         }
     }
 
-    private static func heistValue(from predicate: AccessibilityPredicate) throws -> HeistValue {
+    private static func heistValue(from predicate: AccessibilityPredicate<RootContext>) throws -> HeistValue {
         try TheFence.HeistValuePayloadEncoder.encode(predicate)
     }
 }
 
 private enum WaitPredicateSource {
-    case accessibilityPredicate(AccessibilityPredicate)
+    case accessibilityPredicate(AccessibilityPredicate<RootContext>)
     case rawPredicate(String)
 }
 
@@ -125,28 +124,26 @@ enum WaitPresenceKind: String, EnumerableFlag {
     case exists
     case missing
 
-    func predicate(element: ElementTargetOptions) throws -> AccessibilityPredicate {
-        guard let elementPredicate = try element.parsedMatcher() else {
+    func predicate(element: AccessibilityTargetOptions) throws -> AccessibilityPredicate<RootContext> {
+        guard let target = try element.parsedTarget() else {
             throw ValidationError("--exists/--missing require element fields (e.g. -l, --identifier)")
         }
         switch self {
         case .exists:
-            return .state(.exists(elementPredicate))
+            return .exists(target)
         case .missing:
-            return .state(.missing(elementPredicate))
+            return .missing(target)
         }
     }
 }
 
 private extension WaitChangeKind {
-    func predicate(element: ElementTargetOptions) throws -> AccessibilityPredicate {
+    func predicate() -> AccessibilityPredicate<RootContext> {
         switch self {
         case .screen:
-            return .change(.screenChanged)
+            return .changed(.screen())
         case .elements:
-            return .change(.elements())
-        case .updated:
-            return .change(.elements(.updatedElement(ElementUpdatePredicate(element: try element.parsedMatcher()))))
+            return .changed(.elements())
         }
     }
 }

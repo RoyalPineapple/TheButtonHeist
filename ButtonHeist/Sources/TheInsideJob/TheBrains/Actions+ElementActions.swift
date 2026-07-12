@@ -14,7 +14,7 @@ extension Actions {
     /// Unified pipeline for actions that target an element:
     /// find target in tree → resolve that tree entry to something touchable.
     func performElementAction(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
@@ -93,7 +93,7 @@ extension Actions {
     /// Deliver `activate` through the accessibility contract:
     /// semantic target -> reveal -> activation refresh ->
     /// one `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
-    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeActivate(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .activate
@@ -140,7 +140,7 @@ extension Actions {
         return nil
     }
 
-    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeIncrement(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -165,7 +165,7 @@ extension Actions {
         )
     }
 
-    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeDecrement(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .decrement,
@@ -194,7 +194,7 @@ extension Actions {
         _ target: CustomActionTarget
     ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
-            target: target.elementTarget,
+            target: target.target,
             method: .customAction,
             deallocatedBoundary: "custom action"
         ) { context in

@@ -28,7 +28,7 @@ extension Navigation {
     }
 
     func scanPendingContainers(
-        target: ElementTarget?,
+        target: AccessibilityTarget?,
         targetHeistId: HeistId? = nil,
         exploration: inout SemanticExploration
     ) async -> ScrollTraversalTerminal? {
@@ -109,7 +109,7 @@ extension Navigation {
 
     private func scanContainer(
         _ containerExploration: ContainerExploration,
-        target: ElementTarget?,
+        target: AccessibilityTarget?,
         targetHeistId: HeistId?,
         exploration: inout SemanticExploration
     ) async -> ScrollContainerScanResult {
@@ -148,7 +148,7 @@ extension Navigation {
         }
     }
 
-    private func scanGoal(target: ElementTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
+    private func scanGoal(target: AccessibilityTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
         if let target {
             return .findTarget(target)
         }
@@ -297,8 +297,7 @@ extension Navigation {
     }
 
     private func dedupedOffsets(_ offsets: [CGPoint]) -> [CGPoint] {
-        var seen = Set<CoarseOffset>()
-        return offsets.filter { seen.insert(CoarseOffset($0)).inserted }
+        offsets.uniqued(on: CoarseOffset.init)
     }
 
     private func scanGoalTerminal(

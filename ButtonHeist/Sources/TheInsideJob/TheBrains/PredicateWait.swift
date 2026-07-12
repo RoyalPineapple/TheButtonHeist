@@ -18,7 +18,7 @@ internal enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
 internal struct WaitObservationPlan: Sendable, Equatable {
     internal let scope: SemanticObservationScope
 
-    internal init(predicate _: AccessibilityPredicate) {
+    internal init(predicate _: AccessibilityPredicate<RootContext>) {
         scope = .discovery
     }
 
@@ -39,10 +39,9 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     internal typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
     internal typealias BuildObservationWindow = @MainActor (
         SettledCapture,
-        SettledSemanticObservationEvent,
-        AccessibilityTrace.DeltaProjection
+        SettledSemanticObservationEvent
     ) -> ObservationWindow?
-    internal typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate, String) -> String?
+    internal typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate<RootContext>, String) -> String?
     internal typealias AnnouncementCursor = @MainActor (AnnouncementWaitCursorStrategy) -> AccessibilityNotificationCursor
     internal typealias AnnouncementWait = @MainActor (
         AccessibilityNotificationCursor,
@@ -84,7 +83,6 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         do {
@@ -94,7 +92,6 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 initialTrace: initialTrace,
                 after: sequence,
                 observationPlan: observationPlan ?? WaitObservationPlan(step: resolvedStep),
-                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
                 announcementCursorStrategy: announcementCursorStrategy
             )
         } catch {
@@ -121,12 +118,11 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
-        if case .announcement(let announcement) = step.predicate {
+        if case .announcement(let announcement) = step.predicate.node {
             return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
@@ -164,8 +160,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 initialTrace: initialTrace,
                 start: start,
                 shouldPoll: timeout > 0 && sequence == nil,
-                observationScope: plan.scope,
-                allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+                observationScope: plan.scope
             )
         }
 
@@ -173,8 +168,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         var stream = PredicateObservationStreamState()
         let reducer = Reducer(
             step: step,
-            timeout: timeout,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            timeout: timeout
         )
 
         let initialDecision = initialDecision(
@@ -353,7 +347,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
 
     internal func reduceObservation(
         _ observation: HeistSemanticObservation,
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         baselineSeed: PredicateObservationBaselineSeed,
         stream: PredicateObservationStreamState
     ) -> PredicateObservationStreamReduction {
@@ -365,12 +359,12 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         guard let baseline = seeded.state.changeBaseline else { return seeded }
         let window = buildObservationWindow(
             baseline,
-            observation.event,
-            predicate.deltaProjection
+            observation.event
         )
-        return seeded.state.reducing(
+        return stream.reducing(
             observation,
             predicate: predicate,
+            baselineSeed: .supplied(baseline),
             observationWindow: window
         )
     }

@@ -11,247 +11,127 @@ struct IncludeExcludeFields<Value> {
 }
 
 extension HeistPlanSourceParser {
-    mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicateExpr {
-        if case .string = currentToken.kind {
-            throw error(currentToken, "accessibility predicate requires an explicit accessibility property such as .exists(.label(...)) or .label(...)")
-        }
+    mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate<RootContext> {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
-        case "change":
+        case "changed":
             try expectSymbol("(")
-            var changes: [ChangeScopePredicateExpr] = []
-            if !consumeSymbol(")") {
-                repeat {
-                    changes.append(try parseChangeScopePredicateExpr())
-                } while consumeSymbol(",")
-                try expectSymbol(")")
+            let scopeName = try parseDotCallName(allowedPrefixes: [])
+            let predicate: AccessibilityPredicate<RootContext>
+            switch scopeName {
+            case "screen": predicate = .changed(try parseScreenDelta())
+            case "elements": predicate = .changed(try parseElementsDelta())
+            default: throw error(previous, "unsupported changed scope '.\(scopeName)'. Valid: screen, elements")
             }
-            switch changes.count {
-            case 0:
-                return .changePredicate(.any)
-            case 1:
-                let change = changes[0].change
-                switch change {
-                case .screenScope:
-                    throw error(previous, "single screen change must use .screenChanged")
-                case .elementsScope(let assertions) where assertions.count == 1:
-                    throw error(previous, "single element change must use .appeared, .disappeared, or .updated")
-                case .any, .elementsScope, .allScopes:
-                    return .changePredicate(change)
-                }
-            default:
-                return .changePredicate(.allScopes(NonEmptyArray(changes[0], rest: Array(changes.dropFirst()))))
-            }
+            try expectSymbol(")")
+            return predicate
         case "noChange":
-            return .noChangePredicate
+            return .noChange
         case "announcement":
-            return .announcement(try parseAnnouncementPredicateExpr())
-        case "exists":
-            return .state(try parseExistsMissingState(name: name))
-        case "missing":
-            return .state(try parseExistsMissingState(name: name))
-        case "all":
-            return .state(try parseAllState())
-        case "label", "identifier", "value", "hint", "traits",
-             "actions", "customContent", "rotors", "exclude",
-             "element":
-            return .exists(try parseElementPredicateTemplate(named: name))
-        case "appeared":
-            return .changePredicate(.elementsScope([try parseAppearedElementDeltaPredicateExpr()]))
-        case "disappeared":
-            return .changePredicate(.elementsScope([try parseDisappearedElementDeltaPredicateExpr()]))
-        case "updated":
-            return .changePredicate(.elementsScope([try parseUpdatedElementDeltaPredicateExpr()]))
-        case "screenChanged":
-            return .changePredicate(try parseScreenChangedPredicateExpr().change)
+            return try parseAnnouncementPredicate()
+        case "exists", "missing":
+            return try parseCurrentTreePredicate(name: name)
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
     }
 
-    mutating func parseAnnouncementPredicateExpr() throws -> AnnouncementPredicateExpr {
-        guard consumeSymbol("(") else {
-            return AnnouncementPredicateExpr()
-        }
+    mutating func parseAnnouncementPredicate() throws -> AccessibilityPredicate<RootContext> {
+        guard consumeSymbol("(") else { return .announcement }
         if consumeSymbol(")") {
             throw error(previous, "empty announcement predicate must use .announcement")
         }
-        let match = try parseStringMatchCallArgument(field: "announcement")
+        let expression = try parseStringMatchCallArgument(field: "announcement")
+        let match = try expression.resolve(in: .empty)
         try expectSymbol(")")
-        return AnnouncementPredicateExpr(match: match)
+        return .announcement(match)
     }
 
-    mutating func parseChangeScopePredicateExpr() throws -> ChangeScopePredicateExpr {
-        let name = try parseDotCallName(allowedPrefixes: [])
-        switch name {
-        case "screenChanged":
-            return try parseScreenChangedPredicateExpr()
-        case "elements":
-            try expectSymbol("(")
-            var assertions: [ElementDeltaPredicateExpr] = []
-            if !consumeSymbol(")") {
-                repeat {
-                    assertions.append(try parseElementDeltaPredicateExpr())
-                } while consumeSymbol(",")
-                try expectSymbol(")")
-            }
-            return .elements(assertions)
-        case "appeared":
-            return .elements([try parseAppearedElementDeltaPredicateExpr()])
-        case "disappeared":
-            return .elements([try parseDisappearedElementDeltaPredicateExpr()])
-        case "updated":
-            return .elements([try parseUpdatedElementDeltaPredicateExpr()])
-        default:
-            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screenChanged, elements, appeared, disappeared, updated")
+    mutating func parseScreenDelta() throws -> ChangeDeclaration {
+        try expectSymbol("(")
+        var assertions: [AccessibilityPredicate<ScreenAssertionContext>] = []
+        if !consumeSymbol(")") {
+            try expectSymbol("[")
+            repeat {
+                let name = try parseDotCallName(allowedPrefixes: [])
+                guard name == "exists" || name == "missing" else {
+                    throw error(previous, "screen assertions accept only .exists and .missing")
+                }
+                assertions.append(try parseCurrentTreePredicate(name: name))
+            } while consumeSymbol(",")
+            try expectSymbol("]")
+            try expectSymbol(")")
         }
-    }
-
-    mutating func parseScreenChangedPredicateExpr() throws -> ChangeScopePredicateExpr {
-        guard consumeSymbol("(") else {
-            return .screen([])
-        }
-        if consumeSymbol(")") {
-            throw error(previous, "empty screen change must use .screenChanged")
-        }
-        var assertions: [StatePredicateExpr] = []
-        repeat {
-            assertions.append(try parseStatePredicateExpr())
-        } while consumeSymbol(",")
-        try expectSymbol(")")
         return .screen(assertions)
     }
 
-    mutating func parseStatePredicateExpr() throws -> StatePredicateExpr {
+    mutating func parseElementsDelta() throws -> ChangeDeclaration {
+        try expectSymbol("(")
+        var assertions: [AccessibilityPredicate<ElementsAssertionContext>] = []
+        if !consumeSymbol(")") {
+            try expectSymbol("[")
+            repeat {
+                assertions.append(try parseElementsAssertion())
+            } while consumeSymbol(",")
+            try expectSymbol("]")
+            try expectSymbol(")")
+        }
+        return .elements(assertions)
+    }
+
+    mutating func parseCurrentTreePredicate<Context>(
+        name: String
+    ) throws -> AccessibilityPredicate<Context> {
+        try expectSymbol("(")
+        let target = try parseTargetExpr()
+        try expectSymbol(")")
+        return name == "exists" ? .exists(target) : .missing(target)
+    }
+
+    mutating func parseScreenAssertion() throws -> AccessibilityPredicate<ScreenAssertionContext> {
+        let name = try parseDotCallName(allowedPrefixes: [])
+        guard name == "exists" || name == "missing" else {
+            throw error(previous, "screen assertion accepts only .exists and .missing")
+        }
+        return try parseCurrentTreePredicate(name: name)
+    }
+
+    mutating func parseElementsAssertion() throws -> AccessibilityPredicate<ElementsAssertionContext> {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "exists", "missing":
-            return try parseExistsMissingState(name: name)
-        case "all":
-            return try parseAllState()
-        case "label", "identifier", "value", "hint", "traits",
-             "actions", "customContent", "rotors", "exclude",
-             "element":
-            return .exists(try parseElementPredicateTemplate(named: name))
-        default:
-            throw error(previous, "unsupported state predicate '.\(name)'")
-        }
-    }
-
-    mutating func parseExistsMissingState(name: String) throws -> StatePredicateExpr {
-        try expectSymbol("(")
-        if currentToken.isSymbol(")") {
-            throw error(currentToken, ".\(name) requires an element matcher or target")
-        }
-        let state: StatePredicateExpr
-        if lookaheadLabel("container") {
-            try expectIdentifier("container")
-            try expectSymbol(":")
-            let container = try parseContainerPredicateExpr()
-            state = name == "exists" ? .existsContainer(container) : .missingContainer(container)
-        } else if let target = try parseTargetRefIfPresent() {
-            state = name == "exists" ? .existsTarget(target) : .missingTarget(target)
-        } else if startsTargetExpression {
-            let target = try parseTargetExpr()
-            state = name == "exists" ? .existsTarget(target) : .missingTarget(target)
-        } else {
-            let predicate = try parseElementPredicateTemplate()
-            state = name == "exists" ? .exists(predicate) : .missing(predicate)
-        }
-        try expectSymbol(")")
-        return state
-    }
-
-    mutating func parseAllState() throws -> StatePredicateExpr {
-        try expectSymbol("(")
-        var states: [StatePredicateExpr] = [try parseStatePredicateExpr()]
-        while consumeSymbol(",") {
-            states.append(try parseStatePredicateExpr())
-        }
-        try expectSymbol(")")
-        return .all(NonEmptyArray(states[0], rest: Array(states.dropFirst())))
-    }
-
-    mutating func parseElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
-        let name = try parseDotCallName(allowedPrefixes: [])
-        switch name {
+            return try parseCurrentTreePredicate(name: name)
         case "appeared":
-            return try parseAppearedElementDeltaPredicateExpr()
+            return try parseTemporalTarget(constructor: AccessibilityPredicate.appeared)
         case "disappeared":
-            return try parseDisappearedElementDeltaPredicateExpr()
+            return try parseTemporalTarget(constructor: AccessibilityPredicate.disappeared)
         case "updated":
-            return try parseUpdatedElementDeltaPredicateExpr()
+            return try parseUpdatedAssertion()
         default:
-            throw error(previous, "unsupported element delta predicate '.\(name)'")
+            throw error(
+                previous,
+                "unsupported elements assertion '.\(name)'. Valid: exists, missing, appeared, disappeared, updated"
+            )
         }
     }
 
-    mutating func parseAppearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
+    mutating func parseTemporalTarget(
+        constructor: (AccessibilityTarget) -> AccessibilityPredicate<ElementsAssertionContext>
+    ) throws -> AccessibilityPredicate<ElementsAssertionContext> {
         try expectSymbol("(")
-        if currentToken.isSymbol(")") {
-            throw error(currentToken, ".appeared requires an element matcher")
-        }
-        let predicate = try parseElementPredicateTemplate()
+        let target = try parseTargetExpr()
         try expectSymbol(")")
-        return .appearedElement(predicate)
+        return constructor(target)
     }
 
-    mutating func parseDisappearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
+    mutating func parseUpdatedAssertion() throws -> AccessibilityPredicate<ElementsAssertionContext> {
         try expectSymbol("(")
-        if currentToken.isSymbol(")") {
-            throw error(currentToken, ".disappeared requires an element matcher")
-        }
-        let predicate = try parseElementPredicateTemplate()
+        let target = try parseTargetExpr()
+        try expectSymbol(",")
+        let change = try parsePropertyChangeExpr()
         try expectSymbol(")")
-        return .disappearedElement(predicate)
+        return .updated(target, change)
     }
-
-    mutating func parseUpdatedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
-        try expectSymbol("(")
-        if currentToken.isSymbol(")") {
-            throw error(currentToken, ".updated(...) requires an update matcher")
-        }
-        if lookaheadLabel("element") {
-            throw error(currentToken, "updated(element:) is not supported; use .updated(.label(...), .value(...))")
-        }
-
-        let update: ElementUpdatePredicateExpr
-        if lookaheadElementUpdateMatcherFollowedByChange {
-            let element = try parseElementPredicateTemplate()
-            try expectSymbol(",")
-            update = ElementUpdatePredicateExpr(element: element, change: try parsePropertyChangeExpr())
-        } else if lookaheadElementUpdateMatcherOnly {
-            throw error(currentToken, ".updated(...) with an element matcher also requires an update matcher")
-        } else if startsElementUpdatePropertyChange {
-            update = ElementUpdatePredicateExpr(change: try parsePropertyChangeExpr())
-        } else {
-            let element = try parseElementPredicateTemplate()
-            guard consumeSymbol(",") else {
-                throw error(currentToken, ".updated(...) with an element matcher also requires an update matcher")
-            }
-            update = ElementUpdatePredicateExpr(element: element, change: try parsePropertyChangeExpr())
-        }
-        try expectSymbol(")")
-        return .updatedElement(update)
-    }
-
-    var lookaheadElementUpdateMatcherFollowedByChange: Bool {
-        var parser = self
-        guard (try? parser.parseElementPredicateTemplate()) != nil else { return false }
-        return parser.consumeSymbol(",")
-    }
-
-    var lookaheadElementUpdateMatcherOnly: Bool {
-        var parser = self
-        guard (try? parser.parseElementPredicateTemplate()) != nil else { return false }
-        guard parser.currentToken.isSymbol(")") else { return false }
-        return !lookaheadIdentifier(1, "value")
-    }
-
-    var startsElementUpdatePropertyChange: Bool {
-        currentToken.isSymbol(".") && lookaheadIdentifier(in: Self.validElementPropertyNames)
-    }
-
     mutating func parsePropertyChangeExpr() throws -> AnyPropertyChangeExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
         try expectSymbol("(")

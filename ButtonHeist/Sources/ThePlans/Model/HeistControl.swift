@@ -14,18 +14,10 @@ public struct WaitFor: HeistContent {
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: AccessibilityPredicate<RootContext>,
         timeout: Double = defaultWaitTimeout
     ) {
         self.init(predicate: predicate, timeout: timeout, elseBody: nil, definitions: [], diagnostics: [])
-    }
-
-    @_disfavoredOverload
-    public init(
-        _ predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout
-    ) {
-        self.init(.predicate(predicate), timeout: timeout)
     }
 
     public func `else`(
@@ -49,7 +41,7 @@ public struct WaitFor: HeistContent {
     }
 
     private init(
-        predicate: AccessibilityPredicateExpr,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         elseBody: [HeistStep]?,
         definitions: [HeistPlan],
@@ -67,7 +59,7 @@ public struct RepeatUntil: HeistContent {
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
@@ -80,15 +72,6 @@ public struct RepeatUntil: HeistContent {
             definitions: content.heistDefinitions,
             diagnostics: content.heistBuildDiagnostics
         )
-    }
-
-    @_disfavoredOverload
-    public init(
-        _ predicate: AccessibilityPredicate,
-        timeout: Double,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        self.init(.predicate(predicate), timeout: timeout, content)
     }
 
     public func `else`(
@@ -113,7 +96,7 @@ public struct RepeatUntil: HeistContent {
     }
 
     private init(
-        predicate: AccessibilityPredicateExpr,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]?,
@@ -158,7 +141,7 @@ public struct If: HeistContent {
     }
 
     public init(
-        _ predicate: StatePredicateExpr,
+        _ predicate: AccessibilityPredicate<ScreenAssertionContext>,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
@@ -208,7 +191,7 @@ public struct Case {
     let predicateBranch: PredicateBranch
 
     public init(
-        _ predicate: StatePredicateExpr,
+        _ predicate: AccessibilityPredicate<ScreenAssertionContext>,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()

@@ -7,13 +7,20 @@ struct ButtonHeistImportContract {
     }
 
     static func makePlan() throws -> HeistPlan {
-        let payTarget: ElementTarget = .label("Pay")
-        let currentPredicate: AccessibilityPredicate = .state(.existsTarget(payTarget))
-        let changedPredicate: AccessibilityPredicate = .change(.screenChanged)
-        _ = (currentPredicate, changedPredicate)
+        let payTarget: AccessibilityTarget = .label("Pay")
+        let checkoutContainer: AccessibilityTarget = .container(.label("Checkout"))
+        let currentPredicate: AccessibilityPredicate<RootContext> = .exists(payTarget)
+        let containerPredicate: AccessibilityPredicate<RootContext> = .exists(checkoutContainer)
+        let updatedPredicate: AccessibilityPredicate<ElementsAssertionContext> = .updated(
+            payTarget,
+            .value("Paid")
+        )
+        let changedPredicate: AccessibilityPredicate<RootContext> = .changed(.elements([updatedPredicate]))
+        let noChangePredicate: AccessibilityPredicate<RootContext> = .noChange
+        _ = (currentPredicate, containerPredicate, changedPredicate, noChangePredicate)
 
         return try HeistPlan("external-import-contract") {
-            Activate(.label("Pay")).expect(.change(.screenChanged))
+            Activate(.label("Pay")).expect(.changed(.screen()))
         }
     }
 }

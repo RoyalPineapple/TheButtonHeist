@@ -138,7 +138,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testWaitWarnAndFailRoundTrip() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .state(.exists(ElementPredicate(label: "Ready"))), timeout: 1.5)),
+            .wait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1.5)),
             .warn(WarnStep(message: "optional branch skipped")),
             .fail(FailStep(message: "unexpected state")),
         ])
@@ -160,7 +160,7 @@ final class HeistPlanTests: XCTestCase {
                 elseBody: [.warn(WarnStep(message: "not home"))]
             )),
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Done"))),
+                predicate: .exists(.label("Done")),
                 timeout: 2,
                 elseBody: [.fail(FailStep(message: "no known state"))]
             )),
@@ -333,17 +333,20 @@ final class HeistPlanTests: XCTestCase {
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 2)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2)))
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(change(screen(*)) timeout=2))"#
+            #"action(command=activate expect=wait(changed(screen(*)) timeout=2))"#
         )
     }
 
-    func testElementTargetExprHashMatchesCrossCaseEquality() {
-        let target = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Save"), ordinal: 1))
-        let template = ElementTargetExpr.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))), ordinal: 1)
+    func testAccessibilityTargetSugarHashMatchesCanonicalValue() {
+        let target = AccessibilityTarget.target(.label("Save"), ordinal: 1)
+        let template = AccessibilityTarget.predicate(
+            ElementPredicateTemplate(label: .exact(.literal("Save"))),
+            ordinal: 1
+        )
 
         XCTAssertEqual(target, template)
         XCTAssertEqual(Set([target, template]).count, 1)
@@ -353,7 +356,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachElementStepStoresRefBackedBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let target = try ElementTargetExpr(ref: HeistReferenceName(rawValue: "target"))
+        let target = try AccessibilityTarget(ref: HeistReferenceName(rawValue: "target"))
         let step = try ForEachElementStep(
             matching: matching,
             limit: 5,
@@ -362,7 +365,7 @@ final class HeistPlanTests: XCTestCase {
                 .action(try ActionStep(
                     command: .activate(target),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .state(.missingTarget(target)),
+                        predicate: .missing(target),
                         timeout: 2
                     )))),
                 .warn(WarnStep(message: "activated one")),
@@ -375,7 +378,7 @@ final class HeistPlanTests: XCTestCase {
                 .action(try ActionStep(
                     command: .activate(target),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .state(.missingTarget(target)),
+                        predicate: .missing(target),
                         timeout: 2
                     )))),
                 .warn(WarnStep(message: "activated one")),
@@ -391,7 +394,7 @@ final class HeistPlanTests: XCTestCase {
                 limit: 5,
                 parameter: "target",
                 body: [.action(try ActionStep(
-                    command: .activate(try ElementTargetExpr(ref: HeistReferenceName(rawValue: "target")))
+                    command: .activate(try AccessibilityTarget(ref: HeistReferenceName(rawValue: "target")))
                 ))]
             )),
         ])
@@ -416,7 +419,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("ElementTarget predicate requires"), "\(error)")
+            XCTAssertTrue("\(error)".contains("AccessibilityTarget predicate requires"), "\(error)")
         }
     }
 

@@ -131,9 +131,9 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: contradictory))
     }
 
-    // MARK: - Delta transient payload
+    // MARK: - Change-fact transient metadata
 
-    func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {
+    func testAccessibilityTraceChangeFactRoundTripsWithTransient() throws {
         let element = HeistElement(
             description: "Loading",
             label: "Processing",
@@ -143,14 +143,16 @@ final class AutoSettleFieldsTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
             actions: []
         )
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 12, transient: [element]))
-        let data = try JSONEncoder().encode(delta)
-        let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: data)
-        guard case .noChange(let payload) = decoded else {
-            return XCTFail("Expected noChange, got \(decoded)")
+        let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init(
+            metadata: .init(transient: [element])
+        ))
+        let data = try JSONEncoder().encode(fact)
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.ChangeFact.self, from: data)
+        guard case .elementsChanged(let payload) = decoded else {
+            return XCTFail("Expected elementsChanged, got \(decoded)")
         }
-        XCTAssertEqual(payload.transient.count, 1)
-        XCTAssertEqual(payload.transient.first?.label, "Processing")
+        XCTAssertEqual(payload.metadata.transient.count, 1)
+        XCTAssertEqual(payload.metadata.transient.first?.label, "Processing")
     }
 
 }

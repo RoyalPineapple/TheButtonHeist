@@ -209,25 +209,30 @@ public extension AccessibilityTrace {
         /// The focused (first responder) element, as a durable target
         /// (predicate + ordinal) built server-side via the minimum predicate selector.
         /// No internal id crosses the wire.
-        public let firstResponder: ElementTarget?
+        public let firstResponder: AccessibilityTarget?
         /// Software keyboard state affects text-entry affordances even when
         /// the hierarchy is otherwise unchanged.
         public let keyboardVisible: Bool?
         /// Screen identity derived from the parsed accessibility hierarchy.
         public let screenId: String?
+        /// Monotonic screen-generation identity owned by the settled
+        /// observation stream. Updates are valid only within one generation.
+        public let observationGeneration: UInt64?
         /// Front-to-back app window signal, normalized to avoid storing
         /// process object identifiers.
         public let windowStack: [WindowContext]
 
         public init(
-            firstResponder: ElementTarget? = nil,
+            firstResponder: AccessibilityTarget? = nil,
             keyboardVisible: Bool? = nil,
             screenId: String? = nil,
+            observationGeneration: UInt64? = nil,
             windowStack: [WindowContext] = []
         ) {
             self.firstResponder = firstResponder
             self.keyboardVisible = keyboardVisible
             self.screenId = screenId
+            self.observationGeneration = observationGeneration
             self.windowStack = windowStack
         }
     }

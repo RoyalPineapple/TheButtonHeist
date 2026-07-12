@@ -195,12 +195,12 @@ public struct PredicateSelectionContext: Sendable, Equatable {
 
 public struct MinimumPredicateSelection: Sendable, Equatable {
     public let contextElementId: PredicateSelectionElementId
-    public let target: ElementTarget
+    public let target: AccessibilityTarget
     public let candidate: PredicateCandidate
 
     public init(
         contextElementId: PredicateSelectionElementId,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         candidate: PredicateCandidate
     ) {
         self.contextElementId = contextElementId
@@ -266,7 +266,7 @@ public enum MinimumPredicateSelector {
             if matches.count == 1 {
                 return MinimumPredicateSelection(
                     contextElementId: contextElementId,
-                    target: .predicate(candidate.predicate),
+                    target: .predicate(ElementPredicateTemplate(candidate.predicate)),
                     candidate: candidate
                 )
             }
@@ -288,7 +288,7 @@ public enum MinimumPredicateSelector {
         )
         return MinimumPredicateSelection(
             contextElementId: contextElementId,
-            target: .predicate(strongestSemanticCandidate.predicate, ordinal: ordinal),
+            target: .predicate(ElementPredicateTemplate(strongestSemanticCandidate.predicate), ordinal: ordinal),
             candidate: ordinalCandidate
         )
     }

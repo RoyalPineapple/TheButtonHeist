@@ -125,8 +125,10 @@ cannot be created.
 
 ## Semantic Targeting
 
-Element-targeted semantic commands abstract viewport mechanics. Callers provide
-identity, not coordinates. The Button Heist owns the element inflation loop:
+`AccessibilityTarget` is the one target language for semantic actions,
+accessibility predicates, and `get_interface` subtree queries. Callers provide
+semantic identity, not coordinates. The Button Heist owns the element inflation
+loop:
 
 1. Resolve the semantic target against current accessibility state.
 2. Reveal it if viewport movement is required.
@@ -148,12 +150,22 @@ caller's intent. They are direct client viewport/debug commands, not HeistPlan
 DSL or durable heist primitives, and they execute through direct client
 dispatch as public side-effecting commands.
 
-## Element Identity
+## Accessibility Node Identity
 
 `heistId` is a current-capture annotation. It can appear in interface captures
-and diagnostics to correlate current tree entries. Public action targets use
-`ElementTarget` predicate checks: label, identifier, value, hint, traits,
-actions, custom content, rotors, recursive exclusion, and optional ordinal.
+and diagnostics to correlate current tree entries. Public actions, predicates,
+and subtree queries use `AccessibilityTarget`. An element target carries
+ordered checks for label, identifier, value, hint, traits, actions, custom
+content, rotors, recursive exclusion, and optional ordinal. A container target
+carries `ContainerPredicateExpr`, and `.within(container:target:)` scopes any
+target to descendants of a matching container. Public target nesting is
+bounded by the shared public JSON input depth limit.
+
+Container identifiers are semantic data on every delivered parser container,
+not only semantic-group containers. A container identifier target therefore
+matches any parser container type that carries that identifier. The current
+delivered `Interface` tree is the authority for both element and container
+matches; a flattened element list is not a second query model.
 `heistId` is not a replay selector and it is not geometry authority.
 The string fields may be a single StringMatch or an array of StringMatch values
 when one property needs multiple checks; every entry for that property must
@@ -182,19 +194,26 @@ near-miss suggestions through the diagnostic path. Broad matching modes
 normalization. See [Heist language spec](HEIST-LANGUAGE-SPEC.md) for the full
 matching contract.
 
-## Captures, Traces, and Deltas
+## Captures, Change Facts, and Public Deltas
 
-The accessibility trace stores captures. Segments are derived projections used
-to compare captures, format action results, validate expectations, and report
-diagnostics. Segments are not a second source of truth.
+`AccessibilityTrace` stores settled captures and is the observation source of
+truth. It derives one ordered stream of `ChangeFact.elementsChanged` and
+`ChangeFact.screenChanged` values. Predicate evaluation and diagnostics consume
+that stream directly; there is no endpoint delta or alternate temporal model.
 
-Responses may include compact deltas such as `noChange`, `elementsChanged`, or
-`screenChanged`. Those deltas summarize what changed between trace captures;
-they do not replace the underlying captures. The type families behind captures
-and targets — and the internal/wire border they respect — are drawn in the
-[currency types diagram](diagrams/currency-types.md); a single action's
-end-to-end flow is drawn in the
-[action pipeline diagram](diagrams/action-pipeline.md).
+A screen boundary emits three ordered facts: all old-tree nodes disappear, the
+screen marker occurs, then all new-tree nodes appear. Element updates exist only
+between captures in the same screen generation. Screen, layout, value, and
+announcement notifications are edge evidence and prevent a complete window
+from being considered fact-free.
+
+Responses may include compact public deltas named `noChange`,
+`elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
+it stacks the ordered facts, squashes them into endpoint-friendly edits, and
+lets a screen marker dominate the final kind. It may retain bounded transient
+evidence, but it cannot preserve the ordered history it folded, so predicates
+never consume it. The full model
+is drawn in the [observation pipeline diagram](diagrams/observation-pipeline.md).
 
 ## Interface Rendering Receipt
 
@@ -384,8 +403,8 @@ heist fixtures, scripts, and replay.
 ### ActionResult
 
 `ActionResult` reports a typed `outcome`, the action method used, optional
-command payload, trace-derived accessibility delta, and expectation result
-when one was requested. Failures carry their typed action error inside
+command payload, accessibility trace, trace-folded public delta, and expectation
+result when one was requested. Failures carry their typed action error inside
 `outcome.errorKind`.
 
 For `elementsChanged`, public responses include concrete semantic edits under
@@ -399,21 +418,29 @@ available.
 
 ### Expectations
 
-Expectations use object form with a `type` discriminator, for example
-`{"type":"change","scopes":[{"type":"screen"}]}` or
-`{"type":"exists","element":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Success"}}]}}`.
-Current semantic container presence is a state expectation:
-`{"type":"exists","container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]}}`.
-It does not require a prior `screenChanged` delta. Scoped element targets use
-`{"container":{"checks":[...]},"target":{...}}` so resolution is limited to
-descendants of the matching container.
+Expectations use the context-typed `AccessibilityPredicate<Context>` grammar.
+At the root, the valid forms are `exists`, `missing`, `changed`, `no_change`,
+and `announcement`. `changed` has exactly one scope and always carries an
+`assertions` array:
 
-Expectations use the current object grammar at every public boundary. Element
-expectations select subjects with predicate checks, not flat matcher fields or
-`heistId`.
-Element update predicates use `before` and `after` matcher objects for the old
-and new element state; raw `from`/`to` string fields are not part of the public
-grammar.
+```json
+{"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
+```
+
+Screen assertions permit only current-tree `exists` and `missing`. Elements
+assertions additionally permit `appeared`, `disappeared`, and `updated`.
+Current-tree predicates use the same `AccessibilityTarget` object as actions and
+subtree queries. Container presence uses a container target:
+
+```json
+{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}
+```
+
+Scoped targets use `{"container":{"checks":[...]},"target":{...}}`. Element
+update assertions use `before` and `after` matcher objects for the property
+change; raw `from`/`to` fields are not accepted. Old `change`, `scopes`,
+`screenChanged`, flat element/container predicate fields, aliases, and fallback
+spellings are rejected rather than adapted.
 
 ## Minimal Integration
 

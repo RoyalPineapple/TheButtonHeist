@@ -3,13 +3,13 @@ import TheScore
 
 enum EvidenceMinimumMatcher {
     static func normalizedTarget(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         actionResult: ActionResult
-    ) -> ElementTarget {
+    ) -> AccessibilityTarget {
         minimumTarget(actionResult: actionResult) ?? target
     }
 
-    static func activationTarget(actionResult: ActionResult) -> ElementTarget? {
+    static func activationTarget(actionResult: ActionResult) -> AccessibilityTarget? {
         guard let evidence = actionResult.subjectEvidence,
               isActivatable(evidence.element)
         else { return nil }
@@ -21,7 +21,7 @@ enum EvidenceMinimumMatcher {
             || element.traits.contains { AccessibilityPolicy.interactiveTraits.contains($0) }
     }
 
-    static func minimumTarget(actionResult: ActionResult) -> ElementTarget? {
+    static func minimumTarget(actionResult: ActionResult) -> AccessibilityTarget? {
         guard actionResult.settled != false,
               let evidence = actionResult.subjectEvidence,
               let trace = actionResult.accessibilityTrace,
@@ -59,15 +59,17 @@ enum EvidenceMinimumMatcher {
         return equalIndices.count == 1 ? equalIndices[0] : nil
     }
 
-    static func index(of target: ElementTarget, in elements: [HeistElement]) -> Int? {
-        let matches = ElementMatchGraph(elements: elements).resolve(target).matches
+    static func index(of target: AccessibilityTarget, in elements: [HeistElement]) -> Int? {
         switch target {
-        case .predicate(_, let ordinal):
-            if ordinal != nil {
-                return matches.first?.traversalOrder
+        case .predicate(let template, let ordinal):
+            guard let predicate = try? template.resolve(in: .empty) else { return nil }
+            let matches = ElementMatchGraph(elements: elements).resolve(predicate).matches
+            if let ordinal {
+                guard matches.indices.contains(ordinal) else { return nil }
+                return matches[ordinal].traversalOrder
             }
             return matches.count == 1 ? matches[0].traversalOrder : nil
-        case .within:
+        case .container, .ref, .within:
             return nil
         }
     }

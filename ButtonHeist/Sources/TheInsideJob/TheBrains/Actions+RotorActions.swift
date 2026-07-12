@@ -19,7 +19,7 @@ extension Actions {
         let rotorIndex = target.selection.rotorIndex
         let method: ActionMethod = .rotor
         return await performElementAction(
-            target: target.elementTarget,
+            target: target.target,
             method: method,
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly

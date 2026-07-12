@@ -24,19 +24,24 @@ ButtonHeistMCP projects one tool per exposed Fence command from the same
 contract. Wire message discriminators live one layer lower in TheScore and are
 documented separately.
 
-### Captures and Deltas Are the Currency
+### Captures and Change Facts Are the Currency
 
-The durable state is an accessibility capture: a full hierarchy plus a content
-hash. Deltas are receipts derived from two captures. Action responses and heist
-contract evidence use that same capture/delta model instead of parallel
-before/after interfaces.
+The durable observation truth is an `AccessibilityTrace` of settled captures.
+Each capture contains the delivered `Interface` tree and its content hash.
+There is no independently stored delta or alternate flat screen model.
 
-Agents should start from `get_interface`, then prefer the action result's delta
-over another read. A screen-change delta invalidates prior capture-local
-handles and supplies the new interface evidence. Semantic matchers and
-predicate fields are the public currency for follow-up actions. See the
+The trace derives one ordered `ChangeFact` stream for every temporal consumer.
+Predicates, receipts, diagnostics, and repair analysis all use those facts. A
+public response may expose a compact `delta`, but that value is a one-way,
+lossy fold of the ordered facts: facts are stacked in time and then squashed for
+display. It is never fed back into predicate evaluation.
+
+Agents should start from `get_interface`, then inspect an action result's public
+delta before issuing another read. After a screen change, build follow-up
+targets from the new interface evidence. See the
 [currency types diagram](diagrams/currency-types.md) for the type families and
-the internal/wire border.
+the [observation pipeline diagram](diagrams/observation-pipeline.md) for the
+capture, fact, predicate, and public-fold boundaries.
 
 ### Tripwire Triggers, Settle Decides Stable
 
@@ -46,14 +51,23 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
-for a clean settled snapshot. One pure observation reducer then classifies the
-edge: a scoped `screenChanged` notification wins, followed by typed screen
-appearance evidence. When the screen identity remains stable, scoped
-`layoutChanged` and `valueChanged` notifications become `elementChanged`
-signals. Announcement
-notifications stay in the evidence stream and never create or wake a semantic
-transition. The settle loop can also report unhealthy snapshots rather than
-pretending an empty post-navigation parse is stable.
+for a clean settled snapshot. One pure observation reducer combines the
+settled capture edge with scoped screen, layout, value, and announcement
+notifications. Notifications are edge evidence, not a second state model, and
+any of those notifications prevents the edge from being classified as
+fact-free `noChange`.
+
+A screen notification starts a new observation generation. The screen boundary
+is normalized as old-tree departures, a `screenChanged` marker, then new-tree
+arrivals. Layout, value, and announcement notifications trigger same-generation
+element facts when there is no screen boundary. The settle loop can also report
+unhealthy snapshots rather than pretending an empty post-navigation parse is
+stable.
+
+UIKit value changes are not identified by `valueChanged` alone. UIKit controls
+may signal through value, layout, or announcement notifications, so all three
+trigger a recapture; the before/after `accessibilityValue` diff confirms the
+change. SwiftUI's uniform value notification follows the same recapture path.
 See the [settle loop diagram](diagrams/settle-loop.md) for the state machine
 and its constants.
 
@@ -129,13 +143,13 @@ Runtime subscriptions are not a public driver surface.
 ### Screen Classification Is Typed
 
 Screen changes are not guessed from text, timers, or window events. The parser
-builds settled captures, `AccessibilityNotificationBus` records scoped
-screen/layout/announcement evidence, and `AccessibilityObservationChangeReducer`
-owns the one classification decision used by action results and waiters. The
-wire transition stores typed fallback reasons rather than a free-form
-`screenChangeReason` string. UIKit notification absence is not proof of no
-change: silent flows use the settled snapshot and the explicit typed fallback
-heuristics.
+builds settled captures, `AccessibilityNotificationBus` records scoped screen,
+layout, value, and announcement evidence, and
+`AccessibilityObservationChangeReducer` determines the capture-edge kind used
+to derive facts. A screen notification is authoritative and starts a new
+generation. Notification absence is not proof of no change: silent flows still
+derive facts from settled capture differences and typed screen-appearance
+evidence.
 
 ## Component Map
 
@@ -147,11 +161,12 @@ in-app server.
 
 ## Execution and Predicate Pipeline
 
-The Button Heist has one source of truth: the accessibility tree, a snapshot of
-that tree, or a diff between snapshots. Targets, searches, waits, expectations,
-and repeat-loop stop conditions all evaluate through the same predicate model.
-For a single action's end-to-end sequence — dispatch, resolution, activation,
-settle, delta, receipt — see the [action pipeline diagram](diagrams/action-pipeline.md).
+The Button Heist has one current-tree projection and one temporal projection:
+the delivered `Interface` tree and the ordered facts derived from its capture
+trace. Targets, `get_interface` subtree queries, waits, expectations, and
+repeat-loop stop conditions use one `AccessibilityTarget` language and one
+`AccessibilityPredicate<Context>` tree. For a single action's end-to-end
+sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ```mermaid
 flowchart TD
@@ -173,7 +188,7 @@ flowchart TD
     InitialStop --> StopMet{"stop met?"}
     StopMet -->|yes| Done["success"]
     StopMet -->|no| RunBody["Run body action"]
-    RunBody --> ProgressGate["Progress gate<br/>PredicateWait.wait(.change(), 1s)"]
+    RunBody --> ProgressGate["Progress gate<br/>PredicateWait.wait(.changed(.elements()), 1s)"]
     ProgressGate --> ProgressObserved{"progress observed?"}
     ProgressObserved -->|no| Fail["fail / timeout"]
     ProgressObserved -->|yes| EvaluateStop["Evaluate stop predicate<br/>against accumulated trace"]
@@ -184,13 +199,13 @@ flowchart TD
     ProgressGate --> Poll
 
     Poll --> Observe["Observe settled semantic tree"]
-    Observe --> Append["Append semantic capture<br/>skip duplicate no-change frames<br/>record noChange proof"]
-    Append --> Accumulate["Build accumulated delta<br/>screen + elements over window"]
-    Accumulate --> Evaluate["Evaluate predicate<br/>exists / missing / change / noChange"]
+    Observe --> Append["Append settled capture<br/>and scoped notification evidence"]
+    Append --> Accumulate["Derive ordered ChangeFact stream<br/>over the complete window"]
+    Accumulate --> Evaluate["Evaluate predicate<br/>current tree + ordered facts"]
     Evaluate --> Matched{"matched?"}
     Matched -->|yes| Success["ActionResult success<br/>trace + expectation"]
     Matched -->|no, timeout not elapsed| Observe
-    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>diagnostics + last delta"]
+    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>trace + unmet evidence"]
 ```
 
 The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
@@ -202,7 +217,9 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
   action-like.
 - `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
   immediately first; after each body, The Button Heist waits up to one second for
-  `.change()`, then evaluates the stop predicate against the accumulated trace.
+  `.changed(.elements())`, then evaluates the stop predicate against the
+  accumulated trace. Screen boundaries also emit element lifecycle facts, so
+  they satisfy this progress gate.
 
 Each baseline is a settled `ObservationCursor` carrying generation, semantic
 scope, sequence, capture hash, and notification sequence. The semantic stream
@@ -210,26 +227,37 @@ retains bounded per-scope history and builds one `ObservationWindow` from that
 baseline through the latest settled capture. Polling extends this window; it
 does not maintain a second baseline or notification claim.
 
-A screen appearance ends the current observation generation. The transition
-edge remains available as `screenAppearance` evidence, but retained state from
-the prior screen is discarded and the destination capture starts collection
-for the new generation.
+A screen notification ends the current observation generation and starts the
+next. The boundary is retained in the same ordered fact stream as three facts:
 
-An observation window projects its accumulated trace into distinct transition
-facts. `screenAppearance` carries screen-change evidence, `elementsChanged`
-carries before/after element evidence and layout notifications, and interaction
-or announcement facts remain diagnostic. Generic `.change()` accepts screen or
-element facts; element and screen predicates read only their matching fact.
-Only a complete window can produce unchanged evidence. If lineage or retained
-history is incomplete, the window has no verdict, so `.noChange` cannot pass.
+1. `elementsChanged` with every node in the old delivered tree disappeared.
+2. `screenChanged` as the generation boundary marker.
+3. `elementsChanged` with every node in the new delivered tree appeared.
 
-The public predicate layer is intentionally one tree language:
+This makes a screen change an element lifecycle change without pretending that
+nodes were updated across generations. Only same-generation capture edges can
+construct `updated` facts. A target that has the same semantics on both screens
+still disappears and appears because its generation changed.
 
-- State predicates: `.exists(...)`, `.missing(...)`,
-  `.exists(container: ...)`, `.missing(container: ...)`.
-- Change predicates: `.screenChanged(...)`, `.change(.elements(...))`, `.noChange`.
-- Element delta assertions: `.appeared(...)`, `.disappeared(...)`,
-  `.updated(...)`.
+An observation window contains raw settled captures and completeness. Its
+ordered `ChangeFact` stream is derived from those captures plus scoped
+notification evidence. There is no standalone transition-warning fallback and
+no endpoint delta used by the evaluator. Only a complete, fact-free window can
+satisfy `.noChange`.
+
+The public predicate layer is one context-typed tree language:
+
+- Root predicates: `.exists(target)`, `.missing(target)`,
+  `.changed(...)`, `.noChange`, and `.announcement(...)`.
+- Screen declaration: `.changed(.screen([.exists(target), .missing(target)]))`.
+- Elements declaration: `.changed(.elements([.exists(target),
+  .missing(target), .appeared(target), .disappeared(target),
+  .updated(target, change)]))`.
+
+`exists` and `missing` always evaluate against the current delivered tree,
+including containers. `appeared`, `disappeared`, and `updated` consume ordered
+element facts. Swift's generic contexts make invalid combinations such as an
+`updated` screen assertion unconstructible.
 
 ## Core Flows
 
@@ -247,23 +275,20 @@ The public predicate layer is intentionally one tree language:
 3. TheGetaway routes the plan to TheBrains' heist runtime.
 4. TheBrains captures before-state, performs the action, waits for stable UI, and
    parses after-state.
-5. `AccessibilityObservationChangeReducer` classifies the settled edge using
-   scoped notifications first and typed fallback facts when notifications are silent.
-6. The response includes the heist execution receipt, accessibility trace, derived delta,
-   and optional expectation result.
+5. The trace derives ordered `ChangeFact` values from settled capture edges and
+   scoped notification evidence.
+6. Predicates evaluate directly from the current tree and those facts.
+7. The response includes the heist execution receipt, accessibility trace,
+   optional expectation result, and a public delta folded from the facts.
 
 ### Wait
 
-`wait` is a one-step heist. TheInsideJob checks the current settled state first,
-then watches later settled captures until the requested accessibility predicate
-matches or the timeout expires. Snapshot predicates are direct final-state
-checks, including semantic container presence through
-`.exists(container: ...)`. Element transition waits such as `.appeared(...)`,
-`.disappeared(...)`, and
-`.updated(...)` first try to observe the transition; if the implied final state
-is already true, or becomes true without transition evidence, standalone
-`WaitFor(...)` passes with a warning. Action expectations and
-`RunHeist(...).expect(...)` stay strict transition assertions.
+`wait` is a one-step heist. TheInsideJob checks current-tree predicates first,
+then extends one observation window until the requested predicate matches or
+the timeout expires. `.exists(target)` and `.missing(target)` are current-tree
+checks. `.changed(.elements(...))` and `.changed(.screen(...))` require their
+declared fact evidence. A lifecycle assertion never passes from final state
+alone and there is no warning-based fallback.
 
 ### Replay
 

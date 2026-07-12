@@ -15,11 +15,11 @@ private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
     HeistSemanticStringMatch(mode: .exact, value: .literal(value))
 }
 
-private func existsLabel(_ label: String) -> AccessibilityPredicateExpr {
-    .state(.exists(.label(label)))
+private func existsLabel(_ label: String) -> AccessibilityPredicate<RootContext> {
+    .exists(.label(label))
 }
 
-private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.screenScope())
+private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(.screen())
 
 @Test func `list heists includes root only entry`() throws {
     let catalog = try HeistPlan(
@@ -91,7 +91,7 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
         definitions: [
             HeistPlanAdmissionCandidate(
                 name: "tapRow",
-                parameter: .elementTarget(name: "row"),
+                parameter: .accessibilityTarget(name: "row"),
                 body: [
                     .action(try ActionStep(command: .activate(.ref("row")))),
                 ]
@@ -102,9 +102,9 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
 
     #expect(catalog.heists[1].name == "tapRow")
     #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .elementTarget)
+    #expect(catalog.heists[1].parameterKind == .accessibilityTarget)
     #expect(catalog.heists[1].requiresArgument == true)
-    #expect(catalog.heists[1].summary == "Reusable heist capability requiring element_target argument")
+    #expect(catalog.heists[1].summary == "Reusable heist capability requiring accessibility_target argument")
     #expect(catalog.heists[1].tags == [.capability, .parameterized, .semanticAction])
     #expect(catalog.heists[1].parameterName == nil)
 }
@@ -149,7 +149,7 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
         definitions: [
             HeistPlanAdmissionCandidate(
                 name: "tapRow",
-                parameter: .elementTarget(name: "row"),
+                parameter: .accessibilityTarget(name: "row"),
                 body: [
                     .action(try ActionStep(command: .activate(.ref("row")))),
                 ]
@@ -160,7 +160,7 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
 
     let tapRow = try #require(catalog.heists.first { $0.name == "tapRow" })
     #expect(tapRow.parameterName == "row")
-    #expect(tapRow.parameterKind == .elementTarget)
+    #expect(tapRow.parameterKind == .accessibilityTarget)
     #expect(tapRow.requiresArgument)
     #expect(tapRow.semanticSurfaces == nil)
 }
@@ -193,12 +193,12 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
     let description = try HeistPlan(
         name: "pay",
         body: [
-            .action(try ActionStep(command: .activate(.target(.predicate(.label("Pay")))))),
+            .action(try ActionStep(command: .activate(.label("Pay")))),
             .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ]
     ).describeHeist(named: "pay")
 
-    #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
+    #expect(description.semanticSurface.targetPredicates == [.template(.label("Pay"))])
     #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
 }
 
@@ -224,7 +224,7 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
         body: [
             .action(try ActionStep(command: .typeText(
                 text: .ref("item"),
-                target: .target(.predicate(.label("Search")))
+                target: .label("Search")
             ))),
         ]
     )).heistCatalog()
@@ -313,21 +313,24 @@ private let screenChangePredicate = AccessibilityPredicateExpr.changePredicate(.
 }
 
 @Test func `describe waits expectations and expected effects`() throws {
+    let announcement = AccessibilityPredicate<RootContext>.announcement(.contains("saved"))
     let description = try HeistPlan(
         name: "submit",
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
-            .wait(WaitStep(predicate: .change(.screenChanged), timeout: 2)),
+            .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
+            .wait(WaitStep(predicate: announcement, timeout: 2)),
         ]
     ).describeHeist(named: "submit")
 
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
-    #expect(description.semanticSurface.waits == [screenChangePredicate])
+    #expect(description.semanticSurface.waits == [screenChangePredicate, announcement])
     #expect(description.semanticSurface.expectedEffects == [
         existsLabel("Done"),
         screenChangePredicate,
+        announcement,
     ])
 }
 

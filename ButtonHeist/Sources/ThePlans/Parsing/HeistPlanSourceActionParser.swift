@@ -3,7 +3,7 @@ import Foundation
 extension HeistPlanSourceParser {
     mutating func parseElementTargetAction(
         _ actionName: String,
-        makeCommand: (ElementTargetExpr) -> HeistActionCommand
+        makeCommand: (AccessibilityTarget) -> HeistActionCommand
     ) throws -> HeistActionCommand {
         try expectSymbol("(")
         let target = try parseTargetExpr()
@@ -14,7 +14,7 @@ extension HeistPlanSourceParser {
 
     mutating func rejectActionLevelOrdinalIfPresent(
         actionName: String,
-        target: ElementTargetExpr
+        target: AccessibilityTarget
     ) throws {
         guard consumeSymbol(",") else { return }
         let token = currentToken
@@ -26,21 +26,21 @@ extension HeistPlanSourceParser {
                 "Ordinal belongs to the target. Use \(actionName)(\(renderTargetCorrection(target, ordinal: 0)))."
             )
         }
-        throw error(token, "\(actionName)(...) accepts a single ElementTargetExpr")
+        throw error(token, "\(actionName)(...) accepts a single AccessibilityTarget")
     }
 
-    func renderTargetCorrection(_ target: ElementTargetExpr) -> String {
+    func renderTargetCorrection(_ target: AccessibilityTarget) -> String {
         HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target)
     }
 
-    func renderTargetCorrection(_ target: ElementTargetExpr, ordinal: Int) -> String {
+    func renderTargetCorrection(_ target: AccessibilityTarget, ordinal: Int) -> String {
         HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: ordinal)
     }
 
     mutating func parseTypeTextAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let text = try parseStringExpr()
-        var target: ElementTargetExpr?
+        var target: AccessibilityTarget?
         var replacingExisting = false
         var sawTarget = false
         var sawReplacingExisting = false
@@ -260,37 +260,12 @@ extension HeistPlanSourceParser {
         return .mechanicalDrag(DragTarget(selection: selection))
     }
 
-    mutating func parseConcreteElementTarget() throws -> ElementTarget {
-        let expr = try parseTargetExpr()
-        switch expr {
-        case .target(let target):
-            return target
-        case .predicate(let predicate, let ordinal):
-            return .predicate(try concretePredicate(from: predicate), ordinal: ordinal)
-        case .ref(let reference):
-            throw error(previous, "mechanical actions require a concrete ElementTarget, not target ref '\(reference)'")
-        case .within(let container, let target):
-            return .within(
-                try container.resolve(in: .empty),
-                try concreteElementTarget(from: target)
-            )
-        }
+    mutating func parseConcreteElementTarget() throws -> AccessibilityTarget {
+        try parseTargetExpr()
     }
 
-    mutating func concreteElementTarget(from expr: ElementTargetExpr) throws -> ElementTarget {
-        switch expr {
-        case .target(let target):
-            return target
-        case .predicate(let predicate, let ordinal):
-            return .predicate(try concretePredicate(from: predicate), ordinal: ordinal)
-        case .ref(let reference):
-            throw error(previous, "mechanical actions require a concrete ElementTarget, not target ref '\(reference)'")
-        case .within(let container, let target):
-            return .within(
-                try container.resolve(in: .empty),
-                try concreteElementTarget(from: target)
-            )
-        }
+    mutating func concreteElementTarget(from expr: AccessibilityTarget) throws -> AccessibilityTarget {
+        expr
     }
 
     mutating func parseXYArguments() throws -> ScreenPoint {
@@ -344,11 +319,10 @@ extension HeistPlanSourceParser {
             switch chain {
             case "expect":
                 try expectSymbol("(")
-                let predicate: AccessibilityPredicateExpr
+                let predicate: AccessibilityPredicate<RootContext>
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
-                    predicate = .change()
-                    timeout = nil
+                    throw error(currentToken, ".expect(...) requires a canonical predicate")
                 } else {
                     predicate = try parseAccessibilityPredicateExpr()
                     timeout = try parseTrailingTimeout(defaultValue: nil)

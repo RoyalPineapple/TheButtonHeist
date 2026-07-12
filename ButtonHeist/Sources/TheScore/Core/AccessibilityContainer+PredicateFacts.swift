@@ -33,7 +33,7 @@ public extension AccessibilityContainer {
             rowCount = nil
             columnCount = nil
         case .scrollable:
-            kind = .none
+            kind = .scrollable
             label = nil
             value = nil
             rowCount = nil

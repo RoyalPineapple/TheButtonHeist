@@ -8,7 +8,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .observation,
                 requestDecoder: TheFence.decodeGetInterfaceRequest,
-                parameters: FenceParameterBlocks.elementFilter + [
+                parameters: [
                     FenceParameterBlocks.interfaceSubtree,
                     FenceParameters.interfaceDetail.spec,
                     FenceParameters.maxScrollsPerContainer.spec,
@@ -23,7 +23,7 @@ extension TheFence.Command {
                     Build DSL targets from returned accessibility language: `.label("Pay")`,
                     `.identifier("pay_button")`, `.value("Milk")`, `.element(.label("Pay"),
                     .traits([.button]))`, or `.target(..., ordinal: n)` for duplicates.
-                    Filter with `checks`; each item is
+                    Pass `subtree` a canonical accessibility target. Element target checks use
                     `{ "kind": "label|identifier|value|hint|customContent", "match": ... }`,
                     `{ "kind": "traits|actions|rotors", "values": [...] }`, or
                     `{ "kind": "exclude", "check": { ... } }`.

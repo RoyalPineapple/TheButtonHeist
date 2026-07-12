@@ -143,7 +143,7 @@ private struct EncodedInvocationStepContract: Decodable {
             ]),
         ], body: [
             .wait(WaitStep(
-                predicate: .state(.exists(.label("Ready"))),
+                predicate: .exists(.label("Ready")),
                 timeout: 0,
                 elseBody: [.invoke(HeistInvocationStep(path: ["fallback"]))]
             )),
@@ -219,7 +219,7 @@ private struct EncodedInvocationStepContract: Decodable {
 }
 
 @Test func `reference binding context keeps scope and placeholders aligned`() throws {
-    let target = ElementTarget.predicate(ElementPredicate(label: "Pay"), ordinal: 1)
+    let target = AccessibilityTarget.predicate(.label("Pay"), ordinal: 1)
     let context = HeistReferenceBindingContext.empty
         .binding(string: "milk", to: "query")
         .binding(target: target, to: "button")
@@ -227,7 +227,7 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(context.invariantFailures.isEmpty)
     #expect(context.bindings == [
         HeistReferenceBinding(reference: "query", value: .string("milk")),
-        HeistReferenceBinding(reference: "button", value: .elementTarget(target)),
+        HeistReferenceBinding(reference: "button", value: .accessibilityTarget(target)),
     ])
     #expect(context.scope.stringRefs == ["query"])
     #expect(context.scope.targetRefs == ["button"])

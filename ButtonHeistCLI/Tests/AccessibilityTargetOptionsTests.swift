@@ -3,7 +3,7 @@ import XCTest
 import ThePlans
 @testable import ButtonHeistCLIExe
 
-final class ElementTargetOptionsTests: XCTestCase {
+final class AccessibilityTargetOptionsTests: XCTestCase {
 
     func testHeistIdOptionIsNotSupported() throws {
         XCTAssertThrowsError(try TapSubcommand.parse(["--heist-id", "button_save"]))
@@ -25,10 +25,10 @@ final class ElementTargetOptionsTests: XCTestCase {
         XCTAssertEqual(
             try command.element.parsedTarget(),
             .predicate(
-                ElementPredicate(
+                ElementPredicateTemplate(
                     [
-                        .label("Save"),
-                        .identifier("saveButton"),
+                        .label(.literal("Save")),
+                        .identifier(.literal("saveButton")),
                         .traits([.button]),
                         .exclude(.traits([.notEnabled])),
                     ]
@@ -39,8 +39,7 @@ final class ElementTargetOptionsTests: XCTestCase {
     }
 
     func testGestureElementObjectUsesCanonicalCodableTargetBridge() throws {
-        let target = ElementTarget.predicate(
-            ElementPredicate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
         )
         let object = TapSubcommand.elementObject(target)
         let semanticArguments = CLIRequestBuilder.arguments(target: target)
@@ -80,9 +79,9 @@ final class ElementTargetOptionsTests: XCTestCase {
     }
 
     func testScopedTargetBridgeIncludesContainerScrollableAndActionsChecks() throws {
-        let target = ElementTarget.within(
+        let target = AccessibilityTarget.within(
             container: .matching(.scrollable(true), .actions([.custom("Sub"), .activate])),
-            .predicate(ElementPredicate(label: "Checkout"))
+            .predicate(ElementPredicateTemplate(label: "Checkout"))
         )
 
         let object = CLIRequestBuilder.targetObject(target)
@@ -151,7 +150,7 @@ final class ElementTargetOptionsTests: XCTestCase {
 
         XCTAssertThrowsError(try command.element.parsedTarget()) { error in
             XCTAssertTrue(
-                String(describing: error).contains("ElementTarget requires a predicate"),
+                String(describing: error).contains("AccessibilityTarget requires a predicate"),
                 "Unexpected error: \(error)"
             )
         }

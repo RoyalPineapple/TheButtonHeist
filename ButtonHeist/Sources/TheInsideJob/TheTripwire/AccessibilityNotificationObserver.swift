@@ -2,6 +2,7 @@
 #if DEBUG
 import Foundation
 import os.log
+import TheScore
 import UIKit
 
 private let accessibilityNotificationLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
@@ -388,7 +389,7 @@ private enum AccessibilityNotificationPrivateSPI {
         }
 
         throw InstallError.callbackSymbolsUnavailable(
-            checkedSources: ButtonHeistPrivateSPI.uniquePreservingOrder(checkedSources)
+            checkedSources: checkedSources.uniqued(on: \.self)
         )
     }
 

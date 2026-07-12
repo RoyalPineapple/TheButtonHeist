@@ -5,15 +5,10 @@ import XCTest
 final class GetInterfaceQueryInvariantTests: XCTestCase {
 
     @ButtonHeistActor
-    func testGetInterfaceRejectsSubtreeAndMatcherFields() async throws {
+    func testGetInterfaceRejectsTopLevelChecks() async throws {
         let (fence, _) = makeConnectedFence()
 
         let response = try await fence.execute(command: .getInterface, values: [
-            "subtree": .object([
-                "element": .object([
-                    "checks": .array([Self.exactStringCheck(kind: "label", value: "Save")]),
-                ]),
-            ]),
             "checks": .array([Self.exactStringCheck(kind: "label", value: "Pay")]),
         ])
 
@@ -21,7 +16,7 @@ final class GetInterfaceQueryInvariantTests: XCTestCase {
             return XCTFail("Expected .error response, got: \(response)")
         }
         XCTAssertTrue(
-            failure.message.contains("use subtree or element matcher fields, not both"),
+            failure.message.contains("expected valid get_interface parameter"),
             failure.message
         )
     }

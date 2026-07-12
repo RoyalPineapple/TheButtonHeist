@@ -28,7 +28,7 @@ that genuinely needs multiple parameters, return values, or complex logic
 should be a thin Swift wrapper that drives heists, not a stretched heist.
 
 **A list is not a parameter.** A `HeistDef` takes one `String`, one
-`ElementTarget`, or nothing. To act over several strings, keep the definition
+`AccessibilityTarget`, or nothing. To act over several strings, keep the definition
 single-string and loop at the call site with `ForEach`. The generated wire
 format does carry string arrays — the `for_each_string` step stores its
 `values` list — but that array is loop source data, fixed at plan admission
@@ -51,6 +51,29 @@ The Button Heist keeps the thesis and specifies the mechanism publicly:
 "settled" has an exact fingerprint-based definition
 ([Scope and limits](SCOPE-AND-LIMITS.md)), and every step also asserts its
 outcome against the settled tree after acting.
+
+**One target language prevents projection drift.** Actions, predicates, and
+`get_interface` subtree queries all ask the same question: which accessibility
+node in the delivered tree is meant? `AccessibilityTarget` answers it once for
+elements, containers, ordinals, references, and descendant scope. A separate
+container index or flat-element matcher would allow observation and action to
+disagree about nodes that the parser delivered, especially identifier-bearing
+containers.
+
+**Ordered facts preserve what endpoint diffs erase.** Async UI work can produce
+several meaningful edges before an expectation is fulfilled. A pair of endpoint
+captures cannot distinguish a transient appearance from no change, and it
+cannot preserve notification evidence that arrives between equal hashes.
+`AccessibilityTrace` therefore retains settled captures and derives one ordered
+`ChangeFact` stream. A screen boundary is represented in that stream as all old
+nodes departing, the screen marker, then all new nodes arriving. Updates remain
+same-generation facts.
+
+The public `delta` deliberately solves a different problem: compact response
+rendering. It folds facts in temporal order and squashes them like stacked
+layers, with screen change dominating the final kind. Because that operation is
+lossy, feeding it back into predicate evaluation would recreate the endpoint
+drift the fact stream removed.
 
 ## The invariant, precisely
 

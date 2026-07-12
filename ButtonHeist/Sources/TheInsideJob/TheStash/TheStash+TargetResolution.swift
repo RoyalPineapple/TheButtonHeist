@@ -147,20 +147,20 @@ extension TheStash {
     /// Resolution reads settled semantic memory. If an element is not known,
     /// resolution fails with a near-miss suggestion. Live coordinate
     /// revalidation happens later in action execution.
-    func resolveTarget(_ target: ElementTarget) -> TargetResolution {
+    func resolveTarget(_ target: AccessibilityTarget) -> TargetResolution {
         resolveTarget(target, in: settledSemanticScreen, resolutionScope: .known)
     }
 
     /// Resolve a target against a caller-provided observation value. Used by
     /// exploration before its local semantic union has been committed.
-    func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
+    func resolveTarget(_ target: AccessibilityTarget, in screen: Screen) -> TargetResolution {
         resolveTarget(target, in: screen, resolutionScope: .provided)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
-    func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
+    func resolveVisibleTarget(_ target: AccessibilityTarget) -> TargetResolution {
         resolveTarget(target, in: liveVisibleScreen.visibleOnly, resolutionScope: .visible)
     }
 
@@ -244,7 +244,7 @@ extension TheStash {
     }
 
     /// Resolve a target using first-match semantics against only the live hierarchy.
-    func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
+    func resolveFirstVisibleMatch(_ target: AccessibilityTarget) -> ScreenElement? {
         resolveVisibleTarget(target.firstMatchTarget).resolved
     }
 
@@ -265,7 +265,7 @@ extension TheStash {
 private extension TheStash {
 
     func resolveTarget(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         in screen: Screen,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
@@ -274,13 +274,22 @@ private extension TheStash {
     }
 
     func resolveTarget(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         in projection: SemanticInterfaceProjection,
         screen: Screen,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let selection = target.terminalSelection
         let screenElements = projection.screenElements(scopedBy: target)
+        guard let selection = target.terminalSelection else {
+            return .notFound(TargetNotFoundFacts(
+                predicate: ElementPredicate(),
+                ordinal: nil,
+                reason: .noMatches,
+                resolutionScope: resolutionScope,
+                screenElements: screenElements,
+                visibleHeistIds: screen.visibleIds
+            ))
+        }
         if let ordinal = selection.ordinal, ordinal < 0 {
             return .notFound(TargetNotFoundFacts(
                 predicate: selection.predicate,
@@ -292,8 +301,7 @@ private extension TheStash {
             ))
         }
 
-        let matchGraph = ElementMatchGraph(interface: projection.interface)
-        let matches = projection.screenElements(matching: matchGraph.resolve(selection.targetWithoutOrdinal))
+        let matches = screenElements.filter { selection.predicate.matches($0.element) }
         if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
@@ -335,34 +343,36 @@ private extension TheStash {
 private struct TargetTerminalSelection {
     let predicate: ElementPredicate
     let ordinal: Int?
-    let targetWithoutOrdinal: ElementTarget
 }
 
-private extension ElementTarget {
-    var terminalSelection: TargetTerminalSelection {
+private extension AccessibilityTarget {
+    var terminalSelection: TargetTerminalSelection? {
         switch self {
-        case .predicate(let predicate, let ordinal):
+        case .predicate(let template, let ordinal):
+            guard let predicate = try? template.resolve(in: .empty) else { return nil }
             return TargetTerminalSelection(
                 predicate: predicate,
-                ordinal: ordinal,
-                targetWithoutOrdinal: .predicate(predicate)
+                ordinal: ordinal
             )
-        case .within(let container, let nestedTarget):
-            let nestedSelection = nestedTarget.terminalSelection
+        case .within(_, let nestedTarget):
+            guard let nestedSelection = nestedTarget.terminalSelection else { return nil }
             return TargetTerminalSelection(
                 predicate: nestedSelection.predicate,
-                ordinal: nestedSelection.ordinal,
-                targetWithoutOrdinal: .within(container, nestedSelection.targetWithoutOrdinal)
+                ordinal: nestedSelection.ordinal
             )
+        case .container, .ref:
+            return nil
         }
     }
 
-    var firstMatchTarget: ElementTarget {
+    var firstMatchTarget: AccessibilityTarget {
         switch self {
         case .predicate(let predicate, _):
             return .predicate(predicate, ordinal: 0)
         case .within(let container, let target):
-            return .within(container, target.firstMatchTarget)
+            return .within(container: container, target: target.firstMatchTarget)
+        case .container, .ref:
+            return self
         }
     }
 }

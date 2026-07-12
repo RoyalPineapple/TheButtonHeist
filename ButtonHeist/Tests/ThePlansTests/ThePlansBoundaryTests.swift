@@ -14,7 +14,7 @@ func `representative heist plan encodes decodes validates and renders`() throws 
             .expect(.exists(.value("alex@example.com")), timeout: .seconds(1))
 
         Activate(.label("Submit"))
-            .expect(.change(.screenChanged))
+            .expect(.changed(.screen()))
             .expect(.exists(.label("Home")), timeout: .seconds(5))
 
         WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
@@ -622,7 +622,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
             text: .ref("query"),
-            target: .target(.predicate(.label("Search")))
+            target: .label("Search")
         )))]
     )
 

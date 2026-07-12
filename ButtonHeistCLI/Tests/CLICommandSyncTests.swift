@@ -62,6 +62,26 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.discoveryLimits.parameters[.maxScrollsPerDiscovery], .int(40))
     }
 
+    func testGetInterfaceEncodesCanonicalTargetUnderSubtree() throws {
+        let command = try GetInterfaceCommand.parse([
+            "--label", "Checkout",
+            "--traits", "button",
+            "--ordinal", "1",
+            "--max-scrolls-per-container", "25",
+        ])
+        let target = try XCTUnwrap(command.subtree.parsedTarget())
+        let arguments = try command.requestArguments()
+
+        XCTAssertEqual(arguments.value(for: .subtree), CLIRequestBuilder.targetValue(target))
+        XCTAssertEqual(arguments.value(for: .maxScrollsPerContainer), .int(25))
+        XCTAssertNil(arguments.value(for: .target))
+        XCTAssertNil(arguments.value(for: .checks))
+    }
+
+    func testGetInterfaceRejectsSubtreePrefixedAlias() {
+        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--subtree-label", "Checkout"]))
+    }
+
     func testConnectCommandUsesTypedDeviceOption() throws {
         let command = try ConnectCommand.parse([
             "--device",
@@ -119,13 +139,13 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testFenceExpectationArgumentContractAcceptsJsonObject() throws {
         let parsed = try TheFence.parseExpectationArgument(
-            #"{"type":"change","scopes":[{"type":"elements","assertions":[{"type":"updated","property":"value"}]}]}"#
+            #"{"type":"changed","scope":"elements","assertions":[]}"#
         )
 
         guard case .object(let object) = parsed else {
             return XCTFail("expected object expectation")
         }
-        XCTAssertEqual(object["type"], .string("change"))
+        XCTAssertEqual(object["type"], .string("changed"))
     }
 
     func testFenceExpectationArgumentContractRejectsUnknownString() {
@@ -456,24 +476,21 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","target":{"identifier":{"mode":"exact","value":"button_save"}}}"#
+            from: #"{"command":"activate","target":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"button_save"}}]}}"#
         )
 
         XCTAssertEqual(parsed.command, .activate)
         guard case .object(let target)? = parsed.argument(.target) else {
             return XCTFail("expected typed target object")
         }
-        XCTAssertEqual(target["identifier"], .object([
-            "mode": .string("exact"),
-            "value": .string("button_save"),
-        ]))
+        XCTAssertNotNil(target["checks"])
     }
 
     func testSharedRequestBuilderRejectsWaitTimeoutAtOrBelowZeroInJSONLinesMode() {
         for timeout in ["0", "-1"] {
             XCTAssertThrowsError(
                 try CLIRequestBuilder.parsedRequest(
-                    from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":\#(timeout)}"#
+                    from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":\#(timeout)}"#
                 )
             ) { error in
                 let failure = requestBuildFailure(from: error)
@@ -488,7 +505,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testSharedRequestBuilderRejectsWaitTimeoutAboveThirtyInJSONLinesMode() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(
-                from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":31}"#
+                from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":31}"#
             )
         ) { error in
             let failure = requestBuildFailure(from: error)
@@ -501,7 +518,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderRoutesValidWaitInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":5}"#
+            from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":5}"#
         )
 
         XCTAssertEqual(parsed.command, .wait)
@@ -600,8 +617,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testCLIBuilderCarriesPredicateTargetAsPublicTargetArgument() throws {
-        let expectedTarget = ElementTarget.predicate(
-            ElementPredicate(
+        let expectedTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(
                 [
                     .label("Rotor Host"),
                     .identifier("rotor.host"),
@@ -647,7 +663,7 @@ final class CLICommandSyncTests: XCTestCase {
         ]))
     }
 
-    func testScrollCLIAllowsNoElementTarget() throws {
+    func testScrollCLIAllowsNoAccessibilityTarget() throws {
         let command = try ScrollCommand.parse([])
 
         XCTAssertFalse(try command.selection.element.hasTarget)
@@ -662,7 +678,7 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(try command.selection.element.hasTarget)
     }
 
-    func testScrollCLIRejectsContainerNameWithElementTarget() {
+    func testScrollCLIRejectsContainerNameWithAccessibilityTarget() {
         XCTAssertThrowsError(try ScrollCommand.parse(["--container-name", "main_scroll", "--label", "Item"]))
     }
 
@@ -672,7 +688,7 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.direction, "up")
     }
 
-    func testScrollToEdgeCLIAllowsNoElementTargetAndDefaultsTop() throws {
+    func testScrollToEdgeCLIAllowsNoAccessibilityTargetAndDefaultsTop() throws {
         let command = try ScrollToEdgeCommand.parse([])
 
         XCTAssertFalse(try command.selection.element.hasTarget)

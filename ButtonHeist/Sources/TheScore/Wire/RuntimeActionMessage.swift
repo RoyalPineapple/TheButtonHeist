@@ -10,13 +10,13 @@ import ThePlans
 /// runtime.
 package enum RuntimeActionMessage: Sendable, Equatable {
     /// Activate an element.
-    case activate(ElementTarget)
+    case activate(AccessibilityTarget)
 
     /// Increment an adjustable element.
-    case increment(ElementTarget)
+    case increment(AccessibilityTarget)
 
     /// Decrement an adjustable element.
-    case decrement(ElementTarget)
+    case decrement(AccessibilityTarget)
 
     /// Perform a custom action on an element.
     case performCustomAction(CustomActionTarget)

@@ -241,7 +241,7 @@ extension ElementInflation {
     }
 
     private func stableActionTarget(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         screenElement: TheStash.ScreenElement
     ) -> InflatedElementTarget? {
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement),

@@ -124,7 +124,7 @@ variables:
 func testCheckoutCompletes() {
     runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
         Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 }
 ```
@@ -249,13 +249,15 @@ reveal, element inflation, and live geometry through the runtime pipeline.
 
 ```swift
 CustomAction("Archive", on: .label("Message"))
-    .expect(.change(.elements()))
+    .expect(.changed(.elements()))
 
 TypeText("Bruschetta", into: .label("Search Items"))
     .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.updated(.label("Quantity"), .value(before: "2", after: "3")))
+    .expect(.changed(.elements([
+        .updated(.label("Quantity"), .value(before: "2", after: "3"))
+    ])))
 
 Increment(.label("Volume"))
     .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
@@ -302,9 +304,10 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.updated(...)` for explicit same-screen property-delta assertions in
-action expectations. The first argument may be an element matcher and the second
-argument is the property change matcher. Use `before:` and `after:` when the
+Use `.changed(.elements([.updated(...)]))` for explicit same-screen property
+change assertions in action expectations. The first argument is an
+`AccessibilityTarget` and the second argument is the property change matcher.
+Use `before:` and `after:` when the
 previous value matters; use the unlabeled form for a destination-only value. For
 example, `.value("3")` is exact and `.value(.contains("items"))` is explicitly broad.
 This remains an observed-change predicate for `.expect(...)` and does not infer
@@ -315,24 +318,23 @@ assertion such as `.exists(.element(..., .value(...)))` or a `WaitFor(...)`
 over `.updated(...)`. Keep `.updated(...)` for changes that should remain
 same-screen element deltas.
 
-`.expect(.updated(...))` lowers to an element-change predicate. Include an
-explicit element matcher when the assertion must be tied to a durable element:
-`.updated(.label("Quantity"), .value(before: "2", after: "3"))`.
+The element assertion stays explicit inside the declaration:
+`.changed(.elements([.updated(.label("Quantity"),
+.value(before: "2", after: "3"))]))`.
 
-Standalone `WaitFor(...)` is final-state oriented. Transition predicates still
-communicate intent, but `WaitFor(.appeared(...))`,
-`WaitFor(.disappeared(...))`, and `WaitFor(.updated(...))` can pass with a
-warning when their implied final state is already true or becomes true without
-an observed transition. Use snapshot predicates for destination state after an
-action when the transition itself does not matter.
+Standalone `WaitFor(...)` uses the same evaluator as action expectations.
+Current-tree `exists` and `missing` may pass immediately. `appeared`,
+`disappeared`, and `updated` require observed facts and never pass with a
+warning inferred from final state. Use current-tree predicates when the
+transition itself does not matter.
 
 Use container predicates when the assertion is "the current settled hierarchy
 contains this matching container", not "a navigation just happened". They match
 settled accessibility structure without requiring a previous transition:
 
 ```swift
-WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))
-WaitFor(.missing(container: .label("Loading")), timeout: .seconds(2))
+WaitFor(.exists(.container(.identifier("Checkout"))), timeout: .seconds(2))
+WaitFor(.missing(.container(.identifier("Loading"))), timeout: .seconds(2))
 Activate(.within(container: .label("Checkout"), .label("Pay")))
 Activate(.within(container: .scrollable, .label("Load more")))
 ```
@@ -343,10 +345,11 @@ Container predicates can match semantic-group `.label(...)` and `.value(...)`,
 `.scrollable`, custom actions through `.actions(...)`, or explicit
 `.matching(...)` check chains.
 
-Use `.screenChanged(...)` for navigation. Assertions inside `screenChanged` are
-destination snapshot assertions, not element-delta predicates:
-`.screenChanged(.exists(.label("Receipt")))`. Do not put `.appeared(...)`,
-`.disappeared(...)`, or `.updated(...)` inside `.screenChanged(...)`.
+Use `.changed(.screen())` for navigation. Assertions inside `.screen([...])`
+are destination current-tree assertions:
+`.changed(.screen([.exists(.label("Receipt"))]))`. The type system exposes only
+`.exists(...)` and `.missing(...)` in that list; lifecycle and update
+assertions are available only inside `.changed(.elements([...]))`.
 
 `ForEach` has two durable authoring forms:
 
@@ -399,7 +402,7 @@ and re-evaluates the matched collection. If the policy-backed identity/order
 of the matched collection is unchanged, the next body uses the next ordinal. If
 identity/order changed, the next body resets to ordinal `0`. State-only
 mutations do not reset ordinal scheduling. Each body action still resolves the
-live `ElementTarget` through the normal command and element inflation pipeline, so
+live `AccessibilityTarget` through the normal command and element inflation pipeline, so
 out-of-range or non-inflated targets fail with normal command diagnostics.
 
 ## Compilation boundary
@@ -440,17 +443,14 @@ body-local `try`, `await`, package imports, and unbounded loops. Agents should
 send the full canonical source returned by `canonicalSwiftDSL()`. Body-only
 statement snippets are not a supported authored surface.
 
-Canonical sugar may elide an implied wrapper when the remaining spelling is the
-same DSL concept: `Activate(.label("Pay"))` is shorthand for a target built from
-the `.label("Pay")` predicate, `WaitFor(.label("Pay"))` is shorthand for an
-element existence predicate, and `.expect(.appeared(.label("Toast")))` is
-shorthand for an element-change assertion. Sugar must stay local and
-unambiguous; write `.exists(container: .label("Checkout"))` for settled
-container presence, write `.within(container: .label("Checkout"), .label("Pay"))`
-for scoped targeting, write `.screenChanged` or
-`.screenChanged(.exists(.label("Receipt")))` for navigation, and use
-`.appeared(...)`, `.disappeared(...)`, or `.updated(...)` only for same-screen
-element deltas.
+Canonical sugar may elide an implied target wrapper when the remaining spelling
+is the same target concept: `Activate(.label("Pay"))` is shorthand for an
+`AccessibilityTarget` built from the `.label("Pay")` element predicate, and
+`WaitFor(.label("Pay"))` is shorthand for `.exists(.label("Pay"))`. Change
+declarations are never elided. Write `.exists(.container(...))` for current
+container presence, `.within(container:..., target)` for descendant scope,
+`.changed(.screen())` for navigation, and
+`.changed(.elements([.appeared(...)]))` for lifecycle evidence.
 
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.
@@ -514,7 +514,7 @@ Swift Heist does not preserve:
 - viewport/debug/session commands as durable action steps
 - arbitrary dynamic code over the wire
 - raw JSON wire IR as the agent-facing authoring format
-- generic variables beyond scoped `target_ref` and string refs
+- generic variables beyond scoped accessibility target refs and string refs
 
 The durable language intentionally excludes unbounded loops, sleeps, retries,
 catch/recover flow, and unknown JSON keys. Runtime admission rejects unsafe or

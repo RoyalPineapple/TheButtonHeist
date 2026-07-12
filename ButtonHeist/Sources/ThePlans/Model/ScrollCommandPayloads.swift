@@ -7,7 +7,7 @@ public enum ScrollDirection: String, Codable, Sendable, CaseIterable, Equatable 
 
 public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertible {
     case visibleContainer
-    case element(ElementTarget)
+    case element(AccessibilityTarget)
     case container(ContainerName)
 
     public var description: String {
@@ -40,13 +40,13 @@ public struct ScrollTarget: Sendable, Equatable {
     }
 
     public init(
-        elementTarget: ElementTarget,
+        target: AccessibilityTarget,
         direction: ScrollDirection = .down
     ) {
-        self.init(selection: .element(elementTarget), direction: direction)
+        self.init(selection: .element(target), direction: direction)
     }
 
-    private var elementTarget: ElementTarget? {
+    private var target: AccessibilityTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
     }
@@ -81,28 +81,24 @@ extension ScrollTarget: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case direction
         case containerName
+        case target
     }
 
     public init(from decoder: Decoder) throws {
-        try rejectUnknownScrollPayloadKeys(
-            from: decoder,
-            commandFields: [CodingKeys.direction.stringValue],
-            allowsContainerNameKey: true,
-            typeName: "scroll target"
-        )
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .containerName)
-        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if containerName != nil, elementTarget != nil {
+        let target = try container.decodeIfPresent(AccessibilityTarget.self, forKey: .target)
+        if containerName != nil, target != nil {
             throw DecodingError.dataCorruptedError(
                 forKey: .containerName,
                 in: container,
                 debugDescription: "ScrollTarget requires either containerName or element target fields, not both"
             )
         }
-        switch elementTarget {
-        case .some(let elementTarget):
-            self.selection = .element(elementTarget)
+        switch target {
+        case .some(let target):
+            self.selection = .element(target)
         case nil:
             self.selection = containerName.map(ScrollContainerSelection.container) ?? .visibleContainer
         }
@@ -110,8 +106,8 @@ extension ScrollTarget: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(target, forKey: .target)
         try container.encodeIfPresent(containerName, forKey: .containerName)
         try container.encode(direction, forKey: .direction)
     }
@@ -123,36 +119,34 @@ extension ScrollTarget: Codable {
 /// not setup for ordinary semantic actions.
 public struct ScrollToVisibleTarget: Sendable, Equatable {
     /// Element to scroll into view. Must be a known element with scroll membership.
-    public let elementTarget: ElementTarget
-    public init(elementTarget: ElementTarget) {
-        self.elementTarget = elementTarget
+    public let target: AccessibilityTarget
+    public init(target: AccessibilityTarget) {
+        self.target = target
     }
 }
 
 extension ScrollToVisibleTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scrollToVisible", [
-            elementTarget.description,
+            target.description,
         ].compactMap { $0 })
     }
 }
 
 extension ScrollToVisibleTarget: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case target
+    }
+
     public init(from decoder: Decoder) throws {
-        try rejectUnknownScrollPayloadKeys(from: decoder, typeName: "scroll_to_visible target")
-        guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "ScrollToVisibleTarget requires an element target"
-                )
-            )
-        }
-        self.elementTarget = elementTarget
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll_to_visible target")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        target = try container.decode(AccessibilityTarget.self, forKey: .target)
     }
 
     public func encode(to encoder: Encoder) throws {
-        try elementTarget.encode(to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(target, forKey: .target)
     }
 }
 
@@ -177,13 +171,13 @@ public struct ScrollToEdgeTarget: Sendable, Equatable {
     }
 
     public init(
-        elementTarget: ElementTarget,
+        target: AccessibilityTarget,
         edge: ScrollEdge = .top
     ) {
-        self.init(selection: .element(elementTarget), edge: edge)
+        self.init(selection: .element(target), edge: edge)
     }
 
-    private var elementTarget: ElementTarget? {
+    private var target: AccessibilityTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
     }
@@ -218,28 +212,24 @@ extension ScrollToEdgeTarget: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case edge
         case containerName
+        case target
     }
 
     public init(from decoder: Decoder) throws {
-        try rejectUnknownScrollPayloadKeys(
-            from: decoder,
-            commandFields: [CodingKeys.edge.stringValue],
-            allowsContainerNameKey: true,
-            typeName: "scroll_to_edge target"
-        )
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll_to_edge target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .containerName)
-        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if containerName != nil, elementTarget != nil {
+        let target = try container.decodeIfPresent(AccessibilityTarget.self, forKey: .target)
+        if containerName != nil, target != nil {
             throw DecodingError.dataCorruptedError(
                 forKey: .containerName,
                 in: container,
                 debugDescription: "ScrollToEdgeTarget requires either containerName or element target fields, not both"
             )
         }
-        switch elementTarget {
-        case .some(let elementTarget):
-            self.selection = .element(elementTarget)
+        switch target {
+        case .some(let target):
+            self.selection = .element(target)
         case nil:
             self.selection = containerName.map(ScrollContainerSelection.container) ?? .visibleContainer
         }
@@ -247,20 +237,9 @@ extension ScrollToEdgeTarget: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(target, forKey: .target)
         try container.encodeIfPresent(containerName, forKey: .containerName)
         try container.encode(edge, forKey: .edge)
     }
-}
-
-private func rejectUnknownScrollPayloadKeys(
-    from decoder: Decoder,
-    commandFields: [String] = [],
-    allowsContainerNameKey: Bool = false,
-    typeName: String
-) throws {
-    let containerNameKeys = allowsContainerNameKey ? ["containerName"] : []
-    let allowed = Set(ElementTarget.inlineFieldNames + commandFields + containerNameKeys)
-    try decoder.rejectUnknownKeys(allowed: allowed, typeName: typeName)
 }

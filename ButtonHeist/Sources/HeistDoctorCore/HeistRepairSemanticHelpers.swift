@@ -2,11 +2,13 @@ import Foundation
 import ThePlans
 import TheScore
 
-extension ElementTarget {
+extension AccessibilityTarget {
     var hasOrdinal: Bool {
         switch self {
         case .predicate(_, let ordinal):
             return ordinal != nil
+        case .container, .ref:
+            return false
         case .within(_, let target):
             return target.hasOrdinal
         }
@@ -27,11 +29,6 @@ func nonEmpty(_ value: String?) -> String? {
 
 func primaryText(_ element: HeistElement) -> String? {
     nonEmpty(element.label) ?? nonEmpty(element.value) ?? stableIdentifier(element.identifier)
-}
-
-func unique<T: Hashable>(_ values: [T]) -> [T] {
-    var seen = Set<T>()
-    return values.filter { seen.insert($0).inserted }
 }
 
 func repairFingerprintsAreCompatible(_ lhs: String?, _ rhs: String?) -> Bool {

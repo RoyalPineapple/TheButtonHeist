@@ -66,10 +66,9 @@ struct ToolSyncTests {
         let schemaCases: [(command: TheFence.Command, basePath: [String], label: String)] = [
             (.activate, ["properties", "target", "properties"], "target"),
             (.oneFingerTap, ["properties", "element", "properties"], "gesture element"),
-            (.wait, ["properties", "predicate", "properties", "element", "properties"], "wait.predicate.element"),
-            (.activate, ["properties", "expect", "properties", "element", "properties"], "expect.element"),
-            (.getInterface, ["properties"], "get_interface matcher"),
-            (.getInterface, ["properties", "subtree", "properties", "element", "properties"], "subtree.element"),
+            (.wait, ["properties", "predicate", "properties", "target", "properties"], "wait.predicate.target"),
+            (.activate, ["properties", "expect", "properties", "target", "properties"], "expect.target"),
+            (.getInterface, ["properties", "subtree", "properties"], "subtree"),
         ]
 
         for schemaCase in schemaCases {
@@ -111,9 +110,52 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("Predicate and target schemas expose only canonical fields")
+    func predicateAndTargetSchemasExposeOnlyCanonicalFields() throws {
+        let activate = try inputSchemaValue(for: .activate)
+        let targetProperties = try #require(
+            schemaValue(at: ["properties", "target", "properties"], in: activate)?.objectValue
+        )
+        #expect(Set(targetProperties.keys) == ["checks", "ref", "ordinal", "container", "target"])
+
+        let wait = try inputSchemaValue(for: .wait)
+        let predicateProperties = try #require(
+            schemaValue(at: ["properties", "predicate", "properties"], in: wait)?.objectValue
+        )
+        #expect(Set(predicateProperties.keys) == ["type", "target", "match", "scope", "assertions"])
+        #expect(
+            schemaValue(at: ["properties", "predicate", "properties", "type", "enum"], in: wait)
+                == .array([
+                    .string("exists"),
+                    .string("missing"),
+                    .string("announcement"),
+                    .string("changed"),
+                    .string("no_change"),
+                ])
+        )
+    }
+
+    @Test("AccessibilityTarget schema recursion reaches beyond one nested target")
+    func accessibilityTargetSchemaRecursesBeyondOneNestedTarget() throws {
+        let activate = try inputSchemaValue(for: .activate)
+        let secondNestedTargetPath = [
+            "properties", "target", "properties",
+            "target", "properties",
+            "target", "properties",
+        ]
+        let secondNestedTargetProperties = try #require(
+            schemaValue(at: secondNestedTargetPath, in: activate)?.objectValue
+        )
+
+        #expect(Set(secondNestedTargetProperties.keys) == ["checks", "ref", "ordinal", "container", "target"])
+    }
+
     @Test("get_interface subtree container is an object-only predicate")
     func getInterfaceSubtreeContainerSchemaIsObjectOnly() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
+        let rootProperties = try #require(schemaValue(at: ["properties"], in: tool.inputSchema)?.objectValue)
+        #expect(rootProperties["checks"] == nil)
+
         let containerPath = ["properties", "subtree", "properties", "container"]
         let container = try #require(schemaValue(at: containerPath, in: tool.inputSchema))
 
@@ -208,7 +250,7 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["properties", "argument", "properties", "type", "enum"], in: tool.inputSchema) == .array([
             .string("none"),
             .string("string"),
-            .string("element_target"),
+            .string("accessibility_target"),
         ]))
         #expect(
             schemaValue(at: ["properties", "argument", "properties", "target", "additionalProperties"], in: tool.inputSchema)

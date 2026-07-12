@@ -828,7 +828,7 @@ extension HeistPlanSourceParser {
         switch parameter {
         case .string:
             scope.bindString(localName: localName, referenceName: parameterName)
-        case .elementTarget:
+        case .accessibilityTarget:
             scope.bindTarget(localName: localName, referenceName: parameterName)
         case .none:
             break
@@ -888,5 +888,5 @@ enum HeistPlanSourceBinding {
 enum HeistDefinitionParameterKind {
     case none
     case string
-    case elementTarget
+    case accessibilityTarget
 }

@@ -18,7 +18,13 @@ enum HeistRepairAnalysis {
 
         let lastScreen = RepairScreen(interface: request.lastSuccess.beforeSnapshot)
         let currentScreen = RepairScreen(interface: request.currentFailure.beforeSnapshot)
-        guard case .resolved(let oldResolved, _) = lastScreen.resolve(request.lastSuccess.target) else {
+        let oldResolved: RepairScreen.Element
+        switch lastScreen.resolve(request.lastSuccess.target) {
+        case .resolved(let element, _):
+            oldResolved = element
+        case .unsupportedTarget(let kind):
+            return .ineligible(kind.refusalReason)
+        case .notFound, .ambiguous:
             return .ineligible(.oldTargetDidNotResolveExactlyOnce)
         }
 
@@ -46,6 +52,9 @@ enum HeistRepairAnalysis {
         case .ambiguous(let matches, _):
             failureKind = .ambiguousTarget
             preferredCandidates = Set(matches.map(\.id))
+
+        case .unsupportedTarget(let kind):
+            return .ineligible(kind.refusalReason)
         }
 
         let rankedCandidates = RepairCandidateGenerator.rankedSuccessorCandidates(
@@ -68,6 +77,21 @@ enum HeistRepairAnalysis {
             preferredCandidates: preferredCandidates,
             rankedCandidates: rankedCandidates
         ))
+    }
+}
+
+private extension UnsupportedRepairTargetKind {
+    var refusalReason: HeistRepairRefusalReason {
+        switch self {
+        case .container:
+            return .containerTargetUnsupported
+        case .reference:
+            return .targetReferenceUnsupported
+        case .scoped:
+            return .scopedTargetUnsupported
+        case .unresolvedExpression:
+            return .unresolvedTargetExpression
+        }
     }
 }
 

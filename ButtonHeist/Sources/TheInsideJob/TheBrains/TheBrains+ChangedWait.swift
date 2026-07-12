@@ -9,7 +9,10 @@ extension TheBrains {
     /// Changed-predicate wait entry point. It subscribes to the same settled
     /// observation event stream as every other wait and evaluates only event
     /// deltas, never command-local baseline state.
-    func executeChangedWait(timeout: TimeInterval, expectation: AccessibilityPredicate?) async -> ActionResult {
+    func executeChangedWait(
+        timeout: TimeInterval,
+        expectation: AccessibilityPredicate<RootContext>?
+    ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
@@ -22,7 +25,7 @@ extension TheBrains {
         }
         defer { finishChangedWait() }
 
-        let predicate = expectation ?? .change(.elements())
+        let predicate = expectation ?? .changed(.elements())
         let receipt = await interactionObservation.waitForPredicate(WaitStep(predicate: predicate, timeout: timeout))
         return receipt.actionResult
     }

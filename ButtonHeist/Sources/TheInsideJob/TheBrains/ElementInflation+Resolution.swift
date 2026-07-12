@@ -7,7 +7,7 @@ import ThePlans
 extension ElementInflation {
 
     internal func stateAfterRefresh(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         screenElement: TheStash.ScreenElement,
         didReveal: Bool,
         attempt: Int,
@@ -58,7 +58,7 @@ extension ElementInflation {
     }
 
     internal func findTargetInTree(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         allowKnownFallback: Bool
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
@@ -96,7 +96,7 @@ extension ElementInflation {
     }
 
     internal func knownSemanticTarget(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
@@ -109,13 +109,13 @@ extension ElementInflation {
     }
 
     internal func visibleTargetResolution(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
         visibleTargetResolution(target, in: stash.liveVisibleScreen)
     }
 
     internal func visibleTargetResolution(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         in screen: Screen
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
         switch stash.resolveTarget(target, in: screen.visibleOnly) {
@@ -129,7 +129,7 @@ extension ElementInflation {
     }
 
     internal func resolveCurrentVisibleLiveElementTarget(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         method: ActionMethod
     ) -> FreshElementTargetResolution? {
         switch visibleTargetResolution(target) {
@@ -164,10 +164,11 @@ extension ElementInflation {
 
     internal func retainedScreenElement(
         _ screenElement: TheStash.ScreenElement,
-        matches target: ElementTarget
+        matches target: AccessibilityTarget
     ) -> Bool {
         switch target {
-        case .predicate(let predicate, _):
+        case .predicate(let template, _):
+            guard let predicate = try? template.resolve(in: .empty) else { return false }
             return !ElementPredicateGraph<HeistId, TheStash.ScreenElement>(
                 subjects: [screenElement],
                 identity: \.heistId
@@ -178,11 +179,13 @@ extension ElementInflation {
             guard let resolved = stash.resolveVisibleTarget(target).resolved else { return false }
             return resolved.heistId == screenElement.heistId
                 && resolved.path == screenElement.path
+        case .container, .ref:
+            return false
         }
     }
 
     private func discoveredSemanticTarget(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch knownSemanticTarget(target) {
         case .success(let screenElement):
@@ -195,7 +198,7 @@ extension ElementInflation {
     }
 
     private func currentVisibleTargetFailure(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let screenElement):
@@ -211,7 +214,7 @@ extension ElementInflation {
     }
 
     private func resolveFreshElementTarget(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         screenElement: TheStash.ScreenElement,
         method: ActionMethod,
         deallocatedBoundary: String
@@ -225,7 +228,7 @@ extension ElementInflation {
     }
 
     private func resolveLiveElementTarget(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         screenElement: TheStash.ScreenElement,
         method: ActionMethod,
         deallocatedBoundary: String

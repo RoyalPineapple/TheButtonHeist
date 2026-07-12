@@ -10,16 +10,14 @@ extension PredicateWait {
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
         shouldPoll: Bool,
-        observationScope: SemanticObservationScope,
-        allowsTransitionFinalStateWarning: Bool
+        observationScope: SemanticObservationScope
     ) async -> HeistWaitReceipt {
         var state = State(predicate: step.predicate)
         var stream = PredicateObservationStreamState()
         let timeout = Self.clampedWaitTimeout(step.timeout)
         let reducer = Reducer(
             step: step,
-            timeout: timeout,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning
+            timeout: timeout
         )
 
         if shouldPoll {
@@ -225,7 +223,7 @@ extension PredicateWait {
             baseline: baseline,
             window: window,
             last: latest.map(SettledEventSummary.init(event:)),
-            lastDelta: trace?.accumulatedEndpointDelta ?? trace?.endpointDelta ?? latest?.delta,
+            lastChangeFact: trace?.changeFacts.last ?? latest?.trace.changeFacts.last,
             settleFailure: latestSettleFailure()
         )
         return Self.waitReceipt(
@@ -270,8 +268,8 @@ extension PredicateWait {
         max(immediateTimeout, min(timeout, defaultWaitTimeout))
     }
 
-    internal static func unresolvedWaitPredicate() -> AccessibilityPredicate {
-        AccessibilityPredicate.state(.missing(ElementPredicate(identifier: "__unresolved_heist_predicate__")))
+    internal static func unresolvedWaitPredicate() -> AccessibilityPredicate<RootContext> {
+        .missing(.identifier("__unresolved_heist_predicate__"))
     }
 
     internal static let changePredicateNeedsFutureObservationMessage =
@@ -323,13 +321,13 @@ extension PredicateWait {
     }
 
     private static func waitSuccessMessage(
-        for predicate: AccessibilityPredicate,
+        for predicate: AccessibilityPredicate<RootContext>,
         elapsed: String
     ) -> String {
-        switch predicate {
-        case .state(.exists):
+        switch predicate.node {
+        case .exists:
             return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
-        case .state(.missing):
+        case .missing:
             return "absent confirmed after \(elapsed)s"
         default:
             return "predicate met after \(elapsed)s"
@@ -446,7 +444,7 @@ extension PredicateWait {
         if let last = diagnostics.last {
             parts.append("last settled: \(last.description)")
         }
-        parts.append("last delta: \(deltaSummary(diagnostics.lastDelta))")
+        parts.append("last change: \(changeFactSummary(diagnostics.lastChangeFact))")
         if let settleFailure = diagnostics.settleFailure {
             parts.append(settleFailure)
         }
@@ -456,11 +454,9 @@ extension PredicateWait {
         return parts
     }
 
-    private static func deltaSummary(_ delta: AccessibilityTrace.Delta?) -> String {
-        guard let delta else { return "none" }
-        switch delta {
-        case .noChange:
-            return "no_change"
+    private static func changeFactSummary(_ fact: AccessibilityTrace.ChangeFact?) -> String {
+        guard let fact else { return "none" }
+        switch fact {
         case .elementsChanged:
             return "elements"
         case .screenChanged:
@@ -494,20 +490,20 @@ extension PredicateWait {
         fileprivate let baselineCapture: SettledCapture?
         fileprivate let window: ObservationWindow?
         fileprivate let last: SettledEventSummary?
-        fileprivate let lastDelta: AccessibilityTrace.Delta?
+        fileprivate let lastChangeFact: AccessibilityTrace.ChangeFact?
         fileprivate let settleFailure: String?
 
         fileprivate init(
             baseline: SettledCapture?,
             window: ObservationWindow?,
             last: SettledEventSummary?,
-            lastDelta: AccessibilityTrace.Delta?,
+            lastChangeFact: AccessibilityTrace.ChangeFact?,
             settleFailure: String?
         ) {
             self.baselineCapture = baseline
             self.window = window
             self.last = last
-            self.lastDelta = lastDelta
+            self.lastChangeFact = lastChangeFact
             self.settleFailure = settleFailure
         }
 

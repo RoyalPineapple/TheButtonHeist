@@ -29,6 +29,7 @@ public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
 public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
     case predicate(ElementPredicate)
     case template(ElementPredicateTemplate)
+    case container(ContainerPredicateExpr)
     case targetReference(HeistReferenceName)
 }
 
@@ -177,19 +178,19 @@ public struct HeistCatalog: Codable, Sendable, Equatable {
 public struct HeistSemanticSurface: Sendable, Equatable {
     public let actionCommands: [HeistActionCommandType]
     public let targetPredicates: [HeistTargetPredicateFact]
-    public let waits: [AccessibilityPredicateExpr]
-    public let expectations: [AccessibilityPredicateExpr]
+    public let waits: [AccessibilityPredicate<RootContext>]
+    public let expectations: [AccessibilityPredicate<RootContext>]
     public let nestedRunHeists: [HeistInvocationPath]
-    public let expectedEffects: [AccessibilityPredicateExpr]
+    public let expectedEffects: [AccessibilityPredicate<RootContext>]
     public let semanticSurfaces: [HeistSemanticSurfaceFact]
 
     public init(
         actionCommands: [HeistActionCommandType] = [],
         targetPredicates: [HeistTargetPredicateFact] = [],
-        waits: [AccessibilityPredicateExpr] = [],
-        expectations: [AccessibilityPredicateExpr] = [],
+        waits: [AccessibilityPredicate<RootContext>] = [],
+        expectations: [AccessibilityPredicate<RootContext>] = [],
         nestedRunHeists: [HeistInvocationPath] = [],
-        expectedEffects: [AccessibilityPredicateExpr] = [],
+        expectedEffects: [AccessibilityPredicate<RootContext>] = [],
         semanticSurfaces: [HeistSemanticSurfaceFact] = []
     ) {
         self.actionCommands = actionCommands
@@ -471,11 +472,11 @@ struct ResolvedCatalogHeist {
 
 private struct HeistSemanticSurfaceBuilder {
     var actionCommands: [HeistActionCommandType] = []
-    var targetPredicates: [ElementTargetExpr] = []
-    var waits: [AccessibilityPredicateExpr] = []
-    var expectations: [AccessibilityPredicateExpr] = []
+    var targetPredicates: [AccessibilityTarget] = []
+    var waits: [AccessibilityPredicate<RootContext>] = []
+    var expectations: [AccessibilityPredicate<RootContext>] = []
     var nestedRunHeists: [HeistInvocationPath] = []
-    var expectedEffects: [AccessibilityPredicateExpr] = []
+    var expectedEffects: [AccessibilityPredicate<RootContext>] = []
     var semanticFacets: [ElementPredicateCheck<StringExpr>] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
@@ -564,8 +565,9 @@ private struct HeistSemanticSurfaceBuilder {
             }
 
         case .forEachElement(let forEach):
-            appendTargetPredicate(forEach.matching)
-            let nestedEnvironment = environment.binding(target: .predicate(forEach.matching), to: forEach.parameter)
+            let target = AccessibilityTarget.predicate(ElementPredicateTemplate(forEach.matching))
+            appendTargetPredicate(target)
+            let nestedEnvironment = environment.binding(target: target, to: forEach.parameter)
             collect(
                 steps: forEach.body,
                 definitionScope: definitionScope,
@@ -664,25 +666,25 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
-    mutating func collectWait(_ predicate: AccessibilityPredicateExpr) {
+    mutating func collectWait(_ predicate: AccessibilityPredicate<RootContext>) {
         appendUnique(predicate, to: &waits)
         appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
     }
 
-    mutating func collectExpectation(_ predicate: AccessibilityPredicateExpr) {
+    mutating func collectExpectation(_ predicate: AccessibilityPredicate<RootContext>) {
         appendUnique(predicate, to: &expectations)
         appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
     }
 
-    mutating func appendTargetPredicate(_ target: ElementTargetExpr) {
+    mutating func appendTargetPredicate(_ target: AccessibilityTarget) {
         switch target {
-        case .target(let target):
-            appendTargetPredicate(target)
         case .predicate(let predicate, let ordinal):
             appendUnique(.predicate(predicate, ordinal: ordinal), to: &targetPredicates)
             appendSemanticSurfaces(predicate)
+        case .container:
+            appendUnique(target, to: &targetPredicates)
         case .ref(let reference):
             appendUnique(.ref(reference), to: &targetPredicates)
         case .within(_, let target):
@@ -690,32 +692,8 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
-    mutating func appendTargetPredicate(_ target: ElementTarget) {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            appendUnique(.target(.predicate(predicate, ordinal: ordinal)), to: &targetPredicates)
-            appendSemanticSurfaces(predicate)
-        case .within(_, let target):
-            appendTargetPredicate(target)
-        }
-    }
-
     mutating func appendTargetPredicate(_ occurrence: HeistActionCommandTargetOccurrence) {
-        switch occurrence.target {
-        case .expression(let target):
-            appendTargetPredicate(target)
-        case .element(let target):
-            appendTargetPredicate(target)
-        }
-    }
-
-    mutating func appendTargetPredicate(_ predicate: ElementPredicate) {
-        appendUnique(.target(.predicate(predicate)), to: &targetPredicates)
-        appendSemanticSurfaces(predicate)
-    }
-
-    mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        appendSemanticSurfaces(ElementPredicateTemplate(predicate))
+        appendTargetPredicate(occurrence.target)
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
@@ -724,167 +702,40 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
-    mutating func appendPredicateTargets(_ predicate: AccessibilityPredicateExpr) {
-        switch predicate {
-        case .predicate(let predicate):
+    mutating func appendPredicateTargets<Context>(
+        _ predicate: AccessibilityPredicate<Context>
+    ) {
+        appendPredicateTargets(predicate.node)
+    }
+
+    mutating func appendPredicateTargets(_ node: AccessibilityPredicateNode) {
+        switch node {
+        case .exists(let target), .missing(let target),
+             .appeared(let target), .disappeared(let target):
+            appendTargetPredicate(target)
+        case .announcement:
+            break
+        case .changed(let predicate):
             appendPredicateTargets(predicate)
-        case .state(let state):
-            appendPredicateTargets(state)
-        case .changePredicate(let change):
-            appendPredicateTargets(change)
-        case .noChangePredicate, .announcement:
+        case .noChange:
             break
-        }
-    }
-
-    mutating func appendPredicateTargets(_ predicate: AccessibilityPredicate) {
-        switch predicate {
-        case .state(let state):
-            appendPredicateTargets(state)
-        case .changePredicate(let change):
-            appendPredicateTargets(change)
-        case .noChangePredicate, .announcement:
-            break
-        }
-    }
-
-    mutating func appendPredicateTargets(_ state: AccessibilityPredicate.State) {
-        switch state {
-        case .exists(let predicate), .missing(let predicate):
-            appendTargetPredicate(predicate)
-        case .existsTarget(let target), .missingTarget(let target):
+        case .screen(let assertions), .elements(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        case .updated(let target, _):
             appendTargetPredicate(target)
-        case .existsContainer, .missingContainer:
-            break
-        case .all(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ state: StatePredicateExpr) {
-        switch state {
-        case .exists(let predicate), .missing(let predicate):
-            appendUnique(.predicate(predicate), to: &targetPredicates)
-            appendSemanticSurfaces(predicate)
-        case .existsTarget(let target), .missingTarget(let target):
-            appendTargetPredicate(target)
-        case .existsContainer, .missingContainer:
-            break
-        case .all(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ change: AccessibilityPredicate.Change) {
-        switch change {
-        case .any:
-            break
-        case .screenScope(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        case .elementsScope(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .allScopes(let changes):
-            for change in changes {
-                appendPredicateTargets(change)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ change: AccessibilityPredicate.ChangeScope) {
-        switch change {
-        case .screen(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        case .elements(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .all(let changes):
-            for change in changes {
-                appendPredicateTargets(change)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ change: ChangePredicateExpr) {
-        switch change {
-        case .any:
-            break
-        case .screenScope(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        case .elementsScope(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .allScopes(let changes):
-            for change in changes {
-                appendPredicateTargets(change)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ change: ChangeScopePredicateExpr) {
-        switch change {
-        case .screen(let states):
-            for state in states {
-                appendPredicateTargets(state)
-            }
-        case .elements(let assertions):
-            for assertion in assertions {
-                appendPredicateTargets(assertion)
-            }
-        case .all(let changes):
-            for change in changes {
-                appendPredicateTargets(change)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicate) {
-        switch predicate {
-        case .appearedElement(let element), .disappearedElement(let element):
-            appendTargetPredicate(element)
-        case .updatedElement(let update):
-            if let element = update.element {
-                appendTargetPredicate(element)
-            }
-        }
-    }
-
-    mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicateExpr) {
-        switch predicate {
-        case .appearedElement(let element), .disappearedElement(let element):
-            appendUnique(.predicate(element), to: &targetPredicates)
-            appendSemanticSurfaces(element)
-        case .updatedElement(let update):
-            if let element = update.element {
-                appendUnique(.predicate(element), to: &targetPredicates)
-                appendSemanticSurfaces(element)
-            }
         }
     }
 }
 
-private extension ElementTargetExpr {
+private extension AccessibilityTarget {
     var discoveryFact: HeistTargetPredicateFact {
         switch self {
-        case .target(.predicate(let predicate, _)):
-            return .predicate(predicate)
-        case .target(.within(_, let target)):
-            return ElementTargetExpr.target(target).discoveryFact
         case .predicate(let predicate, _):
             return .template(predicate)
+        case .container(let predicate, _):
+            return .container(predicate)
         case .ref(let reference):
             return .targetReference(reference)
         case .within(_, let target):

@@ -115,10 +115,10 @@ struct DoctorDemoFixture {
         let receiptsDirectory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: receiptsDirectory, withIntermediateDirectories: true)
 
-        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let target = AccessibilityTarget.predicate(.label("Checkout"))
         let plan = try HeistPlan(
             name: "doctorDemoCheckout",
-            body: [.action(try ActionStep(command: .activate(.target(target))))]
+            body: [.action(try ActionStep(command: .activate(target)))]
         )
         let configuration = HeistReceiptRecordingConfiguration(
             rootDirectory: receiptsDirectory,
@@ -161,7 +161,7 @@ struct DoctorDemoFixture {
 
     private static func receipt(
         status: HeistExecutionStepStatus,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         before: Interface,
         after: Interface?,
         actionSucceeded: Bool
@@ -180,7 +180,7 @@ struct DoctorDemoFixture {
                 message: "No element matching \(target)",
                 accessibilityTrace: trace
             )
-        let command = HeistActionCommand.activate(.target(target))
+        let command = HeistActionCommand.activate(target)
         let evidence = HeistActionEvidence.dispatch(
             command: command,
             dispatchResult: actionResult

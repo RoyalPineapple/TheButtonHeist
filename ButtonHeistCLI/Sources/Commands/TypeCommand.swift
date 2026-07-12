@@ -25,7 +25,7 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Text to type")
     var text: String
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 

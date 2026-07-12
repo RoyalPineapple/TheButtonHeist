@@ -78,7 +78,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActionFailureWinsOverAttachedExpectationResult() throws {
         let expectation = ExpectationResult(
             met: false,
-            predicate: .state(.exists(ElementPredicate(label: "Done"))),
+            predicate: .exists(.label("Done")),
             actual: "not evaluated"
         )
         let response = FenceResponse.action(
@@ -157,7 +157,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: makeTestActionResult(),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .change(.screenChanged),
+                predicate: .changed(.screen()),
                 actual: "elementsChanged"
             )
         )
@@ -171,7 +171,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try expectation.bool("met"), false)
         XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
-        XCTAssertTrue(compact.contains(".screenChanged requires a screen-level transition"), compact)
+        XCTAssertTrue(compact.contains(".changed(.screen()) requires a screen-level transition"), compact)
         XCTAssertTrue(response.isFailure)
     }
 
@@ -181,7 +181,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: makeTestActionResult(),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .change(.elements()),
+                predicate: .changed(.elements()),
                 actual: "noChange"
             )
         )
@@ -200,7 +200,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
-        XCTAssertTrue(human.contains("[expectation FAILED: expected change(elements(*)), got noChange]"), human)
+        XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements(*)), got noChange]"), human)
         XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
         XCTAssertTrue(response.isFailure)
     }
@@ -277,14 +277,84 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let human = response.humanFormatted()
 
         XCTAssertEqual(try delta.string("kind"), "elementsChanged")
-        XCTAssertEqual(try digest.int("elementCountBefore"), 11)
-        XCTAssertEqual(try digest.int("elementCountAfter"), 12)
-        XCTAssertEqual(try digest.bool("elementCountChanged"), true)
+        XCTAssertEqual(try digest.int("nodeCountBefore"), 11)
+        XCTAssertEqual(try digest.int("nodeCountAfter"), 12)
+        XCTAssertEqual(try digest.bool("nodeCountChanged"), true)
         XCTAssertEqual(try digest.bool("elementSetChanged"), true)
         XCTAssertEqual(try addedJSON.first?.string("label"), "Barbaresco")
         XCTAssertEqual(try addedJSON.first?.string("identifier"), "wine_barbaresco")
         XCTAssertTrue(compact.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), compact)
         XCTAssertTrue(human.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), human)
+    }
+
+    func testDeltaFoldsFastElementLifecycleWithoutEndpointDiffing() throws {
+        let toast = makeReceiptTestElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
+        let empty = makeReceiptTestInterface([])
+        let visible = makeReceiptTestInterface([toast])
+        let trace = AccessibilityTrace(captures: [
+            AccessibilityTrace.Capture(sequence: 1, interface: empty),
+            AccessibilityTrace.Capture(sequence: 2, interface: visible),
+            AccessibilityTrace.Capture(sequence: 3, interface: empty),
+        ])
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+        )
+
+        let delta = try publicJSONProbe(response).object("delta")
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(try delta.array("transient").first?.string("identifier"), "saved_toast")
+        try delta.assertMissing("edits")
+        XCTAssertTrue(compact.contains("activate: elements changed"), compact)
+        XCTAssertTrue(compact.contains(#"+- "Saved" staticText id="saved_toast""#), compact)
+    }
+
+    func testNotificationOnlyDeltaPreservesDeduplicatedTemporalEvidence() throws {
+        let interface = makeReceiptTestInterface(elementCount: 1)
+        let first = AccessibilityNotificationEvidence(
+            sequence: 7,
+            kind: .valueChanged,
+            timestamp: Date(timeIntervalSince1970: 7),
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let second = AccessibilityNotificationEvidence(
+            sequence: 8,
+            kind: .layoutChanged,
+            timestamp: Date(timeIntervalSince1970: 8),
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let trace = AccessibilityTrace(captures: [
+            AccessibilityTrace.Capture(sequence: 1, interface: interface),
+            AccessibilityTrace.Capture(
+                sequence: 2,
+                interface: interface,
+                transition: AccessibilityTrace.Transition(accessibilityNotifications: [first])
+            ),
+            AccessibilityTrace.Capture(
+                sequence: 3,
+                interface: interface,
+                transition: AccessibilityTrace.Transition(accessibilityNotifications: [first, second])
+            ),
+        ])
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+        )
+
+        let delta = try publicJSONProbe(response).object("delta")
+        let notifications = try delta.array("accessibilityNotifications")
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        try delta.assertMissing("edits")
+        XCTAssertEqual(try notifications.map { try $0.int("sequence") }, [7, 8])
+        XCTAssertEqual(try notifications.map { try $0.string("kind") }, ["valueChanged", "elementChanged"])
+        XCTAssertTrue(compact.contains("accessibility notification valueChanged #7"), compact)
+        XCTAssertTrue(compact.contains("accessibility notification elementChanged #8"), compact)
     }
 
     func testScreenChangedActionOutputIncludesDestinationSummaryTree() throws {
@@ -317,6 +387,46 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(human.contains(#""Checkout" header id="checkout_title""#), human)
     }
 
+    func testLaterScreenChangeDominatesEarlierElementFactsAndDeduplicatesTransitionEvidence() throws {
+        let toast = makeReceiptTestElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
+        let cart = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Cart", identifier: "cart_title", traits: [.header]),
+        ])
+        let cartWithToast = makeReceiptTestInterface([toast] + cart.projectedElements)
+        let checkout = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
+        ])
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: cart,
+            context: AccessibilityTrace.Context(screenId: "cart")
+        )
+        let elementChange = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: cartWithToast,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(screenId: "cart")
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 3,
+            interface: checkout,
+            parentHash: elementChange.hash,
+            context: AccessibilityTrace.Context(screenId: "checkout")
+        )
+        let trace = AccessibilityTrace(captures: [before, elementChange, after])
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
+        )
+
+        let delta = try publicJSONProbe(response).object("delta")
+
+        XCTAssertEqual(try delta.string("kind"), "screenChanged")
+        XCTAssertEqual(try delta.array("transient").count, 1)
+        XCTAssertEqual(try delta.array("transient").first?.string("identifier"), "saved_toast")
+        try delta.assertMissing("edits")
+    }
+
     func testHeistActionStructuredOutputIncludesConcreteElementDeltaWithoutDumpingSuccessCompact() throws {
         let unchanged = (0..<3).map { index in
             makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
@@ -331,7 +441,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface(unchanged),
             after: makeReceiptTestInterface(unchanged + [lazyRow])
         )
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = HeistExecutionResult(
             steps: [
@@ -372,8 +482,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
             expected: AccessibilityTrace.InteractionDigest(
-                elementCountBefore: 3,
-                elementCountAfter: 4,
+                nodeCountBefore: 3,
+                nodeCountAfter: 4,
                 elementSetChanged: true,
                 screenIdBefore: "screen",
                 screenIdAfter: "screen",
@@ -408,7 +518,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface([]),
             after: makeReceiptTestInterface(addedRows)
         )
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -440,8 +550,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
             expected: AccessibilityTrace.InteractionDigest(
-                elementCountBefore: 0,
-                elementCountAfter: 8,
+                nodeCountBefore: 0,
+                nodeCountAfter: 8,
                 elementSetChanged: true,
                 screenIdBefore: "screen",
                 screenIdAfter: "screen",
@@ -483,7 +593,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             beforeScreenId: "before",
             afterScreenId: "checkout"
         )
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Checkout"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Checkout")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -514,8 +624,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         try assertPublicInteractionDigest(
             delta.object("interactionDigest"),
             expected: AccessibilityTrace.InteractionDigest(
-                elementCountBefore: 0,
-                elementCountAfter: 8,
+                nodeCountBefore: 0,
+                nodeCountAfter: 8,
                 elementSetChanged: true,
                 screenIdBefore: "before",
                 screenIdAfter: "checkout",
@@ -553,7 +663,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface(unchanged),
             after: makeReceiptTestInterface(unchanged + [lazyRow])
         )
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = HeistExecutionResult(
             steps: [
@@ -589,7 +699,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
         ))
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Search all items"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Search all items")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -637,7 +747,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult.success(method: .activate),
             expectation: ExpectationResult(
                 met: true,
-                predicate: .state(.exists(ElementPredicate(label: "Done"))),
+                predicate: .exists(.label("Done")),
                 actual: "matched"
             )
         )
@@ -653,14 +763,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
-        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
-        let casePredicateState = StatePredicateExpr.exists(.label("Home"))
-        let casePredicateRuntime = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
+        let casePredicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Home"))
+        let casePredicateRuntime = AccessibilityPredicate<RootContext>.exists(.label("Home"))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: casePredicateState, body: [childAction]),
+            PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childResult = actionReceiptStep(
@@ -695,9 +805,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHeistExpectationCountsAgreeAcrossPublicFormats() throws {
-        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let action = try HeistStep.action(ActionStep(
-            command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
         let plan = try HeistPlan(body: [
             .warn(WarnStep(message: "starting checkout")),
@@ -708,7 +818,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 warnReceiptStep(path: "$.body[0]", message: "starting checkout"),
                 actionReceiptStep(
                     path: "$.body[1]",
-                    command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+                    command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
                     result: ActionResult.success(method: .activate),
                     expectationActionResult: ActionResult.success(method: .wait),
                     expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
@@ -740,8 +850,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicHeistJSONIncludesScoreMetricProjection() throws {
-        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Submit"))))
+        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Submit")))
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: command, expectationPolicy: .expect(ActionExpectation(
                 predicate: expected,
@@ -782,12 +892,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testExplicitSingleActionHeistKeepsReportShapeAcrossPublicFormats() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))))),
         ])
         let result = HeistExecutionResult(
             steps: [
                 actionReceiptStep(
-                    command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                    command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                     result: ActionResult.success(method: .activate)
                 ),
             ],
@@ -807,14 +917,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicHeistJSONProjectsNetDeltaInsideReport() throws {
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))))),
         ])
         let response = FenceResponse.heistExecution(
             plan: plan,
             result: HeistExecutionResult(
                 steps: [
                     actionReceiptStep(
-                        command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                        command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         result: ActionResult.success(method: .activate)
                     ),
                 ],
@@ -932,18 +1042,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicHeistJSONReportsNestedSelectedCaseFailureAsTreeNodes() throws {
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.target(.predicate(ElementPredicate(label: "Continue"))))
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Continue")))
         ))
-        let casePredicateState = StatePredicateExpr.exists(.label("Ready"))
-        let casePredicateRuntime = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        let casePredicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Ready"))
+        let casePredicateRuntime = AccessibilityPredicate<RootContext>.exists(.label("Ready"))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: casePredicateState, body: [childAction]),
+            PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childPath = "$.body[0].conditional.cases[0].body[0]"
         let childResult = actionReceiptStep(
             path: childPath,
-            command: .activate(.target(.predicate(ElementPredicate(label: "Continue")))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Continue"))),
             result: ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
@@ -1009,15 +1119,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicHeistJSONReportsSelectedElsePathAsTreeNodes() throws {
         let elseStep = try HeistStep.action(ActionStep(
-            command: .activate(.target(.predicate(ElementPredicate(label: "Fallback"))))
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback")))
         ))
-        let predicateState = StatePredicateExpr.exists(.label("Home"))
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
+        let predicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Home"))
+        let runtimePredicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
         let conditional = try ConditionalStep(
             cases: [
                 PredicateCase(
-                    predicate: predicateState,
-                    body: [try HeistStep.action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Home"))))))]
+                    predicate: predicate,
+                    body: [try HeistStep.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Home")))))]
                 ),
             ],
             elseBody: [elseStep]
@@ -1026,7 +1136,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childPath = "$.body[0].conditional.else_body[0]"
         let childResult = actionReceiptStep(
             path: childPath,
-            command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback"))),
             result: ActionResult.success(method: .activate)
         )
         let result = HeistExecutionResult(
@@ -1037,8 +1147,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
-                                predicate: predicate,
-                                result: ExpectationResult(met: false, predicate: predicate)
+                                predicate: runtimePredicate,
+                                result: ExpectationResult(met: false, predicate: runtimePredicate)
                             ),
                         ],
                         outcome: .elseBranch(reason: .noMatch),
@@ -1880,7 +1990,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     private func actionReceiptStep(
         path: String = "$.body[0]",
-        command: HeistActionCommand? = .activate(.target(.predicate(ElementPredicate(label: "Button")))),
+        command: HeistActionCommand? = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
         result: ActionResult,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,

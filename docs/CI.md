@@ -48,7 +48,7 @@ final class CheckoutHeistTests: XCTestCase {
     func testCheckoutCompletes() async throws {
         try await runHeist("Checkout.pay") {
             Activate(.label("Pay"))
-                .expect(.appeared(.label("Payment Complete")))
+                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
     }
 }
@@ -66,7 +66,7 @@ directory:
 ```swift
 runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
     Activate(.label("Pay"))
-        .expect(.appeared(.label("Payment Complete")))
+        .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 }
 ```
 

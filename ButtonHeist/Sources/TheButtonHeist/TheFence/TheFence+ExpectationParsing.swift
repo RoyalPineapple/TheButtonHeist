@@ -5,10 +5,10 @@ import TheScore
 extension TheFence {
 
     struct ExpectationPayload: Sendable {
-        let expectation: AccessibilityPredicate?
+        let expectation: AccessibilityPredicate<RootContext>?
         let timeout: Double?
 
-        init(expectation: AccessibilityPredicate?, timeout: Double?) {
+        init(expectation: AccessibilityPredicate<RootContext>?, timeout: Double?) {
             self.expectation = expectation
             self.timeout = timeout
         }
@@ -24,21 +24,21 @@ extension TheFence {
             expectation == nil ? nil : timeout ?? defaultActionExpectationTimeout
         }
 
-        static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate? {
+        static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate<RootContext>? {
             guard let value else { return nil }
             return try parsePredicate(value)
         }
 
         /// Parse a required `AccessibilityPredicate` object (the `wait`
         /// `predicate` field). Throws if missing or malformed.
-        static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate {
+        static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate<RootContext> {
             guard let value else {
                 throw FenceError.invalidRequest("wait requires a \"predicate\" object")
             }
             return try parsePredicate(value)
         }
 
-        static func parsePredicate(_ value: HeistValue) throws -> AccessibilityPredicate {
+        static func parsePredicate(_ value: HeistValue) throws -> AccessibilityPredicate<RootContext> {
             guard case .object(let object) = value else {
                 throw FenceError.invalidRequest(
                     "Invalid predicate type: expected object with a \"type\" discriminator"
@@ -59,35 +59,23 @@ extension TheFence {
                 )
             }
             try validatePredicateStringMatchObjects(value, path: [])
-            return try TheFence.HeistValuePayloadDecoder.decode(
+            let predicate = try TheFence.HeistValuePayloadDecoder.decode(
                 value,
                 field: "expect",
-                as: AccessibilityPredicate.self,
+                as: AccessibilityPredicate<RootContext>.self,
                 includesRootInField: false,
                 dataCorruptedHandling: .invalidRequest
             )
+            return try predicate.resolve(in: .empty)
         }
 
         private static func validatePredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
             guard case .object(let object) = value else { return }
-            if let element = object["element"] {
-                try validateElementPredicateStringMatchObjects(element, path: path + ["element"])
-            }
             if let target = object["target"] {
-                try validateElementPredicateStringMatchObjects(target, path: path + ["target"])
+                try validateAccessibilityTargetStringMatchObjects(target, path: path + ["target"])
             }
             if let match = object["match"] {
                 try TheFence.validateStringMatchObject(match, field: (path + ["match"]).joined(separator: "."))
-            }
-            if let states = object["states"], case .array(let values) = states {
-                for (index, child) in values.enumerated() {
-                    try validatePredicateStringMatchObjects(child, path: path + ["states[\(index)]"])
-                }
-            }
-            if let scopes = object["scopes"], case .array(let values) = scopes {
-                for (index, child) in values.enumerated() {
-                    try validatePredicateStringMatchObjects(child, path: path + ["scopes[\(index)]"])
-                }
             }
             if let assertions = object["assertions"], case .array(let values) = assertions {
                 for (index, child) in values.enumerated() {
@@ -96,11 +84,14 @@ extension TheFence {
             }
         }
 
-        private static func validateElementPredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
+        private static func validateAccessibilityTargetStringMatchObjects(_ value: HeistValue, path: [String]) throws {
             try TheFence.validateElementPredicatePayloadStringMatches(
                 value,
                 field: path.joined(separator: ".")
             )
+            guard case .object(let object) = value,
+                  let nested = object["target"] else { return }
+            try validateAccessibilityTargetStringMatchObjects(nested, path: path + ["target"])
         }
 
     }

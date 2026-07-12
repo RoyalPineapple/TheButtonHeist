@@ -18,12 +18,12 @@ package extension HeistActionCommand {
             return .decrement(try target.resolve(in: environment))
         case .customAction(let name, let target):
             return .performCustomAction(CustomActionTarget(
-                elementTarget: try target.resolve(in: environment),
+                target: try target.resolve(in: environment),
                 actionName: name
             ))
         case .rotor(let selection, let target, let direction):
             return .rotor(RotorTarget(
-                elementTarget: try target.resolve(in: environment),
+                target: try target.resolve(in: environment),
                 selection: selection,
                 direction: direction
             ))
@@ -35,7 +35,7 @@ package extension HeistActionCommand {
             let resolvedText = try text.resolve(in: environment)
             return .typeText(try TypeTextTarget(
                 validatingText: resolvedText,
-                elementTarget: try target?.resolve(in: environment),
+                target: try target?.resolve(in: environment),
                 replacingExisting: replacingExisting
             ))
         case .mechanicalTap(let target):
@@ -49,7 +49,7 @@ package extension HeistActionCommand {
         case .viewportScroll(let target):
             return .scroll(target)
         case .viewportScrollToVisible(let target):
-            return .scrollToVisible(ScrollToVisibleTarget(elementTarget: try target.resolve(in: environment)))
+            return .scrollToVisible(ScrollToVisibleTarget(target: try target.resolve(in: environment)))
         case .viewportScrollToEdge(let target):
             return .scrollToEdge(target)
         case .editAction(let target):

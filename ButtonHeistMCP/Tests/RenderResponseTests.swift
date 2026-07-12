@@ -45,7 +45,7 @@ struct RenderResponseTests {
         )
         let trace = AccessibilityTrace(first: Self.interface([row]))
             .appending(Self.interface([row, lazyRow]))
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
@@ -89,9 +89,9 @@ struct RenderResponseTests {
         #expect(node["action"] == nil)
         #expect(actionResult["method"]?.stringValue == "activate")
         #expect(delta["kind"]?.stringValue == "elementsChanged")
-        #expect(digest["elementCountBefore"] == Value.int(1))
-        #expect(digest["elementCountAfter"] == Value.int(2))
-        #expect(digest["elementCountChanged"] == Value.bool(true))
+        #expect(digest["nodeCountBefore"] == Value.int(1))
+        #expect(digest["nodeCountAfter"] == Value.int(2))
+        #expect(digest["nodeCountChanged"] == Value.bool(true))
         #expect(digest["elementSetChanged"] == Value.bool(true))
         #expect(addedElement["label"]?.stringValue == "Lazy Row")
         #expect(addedElement["value"]?.stringValue == "Loaded by scroll")

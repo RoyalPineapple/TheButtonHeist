@@ -429,7 +429,7 @@ extension SemanticInterfaceProjection {
         }
     }
 
-    func screenElements(scopedBy target: ElementTarget) -> [SemanticScreen.Element] {
+    func screenElements(scopedBy target: AccessibilityTarget) -> [SemanticScreen.Element] {
         screenElements(scopedBy: target, ancestorPaths: nil)
     }
 
@@ -443,16 +443,27 @@ extension SemanticInterfaceProjection {
     }
 
     private func screenElements(
-        scopedBy target: ElementTarget,
+        scopedBy target: AccessibilityTarget,
         ancestorPaths: [TreePath]?
     ) -> [SemanticScreen.Element] {
         switch target {
         case .predicate:
             return screenElements(ancestorPaths: ancestorPaths)
         case .within(let container, let nestedTarget):
-            let matchedContainerPaths = containerPaths(matching: container, ancestorPaths: ancestorPaths)
+            guard let predicate = try? container.resolve(in: .empty) else { return [] }
+            let matchedContainerPaths = containerPaths(matching: predicate, ancestorPaths: ancestorPaths)
             guard !matchedContainerPaths.isEmpty else { return [] }
             return screenElements(scopedBy: nestedTarget, ancestorPaths: matchedContainerPaths)
+        case .container(let container, let ordinal):
+            guard let predicate = try? container.resolve(in: .empty) else { return [] }
+            let matchedContainerPaths = containerPaths(matching: predicate, ancestorPaths: ancestorPaths)
+            if let ordinal {
+                guard matchedContainerPaths.indices.contains(ordinal) else { return [] }
+                return screenElements(ancestorPaths: [matchedContainerPaths[ordinal]])
+            }
+            return screenElements(ancestorPaths: matchedContainerPaths)
+        case .ref:
+            return []
         }
     }
 

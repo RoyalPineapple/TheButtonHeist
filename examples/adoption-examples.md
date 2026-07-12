@@ -23,7 +23,7 @@ final class CheckoutHeistTests: XCTestCase {
 
         runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
             Activate(.label("Pay"))
-                .expect(.appeared(.label("Payment Complete")))
+                .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
     }
 }
@@ -110,7 +110,7 @@ final class LocationPermissionContractTests: XCTestCase {
             WaitFor(.exists(.label("Location Enabled")), timeout: .seconds(5))
 
             Activate(.label("Continue"))
-                .expect(.appeared(.label("Map")))
+                .expect(.changed(.elements([.appeared(.label("Map"))])))
         }
     }
 }

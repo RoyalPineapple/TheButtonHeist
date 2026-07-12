@@ -37,7 +37,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             \(content)
             \(line("}", indent))
             """
-        case .string, .elementTarget:
+        case .string, .accessibilityTarget:
             let childEnvironment = try RenderEnvironment.empty.binding(parameter: definition.parameter)
             let body = try render(steps: definition.body, indent: indent + 1, environment: childEnvironment)
             let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
@@ -61,7 +61,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .string(let parameter):
             try validateParameter(parameter)
             return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
-        case .elementTarget(let parameter):
+        case .accessibilityTarget(let parameter):
             try validateParameter(parameter)
             return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
         }
@@ -71,8 +71,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch parameter {
         case .string:
             return "HeistDef<String>"
-        case .elementTarget:
-            return "HeistDef<ElementTarget>"
+        case .accessibilityTarget:
+            return "HeistDef<AccessibilityTarget>"
         case .none:
             return "HeistDef<Void>"
         }

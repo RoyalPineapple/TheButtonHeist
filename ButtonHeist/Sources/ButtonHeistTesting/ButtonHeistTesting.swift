@@ -94,38 +94,9 @@ func makeRunHeistRequest<Content: HeistContent>(
 @discardableResult
 public func runHeist<Content: HeistContent>(
     _ name: String,
-    argument input: ElementTarget,
+    argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
-) async throws -> Heist {
-    try await runHeist(
-        name,
-        argument: .target(input),
-        parameter: parameter,
-        content
-    )
-}
-
-@_disfavoredOverload
-func makeRunHeistRequest<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTarget,
-    parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
-) throws -> HeistRunRequest {
-    HeistRunRequest(
-        plan: try makeRunHeistPlan(name, targetParameter: parameter, content: content),
-        argument: .elementTarget(.target(input))
-    )
-}
-
-@MainActor
-@discardableResult
-public func runHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTargetExpr,
-    parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
         name,
@@ -136,16 +107,17 @@ public func runHeist<Content: HeistContent>(
     return try await Heist(request.plan, argument: request.argument)
 }
 
+@_disfavoredOverload
 func makeRunHeistRequest<Content: HeistContent>(
     _ name: String,
-    argument input: ElementTargetExpr,
+    argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
 ) throws -> HeistRunRequest {
     let plan = try makeRunHeistPlan(name, targetParameter: parameter, content: content)
     return HeistRunRequest(
         plan: plan,
-        argument: .elementTarget(.target(try input.resolve(in: .empty)))
+        argument: .accessibilityTarget(input)
     )
 }
 
@@ -166,12 +138,12 @@ private func makeRunHeistPlan<Content: HeistContent>(
 private func makeRunHeistPlan<Content: HeistContent>(
     _ name: String,
     targetParameter parameter: HeistReferenceName,
-    content: @escaping (ElementTargetExpr) throws -> Content
+    content: @escaping (AccessibilityTarget) throws -> Content
 ) throws -> HeistPlan {
     guard shouldWrapDottedCapability(name) else {
         return try HeistPlan(name, targetParameter: parameter, content)
     }
-    let definition = HeistDef<ElementTarget>(name, parameter: parameter, content)
+    let definition = HeistDef<AccessibilityTarget>(name, parameter: parameter, content)
     return try HeistPlan(targetParameter: parameter) { target in
         try definition(target)
     }
@@ -261,18 +233,18 @@ public func runHeistSync<Content: HeistContent>(
     )
 }
 
-/// Synchronously runs an element-target heist from a plain XCTest method.
+/// Synchronously runs an accessibility-target heist from a plain XCTest method.
 @_disfavoredOverload
 @discardableResult
 public func runHeistSync<Content: HeistContent>(
     _ name: String,
-    argument input: ElementTarget,
+    argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {

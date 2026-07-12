@@ -308,13 +308,13 @@ extension CLICommandContract {
 
     static func fenceArguments(
         _ parameters: CLIRequestParameters = CLIRequestParameters(),
-        target: ElementTarget? = nil
+        target: AccessibilityTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         CLIRequestBuilder.arguments(parameters: parameters, target: target)
     }
 
     static func fenceArguments(
-        target: ElementTarget? = nil,
+        target: AccessibilityTarget? = nil,
         _ fields: CommandArgumentWriter.Field?...
     ) -> TheFence.CommandArgumentEnvelope {
         CLIRequestBuilder.arguments(

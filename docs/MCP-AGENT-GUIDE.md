@@ -27,14 +27,21 @@ MAY inspect or control the current live session, but they MUST NOT appear inside
 
 ## Choosing tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. These are direct client commands, not DSL. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a container predicate such as role, semantic-group label/value, identifier, table dimensions, scrollability, custom actions, or modal boundary. `containerName` is The Button Heist's generated diagnostic name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` returns the delivered accessibility tree;
+`get_screen` returns visual context plus fresh visible geometry. These are direct
+client commands, not DSL. Pass `subtree` an `AccessibilityTarget`, using the
+same element checks, container predicate, ordinal, or descendant scope used by
+actions and predicates. Container identifiers match any delivered parser
+container type that carries the identifier, not only semantic groups.
+`containerName` remains a capture-local diagnostic name, not a semantic target.
+Reach for `get_screen` when layout, pixels, or current viewport geometry matters.
 
 **Acting**: `perform(step:)` runs one durable ButtonHeist DSL instruction. Use it when one line is enough: one action, or one `WaitFor(...)` statement.
 
 Allowed `perform(step:)` statements are one action or one `WaitFor(...)` statement:
 
 ```swift
-Activate(.label("Pay")).expect(.screenChanged)
+Activate(.label("Pay")).expect(.changed(.screen()))
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
@@ -60,7 +67,8 @@ source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`,
 also rejects raw wire IR and direct viewport/debug/session command text. Use
 `run_heist(plan:)` for durable plans.
 
-**Targets**: element actions share one target grammar:
+**Targets**: actions, predicates, and `get_interface.subtree` share one
+`AccessibilityTarget` grammar:
 
 ```swift
 .label("Pay")
@@ -69,6 +77,8 @@ also rejects raw wire IR and direct viewport/debug/session command text. Use
 .element(.label("Pay"), .traits([.button]))
 .element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")))
 .target(.element(.label("Delete"), .traits([.button])), ordinal: 1)
+.container(.identifier("Checkout"))
+.within(container: .identifier("Checkout"), .label("Pay"))
 ```
 
 Ordinal belongs inside the target:
@@ -86,29 +96,25 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.screenChanged, timeout: .seconds(10))
-WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(5))
+WaitFor(.changed(.screen()), timeout: .seconds(10))
+WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(5))
 WaitFor(.label("Receipt"), timeout: .seconds(5))
 WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
 
-Use `.exists(container: ...)` when you need to assert that the current settled
+Use `.exists(.container(...))` when you need to assert that the current settled
 hierarchy contains a matching container without proving that navigation just
 happened. Container predicates can match `.label(...)`, `.value(...)`,
 `.identifier(...)`, `.scrollable`, `.dataTable(rowCount:columnCount:)`, or
 `.matching(...)` combinations. Use `.within(container: .label("Checkout"), ...)`
 when an element target must resolve inside that container. Use
-`.screenChanged(...)` when the preceding action itself must prove a screen
-transition.
-
-Standalone `WaitFor(...)` is final-state oriented. If you write
-`WaitFor(.appeared(...))`, `WaitFor(.disappeared(...))`, or
-`WaitFor(.updated(...))`, The Button Heist will still try to observe that
-transition, but it may pass with a warning when the implied final state is
-already true. Use action `.expect(...)` when you need to prove what the action
-changed.
+`.changed(.screen([...]))` when the preceding action itself must prove a screen
+transition. Use `.exists(...)` or `.missing(...)` for current-tree state. Use
+`.changed(.elements([.appeared(...), .disappeared(...), .updated(...)]))` only
+when the observed transition itself is required; final state alone never
+satisfies those lifecycle assertions.
 
 For text entry that may reflow the interface, assert the settled field state:
 
@@ -122,14 +128,17 @@ element in place:
 
 ```swift
 Increment(.label("Quantity"))
-    .expect(.updated(.label("Quantity"), .value(before: "2", after: "3")))
+    .expect(.changed(.elements([.updated(
+        .label("Quantity"),
+        .value(before: "2", after: "3")
+    )])))
 ```
 
 `before` and `after` use the same matcher grammar as targets and state assertions.
 Omit `before:` for destination-only updates such as `.value("3")`; include an
 element matcher when the update must be tied to a durable element predicate.
-The shorthand `.expect(.updated(...))` is only sugar for an observed element
-delta. It does not infer the action target.
+The update declaration does not infer the action target; name the element in
+the `.updated(target, change)` assertion.
 
 **Composing**: `run_heist` executes a durable `HeistPlan` in a single call.
 Prefer the `plan` field with canonical ButtonHeist source when authoring compact
@@ -139,7 +148,7 @@ stored artifact:
 ```swift
 HeistPlan {
     Activate(.label("Pay"))
-        .expect(.screenChanged)
+        .expect(.changed(.screen()))
 
     TypeText("milk", into: .label("Search"))
         .expect(.exists(.element(.label("Search"), .value("milk"))))
@@ -154,21 +163,21 @@ HeistPlan("shop") {
         TypeText(item, into: .label("Search Items"))
             .expect(.exists(.element(.label("Search Items"), .value(item))))
         Activate(.label(item))
-            .expect(.appeared(.element(
+            .expect(.changed(.elements([.appeared(.element(
                 .label(.prefix(item)),
                 .identifier(.contains("cart"))
-            )))
+            ))])))
     }
 
     RunHeist("Cart.addItem", "Milk")
-        .expect(.appeared(.element(
+        .expect(.changed(.elements([.appeared(.element(
             .label("subtotal"),
             .value(.contains("1 item"))
-        )))
+        ))])))
 
     If(.label("Pay")) {
         Activate(.label("Pay"))
-            .expect(.screenChanged)
+            .expect(.changed(.screen()))
     }.else {
         Warn("Pay button unavailable")
     }
@@ -216,13 +225,21 @@ MCP tool arguments are preflighted before The Button Heist converts them into co
 
 ## Trace semantics
 
-Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
+Settled trace captures are truth. The ordered `ChangeFact` stream is the sole
+temporal model: same-screen edges emit lifecycle/update facts, while a screen
+boundary emits old-tree departures, a screen marker, then new-tree arrivals.
+Screen, layout, value, and announcement notifications are edge evidence and
+prevent `noChange`; a screen notification starts the new generation.
 
 For the full execution pipeline, including how `WaitFor`, `.expect(...)`, and
-`.until(...)` share the same polling waiter and accumulated-delta evaluation,
+`.until(...)` share the same polling waiter and accumulated-fact evaluation,
 see [Execution and Predicate Pipeline](ARCHITECTURE.md#execution-and-predicate-pipeline).
 
-Actions can refresh off-screen state by exploring scroll views before or after the interaction, but that exploration is not a screen boundary by itself. It only broadens The Button Heist's current-screen knowledge. If the app stays on the same screen, the action result is still an elements-changed patch; if The Button Heist detects a real screen change, the trace starts a new full baseline.
+Actions can refresh off-screen state by exploring scroll views before or after
+the interaction, but exploration is not a screen boundary by itself. It broadens
+current-screen knowledge. A real screen boundary is still visible to element
+predicates because every old node disappears and every new node appears;
+cross-generation nodes are never reported as updates.
 
 `get_interface` returns app state. A default call may refresh discoverable off-screen content so the returned hierarchy is current. Passing `subtree` scopes that projection to the part of the hierarchy you asked for. `get_screen` is diagnostic: it returns pixels plus fresh visible geometry for the current viewport, not a replacement for the app-state hierarchy.
 
@@ -232,7 +249,7 @@ For operations that take time, keep using the DSL:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.screenChanged(.exists(.label("Receipt"))))
+    .expect(.changed(.screen([.exists(.label("Receipt"))])))
 
 WaitFor(.label("Receipt"), timeout: .seconds(10))
 ```
@@ -249,7 +266,7 @@ know what should change:
 
 ```swift
 Activate(.label("Continue"))
-    .expect(.screenChanged)
+    .expect(.changed(.screen()))
 
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
@@ -270,11 +287,16 @@ Heists are authored reusable instructions, not logs inferred from live clicking.
 
 **One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
 
-**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. Use `structuredContent.report.nodes[].evidence.action.result.delta` for full added, removed, updated, or destination-interface evidence; the text summary only expands details when the outcome needs attention.
+**Read the delta before moving on.** It is a compact, one-way fold of ordered
+facts: facts are stacked in time, squashed into endpoint-friendly edits, and a
+screen marker dominates the final kind. It is useful response evidence, but it
+is not the history used by the evaluator. Use
+`structuredContent.report.nodes[].evidence.action.result.delta` for the folded
+added, removed, updated, or destination-interface evidence.
 
 ## Efficiency
 
-Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic matcher fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
+Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic target fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
 
 ## Local MCP development
 

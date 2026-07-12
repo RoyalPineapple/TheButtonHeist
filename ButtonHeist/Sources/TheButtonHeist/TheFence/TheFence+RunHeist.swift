@@ -50,14 +50,14 @@ struct HeistRunProjection {
     ) -> AccessibilityTrace? {
         // Don't emit a net trace if an action step ran without producing a
         // trace — a partial action trace would be misleading. Wait steps then
-        // contribute their settled-state trace when available; `endpointTrace`
+        // contribute their settled-state trace when available; `combinedTrace`
         // returns nil unless at least two distinct captures survive.
         let actionResults = result.dispatchedActionResults
         guard !actionResults.isEmpty,
-              actionResults.allSatisfy({ $0.accessibilityTrace != nil })
+              actionResults.allSatisfy({ $0.accessibilityTrace != nil && $0.settled != false })
         else { return nil }
         let traces = result.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
-        return AccessibilityTrace.endpointTrace(from: traces)
+        return AccessibilityTrace.combinedTrace(from: traces)
     }
 }
 

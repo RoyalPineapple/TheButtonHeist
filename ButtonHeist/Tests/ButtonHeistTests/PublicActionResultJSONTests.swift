@@ -185,7 +185,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             method: .activate,
             subjectEvidence: ActionSubjectEvidence(
                 source: .resolvedSemanticTarget,
-                target: .predicate(ElementPredicate(label: "Pay")),
+                target: .predicate(ElementPredicateTemplate(label: "Pay")),
                 element: subject
             )
         )
@@ -198,6 +198,22 @@ final class PublicActionResultJSONTests: XCTestCase {
             projectedAs: nil,
             omittedCount: nil
         )
+    }
+
+    func testIncompleteFactFreeActionDoesNotProjectNoChange() throws {
+        let interface = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Ready", identifier: "ready"),
+        ])
+        let result = try standaloneActionResultJSON(
+            result: ActionResult.success(
+                method: .activate,
+                accessibilityTrace: makeReceiptTestTrace(before: interface, after: interface),
+                settled: false
+            ),
+            profile: .mcp
+        )
+
+        try result.assertMissing("delta")
     }
 
     func testNestedHeistActionResultEncodesElementEditOmissions() throws {
@@ -250,7 +266,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         try assertAccessibilityTraceProjectedAsDelta(nested, omittedCount: 2)
     }
 
-    func testNestedHeistActionResultEncodesTransientOmissions() throws {
+    func testNestedHeistActionResultEncodesTransientElementChangeOmissions() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(label: "Ready", identifier: "ready"),
         ])
@@ -279,7 +295,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let delta = try result.object("delta")
         let encodedTransient = try delta.array("transient")
         let omitted = try delta.object("omitted")
-        XCTAssertEqual(try delta.string("kind"), "noChange")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         XCTAssertEqual(encodedTransient.count, 5)
         XCTAssertEqual(try omitted.int("transient"), 3)
         XCTAssertEqual(
@@ -395,7 +411,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     private func minimalPlan() throws -> HeistPlan {
         try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Button")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))))),
         ])
     }
 

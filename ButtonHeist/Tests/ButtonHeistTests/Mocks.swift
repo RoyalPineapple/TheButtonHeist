@@ -510,12 +510,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         path: String
     ) -> HeistExecutionStepResult {
         let predicate = (try? repeatUntil.predicate.resolve(in: .empty))
-            ?? .state(.exists(ElementPredicate(label: "unresolved")))
+            ?? .exists(.label("unresolved"))
         return .passed(
             path: path,
             receiptKind: .repeatUntil,
             durationMs: heistStepDurationMs,
-            intent: .repeatUntil(predicate: .predicate(predicate), timeout: repeatUntil.timeout),
+            intent: .repeatUntil(predicate: predicate, timeout: repeatUntil.timeout),
             evidence: HeistRepeatUntilEvidence.predicateMet(
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
@@ -527,8 +527,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
         cases.map {
-            let predicate = (try? $0.predicate.resolve(in: .empty)).map(AccessibilityPredicate.state)
-                ?? .state(.exists(ElementPredicate(label: "unresolved")))
+            let screenPredicate = (try? $0.predicate.resolve(in: .empty))
+                ?? AccessibilityPredicate<ScreenAssertionContext>.exists(.label("unresolved"))
+            let predicate = screenPredicate.rootPredicate
             return HeistCaseMatchResult(
                 predicate: predicate,
                 result: ExpectationResult(met: false, predicate: predicate)
@@ -550,7 +551,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 result,
                 ExpectationResult(
                     met: false,
-                    predicate: .state(.exists(ElementPredicate(label: "unresolved"))),
+                    predicate: .exists(.label("unresolved")),
                     actual: result.message
                 )
             )

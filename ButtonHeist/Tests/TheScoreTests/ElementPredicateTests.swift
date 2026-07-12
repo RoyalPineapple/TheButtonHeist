@@ -105,27 +105,27 @@ final class ElementPredicateTests: XCTestCase {
         }
     }
 
-    func testElementTargetDescriptionComposesPredicateAndOrdinal() {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
+    func testAccessibilityTargetDescriptionComposesPredicateAndOrdinal() {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 1)
 
         XCTAssertEqual(target.description, #"target(predicate(label="Save" traits=[button]) ordinal=1)"#)
     }
 
-    func testElementTargetRejectsOrdinalOnlySelector() throws {
+    func testAccessibilityTargetRejectsOrdinalOnlySelector() throws {
         let data = Data(#"{"ordinal":1}"#.utf8)
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: data)) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: data)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("requires a predicate"))
+            XCTAssertTrue(context.debugDescription.contains("AccessibilityTarget predicate requires"))
         }
     }
 
-    func testElementTargetRejectsEmptyPredicateSelector() throws {
+    func testAccessibilityTargetRejectsEmptyPredicateSelector() throws {
         let data = Data(#"{"checks":[]}"#.utf8)
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: data)) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: data)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -133,11 +133,11 @@ final class ElementPredicateTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsHeistIdKey() {
+    func testAccessibilityTargetRejectsHeistIdKey() {
         // heistId is no longer a targeting field — it is an unknown key.
         let json = #"{"heistId":"save_button"}"#
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -145,10 +145,10 @@ final class ElementPredicateTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsHeistIdAlongsidePredicate() {
+    func testAccessibilityTargetRejectsHeistIdAlongsidePredicate() {
         let json = #"{"heistId":"save_button","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -156,9 +156,9 @@ final class ElementPredicateTests: XCTestCase {
         }
     }
 
-    func testScrollToVisibleTargetWithElementTarget() {
-        let target = ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))
-        guard case .predicate(let predicate, _) = target.elementTarget else {
+    func testScrollToVisibleTargetWithAccessibilityTarget() {
+        let target = ScrollToVisibleTarget(target: .predicate(ElementPredicateTemplate(label: "Save")))
+        guard case .predicate(let predicate, _) = target.target else {
             return XCTFail("Expected .predicate")
         }
         XCTAssertEqual(predicate.checks, [.label(.exact("Save"))])

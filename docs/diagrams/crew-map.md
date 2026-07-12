@@ -47,7 +47,7 @@ Crew members inside `TheInsideJob` (directories under `ButtonHeist/Sources/TheIn
 
 | Crew member | Responsibility |
 |---|---|
-| `TheBrains` | Action execution, settle loop, delta computation, predicate evaluation |
+| `TheBrains` | Action execution, settle loop, observation-window coordination, predicate evaluation |
 | `TheBurglar` | Accessibility hierarchy parsing and semantic observation capture |
 | `TheGetaway` | Message encoding/decoding and transport routing |
 | `TheSafecracker` | Touch injection and text input dispatch |

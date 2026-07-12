@@ -119,12 +119,12 @@ func actionStepRejectsExpectationAndWaiverTogether() {
     {
       "command": {
         "type": "activate",
-        "payload": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Save"}}]}
+        "payload": {"target": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Save"}}]}}
       },
       "expectation": {
         "predicate": {
           "type": "exists",
-          "element": {
+          "target": {
             "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Done" } }]
           }
         },
@@ -178,7 +178,7 @@ func lintFlagsMechanicalCommands() throws {
         .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label("Done"))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
     ])
 
     let messages = plan.lint(.strictTest).map(\.message)
@@ -247,23 +247,23 @@ func runtimeSafetyRejectsInvalidRefs() throws {
         (
             "empty target ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(""))))]),
-            "target_ref"
+            "target ref"
         ),
         (
             "whitespace target ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(" "))))]),
-            "target_ref"
+            "target ref"
         ),
         (
             "unknown target ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
-            "target_ref must resolve"
+            "target ref must resolve"
         ),
         (
             "empty text ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(""),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]),
             "text_ref"
         ),
@@ -271,7 +271,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
             "whitespace text ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(" "),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]),
             "text_ref"
         ),
@@ -279,7 +279,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
             "unknown text ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref("item"),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]),
             "text_ref must resolve"
         ),
@@ -300,7 +300,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
 func heistPlanConstructionRejectsNonDurableActions() throws {
     let command = HeistActionCommand.rotor(
         selection: .index(0),
-        target: .target(.predicate(.label("Article"))),
+        target: .predicate(.label("Article")),
         direction: .next
     )
     let expectedFailure = try #require(command.durableHeistActionFailure)
@@ -362,7 +362,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
         )),
         .action(try ActionStep(command: .typeText(
             text: .ref("item"),
-            target: .target(.predicate(.label("Search")))
+            target: .predicate(.label("Search"))
         ))),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
@@ -381,7 +381,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
     })
     #expect(failures.contains {
         $0.path == "$.body[3].action.command.payload.target"
-            && $0.contract == "target_ref must resolve in the current heist scope"
+            && $0.contract == "target ref must resolve in the current heist scope"
     })
 }
 
@@ -394,7 +394,7 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("item"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]
         )),
@@ -407,8 +407,8 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
 }
 
 @Test
-func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
-    let targets: [(String, ElementTarget)] = [
+func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
+    let targets: [(String, AccessibilityTarget)] = [
         ("label exact", .label("")),
         ("label contains", .label(.contains(""))),
         ("label prefix", .label(.prefix(""))),
@@ -430,7 +430,7 @@ func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
 
     for (label, target) in targets {
         let raw = HeistPlanAdmissionCandidate(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
         ])
 
         let failures = runtimeSafetyFailures(for: raw)
@@ -445,7 +445,7 @@ func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
 @Test
 func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
     let concreteRaw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .activate(.target(.predicate(.label("Save"), ordinal: -1))))),
+        .action(try ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
     ])
     let expressionRaw = HeistPlanAdmissionCandidate(body: [
         .action(try ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
@@ -464,14 +464,14 @@ func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
 @Test
 func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
-        .wait(WaitStep(predicate: .exists(ElementPredicate()))),
+        .wait(WaitStep(predicate: .exists(.predicate(ElementPredicateTemplate())))),
     ])
 
     let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains {
         $0.contract == "element predicate must not be empty"
-            && $0.observed.contains("ElementTarget predicate requires")
+            && $0.observed.contains("AccessibilityTarget predicate requires")
     }, "\(failures)")
 }
 
@@ -502,12 +502,10 @@ func runtimeSafetyEnforcesBounds() throws {
         maxTotalStringBytes: 10,
         maxParameterBytes: 4
     )
-    let deepPredicate = AccessibilityPredicateExpr.state(.all(
-        .all(
-            .exists(ElementPredicateTemplate(label: .exact(.literal("Nested"))))
-        ),
-        .exists(ElementPredicateTemplate(label: .exact(.literal("Sibling"))))
-    ))
+    let deepPredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+        .exists(.label("Nested")),
+        .exists(.label("Sibling")),
+    ]))
     let raw = HeistPlanAdmissionCandidate(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
         .forEachElement(try ForEachElementStep(
@@ -603,7 +601,7 @@ func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
     for timeout in validTimeouts {
         let raw = HeistPlanAdmissionCandidate(body: [
             .repeatUntil(try RepeatUntilStep(
-                predicate: .state(.exists(.label("Done"))),
+                predicate: .exists(.label("Done")),
                 timeout: timeout,
                 body: [.warn(WarnStep(message: "retry"))]
             )),
@@ -619,14 +617,14 @@ func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
 
     let infinite = HeistPlanAdmissionCandidate(body: [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .state(.exists(.label("Done"))),
+            predicate: .exists(.label("Done")),
             timeout: .infinity,
             body: [.warn(WarnStep(message: "retry"))]
         )),
     ])
     let excessive = HeistPlanAdmissionCandidate(body: [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .state(.exists(.label("Done"))),
+            predicate: .exists(.label("Done")),
             timeout: 2,
             body: [.warn(WarnStep(message: "retry"))]
         )),
@@ -634,7 +632,7 @@ func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
 
     #expect(throws: HeistPlanError.self) {
         _ = try RepeatUntilStep(
-            predicate: .state(.exists(.label("Done"))),
+            predicate: .exists(.label("Done")),
             timeout: -1,
             body: [.warn(WarnStep(message: "retry"))]
         )
@@ -753,7 +751,7 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         ]),
         HeistPlanAdmissionCandidate(body: [
             .wait(WaitStep(
-                predicate: .state(.exists(.label("Home"))),
+                predicate: .exists(.label("Home")),
                 timeout: 1,
                 elseBody: [.forEachElement(nestedElement)]
             )),
@@ -987,19 +985,19 @@ func runtimeSafetyRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
 }
 
 @Test
-func runtimeSafetyAcceptsSingularElementTargetCapability() throws {
-    // `elementTarget` is singular by type — a predicate for exactly one element.
+func runtimeSafetyAcceptsSingularAccessibilityTargetCapability() throws {
+    // `target` is singular by type — a predicate for exactly one element.
     // Multiple targets are unrepresentable; a capability run with one target is
     // runtime-valid.
     let definition = HeistPlanAdmissionCandidate(
         name: "deleteItem",
-        parameter: .elementTarget(name: "target"),
+        parameter: .accessibilityTarget(name: "target"),
         body: [.action(try ActionStep(command: .activate(.ref("target"))))]
     )
     let raw = HeistPlanAdmissionCandidate(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
             path: ["deleteItem"],
-            argument: .elementTarget(.target(.label("Row 1")))
+            argument: .accessibilityTarget(.predicate(.label("Row 1")))
         )),
     ])
     _ = try validatedPlan(raw)
@@ -1012,7 +1010,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
             text: .ref("query"),
-            target: .target(.predicate(.label("Search")))
+            target: .predicate(.label("Search"))
         )))]
     )
     _ = try validatedPlan(parameterizedRoot)
@@ -1022,7 +1020,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
             HeistPlanAdmissionCandidate(name: "search", parameter: .string(name: "query"), body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]),
         ],
@@ -1087,7 +1085,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]
         ),
@@ -1108,14 +1106,14 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
 func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
-            command: .activate(.target(.predicate(.label("Sign In")))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label("Home"))), timeout: 5)))),
-        .wait(WaitStep(predicate: .state(.missing(.label("Loading"))), timeout: 1)),
+            command: .activate(.predicate(.label("Sign In"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Home")), timeout: 5)))),
+        .wait(WaitStep(predicate: .missing(.label("Loading")), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Home")), body: [.warn(WarnStep(message: "home"))]),
         ])),
         .wait(WaitStep(
-            predicate: .state(.exists(.label("Done"))),
+            predicate: .exists(.label("Done")),
             timeout: 2,
             elseBody: [.fail(FailStep(message: "timeout"))]
         )),
@@ -1127,7 +1125,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.missingTarget(.ref("target"))), timeout: 2)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 2)))),
             ]
         )),
         .forEachString(try ForEachStringStep(
@@ -1135,9 +1133,9 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             parameter: "item",
             body: [
                 .action(try ActionStep(
-                    command: .typeText(text: .ref("item"), target: .target(.predicate(.label("Add item")))),
+                    command: .typeText(text: .ref("item"), target: .predicate(.label("Add item"))),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .state(.exists(ElementPredicateTemplate(label: .exact(.ref("item"))))),
+                        predicate: .exists(.predicate(ElementPredicateTemplate(label: .exact(.ref("item"))))),
                         timeout: 2
                     )))),
             ]

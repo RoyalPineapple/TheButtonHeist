@@ -3,13 +3,13 @@ import Foundation
 public enum HeistParameter: Codable, Sendable, Equatable {
     case none
     case string(name: HeistReferenceName)
-    case elementTarget(name: HeistReferenceName)
+    case accessibilityTarget(name: HeistReferenceName)
 
     public var name: HeistReferenceName? {
         switch self {
         case .none:
             return nil
-        case .string(let name), .elementTarget(let name):
+        case .string(let name), .accessibilityTarget(let name):
             return name
         }
     }
@@ -18,7 +18,7 @@ public enum HeistParameter: Codable, Sendable, Equatable {
         switch self {
         case .none: return .none
         case .string: return .string
-        case .elementTarget: return .elementTarget
+        case .accessibilityTarget: return .accessibilityTarget
         }
     }
 
@@ -42,8 +42,8 @@ public enum HeistParameter: Codable, Sendable, Equatable {
             self = .none
         case .string:
             self = .string(name: try HeistReferenceName.decode(from: container, forKey: .name))
-        case .elementTarget:
-            self = .elementTarget(name: try HeistReferenceName.decode(from: container, forKey: .name))
+        case .accessibilityTarget:
+            self = .accessibilityTarget(name: try HeistReferenceName.decode(from: container, forKey: .name))
         }
     }
 
@@ -59,19 +59,19 @@ public enum HeistParameter: Codable, Sendable, Equatable {
 public enum HeistParameterKind: String, Codable, Sendable, Equatable {
     case none
     case string
-    case elementTarget = "element_target"
+    case accessibilityTarget = "accessibility_target"
 }
 
 public enum HeistArgument: Codable, Sendable, Equatable {
     case none
     case string(StringExpr)
-    case elementTarget(ElementTargetExpr)
+    case accessibilityTarget(AccessibilityTarget)
 
     public var kind: HeistParameterKind {
         switch self {
         case .none: return .none
         case .string: return .string
-        case .elementTarget: return .elementTarget
+        case .accessibilityTarget: return .accessibilityTarget
         }
     }
 
@@ -109,16 +109,14 @@ public enum HeistArgument: Codable, Sendable, Equatable {
             self = hasValue
                 ? .string(.literal(try container.decode(String.self, forKey: .value)))
                 : .string(.ref(try HeistReferenceName.decode(from: container, forKey: .valueRef)))
-        case .elementTarget:
-            // Singular: a predicate for exactly one element, carried under `target`
-            // as an element-target expression (concrete target, predicate, or ref).
+        case .accessibilityTarget:
             guard container.contains(.target) else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: container.codingPath,
-                    debugDescription: "element_target heist argument requires a target"
+                    debugDescription: "accessibility_target heist argument requires a target"
                 ))
             }
-            self = .elementTarget(try container.decode(ElementTargetExpr.self, forKey: .target))
+            self = .accessibilityTarget(try container.decode(AccessibilityTarget.self, forKey: .target))
         }
     }
 
@@ -135,7 +133,7 @@ public enum HeistArgument: Codable, Sendable, Equatable {
             case .ref(let reference):
                 try container.encode(reference, forKey: .valueRef)
             }
-        case .elementTarget(let target):
+        case .accessibilityTarget(let target):
             try container.encode(target, forKey: .target)
         }
     }

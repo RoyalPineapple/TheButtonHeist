@@ -42,20 +42,10 @@ extension TheFence {
     }
 
     private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
-        let subtree = try decodeInterfaceSubtreeSelector(arguments)
-        let matcher = try interfaceElementMatcher(arguments)
-        if subtree != nil, matcher.hasPredicates {
-            throw SchemaValidationError(
-                field: arguments.field(.subtree),
-                observed: "subtree with element matcher",
-                expected: "use subtree or element matcher fields, not both"
-            )
-        }
         return GetInterfaceRequest(
             detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
             query: InterfaceQuery(
-                subtree: subtree,
-                matcher: matcher,
+                subtree: try decodeInterfaceSubtreeTarget(arguments),
                 maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
                 maxScrollsPerDiscovery: try interfaceDiscoveryLimit(arguments, .maxScrollsPerDiscovery)
             )
@@ -113,46 +103,19 @@ extension TheFence {
         }
     }
 
-    private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {
+    private func decodeInterfaceSubtreeTarget(_ arguments: CommandArgumentEnvelope) throws -> AccessibilityTarget? {
         guard let subtree = arguments.value(for: .subtree) else { return nil }
-        guard case .object = subtree else {
+        guard case .object(let object) = subtree else {
             throw SchemaValidationError(
                 field: arguments.field(.subtree),
                 observed: subtree.schemaObservedDescription,
                 expected: "object"
             )
         }
-        try validateSubtreeElementStringMatchObjects(subtree, field: arguments.field(.subtree))
-        let selector = try arguments.decodePayload(subtree, forKey: .subtree, as: SubtreeSelector.self)
-        guard selector.hasPredicates else {
-            throw SchemaValidationError(
-                field: arguments.field(.subtree),
-                observed: subtree.schemaObservedDescription,
-                expected: "non-empty subtree selector"
-            )
-        }
-        return selector
+        return try CommandArgumentEnvelope(
+            values: object,
+            fieldPrefix: arguments.field(.subtree)
+        ).decodeAccessibilityTargetPayload()
     }
 
-    private func validateSubtreeElementStringMatchObjects(_ value: HeistValue, field: String) throws {
-        guard case .object(let subtree) = value,
-              let element = subtree["element"],
-              case .object(let object) = element
-        else {
-            return
-        }
-        try Self.validateElementPredicatePayloadStringMatches(.object(object), field: "\(field).element")
-    }
-
-    private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
-        if let checksValue = arguments.value(for: .checks) {
-            try Self.validateElementPredicateChecks(checksValue, field: arguments.field(.checks))
-            return ElementPredicate(try arguments.decodePayload(
-                checksValue,
-                forKey: .checks,
-                as: [ElementPredicateCheck<String>].self
-            ))
-        }
-        return ElementPredicate()
-    }
 }

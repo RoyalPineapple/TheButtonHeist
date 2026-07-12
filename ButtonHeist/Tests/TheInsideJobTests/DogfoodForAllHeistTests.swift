@@ -12,14 +12,14 @@ private enum DogfoodHome {
         let backToRoot = try DemoNavigation.backToRootIfNeeded()
 
         If {
-            Case(.exists(destinationTitle)) {
-                WaitFor(.exists(destinationTitle))
+            Case(.exists(.predicate(destinationTitle))) {
+                WaitFor(.exists(.predicate(destinationTitle)))
             }
             Else {
                 backToRoot
 
                 Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-                    .expect(.change(.screenChanged(.exists(destinationTitle))), timeout: .seconds(8))
+                    .expect(.changed(.screen([.exists(.predicate(destinationTitle))])), timeout: .seconds(8))
             }
         }
     }
@@ -28,13 +28,13 @@ private enum DogfoodHome {
 private enum ControlsDemoScreen {
     static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
         Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-            .expect(.change(.screenChanged(.exists(.label(screen)))), timeout: .seconds(8))
+            .expect(.changed(.screen([.exists(.label(screen))])), timeout: .seconds(8))
     }
 }
 
 private enum TextInputScreen {
-    private static let nameField = ElementTarget.element(.value("Name"), traits: [.textEntry])
-    private static let emailField = ElementTarget.element(.value("Email"), traits: [.textEntry])
+    private static let nameField = AccessibilityTarget.element(.value("Name"), traits: [.textEntry])
+    private static let emailField = AccessibilityTarget.element(.value("Email"), traits: [.textEntry])
 
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
@@ -73,17 +73,17 @@ private enum TodoScreen {
         )
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
 
-        WaitFor(.exists(visibleItem), timeout: .seconds(4))
+        WaitFor(.exists(.predicate(visibleItem)), timeout: .seconds(4))
 
         If {
-            Case(.exists(completedItem)) {
-                WaitFor(.exists(completedItem), timeout: .seconds(1))
+            Case(.exists(.predicate(completedItem))) {
+                WaitFor(.exists(.predicate(completedItem)), timeout: .seconds(1))
             }
             Else {
                 CustomAction("Toggle", on: .label(item))
                     .withoutExpectation("Completion is proven by the following wait")
 
-                WaitFor(.exists(completedItem), timeout: .seconds(4))
+                WaitFor(.exists(.predicate(completedItem)), timeout: .seconds(4))
             }
         }
     }
@@ -98,7 +98,7 @@ private enum CalculatorScreen {
             .expect(.exists(.label("7")), timeout: .seconds(1))
 
         Activate(.element(.label("+"), .traits([.button])))
-            .expect(.change(.elements()), timeout: .seconds(1))
+            .expect(.changed(.elements()), timeout: .seconds(1))
 
         Activate(.element(.label("5"), .traits([.button])))
             .expect(.exists(.label("5")), timeout: .seconds(1))
@@ -153,7 +153,7 @@ private enum CustomRotorsScreen {
 }
 
 private enum TouchCanvasScreen {
-    private static let canvas = ElementTarget.element(.label("Touch Canvas"), .traits([.allowsDirectInteraction]))
+    private static let canvas = AccessibilityTarget.element(.label("Touch Canvas"), .traits([.allowsDirectInteraction]))
 
     static let exerciseMechanicalGestures = HeistDef<Void>("TouchCanvas.exerciseMechanicalGestures") {
         Mechanical.Tap(canvas)
@@ -177,7 +177,7 @@ private enum LongListScreen {
     static let topRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
 
     static let openTopAnchor = HeistDef<Void>("LongList.openTopAnchor") {
-        WaitFor(.exists(topRow), timeout: .seconds(8))
+        WaitFor(.exists(.predicate(topRow)), timeout: .seconds(8))
     }
 }
 
@@ -324,7 +324,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 }
             }
 
-            WaitFor(.label("Controls Demo"), timeout: .seconds(2))
+            WaitFor(.exists(.label("Controls Demo")), timeout: .seconds(2))
                 .else {
                     Fail("wait case missed Controls Demo")
                 }
@@ -472,7 +472,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
             .viewportScroll(ScrollTarget(direction: .down)),
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+            .viewportScrollToVisible(.label("Widget 0, Hardware")),
         ])
 
         XCTAssertEqual(results.count, 4)

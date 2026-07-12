@@ -83,41 +83,11 @@ public struct Heist: Sendable {
         )
     }
 
-    @_disfavoredOverload
     @MainActor
     public init<Content: HeistContent>(
-        _ input: ElementTarget,
+        _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-    ) async throws {
-        try await self.init(
-            .target(input),
-            parameter: parameter,
-            runtime: .shared,
-            content
-        )
-    }
-
-    @MainActor
-    init<Content: HeistContent>(
-        _ input: ElementTarget,
-        parameter: HeistReferenceName = "input",
-        runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-    ) async throws {
-        try await self.init(
-            .target(input),
-            parameter: parameter,
-            runtime: runtime,
-            content
-        )
-    }
-
-    @MainActor
-    public init<Content: HeistContent>(
-        _ input: ElementTargetExpr,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
     ) async throws {
         try await self.init(
             input,
@@ -129,18 +99,18 @@ public struct Heist: Sendable {
 
     @MainActor
     init<Content: HeistContent>(
-        _ input: ElementTargetExpr,
+        _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
     ) async throws {
-        let plan = try Self.plan(parameter: .elementTarget(name: parameter)) {
-            try content(try ElementTargetExpr(ref: parameter))
+        let plan = try Self.plan(parameter: .accessibilityTarget(name: parameter)) {
+            try content(try AccessibilityTarget(ref: parameter))
         }
         let target = try input.resolve(in: .empty)
         self.result = try await Self.execute(
             plan,
-            argument: .elementTarget(.target(target)),
+            argument: .accessibilityTarget(target),
             runtime: runtime
         )
     }

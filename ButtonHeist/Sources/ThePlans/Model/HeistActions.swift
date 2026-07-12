@@ -22,7 +22,7 @@ public extension HeistActionContent {
     }
 
     func expect(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: AccessibilityPredicate<RootContext>,
         timeout: Double? = nil
     ) -> ActionContent {
         let priorExplicitTimeout = (self as? ActionContent)?.explicitExpectationTimeout
@@ -49,18 +49,6 @@ public extension HeistActionContent {
         )
     }
 
-    func expect(timeout: Double? = nil) -> ActionContent {
-        expect(.change(), timeout: timeout)
-    }
-
-    @_disfavoredOverload
-    func expect(
-        _ predicate: AccessibilityPredicate,
-        timeout: Double? = nil
-    ) -> ActionContent {
-        expect(.predicate(predicate), timeout: timeout)
-    }
-
     func withoutExpectation(_ reason: String) -> ActionContent {
         let waiver: ActionExpectationWaiver
         do {
@@ -77,7 +65,7 @@ public extension HeistActionContent {
     }
 
     func until(
-        _ predicate: AccessibilityPredicateExpr,
+        _ predicate: AccessibilityPredicate<RootContext>,
         timeout: Double = defaultWaitTimeout
     ) -> RepeatActionUntilContent {
         RepeatActionUntilContent(
@@ -89,13 +77,6 @@ public extension HeistActionContent {
         )
     }
 
-    @_disfavoredOverload
-    func until(
-        _ predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout
-    ) -> RepeatActionUntilContent {
-        until(.predicate(predicate), timeout: timeout)
-    }
 }
 
 public struct ActionContent: HeistActionContent {
@@ -121,7 +102,7 @@ public struct RepeatActionUntilContent: HeistContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    public let predicate: AccessibilityPredicateExpr
+    public let predicate: AccessibilityPredicate<RootContext>
     public let timeout: Double
 
     public var heistSteps: [HeistStep] {
@@ -129,10 +110,7 @@ public struct RepeatActionUntilContent: HeistContent {
         let progressPolicy: ActionExpectationPolicy
         switch expectationPolicy {
         case .default:
-            progressPolicy = .expect(ActionExpectation(
-                predicate: .change(),
-                timeout: defaultActionExpectationTimeout
-            ))
+            progressPolicy = .default
         case .expect, .waived:
             progressPolicy = expectationPolicy
         }
@@ -170,12 +148,7 @@ public struct Activate: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ target: ElementTarget) {
-        self.init(.target(target))
-    }
-
-    @_disfavoredOverload
-    public init(_ target: ElementTargetExpr) {
+    public init(_ target: AccessibilityTarget) {
         self.init(command: .activate(target))
     }
 
@@ -189,12 +162,7 @@ public struct Increment: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ target: ElementTarget) {
-        self.init(.target(target))
-    }
-
-    @_disfavoredOverload
-    public init(_ target: ElementTargetExpr) {
+    public init(_ target: AccessibilityTarget) {
         self.init(command: .increment(target))
     }
 
@@ -208,12 +176,7 @@ public struct Decrement: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ target: ElementTarget) {
-        self.init(.target(target))
-    }
-
-    @_disfavoredOverload
-    public init(_ target: ElementTargetExpr) {
+    public init(_ target: AccessibilityTarget) {
         self.init(command: .decrement(target))
     }
 
@@ -227,53 +190,53 @@ public struct TypeText: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ text: String, into target: ElementTarget? = nil) {
+    public init(_ text: String, into target: AccessibilityTarget? = nil) {
         self.init(text, into: target, replacingExisting: false)
     }
 
     public init(
         _ text: String,
-        into target: ElementTarget? = nil,
+        into target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) {
-        self.init(.literal(text), into: target.map(ElementTargetExpr.target), replacingExisting: replacingExisting)
+        self.init(.literal(text), into: target, replacingExisting: replacingExisting)
     }
 
-    public init(_ text: StringExpr, into target: ElementTarget) {
+    public init(_ text: StringExpr, into target: AccessibilityTarget) {
         self.init(text, into: target, replacingExisting: false)
     }
 
     public init(
         _ text: StringExpr,
-        into target: ElementTarget,
+        into target: AccessibilityTarget,
         replacingExisting: Bool
     ) {
-        self.init(text, into: .target(target), replacingExisting: replacingExisting)
+        self.init(command: .typeText(text: text, target: target, replacingExisting: replacingExisting))
     }
 
     @_disfavoredOverload
-    public init(_ text: String, into target: ElementTargetExpr) {
+    public init(_ text: String, into target: AccessibilityTarget) {
         self.init(text, into: target, replacingExisting: false)
     }
 
     @_disfavoredOverload
     public init(
         _ text: String,
-        into target: ElementTargetExpr,
+        into target: AccessibilityTarget,
         replacingExisting: Bool
     ) {
         self.init(.literal(text), into: target, replacingExisting: replacingExisting)
     }
 
     @_disfavoredOverload
-    public init(_ text: StringExpr, into target: ElementTargetExpr? = nil) {
+    public init(_ text: StringExpr, into target: AccessibilityTarget? = nil) {
         self.init(text, into: target, replacingExisting: false)
     }
 
     @_disfavoredOverload
     public init(
         _ text: StringExpr,
-        into target: ElementTargetExpr? = nil,
+        into target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) {
         self.init(command: .typeText(
@@ -293,12 +256,7 @@ public struct ClearText: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ target: ElementTarget) {
-        self.init(.target(target))
-    }
-
-    @_disfavoredOverload
-    public init(_ target: ElementTargetExpr) {
+    public init(_ target: AccessibilityTarget) {
         self.init(command: .typeText(
             text: .literal(""),
             target: target,
@@ -316,12 +274,7 @@ public struct CustomAction: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ name: String, on target: ElementTarget) {
-        self.init(name, on: .target(target))
-    }
-
-    @_disfavoredOverload
-    public init(_ name: String, on target: ElementTargetExpr) {
+    public init(_ name: String, on target: AccessibilityTarget) {
         self.init(command: .customAction(name: name, target: target))
     }
 
@@ -335,12 +288,7 @@ public struct Rotor: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ name: String, on target: ElementTarget, direction: RotorDirection = .next) {
-        self.init(name, on: .target(target), direction: direction)
-    }
-
-    @_disfavoredOverload
-    public init(_ name: String, on target: ElementTargetExpr, direction: RotorDirection = .next) {
+    public init(_ name: String, on target: AccessibilityTarget, direction: RotorDirection = .next) {
         self.init(command: .rotor(selection: .named(name), target: target, direction: direction))
     }
 
@@ -442,7 +390,7 @@ public enum Mechanical {
         public let expectationPolicy: ActionExpectationPolicy
 
         @_disfavoredOverload
-        public init(_ target: ElementTarget) {
+        public init(_ target: AccessibilityTarget) {
             self.init(command: .mechanicalTap(TapTarget(selection: .element(target))))
         }
 
@@ -450,7 +398,7 @@ public enum Mechanical {
             self.init(command: .mechanicalTap(TapTarget(selection: .coordinate(point))))
         }
 
-        public init(_ target: ElementTarget, at point: UnitPoint) {
+        public init(_ target: AccessibilityTarget, at point: UnitPoint) {
             self.init(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
         }
 
@@ -464,7 +412,7 @@ public enum Mechanical {
         public let command: HeistActionCommand
         public let expectationPolicy: ActionExpectationPolicy
 
-        public init(_ target: ElementTarget, duration: GestureDuration = .longPressDefault) {
+        public init(_ target: AccessibilityTarget, duration: GestureDuration = .longPressDefault) {
             self.init(command: .mechanicalLongPress(LongPressTarget(selection: .element(target), duration: duration)))
         }
 
@@ -479,7 +427,7 @@ public enum Mechanical {
             )
         }
 
-        public init(_ target: ElementTarget, at point: UnitPoint, duration: GestureDuration = .longPressDefault) {
+        public init(_ target: AccessibilityTarget, at point: UnitPoint, duration: GestureDuration = .longPressDefault) {
             self.init(
                 command: .mechanicalLongPress(
                     LongPressTarget(
@@ -500,11 +448,11 @@ public enum Mechanical {
         public let command: HeistActionCommand
         public let expectationPolicy: ActionExpectationPolicy
 
-        public init(_ target: ElementTarget, _ direction: SwipeDirection) {
+        public init(_ target: AccessibilityTarget, _ direction: SwipeDirection) {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction))))
         }
 
-        public init(_ target: ElementTarget, from start: UnitPoint, to end: UnitPoint) {
+        public init(_ target: AccessibilityTarget, from start: UnitPoint, to end: UnitPoint) {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(target, start: start, end: end))))
         }
 
@@ -526,11 +474,11 @@ public enum Mechanical {
         public let command: HeistActionCommand
         public let expectationPolicy: ActionExpectationPolicy
 
-        public init(_ target: ElementTarget, to end: ScreenPoint) {
+        public init(_ target: AccessibilityTarget, to end: ScreenPoint) {
             self.init(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
         }
 
-        public init(_ target: ElementTarget, from start: UnitPoint, to end: ScreenPoint) {
+        public init(_ target: AccessibilityTarget, from start: UnitPoint, to end: ScreenPoint) {
             self.init(command: .mechanicalDrag(DragTarget(start: .elementUnitPoint(target, start), end: end)))
         }
 
@@ -602,25 +550,17 @@ func composeExpectationTimeout(
 }
 
 struct ExpectationPredicateComposition {
-    let predicate: AccessibilityPredicateExpr
+    let predicate: AccessibilityPredicate<RootContext>
     let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectationPredicates(
-    existing: AccessibilityPredicateExpr,
-    next: AccessibilityPredicateExpr
+    existing: AccessibilityPredicate<RootContext>,
+    next: AccessibilityPredicate<RootContext>
 ) -> ExpectationPredicateComposition {
-    if let composed = composeScreenChangeAndState(existing, next) {
+    if let composed = composeScreenDeltaAndCurrentTree(existing, next)
+        ?? composeScreenDeltaAndCurrentTree(next, existing) {
         return ExpectationPredicateComposition(predicate: composed, diagnostics: [])
-    }
-
-    if let existingState = stateExpression(existing),
-       let nextState = stateExpression(next),
-       let state = allState([existingState, nextState]) {
-        return ExpectationPredicateComposition(
-            predicate: .state(state),
-            diagnostics: []
-        )
     }
 
     return ExpectationPredicateComposition(
@@ -628,62 +568,23 @@ func composeExpectationPredicates(
         diagnostics: [.dslBuild(
             code: .dslInvalidActionExpectation,
             message: "unsupported expectation composition: \(existing) + \(next)",
-            hint: "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
+            hint: "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
         )]
     )
 }
 
-private func composeScreenChangeAndState(
-    _ lhs: AccessibilityPredicateExpr,
-    _ rhs: AccessibilityPredicateExpr
-) -> AccessibilityPredicateExpr? {
-    if let screenChange = screenChangeExpectation(lhs),
-       let state = stateExpression(rhs),
-       let assertion = allState([screenChange.state, state].compactMap { $0 }) {
-        return .change(.screenChanged(assertion))
-    }
-
-    if let state = stateExpression(lhs),
-       let screenChange = screenChangeExpectation(rhs),
-       let assertion = allState([screenChange.state, state].compactMap { $0 }) {
-        return .change(.screenChanged(assertion))
-    }
-
-    return nil
-}
-
-private struct ScreenChangeExpectation {
-    let state: StatePredicateExpr?
-}
-
-private func screenChangeExpectation(_ predicate: AccessibilityPredicateExpr) -> ScreenChangeExpectation? {
-    switch predicate {
-    case .changePredicate(.screenScope(let states)):
-        return ScreenChangeExpectation(state: allState(states))
-    case .predicate(.changePredicate(.screenScope(let states))):
-        return ScreenChangeExpectation(state: allState(states.map(StatePredicateExpr.init)))
-    case .predicate, .state, .changePredicate, .noChangePredicate, .announcement:
+private func composeScreenDeltaAndCurrentTree(
+    _ changed: AccessibilityPredicate<RootContext>,
+    _ currentTree: AccessibilityPredicate<RootContext>
+) -> AccessibilityPredicate<RootContext>? {
+    guard case .changed(.screen(let assertions)) = changed.node else { return nil }
+    switch currentTree.node {
+    case .exists, .missing:
+        return AccessibilityPredicate<RootContext>(
+            node: .changed(.screen(assertions + [currentTree.node]))
+        )
+    case .announcement, .changed, .noChange, .screen, .elements, .appeared, .disappeared, .updated:
         return nil
     }
-}
 
-private func stateExpression(_ predicate: AccessibilityPredicateExpr) -> StatePredicateExpr? {
-    switch predicate {
-    case .state(let state):
-        return state
-    case .predicate(.state(let state)):
-        return StatePredicateExpr(state)
-    case .predicate, .changePredicate, .noChangePredicate, .announcement:
-        return nil
-    }
-}
-
-private func allState(_ states: [StatePredicateExpr]) -> StatePredicateExpr? {
-    let flattened = states.flatMap { state -> [StatePredicateExpr] in
-        if case .all(let children) = state { return children.elements }
-        return [state]
-    }
-    guard !flattened.isEmpty else { return nil }
-    guard flattened.count > 1 else { return flattened[0] }
-    return .all(NonEmptyArray(flattened[0], rest: Array(flattened.dropFirst())))
 }

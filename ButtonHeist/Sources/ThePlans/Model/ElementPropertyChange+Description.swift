@@ -69,26 +69,6 @@ extension RotorSetMatch: CustomStringConvertible {
     }
 }
 
-// MARK: - Element Update Predicate Descriptions
-
-extension ElementUpdatePredicate: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("update", [
-            element.map { "element=\($0)" },
-            change.map { "change=\($0)" },
-        ].compactMap { $0 })
-    }
-}
-
-extension ElementUpdatePredicateExpr: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("update", [
-            element.map { "element=\($0)" },
-            change.map { "change=\($0)" },
-        ].compactMap { $0 })
-    }
-}
-
 extension AnyPropertyChange: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -134,18 +114,5 @@ fileprivate extension ElementPropertyChangeExpr {
             before.map { "before=\($0)" },
             after.map { "after=\($0)" },
         ].compactMap { $0 })
-    }
-}
-
-extension ElementDeltaPredicate: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .appearedElement(let element):
-            return ScoreDescription.call("appeared", [element.description])
-        case .disappearedElement(let element):
-            return ScoreDescription.call("disappeared", [element.description])
-        case .updatedElement(let update):
-            return ScoreDescription.call("updated", [update.description])
-        }
     }
 }

@@ -9,7 +9,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let target = try input.requiredElementTarget(command: .activate)
+        let target = try input.requiredAccessibilityTarget(command: .activate)
         let actionName = try input.optionalNonEmptyValue(FenceParameters.actionName)
         return try appInteractionDispatch(
             Command.activate,
@@ -19,19 +19,19 @@ extension TheFence {
     }
 
     static func accessibilityActionCommand(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         actionName: String?
     ) -> HeistActionCommand {
         guard let actionName else {
-            return .activate(.target(target))
+            return .activate(target)
         }
         switch actionName {
         case ElementAction.increment.description:
-            return .increment(.target(target))
+            return .increment(target)
         case ElementAction.decrement.description:
-            return .decrement(.target(target))
+            return .decrement(target)
         default:
-            return .customAction(name: actionName, target: .target(target))
+            return .customAction(name: actionName, target: target)
         }
     }
 }

@@ -1,241 +1,57 @@
 import Foundation
 
 extension HeistPlanRuntimeSafetyValidator {
-    mutating func validatePredicate(
-        _ predicate: AccessibilityPredicateExpr,
+    mutating func validatePredicate<Context>(
+        _ predicate: AccessibilityPredicate<Context>,
         path: String,
         depth: Int,
         scope: HeistReferenceScope
     ) {
-        switch predicate {
-        case .predicate(let predicate):
-            validatePredicate(predicate, path: path, depth: depth)
-        case .state(let state):
-            validateStatePredicate(state, path: path, depth: depth, scope: scope)
-        case .changePredicate(let change):
-            validateChangePredicate(change, path: path, depth: depth, scope: scope)
-        case .noChangePredicate:
-            break
-        case .announcement(let announcement):
-            validateAnnouncementPredicate(announcement, path: path, scope: scope)
-        }
+        validatePredicateNode(predicate.node, path: path, depth: depth, scope: scope)
     }
 
-    mutating func validatePredicate(
-        _ predicate: AccessibilityPredicate,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch predicate {
-        case .state(let state):
-            validateStatePredicate(state, path: path, depth: depth)
-        case .changePredicate(let change):
-            validateChangePredicate(change, path: path, depth: depth)
-        case .noChangePredicate:
-            break
-        case .announcement(let announcement):
-            validateAnnouncementPredicate(announcement, path: path)
-        }
-    }
-
-    mutating func validateAnnouncementPredicate(
-        _ announcement: AnnouncementPredicate,
-        path: String
-    ) {
-        validateString(announcement.match, path: "\(path).match", role: "announcement")
-    }
-
-    mutating func validateAnnouncementPredicate(
-        _ announcement: AnnouncementPredicateExpr,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        if let match = announcement.match {
-            validateString(match, path: "\(path).match", scope: scope)
-        }
-    }
-
-    mutating func validateStatePredicate(
-        _ state: AccessibilityPredicate.State,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch state.contract {
-        case .element(_, let predicate):
-            validateElementPredicate(predicate, path: "\(path).element")
-        case .target(_, let target):
-            validateElementTarget(target, path: "\(path).target")
-        case .container(_, let container):
-            validateContainerPredicate(container, path: "\(path).container")
-        case .all(let states):
-            validateAllChildCount(states.count, path: "\(path).states")
-            for (index, child) in states.enumerated() {
-                validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1)
-            }
-        }
-    }
-
-    mutating func validateStatePredicate(
-        _ state: StatePredicateExpr,
+    mutating func validatePredicateNode(
+        _ node: AccessibilityPredicateNode,
         path: String,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
-        switch state.predicateContract {
-        case .element(_, let predicate):
-            validateElementPredicate(predicate, path: "\(path).element", scope: scope)
-        case .target(_, let target):
+        switch node {
+        case .exists(let target), .missing(let target),
+             .appeared(let target), .disappeared(let target):
             validateTarget(target, path: "\(path).target", scope: scope)
-        case .container(_, let container):
-            validateContainerPredicate(container, path: "\(path).container", scope: scope)
-        case .all(let states):
-            validateAllChildCount(states.count, path: "\(path).states")
-            for (index, child) in states.enumerated() {
-                validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1, scope: scope)
-            }
-        }
-    }
-
-    mutating func validateChangePredicate(
-        _ change: AccessibilityPredicate.Change,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch change.contract {
-        case .any:
+        case .announcement(let announcement):
+            validateString(announcement.match, path: "\(path).match", role: "announcement")
+        case .changed(let predicate):
+            validatePredicateNode(predicate, path: "\(path).changed", depth: depth + 1, scope: scope)
+        case .noChange:
             break
-        case .screen(let states):
-            validateAllChildCount(states.count, path: "\(path).screen")
-            for (index, state) in states.enumerated() {
-                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1)
+        case .screen(let assertions):
+            validateAllChildCount(assertions.count, path: "\(path).assertions")
+            for (index, assertion) in assertions.enumerated() {
+                validatePredicateNode(
+                    assertion,
+                    path: "\(path).assertions[\(index)]",
+                    depth: depth + 1,
+                    scope: scope
+                )
             }
         case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).elements")
+            validateAllChildCount(assertions.count, path: "\(path).assertions")
             for (index, assertion) in assertions.enumerated() {
-                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]")
+                validatePredicateNode(
+                    assertion,
+                    path: "\(path).assertions[\(index)]",
+                    depth: depth + 1,
+                    scope: scope
+                )
             }
-        case .all(let changes):
-            validateAllChildCount(changes.count, path: "\(path).scopes")
-            for (index, child) in changes.enumerated() {
-                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1)
-            }
+        case .updated(let target, let change):
+            validateTarget(target, path: "\(path).target", scope: scope)
+            validatePropertyChange(change, path: "\(path).change", scope: scope)
         }
     }
-
-    mutating func validateChangeScope(
-        _ change: AccessibilityPredicate.ChangeScope,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch change.contract {
-        case .screen(let states):
-            validateAllChildCount(states.count, path: "\(path).screen")
-            for (index, state) in states.enumerated() {
-                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1)
-            }
-        case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).elements")
-            for (index, assertion) in assertions.enumerated() {
-                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]")
-            }
-        case .all(let changes):
-            validateAllChildCount(changes.count, path: "\(path).scopes")
-            for (index, child) in changes.enumerated() {
-                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1)
-            }
-        }
-    }
-
-    mutating func validateChangePredicate(
-        _ change: ChangePredicateExpr,
-        path: String,
-        depth: Int,
-        scope: HeistReferenceScope
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch change.predicateContract {
-        case .any:
-            break
-        case .screen(let states):
-            validateAllChildCount(states.count, path: "\(path).screen")
-            for (index, state) in states.enumerated() {
-                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1, scope: scope)
-            }
-        case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).elements")
-            for (index, assertion) in assertions.enumerated() {
-                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]", scope: scope)
-            }
-        case .all(let changes):
-            validateAllChildCount(changes.count, path: "\(path).scopes")
-            for (index, child) in changes.enumerated() {
-                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope)
-            }
-        }
-    }
-
-    mutating func validateChangeScope(
-        _ change: ChangeScopePredicateExpr,
-        path: String,
-        depth: Int,
-        scope: HeistReferenceScope
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch change.predicateContract {
-        case .screen(let states):
-            validateAllChildCount(states.count, path: "\(path).screen")
-            for (index, state) in states.enumerated() {
-                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1, scope: scope)
-            }
-        case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).elements")
-            for (index, assertion) in assertions.enumerated() {
-                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]", scope: scope)
-            }
-        case .all(let changes):
-            validateAllChildCount(changes.count, path: "\(path).scopes")
-            for (index, child) in changes.enumerated() {
-                validateChangeScope(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope)
-            }
-        }
-    }
-
-    mutating func validateElementDeltaPredicate(
-        _ predicate: ElementDeltaPredicate,
-        path: String
-    ) {
-        switch predicate {
-        case .appearedElement(let element), .disappearedElement(let element):
-            validateElementPredicate(element, path: "\(path).element")
-        case .updatedElement(let update):
-            if let element = update.element {
-                validateElementPredicate(element, path: "\(path).element")
-            }
-            validatePropertyChange(update.change, path: "\(path).change")
-        }
-    }
-
-    mutating func validateElementDeltaPredicate(
-        _ predicate: ElementDeltaPredicateExpr,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        switch predicate {
-        case .appearedElement(let element), .disappearedElement(let element):
-            validateElementPredicate(element, path: "\(path).element", scope: scope)
-        case .updatedElement(let update):
-            if let element = update.element {
-                validateElementPredicate(element, path: "\(path).element", scope: scope)
-            }
-            validatePropertyChange(update.change, path: "\(path).change", scope: scope)
-        }
-    }
-
     mutating func validatePropertyChange(
         _ change: AnyPropertyChange?,
         path: String
@@ -368,47 +184,6 @@ extension HeistPlanRuntimeSafetyValidator {
 
 }
 
-private enum StatePredicateExprContract {
-    case element(AccessibilityPredicateContract.PresenceRequirement, ElementPredicateTemplate)
-    case target(AccessibilityPredicateContract.PresenceRequirement, ElementTargetExpr)
-    case container(AccessibilityPredicateContract.PresenceRequirement, ContainerPredicateExpr)
-    case all(NonEmptyArray<StatePredicateExpr>)
-}
-
-private enum ChangePredicateExprContract {
-    case any
-    case screen([StatePredicateExpr])
-    case elements([ElementDeltaPredicateExpr])
-    case all(NonEmptyArray<ChangeScopePredicateExpr>)
-}
-
-private enum ChangeScopePredicateExprContract {
-    case screen([StatePredicateExpr])
-    case elements([ElementDeltaPredicateExpr])
-    case all(NonEmptyArray<ChangeScopePredicateExpr>)
-}
-
-private extension StatePredicateExpr {
-    var predicateContract: StatePredicateExprContract {
-        switch self {
-        case .exists(let predicate):
-            return .element(.present, predicate)
-        case .missing(let predicate):
-            return .element(.absent, predicate)
-        case .existsTarget(let target):
-            return .target(.present, target)
-        case .missingTarget(let target):
-            return .target(.absent, target)
-        case .existsContainer(let container):
-            return .container(.present, container)
-        case .missingContainer(let container):
-            return .container(.absent, container)
-        case .all(let states):
-            return .all(states)
-        }
-    }
-}
-
 private struct NestedStringMatch<Payload: StringMatchPayload & Codable> {
     let path: String
     let role: String
@@ -436,34 +211,6 @@ extension RotorSetMatch: NestedStringMatchContainer {
             NestedStringMatch(path: "include[\(index)]", role: "rotor include", match: match)
         } + exclude.enumerated().map { index, match in
             NestedStringMatch(path: "exclude[\(index)]", role: "rotor exclude", match: match)
-        }
-    }
-}
-
-private extension ChangePredicateExpr {
-    var predicateContract: ChangePredicateExprContract {
-        switch self {
-        case .any:
-            return .any
-        case .screenScope(let states):
-            return .screen(states)
-        case .elementsScope(let assertions):
-            return .elements(assertions)
-        case .allScopes(let changes):
-            return .all(changes)
-        }
-    }
-}
-
-private extension ChangeScopePredicateExpr {
-    var predicateContract: ChangeScopePredicateExprContract {
-        switch self {
-        case .screen(let states):
-            return .screen(states)
-        case .elements(let assertions):
-            return .elements(assertions)
-        case .all(let changes):
-            return .all(changes)
         }
     }
 }

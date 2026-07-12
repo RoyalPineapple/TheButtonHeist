@@ -8,11 +8,11 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            elementTarget: .predicate(ElementPredicate(label: "Color Picker", traits: [.button]))
+            target: .predicate(ElementPredicateTemplate(label: "Color Picker", traits: [.button]))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        guard case .predicate(let matcher, _) = decoded.elementTarget else {
+        guard case .predicate(let matcher, _) = decoded.target else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.checks, [
@@ -22,10 +22,10 @@ final class ScrollToVisibleTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetMinimal() throws {
-        let target = ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))
+        let target = ScrollToVisibleTarget(target: .predicate(ElementPredicateTemplate(label: "Save")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        guard case .predicate(let matcher, _) = decoded.elementTarget else {
+        guard case .predicate(let matcher, _) = decoded.target else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
@@ -33,9 +33,9 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleRuntimeActionRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            elementTarget: .predicate(ElementPredicate(label: "Settings", traits: [.header]))
+            target: .predicate(ElementPredicateTemplate(label: "Settings", traits: [.header]))
         )
-        let message = ClientMessage.runtimeAction(.viewportScrollToVisible(.target(target.elementTarget)))
+        let message = ClientMessage.runtimeAction(.viewportScrollToVisible(target.target))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
         guard case .runtimeAction(let action) = decoded,
@@ -50,28 +50,23 @@ final class ScrollToVisibleTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {
-        let data = Data(#"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}],"foo":"bar"}"#.utf8)
+        let data = Data(#"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}]},"foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "foo""#])
         }
     }
 
     func testScrollToVisibleTargetRejectsPublicContainerName() throws {
-        let data = Data(#"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}],"containerName":"main_scroll"}"#.utf8)
+        let data = Data(#"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}]},"containerName":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "containerName""#])
         }
     }
 
-    func testScrollToVisibleTargetRejectsPartialScopedTarget() throws {
-        let containerOnly = Data(#"{"container":{"checks":[{"kind":"scrollable","value":true}]}}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: containerOnly)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires target"])
-        }
-
-        let targetOnly = Data(#"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}]}}"#.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: targetOnly)) { error in
-            assertDecodingError(error, contains: ["scoped element target requires container"])
+    func testScrollToVisibleTargetRejectsRemovedFlatTargetShape() throws {
+        let data = Data(#"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Settings"}}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "checks""#])
         }
     }
 

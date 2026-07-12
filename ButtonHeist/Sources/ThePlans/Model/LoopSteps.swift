@@ -87,14 +87,14 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    public let predicate: AccessibilityPredicateExpr
+    public let predicate: AccessibilityPredicate<RootContext>
     /// Seconds. `0` means only the initial predicate evaluation is checked before any else body.
     public let timeout: Double
     public let body: [HeistStep]
     public let elseBody: [HeistStep]?
 
     public init(
-        predicate: AccessibilityPredicateExpr,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]? = nil
@@ -111,26 +111,11 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         self.elseBody = elseBody
     }
 
-    @_disfavoredOverload
-    public init(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
-        body: [HeistStep],
-        elseBody: [HeistStep]? = nil
-    ) throws {
-        try self.init(
-            predicate: .predicate(predicate),
-            timeout: timeout,
-            body: body,
-            elseBody: elseBody
-        )
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
             timeout: try container.decode(Double.self, forKey: .timeout),
             body: try container.decode([HeistStep].self, forKey: .body),
             elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
@@ -139,15 +124,15 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
 }
 
 package struct ResolvedRepeatUntilStep: Sendable, Equatable {
-    package let predicateExpression: AccessibilityPredicateExpr
-    package let predicate: AccessibilityPredicate
+    package let predicateExpression: AccessibilityPredicate<RootContext>
+    package let predicate: AccessibilityPredicate<RootContext>
     package let timeout: Double
     package let body: [HeistStep]
     package let elseBody: [HeistStep]?
 
     package init(
-        predicateExpression: AccessibilityPredicateExpr,
-        predicate: AccessibilityPredicate,
+        predicateExpression: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]? = nil

@@ -27,7 +27,7 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption

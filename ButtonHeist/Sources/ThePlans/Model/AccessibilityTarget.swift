@@ -1,0 +1,190 @@
+import Foundation
+
+/// The canonical accessibility node target used by actions and predicates.
+public indirect enum AccessibilityTarget: Codable, Sendable, Equatable, Hashable {
+    case predicate(ElementPredicateTemplate, ordinal: Int? = nil)
+    case container(ContainerPredicateExpr, ordinal: Int? = nil)
+    case ref(HeistReferenceName)
+    case within(container: ContainerPredicateExpr, target: AccessibilityTarget)
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case ref, ordinal, container, target
+    }
+
+    public static var inlineFieldNames: [String] {
+        ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue)
+            + CodingKeys.allCases.map(\.stringValue)
+    }
+
+    public init(ref: HeistReferenceName) throws {
+        self = .ref(try ref.validated(type: "target"))
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.ref) {
+            try decoder.rejectUnknownKeys(allowed: [CodingKeys.ref.stringValue], typeName: "accessibility target")
+            self = .ref(try HeistReferenceName.decode(from: container, forKey: .ref, type: "target"))
+            return
+        }
+        if container.contains(.container) || container.contains(.target) {
+            guard container.contains(.container) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .target,
+                    in: container,
+                    debugDescription: "scoped accessibility target requires container"
+                )
+            }
+            if !container.contains(.target) {
+                try decoder.rejectUnknownKeys(
+                    allowed: [CodingKeys.container.stringValue, CodingKeys.ordinal.stringValue],
+                    typeName: "container accessibility target"
+                )
+                self = .container(
+                    try container.decode(ContainerPredicateExpr.self, forKey: .container),
+                    ordinal: try Self.decodeOrdinal(from: container)
+                )
+                return
+            }
+            try decoder.rejectUnknownKeys(
+                allowed: [CodingKeys.container.stringValue, CodingKeys.target.stringValue],
+                typeName: "scoped accessibility target"
+            )
+            guard container.contains(.container), container.contains(.target) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "scoped accessibility target requires container and target"
+                ))
+            }
+            self = .within(
+                container: try container.decode(ContainerPredicateExpr.self, forKey: .container),
+                target: try container.decode(AccessibilityTarget.self, forKey: .target)
+            )
+            return
+        }
+
+        try decoder.rejectUnknownKeys(
+            allowed: Set(ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue) + [CodingKeys.ordinal.stringValue]),
+            typeName: "accessibility target"
+        )
+        let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
+        guard predicate.hasPredicates else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
+            ))
+        }
+        self = .predicate(predicate, ordinal: try Self.decodeOrdinal(from: container))
+    }
+
+    public static func decodeInlineIfPresent(from decoder: Decoder) throws -> AccessibilityTarget? {
+        struct AnyCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int? = nil
+
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { return nil }
+        }
+
+        let probe = try decoder.container(keyedBy: AnyCodingKey.self)
+        let allowed = Set(inlineFieldNames)
+        guard probe.allKeys.contains(where: { allowed.contains($0.stringValue) }) else { return nil }
+        return try AccessibilityTarget(from: decoder)
+    }
+
+    public static func decodeInline(from decoder: Decoder) throws -> AccessibilityTarget {
+        try AccessibilityTarget(from: decoder)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            try predicate.encode(to: encoder)
+            if let ordinal {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(ordinal, forKey: .ordinal)
+            }
+        case .container(let predicate, let ordinal):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(predicate, forKey: .container)
+            try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        case .ref(let reference):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(reference, forKey: .ref)
+        case .within(let containerPredicate, let target):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(containerPredicate, forKey: .container)
+            try container.encode(target, forKey: .target)
+        }
+    }
+
+    public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityTarget {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return .predicate(ElementPredicateTemplate(try predicate.resolve(in: environment)), ordinal: ordinal)
+        case .container(let predicate, let ordinal):
+            return .container(
+                ContainerPredicateExpr(try predicate.resolve(in: environment)),
+                ordinal: ordinal
+            )
+        case .ref(let reference):
+            guard let target = environment.targets[reference] else {
+                throw HeistExpressionError.unresolvedTargetReference(reference.rawValue)
+            }
+            return target
+        case .within(let container, let target):
+            return .within(
+                container: ContainerPredicateExpr(try container.resolve(in: environment)),
+                target: try target.resolve(in: environment)
+            )
+        }
+    }
+
+    public func and(_ checks: ElementPredicateCheck<StringExpr>...) -> AccessibilityTarget {
+        appending(checks)
+    }
+
+    public func excluding(_ checks: ElementPredicateCheck<StringExpr>...) -> AccessibilityTarget {
+        appending(checks.map(ElementPredicateCheck.exclude))
+    }
+
+    private func appending(_ checks: [ElementPredicateCheck<StringExpr>]) -> AccessibilityTarget {
+        guard case .predicate(let predicate, let ordinal) = self else { return self }
+        return .predicate(ElementPredicateTemplate(predicate.checks + checks), ordinal: ordinal)
+    }
+
+    private static func decodeOrdinal(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Int? {
+        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: AccessibilityTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription
+            )
+        }
+        return ordinal
+    }
+}
+
+extension AccessibilityTarget: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            return ScoreDescription.call("target", [
+                predicate.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
+        case .container(let predicate, let ordinal):
+            return ScoreDescription.call("container", [
+                predicate.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
+        case .ref(let reference):
+            return ScoreDescription.call("ref", [reference.description])
+        case .within(let container, let target):
+            return ScoreDescription.call("within", [container.description, target.description])
+        }
+    }
+}

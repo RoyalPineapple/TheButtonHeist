@@ -60,7 +60,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     }
 
     func testDuplicateLabelsRequireSemanticDisambiguation() async throws {
-        let row = ElementTarget.element(
+        let row = AccessibilityTarget.element(
             .label("Review PR"),
             .value("Active"),
             .customContent(.init(label: "Category", value: "Work")),
@@ -93,7 +93,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     }
 
     func testDynamicCellsKeepSemanticIdentityAfterChurn() async throws {
-        let noodles = ElementTarget.element(
+        let noodles = AccessibilityTarget.element(
             .label("Nebula Noodles Prime"),
             .customContent(.init(label: "SKU", value: "SKU-72")),
             .customContent(.init(label: "Category", value: "Mains")),
@@ -122,7 +122,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     }
 
     func testDynamicCellsStalePreChurnSemanticTargetFails() async throws {
-        let stale = ElementTarget.element(
+        let stale = AccessibilityTarget.element(
             .label("Nebula Noodles"),
             .customContent(.init(label: "SKU", value: "SKU-72")),
             .customContent(.init(label: "Churn State", value: "pre-churn")),
@@ -141,7 +141,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
     }
 
     func testTextFieldFallbackTypesThroughTapActivation() async throws {
-        let field = ElementTarget.element(.label("Fallback field"), traits: [.textEntry])
+        let field = AccessibilityTarget.element(.label("Fallback field"), traits: [.textEntry])
 
         let heist = try await runHeist("AdversarialTextFieldFallbackPass") {
             try DemoNavigation.openAdversarialScenario("Text Field Fallback")

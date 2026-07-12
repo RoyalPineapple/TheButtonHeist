@@ -25,7 +25,7 @@ struct HeistCanonicalSwiftDSLRenderer {
             try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
             return "\(callee)(\(prefix)parameter: \(quote(parameter))) { \(parameter) in"
-        case .elementTarget(let parameter):
+        case .accessibilityTarget(let parameter):
             try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
             return "\(callee)(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"

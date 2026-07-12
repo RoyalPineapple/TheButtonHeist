@@ -39,7 +39,6 @@ struct SettledSemanticObservationEvent: Sendable {
     let previousCursor: ObservationCursor?
     let notificationSequence: UInt64
     let trace: AccessibilityTrace
-    let delta: AccessibilityTrace.Delta?
 
     init(
         generation: ObservationGeneration = .initial,
@@ -49,8 +48,7 @@ struct SettledSemanticObservationEvent: Sendable {
         previous: SettledSemanticObservation?,
         previousCursor: ObservationCursor? = nil,
         notificationSequence: UInt64 = 0,
-        trace: AccessibilityTrace,
-        delta: AccessibilityTrace.Delta?
+        trace: AccessibilityTrace
     ) {
         self.generation = generation
         self.sequence = sequence
@@ -60,7 +58,6 @@ struct SettledSemanticObservationEvent: Sendable {
         self.previousCursor = previousCursor
         self.notificationSequence = notificationSequence
         self.trace = trace
-        self.delta = delta
     }
 
     var cursor: ObservationCursor? {
@@ -89,8 +86,7 @@ struct SettledSemanticObservationEvent: Sendable {
             previous: previous,
             previousCursor: previousCursor,
             notificationSequence: notificationSequence,
-            trace: trace,
-            delta: delta
+            trace: trace
         )
     }
 
@@ -138,8 +134,9 @@ private struct SemanticObservationFulfillmentState {
 
     enum State {
         case empty
-        case clean(CurrentFulfillment)
+        case observing(CurrentFulfillment)
         case invalidated(CurrentFulfillment?)
+        case replacing(CurrentFulfillment)
     }
 
     private var state: State = .empty
@@ -150,9 +147,9 @@ private struct SemanticObservationFulfillmentState {
 
     var latestSettledObservationInvalidated: Bool {
         switch state {
-        case .empty, .invalidated:
+        case .empty, .invalidated, .replacing:
             true
-        case .clean:
+        case .observing:
             false
         }
     }
@@ -169,11 +166,22 @@ private struct SemanticObservationFulfillmentState {
         switch state {
         case .empty:
             state = .invalidated(nil)
-        case .clean(let fulfillment):
+        case .observing(let fulfillment):
             state = .invalidated(fulfillment)
         case .invalidated(.some(let fulfillment)):
             state = .invalidated(fulfillment)
         case .invalidated(.none):
+            break
+        case .replacing:
+            break
+        }
+    }
+
+    mutating func beginReplacement() {
+        switch state {
+        case .observing(let fulfillment), .invalidated(.some(let fulfillment)):
+            state = .replacing(fulfillment)
+        case .empty, .invalidated(.none), .replacing:
             break
         }
     }
@@ -191,17 +199,22 @@ private struct SemanticObservationFulfillmentState {
         notificationIdentityScreen: Screen? = nil
     ) -> Publication {
         let startsNewGeneration = pendingAccessibilityNotifications.contains(where: \.startsObservationGeneration)
+        if startsNewGeneration {
+            beginReplacement()
+        }
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
-        var currentEvents = startsNewGeneration ? [:] : (currentFulfillment?.eventsByFulfilledScope ?? [:])
+        let previousEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
+        var currentEvents = startsNewGeneration ? [:] : previousEvents
         var events: EventsByFulfilledScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
+            let previousEvent = previousEvents[fulfilledScope]
             let observation = SettledSemanticObservation(
                 sequence: sequence,
                 scope: fulfilledScope,
                 screen: screen.semanticObservationProjection(for: fulfilledScope),
                 tripwireSignal: tripwireSignal
             )
-            let fallbackReason = currentEvents[fulfilledScope].flatMap { previousEvent in
+            let fallbackReason = previousEvent.flatMap { previousEvent in
                 ScreenClassifier.classify(
                     before: ScreenClassifier.snapshot(of: previousEvent.observation.screen),
                     after: ScreenClassifier.snapshot(of: observation.screen)
@@ -215,7 +228,7 @@ private struct SemanticObservationFulfillmentState {
             }
             let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
-                previous: currentEvents[fulfilledScope],
+                previous: previousEvent,
                 generation: eventGeneration,
                 notificationSequence: notificationSequence,
                 stash: stash,
@@ -229,7 +242,7 @@ private struct SemanticObservationFulfillmentState {
         guard let publishedSourceEvent = events[sourceScope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }
-        state = .clean(CurrentFulfillment(
+        state = .observing(CurrentFulfillment(
             sourceEvent: publishedSourceEvent,
             eventsByFulfilledScope: currentEvents
         ))
@@ -244,7 +257,7 @@ private struct SemanticObservationFulfillmentState {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
     ) -> SettledSemanticObservationEvent? {
-        guard case .clean(let fulfillment) = state,
+        guard case .observing(let fulfillment) = state,
               let latest = fulfillment.eventsByFulfilledScope[scope],
               latest.sequence > (sequence ?? 0)
         else {
@@ -257,7 +270,7 @@ private struct SemanticObservationFulfillmentState {
         switch state {
         case .empty:
             return nil
-        case .clean(let fulfillment):
+        case .observing(let fulfillment), .replacing(let fulfillment):
             return fulfillment
         case .invalidated(let fulfillment):
             return fulfillment
@@ -706,6 +719,10 @@ final class SemanticObservationStream {
         fulfillmentState.invalidate()
     }
 
+    private func beginScreenReplacement() {
+        fulfillmentState.beginReplacement()
+    }
+
     /// A scoped `screenChanged` notification recorded after the latest settled
     /// commit means the settled screen has already been replaced — the
     /// notification is a completion signal, so the invalidation is definitive,
@@ -724,7 +741,7 @@ final class SemanticObservationStream {
               stash.accessibilityNotifications.latestScopedScreenChangedSequence
               > lastCommittedScopedScreenChangedSequence
         else { return }
-        invalidateLatestSettledObservation()
+        beginScreenReplacement()
     }
 
     private func publishCurrentSettledObservation(
@@ -762,13 +779,10 @@ final class SemanticObservationStream {
 
     func observationWindow(
         from baseline: SettledCapture,
-        through currentEvent: SettledSemanticObservationEvent,
-        projection: AccessibilityTrace.DeltaProjection
+        through currentEvent: SettledSemanticObservationEvent
     ) -> ObservationWindow? {
         guard let current = currentEvent.settledCapture else { return nil }
-        let gapReason: ObservationGap.Reason? = if baseline.cursor.generation != current.cursor.generation {
-            .generationChanged
-        } else if baseline.cursor.scope != current.cursor.scope {
+        let gapReason: ObservationGap.Reason? = if baseline.cursor.scope != current.cursor.scope {
             .scopeChanged
         } else if current.cursor.sequence <= baseline.cursor.sequence {
             .noObservationAfterBaseline
@@ -802,20 +816,19 @@ final class SemanticObservationStream {
             ))
         }
 
-        let captures = [baseline.capture] + history.lazy
+        let captures = [baseline] + history.lazy
             .filter {
                 $0.scope == current.cursor.scope
                     && $0.sequence > baseline.cursor.sequence
                     && $0.sequence <= current.cursor.sequence
             }
-            .compactMap { $0.trace.captures.last }
-        let windowCaptures = captures.count > 1 ? captures : [baseline.capture, current.capture]
+            .compactMap(\.settledCapture)
+        let windowCaptures = captures.count > 1 ? captures : [baseline, current]
         return ObservationWindow(
             baseline: baseline,
             current: current,
             captures: windowCaptures,
-            completeness: completeness,
-            projection: projection
+            completeness: completeness
         )
     }
 

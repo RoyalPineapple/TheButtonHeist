@@ -6,23 +6,23 @@ import TheScore
 extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
-    func decodedElementTarget() throws -> ElementTarget? {
+    func decodedAccessibilityTarget() throws -> AccessibilityTarget? {
         guard let target = try schemaDictionary(.target) else { return nil }
-        return try target.decodeElementTargetPayload()
+        return try target.decodeAccessibilityTargetPayload()
     }
 
     @ButtonHeistActor
-    func requiredElementTarget(command: TheFence.Command) throws -> ElementTarget {
-        guard let target = try decodedElementTarget() else {
-            throw TheFence.MissingElementTarget(command: command)
+    func requiredAccessibilityTarget(command: TheFence.Command) throws -> AccessibilityTarget {
+        guard let target = try decodedAccessibilityTarget() else {
+            throw TheFence.MissingAccessibilityTarget(command: command)
         }
-        return target
+        return try target.resolvedElementTarget(command: command)
     }
 
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
         if let containerName = try optionalContainerName(.containerName) {
-            if try decodedElementTarget() != nil {
+            if try decodedAccessibilityTarget() != nil {
                 throw SchemaValidationError(
                     field: field(.containerName),
                     observed: observedDescription(for: .containerName) ?? "string",
@@ -31,8 +31,8 @@ extension TheFence.CommandArgumentEnvelope {
             }
             return .container(containerName)
         }
-        if let elementTarget = try decodedElementTarget() {
-            return .element(elementTarget)
+        if let target = try decodedAccessibilityTarget() {
+            return .element(try target.resolvedElementTarget(command: .scroll))
         }
         return .visibleContainer
     }
@@ -65,12 +65,12 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func decodeElementTargetPayload() throws -> ElementTarget {
+    func decodeAccessibilityTargetPayload() throws -> AccessibilityTarget {
         try requireObjectStringMatchFields()
         return try TheFence.HeistValuePayloadDecoder.decode(
             objectValue,
             field: argumentFieldPrefix ?? "target",
-            as: ElementTarget.self
+            as: AccessibilityTarget.self
         )
     }
 
@@ -81,6 +81,29 @@ extension TheFence.CommandArgumentEnvelope {
         )
     }
 
+}
+
+extension AccessibilityTarget {
+    func resolvedElementTarget(command: TheFence.Command) throws -> AccessibilityTarget {
+        let resolved = try resolve(in: .empty)
+        guard resolved.selectsElement else {
+            throw TheFence.ContainerTargetRequiresElement(command: command)
+        }
+        return resolved
+    }
+
+    var selectsElement: Bool {
+        switch self {
+        case .predicate:
+            return true
+        case .container:
+            return false
+        case .ref:
+            preconditionFailure("resolved accessibility targets cannot contain refs")
+        case .within(_, let target):
+            return target.selectsElement
+        }
+    }
 }
 
 extension TheFence {

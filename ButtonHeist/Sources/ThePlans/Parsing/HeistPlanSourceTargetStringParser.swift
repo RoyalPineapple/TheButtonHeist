@@ -11,7 +11,7 @@ private enum StringMatchEmptyLiteralPolicy {
 }
 
 extension HeistPlanSourceParser {
-    mutating func parseTargetExpr() throws -> ElementTargetExpr {
+    mutating func parseTargetExpr() throws -> AccessibilityTarget {
         if let target = try parseTargetRefIfPresent() {
             return target
         }
@@ -23,6 +23,23 @@ extension HeistPlanSourceParser {
         case "label", "identifier", "value", "hint", "traits",
              "actions", "customContent", "rotors", "exclude", "element":
             return .predicate(try parseElementPredicateTemplate(named: name))
+        case "container":
+            try expectSymbol("(")
+            let predicate = try parseContainerPredicateExpr()
+            let ordinal: Int?
+            if consumeSymbol(",") {
+                try expectIdentifier("ordinal")
+                try expectSymbol(":")
+                let parsedOrdinal = try parseSignedInteger()
+                guard parsedOrdinal >= 0 else {
+                    throw error(previous, AccessibilityTargetGrammarError.negativeOrdinal(parsedOrdinal).diagnosticDescription)
+                }
+                ordinal = parsedOrdinal
+            } else {
+                ordinal = nil
+            }
+            try expectSymbol(")")
+            return .container(predicate, ordinal: ordinal)
         case "target":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplate()
@@ -31,7 +48,7 @@ extension HeistPlanSourceParser {
             try expectSymbol(":")
             let ordinal = try parseSignedInteger()
             guard ordinal >= 0 else {
-                throw error(previous, ElementTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription)
+                throw error(previous, AccessibilityTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription)
             }
             try expectSymbol(")")
             return .predicate(predicate, ordinal: ordinal)
@@ -588,7 +605,7 @@ extension HeistPlanSourceParser {
         return nil
     }
 
-    mutating func parseTargetRefIfPresent() throws -> ElementTargetExpr? {
+    mutating func parseTargetRefIfPresent() throws -> AccessibilityTarget? {
         if case .identifier(let name) = currentToken.kind, let reference = scope.targetReference(for: name) {
             advance()
             return .ref(reference)

@@ -50,7 +50,7 @@ extension HeistJUnitReport {
         /// Heist report action or structural step name.
         public let command: String
         /// Durable matcher target used to target the element, if any.
-        public let target: ElementTarget?
+        public let target: AccessibilityTarget?
         /// Wall-clock time for this step, in seconds.
         public let timeSeconds: Double
         /// Pass or fail with diagnostic detail.
@@ -59,7 +59,7 @@ extension HeistJUnitReport {
         public init(
             index: Int,
             command: String,
-            target: ElementTarget?,
+            target: AccessibilityTarget?,
             timeSeconds: Double,
             outcome: Outcome
         ) {
@@ -83,7 +83,8 @@ extension HeistJUnitReport {
         /// Human-readable name for this step (used as testcase name in JUnit).
         public var displayName: String {
             var name = "[\(index)] \(command)"
-            if case .predicate(let predicate, _)? = target {
+            if case .predicate(let template, _)? = target,
+               let predicate = try? template.resolve(in: .empty) {
                 if let summary = predicate.checks.compactMap(ScoreDescription.predicateCheckField).first {
                     name += " \(summary)"
                 }
@@ -190,7 +191,8 @@ extension HeistJUnitReport {
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []
-            if case .predicate(let predicate, _) = target {
+            if case .predicate(let template, _) = target,
+               let predicate = try? template.resolve(in: .empty) {
                 parts = predicate.checks.compactMap(ScoreDescription.predicateCheckField)
             }
             if !parts.isEmpty {

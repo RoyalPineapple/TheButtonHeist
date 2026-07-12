@@ -123,7 +123,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
     }
 
     func testInactiveCommandFailsWithoutStartingObservation() async {
-        let result = await job.brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Save"))))
+        let result = await job.brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate(label: "Save"))))
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.outcome.errorKind, .actionFailed)

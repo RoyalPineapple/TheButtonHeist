@@ -9,12 +9,12 @@ import CoreGraphics
 final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testHeistPlanCarriesSemanticActionCommands() throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "btn"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(identifier: "btn"))
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
             .action(try ActionStep(command: .rotor(
                 selection: .named("Errors"),
-                target: .target(target),
+                target: target,
                 direction: .previous
             ))),
             .action(try ActionStep(command: .dismiss)),
@@ -35,7 +35,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testHeistPlanCarriesGestureCommands() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Canvas"))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Canvas"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let plan = try HeistPlan(body: [
             .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
@@ -62,7 +62,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testHeistPlanCarriesWaitStep() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .change(.elements()), timeout: 2)),
+            .wait(WaitStep(predicate: .changed(.elements()), timeout: 2)),
         ])
 
         let decodedPlan = try roundTripHeistPlan(plan)
@@ -70,7 +70,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         guard case .wait(let wait)? = decodedPlan.body.first else {
             return XCTFail("Expected wait step")
         }
-        XCTAssertEqual(wait.predicate, .change(.elements()))
+        XCTAssertEqual(wait.predicate, .changed(.elements()))
         XCTAssertEqual(wait.timeout, 2)
     }
 
@@ -103,7 +103,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             {
               "type": "rotor",
               "payload": {
-                "elementTarget": {
+                "target": {
                   "checks": [
                     { "kind": "identifier", "match": { "mode": "exact", "value": "btn" } }
                   ]

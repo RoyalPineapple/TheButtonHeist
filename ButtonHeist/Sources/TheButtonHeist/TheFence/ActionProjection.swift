@@ -4,7 +4,7 @@ import TheScore
 struct ExpectationProjection: Sendable {
     let met: Bool
     let actual: String?
-    let expected: AccessibilityPredicate?
+    let expected: AccessibilityPredicate<RootContext>?
     let hint: String?
 
     init(result: ExpectationResult, hint: String? = nil) {
@@ -90,8 +90,13 @@ struct ActionProjection: Sendable {
     }
 
     var delta: DeltaProjection? {
-        result.accessibilityTrace?.endpointDelta.map {
-            DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
+        result.accessibilityTrace.flatMap {
+            DeltaProjection(
+                trace: $0,
+                isComplete: result.settled != false,
+                profile: profile,
+                includeScreenInterface: true
+            )
         }
     }
 

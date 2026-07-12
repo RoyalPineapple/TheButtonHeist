@@ -163,16 +163,24 @@ It is Swift-shaped, but it is the source language accepted by MCP and
 `run_heist(plan:)`; checked-in Swift files are covered in
 [Swift heist authoring](SWIFT-HEIST-AUTHORING.md).
 
+The generated plan uses one `AccessibilityTarget` shape for action targets and
+predicate targets. Expectations use one context-typed predicate tree:
+`exists`, `missing`, `changed`, `no_change`, and `announcement` at the root;
+`changed.screen` accepts current-tree `exists`/`missing`; `changed.elements`
+also accepts `appeared`, `disappeared`, and `updated`. The generated wire form
+is strict: `{"type":"changed","scope":"screen|elements","assertions":[]}`.
+Artifacts do not carry aliases or compatibility spellings.
+
 ```swift
 HeistPlan("purchaseFlow") {
     TypeText("milk", into: .label("Search Items"))
         .expect(.exists(.element(.label("Search Items"), .value("milk"))))
 
     Activate(.label("Milk"))
-        .expect(.appeared(.element(
+        .expect(.changed(.elements([.appeared(.element(
             .label(.prefix("Milk")),
             .identifier(.contains("cart"))
-        )))
+        ))])))
 
     WaitFor(.missing(.label("Loading")), timeout: .seconds(5))
         .else {
@@ -189,10 +197,10 @@ HeistDef<String>("addToCart", parameter: "item") { item in
         .expect(.exists(.element(.label("Search Items"), .value(item))))
 
     Activate(.label(item))
-        .expect(.appeared(.element(
+        .expect(.changed(.elements([.appeared(.element(
             .label(.prefix(item)),
             .identifier(.contains("cart"))
-        )))
+        ))])))
 }
 
 HeistPlan("cartFlow") {
@@ -203,7 +211,7 @@ HeistPlan("cartFlow") {
     If {
             Case(.label("Checkout")) {
                 Activate(.label("Checkout"))
-                    .expect(.screenChanged(.exists(.label("Receipt"))))
+                    .expect(.changed(.screen([.exists(.label("Receipt"))])))
             }
 
         Else {

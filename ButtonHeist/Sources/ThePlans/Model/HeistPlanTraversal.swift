@@ -267,7 +267,7 @@ struct HeistPlanTraversal {
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings.binding(
-                target: .predicate(forEach.matching),
+                target: .predicate(ElementPredicateTemplate(forEach.matching)),
                 to: forEach.parameter
             ),
             definitionScope: context.definitionScope,

@@ -5,7 +5,7 @@ import TheScore
 
 @Suite struct HeistRepeatUntilEvidenceFactoryTests {
     @Test func `expectation result converts to typed predicate checks`() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let met = ExpectationResult(met: true, predicate: predicate)
         let unmet = ExpectationResult(met: false, predicate: predicate, actual: "not found")
 
@@ -32,7 +32,7 @@ import TheScore
     }
 
     @Test func `terminal evidence factories return evidence for typed polarity`() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let met = try #require(MetExpectationResult(ExpectationResult(met: true, predicate: predicate)))
         let unmet = try #require(UnmetExpectationResult(ExpectationResult(
             met: false,
@@ -101,7 +101,7 @@ import TheScore
     }
 
     @Test func `iteration evidence factories return evidence for typed polarity`() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let met = try #require(MetExpectationResult(ExpectationResult(met: true, predicate: predicate)))
         let unmet = try #require(UnmetExpectationResult(ExpectationResult(
             met: false,
@@ -143,7 +143,7 @@ import TheScore
     }
 
     @Test func `decode rejects invalid repeat until polarity at boundary`() throws {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         let evidence = HeistRepeatUntilEvidence.predicateMet(
             predicate: predicate,
             timeout: 1,
@@ -166,7 +166,7 @@ import TheScore
 
 private struct RepeatUntilEvidenceFixture: Codable {
     var outcome: HeistPredicateEvidenceOutcome
-    var predicate: AccessibilityPredicate
+    var predicate: AccessibilityPredicate<RootContext>
     var timeout: Double
     var iterationCount: Int
     var iterationOrdinal: Int?

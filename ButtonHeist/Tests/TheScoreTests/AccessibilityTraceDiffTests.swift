@@ -4,43 +4,38 @@ import ThePlans
 import AccessibilitySnapshotModel
 @testable import TheScore
 
-private extension AccessibilityTrace.Delta {
+private extension Collection where Element == AccessibilityTrace.ChangeFact {
     var testElementEdits: ElementEdits {
-        if case .elementsChanged(let payload) = self { return payload.edits }
-        return ElementEdits()
+        ElementEdits(updated: compactMap { fact -> [ElementUpdate]? in
+            guard case .elementsChanged(let payload) = fact else { return nil }
+            return payload.updated
+        }.flatMap { $0 })
     }
 
     var testTransient: [HeistElement] {
-        switch self {
-        case .noChange(let payload):
-            return payload.transient
-        case .elementsChanged(let payload):
-            return payload.transient
-        case .screenChanged(let payload):
-            return payload.transient
-        }
+        flatMap(\.metadata.transient)
     }
 
     var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
-        switch self {
-        case .noChange(let payload):
-            return payload.captureEdge
-        case .elementsChanged(let payload):
-            return payload.captureEdge
-        case .screenChanged(let payload):
-            return payload.captureEdge
-        }
+        first?.metadata.captureEdge
     }
 
     var testInteractionDigest: AccessibilityTrace.InteractionDigest? {
-        switch self {
-        case .noChange(let payload):
-            return payload.interactionDigest
-        case .elementsChanged(let payload):
-            return payload.interactionDigest
-        case .screenChanged(let payload):
-            return payload.interactionDigest
-        }
+        first?.metadata.interactionDigest
+    }
+
+    var testAppearedLabels: [String] {
+        flatMap { fact -> [AccessibilityTrace.InterfaceChangeNode] in
+            guard case .elementsChanged(let payload) = fact else { return [] }
+            return payload.appeared
+        }.compactMap(\.elementLabel)
+    }
+
+    var testDisappearedLabels: [String] {
+        flatMap { fact -> [AccessibilityTrace.InterfaceChangeNode] in
+            guard case .elementsChanged(let payload) = fact else { return [] }
+            return payload.disappeared
+        }.compactMap(\.elementLabel)
     }
 }
 
@@ -56,8 +51,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ElementEdits.between(before, after),
             ElementEdits.between(beforeInterface, afterInterface)
         )
-        let delta = captureDelta(before: beforeInterface, after: afterInterface)
-        XCTAssertEqual(delta.testElementEdits, ElementEdits.between(before, after))
+        let facts = captureFacts(before: beforeInterface, after: afterInterface)
+        XCTAssertEqual(facts.testElementEdits, ElementEdits.between(before, after))
     }
 
     func testNodeDiffIsTreeDiff() {
@@ -72,9 +67,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ]),
         ])
 
-        let edits = ElementEdits.between(before, after)
-        let delta = captureDelta(before: before, after: after)
-        XCTAssertEqual(delta.testElementEdits, edits)
+        let facts = captureFacts(before: before, after: after)
+        guard let fact = facts.single, case .elementsChanged(let elements) = fact else {
+            return XCTFail("Expected one elementsChanged fact")
+        }
+        XCTAssertEqual(elements.disappeared.compactMap(\.elementLabel), ["Menu"])
+        XCTAssertEqual(elements.appeared.compactMap(\.elementLabel), ["Checkout"])
     }
 
     func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
@@ -113,15 +111,15 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ]),
         ])
 
-        let delta = captureDelta(before: before, after: after)
+        let facts = captureFacts(before: before, after: after)
 
-        guard case .noChange = delta else {
-            return XCTFail("Expected noChange for tree-only reorder, got \(delta)")
-        }
-        let digest = try XCTUnwrap(delta.testInteractionDigest)
-        XCTAssertEqual(digest.elementCountBefore, 2)
-        XCTAssertEqual(digest.elementCountAfter, 2)
-        XCTAssertFalse(digest.elementCountChanged)
+        XCTAssertTrue(facts.isEmpty)
+        let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: before)
+        let afterCapture = AccessibilityTrace.Capture(sequence: 2, interface: after)
+        let digest = AccessibilityTrace.InteractionDigest(between: beforeCapture, and: afterCapture)
+        XCTAssertEqual(digest.nodeCountBefore, 3)
+        XCTAssertEqual(digest.nodeCountAfter, 3)
+        XCTAssertFalse(digest.nodeCountChanged)
         XCTAssertFalse(digest.elementSetChanged)
     }
 
@@ -135,18 +133,15 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             makeElement(label: "Review sale 1 item", identifier: "FooterButton.ReviewSale", traits: [.button]),
         ])
 
-        let delta = captureDelta(before: before, after: after)
+        let facts = captureFacts(before: before, after: after)
 
-        guard case .elementsChanged(let payload) = delta else {
-            return XCTFail("Expected elementsChanged for footer identity swap, got \(delta)")
-        }
-        let digest = try XCTUnwrap(payload.interactionDigest)
-        XCTAssertEqual(digest.elementCountBefore, 2)
-        XCTAssertEqual(digest.elementCountAfter, 2)
-        XCTAssertFalse(digest.elementCountChanged)
+        let digest = try XCTUnwrap(facts.testInteractionDigest)
+        XCTAssertEqual(digest.nodeCountBefore, 2)
+        XCTAssertEqual(digest.nodeCountAfter, 2)
+        XCTAssertFalse(digest.nodeCountChanged)
         XCTAssertTrue(digest.elementSetChanged)
-        XCTAssertEqual(payload.edits.removed.map(\.label), ["Charge $0.00"])
-        XCTAssertEqual(payload.edits.added.map(\.label), ["Review sale 1 item"])
+        XCTAssertEqual(facts.testDisappearedLabels, ["Charge $0.00"])
+        XCTAssertEqual(facts.testAppearedLabels, ["Review sale 1 item"])
     }
 
     func testTraceIdentityPairsElementAcrossLabelAndIdentifierChanges() throws {
@@ -172,7 +167,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ])
 
         let edits = ElementEdits.between(before, after)
-        let delta = captureDelta(before: before, after: after)
+        let facts = captureFacts(before: before, after: after)
 
         XCTAssertTrue(edits.added.isEmpty)
         XCTAssertTrue(edits.removed.isEmpty)
@@ -180,8 +175,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(update.before.label, "Charge $0.00")
         XCTAssertEqual(update.after.label, "Review sale 1 item")
         XCTAssertEqual(update.changes.map(\.property), [.label, .identifier, .value])
-        XCTAssertEqual(delta.testElementEdits, edits)
-        XCTAssertFalse(try XCTUnwrap(delta.testInteractionDigest).elementSetChanged)
+        XCTAssertEqual(facts.testElementEdits, edits)
+        XCTAssertFalse(try XCTUnwrap(facts.testInteractionDigest).elementSetChanged)
     }
 
     func testTraceIdentityReportsLabelOnlyChangeAsElementUpdate() throws {
@@ -195,7 +190,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ])
 
         let edits = ElementEdits.between(before, after)
-        let delta = captureDelta(before: before, after: after)
+        let facts = captureFacts(before: before, after: after)
 
         XCTAssertTrue(edits.added.isEmpty)
         XCTAssertTrue(edits.removed.isEmpty)
@@ -203,9 +198,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(update.changes.map(\.property), [.label])
         XCTAssertEqual(update.changes.first?.oldValue, .text("Total"))
         XCTAssertEqual(update.changes.first?.newValue, .text("Total $12.00"))
-        guard case .elementsChanged = delta else {
-            return XCTFail("Expected elementsChanged for trace-identity label update, got \(delta)")
-        }
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged])
     }
 
     func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() {
@@ -275,30 +268,32 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             timestamp: Date(timeIntervalSince1970: 2)
         )
         let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
-        let afterCapture = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: beforeCapture.hash)
+        let afterCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: beforeCapture.hash
+        )
 
         XCTAssertEqual(
             ElementEdits.between(beforeInterface.projectedElements, afterInterface.projectedElements).updated,
             ElementEdits.between(beforeInterface, afterInterface).updated
         )
-        let delta = AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
-        XCTAssertEqual(delta.testElementEdits, ElementEdits.between(beforeInterface, afterInterface))
+        let facts = AccessibilityTrace.ChangeFact.between(beforeCapture, afterCapture)
+        XCTAssertEqual(facts.testElementEdits, ElementEdits.between(beforeInterface, afterInterface))
     }
 
-    func testCaptureBackedNoChangeDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
+    func testCaptureBackedNoChangeIsACompleteFactFreeTrace() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
         let after = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(), parentHash: before.hash)
         let trace = AccessibilityTrace(captures: [before, after])
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        guard case .noChange = delta else {
-            return XCTFail("Expected noChange, got \(delta)")
-        }
-        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+        XCTAssertTrue(facts.isEmpty)
+        XCTAssertEqual(trace.changeFacts, facts)
     }
 
-    func testCaptureBackedElementsChangedDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
+    func testCaptureBackedElementsChangedFactCarriesSourceEdgeAndDerivesFromTrace() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -307,15 +302,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
         let trace = AccessibilityTrace(captures: [before, after])
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        guard case .elementsChanged = delta else {
-            return XCTFail("Expected elementsChanged, got \(delta)")
-        }
-        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged])
+        try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
-    func testCaptureBackedScreenChangedDeltaCarriesSourceEdgeAndDerivesFromTransition() throws {
+    func testCaptureBackedScreenChangedFactsCarrySourceEdgeAndDeriveFromTransition() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -325,13 +318,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
         let trace = AccessibilityTrace(captures: [before, after])
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
-        guard case .screenChanged(let payload) = delta else {
-            return XCTFail("Expected screenChanged, got \(delta)")
-        }
-        XCTAssertEqual(payload.newInterface, after.interface)
-        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
     func testScreenChangedNotificationWinsWhenScreenIdentityIsUnchanged() throws {
@@ -346,15 +336,45 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        guard case .screenChanged(let payload) = delta else {
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard case .screenChanged(let payload) = facts[1] else {
             return XCTFail("Expected screenChanged from the scoped screenChanged notification")
         }
-        XCTAssertEqual(payload.accessibilityNotifications, [notification])
-        XCTAssertEqual(try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: JSONEncoder().encode(delta)), delta)
+        XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
+        XCTAssertEqual(
+            try JSONDecoder().decode([AccessibilityTrace.ChangeFact].self, from: JSONEncoder().encode(facts)),
+            facts
+        )
     }
 
-    func testLayoutChangedNotificationDoesNotProduceSemanticDelta() throws {
+    func testObservationGenerationBoundaryCannotProduceElementUpdates() {
+        let beforeInterface = makeTestInterface(elements: [
+            makeElement(label: "Quantity", value: "1", traits: [.adjustable]),
+        ])
+        let afterInterface = makeTestInterface(elements: [
+            makeElement(label: "Quantity", value: "2", traits: [.adjustable]),
+        ])
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: beforeInterface,
+            context: AccessibilityTrace.Context(screenId: "checkout", observationGeneration: 7)
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(screenId: "checkout", observationGeneration: 8)
+        )
+
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        XCTAssertTrue(facts.testElementEdits.updated.isEmpty)
+        XCTAssertEqual(facts.testDisappearedLabels, ["Quantity"])
+        XCTAssertEqual(facts.testAppearedLabels, ["Quantity"])
+    }
+
+    func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
         let notification = notification(kind: .layoutChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
@@ -366,15 +386,20 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        guard case .noChange = delta else {
-            return XCTFail("Expected layoutChanged to trigger recapture without inventing a semantic delta")
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
+            return XCTFail("Expected notification-only elementsChanged fact")
         }
         XCTAssertEqual(after.transition.accessibilityNotifications, [notification])
-        XCTAssertEqual(try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: JSONEncoder().encode(delta)), delta)
+        XCTAssertTrue(payload.isNotificationOnly)
+        XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
+        XCTAssertEqual(
+            try JSONDecoder().decode([AccessibilityTrace.ChangeFact].self, from: JSONEncoder().encode(facts)),
+            facts
+        )
     }
 
-    func testValueChangedNotificationDoesNotProduceSemanticDeltaWithoutValueDiff() throws {
+    func testValueChangedNotificationProducesNotificationOnlyElementFactWithoutValueDiff() throws {
         let notification = notification(kind: .valueChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
@@ -384,11 +409,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             transition: AccessibilityTrace.Transition(accessibilityNotifications: [notification])
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        guard case .noChange = delta else {
-            return XCTFail("Expected valueChanged to trigger recapture without inventing a semantic delta")
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
+            return XCTFail("Expected notification-only elementsChanged fact")
         }
         XCTAssertEqual(after.transition.accessibilityNotifications, [notification])
+        XCTAssertTrue(payload.isNotificationOnly)
     }
 
     func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
@@ -404,43 +430,96 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
-            return XCTFail("Expected screen appearance to precede value-change classification")
-        }
+        XCTAssertEqual(
+            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
-    func testAnnouncementDoesNotCreateATransition() {
+    func testAnnouncementProducesElementChangeEvidenceForUIKitValueControls() {
+        let notification = notification(kind: .announcement, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
             interface: makeInterface(label: "Menu"),
             parentHash: before.hash,
             transition: AccessibilityTrace.Transition(
-                accessibilityNotifications: [notification(kind: .announcement, sequence: 1)]
+                accessibilityNotifications: [notification]
             )
         )
 
-        guard case .noChange = AccessibilityTrace.Delta.between(before, after) else {
-            return XCTFail("Announcements are evidence only and must not create a semantic transition")
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
+            return XCTFail("Expected announcement-backed elementsChanged fact")
+        }
+        XCTAssertEqual(payload.metadata.accessibilityNotifications, [notification])
+    }
+
+    func testUIKitValueSignalsAllConfirmChangesByRereadingAccessibilityValue() throws {
+        for kind in [
+            AccessibilityNotificationKind.valueChanged,
+            .layoutChanged,
+            .announcement,
+        ] {
+            let evidence = notification(kind: kind, sequence: 1)
+            let before = AccessibilityTrace.Capture(
+                sequence: 1,
+                interface: makeTestInterface(elements: [
+                    makeElement(label: "Volume", value: "50%", traits: [.adjustable]),
+                ])
+            )
+            let after = AccessibilityTrace.Capture(
+                sequence: 2,
+                interface: makeTestInterface(elements: [
+                    makeElement(label: "Volume", value: "75%", traits: [.adjustable]),
+                ]),
+                parentHash: before.hash,
+                transition: AccessibilityTrace.Transition(accessibilityNotifications: [evidence])
+            )
+
+            let facts = AccessibilityTrace.ChangeFact.between(before, after)
+            let update = try XCTUnwrap(facts.testElementEdits.updated.single)
+
+            XCTAssertEqual(update.before.value, "50%", "notification: \(kind)")
+            XCTAssertEqual(update.after.value, "75%", "notification: \(kind)")
+            XCTAssertEqual(facts.first?.metadata.accessibilityNotifications, [evidence])
         }
     }
 
-    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToCompactDeltaField() throws {
+    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToFactMetadata() throws {
         let transient = makeElement(label: "Loading", traits: [.staticText])
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
-            interface: makeInterface(),
+            interface: makeInterface(label: "Checkout"),
             parentHash: before.hash,
             transition: AccessibilityTrace.Transition(transient: [transient])
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
         XCTAssertEqual(after.transition.transient, [transient])
-        XCTAssertEqual(delta.testTransient, [transient])
-        XCTAssertEqual(delta.testCaptureEdge?.before.hash, before.hash)
-        XCTAssertEqual(delta.testCaptureEdge?.after.hash, after.hash)
+        XCTAssertEqual(facts.testTransient, [transient])
+        XCTAssertEqual(facts.testCaptureEdge?.before.hash, before.hash)
+        XCTAssertEqual(facts.testCaptureEdge?.after.hash, after.hash)
+    }
+
+    func testTransitionTransientProducesFactWhenSettledSnapshotsAreIdentical() {
+        let transient = makeElement(label: "Loading", traits: [.staticText])
+        let interface = makeInterface(label: "Menu")
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: interface)
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(transient: [transient])
+        )
+
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
+            return XCTFail("Expected transient-backed elementsChanged fact")
+        }
+        XCTAssertEqual(payload.metadata.transient, [transient])
     }
 
     func testCaptureContextOnlyDiffsAsElementsChanged() {
@@ -457,11 +536,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             context: AccessibilityTrace.Context(keyboardVisible: false)
         )
 
-        guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(before, after) else {
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
             return XCTFail("Expected elementsChanged for capture context change")
         }
-        XCTAssertEqual(payload.elementCount, interface.projectedElements.count)
-        XCTAssertTrue(payload.edits.isEmpty)
+        XCTAssertFalse(payload.hasLifecycleOrUpdateFacts)
+        XCTAssertTrue(payload.metadata.interactionDigest?.firstResponderChanged == true)
     }
 
     func testGeometryOnlyMovementKeepsSemanticCaptureStableUnlessGeometryIncluded() throws {
@@ -493,22 +573,15 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let after = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: before.hash)
 
         XCTAssertEqual(before.hash, after.hash)
-        guard case .noChange = AccessibilityTrace.Delta.between(before, after) else {
-            return XCTFail("Expected semantic noChange for geometry-only movement")
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        guard let fact = facts.single, case .elementsChanged(let payload) = fact else {
+            return XCTFail("Expected canonical elementsChanged fact")
         }
-
-        guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(
-            before,
-            after,
-            projection: .geometryAware
-        ) else {
-            return XCTFail("Expected elementsChanged when geometry is included")
-        }
-        let properties = try XCTUnwrap(payload.edits.updated.single?.changes.map(\.property))
+        let properties = try XCTUnwrap(payload.updated.single?.changes.map(\.property))
         XCTAssertEqual(properties, [.frame, .activationPoint])
     }
 
-    func testGeometryOnlyMovementFeedsOnlyGeometryPredicates() {
+    func testGeometryOnlyMovementFeedsCanonicalPredicates() {
         let beforeInterface = makeTestInterface(elements: [
             makeElement(
                 label: "Checkout",
@@ -534,17 +607,18 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ),
         ])
         let trace = AccessibilityTrace(first: beforeInterface).appending(afterInterface)
-        let evidence = PredicateEvaluationEvidence(trace: trace)
-        let framePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            element: ElementPredicate(label: "Checkout"),
-            change: .frame(ElementPropertyChange<FrameProperty>(
-                after: ElementFrameMatch(x: 10, y: 20, width: 100, height: 44)
-            ))
-        ))))
-        let semanticPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            element: ElementPredicate(label: "Checkout"),
-            change: .value(before: nil, after: "Moved")
-        ))))
+        guard let evidence = PredicateEvaluationEvidence(trace: trace, isComplete: true) else {
+            return XCTFail("Expected predicate evidence")
+        }
+        let framePredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+            .updated(
+                .label("Checkout"),
+                .frame(after: ElementFrameMatch(x: 10, y: 20, width: 100, height: 44))
+            ),
+        ]))
+        let semanticPredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+            .updated(.label("Checkout"), .value(after: "Moved")),
+        ]))
 
         XCTAssertTrue(framePredicate.evaluate(in: evidence).met)
         XCTAssertFalse(semanticPredicate.evaluate(in: evidence).met)
@@ -595,10 +669,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "checkout")
         )
 
-        guard case .screenChanged(let payload) = AccessibilityTrace.Delta.between(before, after) else {
-            return XCTFail("Expected screenChanged for screen id context change")
-        }
-        XCTAssertEqual(payload.newInterface, interface)
+        XCTAssertEqual(
+            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
     func testInteractionDigestReportsScreenAndFirstResponderChanges() throws {
@@ -607,7 +681,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             sequence: 1,
             interface: interface,
             context: AccessibilityTrace.Context(
-                firstResponder: .predicate(ElementPredicate(label: "Email")),
+                firstResponder: .predicate(ElementPredicateTemplate(label: "Email")),
                 screenId: "login"
             )
         )
@@ -616,13 +690,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             interface: interface,
             parentHash: before.hash,
             context: AccessibilityTrace.Context(
-                firstResponder: .predicate(ElementPredicate(label: "Password")),
+                firstResponder: .predicate(ElementPredicateTemplate(label: "Password")),
                 screenId: "signup"
             )
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        let digest = try XCTUnwrap(delta.testInteractionDigest)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        let digest = try XCTUnwrap(facts.testInteractionDigest)
 
         XCTAssertTrue(digest.screenIdChanged)
         XCTAssertEqual(digest.screenIdBefore, "login")
@@ -633,7 +707,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testInteractionDigestTreatsKeyboardVisibilityChangeAsFirstResponderChange() throws {
         let interface = makeInterface()
-        let firstResponder = ElementTarget.predicate(ElementPredicate(label: "Search"))
+        let firstResponder = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Search"))
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
@@ -654,8 +728,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             )
         )
 
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        let digest = try XCTUnwrap(delta.testInteractionDigest)
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        let digest = try XCTUnwrap(facts.testInteractionDigest)
 
         XCTAssertTrue(digest.firstResponderChanged)
         XCTAssertFalse(digest.screenIdChanged)
@@ -667,14 +741,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: interface, parentHash: nil)
         let after = AccessibilityTrace.Capture(sequence: 99, interface: interface, parentHash: "sha256:parent")
 
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.between(before, after),
-            .noChange(AccessibilityTrace.NoChange(
-                elementCount: interface.projectedElements.count,
-                captureEdge: AccessibilityTrace.CaptureEdge(before: before, after: after),
-                interactionDigest: AccessibilityTrace.InteractionDigest(between: before, and: after)
-            ))
-        )
+        XCTAssertTrue(AccessibilityTrace.ChangeFact.between(before, after).isEmpty)
     }
 
     func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
@@ -784,8 +851,22 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     func testTypedDiffRendersFrameAndActivationPoint() throws {
         let frame = try XCTUnwrap(singleChange(
             property: .frame,
-            old: makeElement(label: "Box", traits: [.staticText], frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 50),
-            new: makeElement(label: "Box", traits: [.staticText], frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)
+            old: makeElement(
+                label: "Box",
+                traits: [.staticText],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 50
+            ),
+            new: makeElement(
+                label: "Box",
+                traits: [.staticText],
+                frameX: 10,
+                frameY: 20,
+                frameWidth: 100,
+                frameHeight: 50
+            )
         ))
         XCTAssertEqual(frame.oldValue, .frame(ElementPropertyFrame(x: 0, y: 0, width: 100, height: 50)))
         XCTAssertEqual(frame.newValue, .frame(ElementPropertyFrame(x: 10, y: 20, width: 100, height: 50)))
@@ -920,27 +1001,37 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             .first { $0.property == property }
     }
 
-    private func assertDeltaDerivesFromCaptureEdge(
-        _ delta: AccessibilityTrace.Delta,
+    private func assertFactsDeriveFromCaptureEdge(
+        _ facts: [AccessibilityTrace.ChangeFact],
         trace: AccessibilityTrace,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let edge = try XCTUnwrap(delta.testCaptureEdge, "Delta did not carry capture edge", file: file, line: line)
-        let before = try XCTUnwrap(trace.capture(ref: edge.before), "Trace did not contain before ref", file: file, line: line)
-        let after = try XCTUnwrap(trace.capture(ref: edge.after), "Trace did not contain after ref", file: file, line: line)
+        let edge = try XCTUnwrap(facts.testCaptureEdge, "Facts did not carry capture edge", file: file, line: line)
+        let before = try XCTUnwrap(
+            trace.capture(ref: edge.before),
+            "Trace did not contain before ref",
+            file: file,
+            line: line
+        )
+        let after = try XCTUnwrap(
+            trace.capture(ref: edge.after),
+            "Trace did not contain after ref",
+            file: file,
+            line: line
+        )
 
         XCTAssertEqual(edge.before.hash, before.hash, file: file, line: line)
         XCTAssertEqual(edge.after.hash, after.hash, file: file, line: line)
-        XCTAssertEqual(delta, AccessibilityTrace.Delta.between(before, after), file: file, line: line)
+        XCTAssertEqual(facts, AccessibilityTrace.ChangeFact.between(before, after), file: file, line: line)
     }
 
-    private func captureDelta(
+    private func captureFacts(
         before beforeInterface: Interface,
         after afterInterface: Interface,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) -> AccessibilityTrace.Delta {
+    ) -> [AccessibilityTrace.ChangeFact] {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: beforeInterface
@@ -950,9 +1041,11 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             interface: afterInterface,
             parentHash: before.hash
         )
-        let delta = AccessibilityTrace.Delta.between(before, after)
-        XCTAssertNotNil(delta.testCaptureEdge, file: file, line: line)
-        return delta
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        if !facts.isEmpty {
+            XCTAssertNotNil(facts.testCaptureEdge, file: file, line: line)
+        }
+        return facts
     }
 
     private func notification(
@@ -973,5 +1066,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 private extension Array {
     var single: Element? {
         count == 1 ? self[0] : nil
+    }
+}
+
+private extension AccessibilityTrace.InterfaceChangeNode {
+    var elementLabel: String? {
+        guard case .element(let element, _) = node else { return nil }
+        return element.label
     }
 }

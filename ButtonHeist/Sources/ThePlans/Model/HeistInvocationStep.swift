@@ -264,7 +264,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
             return "RunHeist(\(name))"
         case .string(let value):
             return "RunHeist(\(name), \(Self.stringArgumentSummary(value)))"
-        case .elementTarget(let target):
+        case .accessibilityTarget(let target):
             return "RunHeist(\(name), \(Self.targetArgumentSummary(target)))"
         }
     }
@@ -278,7 +278,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         }
     }
 
-    private static func targetArgumentSummary(_ expr: ElementTargetExpr) -> String {
+    private static func targetArgumentSummary(_ expr: AccessibilityTarget) -> String {
         switch expr {
         case .ref(let reference):
             return reference.rawValue

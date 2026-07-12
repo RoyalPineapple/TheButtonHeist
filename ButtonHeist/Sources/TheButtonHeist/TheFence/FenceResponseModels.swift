@@ -149,8 +149,10 @@ enum DiagnosticFailureMapper {
                 message: inputError.message,
                 details: FailureDetails(code: .requestInvalid)
             )
-        case let missingTarget as TheFence.MissingElementTarget:
-            return missingElementTargetFailure(command: missingTarget.command)
+        case let missingTarget as TheFence.MissingAccessibilityTarget:
+            return missingAccessibilityTargetFailure(command: missingTarget.command)
+        case let containerTarget as TheFence.ContainerTargetRequiresElement:
+            return containerTargetRequiresElementFailure(command: containerTarget.command)
         case let routingError as FenceOperationRoutingError:
             return DiagnosticFailure(message: routingError.message, details: routingError.details)
         default:
@@ -200,7 +202,7 @@ enum DiagnosticFailureMapper {
         }
     }
 
-    private static func missingElementTargetFailure(command: TheFence.Command) -> DiagnosticFailure {
+    private static func missingAccessibilityTargetFailure(command: TheFence.Command) -> DiagnosticFailure {
         let commandName = command.rawValue
         let contract = "requires target object with checks"
         let next = "get_interface()"
@@ -213,6 +215,13 @@ enum DiagnosticFailureMapper {
                 code: .requestMissingTarget,
                 hint: next
             )
+        )
+    }
+
+    private static func containerTargetRequiresElementFailure(command: TheFence.Command) -> DiagnosticFailure {
+        DiagnosticFailure(
+            message: "Command \"\(command.rawValue)\" requires an accessibility element target; container-only targets are not valid",
+            details: FailureDetails(code: .requestValidationError)
         )
     }
 }

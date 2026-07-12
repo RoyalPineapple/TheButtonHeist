@@ -279,7 +279,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             break
         case .string(let value):
             validateString(value, path: path.child(.value).description, scope: scope)
-        case .elementTarget(let target):
+        case .accessibilityTarget(let target):
             validateTarget(target, path: path.child(.target).description, scope: scope)
         }
     }
@@ -364,7 +364,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validateStatePredicate(predicateCase.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
+        validatePredicate(predicateCase.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
         do {
             _ = try predicateCase.predicate.resolve(in: environment)
         } catch {
@@ -372,7 +372,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 path: path.child(.predicate).description,
                 contract: "predicate refs must resolve in the current heist scope",
                 observed: summarize(error),
-                correction: "Use target_ref or string refs only inside the loop body that defines them."
+                correction: "Use target refs or string refs only inside the loop body that defines them."
             )
         }
     }

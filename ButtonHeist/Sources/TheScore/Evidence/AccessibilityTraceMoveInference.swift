@@ -7,22 +7,19 @@ enum AccessibilityTraceMoveInference {
     static func suppressElementChurnFromFunctionalMoves(
         edits: ElementEdits,
         beforeElements: [HeistElement],
-        afterElements: [HeistElement],
-        projection: AccessibilityTrace.DeltaProjection = .geometryAware
+        afterElements: [HeistElement]
     ) -> ElementEdits {
         suppressElementChurnFromFunctionalMoves(
             edits: edits,
             beforeRecords: beforeElements.map(ElementDiffRecord.init),
-            afterRecords: afterElements.map(ElementDiffRecord.init),
-            projection: projection
+            afterRecords: afterElements.map(ElementDiffRecord.init)
         )
     }
 
     static func suppressElementChurnFromFunctionalMoves(
         edits: ElementEdits,
         beforeRecords: [ElementDiffRecord],
-        afterRecords: [ElementDiffRecord],
-        projection: AccessibilityTrace.DeltaProjection = .geometryAware
+        afterRecords: [ElementDiffRecord]
     ) -> ElementEdits {
         let beforeKeys = Set(beforeRecords.map(\.diffPairingKey))
         let afterKeys = Set(afterRecords.map(\.diffPairingKey))
@@ -52,7 +49,7 @@ enum AccessibilityTraceMoveInference {
         let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
             guard let old = removedByKey[pair.removedKey],
                   let new = addedByKey[pair.insertedKey] else { return nil }
-            return projectElementStateChange(old: old.element, new: new.element, projection: projection)
+            return projectElementStateChange(old: old.element, new: new.element)
         }
 
         return ElementEdits(

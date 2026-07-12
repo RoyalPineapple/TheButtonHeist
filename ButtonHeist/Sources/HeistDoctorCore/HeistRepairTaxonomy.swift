@@ -10,7 +10,7 @@ public enum RepairScoringReason: String, Codable, Sendable, Hashable {
     case rotorCapabilityCompatible
     case siblingRowContextPreserved
     case headerContextPreserved
-    case afterDiffEvidenceMatchesElement
+    case changeFactEvidenceMatchesElement
     case expectationEvidenceMatchesElement
     case onlyCurrentSemanticCandidate
     case elementSupportsSameActionFamily
@@ -27,7 +27,7 @@ public enum RepairSuggestionReason: Codable, Sendable, Hashable {
     case missingTargetSuccessorSelected
     case ambiguousTargetSuccessorSelected
     case scoring(RepairScoringReason)
-    case afterDiff(RepairEvidenceSource, RepairAfterDiffObservation)
+    case changeFact(RepairEvidenceSource, RepairChangeFactObservation)
     case lastSuccessfulExpectationMet
     case currentFailureExpectationUnmet
 }
@@ -36,8 +36,6 @@ public enum RepairCaveat: String, Codable, Sendable, Hashable {
     case candidateDoesNotExposeSameActionFamily
     case ordinalDisambiguation
     case tiedBestCandidates
-    case lastSuccessfulFullAfterSnapshotFallback
-    case currentFailureFullAfterSnapshotFallback
 }
 
 public enum RepairEvidenceSource: String, Codable, Sendable, Hashable {
@@ -45,7 +43,7 @@ public enum RepairEvidenceSource: String, Codable, Sendable, Hashable {
     case currentFailure
 }
 
-public enum RepairAfterDiffObservation: Codable, Sendable, Hashable {
+public enum RepairChangeFactObservation: Codable, Sendable, Hashable {
     case noSemanticChange
     case screenChange
     case valueChange(old: String?, new: String?)
@@ -75,8 +73,8 @@ extension RepairSuggestionReason {
             return "Best successor was selected from the ambiguous current matches."
         case .scoring(let reason):
             return reason.reportText
-        case .afterDiff(let source, let observation):
-            return "\(source.afterDiffPrefix) \(observation.reportText)."
+        case .changeFact(let source, let observation):
+            return "\(source.changeFactPrefix) \(observation.reportText)."
         case .lastSuccessfulExpectationMet:
             return "Last successful result met its expectation."
         case .currentFailureExpectationUnmet:
@@ -110,8 +108,8 @@ extension RepairScoringReason {
             return "Sibling row context is preserved."
         case .headerContextPreserved:
             return "Header context is preserved."
-        case .afterDiffEvidenceMatchesElement:
-            return "After-diff evidence mentions the same semantic element."
+        case .changeFactEvidenceMatchesElement:
+            return "Change-fact evidence mentions the same semantic element."
         case .expectationEvidenceMatchesElement:
             return "Expectation evidence mentions the same semantic element."
         case .onlyCurrentSemanticCandidate:
@@ -133,26 +131,22 @@ extension RepairCaveat {
             return "Suggested matcher uses ordinal as last-resort disambiguation."
         case .tiedBestCandidates:
             return "Multiple candidates have the same semantic score."
-        case .lastSuccessfulFullAfterSnapshotFallback:
-            return "Last successful evidence used a full after snapshot because compact diff was unavailable."
-        case .currentFailureFullAfterSnapshotFallback:
-            return "Current failure evidence used a full after snapshot because compact diff was unavailable."
         }
     }
 }
 
 extension RepairEvidenceSource {
-    var afterDiffPrefix: String {
+    var changeFactPrefix: String {
         switch self {
         case .lastSuccess:
-            return "Last successful after diff"
+            return "Last successful change facts"
         case .currentFailure:
-            return "Current failure after diff"
+            return "Current failure change facts"
         }
     }
 }
 
-extension RepairAfterDiffObservation {
+extension RepairChangeFactObservation {
     var reportText: String {
         switch self {
         case .noSemanticChange:

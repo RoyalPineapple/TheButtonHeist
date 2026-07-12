@@ -8,29 +8,28 @@ import TheScore
 
 final class InterfaceSelectorTests: XCTestCase {
 
-    func testMatcherSelectsMatchingLeaves() throws {
-        let interface = try select(InterfaceQuery(
-            matcher: ElementPredicate(label: "Submit")
-        ))
-        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit"])
-        XCTAssertEqual(interface.annotations.elements.count, 1)
-        XCTAssertTrue(interface.annotations.containers.isEmpty)
-    }
-
     func testElementSubtreeSelectsMatchingLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .element(.predicate(ElementPredicate(identifier: "submit_button")))
+            subtree: literalTarget(ElementPredicate(identifier: "submit_button"))
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit"])
     }
 
     func testElementSubtreeSelectsPredicateLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .element(.predicate(ElementPredicate(identifier: "cancel_button")))
+            subtree: literalTarget(ElementPredicate(identifier: "cancel_button"))
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Cancel"])
         XCTAssertEqual(interface.annotations.elements.count, 1)
         XCTAssertTrue(interface.annotations.containers.isEmpty)
+    }
+
+    func testCanonicalElementOrdinalSelectsOnce() throws {
+        let interface = try select(InterfaceQuery(
+            subtree: .predicate(.traits([.button]), ordinal: 1)
+        ))
+
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Cancel"])
     }
 
     func testContainerSubtreeSelectsMatchingContainer() throws {
@@ -38,6 +37,25 @@ final class InterfaceSelectorTests: XCTestCase {
             subtree: .container(.identifier("actions"))
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
+    }
+
+    func testCanonicalContainerTargetSelectsMatchingContainerSubtree() throws {
+        let interface = try select(InterfaceQuery(
+            subtree: .container(.identifier("actions"))
+        ))
+
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
+    }
+
+    func testCanonicalWithinTargetSelectsDescendantElementSubtree() throws {
+        let interface = try select(InterfaceQuery(
+            subtree: .within(
+                container: .identifier("actions"),
+                target: .identifier("cancel_button")
+            )
+        ))
+
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Cancel"])
     }
 
     func testAmbiguousSubtreeReportsTypedCandidates() {
@@ -62,6 +80,21 @@ final class InterfaceSelectorTests: XCTestCase {
             in: Self.makeInterface(includeDuplicateGroup: true)
         )
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Archive"])
+    }
+
+    func testOutOfRangeOrdinalReportsCandidateCardinality() {
+        XCTAssertThrowsError(try select(
+            InterfaceQuery(subtree: .container(.label("Actions"), ordinal: 2)),
+            in: Self.makeInterface(includeDuplicateGroup: true)
+        )) { error in
+            guard case InterfaceSelectionError.subtreeOrdinalOutOfRange(let ordinal, let count, let candidates) = error else {
+                XCTFail("Expected subtreeOrdinalOutOfRange, got \(error)")
+                return
+            }
+            XCTAssertEqual(ordinal, 2)
+            XCTAssertEqual(count, 2)
+            XCTAssertEqual(candidates.count, 2)
+        }
     }
 
     func testMissingSubtreeReportsTypedError() {

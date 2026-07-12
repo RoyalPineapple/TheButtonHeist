@@ -12,6 +12,8 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var output: OutputOptions
 
+    @OptionGroup var subtree: AccessibilityTargetOptions
+
     @OptionGroup var discoveryLimits: InterfaceDiscoveryLimitOptions
 
     @ButtonHeistActor
@@ -20,8 +22,17 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(discoveryLimits.parameters),
+            arguments: try requestArguments(),
             statusMessage: "Reading interface..."
+        )
+    }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        let subtreeValue = try subtree.parsedTarget().map(CLIRequestBuilder.targetValue)
+        return Self.fenceArguments(
+            discoveryLimits.parameters.adding(
+                CommandArgumentWriter.optional(.subtree, subtreeValue)
+            )
         )
     }
 }

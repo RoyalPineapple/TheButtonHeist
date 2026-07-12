@@ -16,13 +16,16 @@ internal enum PredicateObservationBaselineSeed {
 /// which baseline the predicate owns.
 internal struct PredicateObservationStreamState {
     private let baseline: SettledCapture?
+    private let window: ObservationWindow?
 
     internal init() {
         baseline = nil
+        window = nil
     }
 
-    private init(baseline: SettledCapture?) {
+    private init(baseline: SettledCapture?, window: ObservationWindow?) {
         self.baseline = baseline
+        self.window = window
     }
 
     internal var changeBaseline: SettledCapture? {
@@ -31,7 +34,7 @@ internal struct PredicateObservationStreamState {
 
     internal func reducing(
         _ observation: HeistSemanticObservation,
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         baselineSeed: PredicateObservationBaselineSeed = .preserve,
         observationWindow suppliedWindow: ObservationWindow? = nil
     ) -> PredicateObservationStreamReduction {
@@ -51,12 +54,24 @@ internal struct PredicateObservationStreamState {
         }
 
         let baseline = baseline ?? baselineSeed.baseline(for: observation.event)
-        let window = baseline.flatMap { baseline in
+        let candidateWindow = baseline.flatMap { baseline in
             suppliedWindow ?? ObservationWindow.direct(
                 from: baseline,
-                through: observation.event,
-                projection: predicate.deltaProjection
+                through: observation.event
             )
+        }
+        let window: ObservationWindow? = switch (window, candidateWindow) {
+        case (.some(let existing), .some(let candidate)):
+            existing.merging(
+                candidate,
+                previousCursor: observation.event.previousCursor
+            )
+        case (.some(let existing), nil):
+            existing
+        case (nil, .some(let candidate)):
+            candidate
+        case (nil, nil):
+            nil
         }
         let evidence = PredicateObservationEvidence(
             observation: observation,
@@ -64,7 +79,7 @@ internal struct PredicateObservationStreamState {
             window: window
         )
         return PredicateObservationStreamReduction(
-            state: PredicateObservationStreamState(baseline: baseline),
+            state: PredicateObservationStreamState(baseline: baseline, window: window),
             reduction: PredicateObservationReduction(
                 evidence: evidence,
                 expectation: PredicateEvaluation.evaluate(predicate, in: evidence)
@@ -107,10 +122,6 @@ internal struct PredicateObservationReduction {
 
     internal var changeBaseline: SettledCapture? {
         evidence.baseline
-    }
-
-    internal var changeVerdict: ChangeVerdict? {
-        evidence.window?.verdict
     }
 
     internal var observationWindow: ObservationWindow? {

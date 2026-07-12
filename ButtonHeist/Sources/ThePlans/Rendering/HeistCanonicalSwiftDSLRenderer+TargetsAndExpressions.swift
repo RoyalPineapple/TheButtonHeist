@@ -1,13 +1,14 @@
 import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
-    func renderCorrection(target: ElementTargetExpr) -> String {
+    func renderCorrection(target: AccessibilityTarget) -> String {
         switch target {
-        case .target(let target):
-            return render(target: target)
         case .predicate(let predicate, let ordinal):
             let rendered = renderCorrection(predicate: predicate)
             return ordinal.map { ".target(\(rendered), ordinal: \($0))" } ?? rendered
+        case .container(let predicate, let ordinal):
+            let rendered = renderCorrection(container: predicate)
+            return ordinal.map { ".container(\(rendered), ordinal: \($0))" } ?? ".container(\(rendered))"
         case .ref(let reference):
             return reference.rawValue
         case .within(let container, let target):
@@ -15,12 +16,12 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func renderCorrection(target: ElementTargetExpr, addingOrdinal ordinal: Int) -> String {
+    func renderCorrection(target: AccessibilityTarget, addingOrdinal ordinal: Int) -> String {
         switch target {
-        case .target(let target):
-            return renderCorrection(target: ElementTargetExpr(target), addingOrdinal: ordinal)
         case .predicate(let predicate, _):
             return ".target(\(renderCorrection(predicate: predicate)), ordinal: \(ordinal))"
+        case .container(let predicate, _):
+            return ".container(\(renderCorrection(container: predicate)), ordinal: \(ordinal))"
         case .ref(let reference):
             return reference.rawValue
         case .within(let container, let target):
@@ -128,14 +129,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(target: ElementTargetExpr, environment: RenderEnvironment) throws -> String {
+    func render(target: AccessibilityTarget, environment: RenderEnvironment) throws -> String {
         switch target {
-        case .target(let target):
-            return render(target: target)
         case .predicate(let predicate, let ordinal):
             let renderedPredicate = try render(predicate: predicate, environment: environment)
             guard let ordinal else { return renderedPredicate }
             return ".target(\(renderedPredicate), ordinal: \(ordinal))"
+        case .container(let predicate, let ordinal):
+            let rendered = try render(container: predicate, environment: environment)
+            return ordinal.map { ".container(\(rendered), ordinal: \($0))" } ?? ".container(\(rendered))"
         case .ref(let reference):
             guard environment.targetReferences.contains(reference) else {
                 throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference.rawValue)
@@ -146,14 +148,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(target: ElementTarget) -> String {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            guard let ordinal else { return renderTargetPredicate(predicate) }
-            return ".target(\(render(predicate: predicate)), ordinal: \(ordinal))"
-        case .within(let container, let target):
-            return ".within(container: \(render(container: container)), \(render(target: target)))"
-        }
+    func render(target: AccessibilityTarget) -> String {
+        renderCorrection(target: target)
     }
 
     func render(container: ContainerPredicate) -> String {
@@ -199,6 +195,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".dataTable()"
         case .type(.tabBar):
             return ".tabBar"
+        case .type(.scrollable):
+            return ".type(.scrollable)"
         case .semantic(let predicate):
             return try renderSemantic(predicate)
         case .scrollable(true):

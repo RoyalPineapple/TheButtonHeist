@@ -473,17 +473,17 @@ Two type families are the currency for referring to UI elements. Use them everyw
 **Screen value** (TheInsideJob):
 - `Screen` — immutable snapshot of one screen state. Bundles settled semantic elements with one live capture: hierarchy, per-element live refs, first responder, and scrollable container views. Pure value semantics — TheStash stores a settled screen as truth, a separate latest live capture for action machinery, and separate diagnostic evidence for non-clean settle. Exploration uses a local `var union: Screen` that's `merging(_:)`'d across page parses and commits the finished union as settled discovery state. **Conflict rule**: `Screen.merging` is pure last-read-wins — `other`'s entry replaces `self`'s on heistId conflict; no field-level preservation. `name`/`id`/`heistIds` are derived on demand so they cannot drift from `hierarchy`.
 
-**Target types** (ThePlans/TheScore wire types):
-- `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.predicate(ElementPredicate, ordinal:)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it to a live element.
+**Target types** (ThePlans wire types):
+- `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it against live state.
 - `ElementPredicate` — the ordered check chain over label, identifier, value, hint, traits, actions, custom content, and rotors. Exclusion is one recursive check shape: `.exclude(.traits([...]))`, `.exclude(.actions([...]))`, etc. String fields use case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Matching is **exact or miss** — on a miss the resolver returns structured suggestions through the diagnostic path; there is no substring fallback. The same semantics are evaluated by `HeistElement.matches` on the client (TheScore) and `AccessibilityElement.matches` on the server (TheInsideJob), via the shared `ElementPredicate.stringEquals` helper.
 - `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheStash from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
 
 **Rules:**
 - Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
 - Pass `Screen` when working with a committed snapshot of the resolution layer.
-- Pass `ElementTarget` when referring to an element abstractly (all layers above TheStash).
+- Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheStash).
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
-- Wire types (`HeistElement`, `ElementMatcher`, `ElementTarget`) live in TheScore and cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `Screen`) stay inside TheInsideJob.
+- Wire types (`AccessibilityTarget`, `ElementPredicate`, `HeistElement`) cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `Screen`) stay inside TheInsideJob.
 
 **Strict off-screen rule**: semantic target resolution reads settled world only. Live capture can prove actionability and geometry for a settled element, but diagnostic settle evidence is not targetable by default.
 
@@ -687,7 +687,7 @@ DocC comments (`///`) go on the API surface — types, public/internal methods, 
 ///
 /// Returns `.resolved` on success, `.notFound` or `.ambiguous` with
 /// diagnostics on failure.
-func resolveTarget(_ target: ElementTarget) -> TargetResolution {
+func resolveTarget(_ target: AccessibilityTarget) -> TargetResolution {
 ```
 
 Do NOT document:

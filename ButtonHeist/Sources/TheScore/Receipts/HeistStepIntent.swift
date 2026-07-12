@@ -3,11 +3,11 @@ import ThePlans
 
 public enum HeistStepIntent: Codable, Sendable, Equatable {
     case action(command: HeistActionCommand)
-    case wait(predicate: AccessibilityPredicateExpr, timeout: Double)
+    case wait(predicate: AccessibilityPredicate<RootContext>, timeout: Double)
     case conditional
     case forEachString(parameter: HeistReferenceName, count: Int)
     case forEachElement(parameter: HeistReferenceName, matching: ElementPredicate, limit: Int)
-    case repeatUntil(predicate: AccessibilityPredicateExpr, timeout: Double)
+    case repeatUntil(predicate: AccessibilityPredicate<RootContext>, timeout: Double)
     case invoke(path: HeistInvocationPath, argument: HeistArgument)
     case heist(name: String?)
     case warn(message: String)
@@ -52,7 +52,7 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
         case .wait:
             try Self.rejectFields(except: [.type, .predicate, .timeout], in: container, type: type)
             self = .wait(
-                predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+                predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
                 timeout: try container.decode(Double.self, forKey: .timeout)
             )
         case .conditional:
@@ -74,7 +74,7 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
         case .repeatUntil:
             try Self.rejectFields(except: [.type, .predicate, .timeout], in: container, type: type)
             self = .repeatUntil(
-                predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+                predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
                 timeout: try container.decode(Double.self, forKey: .timeout)
             )
         case .invoke:

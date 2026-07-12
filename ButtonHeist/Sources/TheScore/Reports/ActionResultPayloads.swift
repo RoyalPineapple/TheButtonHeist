@@ -241,14 +241,14 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 
     public let source: Source
     public let phase: Phase
-    public let target: ElementTarget
+    public let target: AccessibilityTarget
     public let element: HeistElement
     public let settledObservationSequence: SettledObservationSequence?
 
     public init(
         source: Source,
         phase: Phase = .resolvedBeforeDispatch,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         element: HeistElement,
         settledObservationSequence: SettledObservationSequence? = nil
     ) {
@@ -273,7 +273,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         self.init(
             source: try container.decode(Source.self, forKey: .source),
             phase: try container.decode(Phase.self, forKey: .phase),
-            target: try container.decode(ElementTarget.self, forKey: .target),
+            target: try container.decode(AccessibilityTarget.self, forKey: .target),
             element: try container.decode(HeistElement.self, forKey: .element),
             settledObservationSequence: try container.decodeIfPresent(SettledObservationSequence.self, forKey: .settledObservationSequence)
         )

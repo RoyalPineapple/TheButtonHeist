@@ -29,7 +29,7 @@ extension TheFence {
             Command.rotor,
             .rotor(
                 selection: selection,
-                target: .target(try input.requiredElementTarget(command: .rotor)),
+                target: try input.requiredAccessibilityTarget(command: .rotor),
                 direction: try input.value(
                     FenceParameters.rotorDirection,
                     defaultFrom: Command.rotor.descriptor

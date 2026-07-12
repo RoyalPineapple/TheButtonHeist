@@ -73,10 +73,10 @@ extension FenceResponse {
         command: TheFence.Command? = nil,
         result: ActionResult? = nil
     ) -> String? {
-        if expectation.predicate == .change(.screenChanged),
-           expectation.actual == AccessibilityTrace.DeltaKind.elementsChanged.rawValue {
-            return ".screenChanged requires a screen-level transition; " +
-                "use .change(.elements()) for same-screen element updates " +
+        if expectation.predicate == .changed(.screen()),
+           expectation.actual == AccessibilityTrace.ChangeFactKind.elementsChanged.rawValue {
+            return ".changed(.screen()) requires a screen-level transition; " +
+                "use .changed(.elements()) for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }
 
@@ -93,9 +93,9 @@ extension FenceResponse {
         command: TheFence.Command?,
         result: ActionResult?
     ) -> Bool {
-        guard expectation.actual == AccessibilityTrace.DeltaKind.noChange.rawValue,
+        guard expectation.actual == "noChange",
               let predicate = expectation.predicate,
-              case .changePredicate = predicate
+              case .changed = predicate.node
         else { return false }
 
         if command == .activate {

@@ -303,12 +303,12 @@ final class HeistJUnitReportTests: XCTestCase {
         )
     }
 
-    private func semanticTarget(label: String? = nil, identifier: String? = nil) -> ElementTarget {
+    private func semanticTarget(label: String? = nil, identifier: String? = nil) -> AccessibilityTarget {
         .predicate(
-            ElementPredicate(
+            ElementPredicateTemplate(ElementPredicate(
                 label: label.map(StringMatch.exact),
                 identifier: identifier.map(StringMatch.exact)
-            )
+            ))
         )
     }
 }

@@ -2,24 +2,25 @@ import Foundation
 
 extension HeistPlanRuntimeSafetyValidator {
     mutating func validateTarget(
-        _ target: ElementTargetExpr,
+        _ target: AccessibilityTarget,
         path: String,
         scope: HeistReferenceScope
     ) {
         switch target {
-        case .target(let target):
-            validateElementTarget(target, path: path)
         case .predicate(let predicate, let ordinal):
             validateOrdinal(ordinal, path: "\(path).ordinal")
             validateElementPredicate(predicate, path: path, scope: scope)
+        case .container(let predicate, let ordinal):
+            validateOrdinal(ordinal, path: "\(path).ordinal")
+            validateContainerPredicate(predicate, path: "\(path).container", scope: scope)
         case .ref(let reference):
-            validateReference(reference, path: path, role: "target_ref")
+            validateReference(reference, path: path, role: "target ref")
             if !scope.targetRefs.contains(reference) {
                 fail(
                     path: path,
-                    contract: "target_ref must resolve in the current heist scope",
+                    contract: "target ref must resolve in the current heist scope",
                     observed: "\"\(reference)\"",
-                    correction: "Use target_ref only inside the for_each_element body that defines it."
+                    correction: "Use ref only inside the for_each_element body that defines it."
                 )
             }
         case .within(let container, let target):
@@ -64,17 +65,6 @@ extension HeistPlanRuntimeSafetyValidator {
                 observed: "empty \(match.mode.rawValue) match",
                 correction: "Use a non-empty string, or an exact match when the empty string is intentional."
             )
-        }
-    }
-
-    mutating func validateElementTarget(_ target: ElementTarget, path: String) {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            validateOrdinal(ordinal, path: "\(path).ordinal")
-            validateElementPredicate(predicate, path: path)
-        case .within(let container, let target):
-            validateContainerPredicate(container, path: "\(path).container")
-            validateElementTarget(target, path: "\(path).target")
         }
     }
 
