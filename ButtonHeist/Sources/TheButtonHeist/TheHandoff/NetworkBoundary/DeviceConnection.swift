@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 import Network
 import os.log
 
@@ -312,7 +313,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         case .failed(let error):
             deviceConnectionLogger.error("Connection failed: \(error)")
             setRuntimePhase(.disconnected)
-            onEvent?(.disconnected(.networkError(error)))
+            onEvent?(.disconnected(.networkError(NetworkTransportFailure(error))))
         case .cancelled:
             deviceConnectionLogger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,

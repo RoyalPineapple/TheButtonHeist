@@ -767,6 +767,38 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failure.details.retryable, true)
     }
 
+    func testAmbiguousDeviceTargetDoesNotMapToNoMatchingDevice() throws {
+        let response = FenceResponse.failure(HandoffConnectionError.ambiguousDeviceTarget(
+            filter: "Demo",
+            matches: ["Demo#one", "Demo#two"]
+        ))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, .discoveryAmbiguousDeviceTarget)
+        XCTAssertNotEqual(failure.failureCode, .discoveryNoMatchingDevice)
+        XCTAssertEqual(failure.code, KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
+        XCTAssertEqual(failure.kind, .discovery)
+        XCTAssertEqual(failure.phase, .discovery)
+        XCTAssertFalse(failure.retryable)
+        XCTAssertEqual(failure.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
+        XCTAssertEqual(failure.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
+    }
+
+    func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
+        let transportFailure = NetworkTransportFailure(.posix(.ECONNRESET))
+        let response = FenceResponse.failure(HandoffConnectionError.disconnected(.networkError(transportFailure)))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, .transportNetworkError)
+        XCTAssertEqual(failure.code, KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(failure.kind, .connection)
+        XCTAssertEqual(failure.phase, .transport)
+        XCTAssertTrue(failure.retryable)
+        XCTAssertEqual(failure.hint, KnownFailureCode.transportNetworkError.defaultHint)
+        XCTAssertTrue(failure.message.contains("posix"), failure.message)
+        XCTAssertTrue(failure.message.contains("connection failed in transport"), failure.message)
+    }
+
     func testAuthFailureMappingPreservesSourceHint() throws {
         let hint = "Retry with the configured token."
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(

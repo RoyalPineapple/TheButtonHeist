@@ -17,7 +17,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.cancel(id: cancelledID)
         assertCancellation(await cancelledTask.value)
 
-        waiters.resolve(attemptID: attemptID, with: .connected)
+        waiters.resolve(connectedTransition(attemptID: attemptID))
         assertSuccess(await liveTask.value)
     }
 
@@ -33,7 +33,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.fail(id: waiterID, attemptID: UUID(), with: HandoffConnectionError.timeout)
         await Task.yield()
 
-        waiters.resolve(attemptID: attemptID, with: .connected)
+        waiters.resolve(connectedTransition(attemptID: attemptID))
         assertSuccess(await waitTask.value)
     }
 
@@ -59,8 +59,27 @@ final class ConnectionResultWaitersTests: XCTestCase {
         let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
         await Task.yield()
 
-        waiters.resolve(attemptID: attemptID, with: .failed(.disconnected(.serverClosed)))
+        waiters.resolve(failedTransition(attemptID: attemptID, failure: .disconnected(.serverClosed)))
         assertConnectionError(await waitTask.value, .disconnected(.serverClosed))
+    }
+
+    @ButtonHeistActor
+    func testNonTerminalTransitionDoesNotResolveWaiter() async {
+        let waiters = ConnectionResultWaiters()
+        let attemptID = UUID()
+        let waiterID = UUID()
+        let device = Self.makeDevice()
+        let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
+        await Task.yield()
+
+        waiters.resolve(HandoffConnectionLifecycleTransition(
+            previous: connectingSnapshot(attemptID: attemptID, device: device),
+            next: connectingSnapshot(attemptID: attemptID, device: device)
+        ))
+        await Task.yield()
+
+        waiters.resolve(connectedTransition(attemptID: attemptID, device: device))
+        assertSuccess(await waitTask.value)
     }
 
     @ButtonHeistActor
@@ -117,5 +136,69 @@ final class ConnectionResultWaitersTests: XCTestCase {
             return XCTFail("Expected \(expected), got \(result)", file: file, line: line)
         }
         XCTAssertEqual(error, expected, file: file, line: line)
+    }
+
+    private func connectedTransition(
+        attemptID: UUID
+    ) -> HandoffConnectionLifecycleTransition {
+        connectedTransition(attemptID: attemptID, device: Self.makeDevice())
+    }
+
+    private func connectedTransition(
+        attemptID: UUID,
+        device: DiscoveredDevice
+    ) -> HandoffConnectionLifecycleTransition {
+        HandoffConnectionLifecycleTransition(
+            previous: connectingSnapshot(attemptID: attemptID, device: device),
+            next: HandoffConnectionLifecycleSnapshot(
+                phase: .connected(HandoffConnectedSession(
+                    attemptID: attemptID,
+                    device: device,
+                    keepaliveTask: Task {}
+                )),
+                activeAttemptID: attemptID,
+                diagnosticFailure: nil,
+                acceptsConnectionResultWaiters: false
+            )
+        )
+    }
+
+    private func failedTransition(
+        attemptID: UUID,
+        failure: HandoffConnectionError
+    ) -> HandoffConnectionLifecycleTransition {
+        failedTransition(attemptID: attemptID, failure: failure, device: Self.makeDevice())
+    }
+
+    private func failedTransition(
+        attemptID: UUID,
+        failure: HandoffConnectionError,
+        device: DiscoveredDevice
+    ) -> HandoffConnectionLifecycleTransition {
+        HandoffConnectionLifecycleTransition(
+            previous: connectingSnapshot(attemptID: attemptID, device: device),
+            next: HandoffConnectionLifecycleSnapshot(
+                phase: .failed(failure),
+                activeAttemptID: nil,
+                diagnosticFailure: failure,
+                acceptsConnectionResultWaiters: false
+            )
+        )
+    }
+
+    private func connectingSnapshot(
+        attemptID: UUID,
+        device: DiscoveredDevice
+    ) -> HandoffConnectionLifecycleSnapshot {
+        HandoffConnectionLifecycleSnapshot(
+            phase: .connecting(HandoffConnectionAttempt(id: attemptID, device: device)),
+            activeAttemptID: attemptID,
+            diagnosticFailure: nil,
+            acceptsConnectionResultWaiters: true
+        )
+    }
+
+    private static func makeDevice() -> DiscoveredDevice {
+        DiscoveredDevice(host: "127.0.0.1", port: 1234)
     }
 }

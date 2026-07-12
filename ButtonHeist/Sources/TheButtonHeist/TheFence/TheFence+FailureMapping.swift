@@ -12,7 +12,8 @@ extension FenceError {
         case .timeout: self = .connectionTimeout
         case .noDeviceFound: self = .noDeviceFound
         case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
-        case .ambiguousDeviceTarget(let filter, let matches): self = .noMatchingDevice(filter: filter, available: matches)
+        case .ambiguousDeviceTarget:
+            self = .connectionFailure(ConnectionFailure(handoffDiagnostic: connectionError.diagnostic))
         }
     }
 
@@ -29,6 +30,14 @@ extension FenceError {
 }
 
 private extension ConnectionFailure {
+    init(handoffDiagnostic diagnostic: HandoffFailureDiagnostic) {
+        self.init(
+            message: HandoffFailureFormatter.message(for: diagnostic),
+            failureCode: diagnostic.details.code,
+            hint: diagnostic.hint
+        )
+    }
+
     init(deviceTransportFailure failure: NetworkTransportFailure) {
         let details = FailureDetails(code: .transportNetworkError)
         self.init(
