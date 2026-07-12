@@ -60,8 +60,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let element = UIAccessibilityElement(accessibilityContainer: container)
         element.accessibilityLabel = "BH layout element payload"
         UIAccessibility.post(notification: .layoutChanged, argument: element)
-        let layoutChange = try await waitForNotification(kind: .layoutChanged, in: bus)
-        XCTAssertEqual(layoutChange.kind, .layoutChanged)
+        let layoutChange = try await waitForNotification(kind: .elementChanged(.layout), in: bus)
+        XCTAssertEqual(layoutChange.kind, .elementChanged(.layout))
         guard case .object(let objectIdentity) = layoutChange.notificationData else {
             return XCTFail("Expected element notification data, got \(layoutChange.notificationData)")
         }
@@ -93,8 +93,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let claimed = action.finishEvents()
 
-        XCTAssertEqual(claimed.map(\.kind), [.valueChanged, .announcement])
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.layoutChanged, .valueChanged, .announcement])
+        XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(
+            bus.pendingEvents().map(\.kind),
+            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+        )
     }
 
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
@@ -118,7 +121,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let announcements = bus.announcements()
         XCTAssertEqual(announcements.map(\.text), ["Item deleted", "3 items selected", "Checkout"])
-        XCTAssertEqual(announcements.map(\.kind), [.announcement, .layoutChanged, .screenChanged])
+        XCTAssertEqual(announcements.map(\.kind), [.announcement, .elementChanged(.layout), .screenChanged])
     }
 
     func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async {
@@ -138,7 +141,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let announcement = await result
         XCTAssertEqual(announcement?.text, "3 items selected")
-        XCTAssertEqual(announcement?.kind, .layoutChanged)
+        XCTAssertEqual(announcement?.kind, .elementChanged(.layout))
     }
 
     // MARK: - Transition Waiter
@@ -178,8 +181,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
         XCTAssertEqual(advanced, bus.transitionCursor())
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown, .announcement])
-        XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [4002, nil])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown(4002), .announcement])
         XCTAssertGreaterThan(bus.transitionCursor().sequence, cursor.sequence)
     }
 
@@ -192,7 +194,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let advanced = await wake
         XCTAssertNotNil(advanced)
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.valueChanged])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.elementChanged(.value)])
     }
 
     func testUnknownNotificationsPreserveRawCodesAtBoundary() {
@@ -204,9 +206,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestSequence, 2)
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
-            [.unknown, .unknown]
+            [.unknown(1009), .unknown(4002)]
         )
-        XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [1009, 4002])
         XCTAssertEqual(bus.transitionCursor().sequence, 2)
     }
 
@@ -255,7 +256,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let bus = AccessibilityNotificationBus()
         let event = PendingAccessibilityNotificationEvent(
             sequence: 7,
-            kind: .valueChanged,
+            kind: .elementChanged(.value),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
             associatedElement: .none
@@ -379,10 +380,10 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let claimed = action.finishEvents()
 
-        XCTAssertEqual(claimed.map(\.kind), [.valueChanged, .announcement])
+        XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
-            [.valueChanged, .announcement],
+            [.elementChanged(.value), .announcement],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 
@@ -403,7 +404,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             await Task.yield()
             _ = await Task.cancellableSleep(for: .milliseconds(10))
         }
-        XCTFail("Timed out waiting for accessibility notification \(kind.rawValue)", file: file, line: line)
+        XCTFail("Timed out waiting for accessibility notification \(String(describing: kind))", file: file, line: line)
         throw WaitError.timedOut(kind)
     }
 

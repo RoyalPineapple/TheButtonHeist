@@ -191,8 +191,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         sequence: UInt64
     ) -> [TransitionWaiter] {
         latestTransitionSequenceStorage = sequence
-        if kind == .screenChanged && hasActiveNotificationScopeLocked {
+        switch kind {
+        case .screenChanged where hasActiveNotificationScopeLocked:
             latestScopedScreenChangedSequenceStorage = sequence
+        case .screenChanged, .elementChanged, .announcement, .unknown:
+            break
         }
         return transitionWaiters.removeAll { $0.afterSequence < sequence }
     }
@@ -550,7 +553,6 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
 struct PendingAccessibilityNotificationEvent {
     let sequence: UInt64
     let kind: AccessibilityNotificationKind
-    let rawCode: UInt32?
     let timestamp: Date
     let notificationData: PendingAccessibilityNotificationPayload
     let associatedElement: PendingAccessibilityNotificationPayload
@@ -558,15 +560,12 @@ struct PendingAccessibilityNotificationEvent {
     init(
         sequence: UInt64,
         kind: AccessibilityNotificationKind,
-        rawCode: UInt32? = nil,
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
-        precondition((kind == .unknown) == (rawCode != nil))
         self.sequence = sequence
         self.kind = kind
-        self.rawCode = rawCode
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
@@ -579,17 +578,9 @@ struct PendingAccessibilityNotificationEvent {
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
-        let kind: AccessibilityNotificationKind = switch rawCode {
-        case 1000: .screenChanged
-        case 1001: .layoutChanged
-        case 1005: .valueChanged
-        case 1008: .announcement
-        default: .unknown
-        }
         self.init(
             sequence: sequence,
-            kind: kind,
-            rawCode: kind == .unknown ? rawCode : nil,
+            kind: AccessibilityNotificationKind(rawCode: rawCode),
             timestamp: timestamp,
             notificationData: notificationData,
             associatedElement: associatedElement
@@ -603,13 +594,17 @@ struct PendingAccessibilityNotificationEvent {
             text: text,
             timestamp: timestamp,
             kind: kind,
-            rawCode: rawCode,
             associatedElement: associatedElement.publicPayload
         )
     }
 
     var startsObservationGeneration: Bool {
-        kind == .screenChanged
+        switch kind {
+        case .screenChanged:
+            true
+        case .elementChanged, .announcement, .unknown:
+            false
+        }
     }
 
 }

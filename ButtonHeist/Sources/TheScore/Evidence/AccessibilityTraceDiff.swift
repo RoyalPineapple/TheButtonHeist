@@ -45,8 +45,8 @@ enum AccessibilityTraceDiff {
         after: Interface,
         metadata: AccessibilityTrace.ChangeFactMetadata
     ) -> [AccessibilityTrace.ChangeFact] {
-        let elementMetadata = metadata.filteringNotifications { $0.kind.isElementChangeEvidence }
-        let screenMetadata = metadata.filteringNotifications { $0.kind == .screenChanged }
+        let elementMetadata = metadata.filteringNotifications(isElementChangeNotification)
+        let screenMetadata = metadata.filteringNotifications(isScreenChangeNotification)
         let disappearances = AccessibilityTrace.ChangeFact.elementsChanged(
             AccessibilityTrace.ElementsChangeFact(
                 disappeared: before.graph.nodesInPathOrder.map {
@@ -101,7 +101,7 @@ enum AccessibilityTraceDiff {
                 containers: disappearedContainers
             ),
             updated: effectiveEdits.updated,
-            metadata: metadata.filteringNotifications { $0.kind.isElementChangeEvidence }
+            metadata: metadata.filteringNotifications(isElementChangeNotification)
         )
 
         guard fact.hasLifecycleOrUpdateFacts
@@ -113,6 +113,24 @@ enum AccessibilityTraceDiff {
         return [
             .elementsChanged(fact),
         ]
+    }
+
+    private static func isElementChangeNotification(_ evidence: AccessibilityNotificationEvidence) -> Bool {
+        switch evidence.kind {
+        case .elementChanged:
+            true
+        case .screenChanged, .announcement, .unknown:
+            false
+        }
+    }
+
+    private static func isScreenChangeNotification(_ evidence: AccessibilityNotificationEvidence) -> Bool {
+        switch evidence.kind {
+        case .screenChanged:
+            true
+        case .elementChanged, .announcement, .unknown:
+            false
+        }
     }
 
     private static func lifecycleNodes(

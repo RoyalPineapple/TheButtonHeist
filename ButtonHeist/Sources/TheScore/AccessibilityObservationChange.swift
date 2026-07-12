@@ -28,8 +28,15 @@ enum AccessibilityObservationChangeReducer {
         before: AccessibilityTrace.Capture,
         after: AccessibilityTrace.Capture
     ) -> AccessibilityObservationChange {
-        let notificationKinds = after.transition.accessibilityNotifications.map(\.kind)
-        if notificationKinds.contains(.screenChanged) {
+        let hasScreenChangedNotification = after.transition.accessibilityNotifications.contains { notification in
+            switch notification.kind {
+            case .screenChanged:
+                true
+            case .elementChanged, .announcement, .unknown:
+                false
+            }
+        }
+        if hasScreenChangedNotification {
             return .screenChanged(source: .screenChangedNotification)
         }
         if let beforeGeneration = before.context.observationGeneration,
@@ -42,12 +49,6 @@ enum AccessibilityObservationChangeReducer {
         }
         if before.context.screenId != after.context.screenId {
             return .screenChanged(source: .fallback(.screenIdentifierChanged))
-        }
-        if notificationKinds.contains(where: \.isElementChangeEvidence) {
-            return .elementChanged(source: .settledSnapshot)
-        }
-        if !after.transition.transient.isEmpty {
-            return .elementChanged(source: .settledSnapshot)
         }
         return .elementChanged(source: .settledSnapshot)
     }

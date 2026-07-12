@@ -375,7 +375,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
-        let notification = notification(kind: .layoutChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.layout), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -400,7 +400,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testValueChangedNotificationProducesNotificationOnlyElementFactWithoutValueDiff() throws {
-        let notification = notification(kind: .valueChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.value), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -418,7 +418,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
-        let notification = notification(kind: .valueChanged, sequence: 1)
+        let notification = notification(kind: .elementChanged(.value), sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -457,8 +457,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testUIKitValueSignalsAllConfirmChangesByRereadingAccessibilityValue() throws {
         for kind in [
-            AccessibilityNotificationKind.valueChanged,
-            .layoutChanged,
+            AccessibilityNotificationKind.elementChanged(.value),
+            .elementChanged(.layout),
             .announcement,
         ] {
             let evidence = notification(kind: kind, sequence: 1)
