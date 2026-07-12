@@ -4,6 +4,11 @@ import TheScore
 
 final class ServerTransportTests: XCTestCase {
 
+    func testTransportEventStreamUsesCheckedSendableConformance() {
+        assertSendable(TransportEventStream.self)
+        assertSendable(TransportEventStream.EventStream.self)
+    }
+
     @MainActor
     func testEventOverflowInvokesFailClosedHandler() async {
         let transport = ServerTransport()
@@ -282,3 +287,5 @@ final class ServerTransportTests: XCTestCase {
         }
     }
 }
+
+private func assertSendable<T: Sendable>(_: T.Type) {}

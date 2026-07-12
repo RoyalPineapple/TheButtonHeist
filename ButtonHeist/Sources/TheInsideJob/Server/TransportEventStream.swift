@@ -6,7 +6,7 @@ import TheScore
 private let logger = ButtonHeistLog.logger(.handoff(.transport))
 
 /// Ordered transport event stream with fail-closed backlog handling.
-final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class TransportEventStream: Sendable {
     nonisolated let events: AsyncStream<TransportEvent>
 
     private let continuation: AsyncStream<TransportEvent>.Continuation
@@ -59,7 +59,7 @@ final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:thi
         continuation.finish()
     }
 
-    struct EventStream {
+    struct EventStream: Sendable {
         let events: AsyncStream<TransportEvent>
         let continuation: AsyncStream<TransportEvent>.Continuation
     }
