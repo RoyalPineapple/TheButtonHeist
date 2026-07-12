@@ -35,8 +35,9 @@ extension TheGetaway {
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.removeClient(clientId)
         }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
-            self?.handleClientConnected(clientId, respond: respond)
+        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = {
+            [weak self] clientId, respond in
+            await self?.handleClientConnected(clientId, respond: respond)
         }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
@@ -79,10 +80,6 @@ extension TheGetaway {
                 break
             }
 
-        case .sendFailed(let clientId, let failure):
-            let deliveryResult = DeliveryResult(clientId: clientId, sendFailure: failure)
-            insideJobLogger.error("\(deliveryResult.description)")
-            await handleClientDeliveryTerminated(clientId: clientId)
         }
     }
 
@@ -97,8 +94,8 @@ extension TheGetaway {
         await tearDown()
     }
 
-    private func handleClientConnected(_ clientId: Int, respond: @escaping (Data) -> Void) {
-        sendServerInfo(respond: respond)
+    private func handleClientConnected(_ clientId: Int, respond: @escaping SocketResponseHandler) async {
+        await sendServerInfo(respond: respond)
     }
 
     private func handleClientDeliveryTerminated(clientId: Int) async {

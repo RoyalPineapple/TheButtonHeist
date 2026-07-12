@@ -8,8 +8,7 @@ import TheScore
 enum TransportEvent: Sendable {
     case clientConnected(clientId: Int, remoteAddress: String?)
     case clientDisconnected(clientId: Int)
-    case dataReceived(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
-    case sendFailed(clientId: Int, failure: ServerSendFailure)
+    case dataReceived(clientId: Int, data: Data, respond: SocketResponseHandler)
 }
 
 enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {

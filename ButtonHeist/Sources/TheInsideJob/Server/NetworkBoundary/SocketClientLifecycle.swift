@@ -1,27 +1,7 @@
 import Foundation
 
-struct SocketResponseHandler: Sendable {
-    private let deliverResponse: @Sendable (Data) async -> ServerSendOutcome
-    private let sendResponseInBackground: @Sendable (Data) -> Void
-
-    init(
-        deliver: @escaping @Sendable (Data) async -> ServerSendOutcome,
-        sendInBackground: @escaping @Sendable (Data) -> Void
-    ) {
-        self.deliverResponse = deliver
-        self.sendResponseInBackground = sendInBackground
-    }
-
-    func callAsFunction(_ data: Data) {
-        sendResponseInBackground(data)
-    }
-
-    func deliver(_ data: Data) async -> ServerSendOutcome {
-        await deliverResponse(data)
-    }
-}
-
-typealias SocketDataHandler = @Sendable (Int, Data, SocketResponseHandler) -> Void
+typealias SocketResponseHandler = @Sendable (Data) async -> ServerSendOutcome
+typealias SocketDataHandler = @Sendable (Int, Data, @escaping SocketResponseHandler) -> Void
 
 /// Callback bundle for socket lifecycle and data events.
 struct SocketServerCallbacks: Sendable {
@@ -55,7 +35,7 @@ struct SocketClientLifecycle: Sendable {
     func receivedData(
         clientId: Int,
         data: Data,
-        respond: SocketResponseHandler
+        respond: @escaping SocketResponseHandler
     ) {
         callbacks.onDataReceived?(clientId, data, respond)
     }

@@ -3,18 +3,8 @@ import Foundation
 
 /// Outcome for a socket send after Network.framework reports content processing.
 enum ServerSendOutcome: Equatable, Sendable {
-    /// Retained spelling for existing callers; emitted only after send completion.
-    case enqueued
+    case delivered
     case failed(ServerSendFailure)
-
-    var didCompleteSend: Bool {
-        if case .enqueued = self { return true }
-        return false
-    }
-
-    var didEnqueue: Bool {
-        didCompleteSend
-    }
 }
 
 enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {

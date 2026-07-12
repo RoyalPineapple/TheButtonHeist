@@ -6,10 +6,10 @@ import TheScore
 
 extension TheGetaway {
 
-    func sendServerInfo(respond: @escaping (Data) -> Void) {
+    func sendServerInfo(respond: @escaping SocketResponseHandler) async {
         let screenBounds = ScreenMetrics.current.bounds
         guard let listeningPort = transport?.listeningPort else {
-            sendMessage(
+            await sendMessage(
                 .error(ServerError(kind: .general, message: "Server info contract failed: transport is not listening")),
                 respond: respond
             )
@@ -29,7 +29,7 @@ extension TheGetaway {
             vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             tlsActive: identity.tlsActive
         )
-        sendMessage(.info(info), respond: respond)
+        await sendMessage(.info(info), respond: respond)
     }
 
     func makeStatusPayload() async -> StatusPayload {

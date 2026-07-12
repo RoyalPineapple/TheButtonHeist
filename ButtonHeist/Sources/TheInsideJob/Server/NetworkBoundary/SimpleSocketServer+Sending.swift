@@ -68,7 +68,7 @@ extension SimpleSocketServer {
         guard clientWasStillConnected else {
             return .failed(.clientNotFound(clientId))
         }
-        return .enqueued
+        return .delivered
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.

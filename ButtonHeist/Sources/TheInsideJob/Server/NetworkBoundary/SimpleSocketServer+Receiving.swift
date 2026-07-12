@@ -78,18 +78,10 @@ extension SimpleSocketServer {
     }
 
     private func responseHandler(clientId: Int) -> SocketResponseHandler {
-        SocketResponseHandler(
-            deliver: { [weak self] response in
-                guard let self else { return .failed(.transportUnavailable) }
-                return await self.send(response, to: clientId)
-            },
-            sendInBackground: { [weak self] response in
-                guard let self else { return }
-                self.spawnTrackedTask { server in
-                    _ = await server.send(response, to: clientId)
-                }
-            }
-        )
+        { [weak self] response in
+            guard let self else { return .failed(.transportUnavailable) }
+            return await self.send(response, to: clientId)
+        }
     }
 
     #if DEBUG

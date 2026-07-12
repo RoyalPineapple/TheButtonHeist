@@ -158,7 +158,7 @@ actor TheMuscle {
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
-        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void
+        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void
     ) {
         delivery.install(ClientDelivery.Callbacks(
             sendToClient: sendToClient,
@@ -195,7 +195,7 @@ actor TheMuscle {
     func admitClientMessage(
         _ clientId: Int,
         data: Data,
-        respond: @escaping @Sendable (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async -> ClientAdmission {
         await resolveAdmissionDecision(admission.admitClientMessage(
             clientId,
@@ -412,7 +412,7 @@ actor TheMuscle {
         let result: ResponseDeliveryResult
         switch destination {
         case .response(let respond):
-            result = ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
+            result = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
 
         case .client(let clientId):
             result = await sendResponseToClient(message, requestId: requestId, clientId: clientId)
@@ -429,10 +429,10 @@ actor TheMuscle {
         switch encodeEnvelope(message, requestId: requestId) {
         case .success(let data):
             switch await delivery.send(data, toClient: clientId) {
-            case .enqueued:
+            case .delivered:
                 return .delivered
             case .failed(let failure):
-                return ResponseDeliveryResult(clientId: clientId, sendFailure: failure)
+                return ResponseDeliveryResult(sendFailure: failure)
             }
 
         case .failure(let failure):

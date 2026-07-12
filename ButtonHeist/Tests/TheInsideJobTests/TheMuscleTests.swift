@@ -15,18 +15,18 @@ import TheScore
 private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
     private var disconnectedClientsStorage: [Int] = []
-    private var authenticatedCallbacksStorage: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
+    private var authenticatedCallbacksStorage: [(clientId: Int, respond: SocketResponseHandler)] = []
     private let lock = NSLock()
 
     var sentMessages: [(data: Data, clientId: Int)] { lock.withLock { sentMessagesStorage } }
     var disconnectedClients: [Int] { lock.withLock { disconnectedClientsStorage } }
-    var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
+    var authenticatedCallbacks: [(clientId: Int, respond: SocketResponseHandler)] {
         lock.withLock { authenticatedCallbacksStorage }
     }
 
     func appendSent(_ entry: (Data, Int)) { lock.withLock { sentMessagesStorage.append(entry) } }
     func appendDisconnected(_ clientId: Int) { lock.withLock { disconnectedClientsStorage.append(clientId) } }
-    func appendAuthenticatedCallback(_ entry: (Int, @Sendable (Data) -> Void)) {
+    func appendAuthenticatedCallback(_ entry: (Int, SocketResponseHandler)) {
         lock.withLock { authenticatedCallbacksStorage.append(entry) }
     }
 }
@@ -65,7 +65,7 @@ final class TheMuscleTests: XCTestCase {
 
     private var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
     private var disconnectedClients: [Int] { sink.disconnectedClients }
-    private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
+    private var authenticatedCallbacks: [(clientId: Int, respond: SocketResponseHandler)] {
         sink.authenticatedCallbacks
     }
 
@@ -76,12 +76,12 @@ final class TheMuscleTests: XCTestCase {
         let sink = self.sink!
         let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             sink.appendSent((data, clientId))
-            return .enqueued
+            return .delivered
         }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             sink.appendDisconnected(clientId)
         }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { clientId, respond in
+        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { clientId, respond in
             sink.appendAuthenticatedCallback((clientId, respond))
         }
         await muscle.installCallbacks(
@@ -116,7 +116,7 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
-    private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
+    private func performHello(clientId: Int, respond: @escaping SocketResponseHandler) async {
         guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             XCTFail("Failed to encode clientHello")
             return
@@ -129,7 +129,7 @@ final class TheMuscleTests: XCTestCase {
         token: String,
         driverId: String? = nil,
         address: String = "127.0.0.1",
-        respond: @escaping @Sendable (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async throws {
         await muscle.registerClientAddress(clientId, address: address)
         await performHello(clientId: clientId, respond: respond)
@@ -140,13 +140,13 @@ final class TheMuscleTests: XCTestCase {
         )
     }
 
-    private func respondSink() -> @Sendable (Data) -> Void {
+    private func respondSink() -> SocketResponseHandler {
         // No-op respond closure for tests that don't need to inspect responses.
         // Use collectResponses() when you need to check what was sent back.
-        return { _ in }
+        return { _ in .delivered }
     }
 
-    private func collectResponses() -> (respond: @Sendable (Data) -> Void, responses: () -> [Data]) {
+    private func collectResponses() -> (respond: SocketResponseHandler, responses: () -> [Data]) {
         // Test-only inspection box. Mutated only from within the @Sendable
         // closure that captures it; not shared across threads in practice.
         final class Box: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
@@ -154,8 +154,9 @@ final class TheMuscleTests: XCTestCase {
             let lock = NSLock()
         }
         let box = Box()
-        let respond: @Sendable (Data) -> Void = { data in
+        let respond: SocketResponseHandler = { data in
             box.lock.withLock { box.items.append(data) }
+            return .delivered
         }
         return (respond, { box.lock.withLock { box.items } })
     }
@@ -265,7 +266,7 @@ final class TheMuscleTests: XCTestCase {
             _ = admission.admitClientMessage(
                 1,
                 data: data,
-                respond: { _ in },
+                respond: { _ in .delivered },
                 at: now
             )
         }
@@ -273,7 +274,7 @@ final class TheMuscleTests: XCTestCase {
         guard case .handled(let effects) = admission.admitClientMessage(
             1,
             data: data,
-            respond: { _ in },
+            respond: { _ in .delivered },
             at: now
         ) else {
             return XCTFail("Expected over-limit frame to be handled by admission")
@@ -305,7 +306,7 @@ final class TheMuscleTests: XCTestCase {
             _ = admission.admitClientMessage(
                 1,
                 data: data,
-                respond: { _ in },
+                respond: { _ in .delivered },
                 at: now
             )
         }
@@ -313,7 +314,7 @@ final class TheMuscleTests: XCTestCase {
         guard case .handled(let firstLimit) = admission.admitClientMessage(
             1,
             data: data,
-            respond: { _ in },
+            respond: { _ in .delivered },
             at: now
         ) else {
             return XCTFail("Expected first over-limit frame to be handled")
@@ -330,7 +331,7 @@ final class TheMuscleTests: XCTestCase {
         guard case .handled(let repeatedLimit) = admission.admitClientMessage(
             1,
             data: data,
-            respond: { _ in },
+            respond: { _ in .delivered },
             at: now
         ) else {
             return XCTFail("Expected repeated over-limit frame to be handled")
@@ -344,7 +345,7 @@ final class TheMuscleTests: XCTestCase {
         guard case .handled(let nextWindow) = admission.admitClientMessage(
             1,
             data: data,
-            respond: { _ in },
+            respond: { _ in .delivered },
             at: now.addingTimeInterval(1.1)
         ) else {
             return XCTFail("Expected next-window frame to continue through normal admission")
@@ -372,7 +373,7 @@ final class TheMuscleTests: XCTestCase {
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
-        let respond: @Sendable (Data) -> Void = { _ in }
+        let respond: SocketResponseHandler = { _ in .delivered }
         let now = Date()
 
         admission.registerClientAddress(1, address: "127.0.0.1")

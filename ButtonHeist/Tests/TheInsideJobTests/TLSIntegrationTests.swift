@@ -46,8 +46,10 @@ final class TLSIntegrationTests: XCTestCase {
         let echoReceived = expectation(description: "server received message")
         let callbacks = SocketServerCallbacks(
             onDataReceived: { _, data, respond in
-                respond(data)
-                echoReceived.fulfill()
+                Task {
+                    _ = await respond(data)
+                    echoReceived.fulfill()
+                }
             }
         )
         let port = try await server.startAsync(

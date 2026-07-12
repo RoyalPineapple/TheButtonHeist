@@ -27,7 +27,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
 
         gate.complete(nil)
 
-        XCTAssertEqual(await sendTask.value, .enqueued)
+        XCTAssertEqual(await sendTask.value, .delivered)
         XCTAssertEqual(
             await server.clientPhaseForTesting(clientId),
             .connected(SocketSendBuffer())
@@ -35,7 +35,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         await server.removeClient(clientId)
     }
 
-    func testResponseHandlerDeliverWaitsForContentProcessedCompletion() async {
+    func testResponseHandlerWaitsForContentProcessedCompletion() async {
         let server = SimpleSocketServer()
         let gate = SendCompletionGate()
         await server.setSendContentForTesting { _, _, completion in
@@ -47,7 +47,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         let responder = await server.responseHandlerForTesting(clientId: clientId)
 
         let sendTask = Task {
-            await responder.deliver(Data("reply".utf8))
+            await responder(Data("reply".utf8))
         }
         await gate.waitUntilCaptured()
 
@@ -58,7 +58,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
 
         gate.complete(nil)
 
-        XCTAssertEqual(await sendTask.value, .enqueued)
+        XCTAssertEqual(await sendTask.value, .delivered)
         XCTAssertEqual(
             await server.clientPhaseForTesting(clientId),
             .connected(SocketSendBuffer())
