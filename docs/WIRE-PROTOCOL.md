@@ -237,12 +237,26 @@ contract.
 ```
 
 `heistId` is a current-capture annotation for correlation and diagnostics.
-Public action messages identify elements with the canonical `ElementTarget`
-shape: `target` carries an ordered predicate `checks` chain, and `target_ref`
-refers to a scoped heist parameter. Checks include `label`, `identifier`,
-`value`, `hint`, `traits`, `actions`, `customContent`, and `rotors`; predicate
-targets may also carry an optional `ordinal`. Durable replay uses the same
-semantic target shape.
+`AccessibilityTarget` is the canonical target object for actions, predicates,
+and `get_interface.query.subtree`. An element target carries an ordered
+predicate `checks` chain and optional `ordinal`; a container target carries
+`container` and optional `ordinal`; `container` plus `target` expresses a
+descendant-scoped target; `ref` refers to a scoped heist target parameter.
+Public target nesting is bounded by the shared public JSON input depth limit.
+Checks include `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
+`customContent`, and `rotors`. Durable replay uses the same target shape.
+
+Container identifiers are matched on every delivered container type that
+carries the identifier. They are not restricted to semantic-group containers.
+Canonical container kinds are `none`, `scrollable`, `semanticGroup`, `list`,
+`landmark`, `dataTable`, and `tabBar`; parser `scrollable` containers are never
+projected as `none`.
+Target resolution always walks the canonical delivered tree, including for
+`exists`, `missing`, and subtree queries.
+`InterfaceQuery` contains only optional `subtree`, `maxScrollsPerContainer`,
+and `maxScrollsPerDiscovery` fields. Filtering is expressed only by the
+canonical `AccessibilityTarget` in `subtree`; there is no separate interface
+matcher or top-level `checks` adapter.
 The string predicate fields may carry one StringMatch value or an array of
 StringMatch values; arrays require every check against that property to match.
 Prefer ordered `checks` when string checks and trait checks belong in one
@@ -308,24 +322,32 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":30}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
-The host evaluates the predicate against the current settled accessibility
-state first, then waits for later settled accessibility state until the
-predicate's final state is true or the timeout expires. Absence predicates are
-satisfied by current absence. Standalone waits using element transition
-predicates can pass with a warning when the implied final state is true but the
-transition was not observed. The response is a heist execution receipt, even for
-a single wait.
+The host evaluates current-tree predicates against the current delivered
+interface first, then extends one observation window until the predicate is met
+or the timeout expires. `exists` and `missing` read current state. Lifecycle
+assertions require observed facts; they never pass from an implied final state
+or a warning fallback. The response is a heist execution receipt, even for a
+single wait.
 
 To assert current settled container presence without requiring a transition,
-use the container state predicate in the wait plan:
-`{"type":"exists","container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]}}`.
-Scoped element targets use `{"container":{"checks":[...]},"target":{...}}` so
-resolution is limited to descendants of the matching container. `change` with
-a `screen` scope remains the screen-change predicate and requires before/after
-settled evidence.
+put the container in the canonical target slot:
+`{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}`.
+Scoped targets use `{"container":{"checks":[...]},"target":{...}}` so
+resolution is limited to descendants of the matching container.
+
+The strict predicate wire grammar is:
+
+```json
+{"type":"changed","scope":"screen","assertions":[]}
+{"type":"changed","scope":"elements","assertions":[{"type":"appeared","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Toast"}}]}}]}
+```
+
+`screen` assertions accept `exists` and `missing`; `elements` assertions also
+accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
+`screenChanged`, alternate spellings, and flat target wrappers are invalid.
 
 ## Action Results
 
@@ -350,26 +372,34 @@ when the error belongs to the action. Server-level failures use the `error`
 message with `kind` and `message`. Where each receipt field is produced during
 an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md).
 
-## Traces and Deltas
+## Traces, Facts, and Public Deltas
 
-The trace stores captures. Segments and deltas are derived projections used for
-formatting, expectations, and diagnostics; they are not the authoritative
-storage truth.
+`AccessibilityTrace` stores ordered settled captures. The runtime derives one
+ordered `ChangeFact` stream from adjacent capture edges. Predicate evaluation,
+diagnostics, and repair analysis consume that stream directly; no separate
+stored or endpoint temporal model exists.
 
-`AccessibilityTrace.Delta` is discriminated by `kind`:
+Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
+always derives three ordered facts: old-tree departures, the screen marker,
+then new-tree arrivals. `updated` entries can only be derived from captures in
+the same screen generation. A complete trace with no facts is proof of
+`noChange`; no `noChange` fact is emitted.
 
-| `kind` | Meaning |
-|--------|---------|
-| `noChange` | The settled hierarchy did not change. |
-| `elementsChanged` | Same screen, element-level additions/removals/updates. |
-| `screenChanged` | Screen identity changed; the post-change interface is included. |
+Scoped `screenChanged`, `elementChanged`, `valueChanged`, and `announcement`
+notifications are evidence on the capture edge. A notification prevents a
+complete window from being treated as fact-free even when its tree hashes are
+equal.
 
-`elementsChanged` and `screenChanged` may include
-`accessibilityNotifications`, filtered to the notification category that
-supports that delta. Notification kinds are `screenChanged`, `elementChanged`,
-`valueChanged`, and `announcement`; both element and value notifications
-support an `elementsChanged` delta. This preserves the evidence used to classify the change.
-Empty edit and notification collections are omitted on the wire.
+For UIKit value controls, `valueChanged`, `elementChanged`, and `announcement`
+are all recapture triggers. The notification kind does not assert the new
+value; Button Heist re-reads the delivered node and derives any value update
+from the before/after captures. SwiftUI value notifications use that same path.
+
+Public action JSON retains a compact `delta` field. It is a one-way lossy fold
+over the ordered facts for display and transport. A folded public delta is
+discriminated as `noChange`, `elementsChanged`, or `screenChanged`; it is never
+used to evaluate a predicate. Empty edit and notification collections are
+omitted on the wire.
 
 ## Authentication and Sessions
 

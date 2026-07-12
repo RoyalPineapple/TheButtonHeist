@@ -6,12 +6,11 @@ import AccessibilitySnapshotModel
 import ThePlans
 import TheScore
 
-/// A settled semantic observation paired with its trace, delta, and summary.
+/// A settled semantic observation paired with its trace and summary.
 struct HeistSemanticObservation {
     let event: SettledSemanticObservationEvent
     let state: PostActionObservation.BeforeState
     let accessibilityTrace: AccessibilityTrace
-    let delta: AccessibilityTrace.Delta?
     let summary: String
 }
 
@@ -50,7 +49,7 @@ struct SemanticObservationDeadline: Sendable, Equatable {
     }
 }
 
-/// Builds traces, captures, deltas, and action receipts from supplied semantic
+/// Builds traces, captures, change facts, and action receipts from supplied semantic
 /// states. The post-action contract is: refresh/settle → before → action →
 /// refresh/settle → after → result.
 @MainActor
@@ -178,7 +177,6 @@ final class PostActionObservation {
             event: event,
             state: current,
             accessibilityTrace: event.trace,
-            delta: event.delta,
             summary: Self.observationSummary(current)
         )
     }
@@ -525,7 +523,7 @@ final class PostActionObservation {
         )
     }
 
-    private func firstResponderTarget(in screen: Screen) -> ElementTarget? {
+    private func firstResponderTarget(in screen: Screen) -> AccessibilityTarget? {
         guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
         let elements = screen.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)

@@ -6,19 +6,6 @@ import ThePlans
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-private extension AccessibilityTrace.Delta {
-    var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
-        switch self {
-        case .noChange(let payload):
-            return payload.captureEdge
-        case .elementsChanged(let payload):
-            return payload.captureEdge
-        case .screenChanged(let payload):
-            return payload.captureEdge
-        }
-    }
-}
-
 @MainActor
 final class ElementInflationProductTests: XCTestCase {
 
@@ -41,6 +28,34 @@ final class ElementInflationProductTests: XCTestCase {
         try await super.tearDown()
     }
 
+    func testElementActionRejectsContainerTargetWithTypedResolutionFailure() async {
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .container(.identifier("content")),
+            method: .activate,
+            deallocatedBoundary: "test"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected container target rejection")
+        }
+        XCTAssertEqual(failure.failedStep, .targetResolution)
+        XCTAssertEqual(failure.targetResolutionFailure, .containerTarget)
+    }
+
+    func testElementActionRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .ref("row"),
+            method: .activate,
+            deallocatedBoundary: "test"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected unresolved target reference rejection")
+        }
+        XCTAssertEqual(failure.failedStep, .targetResolution)
+        XCTAssertEqual(failure.targetResolutionFailure, .unresolvedReference("row"))
+    }
+
     func testSemanticActivateRevealsOffscreenScrollTargetWithoutManualPreScroll() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "semantic_checkout_submit",
@@ -52,7 +67,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
+            literalTarget(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic activate failed")
@@ -72,7 +87,7 @@ final class ElementInflationProductTests: XCTestCase {
         try seedKnownOffscreenTarget(fixture)
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
+            literalTarget(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested semantic activate failed")
@@ -100,7 +115,7 @@ final class ElementInflationProductTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "leave at desk",
-            elementTarget: .predicate(ElementPredicate(identifier: .exact(fixture.identifier)))
+            target: literalTarget(ElementPredicate(identifier: .exact(fixture.identifier)))
         )))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
@@ -126,7 +141,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertFalse(fixture.target.isFirstResponder)
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.textEntry]))
+            literalTarget(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.textEntry]))
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
@@ -149,7 +164,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.innerScrollView.contentOffset, .zero)
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
+            literalTarget(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed")
@@ -171,7 +186,7 @@ final class ElementInflationProductTests: XCTestCase {
         try seedKnownNestedScrollTarget(fixture)
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
+            literalTarget(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed with decoy")
@@ -187,7 +202,7 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(label: "Duplicate", traits: [.button]))
+            literalTarget(ElementPredicate(label: "Duplicate", traits: [.button]))
         ))
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -215,7 +230,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
+            literalTarget(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
         ))
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -243,7 +258,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
 
         let result = await brains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
+            literalTarget(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
         ))
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -297,7 +312,7 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(.scroll(ScrollTarget(
-            elementTarget: .predicate(ElementPredicate(identifier: "visible_anchor_explicit_scroll_revealed")),
+            target: literalTarget(ElementPredicate(identifier: "visible_anchor_explicit_scroll_revealed")),
             direction: .down
         )))
 
@@ -305,8 +320,8 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)
-        let delta = try XCTUnwrap(result.accessibilityTrace?.endpointDelta)
-        XCTAssertNotNil(delta.testCaptureEdge)
+        let trace = try XCTUnwrap(result.accessibilityTrace)
+        XCTAssertGreaterThanOrEqual(trace.captures.count, 2)
     }
 
     private func runSemanticActivateThroughCommand(
@@ -337,7 +352,7 @@ final class ElementInflationProductTests: XCTestCase {
         }
 
         let result = await localBrains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: .exact(identifier), traits: [.button]))
+            literalTarget(ElementPredicate(identifier: .exact(identifier), traits: [.button]))
         ))
         return (result, fixture.target.activationCount)
     }

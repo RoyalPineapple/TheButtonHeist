@@ -4,24 +4,6 @@ import TheScore
 
 extension FenceResponse {
 
-    static func compactDeltaKind(_ delta: AccessibilityTrace.Delta) -> String {
-        switch DeltaProjection(delta: delta, profile: .summary) {
-        case .noChange:
-            return DeltaProjectionKind.noChange.rawValue
-        case .elementsChanged:
-            return DeltaProjectionKind.elementsChanged.rawValue
-        case .screenChanged:
-            return DeltaProjectionKind.screenChanged.rawValue
-        }
-    }
-
-    static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
-        compactDelta(
-            DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true),
-            method: method
-        )
-    }
-
     static func compactDelta(_ projection: DeltaProjection, actionMethod: ActionMethodProjection) -> String {
         compactDelta(projection, method: actionMethod.rawValue)
     }
@@ -42,6 +24,7 @@ extension FenceResponse {
             if let omitted = metadata.transient.omittedCount {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
+            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
             return lines.joined(separator: "\n")
 
         case .elementsChanged(let delta):
@@ -54,6 +37,7 @@ extension FenceResponse {
             if let omitted = metadata.transient.omittedCount {
                 lines.append("  ... transient omitted \(omitted) observed elements")
             }
+            lines.append(contentsOf: compactNotificationLines(metadata.accessibilityNotifications))
             return lines.joined(separator: "\n")
 
         case .screenChanged(let delta):
@@ -63,6 +47,7 @@ extension FenceResponse {
             } else {
                 lines.append("\(delta.screen.screenDescription) (\(delta.screen.elementCount) elements)")
             }
+            lines.append(contentsOf: compactNotificationLines(delta.metadata.accessibilityNotifications))
             return lines.joined(separator: "\n")
         }
     }
@@ -113,6 +98,12 @@ extension FenceResponse {
 
     private static func compactChangeLine(name: String, change: PropertyChange) -> String {
         "  ~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" → \"\(display(change.newValue))\""
+    }
+
+    private static func compactNotificationLines(
+        _ notifications: [AccessibilityNotificationEvidence]
+    ) -> [String] {
+        notifications.map { "  ! accessibility notification \($0.kind.rawValue) #\($0.sequence)" }
     }
 
     private static func display(_ value: ElementPropertyValue?) -> String {

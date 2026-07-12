@@ -382,8 +382,8 @@ extension AnyPropertyChangeExpr: Codable {
 
 // MARK: - Element Update Predicate Codable
 
-private enum ElementUpdateCodingKeys: String, CodingKey, CaseIterable {
-    case type, element, before, after, property
+internal enum ElementUpdateCodingKeys: String, CodingKey, CaseIterable {
+    case type, element, target, before, after, property
 }
 
 private func unsupportedUpdateProperty(
@@ -395,91 +395,6 @@ private func unsupportedUpdateProperty(
         in: container,
         debugDescription: "\(property.rawValue) is an element identity matcher, not an update property"
     )
-}
-
-extension ElementUpdatePredicate: Codable {
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: ElementUpdateCodingKeys.self, typeName: "element update predicate")
-        let container = try decoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        self.init(
-            element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element),
-            change: try AnyPropertyChange.decodeIfPresent(from: container)
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        try container.encodeIfPresent(element, forKey: .element)
-        try change?.encodeFields(to: &container)
-    }
-}
-
-extension ElementUpdatePredicateExpr: Codable {
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(
-            allowed: ElementUpdateCodingKeys.self,
-            typeName: "element update predicate expression"
-        )
-        let container = try decoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        self.init(
-            element: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .element),
-            change: try AnyPropertyChangeExpr.decodeIfPresent(from: container)
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        try container.encodeIfPresent(element, forKey: .element)
-        try change?.encodeFields(to: &container)
-    }
-}
-
-extension ElementDeltaPredicate: Codable {
-    private enum WireType: String, CaseIterable {
-        case appeared
-        case disappeared
-        case updated
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        let typeString = try container.decode(String.self, forKey: .type)
-        guard let wireType = WireType(rawValue: typeString) else {
-            let validTypes = WireType.allCases.map(\.rawValue).joined(separator: ", ")
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown element delta predicate type: \"\(typeString)\". Valid: \(validTypes)"
-            )
-        }
-        switch wireType {
-        case .appeared:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "appeared predicate")
-            self = .appearedElement(try container.decode(ElementPredicate.self, forKey: .element))
-        case .disappeared:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "disappeared predicate")
-            self = .disappearedElement(try container.decode(ElementPredicate.self, forKey: .element))
-        case .updated:
-            try decoder.rejectUnknownKeys(allowed: ElementUpdateCodingKeys.self, typeName: "updated predicate")
-            self = .updatedElement(try ElementUpdatePredicate(from: decoder))
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ElementUpdateCodingKeys.self)
-        switch self {
-        case .appearedElement(let element):
-            try container.encode(WireType.appeared.rawValue, forKey: .type)
-            try container.encode(element, forKey: .element)
-        case .disappearedElement(let element):
-            try container.encode(WireType.disappeared.rawValue, forKey: .type)
-            try container.encode(element, forKey: .element)
-        case .updatedElement(let update):
-            try container.encode(WireType.updated.rawValue, forKey: .type)
-            try container.encodeIfPresent(update.element, forKey: .element)
-            try update.change?.encodeFields(to: &container)
-        }
-    }
 }
 
 fileprivate extension AnyPropertyChange {
@@ -550,8 +465,8 @@ fileprivate extension AnyPropertyChange {
     }
 }
 
-fileprivate extension AnyPropertyChangeExpr {
-    static func decodeIfPresent(
+extension AnyPropertyChangeExpr {
+    internal static func decodeIfPresent(
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> AnyPropertyChangeExpr? {
         let hasBefore = container.contains(.before)
@@ -569,7 +484,7 @@ fileprivate extension AnyPropertyChangeExpr {
         return try decode(property: property, from: container)
     }
 
-    static func decode(
+    internal static func decode(
         property: ElementProperty,
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> AnyPropertyChangeExpr {
@@ -595,7 +510,7 @@ fileprivate extension AnyPropertyChangeExpr {
         }
     }
 
-    func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
+    internal func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
         try container.encode(property, forKey: .property)
         switch self {
         case .value(let change):

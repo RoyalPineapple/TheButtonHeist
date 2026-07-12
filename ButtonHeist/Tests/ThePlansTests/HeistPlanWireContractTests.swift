@@ -119,22 +119,18 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
     let transitionCase = Data("""
     {
       "predicate": {
-        "type": "change",
-        "scopes": [
-          {
-            "type": "elements",
-            "assertions": [
+        "type": "changed",
+        "scope": "elements",
+        "assertions": [
               {
                 "type": "appeared",
-                "element": {
+                "target": {
                   "checks": [
                     { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
                   ]
                 }
               }
             ]
-          }
-        ]
       },
       "body": [
         { "type": "warn", "warn": { "message": "ready" } }
@@ -150,7 +146,7 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
     {
       "predicate": {
         "type": "exists",
-        "element": {
+        "target": {
           "checks": [
             { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
           ]
@@ -264,6 +260,20 @@ func `model Codable boundaries reject unknown fields`() {
 }
 
 @Test
+func `target parameter kind uses accessibility target spelling`() throws {
+    let parameter = HeistParameter.accessibilityTarget(name: "row")
+    let argument = HeistArgument.accessibilityTarget(.ref("row"))
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    #expect(String(bytes: try encoder.encode(parameter), encoding: .utf8) ==
+        #"{"name":"row","type":"accessibility_target"}"#)
+    #expect(String(bytes: try encoder.encode(argument), encoding: .utf8) ==
+        #"{"target":{"ref":"row"},"type":"accessibility_target"}"#)
+
+}
+
+@Test
 func `element update property checkers reject unknown fields`() {
     expectUnknownField("frame match", contains: #"Unknown frame match field "unexpected""#) {
         _ = try JSONDecoder().decode(ElementFrameMatch.self, from: Data("""
@@ -278,9 +288,14 @@ func `element update property checkers reject unknown fields`() {
     }
 
     expectUnknownField("nested frame update", contains: #"Unknown frame match field "unexpected""#) {
-        _ = try JSONDecoder().decode(ElementDeltaPredicate.self, from: Data("""
+        _ = try JSONDecoder().decode(AccessibilityPredicate<ElementsAssertionContext>.self, from: Data("""
         {
           "type": "updated",
+          "target": {
+            "checks": [
+              { "kind": "label", "match": { "mode": "exact", "value": "Panel" } }
+            ]
+          },
           "property": "frame",
           "after": { "x": 1, "unexpected": true }
         }
@@ -337,7 +352,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
             {
               "predicate": {
                 "type" : "exists",
-                "element": {
+                "target": {
                   "checks": [
                     { "kind": "label", "match": { "mode": "exact", "value": "Home" } }
                   ]
@@ -355,7 +370,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
                 {
                   "predicate": {
                     "type" : "exists",
-                    "element": {
+                    "target": {
                       "checks": [
                         { "kind": "label", "match": { "mode": "exact", "value": "Promo" } }
                       ]
@@ -373,7 +388,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
             {
               "predicate": {
                 "type" : "exists",
-                "element": {
+                "target": {
                   "checks": [
                     { "kind": "label", "match": { "mode": "exact", "value": "Promo" } }
                   ]
@@ -419,7 +434,7 @@ private func unknownCollectionStepPayloadCases() -> [UnknownFieldCase] {
             {
               "predicate": {
                 "type" : "exists",
-                "element": {
+                "target": {
                   "checks": [
                     { "kind": "label", "match": { "mode": "exact", "value": "Ready" } }
                   ]
@@ -472,7 +487,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 0)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
             .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
@@ -593,12 +608,11 @@ private let expectedAllStepKindsPlanJSON = """
         },
         "expectation" : {
           "predicate" : {
-            "scopes" : [
-              {
-                "type" : "screen"
-              }
+            "assertions" : [
+
             ],
-            "type" : "change"
+            "scope" : "screen",
+            "type" : "changed"
           },
           "timeout" : 0
         }
@@ -609,7 +623,7 @@ private let expectedAllStepKindsPlanJSON = """
       "type" : "wait",
       "wait" : {
         "predicate" : {
-          "element" : {
+          "target" : {
             "checks" : [
               {
                 "kind" : "label",
@@ -638,7 +652,7 @@ private let expectedAllStepKindsPlanJSON = """
               }
             ],
             "predicate" : {
-              "element" : {
+              "target" : {
                 "checks" : [
                   {
                     "kind" : "label",
@@ -671,13 +685,17 @@ private let expectedAllStepKindsPlanJSON = """
             "action" : {
               "command" : {
                 "payload" : {
-                  "target_ref" : "row"
+                  "target" : {
+                    "ref" : "row"
+                  }
                 },
                 "type" : "activate"
               },
               "expectation" : {
                 "predicate" : {
-                  "target_ref" : "row",
+                  "target" : {
+                    "ref" : "row"
+                  },
                   "type" : "missing"
                 },
                 "timeout" : 2
@@ -761,7 +779,7 @@ private let expectedAllStepKindsPlanJSON = """
           }
         ],
         "predicate" : {
-          "element" : {
+          "target" : {
             "checks" : [
               {
                 "kind" : "label",

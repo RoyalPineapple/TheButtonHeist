@@ -47,21 +47,21 @@ extension Actions {
         }
     }
 
-    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        switch target.selection {
-        case .unitElement(let elementTarget, let start, let end):
+    func executeSwipe(_ request: SwipeTarget) async -> TheSafecracker.ActionDispatchOutcome {
+        switch request.selection {
+        case .unitElement(let target, let start, let end):
             return await performElementFrameSwipe(
-                elementTarget: elementTarget,
+                target: target,
                 start: start,
                 end: end,
-                duration: target.resolvedDuration
+                duration: request.resolvedDuration
             )
-        case .elementDirection(let elementTarget, let direction):
+        case .elementDirection(let target, let direction):
             return await performElementFrameSwipe(
-                elementTarget: elementTarget,
+                target: target,
                 start: direction.defaultStart,
                 end: direction.defaultEnd,
-                duration: target.resolvedDuration
+                duration: request.resolvedDuration
             )
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
@@ -89,21 +89,21 @@ extension Actions {
                 return await performResolvedSwipe(
                     from: startPoint,
                     to: endPoint,
-                    duration: target.resolvedDuration
+                    duration: request.resolvedDuration
                 ).withSubjectEvidence(resolvedPoint.subjectEvidence)
             }
         }
     }
 
     private func performElementFrameSwipe(
-        elementTarget: ElementTarget,
+        target: AccessibilityTarget,
         start: UnitPoint,
         end: UnitPoint,
         duration: GestureDuration
     ) async -> TheSafecracker.ActionDispatchOutcome {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
-            for: elementTarget,
+            for: target,
             method: .syntheticSwipe,
             deallocatedBoundary: "gesture action"
         ) {

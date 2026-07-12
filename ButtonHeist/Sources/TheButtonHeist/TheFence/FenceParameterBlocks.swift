@@ -2,13 +2,13 @@ import ThePlans
 import TheScore
 
 internal enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = ElementTarget.predicateSchemaFields.map { elementTargetFieldSpec($0) }
-    internal static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map { elementTargetFieldSpec($0) }
+    private static let matcherFields = [predicateChecksParam(.checks)]
+    internal static let inlineAccessibilityTargetFields = accessibilityTargetProperties()
 
-    internal static let elementTarget: [FenceParameterSpec] = [
-        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
+    internal static let target: [FenceParameterSpec] = [
+        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
     ]
-    internal static let gestureElement = objectParam(.element, properties: inlineElementTargetFields, validation: .customPayload)
+    internal static let gestureElement = objectParam(.element, properties: inlineAccessibilityTargetFields, validation: .customPayload)
     internal static let gestureUnitPoint = objectParam(.unitPoint, properties: unitPoint)
     internal static let gesturePoint = objectParam(.point, properties: screenPoint)
 
@@ -82,82 +82,34 @@ internal enum FenceParameterBlocks: Sendable {
 
     internal static let elementFilter = matcherFields
 
-    private static let subtreeElementProperties = matcherFields
-
-    private static let subtreeContainer = containerPredicateParam(.container)
-
     internal static let interfaceSubtree: FenceParameterSpec = objectParam(
         .subtree,
-        properties: [
-            objectParam(.element, properties: subtreeElementProperties, validation: .customPayload),
-            subtreeContainer,
-            param(.ordinal, .integer, minimum: 0),
-        ]
+        properties: inlineAccessibilityTargetFields,
+        validation: .customPayload
     )
-
-    private static let predicateType = param(
-        .type, .string, required: true,
-        enumValues: AccessibilityPredicateContract.PredicateWireType.values
-    )
-
-    /// Documented fields of an `AccessibilityPredicate.State` object (`exists`,
-    /// `missing`, `all`). A `State` is recursive — `all` nests further states —
-    /// so item objects allow additional keys and the decoder enforces the
-    /// per-type required-field rules.
-    private static let stateProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: AccessibilityPredicateContract.StateWireType.values),
-        objectParam(.element, properties: matcherFields, validation: .customPayload),
-        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
-        containerPredicateParam(.container),
-        param(.targetRef, .string),
-        arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
-    ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: assertionWireTypeValues),
-        objectParam(.element, properties: matcherFields, validation: .customPayload),
-        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
-        containerPredicateParam(.container),
-        param(.targetRef, .string),
+        param(.type, .string, required: true, enumValues: PredicateAssertionType.allCases.map(\.rawValue)),
+        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
         FenceParameters.elementProperty.spec,
-        objectParam(.before, properties: matcherFields, validation: .customPayload),
-        objectParam(.after, properties: matcherFields, validation: .customPayload),
-        arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
+        unconstrainedParam(.before, validation: .customPayload),
+        unconstrainedParam(.after, validation: .customPayload),
     ]
 
-    private static let changeScopeProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: AccessibilityPredicateContract.ChangeScopeWireType.values),
+    /// Canonical root predicate shape shared by `expect` and `wait.predicate`.
+    private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
+        param(
+            .type,
+            .string,
+            required: true,
+            enumValues: AccessibilityPredicate<RootContext>.wireTypeValues
+        ),
+        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        stringMatchParam(.match),
+        param(.scope, .string, enumValues: ChangedScope.allCases.map(\.rawValue)),
         arrayParam(
             .assertions,
-            items: .object(properties: assertionProperties, additionalProperties: true)
-        ),
-        arrayParam(
-            .scopes,
-            items: .object(properties: [], additionalProperties: true)
-        ),
-    ]
-
-    /// Object properties for an `AccessibilityPredicate` (the `expect` slot and
-    /// the `wait` `predicate` field). State predicates use `element`, `target`,
-    /// `target_ref`, `container`, or `states`; change predicates use `scopes`,
-    /// whose children carry `screen` state assertions or `elements` delta assertions.
-    private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
-        predicateType,
-        objectParam(.element, properties: matcherFields, validation: .customPayload),
-        objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
-        containerPredicateParam(.container),
-        param(.targetRef, .string),
-        FenceParameters.elementProperty.spec,
-        objectParam(.before, properties: matcherFields, validation: .customPayload),
-        objectParam(.after, properties: matcherFields, validation: .customPayload),
-        stringMatchParam(.match),
-        arrayParam(
-            .states,
-            items: .object(properties: stateProperties, additionalProperties: true)
-        ),
-        arrayParam(
-            .scopes,
-            items: .object(properties: changeScopeProperties, additionalProperties: true)
+            items: .object(properties: assertionProperties, additionalProperties: false)
         ),
     ]
 
@@ -189,15 +141,17 @@ internal enum FenceParameterBlocks: Sendable {
         exclusiveMinimum: 0
     )
 
-    private static var assertionWireTypeValues: [String] {
-        AccessibilityPredicateContract.StateWireType.values + elementDeltaPredicateWireTypeValues
-    }
+}
 
-    private static var elementDeltaPredicateWireTypeValues: [String] {
-        [
-            ElementDeltaPredicate.appearedElement(.label("sample")),
-            ElementDeltaPredicate.disappearedElement(.label("sample")),
-            ElementDeltaPredicate.updatedElement(.any),
-        ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.type.rawValue) }
-    }
+private enum ChangedScope: String, CaseIterable {
+    case screen
+    case elements
+}
+
+private enum PredicateAssertionType: String, CaseIterable {
+    case exists
+    case missing
+    case appeared
+    case disappeared
+    case updated
 }

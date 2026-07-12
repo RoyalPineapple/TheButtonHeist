@@ -11,7 +11,7 @@ import AccessibilitySnapshotParser
 /// Internal element identity. Lives only inside TheInsideJob — it is the
 /// Screen-keying / resolution / diff-pairing handle and never crosses the wire,
 /// is never shown to the agent, and never appears in deliverables. Wire-facing
-/// element references use `ElementTarget` (predicate + ordinal) instead.
+/// element references use `AccessibilityTarget` (predicate + ordinal) instead.
 struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, CustomStringConvertible, ExpressibleByStringLiteral {
     let rawValue: String
 

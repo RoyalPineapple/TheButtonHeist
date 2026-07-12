@@ -9,28 +9,19 @@ public struct WaitStep: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    public let predicate: AccessibilityPredicateExpr
+    public let predicate: AccessibilityPredicate<RootContext>
     /// Seconds. `0` means immediate predicate evaluation.
     public let timeout: Double
     public let elseBody: [HeistStep]?
 
     public init(
-        predicate: AccessibilityPredicateExpr,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double = defaultWaitTimeout,
         elseBody: [HeistStep]? = nil
     ) {
         self.predicate = predicate
         self.timeout = timeout
         self.elseBody = elseBody
-    }
-
-    @_disfavoredOverload
-    public init(
-        predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout,
-        elseBody: [HeistStep]? = nil
-    ) {
-        self.init(predicate: .predicate(predicate), timeout: timeout, elseBody: elseBody)
     }
 
     public init(from decoder: Decoder) throws {
@@ -45,7 +36,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
             )
         }
         self.init(
-            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
             timeout: decodedTimeout,
             elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
@@ -60,10 +51,10 @@ public struct WaitStep: Codable, Sendable, Equatable {
 }
 
 public struct ResolvedWaitStep: Sendable, Equatable {
-    public let predicate: AccessibilityPredicate
+    public let predicate: AccessibilityPredicate<RootContext>
     public let timeout: Double
 
-    public init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
+    public init(predicate: AccessibilityPredicate<RootContext>, timeout: Double = defaultWaitTimeout) {
         self.predicate = predicate
         self.timeout = timeout
     }

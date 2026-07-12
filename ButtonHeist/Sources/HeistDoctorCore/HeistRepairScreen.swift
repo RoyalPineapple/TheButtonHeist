@@ -56,7 +56,7 @@ struct RepairScreen {
                 path: core.path,
                 traversalIndex: core.traversalIndex,
                 ordinal: core.ordinal,
-                siblingText: unique(siblings),
+                siblingText: siblings.uniqued(on: \.self),
                 headerText: Array(headers.suffix(3))
             )
             if core.element.traits.contains(.header), let header = primaryText(core.element) {
@@ -67,11 +67,17 @@ struct RepairScreen {
         self.elements = elements
     }
 
-    func resolve(_ target: ElementTarget) -> RepairTargetResolution {
+    func resolve(_ target: AccessibilityTarget) -> RepairTargetResolution {
         switch target {
         case .predicate(let predicate, let ordinal):
+            let resolvedPredicate: ElementPredicate
+            do {
+                resolvedPredicate = try predicate.resolve(in: .empty)
+            } catch {
+                return .unsupportedTarget(.unresolvedExpression)
+            }
             let matches = ElementMatchGraph(elements: elements.map(\.element))
-                .resolve(predicate)
+                .resolve(resolvedPredicate)
                 .matches
                 .map { elements[$0.traversalOrder] }
             if let ordinal {
@@ -88,8 +94,12 @@ struct RepairScreen {
             default:
                 return .ambiguous(matches, matchCount: matches.count)
             }
+        case .container:
+            return .unsupportedTarget(.container)
+        case .ref:
+            return .unsupportedTarget(.reference)
         case .within:
-            return .notFound(matchCount: 0)
+            return .unsupportedTarget(.scoped)
         }
     }
 
@@ -115,6 +125,14 @@ enum RepairTargetResolution {
     case resolved(RepairScreen.Element, matchCount: Int)
     case notFound(matchCount: Int)
     case ambiguous([RepairScreen.Element], matchCount: Int)
+    case unsupportedTarget(UnsupportedRepairTargetKind)
+}
+
+enum UnsupportedRepairTargetKind: String, Sendable, Equatable {
+    case container
+    case reference
+    case scoped
+    case unresolvedExpression
 }
 
 private func parentPath(_ path: TreePath) -> TreePath {

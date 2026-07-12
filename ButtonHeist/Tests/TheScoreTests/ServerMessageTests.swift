@@ -284,7 +284,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultSubjectEvidenceWireShape() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Delete", traits: [.button]))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
         let element = HeistElement(
             description: "Delete",
             label: "Delete",
@@ -429,7 +429,7 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertNil(decoded.accessibilityTrace?.endpointDelta)
+        XCTAssertNil(decoded.accessibilityTrace)
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {

@@ -10,7 +10,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
         let actionResult = semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
-            target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
+            target: .predicate(ElementPredicateTemplate(label: "Delete"), ordinal: 1),
             subject: button,
             before: [label, button],
             after: [label, button]
@@ -18,7 +18,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
 
         XCTAssertEqual(
             EvidenceMinimumMatcher.minimumTarget(actionResult: actionResult),
-            .predicate(ElementPredicate(label: "Delete", traits: [.button]))
+            .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
         )
     }
 
@@ -27,7 +27,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
         let actionResult = semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
-            target: .predicate(ElementPredicate(label: "Delete")),
+            target: .predicate(ElementPredicateTemplate(label: "Delete")),
             subject: button,
             before: [button],
             after: [button],
@@ -41,7 +41,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
 private func semanticActionResult(
     method: ActionMethod,
     source: ActionSubjectEvidence.Source,
-    target: ElementTarget,
+    target: AccessibilityTarget,
     subject: HeistElement,
     before: [HeistElement],
     after: [HeistElement],

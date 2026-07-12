@@ -266,7 +266,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
-    public let predicate: AccessibilityPredicate
+    public let predicate: AccessibilityPredicate<RootContext>
     public let timeout: Double
     public let iterationCount: Int
     public let lastObservedSummary: String?
@@ -352,7 +352,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     private init(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int = 0,
         lastObservedSummary: String?,
@@ -366,7 +366,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func predicateMet(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
@@ -388,7 +388,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func continued(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
@@ -410,7 +410,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func timedOut(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         expectation: UnmetExpectationResult,
@@ -431,7 +431,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func bodyFailed(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         expectation: UnmetExpectationResult,
@@ -452,7 +452,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func initialObservationUnavailable(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         expectation: UnmetExpectationResult,
         lastObservedSummary: String?,
@@ -472,7 +472,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func failedIteration(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
@@ -494,7 +494,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func timeoutHandledByElse(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         expectation: UnmetExpectationResult,
@@ -514,7 +514,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func timeoutElseFailed(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         timeout: Double,
         iterationCount: Int,
         expectation: UnmetExpectationResult,
@@ -550,7 +550,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let outcome = try container.decode(HeistPredicateEvidenceOutcome.self, forKey: .outcome)
-        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
+        let predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
         let timeout = try container.decode(Double.self, forKey: .timeout)
         let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
         let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)

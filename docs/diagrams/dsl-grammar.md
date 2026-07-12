@@ -1,9 +1,10 @@
 # DSL Grammar
 
-The authoring surface as one picture: step types, action commands, the passable types, target forms, and — the central division — the split between state predicates (evaluated against a frozen parse) and change predicates (requiring delta evidence, never usable as search selectors). This diagram answers "what can a heist say, and what kind of evidence does each construct consume?"
+The authoring surface as one picture: step types, action commands, passable
+types, one target language, and one context-typed predicate tree.
 
 **Illustrates:** [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [HEIST-FORMAT.md](../HEIST-FORMAT.md), [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/Model/StatePredicateExpressions.swift`, `ButtonHeist/Sources/ThePlans/Model/ElementTarget.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
 
 ```mermaid
 flowchart TD
@@ -38,7 +39,7 @@ flowchart TD
 
     subgraph passables["Passable types"]
         PSTR["String — StringExpr:<br/>.literal or .ref"]
-        PTGT["ElementTarget — ElementTargetExpr:<br/>.target or .ref"]
+        PTGT["AccessibilityTarget:<br/>predicate · container · within · ref"]
         PVOID["Void — no argument"]
         PSTR ~~~ PTGT
         PTGT ~~~ PVOID
@@ -50,27 +51,28 @@ flowchart TD
     INVOKE --> passables
 ```
 
-The predicate split:
+The predicate contexts:
 
 ```mermaid
 flowchart LR
-    subgraph statep["State predicates"]
-        STATE["AccessibilityPredicate.state(State)<br/>exists · missing · container presence ·<br/>existsTarget · missingTarget · all"]
-        NOTE1["evaluated against one settled capture —<br/>answers 'is the screen like this now?'"]
-        STATE --- NOTE1
-    end
-    subgraph changep["Change predicates"]
-        CHANGE["AccessibilityPredicate.changePredicate(Change)<br/>any · screenScope · elementsScope · allScopes<br/>and noChangePredicate"]
-        NOTE2["require before/after settled captures —<br/>answer 'did the action change this?'<br/>never usable as search selectors"]
-        CHANGE --- NOTE2
-    end
-    ACTIONK["action + expectation"] --> changep
-    WAITK["WaitFor · If · RepeatUntil conditions"] --> statep
+    ROOT["AccessibilityPredicate RootContext<br/>exists · missing · changed · noChange · announcement"]
+    CHANGED["changed(ChangeDeclaration)"]
+    SCREEN["ScreenAssertionContext<br/>exists · missing"]
+    ELEMENTS["ElementsAssertionContext<br/>exists · missing · appeared · disappeared · updated"]
+    TREE["current delivered Interface tree"]
+    FACTS["ordered ChangeFact stream"]
+    ROOT --> CHANGED
+    CHANGED -->|screen| SCREEN
+    CHANGED -->|elements| ELEMENTS
+    ROOT -->|exists / missing| TREE
+    SCREEN --> TREE
+    ELEMENTS --> TREE
+    ELEMENTS --> FACTS
 ```
 
 Notes:
 
 - `invoke(HeistInvocationStep)` is `RunHeist` by name plus an argument — the passable types are what that argument can be.
-- Targets have exactly one durable form: `ElementTarget.predicate(ElementPredicate, ordinal:)` — a semantic selector with an optional 0-based disambiguating ordinal. There is no coordinate target and no capture-local id target in the durable language (see [element-inflation.md](element-inflation.md)).
-- The state/change split is the headline design rule: a state predicate can gate control flow because it reads one frozen parse; a change predicate classifies an action's delta and therefore only exists attached to an action's expectation. Element deltas are expressed with `ElementUpdatePredicate.updated(_, before:, after:)`.
+- `AccessibilityTarget` is shared by actions and predicates. It can target an element predicate, a container predicate, a scoped descendant, or a reference.
+- Generic predicate contexts make invalid combinations unconstructible. Current-tree existence checks are shared; lifecycle and update assertions are available only inside element change declarations.
 - Wire discriminators for the loop steps are snake_case in `plan.json`: `for_each_element`, `for_each_string`, `repeat_until`.

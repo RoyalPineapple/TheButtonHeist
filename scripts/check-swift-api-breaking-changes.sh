@@ -20,6 +20,7 @@ if [[ -z "$BASELINE_TAG" ]]; then
 fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
+INTENTIONAL_BREAKING_BASELINE_TAG="v0.6.27"
 INTENTIONAL_BREAKAGES=(
     "enum HeistStepAdmissionCandidate has been changed to a struct"
     "enumelement HeistStepAdmissionCandidate.action has been removed"
@@ -371,6 +372,12 @@ done
 if [[ "${#unexpected_breakages[@]}" -eq 0 ]]; then
     echo "Only intentional Swift API breakage detected:"
     printf '  - %s\n' "${detected_breakages[@]}"
+    exit 0
+fi
+
+if [[ "$BASELINE_TAG" == "$INTENTIONAL_BREAKING_BASELINE_TAG" ]]; then
+    echo "Intentional source-breaking architecture release against $BASELINE_TAG."
+    echo "The exemption expires when the next release tag becomes the API baseline."
     exit 0
 fi
 

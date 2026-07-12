@@ -9,7 +9,7 @@ func `unresolved expression refs throw typed errors`() throws {
     }
 
     expectExpressionError(.unresolvedTargetReference("missing")) {
-        try ElementTargetExpr(ref: HeistReferenceName(rawValue: "missing")).resolve(in: .empty)
+        try AccessibilityTarget(ref: HeistReferenceName(rawValue: "missing")).resolve(in: .empty)
     }
 
     let predicate = ElementPredicateTemplate(label: .exact(.ref("label")))
@@ -25,20 +25,26 @@ func `empty refs are rejected at expression boundaries`() throws {
     }
 
     expectExpressionError(.emptyReference("target")) {
-        try ElementTargetExpr(ref: HeistReferenceName(rawValue: "  \n "))
+        try AccessibilityTarget(ref: HeistReferenceName(rawValue: "  \n "))
     }
 
     expectDecodingError(StringExpr.self, #"{"ref":"   "}"#, contains: "string reference must not be empty")
-    expectDecodingError(ElementTargetExpr.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
+    expectDecodingError(AccessibilityTarget.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
     expectDecodingError(
         ElementPredicateTemplate.self,
         #"{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"   "}}}]}"#,
         contains: "string reference must not be empty"
     )
-    expectDecodingError(StatePredicateExpr.self, #"{"type": "exists","target_ref":"   "}"#, contains: "target_ref must not be empty")
     expectDecodingError(
-        ElementUpdatePredicateExpr.self,
-        #"{"property":"value","before":{"mode":"exact","value":{"ref":"   "}}}"#,
+        AccessibilityPredicate<RootContext>.self,
+        #"{"type":"exists","target":{"ref":"   "}}"#,
+        contains: "target reference must not be empty"
+    )
+    expectDecodingError(
+        AccessibilityPredicate<ElementsAssertionContext>.self,
+        #"{"type":"updated","target":{"checks":["# +
+            #"{"kind":"label","match":{"mode":"exact","value":"Count"}}]},"# +
+            #""property":"value","before":{"mode":"exact","value":{"ref":"   "}}}"#,
         contains: "string reference must not be empty"
     )
 }
@@ -50,17 +56,32 @@ func `broad string matches reject refs that resolve empty`() throws {
         try labelPredicate.resolve(in: HeistExecutionEnvironment(strings: ["needle": ""]))
     }
 
-    let state = StatePredicateExpr.exists(ElementPredicateTemplate(identifier: .prefix(.ref("prefix"))))
+    let state = AccessibilityPredicate<RootContext>.exists(.identifier(.prefix(.ref("prefix"))))
     expectExpressionError(.invalidStringMatch(mode: "prefix")) {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
 
-    let scopedTarget = ElementTargetExpr.within(container: .identifier("Screen"), .label(.contains(.ref("titlePart"))))
+    let scopedTarget = AccessibilityTarget.within(
+        container: .identifier("Screen"),
+        .label(.contains(.ref("titlePart")))
+    )
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
         _ = try scopedTarget.resolve(in: HeistExecutionEnvironment(strings: ["titlePart": ""]))
     }
 
-    let update = ElementUpdatePredicateExpr(change: .value(before: .contains(.ref("fromPart"))))
+    let containerTarget = AccessibilityTarget.container(
+        .identifier(StringExpr.ref("screenId")),
+        ordinal: 2
+    )
+    #expect(
+        try containerTarget.resolve(in: HeistExecutionEnvironment(strings: ["screenId": "Checkout"])) ==
+        .container(.identifier("Checkout"), ordinal: 2)
+    )
+
+    let update = AccessibilityPredicate<ElementsAssertionContext>.updated(
+        .label("Count"),
+        .value(before: .contains(.ref("fromPart")))
+    )
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
         try update.resolve(in: HeistExecutionEnvironment(strings: ["fromPart": ""]))
     }
@@ -68,7 +89,7 @@ func `broad string matches reject refs that resolve empty`() throws {
 
 @Test
 func `parameter binding resolves arguments in current scope and returns nested scope`() throws {
-    let sourceTarget = ElementTarget.predicate(ElementPredicate(label: "Submit"), ordinal: 1)
+    let sourceTarget = AccessibilityTarget.predicate(.label("Submit"), ordinal: 1)
     let outer = HeistExecutionEnvironment(
         targets: ["sourceTarget": sourceTarget],
         strings: ["source": "Pay", "item": "outer"]
@@ -80,26 +101,29 @@ func `parameter binding resolves arguments in current scope and returns nested s
     #expect(stringScope.targets == outer.targets)
     #expect(outer.strings["item"] == "outer")
 
-    let targetScope = try outer.binding(argument: .elementTarget(.ref("sourceTarget")), to: .elementTarget(name: "target"))
+    let targetScope = try outer.binding(
+        argument: .accessibilityTarget(.ref("sourceTarget")),
+        to: .accessibilityTarget(name: "target")
+    )
     #expect(targetScope.targets["target"] == sourceTarget)
     #expect(targetScope.targets["sourceTarget"] == sourceTarget)
     #expect(targetScope.strings == outer.strings)
     #expect(outer.targets["target"] == nil)
 
-    expectExpressionError(.parameterArgumentMismatch(parameter: .string, argument: .elementTarget)) {
-        try outer.binding(argument: .elementTarget(.target(sourceTarget)), to: .string(name: "item"))
+    expectExpressionError(.parameterArgumentMismatch(parameter: .string, argument: .accessibilityTarget)) {
+        try outer.binding(argument: .accessibilityTarget(sourceTarget), to: .string(name: "item"))
     }
 }
 
 @Test
-func `nested predicate resolution preserves state and change semantics`() throws {
-    let target = ElementTarget.predicate(ElementPredicate(identifier: "cta"), ordinal: 0)
-    let expression = AccessibilityPredicateExpr.change(.screenChanged(.all(
-        .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
-        .missingTarget(.ref("ctaTarget")),
-        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
-        .existsContainer(.identifier(.ref("screenId")))
-    )))
+func `nested predicate resolution preserves screen change semantics`() throws {
+    let target = AccessibilityTarget.predicate(.identifier("cta"), ordinal: 0)
+    let expression = AccessibilityPredicate<RootContext>.changed(.screen([
+        .exists(.label(.exact(.ref("title")))),
+        .missing(.ref("ctaTarget")),
+        .exists(.value(.contains(.ref("valuePart")))),
+        .exists(.container(.identifier(StringExpr.ref("screenId")))),
+    ]))
 
     let environment = HeistExecutionEnvironment(
         targets: ["ctaTarget": target],
@@ -107,12 +131,12 @@ func `nested predicate resolution preserves state and change semantics`() throws
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = AccessibilityPredicate.change(.screenChanged(.all(
-        .exists(ElementPredicate(label: "Dashboard")),
-        .missingTarget(target),
-        .exists(ElementPredicate(value: .contains("Ready"))),
-        .existsContainer(.identifier("DashboardScreen"))
-    )))
+    let expected = AccessibilityPredicate<RootContext>.changed(.screen([
+        .exists(.label("Dashboard")),
+        .missing(target),
+        .exists(.value(.contains("Ready"))),
+        .exists(.container(.identifier("DashboardScreen"))),
+    ]))
 
     #expect(resolved == expected)
 }
@@ -120,7 +144,7 @@ func `nested predicate resolution preserves state and change semantics`() throws
 @Test
 func `expression codable shapes remain stable`() throws {
     #expect(try sortedJSON(StringExpr.ref("title")) == #"{"ref":"title"}"#)
-    #expect(try sortedJSON(ElementTargetExpr.ref("target")) == #"{"ref":"target"}"#)
+    #expect(try sortedJSON(AccessibilityTarget.ref("target")) == #"{"ref":"target"}"#)
 
     let template = ElementPredicateTemplate(
         label: .exact(.ref("title")),
@@ -134,44 +158,56 @@ func `expression codable shapes remain stable`() throws {
         """
     #expect(try sortedJSON(template) == expectedTemplateJSON)
 
-    #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
     #expect(
-        try sortedJSON(StatePredicateExpr.exists(container: .label("Checkout"))) ==
-        #"{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]},"type":"exists"}"#
+        try sortedJSON(AccessibilityPredicate<RootContext>.exists(.ref("target"))) ==
+        #"{"target":{"ref":"target"},"type":"exists"}"#
     )
     #expect(
-        try sortedJSON(StatePredicateExpr.missing(container: .label("Checkout"))) ==
-        #"{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Checkout"}}}]},"type":"missing"}"#
+        try sortedJSON(AccessibilityPredicate<RootContext>.exists(.container(.label("Checkout")))) ==
+        #"{"target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","# +
+        #""match":{"mode":"exact","value":"Checkout"}}}]}},"type":"exists"}"#
+    )
+    #expect(
+        try sortedJSON(AccessibilityPredicate<RootContext>.missing(.container(.label("Checkout")))) ==
+        #"{"target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"label","# +
+        #""match":{"mode":"exact","value":"Checkout"}}}]}},"type":"missing"}"#
     )
 
-    let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
-        element: ElementPredicateTemplate(label: .exact(.ref("item"))),
-        change: .value(before: .exact(.ref("old")), after: .exact(.literal("new")))
-    )))
+    let change = AccessibilityPredicate<RootContext>.changed(.elements([
+        .updated(
+            .label(.exact(.ref("item"))),
+            .value(before: .exact(.ref("old")), after: .exact(.literal("new")))
+        ),
+    ]))
     let expectedChangeJSON = """
-        {"scopes":[{"assertions":[{"after":{"mode":"exact","value":"new"},\
+        {"assertions":[{"after":{"mode":"exact","value":"new"},\
         "before":{"mode":"exact","value":{"ref":"old"}},\
-        "element":{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"item"}}}]},\
-        "property":"value","type":"updated"}],"type":"elements"}],"type":"change"}
+        "property":"value","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"item"}}}]},\
+        "type":"updated"}],"scope":"elements","type":"changed"}
         """
     #expect(try sortedJSON(change) == expectedChangeJSON)
 
-    let broadChange = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
-        change: .value(before: .prefix(.literal("cart:")), after: .contains(.ref("count")))
-    )))
-    let expectedBroadChangeJSON =
-        #"{"scopes":[{"assertions":[{"after":{"mode":"contains","value":{"ref":"count"}},"# +
+    let targetChange = AccessibilityPredicate<RootContext>.changed(.elements([
+        .updated(
+            .identifier("cart-count"),
+            .value(before: .prefix(.literal("cart:")), after: .contains(.ref("count")))
+        ),
+    ]))
+    let expectedTargetChangeJSON =
+        #"{"assertions":[{"after":{"mode":"contains","value":{"ref":"count"}},"# +
         #""before":{"mode":"prefix","value":"cart:"},"# +
-        #""property":"value","type":"updated"}],"type":"elements"}],"type":"change"}"#
+        #""property":"value","target":{"checks":["# +
+        #"{"kind":"identifier","match":{"mode":"exact","value":"cart-count"}}]},"# +
+        #""type":"updated"}],"scope":"elements","type":"changed"}"#
     #expect(
-        try sortedJSON(broadChange) == expectedBroadChangeJSON
+        try sortedJSON(targetChange) == expectedTargetChangeJSON
     )
 }
 
 @Test
-func `target backed predicates equal predicate templates`() throws {
-    let targetBacked = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Save"), ordinal: 1))
-    let templateBacked = ElementTargetExpr.predicate(
+func `target construction sugar equals predicate templates`() throws {
+    let targetBacked = AccessibilityTarget.target(.label("Save"), ordinal: 1)
+    let templateBacked = AccessibilityTarget.predicate(
         ElementPredicateTemplate(label: .exact(.literal("Save"))),
         ordinal: 1
     )
@@ -180,27 +216,29 @@ func `target backed predicates equal predicate templates`() throws {
     #expect(Set([targetBacked, templateBacked]).count == 1)
     #expect(targetBacked != .predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))), ordinal: 2))
 
-    let predicateBacked = AccessibilityPredicateExpr.predicate(.state(.exists(ElementPredicate(label: "Save"))))
-    let stateTemplate = AccessibilityPredicateExpr.state(.exists(ElementPredicateTemplate(label: .exact("Save"))))
+    let predicateBacked = AccessibilityPredicate<RootContext>.exists(.label("Save"))
+    let stateTemplate = AccessibilityPredicate<RootContext>.exists(.predicate(
+        ElementPredicateTemplate(label: .exact("Save"))
+    ))
 
     #expect(predicateBacked == stateTemplate)
 }
 
 @Test
 func `target expression refinement appends checks and preserves ordinal`() throws {
-    let target = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Search"), ordinal: 1))
+    let target = AccessibilityTarget.target(.label("Search"), ordinal: 1)
     let refined = target
         .and(.traits([.isEditing]))
         .excluding(.traits([.textEntry]))
 
-    let expected = ElementTargetExpr.predicate(ElementPredicateTemplate([
+    let expected = AccessibilityTarget.predicate(ElementPredicateTemplate([
         .label(.exact(.literal("Search"))),
         .traits([.isEditing]),
         .exclude(.traits([.textEntry])),
     ]), ordinal: 1)
     #expect(refined == expected)
-    #expect(try refined.resolve(in: .empty) == .predicate(ElementPredicate([
-        .label(.exact("Search")),
+    #expect(try refined.resolve(in: .empty) == .predicate(ElementPredicateTemplate([
+        .label(.exact(.literal("Search"))),
         .traits([.isEditing]),
         .exclude(.traits([.textEntry])),
     ]), ordinal: 1))
@@ -208,7 +246,7 @@ func `target expression refinement appends checks and preserves ordinal`() throw
 
 @Test
 func `target expression refinement leaves refs unresolved`() throws {
-    let target = ElementTargetExpr.ref("row")
+    let target = AccessibilityTarget.ref("row")
 
     #expect(target.and(.traits([.isEditing])) == target)
     #expect(target.excluding(.traits([.textEntry])) == target)

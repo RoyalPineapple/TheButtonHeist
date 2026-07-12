@@ -6,15 +6,15 @@ import ButtonHeistTesting
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
         CustomAction("Add to Cart", on: .label(item))
-            .expect(.change(.elements()), timeout: .seconds(2))
+            .expect(.changed(.elements()), timeout: .seconds(2))
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
         Activate(.label("Checkout"))
-            .expect(.change(.screenChanged(.exists(.label("Checkout")))), timeout: .seconds(8))
+            .expect(.changed(.screen([.exists(.label("Checkout"))])), timeout: .seconds(8))
 
         Activate(.label(DemoOrder.confirmPaymentLabel))
-            .expect(.change(.screenChanged(.exists(.label("Processing payment")))), timeout: .seconds(8))
+            .expect(.changed(.screen([.exists(.label("Processing payment"))])), timeout: .seconds(8))
 
         WaitFor(.exists(.label("Payment Successful")), timeout: .seconds(12))
     }

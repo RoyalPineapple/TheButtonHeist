@@ -75,12 +75,24 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         for occurrence in command.targetOccurrences {
             let targetPath = occurrence.path.render(commandPath: path)
-            switch occurrence.target {
-            case .expression(let target):
-                validateTarget(target, path: targetPath, scope: scope)
-            case .element(let target):
-                validateElementTarget(target, path: targetPath)
-            }
+            validateTarget(occurrence.target, path: targetPath, scope: scope)
+            validateActionElementTarget(occurrence.target, path: targetPath)
+        }
+    }
+
+    mutating func validateActionElementTarget(_ target: AccessibilityTarget, path: String) {
+        switch target {
+        case .container:
+            fail(
+                path: path,
+                contract: "action target must select an accessibility element",
+                observed: "container-only target",
+                correction: "Use a predicate target for element actions; use a container-aware scroll command for containers."
+            )
+        case .within(_, let target):
+            validateActionElementTarget(target, path: "\(path).target")
+        case .predicate, .ref:
+            break
         }
     }
 

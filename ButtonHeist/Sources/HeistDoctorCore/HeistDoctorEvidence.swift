@@ -12,8 +12,7 @@ extension HeistDoctor {
             actionIdentity: evidence.actionIdentity,
             target: evidence.target,
             beforeSnapshot: evidence.beforeSnapshot,
-            afterDelta: evidence.afterDelta,
-            afterSnapshot: evidence.afterSnapshot,
+            changeFacts: evidence.changeFacts,
             result: RepairPassEvidence(
                 method: evidence.actionResult.method,
                 expectation: evidence.expectation
@@ -31,8 +30,7 @@ extension HeistDoctor {
             actionIdentity: evidence.actionIdentity,
             target: evidence.target,
             beforeSnapshot: evidence.beforeSnapshot,
-            afterDelta: evidence.afterDelta,
-            afterSnapshot: evidence.afterSnapshot,
+            changeFacts: evidence.changeFacts,
             result: RepairFailureEvidence(
                 method: evidence.actionResult.method,
                 errorKind: repairErrorKind(evidence.actionEvidence),
@@ -66,8 +64,7 @@ extension HeistDoctor {
             actionIdentity: HeistRepairActionIdentity(command: command),
             target: target,
             beforeSnapshot: before,
-            afterDelta: trace.meaningfulEndpointDelta,
-            afterSnapshot: trace.captures.last?.interface,
+            changeFacts: trace.changeFacts,
             actionResult: dispatchResult,
             actionEvidence: actionEvidence,
             expectation: actionEvidence.expectation
@@ -91,10 +88,9 @@ extension HeistDoctor {
 private struct RepairEvidenceFields {
     let stepPath: String
     let actionIdentity: HeistRepairActionIdentity
-    let target: ElementTarget
+    let target: AccessibilityTarget
     let beforeSnapshot: Interface
-    let afterDelta: AccessibilityTrace.Delta?
-    let afterSnapshot: Interface?
+    let changeFacts: [AccessibilityTrace.ChangeFact]
     let actionResult: ActionResult
     let actionEvidence: HeistActionEvidence
     let expectation: ExpectationResult?

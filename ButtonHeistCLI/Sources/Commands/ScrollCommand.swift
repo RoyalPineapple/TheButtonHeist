@@ -5,7 +5,7 @@ import ThePlans
 typealias ScrollSelection = ScrollContainerSelection
 
 struct ScrollSelectionInput: ParsableArguments {
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Option(name: .long, help: "Current-capture containerName from get_interface")
     var containerName: String?
@@ -32,7 +32,7 @@ struct ScrollSelectionInput: ParsableArguments {
 }
 
 extension ScrollSelection {
-    var cliTarget: ElementTarget? {
+    var cliTarget: AccessibilityTarget? {
         guard case .element(let target) = self else { return nil }
         return target
     }

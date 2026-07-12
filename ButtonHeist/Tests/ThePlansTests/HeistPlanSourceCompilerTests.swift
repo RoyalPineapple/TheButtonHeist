@@ -17,14 +17,19 @@ import Testing
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.identifier(.suffix("field")))
     WaitFor(
-        .exists(.element(.label(.prefix("No results")), .identifier(.contains("empty_state")), .value(.suffix("items")), .hint(.isEmpty))),
+        .exists(.element(
+            .label(.prefix("No results")),
+            .identifier(.contains("empty_state")),
+            .value(.suffix("items")),
+            .hint(.isEmpty)
+        )),
         timeout: .seconds(2)
     )
     TypeText("milk", into: .value(.prefix("Search")))
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.identifier(.suffix("field")))))),
-        .wait(WaitStep(predicate: .exists(ElementPredicateTemplate.element(
+        .wait(WaitStep(predicate: .exists(.element(
             .label(.prefix(.literal("No results"))),
             .identifier(.contains(.literal("empty_state"))),
             .value(.suffix(.literal("items"))),
@@ -50,7 +55,7 @@ import Testing
             command: .activate(.predicate(.label("Delete"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .announcement("Item deleted"), timeout: 1))
         )),
-        .wait(WaitStep(predicate: .announcement(containing: "processed"), timeout: 5)),
+        .wait(WaitStep(predicate: .announcement(.contains("processed")), timeout: 5)),
         .wait(WaitStep(predicate: .announcement)),
     ])
 
@@ -60,13 +65,15 @@ import Testing
 
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.exists(container: .label("Checkout")), timeout: .seconds(2))
-    WaitFor(.exists(container: .actions([.custom("Archive")])), timeout: .seconds(1))
+    WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))
+    WaitFor(.exists(.container(.actions([.custom("Archive")]))), timeout: .seconds(1))
+    WaitFor(.missing(.container(.identifier("Checkout"), ordinal: 1)))
     Activate(.within(container: .label("Checkout"), .label("Pay")))
     """))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .exists(container: .label("Checkout")), timeout: 2)),
-        .wait(WaitStep(predicate: .exists(container: .actions([.custom("Archive")])), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(.container(.label("Checkout"))), timeout: 2)),
+        .wait(WaitStep(predicate: .exists(.container(.actions([.custom("Archive")]))), timeout: 1)),
+        .wait(WaitStep(predicate: .missing(.container(.identifier("Checkout"), ordinal: 1)))),
         .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ])
 
@@ -92,12 +99,36 @@ import Testing
 
 @Test func `runtime parser rejects alternate property match spellings`() {
     let cases = [
-        ("WaitFor(.change(.elements(.updated(.traits(after: .include([.selected]))))))", "trait set match must use .init(...)"),
-        ("WaitFor(.change(.elements(.updated(.actions(after: .exclude([.activate]))))))", "action set match must use .init(...)"),
-        ("WaitFor(.change(.elements(.updated(.frame(after: .exact(x: 0, y: 0, width: 10, height: 10))))))", "frame match must use .init(...)"),
-        ("WaitFor(.change(.elements(.updated(.activationPoint(after: .match(x: 1))))))", "activation point match must use .init(...)"),
-        (#"WaitFor(.change(.elements(.updated(.customContent(after: .match(label: "Status"))))))"#, "custom content match must use .init(...)"),
-        (#"WaitFor(.change(.elements(.updated(.rotors(after: .include(["Headings"]))))))"#, "rotor set match must use .init(...)"),
+        (
+            "WaitFor(.changed(.elements([.updated(.identifier(\"item\"), " +
+                ".traits(after: .include([.selected])))])))",
+            "trait set match must use .init(...)"
+        ),
+        (
+            "WaitFor(.changed(.elements([.updated(.identifier(\"item\"), " +
+                ".actions(after: .exclude([.activate])))])))",
+            "action set match must use .init(...)"
+        ),
+        (
+            "WaitFor(.changed(.elements([.updated(.identifier(\"item\"), " +
+                ".frame(after: .exact(x: 0, y: 0, width: 10, height: 10)))])))",
+            "frame match must use .init(...)"
+        ),
+        (
+            "WaitFor(.changed(.elements([.updated(.identifier(\"item\"), " +
+                ".activationPoint(after: .match(x: 1)))])))",
+            "activation point match must use .init(...)"
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), "# +
+                #".customContent(after: .match(label: "Status")))])))"#,
+            "custom content match must use .init(...)"
+        ),
+        (
+            #"WaitFor(.changed(.elements([.updated(.identifier("item"), "# +
+                #".rotors(after: .include(["Headings"])))])))"#,
+            "rotor set match must use .init(...)"
+        ),
     ]
 
     for (source, expected) in cases {
@@ -109,9 +140,9 @@ import Testing
     let cases = [
         (#"WaitFor(.announcement(containing: "processed"))"#, "expected a string literal or scoped string reference"),
         ("WaitFor(.announcement())", "empty announcement predicate must use .announcement"),
-        ("WaitFor(.screenChanged())", "empty screen change must use .screenChanged"),
-        ("WaitFor(.change(.screen()))", "unsupported change predicate '.screen'"),
-        (#"WaitFor(.change(.appeared(.label("Toast"))))"#, "single element change must use .appeared, .disappeared, or .updated"),
+        ("WaitFor(.screenChanged())", "unsupported accessibility predicate '.screenChanged'"),
+        ("WaitFor(.change(.screen()))", "unsupported accessibility predicate '.change'"),
+        (#"WaitFor(.change(.appeared(.label("Toast"))))"#, "unsupported accessibility predicate '.change'"),
     ]
 
     for (source, expected) in cases {
@@ -128,6 +159,7 @@ import Testing
         (#"Activate(.actions([.custom("")]))"#, "custom action name must not be empty"),
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
         ("Activate(.customContent(.init()))", "customContent match must include label, value, or isImportant"),
+        (#"WaitFor(.exists(.container(.identifier("Screen"), ordinal: -1)))"#, "ordinal must be non-negative"),
     ]
 
     for (source, expected) in cases {
@@ -146,7 +178,10 @@ import Testing
     let cases = [
         ("Activate(.traits([button]))", "accessibility trait must use canonical dotted enum-case syntax"),
         ("Edit(paste)", "edit action must use canonical dotted enum-case syntax"),
-        (#"Rotor("Headings", on: .label("Article"), direction: previous)"#, "rotor direction must use canonical dotted enum-case syntax"),
+        (
+            #"Rotor("Headings", on: .label("Article"), direction: previous)"#,
+            "rotor direction must use canonical dotted enum-case syntax"
+        ),
         (#"Mechanical.Swipe(.label("List"), down)"#, "swipe direction must use canonical dotted enum-case syntax"),
     ]
 
@@ -158,14 +193,14 @@ import Testing
 @Test func `screen action namespace compiles regular actions`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ScreenActions.Dismiss()
-        .expect(.screenChanged)
+        .expect(.changed(.screen()))
     ScreenActions.MagicTap()
         .withoutExpectation("Magic tap toggles process-local playback state")
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .dismiss,
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         .action(try ActionStep(
             command: .magicTap,
             expectationPolicy: .waived(try ActionExpectationWaiver("Magic tap toggles process-local playback state")))),
@@ -230,12 +265,12 @@ import Testing
 
 @Test func `inline plan source chained expectation compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    Activate(.label("Pay")).expect(.screenChanged)
+    Activate(.label("Pay")).expect(.changed(.screen()))
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
     ])
 
     #expect(plan == expected)
@@ -253,16 +288,16 @@ import Testing
         }
 
         RunHeist("Cart.addItem", "Milk")
-            .expect(.appeared(.label("subtotal")))
+            .expect(.changed(.elements([.appeared(.label("subtotal"))])))
 
         RunHeist("Cart.addItem", "Eggs")
-            .expect(.updated(.label("subtotal"), .value(.contains("2 items"))))
+            .expect(.changed(.elements([.updated(.label("subtotal"), .value(.contains("2 items")))])))
 
         RunHeist("Checkout.pay")
             .expect(.exists(.label("Payment Complete")))
 
         RunHeist("Checkout.pay")
-            .expect(.screenChanged(.exists(.label("Receipt"))))
+            .expect(.changed(.screen([.exists(.label("Receipt"))])))
     }
     """)
     let expected = try HeistPlan(
@@ -288,7 +323,7 @@ import Testing
                 path: ["Cart", "addItem"],
                 argument: .string(.literal("Milk")),
                 expectation: WaitStep(
-                    predicate: .change(.elements(.appearedElement(.label("subtotal")))),
+                    predicate: .changed(.elements([.appeared(.label("subtotal"))])),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -296,10 +331,9 @@ import Testing
                 path: ["Cart", "addItem"],
                 argument: .string(.literal("Eggs")),
                 expectation: WaitStep(
-                    predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                        element: .label("subtotal"),
-                        change: .value(after: .contains(.literal("2 items")))
-                    )))),
+                    predicate: .changed(.elements([
+                        .updated(.label("subtotal"), .value(after: .contains(.literal("2 items")))),
+                    ])),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -313,7 +347,7 @@ import Testing
             .invoke(HeistInvocationStep(
                 path: ["Checkout", "pay"],
                 expectation: WaitStep(
-                    predicate: .change(.screenChanged(.exists(.label("Receipt")))),
+                    predicate: .changed(.screen([.exists(.label("Receipt"))])),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
@@ -352,22 +386,25 @@ import Testing
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.updated(.identifier("Search"), .value("Bruschetta")))
+        .expect(.changed(.elements([.updated(.identifier("Search"), .value("Bruschetta"))])))
     """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.updated(.value("3")))
+        .expect(.changed(.elements([.updated(.identifier("Quantity"), .value("3"))])))
     """#))
     let beforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.updated(
+        .expect(.changed(.elements([.updated(
             .identifier("Quantity"),
             .value(before: "2", after: "3")
-        ))
+        )])))
     """#))
     let broadBeforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.updated(.value(before: .prefix("cart:"), after: .contains("items"))))
+        .expect(.changed(.elements([.updated(
+            .identifier("Quantity"),
+            .value(before: .prefix("cart:"), after: .contains("items"))
+        )])))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -376,32 +413,33 @@ import Testing
                 text: .literal("Bruschetta"),
                 target: .predicate(.identifier("Search"))
             ),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
-                change: .value(after: "Bruschetta")
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Search"), .value(after: "Bruschetta")),
+            ])), timeout: 1)))),
     ])
     let expectedUnscoped = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .value(after: "3")
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Quantity"), .value(after: "3")),
+            ])), timeout: 1)))),
     ])
     let expectedBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Quantity"),
-                change: .value(before: "2", after: "3")
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Quantity"), .value(before: "2", after: "3")),
+            ])), timeout: 1)))),
     ])
     let expectedBroadBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .value(before: .prefix("cart:"), after: .contains("items"))
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(
+                    .identifier("Quantity"),
+                    .value(before: .prefix("cart:"), after: .contains("items"))
+                ),
+            ])), timeout: 1)))),
     ])
 
     #expect(scoped == expectedScoped)
@@ -414,78 +452,91 @@ import Testing
 
 @Test func `inline plan source custom content update queries label and value`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
-    WaitFor(.updated(.customContent(after: .init(
+    WaitFor(.changed(.elements([.updated(.identifier("status"), .customContent(after: .init(
         label: "Status",
         value: .contains("Ready"),
         isImportant: true
-    ))))
+    )))])))
     """#))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-            change: .customContent(after: CustomContentMatch<StringExpr>(
+        .wait(WaitStep(predicate: .changed(.elements([
+            .updated(.identifier("status"), .customContent(after: CustomContentMatch<StringExpr>(
                 label: .exact(.literal("Status")),
                 value: .contains(.literal("Ready")),
                 isImportant: true
-            ))
-        )))))),
+            ))),
+        ])))),
     ])
 
     #expect(plan == expected)
-    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(after: .init(label: "Status", value: .contains("Ready"), isImportant: true))"#))
+    let expectedCustomContent = #".customContent(after: .init(label: "Status", "# +
+        #"value: .contains("Ready"), isImportant: true))"#
+    #expect(try plan.canonicalSwiftDSL().contains(expectedCustomContent))
     try assertCanonicalRoundTrip(plan)
 }
 
 @Test func `inline plan source accepts canonical direct delta predicates`() throws {
     let appeared = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.label("Add")).expect(.appeared(.label("Back")))
+    Activate(.label("Add"))
+        .expect(.changed(.elements([.appeared(.label("Back"))])))
     """#))
     let disappeared = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.label("Clear")).expect(.disappeared(.identifier("row-1")))
+    Activate(.label("Clear"))
+        .expect(.changed(.elements([.disappeared(.identifier("row-1"))])))
     """#))
     let updatedPropertyOnly = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.updated(.value()))
+        .expect(.changed(.elements([.updated(.identifier("Search"), .value())])))
     """#))
     let updatedBeforeAfterOnly = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.updated(.value(before: "", after: "milk")))
+        .expect(.changed(.elements([.updated(
+            .identifier("Search"),
+            .value(before: "", after: "milk")
+        )])))
     """#))
     let updatedAllFields = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
-        .expect(.updated(.identifier("Search"), .value(before: "", after: "milk")))
+        .expect(.changed(.elements([.updated(
+            .identifier("Search"),
+            .value(before: "", after: "milk")
+        )])))
     """#))
 
     let expectedAppeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Add"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.appearedElement(.label("Back")))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .appeared(.label("Back")),
+            ])), timeout: 1)))),
     ])
     let expectedDisappeared = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Clear"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .disappeared(.identifier("row-1")),
+            ])), timeout: 1)))),
     ])
     let expectedUpdatedPropertyOnly = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .value()
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Search"), .value()),
+            ])), timeout: 1)))),
     ])
     let expectedUpdatedBeforeAfterOnly = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .value(before: "", after: "milk")
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Search"), .value(before: "", after: "milk")),
+            ])), timeout: 1)))),
     ])
     let expectedUpdatedAllFields = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
-                change: .value(before: "", after: "milk")
-            )))), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
+                .updated(.identifier("Search"), .value(before: "", after: "milk")),
+            ])), timeout: 1)))),
     ])
     #expect(appeared == expectedAppeared)
     #expect(disappeared == expectedDisappeared)
@@ -497,62 +548,25 @@ import Testing
     try assertCanonicalRoundTrip(updatedAllFields)
 }
 
-@Test func `inline plan source accepts inferred element change predicates`() throws {
-    let appeared = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.label("Add Bruschetta"))
-        .expect(.appeared(.label(.contains("Bruschetta, $9.00"))))
-    """#))
-    let disappeared = try HeistPlanSourceCompiler().compile(root(#"""
-    Activate(.label("Remove Bruschetta"))
-        .expect(.disappeared(.identifier("cart-row-bruschetta")))
-    """#))
-    let updated = try HeistPlanSourceCompiler().compile(root(#"""
-    TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.updated(.value("Bruschetta")))
-    """#))
+@Test func `inline plan source rejects inferred element change predicates`() {
+    let cases = [
+        #"Activate(.label("Add Bruschetta")).expect(.appeared(.label("Toast")))"#,
+        #"Activate(.label("Remove Bruschetta")).expect(.disappeared(.identifier("row")))"#,
+        #"TypeText("Bruschetta", into: .identifier("Search")).expect(.updated(.value("Bruschetta")))"#,
+    ]
 
-    let expectedAppeared = try HeistPlan(body: [
-        .action(try ActionStep(
-            command: .activate(.predicate(.label("Add Bruschetta"))),
-            expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.elements(.appearedElement(.label(.contains("Bruschetta, $9.00"))))),
-                timeout: 1
-            )))),
-    ])
-    let expectedDisappeared = try HeistPlan(body: [
-        .action(try ActionStep(
-            command: .activate(.predicate(.label("Remove Bruschetta"))),
-            expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.elements(.disappearedElement(.identifier("cart-row-bruschetta")))),
-                timeout: 1
-            )))),
-    ])
-    let expectedUpdated = try HeistPlan(body: [
-        .action(try ActionStep(
-            command: .typeText(
-                text: .literal("Bruschetta"),
-                target: .predicate(.identifier("Search"))
-            ),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                change: .value(after: "Bruschetta")
-            )))), timeout: 1)))),
-    ])
-
-    #expect(appeared == expectedAppeared)
-    #expect(disappeared == expectedDisappeared)
-    #expect(updated == expectedUpdated)
-    try assertCanonicalRoundTrip(appeared)
-    try assertCanonicalRoundTrip(disappeared)
-    try assertCanonicalRoundTrip(updated)
+    for source in cases {
+        expect(compileError(root(source)), contains: "unsupported accessibility predicate")
+    }
 }
 
 @Test func `inline plan source accepts controlled predicate and loop sugar`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
     Activate(.label("Search"))
-        .expect(.label("Results"))
+        .expect(.exists(.label("Results")))
     Activate(.label("Open Details"))
-        .expect(.screenChanged(.exists(.label("Details"))))
-    If(.value(.contains("Promo"))) {
+        .expect(.changed(.screen([.exists(.label("Details"))])))
+    If(.exists(.value(.contains("Promo")))) {
         Warn("promo visible")
     }
     ForEach("Milk", "Eggs") { item in
@@ -570,7 +584,7 @@ import Testing
         .action(try ActionStep(
             command: .activate(.predicate(.label("Open Details"))),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .change(.screenChanged(.exists(.label("Details")))),
+                predicate: .changed(.screen([.exists(.label("Details"))])),
                 timeout: 1
             )))),
         .conditional(try ConditionalStep(cases: [
@@ -585,7 +599,7 @@ import Testing
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("item"),
-                    target: .target(.label("Search"))
+                    target: .label("Search")
                 ))),
             ]
         )),
@@ -623,9 +637,9 @@ import Testing
             Activate(.label(item))
         }
 
-        Activate(.label("Pay")).expect()
+        Activate(.label("Pay")).expect(.changed(.screen()))
 
-        WaitFor(.label("Receipt"), timeout: .seconds(5)).else {
+        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
             Fail("Receipt did not appear")
         }
 
@@ -645,7 +659,7 @@ import Testing
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(), timeout: 1)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         .wait(WaitStep(
             predicate: .exists(.label("Receipt")),
             timeout: 5,
@@ -675,15 +689,15 @@ import Testing
                 .expect(.exists(.label("Added")))
         }
 
-        HeistDef<ElementTarget>("Messages.archive", parameter: "message") { message in
+        HeistDef<AccessibilityTarget>("Messages.archive", parameter: "message") { message in
             CustomAction("Archive", on: message)
         }
 
         Activate(rootTarget)
         Activate(.label("Pay"))
-            .expect()
+            .expect(.changed(.screen()))
 
-        WaitFor(.label("Receipt"), timeout: .seconds(5)).else {
+        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
             Fail("Receipt did not appear")
         }
 
@@ -717,7 +731,7 @@ import Testing
     let plan = try HeistPlanSourceCompiler().compile(source)
 
     #expect(plan.name == "RuntimeSurface")
-    #expect(plan.parameter == .elementTarget(name: "rootTarget"))
+    #expect(plan.parameter == .accessibilityTarget(name: "rootTarget"))
     #expect(plan.body.map(\.testKind) == [
         .action,
         .action,
@@ -736,7 +750,7 @@ import Testing
 
     let messages = try #require(plan.definitions.first { $0.name == "Messages" })
     let archive = try #require(messages.definitions.first { $0.name == "archive" })
-    #expect(archive.parameter == .elementTarget(name: "message"))
+    #expect(archive.parameter == .accessibilityTarget(name: "message"))
     #expect(archive.body.map(\.testKind) == [.action])
 
     try assertCanonicalRoundTrip(plan)
@@ -868,7 +882,10 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.exists(.label(.ref("item")))), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .exists(.label(.ref("item"))),
+                        timeout: 1
+                    )))),
             ]
         )),
     ])
@@ -910,9 +927,7 @@ import Testing
             predicate: .exists(.element(.label("Volume"), .value("100"))),
             timeout: defaultWaitTimeout,
             body: [
-                .action(try ActionStep(
-                    command: .increment(.predicate(.label("Volume"))),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .change(), timeout: 1)))),
+                .action(try ActionStep(command: .increment(.predicate(.label("Volume"))))),
             ]
         )),
     ])
@@ -931,7 +946,7 @@ import Testing
     }
     """))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .state(.exists(.label("Home"))), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .exists(.label("Pay")), body: [.warn(WarnStep(message: "ready"))]),
         ])),
@@ -954,7 +969,7 @@ import Testing
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .state(.missingTarget(.ref("target"))), timeout: 1)))),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
             ]
         )),
     ])
@@ -975,7 +990,11 @@ import Testing
         Activate(target)
     }
     """))
-    expect(matchingDiagnostic, contains: #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
+    expect(
+        matchingDiagnostic,
+        contains: #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, "# +
+            #"not `.matching(...)`"#
+    )
 }
 
 @Test func `inline plan source RunHeist syntax validates through normal runtime pipeline`() throws {
@@ -1005,7 +1024,11 @@ import Testing
     #expect(diagnostic.kind == .error)
     #expect(diagnostic.phase == .planValidation)
     #expect(diagnostic.path == "$.body[0].action.command")
-    #expect(diagnostic.message == "durable heist action; observed scroll is a viewport debug command, not a durable heist action")
+    #expect(
+        diagnostic.message ==
+            "durable heist action; observed scroll is a viewport debug command, " +
+            "not a durable heist action"
+    )
     #expect(diagnostic.hint == nonDurableHeistActionRepairHint)
 }
 
@@ -1107,7 +1130,7 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 0)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
         .action(try ActionStep(
             command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
@@ -1156,7 +1179,11 @@ import Testing
             end: UnitPoint(x: 0.2, y: 0.5)
         ))))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
-            selection: .elementToPoint(.label("Slider"), start: UnitPoint(x: 0.8, y: 0.5), end: ScreenPoint(x: 200, y: 40))
+            selection: .elementToPoint(
+                .label("Slider"),
+                start: UnitPoint(x: 0.8, y: 0.5),
+                end: ScreenPoint(x: 200, y: 40)
+            )
         )))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
@@ -1218,7 +1245,7 @@ import Testing
             elseBody: [.fail(FailStep(message: "Pay button missing"))]
         )),
         .wait(WaitStep(
-            predicate: .change(.screenChanged),
+            predicate: .changed(.screen()),
             timeout: 3,
             elseBody: [.fail(FailStep(message: "screen did not change"))]
         )),
@@ -1409,38 +1436,69 @@ import Testing
 }
 
 @Test func `reported agent update grammar mistakes fail with corrections`() throws {
-    let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated())"#))
-    expect(emptyUpdated, contains: ".updated(...) requires an update matcher")
+    let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.changed(.elements([.updated()])))"#))
+    expect(emptyUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let elementOnlyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(.label("Total")))"#))
-    expect(elementOnlyUpdated, contains: ".updated(...) with an element matcher also requires an update matcher")
+    let elementOnlyUpdated = compileError(root(
+        #"Activate(.label("Pay")).expect(.changed(.elements([.updated(.label("Total"))])))"#
+    ))
+    expect(elementOnlyUpdated, contains: "expected ','")
 
-    let explicitlyElementOnlyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(.element(.label("Quantity"))))"#))
-    expect(explicitlyElementOnlyUpdated, contains: ".updated(...) with an element matcher also requires an update matcher")
+    let explicitlyElementOnlyUpdated = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(.element(.label("Quantity")))])))"#
+    ))
+    expect(explicitlyElementOnlyUpdated, contains: "expected ','")
 
-    let labeledElementUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(element: .label("Total"), .value("$3")))"#))
-    expect(labeledElementUpdated, contains: "updated(element:) is not supported")
+    let labeledElementUpdated = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(element: .label("Total"), .value("$3"))])))"#
+    ))
+    expect(labeledElementUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let labeledExplicitElementUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated(element: .element(.label("Total")), .value("$3")))"#))
-    expect(labeledExplicitElementUpdated, contains: "updated(element:) is not supported")
+    let labeledExplicitElementUpdated = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(element: .element(.label("Total")), "# +
+            #".value("$3"))])))"#
+    ))
+    expect(labeledExplicitElementUpdated, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let beforeOnlyUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(before: "$2")))"#))
+    let beforeOnlyUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(.label("Total"), .value(before: "$2"))])))"#
+    ))
     expect(beforeOnlyUpdate, contains: "value update predicate requires after when before is set")
 
-    let fromToUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.value(from: "$2", to: "$3")))"#))
+    let fromToUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(.label("Total"), .value(from: "$2", to: "$3"))])))"#
+    ))
     expect(fromToUpdate, contains: "value update predicate accepts before and after")
 
-    let labelUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.label(before: "Old", after: "New")))"#))
-    expect(labelUpdate, contains: "expected a string literal or scoped string reference")
+    let labelUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(.label("Total"), "# +
+            #".label(before: "Old", after: "New"))])))"#
+    ))
+    expect(labelUpdate, contains: "unsupported element update property '.label'")
 
-    let identifierUpdate = compileError(root(#"Activate(.label("Pay")).expect(.updated(.identifier(before: "old", after: "new")))"#))
-    expect(identifierUpdate, contains: "expected a string literal or scoped string reference")
+    let identifierUpdate = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.elements([.updated(.label("Total"), "# +
+            #".identifier(before: "old", after: "new"))])))"#
+    ))
+    expect(identifierUpdate, contains: "unsupported element update property '.identifier'")
 
-    let screenChangedAppeared = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged(.appeared(.label("Receipt"))))"#))
-    expect(screenChangedAppeared, contains: "unsupported state predicate '.appeared'")
+    let screenChangedAppeared = compileError(root(
+        #"Activate(.label("Pay")).expect(.changed(.screen([.appeared(.label("Receipt"))])))"#
+    ))
+    expect(screenChangedAppeared, contains: "screen assertions accept only .exists and .missing")
 
-    let screenChangedUpdated = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged(.updated(.value("$3"))))"#))
-    expect(screenChangedUpdated, contains: "unsupported state predicate '.updated'")
+    let screenChangedUpdated = compileError(root(
+        #"Activate(.label("Pay")).expect("# +
+            #".changed(.screen([.updated(.label("Total"), .value("$3"))])))"#
+    ))
+    expect(screenChangedUpdated, contains: "screen assertions accept only .exists and .missing")
 
     let bareActionString = compileError(root(#"Activate("Pay")"#))
     expect(bareActionString, contains: "target expression requires an explicit accessibility property")
@@ -1451,19 +1509,19 @@ import Testing
 
 @Test func `runtime parser rejects empty predicates and bare wait strings`() throws {
     let emptyExists = compileError(root(#"WaitFor(.exists())"#))
-    expect(emptyExists, contains: ".exists requires an element matcher or target")
+    expect(emptyExists, contains: "expected a ButtonHeist expression beginning with '.'")
 
     let emptyMissing = compileError(root(#"WaitFor(.missing())"#))
-    expect(emptyMissing, contains: ".missing requires an element matcher or target")
+    expect(emptyMissing, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let emptyAppeared = compileError(root(#"WaitFor(.appeared())"#))
-    expect(emptyAppeared, contains: ".appeared requires an element matcher")
+    let emptyAppeared = compileError(root(#"WaitFor(.changed(.elements([.appeared()])))"#))
+    expect(emptyAppeared, contains: "expected a ButtonHeist expression beginning with '.'")
 
-    let emptyDisappeared = compileError(root(#"WaitFor(.disappeared())"#))
-    expect(emptyDisappeared, contains: ".disappeared requires an element matcher")
+    let emptyDisappeared = compileError(root(#"WaitFor(.changed(.elements([.disappeared()])))"#))
+    expect(emptyDisappeared, contains: "expected a ButtonHeist expression beginning with '.'")
 
     let bareWaitString = compileError(root(#"WaitFor("Receipt")"#))
-    expect(bareWaitString, contains: "accessibility predicate requires an explicit accessibility property")
+    expect(bareWaitString, contains: "expected a ButtonHeist expression beginning with '.'")
 }
 
 @Test func `runtime parser rejects transition predicates in conditionals`() throws {
@@ -1472,7 +1530,7 @@ import Testing
         Warn("ready")
     }
     """#))
-    expect(ifAppeared, contains: "unsupported state predicate '.appeared'")
+    expect(ifAppeared, contains: "screen assertion accepts only .exists and .missing")
 
     let caseUpdated = compileError(root(#"""
     If {
@@ -1481,7 +1539,7 @@ import Testing
         }
     }
     """#))
-    expect(caseUpdated, contains: "unsupported state predicate '.updated'")
+    expect(caseUpdated, contains: "screen assertion accepts only .exists and .missing")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {
@@ -1579,43 +1637,6 @@ import Testing
     }
 }
 
-@Test func `runtime parser rejects removed compatibility spellings`() {
-    let cases: [(String, String)] = [
-        (
-            root(#"Activate(ElementTarget.label("Pay"))"#),
-            "expected a ButtonHeist expression beginning with '.'"
-        ),
-        (
-            root(#"WaitFor(AccessibilityPredicate.exists(.label("Pay")))"#),
-            "expected a ButtonHeist expression beginning with '.'"
-        ),
-        (
-            root(#"Activate(.element(.label(StringMatch.contains("Pay"))))"#),
-            "expected a string literal or scoped string reference"
-        ),
-        (
-            root(#"WaitFor(.exists(.label("Pay")), timeout: 1)"#),
-            "expected a timeout duration such as .seconds(1)"
-        ),
-        (
-            root(#"WaitFor(.exists(.label("Pay")), timeout: Double.seconds(1))"#),
-            "expected a timeout duration such as .seconds(1)"
-        ),
-        (
-            root(#"Activate(.within(container: .label("Checkout"), target: .label("Pay")))"#),
-            ".within(...) target argument is unlabeled"
-        ),
-        (
-            root(#"WaitFor(.change(.updated(.title())))"#),
-            "unsupported element predicate '.title'"
-        ),
-    ]
-
-    for (source, expectedDiagnostic) in cases {
-        expect(compileError(source), contains: expectedDiagnostic)
-    }
-}
-
 @Test func `element actions share the same target grammar`() throws {
     let source = """
     HeistPlan("TargetGrammar", targetParameter: "targetRef") { targetRef in
@@ -1674,7 +1695,7 @@ import Testing
             TypeText(itemAlias, into: .label(itemAlias))
         }
 
-        HeistDef<ElementTarget>("Messages.archive", parameter: "message") { messageAlias in
+        HeistDef<AccessibilityTarget>("Messages.archive", parameter: "message") { messageAlias in
             CustomAction("Archive", on: messageAlias)
         }
 
@@ -1706,7 +1727,7 @@ import Testing
             target: .predicate(.label(.ref("item")))
         ))),
     ])
-    #expect(archive.parameter == .elementTarget(name: "message"))
+    #expect(archive.parameter == .accessibilityTarget(name: "message"))
     #expect(archive.body == [
         .action(try ActionStep(command: .customAction(name: "Archive", target: .ref("message")))),
     ])

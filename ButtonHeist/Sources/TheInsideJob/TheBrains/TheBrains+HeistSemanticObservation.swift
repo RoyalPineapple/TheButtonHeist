@@ -13,56 +13,34 @@ extension ConditionalStep {
 
 extension AccessibilityPredicate {
     var observationScope: SemanticObservationScope {
+        node.observationScope
+    }
+}
+
+private extension AccessibilityPredicateNode {
+    var observationScope: SemanticObservationScope {
         switch self {
-        case .state(let state):
-            return state.observationScope
-        case .changePredicate(let change):
-            return change.observationScope
-        case .noChangePredicate, .announcement:
+        case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
+            return target.observationScope
+        case .updated(let target, _):
+            return target.observationScope
+        case .changed(let child):
+            return child.observationScope
+        case .screen(let assertions), .elements(let assertions):
+            return assertions.map(\.observationScope).max() ?? .visible
+        case .noChange, .announcement:
             return .visible
         }
     }
 }
 
-private extension AccessibilityPredicate.State {
+private extension AccessibilityTarget {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .exists, .missing, .existsTarget, .missingTarget:
+        case .predicate, .ref:
             return .visible
-        case .existsContainer, .missingContainer:
+        case .container, .within:
             return .discovery
-        case .all(let states):
-            return states
-                .map(\.observationScope)
-                .max() ?? .visible
-        }
-    }
-}
-
-private extension AccessibilityPredicate.Change {
-    var observationScope: SemanticObservationScope {
-        switch self {
-        case .any:
-            return .visible
-        case .screenScope(let states):
-            return states.map(\.observationScope).max() ?? .visible
-        case .elementsScope:
-            return .visible
-        case .allScopes(let changes):
-            return changes.map(\.observationScope).max() ?? .visible
-        }
-    }
-}
-
-private extension AccessibilityPredicate.ChangeScope {
-    var observationScope: SemanticObservationScope {
-        switch self {
-        case .screen(let states):
-            return states.map(\.observationScope).max() ?? .visible
-        case .elements:
-            return .visible
-        case .all(let changes):
-            return changes.map(\.observationScope).max() ?? .visible
         }
     }
 }

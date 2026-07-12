@@ -12,52 +12,31 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
         self.actual = actual
     }
 
-    public func expectation(for predicate: AccessibilityPredicate?) -> ExpectationResult {
+    public func expectation(for predicate: AccessibilityPredicate<RootContext>?) -> ExpectationResult {
         ExpectationResult(met: met, predicate: predicate, actual: actual)
     }
 }
 
-/// Predicate evidence derived from an observed trace before any lossy endpoint
-/// projection is chosen for reporting.
+/// Predicate evidence derived from one canonical observed trace.
 public struct PredicateEvaluationEvidence: Sendable, Equatable {
-    public let currentInterface: Interface?
-    public let currentElements: [HeistElement]
-    public let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
-    public let geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    public let trace: AccessibilityTrace
+    public let isComplete: Bool
 
-    public init(
-        currentInterface: Interface? = nil,
-        currentElements: [HeistElement],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
-        geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil
-    ) {
-        self.currentInterface = currentInterface
-        self.currentElements = currentElements
-        self.accumulatedDelta = accumulatedDelta
-        self.geometryAccumulatedDelta = geometryAccumulatedDelta
+    public init?(trace: AccessibilityTrace, isComplete: Bool) {
+        guard trace.captures.last != nil else { return nil }
+        self.trace = trace
+        self.isComplete = isComplete
     }
 
-    public init(
-        currentElements: [HeistElement],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
-        geometryAccumulatedDelta: AccessibilityTrace.AccumulatedDelta? = nil
-    ) {
-        self.init(
-            currentInterface: nil,
-            currentElements: currentElements,
-            accumulatedDelta: accumulatedDelta,
-            geometryAccumulatedDelta: geometryAccumulatedDelta
-        )
+    package var currentInterface: Interface {
+        guard let current = trace.captures.last?.interface else {
+            preconditionFailure("PredicateEvaluationEvidence requires a current capture")
+        }
+        return current
     }
 
-    public init(trace: AccessibilityTrace) {
-        let interface = trace.captures.last?.interface
-        self.init(
-            currentInterface: interface,
-            currentElements: interface?.projectedElements ?? [],
-            accumulatedDelta: trace.accumulatedDelta,
-            geometryAccumulatedDelta: trace.accumulatedDelta(projection: .geometryAware)
-        )
+    package var changeFacts: [AccessibilityTrace.ChangeFact] {
+        trace.changeFacts
     }
 }
 
@@ -67,17 +46,17 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
     /// Whether the predicate was met.
     public let met: Bool
     /// The predicate that was checked. Nil for implicit delivery check.
-    public let predicate: AccessibilityPredicate?
+    public let predicate: AccessibilityPredicate<RootContext>?
     /// What was actually observed (for diagnostics when `met` is false).
     public let actual: String?
 
-    public init(met: Bool, predicate: AccessibilityPredicate?, actual: String? = nil) {
+    public init(met: Bool, predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
         self.met = met
         self.predicate = predicate
         self.actual = actual
     }
 
-    public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate?) {
+    public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate<RootContext>?) {
         self.init(met: result.met, predicate: predicate, actual: result.actual)
     }
 }
@@ -94,7 +73,7 @@ public struct MetExpectationResult: Sendable, Equatable {
         self.result = result
     }
 
-    public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
+    public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
         result = ExpectationResult(met: true, predicate: predicate, actual: actual)
     }
 }
@@ -111,7 +90,7 @@ public struct UnmetExpectationResult: Sendable, Equatable {
         self.result = result
     }
 
-    public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
+    public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
         result = ExpectationResult(met: false, predicate: predicate, actual: actual)
     }
 }

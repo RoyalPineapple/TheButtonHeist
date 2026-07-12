@@ -28,13 +28,8 @@ public struct ActionExpectationWaiver: Codable, Sendable, Equatable, CustomStrin
 public struct ActionExpectation: Codable, Sendable, Equatable {
     public let step: WaitStep
 
-    public init(predicate: AccessibilityPredicateExpr, timeout: Double = defaultWaitTimeout) {
+    public init(predicate: AccessibilityPredicate<RootContext>, timeout: Double = defaultWaitTimeout) {
         self.step = WaitStep(predicate: predicate, timeout: timeout)
-    }
-
-    @_disfavoredOverload
-    public init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
-        self.init(predicate: .predicate(predicate), timeout: timeout)
     }
 
     public init(_ step: WaitStep) throws {

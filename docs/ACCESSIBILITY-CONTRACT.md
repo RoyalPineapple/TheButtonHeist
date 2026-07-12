@@ -21,16 +21,17 @@ read settled accessibility interface
 -> resolve semantic target
 -> perform declared action
 -> wait for settled accessibility interface
--> compute delta
+-> append capture and scoped notification evidence
+-> derive ordered change facts
 -> assert evidence
--> return receipt
+-> fold public receipt summary
 ```
 
 For example:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.appeared(.label("Payment Complete")))
+    .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 ```
 
 This step resolves the control declared as `Pay`, performs the activation
@@ -47,18 +48,20 @@ settled semantic evidence, not a mechanical playback log.
 ```mermaid
 flowchart LR
     Contract["Accessibility contract<br/>what exists, what can act"]
-    Before["Settled accessibility interface<br/>before"]
+    Before["Settled accessibility capture<br/>before"]
     Action["Declared action<br/>activate, type, rotor, wait"]
-    After["Settled accessibility interface<br/>after"]
-    Evidence["Evidence<br/>appeared, disappeared, updated"]
-    Receipt["Receipt<br/>what changed, what was proven"]
+    After["Settled accessibility capture<br/>after"]
+    Facts["Ordered ChangeFact stream<br/>elementsChanged, screenChanged"]
+    Evidence["Predicate evidence<br/>current tree plus facts"]
+    Receipt["Receipt<br/>trace plus folded public delta"]
     Next["Next step"]
 
     Contract --> Before
     Before --> Action
     Action --> After
-    Before --> Evidence
-    After --> Evidence
+    Before --> Facts
+    After --> Facts
+    Facts --> Evidence
     Evidence --> Receipt
     Receipt --> Next
     Next --> Before
@@ -73,8 +76,8 @@ activation decision tree, including the warn-but-proceed path and the
 ## Receipts
 
 A receipt is plain evidence about what happened. It names the step, the status,
-the before and after interface, the delta, and the facts that satisfied or broke
-the contract.
+the observed trace, and the facts that satisfied or broke the contract. Public
+formatters may squash those ordered facts into a compact delta.
 
 Receipts are not live handles, replay objects, or private runtime state. They
 are reportable facts that callers can assert against, print, store, or use to
@@ -84,8 +87,9 @@ compose the next heist.
 
 | Boundary | Owns | Refuses to own |
 |----------|------|----------------|
-| `AccessibilityPredicate` | Condition algebra for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `AccessibilityTrace` | Observed accessibility captures and capture-chain identity | Independent delta truth, repair policy, report formatting |
+| `AccessibilityTarget` | One node-target language for actions, predicates, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
+| `AccessibilityPredicate<Context>` | Context-valid conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
+| `AccessibilityTrace` | Settled captures, capture-chain identity, and the derived ordered `ChangeFact` stream | Alternate temporal projections, repair policy, report formatting |
 | `InteractionObservation` | Before/body/after evidence coordination for actions and waits | Command payload design and report adapters |
 | `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
 | `HeistPlan` | Durable semantic program AST | Arbitrary Swift source, native loop preservation, runtime state |
@@ -106,8 +110,12 @@ All public executable routes enter the same machine:
 3. Element inflation resolves the target, reveals it if needed, acquires fresh
    live inflation evidence, and executes the accessibility operation.
 4. The runtime waits for settled semantic evidence.
-5. Reports, JSON, compact output, and later repair artifacts project
-   from the resulting trace and execution result.
+5. The trace derives one ordered `ChangeFact` stream. Screen boundaries become
+   old-tree departures, a screen marker, then new-tree arrivals.
+6. Predicates evaluate from the current delivered tree and that fact stream.
+7. Reports, JSON, compact output, and later repair artifacts project from the
+   resulting trace and execution result. Public delta is a one-way lossy fold,
+   never evaluator input.
 
 Raw generated JSON plan IR is internal/runtime tooling data. It is not a public
 user-authored execution route.
@@ -131,7 +139,16 @@ The product contract is healthy when these cases hold:
   intent.
 - `wait` and action expectations use the same `AccessibilityPredicate`
   evaluator.
+- Actions, predicates, and `get_interface` subtree queries use the same
+  `AccessibilityTarget` resolver over the delivered tree, including identifier-
+  bearing containers of every parser type.
+- `exists` and `missing` are current-tree checks in every valid predicate
+  context; lifecycle and update checks require ordered facts.
+- A complete fact-free observation window is the only proof of `noChange`.
+- Screen, layout, value, and announcement notifications prevent `noChange`; a
+  screen notification begins a new observation generation.
 - Unknown JSON keys fail at the contract boundary.
 - Timeout diagnostics say which contract was not satisfied and what command or
   target shape is valid next.
-- `AccessibilityTrace` captures are the source of truth; deltas are projections.
+- `AccessibilityTrace` captures are the source of truth; ordered change facts
+  are the canonical temporal projection. Public deltas are lossy output folds.

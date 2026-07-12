@@ -136,14 +136,14 @@ extension Navigation {
         command: ContainerScrollCommand
     ) -> ContainerScrollResolution {
         switch selection {
-        case .element(let elementTarget):
-            let visibleResolution = stash.resolveVisibleTarget(elementTarget)
+        case .element(let target):
+            let visibleResolution = stash.resolveVisibleTarget(target)
             let resolved: TheStash.ScreenElement
             switch visibleResolution {
             case .resolved(let screenElement):
                 resolved = screenElement
             case .notFound, .ambiguous:
-                return .failed(liveScrollElementFailure(elementTarget, command: command))
+                return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)
             guard let scrollView = stash.liveScrollView(for: resolved) else {
@@ -334,7 +334,7 @@ extension Navigation {
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailure(
-        _ target: ElementTarget,
+        _ target: AccessibilityTarget,
         command: ContainerScrollCommand
     ) -> ContainerScrollFailure {
         switch stash.resolveTarget(target) {

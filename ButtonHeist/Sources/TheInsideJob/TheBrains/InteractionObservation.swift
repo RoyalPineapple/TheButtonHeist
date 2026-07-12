@@ -44,11 +44,10 @@ final class InteractionObservation {
             semanticObservation: { event in
                 postActionObservation.semanticObservation(from: event)
             },
-            buildObservationWindow: { baseline, event, projection in
+            buildObservationWindow: { baseline, event in
                 stash.semanticObservationStream.observationWindow(
                     from: baseline,
-                    through: event,
-                    projection: projection
+                    through: event
                 )
             },
             presenceTimeoutMessage: { predicate, elapsed in
@@ -163,7 +162,6 @@ final class InteractionObservation {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
@@ -171,7 +169,6 @@ final class InteractionObservation {
             initialTrace: initialTrace,
             after: sequence,
             observationPlan: observationPlan,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
             announcementCursorStrategy: announcementCursorStrategy
         )
     }
@@ -181,7 +178,6 @@ final class InteractionObservation {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        allowsTransitionFinalStateWarning: Bool = true,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
@@ -189,7 +185,6 @@ final class InteractionObservation {
             initialTrace: initialTrace,
             after: sequence,
             observationPlan: observationPlan,
-            allowsTransitionFinalStateWarning: allowsTransitionFinalStateWarning,
             announcementCursorStrategy: announcementCursorStrategy
         )
     }

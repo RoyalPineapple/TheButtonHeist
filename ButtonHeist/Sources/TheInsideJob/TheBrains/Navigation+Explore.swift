@@ -17,7 +17,7 @@ extension Navigation {
     }
 
     func exploreScreen(
-        target: ElementTarget? = nil,
+        target: AccessibilityTarget? = nil,
         baseline: Screen? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
@@ -44,7 +44,7 @@ extension Navigation {
         return exploration.finish(startTime: startTime)
     }
 
-    func hasTerminalExplorationResolution(_ target: ElementTarget, in screen: Screen) -> Bool {
+    func hasTerminalExplorationResolution(_ target: AccessibilityTarget, in screen: Screen) -> Bool {
         switch stash.resolveTarget(target, in: screen) {
         case .resolved, .ambiguous:
             return true
@@ -53,11 +53,11 @@ extension Navigation {
         }
     }
 
-    func hasVisibleTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
+    func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget) -> Bool {
         hasTerminalExplorationResolution(target, in: stash.liveVisibleScreen.visibleOnly)
     }
 
-    func hasVisibleTerminalExplorationResolution(_ target: ElementTarget, in screen: Screen) -> Bool {
+    func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget, in screen: Screen) -> Bool {
         hasTerminalExplorationResolution(target, in: screen.visibleOnly)
     }
 }

@@ -186,53 +186,32 @@ internal func containerPredicateParam(_ key: FenceParameterKey) -> FenceParamete
     )
 }
 
-internal func elementTargetFieldSpec(
-    _ field: ElementTarget.SchemaField,
-    nestedTargetDepth: Int = 1
-) -> FenceParameterSpec {
-    guard let key = FenceParameterKey(rawValue: field.name) else {
-        preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
-    }
-    switch field.kind {
-    case .predicateChecks:
-        return predicateChecksParam(key)
-    case .string:
-        return param(key, .string)
-    case .stringMatch:
-        return stringMatchParam(key, allowsArray: true)
-    case .stringArray:
-        return stringArrayParam(key)
-    case .stringMatchArray:
-        return arrayParam(key, items: stringMatchParam(.values).schema)
-    case .actionArray:
-        return arrayParam(key, items: .unconstrained)
-    case .customContentMatch:
-        return objectParam(
-            key,
-            properties: [
-                stringMatchParam(.label),
-                stringMatchParam(.value),
-                param(.isImportant, .boolean),
-            ]
-        )
-    case .nonNegativeInteger:
-        return param(key, .integer, minimum: 0)
-    case .containerPredicate:
-        return containerPredicateParam(key)
-    case .nestedElementTarget:
-        let properties = nestedTargetDepth > 0
-            ? ElementTarget.inlineSchemaFields.map { elementTargetFieldSpec($0, nestedTargetDepth: nestedTargetDepth - 1) }
-            : []
-        return objectParam(
-            key,
-            properties: properties,
-            additionalProperties: nestedTargetDepth == 0,
+/// The schema model has no reference node, so expand to the public JSON input
+/// depth. `PublicJSONInputLimits` remains the single adjustable boundary.
+internal let accessibilityTargetSchemaMaximumNestingDepth = PublicJSONInputLimits.maxNestingDepth
+
+internal func accessibilityTargetProperties(
+    remainingNestingDepth: Int = accessibilityTargetSchemaMaximumNestingDepth
+) -> [FenceParameterSpec] {
+    precondition(remainingNestingDepth > 0)
+    let terminalProperties = [
+        predicateChecksParam(.checks),
+        param(.ref, .string),
+        param(.ordinal, .integer, minimum: 0),
+        containerPredicateParam(.container),
+    ]
+    guard remainingNestingDepth > 1 else { return terminalProperties }
+    return terminalProperties + [
+        objectParam(
+            .target,
+            properties: accessibilityTargetProperties(remainingNestingDepth: remainingNestingDepth - 1),
+            additionalProperties: false,
             validation: .customPayload
-        )
-    }
+        ),
+    ]
 }
 
-private func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+internal func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpec {
     arrayParam(
         key,
         items: .object(

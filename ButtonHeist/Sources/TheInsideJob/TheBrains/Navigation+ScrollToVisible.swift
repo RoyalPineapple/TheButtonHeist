@@ -11,13 +11,13 @@ extension Navigation {
     /// product element inflation path. It does not own separate reveal or geometry
     /// behavior.
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        await executeScrollToVisible(elementTarget: target.elementTarget)
+        await executeScrollToVisible(target: target.target)
     }
 
     func executeScrollToVisible(
-        elementTarget: ElementTarget?
+        target: AccessibilityTarget?
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        guard let elementTarget else {
+        guard let target else {
             return .failure(
                 .scrollToVisible,
                 message: "Element target required for scroll_to_visible",
@@ -26,7 +26,7 @@ extension Navigation {
         }
 
         switch await elementInflation.inflate(
-            for: elementTarget,
+            for: target,
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         ) {

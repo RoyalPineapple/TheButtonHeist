@@ -90,7 +90,7 @@ import TheScore
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {
-        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
         return HeistExecutionResult.passed(
             steps: [
                 actionStep(predicate: predicate),
@@ -102,8 +102,8 @@ import TheScore
         )
     }
 
-    private func actionStep(predicate: AccessibilityPredicate) -> HeistExecutionStepResult {
-        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Pay"))))
+    private func actionStep(predicate: AccessibilityPredicate<RootContext>) -> HeistExecutionStepResult {
+        let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
         return HeistExecutionStepResult.passed(
             path: "$.body[0]",
             receiptKind: .action,
@@ -118,7 +118,7 @@ import TheScore
         )
     }
 
-    private func waitStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
+    private func waitStep(predicate: AccessibilityPredicate<RootContext>) throws -> HeistExecutionStepResult {
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(method: .wait, timing: waitTiming),
             expectation: MetExpectationResult(predicate: predicate)
@@ -127,17 +127,17 @@ import TheScore
             path: "$.body[1]",
             receiptKind: .wait,
             durationMs: 100,
-            intent: .wait(predicate: .predicate(predicate), timeout: 0.1),
+            intent: .wait(predicate: predicate, timeout: 0.1),
             evidence: HeistWaitEvidence.matched(check)
         )
     }
 
-    private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
+    private func repeatStep(predicate: AccessibilityPredicate<RootContext>) throws -> HeistExecutionStepResult {
         HeistExecutionStepResult.passed(
             path: "$.body[2]",
             receiptKind: .repeatUntil,
             durationMs: 60,
-            intent: .repeatUntil(predicate: .predicate(predicate), timeout: 0.05),
+            intent: .repeatUntil(predicate: predicate, timeout: 0.05),
             evidence: HeistRepeatUntilEvidence.predicateMet(
                 predicate: predicate,
                 timeout: 0.05,

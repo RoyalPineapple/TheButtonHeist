@@ -31,7 +31,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
             Command.scrollToVisible,
-            .viewportScrollToVisible(.target(try input.requiredElementTarget(command: .scrollToVisible))),
+            .viewportScrollToVisible(try input.requiredAccessibilityTarget(command: .scrollToVisible)),
             expectationPayload: expectationPayload
         )
     }

@@ -20,7 +20,7 @@ internal final class ElementInflation {
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
-    internal var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
+    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> Screen?)?
     internal var revealKnownTarget: (@MainActor (HeistId) async -> Screen?)?
 
     /// Bounded window inflation waits for a target whose reveal failed, or
@@ -58,11 +58,17 @@ internal final class ElementInflation {
     }
 
     internal func inflate(
-        for target: ElementTarget,
+        for target: AccessibilityTarget,
         method: ActionMethod,
         deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
+        let resolvedTarget: AccessibilityTarget
+        do {
+            resolvedTarget = try target.validatedForElementAction()
+        } catch {
+            return .failed(.targetResolution(error))
+        }
         stash.refreshCurrentVisibleTree()
         var state: State = .resolving(.initial)
         let maxAttempts = 2
@@ -70,12 +76,12 @@ internal final class ElementInflation {
         while true {
             switch state {
             case .resolving(let pass):
-                switch await findTargetInTree(target, allowKnownFallback: pass.allowsKnownFallback) {
+                switch await findTargetInTree(resolvedTarget, allowKnownFallback: pass.allowsKnownFallback) {
                 case .success(.visible(let treeElement)):
                     transition(
                         &state,
                         to: .refreshing(
-                            target: target,
+                            target: resolvedTarget,
                             screenElement: treeElement,
                             attempt: pass.attempt,
                             didReveal: false
@@ -88,7 +94,7 @@ internal final class ElementInflation {
                 }
 
             case .revealing(let treeElement, let attempt):
-                transition(&state, to: await stateAfterReveal(treeElement, target: target, attempt: attempt))
+                transition(&state, to: await stateAfterReveal(treeElement, target: resolvedTarget, attempt: attempt))
 
             case .refreshing(let target, let screenElement, let attempt, let didReveal):
                 transition(
@@ -138,7 +144,7 @@ internal final class ElementInflation {
     }
 
     internal func inflateAfterActivationRefresh(
-        for target: ElementTarget
+        for target: AccessibilityTarget
     ) async -> ElementInflationResult {
         refreshLiveCaptureForActivation()
         return await inflate(

@@ -97,20 +97,18 @@ public struct HeistPassedStepRepairEvidence: Codable, Sendable, Equatable {
     public let heistFingerprint: String?
     public let stepPath: String
     public let actionIdentity: HeistRepairActionIdentity
-    public let target: ElementTarget
+    public let target: AccessibilityTarget
     public let beforeSnapshot: Interface
-    public let afterDelta: AccessibilityTrace.Delta?
-    public let afterSnapshot: Interface?
+    public let changeFacts: [AccessibilityTrace.ChangeFact]
     public let result: RepairPassEvidence
 
     public init(
         heistFingerprint: String? = nil,
         stepPath: String,
         actionIdentity: HeistRepairActionIdentity,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         beforeSnapshot: Interface,
-        afterDelta: AccessibilityTrace.Delta? = nil,
-        afterSnapshot: Interface? = nil,
+        changeFacts: [AccessibilityTrace.ChangeFact] = [],
         result: RepairPassEvidence
     ) {
         self.heistFingerprint = heistFingerprint
@@ -118,8 +116,7 @@ public struct HeistPassedStepRepairEvidence: Codable, Sendable, Equatable {
         self.actionIdentity = actionIdentity
         self.target = target
         self.beforeSnapshot = beforeSnapshot
-        self.afterDelta = afterDelta
-        self.afterSnapshot = afterSnapshot
+        self.changeFacts = changeFacts
         self.result = result
     }
 }
@@ -128,20 +125,18 @@ public struct HeistFailedStepRepairEvidence: Codable, Sendable, Equatable {
     public let heistFingerprint: String?
     public let stepPath: String
     public let actionIdentity: HeistRepairActionIdentity
-    public let target: ElementTarget
+    public let target: AccessibilityTarget
     public let beforeSnapshot: Interface
-    public let afterDelta: AccessibilityTrace.Delta?
-    public let afterSnapshot: Interface?
+    public let changeFacts: [AccessibilityTrace.ChangeFact]
     public let result: RepairFailureEvidence
 
     public init(
         heistFingerprint: String? = nil,
         stepPath: String,
         actionIdentity: HeistRepairActionIdentity,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         beforeSnapshot: Interface,
-        afterDelta: AccessibilityTrace.Delta? = nil,
-        afterSnapshot: Interface? = nil,
+        changeFacts: [AccessibilityTrace.ChangeFact] = [],
         result: RepairFailureEvidence
     ) {
         self.heistFingerprint = heistFingerprint
@@ -149,8 +144,7 @@ public struct HeistFailedStepRepairEvidence: Codable, Sendable, Equatable {
         self.actionIdentity = actionIdentity
         self.target = target
         self.beforeSnapshot = beforeSnapshot
-        self.afterDelta = afterDelta
-        self.afterSnapshot = afterSnapshot
+        self.changeFacts = changeFacts
         self.result = result
     }
 }
@@ -192,6 +186,10 @@ public enum HeistRepairRefusalReason: String, Codable, Sendable, Equatable {
     case differentStepPaths
     case incompatibleHeistFingerprints
     case oldTargetDidNotResolveExactlyOnce
+    case containerTargetUnsupported
+    case targetReferenceUnsupported
+    case scopedTargetUnsupported
+    case unresolvedTargetExpression
     case oldTargetStillResolvesAndSupportsRequestedAction
     case noCandidateMetScoreThreshold
     case noCandidateValidated
@@ -262,7 +260,7 @@ public struct ElementSummary: Codable, Sendable, Equatable {
 
 public enum RepairCandidateValidation: Codable, Sendable, Equatable {
     case notEvaluated
-    case suggested(target: ElementTarget, confidence: RepairConfidence)
+    case suggested(target: AccessibilityTarget, confidence: RepairConfidence)
     case rejected(reason: RepairCandidateRejectionReason)
 }
 
@@ -285,8 +283,8 @@ public struct HeistRepairCandidateDiagnosis: Codable, Sendable, Equatable {
         self.source = source
         self.resolvedElement = resolvedElement
         self.score = score
-        self.reasons = unique(reasons)
-        self.caveats = unique(caveats)
+        self.reasons = reasons.uniqued(on: \.self)
+        self.caveats = caveats.uniqued(on: \.self)
         self.validation = validation
     }
 }
@@ -299,7 +297,7 @@ public enum HeistRepairDiagnosis: Codable, Sendable, Equatable {
 public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {
     public let stepPath: String
     public let failureKind: HeistRepairFailureKind
-    public let oldTarget: ElementTarget
+    public let oldTarget: AccessibilityTarget
     public let oldResolvedElement: ElementSummary
     public let currentMatchCount: Int
     public let candidates: [HeistRepairCandidateDiagnosis]
@@ -308,7 +306,7 @@ public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {
     public init(
         stepPath: String,
         failureKind: HeistRepairFailureKind,
-        oldTarget: ElementTarget,
+        oldTarget: AccessibilityTarget,
         oldResolvedElement: ElementSummary,
         currentMatchCount: Int,
         candidates: [HeistRepairCandidateDiagnosis],
@@ -350,13 +348,13 @@ public struct HeistRepairEligibleRefusalContext: Codable, Sendable, Equatable {
 
 public struct HeistRepairRefusedDiagnosis: Codable, Sendable, Equatable {
     public let stepPath: String
-    public let oldTarget: ElementTarget
+    public let oldTarget: AccessibilityTarget
     public let context: HeistRepairRefusalContext
     public let refusal: HeistRepairRefusal
 
     public init(
         stepPath: String,
-        oldTarget: ElementTarget,
+        oldTarget: AccessibilityTarget,
         context: HeistRepairRefusalContext,
         refusal: HeistRepairRefusal
     ) {
@@ -370,9 +368,9 @@ public struct HeistRepairRefusedDiagnosis: Codable, Sendable, Equatable {
 public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
     public let stepPath: String
     public let failureKind: HeistRepairFailureKind
-    public let oldTarget: ElementTarget
+    public let oldTarget: AccessibilityTarget
     public let oldResolvedElement: ElementSummary
-    public let newTarget: ElementTarget
+    public let newTarget: AccessibilityTarget
     public let newResolvedElement: ElementSummary
     public let confidence: RepairConfidence
     public let reasons: [RepairSuggestionReason]
@@ -381,9 +379,9 @@ public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
     public init(
         stepPath: String,
         failureKind: HeistRepairFailureKind,
-        oldTarget: ElementTarget,
+        oldTarget: AccessibilityTarget,
         oldResolvedElement: ElementSummary,
-        newTarget: ElementTarget,
+        newTarget: AccessibilityTarget,
         newResolvedElement: ElementSummary,
         confidence: RepairConfidence,
         reasons: [RepairSuggestionReason],
@@ -396,8 +394,8 @@ public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
         self.newTarget = newTarget
         self.newResolvedElement = newResolvedElement
         self.confidence = confidence
-        self.reasons = unique(reasons)
-        self.caveats = unique(caveats)
+        self.reasons = reasons.uniqued(on: \.self)
+        self.caveats = caveats.uniqued(on: \.self)
     }
 
 }

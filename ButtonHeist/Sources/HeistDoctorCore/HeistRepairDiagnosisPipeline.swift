@@ -145,6 +145,8 @@ private extension RepairTargetResolution {
              .notFound(let matchCount),
              .ambiguous(_, let matchCount):
             return matchCount
+        case .unsupportedTarget:
+            return 0
         }
     }
 }

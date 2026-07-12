@@ -148,17 +148,17 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - Heist Plan Tests
 
     func testHeistPlanClientMessageRoundTrip() throws {
-        let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
+        let saveTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(.target(saveTarget)),
-                    expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 10)))),
+                    command: .activate(saveTarget),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))),
                 .wait(WaitStep(
-                    predicate: .exists(ElementPredicate(label: "Save", traits: [.button])),
+                    predicate: .exists(.element(.label("Save"), traits: [.button])),
                     timeout: 2.5
                 )),
                 .wait(WaitStep(
-                    predicate: .exists(ElementPredicate(label: "Done")),
+                    predicate: .exists(.label("Done")),
                     timeout: 1.0
                 )),
             ]
@@ -176,10 +176,10 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
-              decodedAction.expectationPolicy.expectedStep?.predicate == AccessibilityPredicateExpr.predicate(.change(.screenChanged)) else {
+              decodedAction.expectationPolicy.expectedStep?.predicate == .changed(.screen()) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
-        XCTAssertEqual(decodedTarget, ElementTargetExpr.target(saveTarget))
+        XCTAssertEqual(decodedTarget, saveTarget)
     }
 
     func testHeistPlanClientMessageRoundTripPreservesRootArgument() throws {
@@ -189,7 +189,7 @@ final class ClientMessageTests: XCTestCase {
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]
         )
@@ -234,18 +234,18 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(text, StringExpr.literal("hello"))
-        XCTAssertEqual(target, ElementTargetExpr.predicate(ElementPredicateTemplate(identifier: .exact(.literal("nameField")))))
+        XCTAssertEqual(target, AccessibilityTarget.identifier("nameField"))
         XCTAssertFalse(replacingExisting)
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 10)))
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(change(screen(*)) timeout=10))"#
+            #"action(command=activate expect=wait(changed(screen(*)) timeout=10))"#
         )
     }
 
@@ -355,7 +355,7 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
         XCTAssertEqual(decoded.text, "Hello")
-        XCTAssertNil(decoded.elementTarget)
+        XCTAssertNil(decoded.target)
         XCTAssertFalse(decoded.replacingExisting)
     }
 
@@ -368,7 +368,7 @@ final class ClientMessageTests: XCTestCase {
     func testTypeTextReplacingExistingAllowsEmptyText() throws {
         let target = TypeTextTarget(
             text: "",
-            elementTarget: .predicate(ElementPredicate(identifier: "nameField")),
+            target: .predicate(ElementPredicateTemplate(identifier: "nameField")),
             replacingExisting: true
         )
         let data = try JSONEncoder().encode(target)
@@ -376,10 +376,10 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.text, "")
         XCTAssertTrue(decoded.replacingExisting)
-        if case .predicate(let matcher, _) = decoded.elementTarget {
+        if case .predicate(let matcher, _) = decoded.target {
             XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
         } else {
-            XCTFail("Expected .matcher elementTarget")
+            XCTFail("Expected .matcher target")
         }
     }
 
@@ -389,19 +389,19 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(TypeTextTarget.self, from: Data(json.utf8)))
     }
 
-    func testTypeTextWithElementTarget() throws {
+    func testTypeTextWithAccessibilityTarget() throws {
         let target = TypeTextTarget(
             text: "Hello",
-            elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
+            target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
         XCTAssertEqual(decoded.text, "Hello")
-        if case .predicate(let matcher, _) = decoded.elementTarget {
+        if case .predicate(let matcher, _) = decoded.target {
             XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
         } else {
-            XCTFail("Expected .matcher elementTarget")
+            XCTFail("Expected .matcher target")
         }
     }
 
@@ -497,63 +497,52 @@ final class ClientMessageTests: XCTestCase {
 
     func testWaitAbsentRoundTrip() throws {
         let target = WaitTarget(
-            predicate: .state(.missing(ElementPredicate(label: "Loading", traits: [.staticText]))),
+            predicate: .missing(.element(.label("Loading"), traits: [.staticText])),
             timeout: 5.0
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        if case .state(.missing(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.checks, [
-                .label(.exact("Loading")),
-                .traits([.staticText]),
-            ])
-            XCTAssertEqual(decoded.timeout, 5.0)
-        } else {
-            XCTFail("Expected wait(.missing), got \(decoded)")
-        }
+        XCTAssertEqual(decoded.predicate, .missing(.element(.label("Loading"), traits: [.staticText])))
+        XCTAssertEqual(decoded.timeout, 5.0)
     }
 
     func testWaitPresentRoundTrip() throws {
-        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(identifier: "spinner"))))
+        let target = WaitTarget(predicate: .exists(.identifier("spinner")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        if case .state(.exists(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.checks, [.identifier(.exact("spinner"))])
-            XCTAssertNil(decoded.timeout)
-            XCTAssertEqual(decoded.resolvedTimeout, defaultWaitTimeout)
-        } else {
-            XCTFail("Expected wait(.exists), got \(decoded)")
-        }
+        XCTAssertEqual(decoded.predicate, .exists(.identifier("spinner")))
+        XCTAssertNil(decoded.timeout)
+        XCTAssertEqual(decoded.resolvedTimeout, defaultWaitTimeout)
     }
 
     func testWaitTimeoutClamping() {
-        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(label: "x"))), timeout: 999)
+        let target = WaitTarget(predicate: .exists(.label("x")), timeout: 999)
         XCTAssertEqual(target.resolvedTimeout, 30.0)
     }
 
     func testWaitChangedScreenRoundTrip() throws {
-        let target = WaitTarget(predicate: .change(.screenChanged), timeout: 15.0)
+        let target = WaitTarget(predicate: .changed(.screen()), timeout: 15.0)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        XCTAssertEqual(decoded.predicate, .change(.screenChanged))
+        XCTAssertEqual(decoded.predicate, .changed(.screen()))
         XCTAssertEqual(decoded.timeout, 15.0)
     }
 
     func testWaitAbsentConvenienceRoundTrip() throws {
-        let target = WaitTarget(predicate: .missing(ElementPredicate(label: "Loading")), timeout: 5.0)
+        let target = WaitTarget(predicate: .missing(.label("Loading")), timeout: 5.0)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        XCTAssertEqual(decoded.predicate, .missing(ElementPredicate(label: "Loading")))
+        XCTAssertEqual(decoded.predicate, .missing(.label("Loading")))
         XCTAssertEqual(decoded.timeout, 5.0)
     }
 
     func testWaitEnvelopeUsesHeistPlan() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .change(.elements()), timeout: 8.0)),
+            .wait(WaitStep(predicate: .changed(.elements()), timeout: 8.0)),
         ])
         let envelope = RequestEnvelope(
             requestId: "wait-1",
@@ -567,7 +556,7 @@ final class ClientMessageTests: XCTestCase {
               case .wait(let target)? = run.plan.body.first else {
             return XCTFail("Expected heistPlan wait, got \(decoded.message)")
         }
-        XCTAssertEqual(target.predicate, .change(.elements()))
+        XCTAssertEqual(target.predicate, .changed(.elements()))
         XCTAssertEqual(target.timeout, 8.0)
     }
 
@@ -578,12 +567,12 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertNil(decoded.payload)
     }
 
-    // MARK: - ElementTarget Ordinal Tests
+    // MARK: - AccessibilityTarget Ordinal Tests
 
-    func testElementTargetMatcherWithoutOrdinalRoundTrip() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Save"))
+    func testAccessibilityTargetMatcherWithoutOrdinalRoundTrip() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
         let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+        let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: data)
 
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
@@ -592,10 +581,10 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertNil(ordinal)
     }
 
-    func testElementTargetMatcherWithOrdinalRoundTrip() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
+    func testAccessibilityTargetMatcherWithOrdinalRoundTrip() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 2)
         let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+        let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: data)
 
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
@@ -607,9 +596,9 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(ordinal, 2)
     }
 
-    func testElementTargetOrdinalWireFormat() throws {
+    func testAccessibilityTargetOrdinalWireFormat() throws {
         let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"ordinal":2}"#
-        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
+        let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))
 
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
@@ -618,9 +607,9 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(ordinal, 2)
     }
 
-    func testElementTargetOrdinalOmittedInWireFormat() throws {
+    func testAccessibilityTargetOrdinalOmittedInWireFormat() throws {
         let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
-        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
+        let decoded = try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))
 
         guard case .predicate(_, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
@@ -628,9 +617,9 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertNil(ordinal)
     }
 
-    func testElementTargetNegativeOrdinalThrows() {
+    func testAccessibilityTargetNegativeOrdinalThrows() {
         let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"ordinal":-1}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -638,10 +627,10 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsHeistIdWithMatcherFieldsAtCodableBoundary() {
+    func testAccessibilityTargetRejectsHeistIdWithMatcherFieldsAtCodableBoundary() {
         // heistId is no longer a targeting field — it is rejected as unknown.
         let json = #"{"heistId":"button_save","checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -649,9 +638,9 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsHeistIdWithOrdinalAtCodableBoundary() {
+    func testAccessibilityTargetRejectsHeistIdWithOrdinalAtCodableBoundary() {
         let json = #"{"heistId":"button_save","ordinal":1}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -659,9 +648,9 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsUnknownFieldAtCodableBoundary() {
+    func testAccessibilityTargetRejectsUnknownFieldAtCodableBoundary() {
         let json = #"{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}],"unexpectedTargetField":"button_save"}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -669,14 +658,14 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testElementTargetOrdinalEquality() {
-        let withOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1)
-        let withoutOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"))
-        let differentOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 2)
+    func testAccessibilityTargetOrdinalEquality() {
+        let withOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 1)
+        let withoutOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"))
+        let differentOrdinal = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 2)
 
         XCTAssertNotEqual(withOrdinal, withoutOrdinal)
         XCTAssertNotEqual(withOrdinal, differentOrdinal)
-        XCTAssertEqual(withOrdinal, ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1))
+        XCTAssertEqual(withOrdinal, AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save"), ordinal: 1))
     }
 
     // MARK: - UnitPoint Tests
@@ -684,7 +673,7 @@ final class ClientMessageTests: XCTestCase {
     func testUnitPointRoundTrip() throws {
         let swipe = SwipeTarget(
             selection: .unitElement(
-                .predicate(ElementPredicate(identifier: "scrollable")),
+                .predicate(ElementPredicateTemplate(identifier: "scrollable")),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             )
@@ -695,7 +684,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(
             decoded.selection,
             .unitElement(
-                .predicate(ElementPredicate(identifier: "scrollable")),
+                .predicate(ElementPredicateTemplate(identifier: "scrollable")),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             )

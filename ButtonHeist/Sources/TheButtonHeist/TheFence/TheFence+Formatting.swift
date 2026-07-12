@@ -426,10 +426,6 @@ extension FenceResponse {
         }
     }
 
-    private func formatDelta(_ delta: AccessibilityTrace.Delta) -> String {
-        formatDelta(DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true))
-    }
-
     private func formatDelta(_ projection: DeltaProjection) -> String {
         switch projection {
         case .noChange(let metadata):
@@ -453,6 +449,9 @@ extension FenceResponse {
             if delta.edits.updated.updates.count > 0 {
                 let updatedCount = delta.edits.updated.updates.count
                 parts.append("~\(updatedCount) updated")
+            }
+            if !delta.metadata.accessibilityNotifications.isEmpty {
+                parts.append("\(delta.metadata.accessibilityNotifications.count) accessibility notification(s)")
             }
             let detail = Self.compactElementEditLines(
                 edits: delta.edits,

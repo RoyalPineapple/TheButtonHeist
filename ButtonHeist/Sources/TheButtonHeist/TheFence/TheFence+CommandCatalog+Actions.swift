@@ -74,7 +74,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollRequest,
-                parameters: FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.target + [
                     param(.containerName, .string),
                     FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
@@ -91,7 +91,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToVisibleRequest,
-                parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
+                parameters: FenceParameterBlocks.target + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
                 responseProjection: .action,
                 execution: [.appInteraction],
@@ -104,7 +104,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
-                parameters: FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.target + [
                     param(.containerName, .string),
                     FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
@@ -131,7 +131,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .semanticAction,
                 requestDecoder: TheFence.decodeActivateRequest,
-                parameters: FenceParameterBlocks.elementTarget
+                parameters: FenceParameterBlocks.target
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,
@@ -145,7 +145,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .semanticAction,
                 requestDecoder: TheFence.decodeRotorRequest,
-                parameters: FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.target + [
                     FenceParameters.rotorName.spec,
                     FenceParameters.rotorIndex.spec,
                     FenceParameters.rotorDirection.spec,
@@ -163,7 +163,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
-                parameters: FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.target + [
                     FenceParameters.text.spec,
                     FenceParameters.replacingExisting.spec,
                 ] + FenceParameterBlocks.expectation,

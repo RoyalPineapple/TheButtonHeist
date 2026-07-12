@@ -15,7 +15,7 @@ enum InterfaceSelectionError: Error, Equatable {
         case .subtreeNotFound:
             return """
                 get_interface subtree matched no nodes; refine subtree using a container \
-                predicate or a leaf matcher from get_interface.
+                or element target from get_interface.
                 """
         case .subtreeOrdinalOutOfRange(let ordinal, let candidateCount, let candidates):
             let range = candidateCount == 1 ? "0" : "0...\(candidateCount - 1)"
@@ -42,51 +42,19 @@ struct InterfaceSelector {
     let interface: Interface
 
     func select(_ query: InterfaceQuery) throws(InterfaceSelectionError) -> Interface {
-        if let subtree = query.subtree {
-            return try select(subtree)
-        }
-
-        if query.matcher.hasPredicates {
-            return selectLeafSubtrees(matching: query.matcher)
-        }
-
-        return interface
+        guard let subtree = query.subtree else { return interface }
+        return try select(subtree)
     }
 
-    private func selectLeafSubtrees(matching predicate: ElementPredicate) -> Interface {
-        let candidates = interface.graph.elementsInTraversalOrder.compactMap { record -> InterfaceLeafCandidate? in
-            guard record.projectedElement.matches(predicate) else { return nil }
-            return InterfaceLeafCandidate(
-                node: record.node,
-                path: record.path,
-                traversalIndex: record.traversalIndex,
-                annotation: record.annotation,
-                traceIdentity: record.traceIdentity
-            )
-        }
-        return selectedInterface(forLeafCandidates: candidates)
-    }
-
-    private func select(_ subtree: SubtreeSelector) throws(InterfaceSelectionError) -> Interface {
+    private func select(_ subtree: AccessibilityTarget) throws(InterfaceSelectionError) -> Interface {
         let graph = interface.graph
-        let selectedElementPaths: Set<TreePath>?
-        switch subtree {
-        case .element(let target):
-            selectedElementPaths = Set(ElementMatchGraph(interface: interface).resolve(target).orderedPaths)
-        case .container:
-            selectedElementPaths = nil
-        }
+        let resolution = InterfaceSubtreeResolution(subtree)
+        let selectedTargetPaths = ElementMatchGraph(interface: interface).resolve(resolution.target).paths
         let candidates = graph.nodesInPathOrder.compactMap { record -> InterfaceSubtreeCandidate? in
+            guard selectedTargetPaths.contains(record.path) else { return nil }
             switch record.kind {
             case .element(let elementRecord):
                 let projected = elementRecord.projectedElement
-                guard case .element(let target) = subtree else { return nil }
-                switch target {
-                case .predicate(let predicate, _):
-                    guard projected.matches(predicate) else { return nil }
-                case .within:
-                    guard selectedElementPaths?.contains(record.path) == true else { return nil }
-                }
                 return InterfaceSubtreeCandidate(
                     node: record.node,
                     originalPath: record.path,
@@ -95,9 +63,6 @@ struct InterfaceSelector {
                 )
 
             case .container(let containerRecord):
-                guard case .container(let predicate, _) = subtree,
-                      predicate.matches(containerRecord.container.containerPredicateFacts)
-                else { return nil }
                 return InterfaceSubtreeCandidate(
                     node: record.node,
                     originalPath: record.path,
@@ -110,7 +75,7 @@ struct InterfaceSelector {
             throw .subtreeNotFound
         }
 
-        if let ordinal = subtree.ordinal {
+        if let ordinal = resolution.ordinal {
             guard candidates.indices.contains(ordinal) else {
                 throw .subtreeOrdinalOutOfRange(
                     ordinal: ordinal,
@@ -148,46 +113,24 @@ struct InterfaceSelector {
     private func traceIdentities(for candidate: InterfaceSubtreeCandidate) -> InterfaceTraceIdentities {
         interface.graph.traceIdentitiesForSubtree(originalPath: candidate.originalPath, rootPath: TreePath([0]))
     }
-
-    private func selectedInterface(forLeafCandidates candidates: [InterfaceLeafCandidate]) -> Interface {
-        let orderedCandidates = candidates.sorted()
-        let tree = orderedCandidates.map(\.node)
-        let elementAnnotations = orderedCandidates.enumerated().compactMap { index, candidate -> InterfaceElementAnnotation? in
-            guard let annotation = candidate.annotation else { return nil }
-            return InterfaceElementAnnotation(
-                path: TreePath([index]),
-                actions: annotation.actions
-            )
-        }
-        let traceIdentities = Dictionary(uniqueKeysWithValues: orderedCandidates.enumerated().compactMap { index, candidate in
-            candidate.traceIdentity.map { (TreePath([index]), $0) }
-        })
-        return Interface(
-            timestamp: interface.timestamp,
-            tree: tree,
-            annotations: InterfaceAnnotations(elements: elementAnnotations),
-            diagnostics: interface.diagnostics,
-            traceIdentities: InterfaceTraceIdentities(traceIdentities)
-        )
-    }
 }
 
-private struct InterfaceLeafCandidate: Comparable {
-    let node: AccessibilityHierarchy
-    let path: TreePath
-    let traversalIndex: Int
-    let annotation: InterfaceElementAnnotation?
-    let traceIdentity: TraceElementIdentity?
+private struct InterfaceSubtreeResolution {
+    let target: AccessibilityTarget
+    let ordinal: Int?
 
-    static func == (lhs: InterfaceLeafCandidate, rhs: InterfaceLeafCandidate) -> Bool {
-        lhs.traversalIndex == rhs.traversalIndex && lhs.path == rhs.path
-    }
-
-    static func < (lhs: InterfaceLeafCandidate, rhs: InterfaceLeafCandidate) -> Bool {
-        if lhs.traversalIndex != rhs.traversalIndex {
-            return lhs.traversalIndex < rhs.traversalIndex
+    init(_ target: AccessibilityTarget) {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            self.target = .predicate(predicate)
+            self.ordinal = ordinal
+        case .container(let predicate, let ordinal):
+            self.target = .container(predicate)
+            self.ordinal = ordinal
+        case .ref, .within:
+            self.target = target
+            self.ordinal = nil
         }
-        return lhs.path < rhs.path
     }
 }
 
@@ -246,4 +189,5 @@ private func subtreeSummaryField(_ name: String, _ value: String?) -> String? {
 private func subtreeSummaryRequiredField(_ name: String, _ value: String) -> String {
     "\(name)=\"\(value)\""
 }
+
 #endif

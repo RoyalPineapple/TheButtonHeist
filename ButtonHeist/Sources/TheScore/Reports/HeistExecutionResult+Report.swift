@@ -548,7 +548,7 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
         return evidence.command?.wireType.rawValue
     }
 
-    package var target: ElementTarget? {
+    package var target: AccessibilityTarget? {
         guard case .action(let evidence) = self else { return nil }
         return evidence.command?.reportTarget
     }
@@ -652,7 +652,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let capabilityName: String?
     package let displayName: String
     package let commandName: String?
-    package let target: ElementTarget?
+    package let target: AccessibilityTarget?
     package let status: HeistExecutionStepStatus
     package let message: String?
     package let failureMessage: String?
@@ -812,7 +812,7 @@ public extension HeistExecutionStepResult {
     }
 
     /// Durable matcher target for an action-kind step, if any.
-    var reportTarget: ElementTarget? {
+    var reportTarget: AccessibilityTarget? {
         reportFacts.target
     }
 

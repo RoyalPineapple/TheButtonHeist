@@ -14,11 +14,12 @@ struct PredicateCaseSelection {
     static func unevaluated(_ cases: [ResolvedPredicateCase]) -> PredicateCaseSelection {
         PredicateCaseSelection(
             cases: cases.map {
-                HeistCaseMatchResult(
-                    predicate: $0.predicate,
+                let predicate = $0.predicate.rootPredicate
+                return HeistCaseMatchResult(
+                    predicate: predicate,
                     result: ExpectationResult(
                         met: false,
-                        predicate: $0.predicate,
+                        predicate: predicate,
                         actual: "no settled accessibility state observed"
                     )
                 )
@@ -63,7 +64,15 @@ struct PredicateCaseSelection {
     ) async -> HeistCaseSelectionResult {
         let start = CFAbsoluteTimeGetCurrent()
         let scope = cases.observationScope
-        let requiresChangeBaseline = cases.contains { $0.predicate.requiresChangeBaseline }
+        guard let evaluationPredicate = cases.first?.predicate.rootPredicate else {
+            return HeistCaseSelectionResult(
+                cases: [],
+                outcome: .noMatch,
+                elapsedMs: 0,
+                timeout: rawTimeout,
+                lastObservedSummary: nil
+            )
+        }
         var stream = PredicateObservationStreamState()
         let pollResult = await PredicatePollingEngine<PredicateCaseSelection>(
             observeSemanticState: observeSemanticState
@@ -72,15 +81,9 @@ struct PredicateCaseSelection {
             timeout: rawTimeout,
             start: start,
             evaluate: { observation in
-                let baselineSeed: PredicateObservationBaselineSeed =
-                    requiresChangeBaseline && stream.changeBaseline == nil
-                        ? .previousObservationIfAvailable
-                        : .preserve
                 let reduced = stream.reducing(
                     observation,
-                    predicate: cases.first?.predicate
-                        ?? .state(.missing(ElementPredicate(identifier: "__empty_heist_cases__"))),
-                    baselineSeed: baselineSeed
+                    predicate: evaluationPredicate
                 )
                 stream = reduced.state
                 return PredicateCaseSelection.evaluate(

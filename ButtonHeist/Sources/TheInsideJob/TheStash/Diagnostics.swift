@@ -25,26 +25,33 @@ private struct Relaxation {
 extension TheStash {
 
     func presenceWaitTimeoutMessage(
-        for predicate: AccessibilityPredicate,
+        for predicate: AccessibilityPredicate<RootContext>,
         elapsed: String
     ) -> String? {
-        let target: ElementTarget
+        let target: AccessibilityTarget
         let absent: Bool
-        switch predicate {
-        case .state(.exists(let elementPredicate)):
-            target = .predicate(elementPredicate, ordinal: 0)
+        switch predicate.node {
+        case .exists(let accessibilityTarget):
+            target = accessibilityTarget
             absent = false
-        case .state(.missing(let elementPredicate)):
-            target = .predicate(elementPredicate, ordinal: 0)
+        case .missing(let accessibilityTarget):
+            target = accessibilityTarget
             absent = true
         default:
             return nil
         }
 
-        let resolution = resolveTarget(target)
         let expected = absent ? "element to disappear" : "element to appear"
         let reason = absent ? "element still present" : "element not found"
-        let diagnostics = resolution.diagnostics
+        let diagnostics: String
+        switch target {
+        case .container(let expression, let ordinal):
+            diagnostics = (try? expression.resolve(in: .empty))
+                .map { resolveContainerTarget($0, ordinal: ordinal).diagnostics }
+                ?? "container target expression is unresolved"
+        case .predicate, .within, .ref:
+            diagnostics = resolveTarget(target).diagnostics
+        }
         var parts = [
             "timed out after \(elapsed)s waiting for \(expected)",
             "expected: \(waitForTargetDescription(target))",
@@ -65,9 +72,10 @@ extension TheStash {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: ElementTarget) -> String {
+    private func waitForTargetDescription(_ target: AccessibilityTarget) -> String {
         switch target {
-        case .predicate(let predicate, let ordinal):
+        case .predicate(let template, let ordinal):
+            guard let predicate = try? template.resolve(in: .empty) else { return target.description }
             var description = Diagnostics.formatMatcher(predicate)
             if let ordinal {
                 description += " ordinal=\(ordinal)"
@@ -75,6 +83,11 @@ extension TheStash {
             return description
         case .within(let container, let target):
             return "\(waitForTargetDescription(target)) within \(container)"
+        case .container(let container, let ordinal):
+            guard let ordinal else { return "container \(container)" }
+            return "container \(container) ordinal=\(ordinal)"
+        case .ref(let reference):
+            return "target reference \(reference)"
         }
     }
 
@@ -208,14 +221,14 @@ extension TheStash {
             guard relaxation.relaxed.hasPredicates else { continue }
             let hits = matchCandidates(relaxation.relaxed, in: screenElements, limit: suggestionCap + 1)
             guard !hits.isEmpty else { continue }
-            let deduped = dedupedPreservingOrder(hits.map {
+            let deduped = hits.map {
                 suggestionValue(
                     field: relaxation.field,
                     actual: relaxation.actual($0.element),
                     candidate: $0,
                     visibleHeistIds: visibleHeistIds
                 )
-            })
+            }.uniqued(on: \.self)
             let candidates = deduped.prefix(suggestionCap)
             let suggestion = candidates.joined(separator: ", ")
             let suffix = deduped.count > suggestionCap ? ", ..." : ""
@@ -235,13 +248,13 @@ extension TheStash {
             .elements
             .prefix(limit + 1)
         guard !hits.isEmpty else { return nil }
-        let deduped = dedupedPreservingOrder(hits.map {
+        let deduped = hits.map {
             failureInterfaceSuggestionValue(
                 failedPredicate: predicate,
                 diagnosticPredicate: diagnosticPredicate,
                 element: $0
             )
-        })
+        }.uniqued(on: \.self)
         let suggestions = deduped.prefix(limit).joined(separator: "; ")
         let suffix = deduped.count > limit ? "; ..." : ""
         return "captured interface contains-match suggestion: \(suggestions)\(suffix)"
@@ -394,12 +407,6 @@ extension TheStash {
         return .offscreen(isReachable: candidate.scrollMembership != nil)
     }
 
-    /// Drop duplicate formatted candidates while keeping the first occurrence's
-    /// position, so repeated parse entries don't make near-miss output noisy.
-    private static func dedupedPreservingOrder(_ values: [String]) -> [String] {
-        var seen: Set<String> = []
-        return values.filter { seen.insert($0).inserted }
-    }
 }
 
 }

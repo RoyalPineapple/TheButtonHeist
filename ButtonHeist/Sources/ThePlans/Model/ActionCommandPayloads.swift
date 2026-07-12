@@ -5,17 +5,17 @@ import Foundation
 /// Custom actions are element actions. Containers remain addressable by the
 /// commands whose product subject is a container, such as scroll commands.
 public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
-    public let elementTarget: ElementTarget
+    public let target: AccessibilityTarget
     public let actionName: String
 
-    public init(elementTarget: ElementTarget, actionName: String) {
-        self.elementTarget = elementTarget
+    public init(target: AccessibilityTarget, actionName: String) {
+        self.target = target
         self.actionName = actionName
     }
 
     public var description: String {
         ScoreDescription.call("customAction", [
-            elementTarget.description,
+            target.description,
             ScoreDescription.stringField("action", actionName),
         ].compactMap { $0 })
     }
@@ -34,7 +34,7 @@ enum CustomActionTargetValidationError: Error, Sendable, Equatable, CustomString
 
 extension CustomActionTarget {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case elementTarget
+        case target
         case actionName
     }
 
@@ -58,7 +58,7 @@ extension CustomActionTarget {
             )
         }
         self.init(
-            elementTarget: try container.decode(ElementTarget.self, forKey: .elementTarget),
+            target: try container.decode(AccessibilityTarget.self, forKey: .target),
             actionName: actionName
         )
     }
@@ -66,7 +66,7 @@ extension CustomActionTarget {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        try container.encode(elementTarget, forKey: .elementTarget)
+        try container.encode(target, forKey: .target)
     }
 }
 
@@ -161,17 +161,17 @@ extension RotorSelection: CustomStringConvertible {
 /// Target for moving through a rotor.
 public struct RotorTarget: Sendable, Equatable {
     /// Element whose `accessibilityCustomRotors` should be used.
-    public let elementTarget: ElementTarget
+    public let target: AccessibilityTarget
     public let selection: RotorSelection
     /// Direction to move the held rotor cursor (forward/back).
     public let direction: RotorDirection
 
     public init(
-        elementTarget: ElementTarget,
+        target: AccessibilityTarget,
         selection: RotorSelection = .automatic,
         direction: RotorDirection = .next
     ) {
-        self.elementTarget = elementTarget
+        self.target = target
         self.selection = selection
         self.direction = direction
     }
@@ -180,7 +180,7 @@ public struct RotorTarget: Sendable, Equatable {
 extension RotorTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("rotor", [
-            elementTarget.description,
+            target.description,
             selection == .automatic ? nil : selection.description,
             ScoreDescription.valueField("direction", direction),
         ].compactMap { $0 })
@@ -188,16 +188,17 @@ extension RotorTarget: CustomStringConvertible {
 }
 
 extension RotorTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case target
         case rotor
         case rotorIndex
         case direction
     }
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(from: decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "rotor target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        elementTarget = try ElementTarget.decodeInline(from: decoder)
+        target = try container.decode(AccessibilityTarget.self, forKey: .target)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
         selection = try RotorSelection.decode(name: rotor, index: rotorIndex, codingPath: container.codingPath)
@@ -205,20 +206,9 @@ extension RotorTarget: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(target, forKey: .target)
         try selection.encode(to: &container, nameKey: .rotor, indexKey: .rotorIndex)
         try container.encode(direction, forKey: .direction)
-    }
-
-    private static func rejectUnknownKeys(from decoder: Decoder) throws {
-        let allowedKeys = Set(
-            ElementTarget.inlineFieldNames + [
-                CodingKeys.rotor.stringValue,
-                CodingKeys.rotorIndex.stringValue,
-                CodingKeys.direction.stringValue,
-            ]
-        )
-        try decoder.rejectUnknownKeys(allowed: allowedKeys, typeName: "rotor target")
     }
 }

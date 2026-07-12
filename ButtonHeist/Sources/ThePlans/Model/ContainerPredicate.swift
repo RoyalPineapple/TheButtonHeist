@@ -4,6 +4,7 @@ import Foundation
 
 public enum AccessibilityContainerKind: String, Codable, CaseIterable, Sendable {
     case none
+    case scrollable
     case semanticGroup
     case list
     case landmark

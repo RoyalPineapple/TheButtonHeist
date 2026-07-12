@@ -147,12 +147,12 @@ func semanticTarget(
     value: String? = nil,
     traits: [HeistTrait]? = nil,
     ordinal: Int? = nil
-) -> ElementTarget {
+) -> AccessibilityTarget {
     .predicate(
-        ElementPredicate(
-            label: label.map(StringMatch.exact),
-            identifier: identifier.map(StringMatch.exact),
-            value: value.map(StringMatch.exact),
+        ElementPredicateTemplate(
+            label: label.map(StringMatch<StringExpr>.literal),
+            identifier: identifier.map(StringMatch<StringExpr>.literal),
+            value: value.map(StringMatch<StringExpr>.literal),
             traits: traits ?? []
         ),
         ordinal: ordinal

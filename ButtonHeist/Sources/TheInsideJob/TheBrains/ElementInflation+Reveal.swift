@@ -21,7 +21,7 @@ extension ElementInflation {
 
     internal func stateAfterReveal(
         _ treeElement: TheStash.ScreenElement,
-        target: ElementTarget,
+        target: AccessibilityTarget,
         attempt: Int
     ) async -> State {
         if case .success(let visible)? = visibleTargetResolution(target) {
@@ -86,7 +86,7 @@ extension ElementInflation {
     }
 
     internal func awaitStaleLiveTargetGrace(
-        for target: ElementTarget,
+        for target: AccessibilityTarget,
         method: ActionMethod,
         reason: RetryReason
     ) async -> TargetRefreshGraceTerminal {
@@ -101,7 +101,7 @@ extension ElementInflation {
     }
 
     private func refreshedVisibleTargetResolution(
-        _ target: ElementTarget
+        _ target: AccessibilityTarget
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure>? {
         guard stash.refreshCurrentVisibleTree() != nil else { return nil }
         return visibleTargetResolution(target)
@@ -123,7 +123,7 @@ extension ElementInflation {
     /// one-frame real-time floor — so the window can never starve the main
     /// actor, and task cancellation exits promptly.
     private func awaitTargetRefreshGrace(
-        for target: ElementTarget,
+        for target: AccessibilityTarget,
         mode: TargetRefreshGraceMode
     ) async -> TargetRefreshGraceTerminal {
         let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
@@ -246,7 +246,7 @@ extension ElementInflation {
     }
 
     private func targetRefreshGraceResolution(
-        target: ElementTarget,
+        target: AccessibilityTarget,
         mode: TargetRefreshGraceMode
     ) -> TargetRefreshGraceResolution {
         switch mode {
@@ -296,7 +296,7 @@ extension ElementInflation {
     }
 
     private func attemptRevealPathGraceKnownTarget(
-        for target: ElementTarget
+        for target: AccessibilityTarget
     ) async -> RevealPathGraceKnownTargetAttempt {
         guard case .success(let fresh) = knownSemanticTarget(target),
               fresh.scrollMembership != nil

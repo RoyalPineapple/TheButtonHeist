@@ -6,18 +6,14 @@ import TheScore
 
 extension PredicateWait {
     internal func initialTraceChangeEvaluation(
-        for predicate: AccessibilityPredicate,
+        for predicate: AccessibilityPredicate<RootContext>,
         initialTrace: AccessibilityTrace?
     ) -> ExpectationResult? {
         guard predicate.requiresChangeBaseline,
               let initialTrace,
-              let lastCapture = initialTrace.captures.last
+              let evidence = PredicateEvaluationEvidence(trace: initialTrace, isComplete: false)
         else { return nil }
-        return PredicateEvaluation.evaluate(
-            predicate,
-            currentElements: lastCapture.interface.projectedElements,
-            accumulatedDelta: initialTrace.accumulatedDelta(projection: predicate.deltaProjection)
-        )
+        return predicate.evaluate(in: evidence)
     }
 
     internal nonisolated static func suppliedChangeBaseline(
@@ -46,13 +42,29 @@ extension PredicateWait {
            let cursor = entry.previousCursor {
             return SettledCapture(cursor: cursor, capture: capture)
         }
-        return SettledCapture(previousOf: entry)
+        let cursor = entry.previousCursor.map {
+            ObservationCursor(
+                generation: $0.generation,
+                scope: $0.scope,
+                sequence: $0.sequence,
+                captureHash: capture.hash,
+                notificationSequence: $0.notificationSequence
+            )
+        } ?? entry.cursor.map {
+            ObservationCursor(
+                generation: $0.generation,
+                scope: $0.scope,
+                sequence: $0.sequence,
+                captureHash: capture.hash,
+                notificationSequence: $0.notificationSequence
+            )
+        }
+        return cursor.map { SettledCapture(cursor: $0, capture: capture) }
     }
 }
 
 internal struct PredicateObservationEvidence {
     private let snapshot: PredicateObservationSnapshot
-    private let stateGraph: ElementMatchGraph
     internal let baseline: SettledCapture?
     internal let window: ObservationWindow?
 
@@ -63,7 +75,6 @@ internal struct PredicateObservationEvidence {
     ) {
         let snapshot = PredicateObservationSnapshot(observation)
         self.snapshot = snapshot
-        self.stateGraph = ElementMatchGraph(interface: snapshot.interface)
         self.baseline = baseline
         self.window = window
     }
@@ -76,17 +87,8 @@ internal struct PredicateObservationEvidence {
         window?.trace ?? snapshot.trace
     }
 
-    internal func evaluate(_ predicate: AccessibilityPredicate) -> ExpectationResult {
-        switch predicate {
-        case .state(let state):
-            return state.evaluate(in: stateGraph).expectation(for: predicate)
-        case .announcement:
-            return ExpectationResult(
-                met: false,
-                predicate: predicate,
-                actual: "announcement predicates require spoken accessibility text evidence"
-            )
-        case .changePredicate, .noChangePredicate:
+    internal func evaluate(_ predicate: AccessibilityPredicate<RootContext>) -> ExpectationResult {
+        if predicate.requiresChangeBaseline {
             guard baseline != nil else {
                 return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
             }
@@ -97,37 +99,38 @@ internal struct PredicateObservationEvidence {
                     actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
                 )
             }
-            guard let verdict = window.verdict else {
-                let actual = switch window.completeness {
-                case .incomplete(let gap) where gap.reason == .noObservationAfterBaseline:
-                    PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
-                case .complete, .incomplete:
-                    "observation history incomplete"
-                }
-                return ExpectationResult(met: false, predicate: predicate, actual: actual)
+            let isComplete: Bool
+            switch window.completeness {
+            case .complete:
+                isComplete = true
+            case .incomplete:
+                isComplete = false
             }
-            let accumulatedDelta: AccessibilityTrace.AccumulatedDelta? = switch verdict {
-            case .changed(let facts):
-                facts.accumulatedDelta
-            case .unchanged:
-                window.accumulatedDelta
+            guard let evidence = PredicateEvaluationEvidence(
+                trace: window.trace,
+                isComplete: isComplete
+            ) else {
+                return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
             }
-            return predicate.evaluate(
-                currentElements: window.current.capture.interface.projectedElements,
-                accumulatedDelta: accumulatedDelta
-            )
+            return predicate.evaluate(in: evidence)
         }
+
+        guard let evidence = PredicateEvaluationEvidence(
+            trace: snapshot.trace,
+            isComplete: false
+        ) else {
+            return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
+        }
+        return predicate.evaluate(in: evidence)
     }
 }
 
 private struct PredicateObservationSnapshot {
     fileprivate let observation: HeistSemanticObservation
-    fileprivate let interface: Interface
     fileprivate let trace: AccessibilityTrace
 
     fileprivate init(_ observation: HeistSemanticObservation) {
         self.observation = observation
-        self.interface = observation.state.interface
         self.trace = observation.accessibilityTrace
     }
 }

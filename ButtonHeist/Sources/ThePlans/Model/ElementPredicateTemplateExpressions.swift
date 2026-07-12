@@ -54,7 +54,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
             return description
         }
-        return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription
+        return hasPredicates ? nil : AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
     }
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {

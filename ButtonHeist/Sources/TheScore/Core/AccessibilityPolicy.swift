@@ -44,7 +44,7 @@ public enum AccessibilityPolicy {
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
     /// - TheBurglar duplicate-id disambiguation
-    /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
+    /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
     public static let transientTraits: Set<HeistTrait> = [

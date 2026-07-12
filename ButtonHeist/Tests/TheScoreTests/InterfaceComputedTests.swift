@@ -186,24 +186,24 @@ final class InterfaceComputedTests: XCTestCase {
     }
 
     func testAccessibilityPredicateDescriptionComposesPredicate() {
-        let predicate = AccessibilityPredicate.exists(ElementPredicate(label: "Done", traits: [.button]))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.element(.label("Done"), traits: [.button]))
 
         XCTAssertEqual(
             predicate.description,
-            #"exists(predicate(label="Done" traits=[button]))"#
+            #"exists(target(predicate(label="Done" traits=[button])))"#
         )
     }
 
     func testExpectationResultDescriptionComposesPredicateAndActual() {
         let result = ExpectationResult(
             met: false,
-            predicate: .missing(ElementPredicate(identifier: "spinner")),
+            predicate: .missing(.identifier("spinner")),
             actual: "still visible"
         )
 
         XCTAssertEqual(
             result.description,
-            #"expectation(met=false expected=missing(predicate(identifier="spinner")) actual="still visible")"#
+            #"expectation(met=false expected=missing(target(predicate(identifier="spinner"))) actual="still visible")"#
         )
     }
 

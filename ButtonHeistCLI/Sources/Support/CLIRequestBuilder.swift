@@ -30,7 +30,7 @@ enum CLIRequestBuilder {
 
     static func arguments(
         parameters: CLIRequestParameters = CLIRequestParameters(),
-        target: ElementTarget? = nil
+        target: AccessibilityTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         var parameters = parameters
         if let target {
@@ -103,22 +103,22 @@ enum CLIRequestBuilder {
         return DiagnosticFailure(message: message, details: details)
     }
 
-    static func targetValue(_ target: ElementTarget) -> HeistValue {
+    static func targetValue(_ target: AccessibilityTarget) -> HeistValue {
         do {
             return try TheFence.HeistValuePayloadEncoder.encode(target)
         } catch {
-            preconditionFailure("Failed to encode canonical ElementTarget payload: \(error)")
+            preconditionFailure("Failed to encode canonical AccessibilityTarget payload: \(error)")
         }
     }
 
-    static func targetObject(_ target: ElementTarget) -> CLIRequestObject {
+    static func targetObject(_ target: AccessibilityTarget) -> CLIRequestObject {
         guard case .object(let fields) = targetValue(target) else {
-            preconditionFailure("Canonical ElementTarget payload did not encode as an object")
+            preconditionFailure("Canonical AccessibilityTarget payload did not encode as an object")
         }
 
         return CLIRequestObject(fields.map { rawKey, value in
             guard let key = FenceParameterKey(rawValue: rawKey) else {
-                preconditionFailure("Canonical ElementTarget payload emitted unknown key \(rawKey)")
+                preconditionFailure("Canonical AccessibilityTarget payload emitted unknown key \(rawKey)")
             }
             return (key, value)
         })

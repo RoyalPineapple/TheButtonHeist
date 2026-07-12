@@ -210,14 +210,13 @@ import AccessibilitySnapshotParser
         if AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits) {
             actions.append(.typeText)
         }
-        appendUniqueActions(
-            element.customActions.map { $0.name }.filter { !$0.isEmpty }.map(ElementAction.custom),
-            to: &actions
-        )
+        let semanticActions = element.customActions.map { $0.name }.filter { !$0.isEmpty }.map(ElementAction.custom)
+        actions += semanticActions.uniqued(on: \.description, excluding: Set(actions.map(\.description)))
         let liveNames = liveObject?.accessibilityCustomActions?
             .map { $0.name }
             .filter { !$0.isEmpty } ?? []
-        appendUniqueActions(liveNames.map(ElementAction.custom), to: &actions)
+        actions += liveNames.map(ElementAction.custom)
+            .uniqued(on: \.description, excluding: Set(actions.map(\.description)))
         return actions
     }
 
@@ -229,7 +228,7 @@ import AccessibilitySnapshotParser
         let liveNames = liveObject?.accessibilityCustomActions?
             .map { $0.name }
             .filter { !$0.isEmpty } ?? []
-        appendUnique(liveNames, to: &names)
+        names += liveNames.uniqued(on: \.self, excluding: Set(names))
         return names
     }
 
@@ -241,20 +240,8 @@ import AccessibilitySnapshotParser
         let liveNames = liveObject?.accessibilityCustomRotors?
             .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
             .filter { !$0.isEmpty } ?? []
-        appendUnique(liveNames, to: &names)
+        names += liveNames.uniqued(on: \.self, excluding: Set(names))
         return names
-    }
-
-    private static func appendUnique(_ additions: [String], to names: inout [String]) {
-        for name in additions where !names.contains(name) {
-            names.append(name)
-        }
-    }
-
-    private static func appendUniqueActions(_ additions: [ElementAction], to actions: inout [ElementAction]) {
-        for action in additions where !actions.contains(where: { $0.description == action.description }) {
-            actions.append(action)
-        }
     }
 
     private static func formatNumber(_ value: CGFloat) -> String {

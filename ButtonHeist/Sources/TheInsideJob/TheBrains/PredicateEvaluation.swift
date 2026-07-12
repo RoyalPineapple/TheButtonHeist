@@ -5,71 +5,44 @@ import ThePlans
 
 enum PredicateEvaluation {
     static func evaluate(
-        _ predicate: AccessibilityPredicate,
-        currentElements: [HeistElement],
-        delta: AccessibilityTrace.Delta?
-    ) -> ExpectationResult {
-        return predicate.evaluate(
-            currentElements: currentElements,
-            delta: delta
-        )
-    }
-
-    static func evaluate(
-        _ predicate: AccessibilityPredicate,
-        currentElements: [HeistElement],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
-    ) -> ExpectationResult {
-        predicate.evaluate(
-            currentElements: currentElements,
-            accumulatedDelta: accumulatedDelta
-        )
-    }
-
-    static func evaluate(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicate<RootContext>,
         in evidence: PredicateObservationEvidence
     ) -> ExpectationResult {
         evidence.evaluate(predicate)
     }
 
     static func evaluate(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicate<RootContext>,
         in observation: HeistSemanticObservation
     ) -> ExpectationResult {
-        if case .state = predicate {
-            return PredicateObservationEvidence(
-                observation: observation,
-                baseline: nil,
-                window: nil
-            ).evaluate(predicate)
+        guard let evidence = PredicateEvaluationEvidence(
+            trace: observation.accessibilityTrace,
+            isComplete: false
+        ) else {
+            return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
         }
-
-        return evaluate(
-            predicate,
-            currentElements: observation.accessibilityTrace.captures.last?.interface.projectedElements
-                ?? observation.state.interface.projectedElements,
-            delta: observation.delta
-        )
+        return predicate.evaluate(in: evidence)
     }
 
     static func evaluate(
-        _ predicate: AccessibilityPredicate,
-        in trace: AccessibilityTrace
+        _ predicate: AccessibilityPredicate<RootContext>,
+        in trace: AccessibilityTrace,
+        isComplete: Bool
     ) -> ExpectationResult {
-        predicate.evaluate(in: PredicateEvaluationEvidence(trace: trace))
+        guard let evidence = PredicateEvaluationEvidence(trace: trace, isComplete: isComplete) else {
+            return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
+        }
+        return predicate.evaluate(in: evidence)
     }
 
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCase,
         in observation: HeistSemanticObservation
     ) -> HeistCaseMatchResult {
-        HeistCaseMatchResult(
-            predicate: predicateCase.predicate,
-            result: evaluate(
-                predicateCase.predicate,
-                in: observation
-            )
+        let predicate = predicateCase.predicate.rootPredicate
+        return HeistCaseMatchResult(
+            predicate: predicate,
+            result: evaluate(predicate, in: observation)
         )
     }
 
@@ -77,19 +50,22 @@ enum PredicateEvaluation {
         _ predicateCase: ResolvedPredicateCase,
         in evidence: PredicateObservationEvidence
     ) -> HeistCaseMatchResult {
-        HeistCaseMatchResult(
-            predicate: predicateCase.predicate,
-            result: evaluate(predicateCase.predicate, in: evidence)
+        let predicate = predicateCase.predicate.rootPredicate
+        return HeistCaseMatchResult(
+            predicate: predicate,
+            result: evaluate(predicate, in: evidence)
         )
     }
 }
 
-extension AccessibilityPredicate {
+extension AccessibilityPredicate where Context == RootContext {
     var requiresChangeBaseline: Bool {
-        switch self {
-        case .changePredicate, .noChangePredicate:
+        switch node {
+        case .changed, .noChange:
             return true
-        case .state, .announcement:
+        case .exists, .missing, .announcement:
+            return false
+        case .screen, .elements, .appeared, .disappeared, .updated:
             return false
         }
     }

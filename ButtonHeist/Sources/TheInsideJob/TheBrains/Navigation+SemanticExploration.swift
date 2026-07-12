@@ -33,12 +33,12 @@ extension Navigation {
 
     enum ScrollScanGoal: Equatable, Sendable {
         case exhaust
-        case findTarget(ElementTarget)
+        case findTarget(AccessibilityTarget)
         case findHeistId(HeistId)
     }
 
     enum ScrollTraversalTerminal: Equatable, Sendable {
-        case foundTarget(ElementTarget)
+        case foundTarget(AccessibilityTarget)
         case foundHeistId(HeistId)
         case coverageComplete
     }

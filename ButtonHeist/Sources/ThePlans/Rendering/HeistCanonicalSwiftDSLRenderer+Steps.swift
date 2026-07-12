@@ -74,7 +74,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ""
         case .string(let value):
             return try render(string: value, environment: environment)
-        case .elementTarget(let target):
+        case .accessibilityTarget(let target):
             return try render(target: target, environment: environment)
         }
     }
@@ -130,7 +130,7 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderSingleCaseBranches(
         callee: String,
-        predicate: StatePredicateExpr,
+        predicate: AccessibilityPredicate<ScreenAssertionContext>,
         timeout: Double?,
         body: [HeistStep],
         elseBody: [HeistStep]?,

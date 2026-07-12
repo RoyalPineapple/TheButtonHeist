@@ -3,7 +3,7 @@ import ArgumentParser
 import ThePlans
 
 /// Shared options for commands that target a UI element by accessibility properties.
-struct ElementTargetOptions: ParsableArguments {
+struct AccessibilityTargetOptions: ParsableArguments {
     @Option(name: .long, help: "Accessibility identifier")
     var identifier: String?
 
@@ -22,42 +22,40 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
     var ordinal: Int?
 
-    func parsedMatcher() throws -> ElementPredicate? {
+    func parsedPredicate() throws -> ElementPredicateTemplate? {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludedTraits.isEmpty
         guard hasFields else { return nil }
-        var checks: [ElementPredicateCheck<String>] = []
-        if let label { checks.append(.label(.exact(label))) }
-        if let identifier { checks.append(.identifier(.exact(identifier))) }
-        if let value { checks.append(.value(.exact(value))) }
+        var checks: [ElementPredicateCheck<StringExpr>] = []
+        if let label { checks.append(.label(.literal(label))) }
+        if let identifier { checks.append(.identifier(.literal(identifier))) }
+        if let value { checks.append(.value(.literal(value))) }
         let requiredTraits = Set(try parseTraits(traits, label: "trait"))
         if !requiredTraits.isEmpty { checks.append(.traits(requiredTraits)) }
         let excludedTraits = Set(try parseTraits(excludedTraits, label: "excluded trait"))
         if !excludedTraits.isEmpty { checks.append(.exclude(.traits(excludedTraits))) }
-        return ElementPredicate(checks)
+        return ElementPredicateTemplate(checks)
     }
 
-    func requireTarget() throws -> ElementTarget {
-        guard let elementTarget = try parsedTarget() else {
+    func requireTarget() throws -> AccessibilityTarget {
+        guard let target = try parsedTarget() else {
             throw ValidationError("Must specify --identifier, -l, -v, --traits, or --exclude-traits")
         }
-        return elementTarget
+        return target
     }
 
-    func parsedTarget() throws -> ElementTarget? {
-        let predicate = try parsedMatcher()
+    func parsedTarget() throws -> AccessibilityTarget? {
+        let predicate = try parsedPredicate()
         guard predicate != nil || ordinal != nil else {
             return nil
         }
-        do {
-            return try ElementTargetGrammar.validatedTarget(
-                predicate: predicate,
-                predicateWasProvided: predicate != nil,
-                ordinal: ordinal
-            )
-        } catch let error as ElementTargetGrammarError {
-            throw ValidationError(error.diagnosticDescription)
+        guard let predicate else {
+            throw ValidationError(AccessibilityTargetGrammarError.missingTarget.diagnosticDescription)
         }
+        if let ordinal, ordinal < 0 {
+            throw ValidationError(AccessibilityTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription)
+        }
+        return .predicate(predicate, ordinal: ordinal)
     }
 
     private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait] {
@@ -70,7 +68,7 @@ struct ElementTargetOptions: ParsableArguments {
         }
     }
 
-    /// Returns true when the supplied options construct a valid ElementTarget.
+    /// Returns true when the supplied options construct a valid AccessibilityTarget.
     var hasTarget: Bool {
         get throws {
             try parsedTarget() != nil

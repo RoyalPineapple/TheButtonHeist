@@ -260,13 +260,13 @@ private extension TheFence {
 
     func validateRootHeistArgumentPayload(_ value: HeistValue) throws {
         guard case .object(let object) = value,
-              object["type"] == .string(HeistParameterKind.elementTarget.rawValue),
+              object["type"] == .string(HeistParameterKind.accessibilityTarget.rawValue),
               let target = object["target"] else {
             return
         }
         try Self.validateElementPredicatePayloadStringMatches(target, field: "argument.target")
         guard case .object(let targetObject) = target else { return }
-        let allowedTargetKeys = Set(ElementTarget.inlineFieldNames)
+        let allowedTargetKeys = Set(AccessibilityTarget.inlineFieldNames)
         guard let unknownKey = targetObject.keys.sorted().first(where: { !allowedTargetKeys.contains($0) }) else {
             return
         }

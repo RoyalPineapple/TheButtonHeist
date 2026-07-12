@@ -62,18 +62,7 @@ struct HeistReportProjection: Sendable {
         accessibilityTrace: AccessibilityTrace?,
         profile: ProjectionProfile
     ) {
-        self.init(
-            result: result,
-            netDelta: accessibilityTrace?.meaningfulEndpointDelta,
-            profile: profile.heistReport
-        )
-    }
-
-    init(
-        result: HeistExecutionResult,
-        netDelta: AccessibilityTrace.Delta?,
-        profile: ProjectionProfile
-    ) {
+        let profile = profile.heistReport
         let rollup = result.evidenceRollup
         let reportSummary = rollup.summary
         status = reportSummary.abortedAtPath == nil ? .ok : .partial
@@ -86,7 +75,9 @@ struct HeistReportProjection: Sendable {
         failureInterfaceDump = result.failureInterfaceDump(
             elementLimit: profile.limits.failureInterfaceElements
         )
-        self.netDelta = netDelta.map { DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true) }
+        self.netDelta = accessibilityTrace.flatMap {
+            DeltaProjection(trace: $0, isComplete: true, profile: profile, includeScreenInterface: true)
+        }
     }
 }
 
@@ -116,7 +107,7 @@ struct HeistReportNodeProjection: Sendable {
     var capability: String? { report.capabilityName }
     var displayName: String { report.displayName }
     var commandName: String? { report.commandName }
-    var target: ElementTarget? { report.target }
+    var target: AccessibilityTarget? { report.target }
     var status: HeistExecutionStepStatus { report.status }
     var message: String? { report.message }
     var durationMs: Int { step.durationMs }
@@ -137,8 +128,15 @@ struct HeistReportNodeProjection: Sendable {
     var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
     var actionErrorKind: ErrorKind? { results.actionErrorKind }
     var traceDelta: DeltaProjection? {
-        results.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
-            DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
+        results.traceEvidenceResult.flatMap { result in
+            result.accessibilityTrace.flatMap {
+                DeltaProjection(
+                    trace: $0,
+                    isComplete: result.settled != false,
+                    profile: profile,
+                    includeScreenInterface: true
+                )
+            }
         }
     }
 }

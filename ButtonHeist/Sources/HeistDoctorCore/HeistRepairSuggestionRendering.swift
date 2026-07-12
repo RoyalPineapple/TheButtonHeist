@@ -76,13 +76,6 @@ enum HeistRepairSuggestionRenderer {
         if tiedBestCount > 1 {
             caveats.append(.tiedBestCandidates)
         }
-        if request.lastSuccess.afterDelta == nil, request.lastSuccess.afterSnapshot != nil {
-            caveats.append(.lastSuccessfulFullAfterSnapshotFallback)
-        }
-        if request.currentFailure.afterDelta == nil, request.currentFailure.afterSnapshot != nil {
-            caveats.append(.currentFailureFullAfterSnapshotFallback)
-        }
-
         return .suggested(HeistRepairSuggestion(
             stepPath: request.currentFailure.stepPath,
             failureKind: analysis.failureKind,
@@ -119,6 +112,8 @@ enum HeistRepairSuggestionRenderer {
             reasons.append(.oldTargetCurrentMatchCount(matchCount))
         case .ambiguous(_, let matchCount):
             reasons.append(.oldTargetCurrentMatchCount(matchCount))
+        case .unsupportedTarget:
+            break
         }
         reasons.append(.suggestedMatcherResolvesExactlyOneElement)
         if selection.candidate.tier == .ordinalDisambiguation {
@@ -140,13 +135,8 @@ enum HeistRepairSuggestionRenderer {
         lastSuccess: HeistPassedStepRepairEvidence,
         currentFailure: HeistFailedStepRepairEvidence
     ) -> [RepairSuggestionReason] {
-        var reasons: [RepairSuggestionReason] = []
-        if let reason = deltaReason(source: .lastSuccess, delta: lastSuccess.afterDelta) {
-            reasons.append(reason)
-        }
-        if let reason = deltaReason(source: .currentFailure, delta: currentFailure.afterDelta) {
-            reasons.append(reason)
-        }
+        var reasons = changeFactReasons(source: .lastSuccess, facts: lastSuccess.changeFacts)
+        reasons.append(contentsOf: changeFactReasons(source: .currentFailure, facts: currentFailure.changeFacts))
         if let expectation = lastSuccess.result.expectation, expectation.met {
             reasons.append(.lastSuccessfulExpectationMet)
         }
@@ -156,32 +146,43 @@ enum HeistRepairSuggestionRenderer {
         return reasons
     }
 
-    private static func deltaReason(
+    private static func changeFactReasons(
         source: RepairEvidenceSource,
-        delta: AccessibilityTrace.Delta?
-    ) -> RepairSuggestionReason? {
-        guard let delta else { return nil }
-        switch delta {
-        case .noChange:
-            return .afterDiff(source, .noSemanticChange)
+        facts: [AccessibilityTrace.ChangeFact]
+    ) -> [RepairSuggestionReason] {
+        guard !facts.isEmpty else {
+            return [.changeFact(source, .noSemanticChange)]
+        }
+        return facts.flatMap { fact in
+            changeFactObservations(fact).map { .changeFact(source, $0) }
+        }
+    }
+
+    private static func changeFactObservations(
+        _ fact: AccessibilityTrace.ChangeFact
+    ) -> [RepairChangeFactObservation] {
+        switch fact {
         case .screenChanged:
-            return .afterDiff(source, .screenChange)
-        case .elementsChanged(let payload):
-            if let valueChange = payload.edits.updated
-                .flatMap(\.changes)
-                .first(where: { $0.property == .value }) {
-                return .afterDiff(
-                    source,
-                    .valueChange(old: valueChange.oldDisplayText, new: valueChange.newDisplayText)
-                )
+            return [.screenChange]
+        case .elementsChanged(let elements):
+            let valueChanges = elements.updated.flatMap(\.changes)
+                .filter { $0.property == .value }
+                .map { RepairChangeFactObservation.valueChange(
+                    old: $0.oldDisplayText,
+                    new: $0.newDisplayText
+                ) }
+            var observations: [RepairChangeFactObservation] = []
+            if !elements.disappeared.isEmpty {
+                observations.append(.semanticElementsRemoved)
             }
-            if !payload.edits.added.isEmpty {
-                return .afterDiff(source, .semanticElementsAdded)
+            if !elements.appeared.isEmpty {
+                observations.append(.semanticElementsAdded)
             }
-            if !payload.edits.removed.isEmpty {
-                return .afterDiff(source, .semanticElementsRemoved)
+            observations.append(contentsOf: valueChanges)
+            if observations.isEmpty {
+                observations.append(.elementChanges)
             }
-            return .afterDiff(source, .elementChanges)
+            return observations
         }
     }
 
@@ -225,6 +226,14 @@ extension HeistRepairRefusalReason {
             return "heist fingerprints are incompatible"
         case .oldTargetDidNotResolveExactlyOnce:
             return "old target did not resolve exactly once in the last successful before snapshot"
+        case .containerTargetUnsupported:
+            return "container-only targets are not repairable as accessibility elements"
+        case .targetReferenceUnsupported:
+            return "unresolved target references are not repairable without their execution environment"
+        case .scopedTargetUnsupported:
+            return "container-scoped targets are not repairable without container-aware repair resolution"
+        case .unresolvedTargetExpression:
+            return "target expressions are not repairable without all referenced values"
         case .oldTargetStillResolvesAndSupportsRequestedAction:
             return "old target still resolves and supports the requested action; no target repair needed"
         case .noCandidateMetScoreThreshold:

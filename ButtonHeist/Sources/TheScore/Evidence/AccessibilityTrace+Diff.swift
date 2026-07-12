@@ -2,20 +2,19 @@ import ThePlans
 import Foundation
 import AccessibilitySnapshotModel
 
-// MARK: - Accessibility Trace Diff Facades
+// MARK: - Accessibility Trace Change-Fact Facades
 
-public extension AccessibilityTrace.Delta {
+public extension AccessibilityTrace.ChangeFact {
 
-    /// Compare two full accessibility captures and emit the compact delta.
+    /// Compare two full accessibility captures and emit the canonical facts.
     ///
-    /// Captures remain trace truth. This facade preserves the public entry point
-    /// while delegating the derived diff to `AccessibilityTraceDiff`.
+    /// Captures remain trace truth. This facade delegates the derived fact
+    /// stream to `AccessibilityTraceDiff`.
     static func between(
         _ before: AccessibilityTrace.Capture,
-        _ after: AccessibilityTrace.Capture,
-        projection: AccessibilityTrace.DeltaProjection = .semantic
-    ) -> AccessibilityTrace.Delta {
-        AccessibilityTraceDiff.projectDelta(between: before, and: after, projection: projection)
+        _ after: AccessibilityTrace.Capture
+    ) -> [AccessibilityTrace.ChangeFact] {
+        AccessibilityTraceDiff.projectChangeFacts(between: before, and: after)
     }
 }
 

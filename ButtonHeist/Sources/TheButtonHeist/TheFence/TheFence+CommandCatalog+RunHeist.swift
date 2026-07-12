@@ -71,8 +71,8 @@ extension TheFence.Command {
         Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
         Examples:
-        `Activate(.label("Pay")).expect(.screenChanged)`
-        `TypeText("milk", into: .label("Search")).expect(.change(.elements()))`
+        `Activate(.label("Pay")).expect(.changed(.screen()))`
+        `TypeText("milk", into: .label("Search")).expect(.changed(.elements()))`
         `Increment(.label("Quantity"))`
         `Decrement(.label("Quantity"))`
         `CustomAction("Archive", on: .label("Message"))`
@@ -101,16 +101,16 @@ extension TheFence.Command {
         Author plans as ButtonHeist source, not raw JSON IR:
         `HeistPlan("shop") { ... }`
         `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
-        `RunHeist("Cart.addItem", "Milk").expect(.appeared(.element(.label("subtotal"), .value(.contains("1 item")))))`
+        `RunHeist("Cart.addItem", "Milk").expect(.changed(.elements([.appeared(.element(.label("subtotal"), .value(.contains("1 item"))))])))`
         `If(.label("Pay")) { ... }.else { ... }`
-        `WaitFor(.screenChanged, timeout: .seconds(10)).else { ... }`
+        `WaitFor(.changed(.screen()), timeout: .seconds(10)).else { ... }`
         `ForEach("Milk", "Bread") { item in ... }`
         `ForEach(.element(.label(.prefix("Delete")), .traits([.button])), limit: 20) { target in ... }`
         `Warn("message")`
         `Fail("message")`
 
         Provide exactly one source: `path` or `plan`. Use `argument` when the root
-        heist takes a string or element target. Runtime source is restricted
+        heist takes a string or accessibility target. Runtime source is restricted
         ButtonHeist DSL, not arbitrary Swift.
         """
 
@@ -122,13 +122,17 @@ extension TheFence.Command {
                     .type,
                     .string,
                     required: true,
-                    enumValues: [HeistParameterKind.none.rawValue, HeistParameterKind.string.rawValue, HeistParameterKind.elementTarget.rawValue]
+                    enumValues: [
+                        HeistParameterKind.none.rawValue,
+                        HeistParameterKind.string.rawValue,
+                        HeistParameterKind.accessibilityTarget.rawValue,
+                    ]
                 ),
                 param(.value, .string),
                 param(.valueRef, .string),
                 objectParam(
                     .target,
-                    properties: FenceParameterBlocks.inlineElementTargetFields
+                    properties: FenceParameterBlocks.inlineAccessibilityTargetFields
                 ),
             ],
             additionalProperties: false

@@ -227,17 +227,17 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(invocation.argument, .string(.ref("input")))
     }
 
-    func testRunHeistTestingFacadeDottedElementTargetArgumentBuildsValidatedInvocation() throws {
-        let request = try makeRunHeistRequest("Rows.activate", argument: ElementTarget.label("Milk")) { _ in
+    func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() throws {
+        let request = try makeRunHeistRequest("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
             Warn("activating")
         }
 
         let invocation = try invocationStep(in: request.plan)
         XCTAssertNil(request.plan.name)
-        XCTAssertEqual(request.plan.parameter, .elementTarget(name: "input"))
-        XCTAssertEqual(request.argument, .elementTarget(.target(.label("Milk"))))
+        XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: "input"))
+        XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
         XCTAssertEqual(invocation.path, ["Rows", "activate"])
-        XCTAssertEqual(invocation.argument, .elementTarget(.ref("input")))
+        XCTAssertEqual(invocation.argument, .accessibilityTarget(.ref("input")))
     }
 
     func testPrebuiltPlanRunsThroughInAppRuntimeWithoutTransport() async throws {
@@ -350,34 +350,34 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(request.argument, .string(.literal("Milk")))
     }
 
-    func testRunHeistTestingFacadeElementTargetArgumentLowersLikeNamedHeistPlan() throws {
+    func testRunHeistTestingFacadeAccessibilityTargetArgumentLowersLikeNamedHeistPlan() throws {
         let expectedPlan = try HeistPlan("RowsActivate", targetParameter: "input") { _ in
             Warn("activating")
         }
         let request = try makeRunHeistRequest(
             "RowsActivate",
-            argument: ElementTarget.label("Milk")
+            argument: AccessibilityTarget.label("Milk")
         ) { _ in
             Warn("activating")
         }
 
         XCTAssertEqual(request.plan, expectedPlan)
         XCTAssertEqual(request.plan.name, "RowsActivate")
-        XCTAssertEqual(request.plan.parameter, .elementTarget(name: "input"))
-        XCTAssertEqual(request.argument, .elementTarget(.target(.label("Milk"))))
+        XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: "input"))
+        XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
     }
 
-    func testSingleElementTargetRootHeistBindsOneRootArgument() async throws {
+    func testSingleAccessibilityTargetRootHeistBindsOneRootArgument() async throws {
         let job = TheInsideJob(token: "in-app-heist-target-test")
         let capture = RuntimeCapture(job: job)
 
-        let heist = try await Heist(ElementTarget.label("Delete"), runtime: capture.runtime) { _ in
+        let heist = try await Heist(AccessibilityTarget.label("Delete"), runtime: capture.runtime) { _ in
             Warn("target root")
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(capture.argument, .elementTarget(.target(.label("Delete"))))
-        XCTAssertEqual(capture.plan?.parameter, .elementTarget(name: "input"))
+        XCTAssertEqual(capture.argument, .accessibilityTarget(.label("Delete")))
+        XCTAssertEqual(capture.plan?.parameter, .accessibilityTarget(name: "input"))
     }
 
     func testRepeatUntilSuccessReceiptDoesNotSynthesizeWaitActionResult() async throws {
@@ -658,7 +658,7 @@ private final class ReceiptWaitScript {
             ?? AccessibilityTrace(capture: state.capture)
         previousCapture = state.capture
 
-        let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace)
+        let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace, isComplete: true)
         if expectation.met {
             return .matched(
                 message: expectation.actual,

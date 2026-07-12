@@ -154,7 +154,10 @@ extension TheBrains {
             let iterationIndex = iterationNodes.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = "\(path).for_each_element.iterations[\(iterationIndex)]"
-            let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
+            let currentElement = AccessibilityTarget.predicate(
+                ElementPredicateTemplate(step.matching),
+                ordinal: nextOrdinal
+            )
             let iterationEnvironment = environment.binding(target: currentElement, to: step.parameter)
             let iterationResults = await executeHeistSteps(
                 step.body,
@@ -228,7 +231,10 @@ extension TheBrains {
         targetOrdinal: Int,
         children: HeistReceiptChildren
     ) -> HeistExecutionStepResult {
-        let currentElement = ElementTarget.predicate(step.matching, ordinal: targetOrdinal)
+        let currentElement = AccessibilityTarget.predicate(
+            ElementPredicateTemplate(step.matching),
+            ordinal: targetOrdinal
+        )
         let evidence = HeistStepEvidence.forEachElement(HeistForEachElementEvidence(
             parameter: step.parameter,
             matching: step.matching,

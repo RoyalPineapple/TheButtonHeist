@@ -156,7 +156,7 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     }
 
     public var elementTargetParameterKeys: [String] {
-        let elementTargetKeys = Set(FenceParameterBlocks.elementTarget.map(\.key))
+        let elementTargetKeys = Set(FenceParameterBlocks.target.map(\.key))
         return parameters.map(\.key).filter(elementTargetKeys.contains)
     }
 

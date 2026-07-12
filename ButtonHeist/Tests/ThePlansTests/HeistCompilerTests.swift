@@ -246,7 +246,7 @@ struct HeistCompilerTests {
             func heist() throws -> HeistPlan {
                 try HeistPlan("TrustedFrontend") {
                     Activate(.label(payLabel()))
-                        .expect(.change(.screenChanged))
+                        .expect(.changed(.screen()))
                 }
             }
             """
@@ -259,7 +259,7 @@ struct HeistCompilerTests {
         #expect(plan.body == [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])
     }
 
@@ -296,14 +296,18 @@ struct HeistCompilerTests {
             }
             Issue.record("Expected invalid expectation composition to fail")
         } catch let error as HeistPlanBuildError {
-            let diagnostic = try #require(error.diagnostics.first)
-
-            #expect(error.diagnostics.count == 1)
-            #expect(diagnostic.code == .dslInvalidActionExpectation)
-            #expect(diagnostic.phase == .dslBuild)
-            #expect(diagnostic.path == "activate")
-            #expect(diagnostic.message.contains("multiple explicit expectation timeouts"))
-            #expect(diagnostic.hint == "Use one explicit timeout for the composed expectation.")
+            #expect(error.diagnostics.count == 2)
+            #expect(error.diagnostics.allSatisfy { $0.code == .dslInvalidActionExpectation })
+            #expect(error.diagnostics.allSatisfy { $0.phase == .dslBuild })
+            #expect(error.diagnostics.allSatisfy { $0.path == "activate" })
+            #expect(error.diagnostics.contains {
+                $0.message.contains("unsupported expectation composition")
+                    && $0.hint == "Use one canonical predicate per expectation, or add current-tree assertions inside .changed(.screen(...))."
+            })
+            #expect(error.diagnostics.contains {
+                $0.message.contains("multiple explicit expectation timeouts")
+                    && $0.hint == "Use one explicit timeout for the composed expectation."
+            })
         } catch {
             Issue.record("Expected HeistPlanBuildError, got \(error)")
         }
@@ -421,11 +425,15 @@ struct HeistCompilerTests {
 
         let invalidIfDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidIfSource))
         let invalidIfText = invalidIfDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(invalidIfText.contains("type 'StatePredicateExpr' has no member 'updated'"))
+        #expect(invalidIfText.contains(
+            "requires the types 'ScreenAssertionContext' and 'ElementsAssertionContext' be equivalent"
+        ))
 
         let invalidCaseDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidCaseSource))
         let invalidCaseText = invalidCaseDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(invalidCaseText.contains("type 'StatePredicateExpr' has no member 'appeared'"))
+        #expect(invalidCaseText.contains(
+            "requires the types 'ScreenAssertionContext' and 'ElementsAssertionContext' be equivalent"
+        ))
     }
 
     @Test
@@ -438,15 +446,15 @@ struct HeistCompilerTests {
 
             func heist() throws -> HeistPlan {
                 try HeistPlan("PredicateComposition") {
-                    WaitFor(.all(
+                    WaitFor(.exists(.label("Receipt")))
+                    WaitFor(.missing(.label("Loading")))
+                    WaitFor(.changed(.screen([
                         .exists(.label("Receipt")),
-                        .missing(.label("Loading"))
-                    ))
-
-                    WaitFor(.change(.all(
-                        .screenChanged(.exists(.label("Receipt"))),
-                        .updated(.value("3"))
-                    )))
+                        .missing(.label("Loading")),
+                    ])))
+                    WaitFor(.changed(.elements([
+                        .updated(.identifier("count"), .value("3")),
+                    ])))
                 }
             }
             """
@@ -458,7 +466,7 @@ struct HeistCompilerTests {
 
             func heist() throws -> HeistPlan {
                 try HeistPlan("EmptyAll") {
-                    WaitFor(.all())
+                    WaitFor(.changed())
                 }
             }
             """
@@ -470,7 +478,7 @@ struct HeistCompilerTests {
 
             func heist() throws -> HeistPlan {
                 try HeistPlan("RawEmptyAll") {
-                    WaitFor(.state(.all([])))
+                    WaitFor(.changed(.screen([.screen([])])))
                 }
             }
             """
@@ -482,14 +490,14 @@ struct HeistCompilerTests {
 
             func heist() throws -> HeistPlan {
                 try HeistPlan("NestedAny") {
-                    WaitFor(.changePredicate(.all(.any)))
+                    WaitFor(.changed(.all(.screen(), .elements())))
                 }
             }
             """
         )
 
         let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
-        #expect(plan.body.count == 2)
+        #expect(plan.body.count == 4)
 
         let emptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(emptyAllSource))
         let emptyAllText = emptyAllDiagnostics.map(\.description).joined(separator: "\n")
@@ -497,11 +505,11 @@ struct HeistCompilerTests {
 
         let rawEmptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(rawEmptyAllSource))
         let rawEmptyAllText = rawEmptyAllDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(rawEmptyAllText.contains("NonEmptyArray<StatePredicateExpr>"))
+        #expect(rawEmptyAllText.contains("AccessibilityPredicate<ScreenAssertionContext>') has no member 'screen'"))
 
         let nestedAnyDiagnostics = try await requireFailure(HeistCompiler().compileFile(nestedAnySource))
         let nestedAnyText = nestedAnyDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(nestedAnyText.contains("type 'ChangeScopePredicateExpr' has no member 'any'"))
+        #expect(nestedAnyText.contains("type 'ChangeDeclaration' has no member 'all'"))
     }
 
     @Test

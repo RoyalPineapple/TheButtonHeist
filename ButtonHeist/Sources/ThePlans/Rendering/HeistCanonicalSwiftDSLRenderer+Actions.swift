@@ -93,23 +93,23 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(mechanicalLongPress target: LongPressTarget) throws -> String {
-        switch target.selection {
-        case .element(let elementTarget):
-            if target.duration == .longPressDefault {
-                return "Mechanical.LongPress(\(render(target: elementTarget)))"
+    func render(mechanicalLongPress request: LongPressTarget) throws -> String {
+        switch request.selection {
+        case .element(let target):
+            if request.duration == .longPressDefault {
+                return "Mechanical.LongPress(\(render(target: target)))"
             }
-            return "Mechanical.LongPress(\(render(target: elementTarget)), duration: \(render(duration: target.duration)))"
-        case .elementUnitPoint(let elementTarget, let point):
-            if target.duration == .longPressDefault {
-                return "Mechanical.LongPress(\(render(target: elementTarget)), at: \(render(unitPoint: point)))"
+            return "Mechanical.LongPress(\(render(target: target)), duration: \(render(duration: request.duration)))"
+        case .elementUnitPoint(let target, let point):
+            if request.duration == .longPressDefault {
+                return "Mechanical.LongPress(\(render(target: target)), at: \(render(unitPoint: point)))"
             }
-            return "Mechanical.LongPress(\(render(target: elementTarget)), at: \(render(unitPoint: point)), duration: \(render(duration: target.duration)))"
+            return "Mechanical.LongPress(\(render(target: target)), at: \(render(unitPoint: point)), duration: \(render(duration: request.duration)))"
         case .coordinate(let point):
-            if target.duration == .longPressDefault {
+            if request.duration == .longPressDefault {
                 return "Mechanical.LongPress(\(render(point: point)))"
             }
-            return "Mechanical.LongPress(\(render(point: point)), duration: \(render(duration: target.duration)))"
+            return "Mechanical.LongPress(\(render(point: point)), duration: \(render(duration: request.duration)))"
         }
     }
 

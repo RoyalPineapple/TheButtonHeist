@@ -414,7 +414,7 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
         if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
             return description
         }
-        return hasPredicates ? nil : ElementTargetGrammarError.emptyPredicate.diagnosticDescription
+        return hasPredicates ? nil : AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
     }
 
     private static func checks(
@@ -701,14 +701,15 @@ package struct ElementPredicateGraph<Identity: Hashable, Subject: ElementPredica
         }
     }
 
-    package func resolve(_ target: ElementTarget) -> ElementPredicateMatchSet<Identity, Subject> {
+    package func resolve(_ target: AccessibilityTarget) -> ElementPredicateMatchSet<Identity, Subject> {
         switch target {
         case .predicate(let predicate, let ordinal):
+            guard let predicate = try? predicate.resolve(in: .empty) else { return .empty }
             let predicateMatches = resolve(predicate)
             guard let ordinal else { return predicateMatches }
             guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
             return ElementPredicateMatchSet([predicateMatches.matches[ordinal]])
-        case .within:
+        case .container, .ref, .within:
             return .empty
         }
     }

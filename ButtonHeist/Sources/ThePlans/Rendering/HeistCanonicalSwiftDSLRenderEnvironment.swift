@@ -33,7 +33,7 @@ struct RenderEnvironment {
             return self
         case .string:
             return bindingStringReference(name)
-        case .elementTarget:
+        case .accessibilityTarget:
             return bindingTargetReference(name)
         }
     }

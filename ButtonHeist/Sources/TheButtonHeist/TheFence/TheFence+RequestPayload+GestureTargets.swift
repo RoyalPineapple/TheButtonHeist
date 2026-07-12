@@ -5,25 +5,25 @@ extension TheFence {
 
     func decodeTapTarget(_ request: CommandArgumentEnvelope) throws -> TapTarget {
         try decodeGestureTarget(request, as: TapTarget.self) {
-            try $0.validatePublicGestureUnitPoints()
+            try $0.validatePublicGestureTarget(command: .oneFingerTap)
         }
     }
 
     func decodeLongPressTarget(_ request: CommandArgumentEnvelope) throws -> LongPressTarget {
         try decodeGestureTarget(request, as: LongPressTarget.self) {
-            try $0.validatePublicGestureUnitPoints()
+            try $0.validatePublicGestureTarget(command: .longPress)
         }
     }
 
     func decodeSwipeTarget(_ request: CommandArgumentEnvelope) throws -> SwipeTarget {
         try decodeGestureTarget(request, as: SwipeTarget.self) {
-            try $0.validatePublicGestureUnitPoints()
+            try $0.validatePublicGestureTarget(command: .swipe)
         }
     }
 
     func decodeDragTarget(_ request: CommandArgumentEnvelope) throws -> DragTarget {
         try decodeGestureTarget(request, as: DragTarget.self) {
-            try $0.validatePublicGestureUnitPoints()
+            try $0.validatePublicGestureTarget(command: .drag)
         }
     }
 
@@ -44,30 +44,56 @@ extension TheFence {
 }
 
 private extension TapTarget {
-    func validatePublicGestureUnitPoints() throws {
+    func validatePublicGestureTarget(command: TheFence.Command) throws {
+        try selection.validateElementTarget(command: command)
         try selection.validatePublicGestureUnitPoint(field: "unitPoint")
     }
 }
 
 private extension LongPressTarget {
-    func validatePublicGestureUnitPoints() throws {
+    func validatePublicGestureTarget(command: TheFence.Command) throws {
+        try selection.validateElementTarget(command: command)
         try selection.validatePublicGestureUnitPoint(field: "unitPoint")
     }
 }
 
 private extension SwipeTarget {
-    func validatePublicGestureUnitPoints() throws {
-        guard case .unitElement(_, let start, let end) = selection else { return }
-        try start.validatePublicGestureUnitPoint(field: "elementUnitPoints.start")
-        try end.validatePublicGestureUnitPoint(field: "elementUnitPoints.end")
+    func validatePublicGestureTarget(command: TheFence.Command) throws {
+        switch selection {
+        case .unitElement(let target, let start, let end):
+            _ = try target.resolvedElementTarget(command: command)
+            try start.validatePublicGestureUnitPoint(field: "elementUnitPoints.start")
+            try end.validatePublicGestureUnitPoint(field: "elementUnitPoints.end")
+        case .elementDirection(let target, _):
+            _ = try target.resolvedElementTarget(command: command)
+        case .point:
+            break
+        }
     }
 }
 
 private extension DragTarget {
-    func validatePublicGestureUnitPoints() throws {
-        guard case .elementToPoint(_, let start, _) = selection,
-              let start else { return }
-        try start.validatePublicGestureUnitPoint(field: "elementToPoint.start")
+    func validatePublicGestureTarget(command: TheFence.Command) throws {
+        switch selection {
+        case .elementToPoint(let target, let start, _):
+            _ = try target.resolvedElementTarget(command: command)
+            if let start {
+                try start.validatePublicGestureUnitPoint(field: "elementToPoint.start")
+            }
+        case .pointToPoint:
+            break
+        }
+    }
+}
+
+private extension GesturePointSelection {
+    func validateElementTarget(command: TheFence.Command) throws {
+        switch self {
+        case .element(let target), .elementUnitPoint(let target, _):
+            _ = try target.resolvedElementTarget(command: command)
+        case .coordinate:
+            break
+        }
     }
 }
 

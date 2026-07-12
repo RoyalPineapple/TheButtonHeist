@@ -57,6 +57,7 @@ and local command help disagree, the descriptor-backed help wins.
 
 ```bash
 buttonheist get_interface
+buttonheist get_interface --label "Checkout" --traits button
 buttonheist activate --label "Sign In" --traits button
 buttonheist type_text "user@example.com" --identifier emailField
 ```
@@ -96,7 +97,7 @@ JSON requests on stdin.
 ```bash
 buttonheist json_lines
 echo '{"command":"get_interface"}' | buttonheist json_lines
-printf '%s\n' '{"command":"run_heist","plan":"HeistPlan(\"smoke\") { Activate(.label(\"Sign In\")).expect(.screenChanged) }"}' | buttonheist json_lines
+printf '%s\n' '{"command":"run_heist","plan":"HeistPlan(\"smoke\") { Activate(.label(\"Sign In\")).expect(.changed(.screen())) }"}' | buttonheist json_lines
 ```
 
 JSON-lines mode auto-reconnects after connection loss, then the next command

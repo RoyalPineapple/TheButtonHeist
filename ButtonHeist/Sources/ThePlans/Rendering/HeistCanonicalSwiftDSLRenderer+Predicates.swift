@@ -1,320 +1,49 @@
 import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
-    func render(predicate: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
-        try render(state: predicate, environment: environment)
+    func render<Context>(
+        predicate: AccessibilityPredicate<Context>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        try render(predicateNode: predicate.node, environment: environment)
     }
 
-    func render(predicate: AccessibilityPredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch predicate {
-        case .state(let state):
-            return try render(state: state, environment: environment)
-        case .changePredicate(let change):
-            return try render(changePredicate: change, environment: environment)
-        case .noChangePredicate:
-            return ".noChange"
-        case .announcement(let announcement):
-            return try render(announcement: announcement, environment: environment)
-        case .predicate(let predicate):
-            return try render(predicate: predicate, environment: environment)
-        }
-    }
-
-    func render(predicate: AccessibilityPredicate, environment: RenderEnvironment) throws -> String {
-        switch predicate {
-        case .state(let state):
-            return try render(state: state, environment: environment)
-        case .changePredicate(let change):
-            return try render(changePredicate: change, environment: environment)
-        case .noChangePredicate:
-            return ".noChange"
-        case .announcement(let announcement):
-            return render(announcement: announcement)
-        }
-    }
-
-    func render(announcement: AnnouncementPredicateExpr, environment: RenderEnvironment) throws -> String {
-        guard let match = announcement.match else { return ".announcement" }
-        return try ".announcement(\(renderCallArgument(match, environment: environment)))"
-    }
-
-    func render(announcement: AnnouncementPredicate) -> String {
-        guard let match = announcement.match else { return ".announcement" }
-        return ".announcement(\(renderCallArgument(match)))"
-    }
-
-    func render(changePredicate change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {
-        if case .screenScope(let assertions) = change {
-            return try renderScreenChanged(assertions: assertions, environment: environment)
-        }
-        if case .elementsScope(let assertions) = change, assertions.count == 1 {
-            return try render(elementDelta: assertions[0], environment: environment)
-        }
-        return try ".change(\(render(change: change, environment: environment)))"
-    }
-
-    func render(changePredicate change: AccessibilityPredicate.Change, environment: RenderEnvironment) throws -> String {
-        if case .screenScope(let assertions) = change {
-            return try renderScreenChanged(assertions: assertions, environment: environment)
-        }
-        if case .elementsScope(let assertions) = change, assertions.count == 1 {
-            return try render(elementDelta: assertions[0])
-        }
-        return try ".change(\(render(change: change, environment: environment)))"
-    }
-
-    func render(state: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch state {
-        case .exists(let predicate):
-            return try renderExistsState(predicate, environment: environment)
-        case .missing(let predicate):
-            return ".missing(\(try render(predicate: predicate, environment: environment)))"
-        case .existsTarget(let target):
+    private func render(
+        predicateNode node: AccessibilityPredicateNode,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch node {
+        case .exists(let target):
             return ".exists(\(try render(target: target, environment: environment)))"
-        case .missingTarget(let target):
+        case .missing(let target):
             return ".missing(\(try render(target: target, environment: environment)))"
-        case .existsContainer(let container):
-            return try ".exists(container: \(render(container: container, environment: environment)))"
-        case .missingContainer(let container):
-            return try ".missing(container: \(render(container: container, environment: environment)))"
-        case .all(let states):
-            return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
-        }
-    }
-
-    func render(state: AccessibilityPredicate.State, environment: RenderEnvironment) throws -> String {
-        switch state {
-        case .exists(let predicate):
-            return renderExistsState(predicate)
-        case .missing(let predicate):
-            return ".missing(\(render(predicate: predicate)))"
-        case .existsTarget(let target):
-            return ".exists(\(render(target: target)))"
-        case .missingTarget(let target):
-            return ".missing(\(render(target: target)))"
-        case .existsContainer(let container):
-            return ".exists(container: \(render(container: container)))"
-        case .missingContainer(let container):
-            return ".missing(container: \(render(container: container)))"
-        case .all(let states):
-            return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
-        }
-    }
-
-    func renderExistsState(_ predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
-        if let shorthand = try renderSingleCheckTarget(predicate.checks, environment: environment) {
-            return shorthand
-        }
-        return ".exists(.element(\(try renderElementPredicateTemplateChecks(predicate, environment: environment))))"
-    }
-
-    func renderExistsState(_ predicate: ElementPredicate) -> String {
-        if let shorthand = renderSingleCheckTarget(predicate.checks) {
-            return shorthand
-        }
-        return ".exists(.element(\(renderElementPredicateChecks(predicate))))"
-    }
-
-    func render(change: AccessibilityPredicate.Change, environment: RenderEnvironment) throws -> String {
-        switch change {
-        case .any:
-            return ""
-        case .screenScope(let assertions):
-            return try renderScreenChanged(assertions: assertions, environment: environment)
-        case .elementsScope(let assertions):
-            switch assertions.count {
-            case 0:
-                return ".elements()"
-            case 1:
-                return try render(elementDelta: assertions[0])
-            default:
-                return try ".elements(\(assertions.map { try render(elementDelta: $0) }.joined(separator: ", ")))"
-            }
-        case .allScopes(let changes):
-            return try changes.map { try render(changeScope: $0, environment: environment) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ", ")
-        }
-    }
-
-    func render(change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch change {
-        case .any:
-            return ""
-        case .screenScope(let assertions):
-            return try renderScreenChanged(assertions: assertions, environment: environment)
-        case .elementsScope(let assertions):
-            switch assertions.count {
-            case 0:
-                return ".elements()"
-            case 1:
-                return try render(elementDelta: assertions[0], environment: environment)
-            default:
-                return try ".elements(\(assertions.map { try render(elementDelta: $0, environment: environment) }.joined(separator: ", ")))"
-            }
-        case .allScopes(let changes):
-            return try changes.map { try render(changeScope: $0, environment: environment) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ", ")
-        }
-    }
-
-    func render(changeScope scope: AccessibilityPredicate.ChangeScope, environment: RenderEnvironment) throws -> String {
-        switch scope {
+        case .announcement(let announcement):
+            guard let match = announcement.match else { return ".announcement" }
+            return ".announcement(\(renderCallArgument(match)))"
+        case .changed(let delta):
+            return ".changed(\(try render(predicateNode: delta, environment: environment)))"
+        case .noChange:
+            return ".noChange"
         case .screen(let assertions):
-            return try renderScreenChanged(assertions: assertions, environment: environment)
-        case .elements(let assertions):
-            switch assertions.count {
-            case 0:
-                return ".elements()"
-            case 1:
-                return try render(elementDelta: assertions[0])
-            default:
-                return try ".elements(\(assertions.map { try render(elementDelta: $0) }.joined(separator: ", ")))"
+            guard !assertions.isEmpty else { return ".screen()" }
+            let rendered = try assertions.map {
+                try render(predicateNode: $0, environment: environment)
             }
-        case .all(let scopes):
-            return try scopes.map { try render(changeScope: $0, environment: environment) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ", ")
-        }
-    }
-
-    func render(changeScope scope: ChangeScopePredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch scope {
-        case .screen(let assertions):
-            return try renderScreenChanged(assertions: assertions, environment: environment)
+            return ".screen([\(rendered.joined(separator: ", "))])"
         case .elements(let assertions):
-            switch assertions.count {
-            case 0:
-                return ".elements()"
-            case 1:
-                return try render(elementDelta: assertions[0], environment: environment)
-            default:
-                return try ".elements(\(assertions.map { try render(elementDelta: $0, environment: environment) }.joined(separator: ", ")))"
+            guard !assertions.isEmpty else { return ".elements()" }
+            let rendered = try assertions.map {
+                try render(predicateNode: $0, environment: environment)
             }
-        case .all(let scopes):
-            return try scopes.map { try render(changeScope: $0, environment: environment) }
-                .filter { !$0.isEmpty }
-                .joined(separator: ", ")
+            return ".elements([\(rendered.joined(separator: ", "))])"
+        case .appeared(let target):
+            return ".appeared(\(try render(target: target, environment: environment)))"
+        case .disappeared(let target):
+            return ".disappeared(\(try render(target: target, environment: environment)))"
+        case .updated(let target, let change):
+            return try ".updated(\(render(target: target, environment: environment)), \(render(propertyChange: change, environment: environment)))"
         }
     }
-
-    func renderScreenChanged(assertions: [StatePredicateExpr], environment: RenderEnvironment) throws -> String {
-        switch assertions.count {
-        case 0:
-            return ".screenChanged"
-        case 1:
-            return try ".screenChanged(\(renderScreenAssertion(assertions[0], environment: environment)))"
-        default:
-            let assertion = StatePredicateExpr.all(NonEmptyArray(
-                assertions[0],
-                rest: Array(assertions.dropFirst())
-            ))
-            return try ".screenChanged(\(renderScreenAssertion(assertion, environment: environment)))"
-        }
-    }
-
-    func renderScreenChanged(assertions: [AccessibilityPredicate.State], environment: RenderEnvironment) throws -> String {
-        switch assertions.count {
-        case 0:
-            return ".screenChanged"
-        case 1:
-            return ".screenChanged(\(renderScreenAssertion(assertions[0])))"
-        default:
-            let assertion = AccessibilityPredicate.State.all(NonEmptyArray(
-                assertions[0],
-                rest: Array(assertions.dropFirst())
-            ))
-            return ".screenChanged(\(renderScreenAssertion(assertion)))"
-        }
-    }
-
-    func renderScreenAssertion(_ state: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch state {
-        case .exists(let predicate):
-            return try ".exists(\(render(predicate: predicate, environment: environment)))"
-        case .missing(let predicate):
-            return try ".missing(\(render(predicate: predicate, environment: environment)))"
-        case .existsTarget(let target):
-            return try ".exists(\(render(target: target, environment: environment)))"
-        case .missingTarget(let target):
-            return try ".missing(\(render(target: target, environment: environment)))"
-        case .existsContainer(let container):
-            return try ".exists(container: \(render(container: container, environment: environment)))"
-        case .missingContainer(let container):
-            return try ".missing(container: \(render(container: container, environment: environment)))"
-        case .all(let states):
-            return try ".all(\(states.map { try renderScreenAssertion($0, environment: environment) }.joined(separator: ", ")))"
-        }
-    }
-
-    func renderScreenAssertion(_ state: AccessibilityPredicate.State) -> String {
-        switch state {
-        case .exists(let predicate):
-            return ".exists(\(render(predicate: predicate)))"
-        case .missing(let predicate):
-            return ".missing(\(render(predicate: predicate)))"
-        case .existsTarget(let target):
-            return ".exists(\(render(target: target)))"
-        case .missingTarget(let target):
-            return ".missing(\(render(target: target)))"
-        case .existsContainer(let container):
-            return ".exists(container: \(render(container: container)))"
-        case .missingContainer(let container):
-            return ".missing(container: \(render(container: container)))"
-        case .all(let states):
-            return ".all(\(states.map(renderScreenAssertion).joined(separator: ", ")))"
-        }
-    }
-
-    func render(elementDelta: ElementDeltaPredicate) throws -> String {
-        switch elementDelta {
-        case .appearedElement(let element):
-            return ".appeared(\(render(predicate: element)))"
-        case .disappearedElement(let element):
-            return ".disappeared(\(render(predicate: element)))"
-        case .updatedElement(let update):
-            return try ".updated(\(render(update: update)))"
-        }
-    }
-
-    func render(elementDelta: ElementDeltaPredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch elementDelta {
-        case .appearedElement(let element):
-            return try ".appeared(\(render(predicate: element, environment: environment)))"
-        case .disappearedElement(let element):
-            return try ".disappeared(\(render(predicate: element, environment: environment)))"
-        case .updatedElement(let update):
-            return try ".updated(\(render(update: update, environment: environment)))"
-        }
-    }
-
-    func render(update: ElementUpdatePredicate) throws -> String {
-        switch (update.element, update.change) {
-        case (.none, .some(let change)):
-            return render(propertyChange: change)
-        case (.some(let element), .some(let change)):
-            return "\(render(predicate: element)), \(render(propertyChange: change))"
-        case (.some, .none):
-            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("updated element matcher without an update matcher")
-        case (.none, .none):
-            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("empty updated predicate")
-        }
-    }
-
-    func render(update: ElementUpdatePredicateExpr, environment: RenderEnvironment) throws -> String {
-        switch (update.element, update.change) {
-        case (.none, .some(let change)):
-            return try render(propertyChange: change, environment: environment)
-        case (.some(let element), .some(let change)):
-            return try "\(render(predicate: element, environment: environment)), \(render(propertyChange: change, environment: environment))"
-        case (.some, .none):
-            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("updated element matcher without an update matcher")
-        case (.none, .none):
-            throw HeistCanonicalSwiftDSLError.unsupportedPredicate("empty updated predicate")
-        }
-    }
-
     func render(propertyChange change: AnyPropertyChange) -> String {
         switch change {
         case .value(let change):

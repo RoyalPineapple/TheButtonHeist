@@ -156,42 +156,59 @@ package func makeTestHeistExecutionResult(
 }
 
 package extension AccessibilityTrace {
-    static func projectingForTests(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
-        TestActionResultTrace.projecting(delta)
+    static func noChangeForTests(elementCount: Int) -> AccessibilityTrace {
+        TestActionResultTrace.noChange(elementCount: elementCount)
+    }
+
+    static func elementsChangedForTests(
+        elementCount: Int,
+        edits: ElementEdits
+    ) -> AccessibilityTrace {
+        TestActionResultTrace.elementsChanged(elementCount: elementCount, edits: edits)
+    }
+
+    static func screenChangedForTests(replacementInterface: Interface) -> AccessibilityTrace {
+        TestActionResultTrace.screenChanged(replacementInterface: replacementInterface)
     }
 }
 
 private enum TestActionResultTrace {
-    static func projecting(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
-        switch delta {
-        case .noChange(let payload):
-            let interface = interface(elements: placeholders(count: payload.elementCount))
-            return AccessibilityTrace(captures: [
-                capture(sequence: 1, interface: interface),
-                capture(sequence: 2, interface: interface),
-            ])
+    static func noChange(elementCount: Int) -> AccessibilityTrace {
+        let interface = interface(elements: placeholders(count: elementCount))
+        return AccessibilityTrace(captures: [
+            capture(sequence: 1, interface: interface),
+            capture(sequence: 2, interface: interface),
+        ])
+    }
 
-        case .elementsChanged(let payload):
-            let before = interface(elements: beforeElements(for: payload.edits, elementCount: payload.elementCount))
-            let after = interface(elements: afterElements(for: payload.edits, elementCount: payload.elementCount))
-            if payload.edits.isEmpty {
-                return AccessibilityTrace(captures: [
-                    capture(sequence: 1, interface: before, context: .empty),
-                    capture(sequence: 2, interface: before, context: AccessibilityTrace.Context(keyboardVisible: true)),
-                ])
-            }
+    static func elementsChanged(elementCount: Int, edits: ElementEdits) -> AccessibilityTrace {
+        let before = interface(elements: beforeElements(for: edits, elementCount: elementCount))
+        let after = interface(elements: afterElements(for: edits, elementCount: elementCount))
+        if edits.isEmpty {
             return AccessibilityTrace(captures: [
-                capture(sequence: 1, interface: before),
-                capture(sequence: 2, interface: after),
-            ])
-
-        case .screenChanged(let payload):
-            let before = interface(elements: placeholders(count: max(payload.elementCount, 1)))
-            return AccessibilityTrace(captures: [
-                capture(sequence: 1, interface: before, context: AccessibilityTrace.Context(screenId: "before")),
-                capture(sequence: 2, interface: payload.newInterface, context: AccessibilityTrace.Context(screenId: "after")),
+                capture(sequence: 1, interface: before, context: .empty),
+                capture(sequence: 2, interface: before, context: AccessibilityTrace.Context(keyboardVisible: true)),
             ])
         }
+        return AccessibilityTrace(captures: [
+            capture(sequence: 1, interface: before),
+            capture(sequence: 2, interface: after),
+        ])
+    }
+
+    static func screenChanged(replacementInterface: Interface) -> AccessibilityTrace {
+        AccessibilityTrace(captures: [
+            capture(
+                sequence: 1,
+                interface: interface(elements: []),
+                context: AccessibilityTrace.Context(screenId: "before")
+            ),
+            capture(
+                sequence: 2,
+                interface: replacementInterface,
+                context: AccessibilityTrace.Context(screenId: "after")
+            ),
+        ])
     }
 
     private static func capture(

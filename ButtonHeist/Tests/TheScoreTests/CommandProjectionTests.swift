@@ -12,12 +12,12 @@ final class CommandProjectionTests: XCTestCase {
 
     func testSwipeProjectionPreservesElementDirectionIntent() {
         let target = SwipeTarget(
-            selection: .elementDirection(.predicate(ElementPredicate(label: "carousel")), .left)
+            selection: .elementDirection(.predicate(ElementPredicateTemplate(label: "carousel")), .left)
         )
 
         XCTAssertEqual(
             target.selection,
-            .elementDirection(.predicate(ElementPredicate(label: "carousel")), .left)
+            .elementDirection(.predicate(ElementPredicateTemplate(label: "carousel")), .left)
         )
     }
 
@@ -40,8 +40,8 @@ final class CommandProjectionTests: XCTestCase {
 
     func testScrollTargetOwnsPublicSelection() {
         XCTAssertEqual(
-            ScrollTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
-            .element(.predicate(ElementPredicate(label: "row")))
+            ScrollTarget(selection: .element(.predicate(ElementPredicateTemplate(label: "row")))).selection,
+            .element(.predicate(ElementPredicateTemplate(label: "row")))
         )
         XCTAssertEqual(ScrollTarget().selection, .visibleContainer)
         XCTAssertEqual(
@@ -49,8 +49,8 @@ final class CommandProjectionTests: XCTestCase {
             .container("main_scroll")
         )
         XCTAssertEqual(
-            ScrollToEdgeTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
-            .element(.predicate(ElementPredicate(label: "row")))
+            ScrollToEdgeTarget(selection: .element(.predicate(ElementPredicateTemplate(label: "row")))).selection,
+            .element(.predicate(ElementPredicateTemplate(label: "row")))
         )
         XCTAssertEqual(
             ScrollToEdgeTarget(selection: .container("main_scroll")).selection,
@@ -60,8 +60,8 @@ final class CommandProjectionTests: XCTestCase {
 
     func testCustomActionTargetOwnsElementSelection() {
         XCTAssertEqual(
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "button")), actionName: "Archive"),
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "button")), actionName: "Archive")
+            CustomActionTarget(target: .predicate(ElementPredicateTemplate(label: "button")), actionName: "Archive"),
+            CustomActionTarget(target: .predicate(ElementPredicateTemplate(label: "button")), actionName: "Archive")
         )
     }
 

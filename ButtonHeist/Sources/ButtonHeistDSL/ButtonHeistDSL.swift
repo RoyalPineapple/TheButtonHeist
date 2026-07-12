@@ -18,20 +18,16 @@ public typealias StringMatchPayload = ThePlans.StringMatchPayload
 // MARK: - Targets And Predicates
 
 public typealias HeistTrait = ThePlans.HeistTrait
-public typealias ElementTarget = ThePlans.ElementTarget
-public typealias ElementTargetExpr = ThePlans.ElementTargetExpr
+public typealias AccessibilityTarget = ThePlans.AccessibilityTarget
 public typealias ElementPredicate = ThePlans.ElementPredicate
 public typealias ElementPredicateTemplate = ThePlans.ElementPredicateTemplate
 public typealias ElementPredicateCheck = ThePlans.ElementPredicateCheck
-public typealias AccessibilityPredicate = ThePlans.AccessibilityPredicate
-public typealias AccessibilityPredicateExpr = ThePlans.AccessibilityPredicateExpr
-public typealias StatePredicateExpr = ThePlans.StatePredicateExpr
-public typealias ChangePredicateExpr = ThePlans.ChangePredicateExpr
-public typealias ChangeScopePredicateExpr = ThePlans.ChangeScopePredicateExpr
-public typealias ElementDeltaPredicate = ThePlans.ElementDeltaPredicate
-public typealias ElementDeltaPredicateExpr = ThePlans.ElementDeltaPredicateExpr
-public typealias ElementUpdatePredicate = ThePlans.ElementUpdatePredicate
-public typealias ElementUpdatePredicateExpr = ThePlans.ElementUpdatePredicateExpr
+public typealias AccessibilityPredicate<Context> = ThePlans.AccessibilityPredicate<Context>
+public typealias RootContext = ThePlans.RootContext
+public typealias ScreenAssertionContext = ThePlans.ScreenAssertionContext
+public typealias ElementsAssertionContext = ThePlans.ElementsAssertionContext
+public typealias ChangeDeclaration = ThePlans.ChangeDeclaration
+public typealias AnyPropertyChangeExpr = ThePlans.AnyPropertyChangeExpr
 
 // MARK: - Actions
 
@@ -105,20 +101,12 @@ public func RunHeist(_ path: HeistInvocationPath, _ input: StringExpr) -> HeistI
 }
 
 @_disfavoredOverload
-public func RunHeist(_ name: String, _ input: ElementTarget) -> HeistInvocationContent {
+public func RunHeist(_ name: String, _ input: AccessibilityTarget) -> HeistInvocationContent {
     ThePlans.RunHeist(name, input)
 }
 
 @_disfavoredOverload
-public func RunHeist(_ path: HeistInvocationPath, _ input: ElementTarget) -> HeistInvocationContent {
-    ThePlans.RunHeist(path, input)
-}
-
-public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocationContent {
-    ThePlans.RunHeist(name, input)
-}
-
-public func RunHeist(_ path: HeistInvocationPath, _ input: ElementTargetExpr) -> HeistInvocationContent {
+public func RunHeist(_ path: HeistInvocationPath, _ input: AccessibilityTarget) -> HeistInvocationContent {
     ThePlans.RunHeist(path, input)
 }
 // swiftlint:enable identifier_name

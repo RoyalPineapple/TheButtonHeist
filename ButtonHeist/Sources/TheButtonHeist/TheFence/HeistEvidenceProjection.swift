@@ -52,7 +52,7 @@ struct HeistActionEvidenceProjection: Sendable {
         actionEvidence.command?.wireType.rawValue
     }
 
-    var target: ElementTarget? {
+    var target: AccessibilityTarget? {
         actionEvidence.command?.reportTarget
     }
 
@@ -163,7 +163,7 @@ struct HeistCaseSelectionEvidenceProjection: Sendable {
 }
 
 struct HeistCaseMatchProjection: Sendable {
-    let predicate: AccessibilityPredicate
+    let predicate: AccessibilityPredicate<RootContext>
     let met: Bool
     let actual: String?
 
@@ -218,7 +218,7 @@ struct HeistForEachElementEvidenceProjection: Sendable {
 
 struct HeistRepeatUntilEvidenceProjection: Sendable {
     let outcome: HeistPredicateEvidenceOutcome
-    let predicate: AccessibilityPredicate
+    let predicate: AccessibilityPredicate<RootContext>
     let timeout: Double
     let iterationCount: Int
     let iterationOrdinal: Int?

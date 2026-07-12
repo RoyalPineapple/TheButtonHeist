@@ -1,237 +1,155 @@
-public extension ElementTarget {
-    static func label(_ label: String) -> ElementTarget {
-        .predicate(.label(label))
-    }
-
-    static func label(_ label: StringMatch<String>) -> ElementTarget {
-        .predicate(.label(label))
-    }
-
-    static func identifier(_ identifier: String) -> ElementTarget {
-        .predicate(.identifier(identifier))
-    }
-
-    static func identifier(_ identifier: StringMatch<String>) -> ElementTarget {
-        .predicate(.identifier(identifier))
-    }
-
-    static func value(_ value: String) -> ElementTarget {
-        .predicate(.value(value))
-    }
-
-    static func value(_ value: StringMatch<String>) -> ElementTarget {
-        .predicate(.value(value))
-    }
-
-    static func hint(_ hint: String) -> ElementTarget {
-        .predicate(.hint(hint))
-    }
-
-    static func hint(_ hint: StringMatch<String>) -> ElementTarget {
-        .predicate(.hint(hint))
-    }
-
-    static func traits(_ traits: [HeistTrait]) -> ElementTarget {
-        .predicate(.traits(traits))
-    }
-
-    static func actions(_ actions: [ElementAction]) -> ElementTarget {
-        .predicate(.actions(actions))
-    }
-
-    static func customContent(_ match: CustomContentMatch<String>) -> ElementTarget {
-        .predicate(.customContent(match))
-    }
-
-    static func rotors(_ rotors: [StringMatch<String>]) -> ElementTarget {
-        .predicate(.rotors(rotors))
-    }
-
-    static func exclude(_ check: ElementPredicateCheck<String>) -> ElementTarget {
-        .predicate(.exclude(check))
-    }
-
-    static func element(
-        _ checks: ElementPredicateCheck<String>...,
-        traits: [HeistTrait] = [],
-        actions: [ElementAction] = []
-    ) -> ElementTarget {
-        .predicate(ElementPredicate(
-            checks,
-            traits: traits,
-            actions: actions
-        ))
-    }
-
-    static func target(_ predicate: ElementPredicate, ordinal: Int) -> ElementTarget {
-        .predicate(predicate, ordinal: ordinal)
-    }
-
-    static func within(container: ContainerPredicate, _ target: ElementTarget) -> ElementTarget {
-        .within(container, target)
-    }
-}
-
 public extension ElementPredicateTemplate {
     @_disfavoredOverload
-    static func label(_ label: StringMatch<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(label: label)
+    static func label(_ label: StringMatch<StringExpr>) -> Self {
+        Self(label: label)
     }
 
-    static func label(_ label: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(label: StringMatch(label))
+    static func label(_ label: StringExpr) -> Self {
+        Self(label: StringMatch(label))
     }
 
-    static func label(_ label: String) -> ElementPredicateTemplate {
+    static func label(_ label: String) -> Self {
         .label(.literal(label))
     }
 
     @_disfavoredOverload
-    static func identifier(_ identifier: StringMatch<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(identifier: identifier)
+    static func identifier(_ identifier: StringMatch<StringExpr>) -> Self {
+        Self(identifier: identifier)
     }
 
-    static func identifier(_ identifier: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(identifier: StringMatch(identifier))
+    static func identifier(_ identifier: StringExpr) -> Self {
+        Self(identifier: StringMatch(identifier))
     }
 
-    static func identifier(_ identifier: String) -> ElementPredicateTemplate {
+    static func identifier(_ identifier: String) -> Self {
         .identifier(.literal(identifier))
     }
 
     @_disfavoredOverload
-    static func value(_ value: StringMatch<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(value: value)
+    static func value(_ value: StringMatch<StringExpr>) -> Self {
+        Self(value: value)
     }
 
-    static func value(_ value: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(value: StringMatch(value))
+    static func value(_ value: StringExpr) -> Self {
+        Self(value: StringMatch(value))
     }
 
-    static func value(_ value: String) -> ElementPredicateTemplate {
+    static func value(_ value: String) -> Self {
         .value(.literal(value))
     }
 
     @_disfavoredOverload
-    static func hint(_ hint: StringMatch<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(hint: hint)
+    static func hint(_ hint: StringMatch<StringExpr>) -> Self {
+        Self(hint: hint)
     }
 
-    static func hint(_ hint: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(hint: StringMatch(hint))
+    static func hint(_ hint: StringExpr) -> Self {
+        Self(hint: StringMatch(hint))
     }
 
-    static func hint(_ hint: String) -> ElementPredicateTemplate {
+    static func hint(_ hint: String) -> Self {
         .hint(.literal(hint))
     }
 
-    static func traits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(traits: traits)
+    static func traits(_ traits: [HeistTrait]) -> Self {
+        Self(traits: traits)
     }
 
-    static func actions(_ actions: [ElementAction]) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(actions: actions)
+    static func actions(_ actions: [ElementAction]) -> Self {
+        Self(actions: actions)
     }
 
-    static func customContent(_ match: CustomContentMatch<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(customContent: match)
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> Self {
+        Self(customContent: match)
     }
 
-    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(rotors: rotors)
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> Self {
+        Self(rotors: rotors)
     }
 
-    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> ElementPredicateTemplate {
-        ElementPredicateTemplate([.exclude(check)])
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> Self {
+        Self([.exclude(check)])
     }
 
     static func element(
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
         actions: [ElementAction] = []
-    ) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(
-            checks,
-            traits: traits,
-            actions: actions
-        )
+    ) -> Self {
+        Self(checks, traits: traits, actions: actions)
     }
 }
 
-public extension ElementTargetExpr {
+public extension AccessibilityTarget {
     @_disfavoredOverload
-    static func label(_ label: StringMatch<StringExpr>) -> ElementTargetExpr {
+    static func label(_ label: StringMatch<StringExpr>) -> Self {
         .predicate(.label(label))
     }
 
-    static func label(_ label: StringExpr) -> ElementTargetExpr {
-        .predicate(.label(StringMatch(label)))
+    static func label(_ label: StringExpr) -> Self {
+        .predicate(.label(label))
     }
 
-    @_disfavoredOverload
-    static func label(_ label: String) -> ElementTargetExpr {
+    static func label(_ label: String) -> Self {
         .predicate(.label(label))
     }
 
     @_disfavoredOverload
-    static func identifier(_ identifier: StringMatch<StringExpr>) -> ElementTargetExpr {
+    static func identifier(_ identifier: StringMatch<StringExpr>) -> Self {
         .predicate(.identifier(identifier))
     }
 
-    static func identifier(_ identifier: StringExpr) -> ElementTargetExpr {
-        .predicate(.identifier(StringMatch(identifier)))
+    static func identifier(_ identifier: StringExpr) -> Self {
+        .predicate(.identifier(identifier))
     }
 
-    @_disfavoredOverload
-    static func identifier(_ identifier: String) -> ElementTargetExpr {
+    static func identifier(_ identifier: String) -> Self {
         .predicate(.identifier(identifier))
     }
 
     @_disfavoredOverload
-    static func value(_ value: StringMatch<StringExpr>) -> ElementTargetExpr {
+    static func value(_ value: StringMatch<StringExpr>) -> Self {
         .predicate(.value(value))
     }
 
-    static func value(_ value: StringExpr) -> ElementTargetExpr {
-        .predicate(.value(StringMatch(value)))
+    static func value(_ value: StringExpr) -> Self {
+        .predicate(.value(value))
     }
 
-    @_disfavoredOverload
-    static func value(_ value: String) -> ElementTargetExpr {
+    static func value(_ value: String) -> Self {
         .predicate(.value(value))
     }
 
     @_disfavoredOverload
-    static func hint(_ hint: StringMatch<StringExpr>) -> ElementTargetExpr {
+    static func hint(_ hint: StringMatch<StringExpr>) -> Self {
         .predicate(.hint(hint))
     }
 
-    static func hint(_ hint: StringExpr) -> ElementTargetExpr {
-        .predicate(.hint(StringMatch(hint)))
-    }
-
-    @_disfavoredOverload
-    static func hint(_ hint: String) -> ElementTargetExpr {
+    static func hint(_ hint: StringExpr) -> Self {
         .predicate(.hint(hint))
     }
 
-    static func traits(_ traits: [HeistTrait]) -> ElementTargetExpr {
+    static func hint(_ hint: String) -> Self {
+        .predicate(.hint(hint))
+    }
+
+    static func traits(_ traits: [HeistTrait]) -> Self {
         .predicate(.traits(traits))
     }
 
-    static func actions(_ actions: [ElementAction]) -> ElementTargetExpr {
+    static func actions(_ actions: [ElementAction]) -> Self {
         .predicate(.actions(actions))
     }
 
-    static func customContent(_ match: CustomContentMatch<StringExpr>) -> ElementTargetExpr {
+    static func customContent(_ match: CustomContentMatch<StringExpr>) -> Self {
         .predicate(.customContent(match))
     }
 
-    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> ElementTargetExpr {
+    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> Self {
         .predicate(.rotors(rotors))
     }
 
-    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> ElementTargetExpr {
+    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> Self {
         .predicate(.exclude(check))
     }
 
@@ -239,571 +157,15 @@ public extension ElementTargetExpr {
         _ checks: ElementPredicateCheck<StringExpr>...,
         traits: [HeistTrait] = [],
         actions: [ElementAction] = []
-    ) -> ElementTargetExpr {
-        .predicate(ElementPredicateTemplate(
-            checks,
-            traits: traits,
-            actions: actions
-        ))
+    ) -> Self {
+        .predicate(ElementPredicateTemplate(checks, traits: traits, actions: actions))
     }
 
-    static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> ElementTargetExpr {
+    static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> Self {
         .predicate(predicate, ordinal: ordinal)
     }
 
-    static func within(container: ContainerPredicateExpr, _ target: ElementTargetExpr) -> ElementTargetExpr {
+    static func within(container: ContainerPredicateExpr, _ target: Self) -> Self {
         .within(container: container, target: target)
-    }
-}
-
-public extension AccessibilityPredicate {
-    static func change(_ scopes: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate {
-        switch scopes.count {
-        case 0:
-            return .changePredicate(.any)
-        case 1:
-            return .changePredicate(AccessibilityPredicate.Change(scopes[0]))
-        default:
-            return .changePredicate(.allScopes(NonEmptyArray(scopes[0], rest: Array(scopes.dropFirst()))))
-        }
-    }
-
-    static var noChange: AccessibilityPredicate {
-        .noChangePredicate
-    }
-
-    static var announcement: AccessibilityPredicate {
-        .announcement(AnnouncementPredicate())
-    }
-
-    static func announcement(_ text: String) -> AccessibilityPredicate {
-        .announcement(AnnouncementPredicate(text))
-    }
-
-    static func announcement(_ match: StringMatch<String>) -> AccessibilityPredicate {
-        .announcement(AnnouncementPredicate(match: match))
-    }
-
-    static func announcement(containing text: String) -> AccessibilityPredicate {
-        .announcement(AnnouncementPredicate(match: .contains(text)))
-    }
-
-    static func exists(_ predicate: ElementPredicate) -> AccessibilityPredicate {
-        .state(.exists(predicate))
-    }
-
-    @_disfavoredOverload
-    static func exists(_ target: ElementTarget) -> AccessibilityPredicate {
-        .state(.existsTarget(target))
-    }
-
-    static func missing(_ predicate: ElementPredicate) -> AccessibilityPredicate {
-        .state(.missing(predicate))
-    }
-
-    @_disfavoredOverload
-    static func missing(_ target: ElementTarget) -> AccessibilityPredicate {
-        .state(.missingTarget(target))
-    }
-
-    static func exists(container: ContainerPredicate) -> AccessibilityPredicate {
-        .state(.existsContainer(container))
-    }
-
-    static func missing(container: ContainerPredicate) -> AccessibilityPredicate {
-        .state(.missingContainer(container))
-    }
-
-    static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate {
-        .state(.all(NonEmptyArray(first, rest: rest)))
-    }
-}
-
-public extension AccessibilityPredicate.State {
-    static func exists(container: ContainerPredicate) -> AccessibilityPredicate.State {
-        .existsContainer(container)
-    }
-
-    static func missing(container: ContainerPredicate) -> AccessibilityPredicate.State {
-        .missingContainer(container)
-    }
-
-    static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.State {
-        .all(NonEmptyArray(first, rest: rest))
-    }
-}
-
-public extension AccessibilityPredicateExpr {
-    static func exists(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .state(.exists(predicate))
-    }
-
-    @_disfavoredOverload
-    static func exists(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
-        .state(.existsTarget(target))
-    }
-
-    static func missing(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .state(.missing(predicate))
-    }
-
-    @_disfavoredOverload
-    static func missing(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
-        .state(.missingTarget(target))
-    }
-
-    static func exists(container: ContainerPredicateExpr) -> AccessibilityPredicateExpr {
-        .state(.existsContainer(container))
-    }
-
-    static func missing(container: ContainerPredicateExpr) -> AccessibilityPredicateExpr {
-        .state(.missingContainer(container))
-    }
-
-    static func change(_ scopes: ChangeScopePredicateExpr...) -> AccessibilityPredicateExpr {
-        switch scopes.count {
-        case 0:
-            return .changePredicate(.any)
-        case 1:
-            return .changePredicate(scopes[0].change)
-        default:
-            return .changePredicate(.allScopes(NonEmptyArray(scopes[0], rest: Array(scopes.dropFirst()))))
-        }
-    }
-
-    static var noChange: AccessibilityPredicateExpr {
-        .noChangePredicate
-    }
-
-    static var announcement: AccessibilityPredicateExpr {
-        .announcement(AnnouncementPredicateExpr())
-    }
-
-    static func announcement(_ text: String) -> AccessibilityPredicateExpr {
-        .announcement(AnnouncementPredicateExpr(text))
-    }
-
-    static func announcement(_ match: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .announcement(AnnouncementPredicateExpr(match: match))
-    }
-
-    static func announcement(containing text: String) -> AccessibilityPredicateExpr {
-        .announcement(AnnouncementPredicateExpr(match: .contains(.literal(text))))
-    }
-
-    static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> AccessibilityPredicateExpr {
-        .state(.all(NonEmptyArray(first, rest: rest)))
-    }
-
-    @_disfavoredOverload
-    static func label(_ label: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.label(label))
-    }
-
-    static func label(_ label: StringExpr) -> AccessibilityPredicateExpr {
-        .exists(.label(label))
-    }
-
-    static func label(_ label: String) -> AccessibilityPredicateExpr {
-        .exists(.label(label))
-    }
-
-    @_disfavoredOverload
-    static func identifier(_ identifier: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    static func identifier(_ identifier: StringExpr) -> AccessibilityPredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    static func identifier(_ identifier: String) -> AccessibilityPredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    @_disfavoredOverload
-    static func value(_ value: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.value(value))
-    }
-
-    static func value(_ value: StringExpr) -> AccessibilityPredicateExpr {
-        .exists(.value(value))
-    }
-
-    static func value(_ value: String) -> AccessibilityPredicateExpr {
-        .exists(.value(value))
-    }
-
-    @_disfavoredOverload
-    static func hint(_ hint: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func hint(_ hint: StringExpr) -> AccessibilityPredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func hint(_ hint: String) -> AccessibilityPredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func traits(_ traits: [HeistTrait]) -> AccessibilityPredicateExpr {
-        .exists(.traits(traits))
-    }
-
-    static func actions(_ actions: [ElementAction]) -> AccessibilityPredicateExpr {
-        .exists(.actions(actions))
-    }
-
-    static func customContent(_ match: CustomContentMatch<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.customContent(match))
-    }
-
-    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> AccessibilityPredicateExpr {
-        .exists(.rotors(rotors))
-    }
-
-    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> AccessibilityPredicateExpr {
-        .exists(.exclude(check))
-    }
-
-    static func element(
-        _ checks: ElementPredicateCheck<StringExpr>...,
-        traits: [HeistTrait] = [],
-        actions: [ElementAction] = []
-    ) -> AccessibilityPredicateExpr {
-        .exists(ElementPredicateTemplate(
-            checks,
-            traits: traits,
-            actions: actions
-        ))
-    }
-
-    static func appeared(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .change(.appeared(predicate))
-    }
-
-    static func disappeared(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .change(.disappeared(predicate))
-    }
-
-    static func updated(_ change: AnyPropertyChangeExpr) -> AccessibilityPredicateExpr {
-        .change(.updated(change))
-    }
-
-    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> AccessibilityPredicateExpr {
-        .change(.updated(element, change))
-    }
-
-    static var screenChanged: AccessibilityPredicateExpr {
-        .change(.screenChanged)
-    }
-
-    static func screenChanged(_ assertions: StatePredicateExpr...) -> AccessibilityPredicateExpr {
-        .change(.screenChanged(assertions))
-    }
-}
-
-public extension StatePredicateExpr {
-    @_disfavoredOverload
-    static func exists(_ target: ElementTargetExpr) -> StatePredicateExpr {
-        .existsTarget(target)
-    }
-
-    @_disfavoredOverload
-    static func missing(_ target: ElementTargetExpr) -> StatePredicateExpr {
-        .missingTarget(target)
-    }
-
-    static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> StatePredicateExpr {
-        .all(NonEmptyArray(first, rest: rest))
-    }
-
-    static func exists(container: ContainerPredicateExpr) -> StatePredicateExpr {
-        .existsContainer(container)
-    }
-
-    static func missing(container: ContainerPredicateExpr) -> StatePredicateExpr {
-        .missingContainer(container)
-    }
-
-    @_disfavoredOverload
-    static func label(_ label: StringMatch<StringExpr>) -> StatePredicateExpr {
-        .exists(.label(label))
-    }
-
-    static func label(_ label: StringExpr) -> StatePredicateExpr {
-        .exists(.label(label))
-    }
-
-    static func label(_ label: String) -> StatePredicateExpr {
-        .exists(.label(label))
-    }
-
-    @_disfavoredOverload
-    static func identifier(_ identifier: StringMatch<StringExpr>) -> StatePredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    static func identifier(_ identifier: StringExpr) -> StatePredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    static func identifier(_ identifier: String) -> StatePredicateExpr {
-        .exists(.identifier(identifier))
-    }
-
-    @_disfavoredOverload
-    static func value(_ value: StringMatch<StringExpr>) -> StatePredicateExpr {
-        .exists(.value(value))
-    }
-
-    static func value(_ value: StringExpr) -> StatePredicateExpr {
-        .exists(.value(value))
-    }
-
-    static func value(_ value: String) -> StatePredicateExpr {
-        .exists(.value(value))
-    }
-
-    @_disfavoredOverload
-    static func hint(_ hint: StringMatch<StringExpr>) -> StatePredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func hint(_ hint: StringExpr) -> StatePredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func hint(_ hint: String) -> StatePredicateExpr {
-        .exists(.hint(hint))
-    }
-
-    static func traits(_ traits: [HeistTrait]) -> StatePredicateExpr {
-        .exists(.traits(traits))
-    }
-
-    static func actions(_ actions: [ElementAction]) -> StatePredicateExpr {
-        .exists(.actions(actions))
-    }
-
-    static func customContent(_ match: CustomContentMatch<StringExpr>) -> StatePredicateExpr {
-        .exists(.customContent(match))
-    }
-
-    static func rotors(_ rotors: [StringMatch<StringExpr>]) -> StatePredicateExpr {
-        .exists(.rotors(rotors))
-    }
-
-    static func exclude(_ check: ElementPredicateCheck<StringExpr>) -> StatePredicateExpr {
-        .exists(.exclude(check))
-    }
-
-    static func element(
-        _ checks: ElementPredicateCheck<StringExpr>...,
-        traits: [HeistTrait] = [],
-        actions: [ElementAction] = []
-    ) -> StatePredicateExpr {
-        .exists(ElementPredicateTemplate(
-            checks,
-            traits: traits,
-            actions: actions
-        ))
-    }
-}
-
-public extension ChangePredicateExpr {
-    static var screenChanged: ChangePredicateExpr {
-        .screenScope([])
-    }
-
-    static func screenChanged(_ assertions: [StatePredicateExpr]) -> ChangePredicateExpr {
-        .screenScope(assertions)
-    }
-
-    static func screenChanged(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangePredicateExpr {
-        .screenScope([first] + rest)
-    }
-
-    static func elements() -> ChangePredicateExpr {
-        .elementsScope([])
-    }
-
-    static func elements(_ first: ElementDeltaPredicateExpr, _ rest: ElementDeltaPredicateExpr...) -> ChangePredicateExpr {
-        .elementsScope([first] + rest)
-    }
-
-    static func appeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr {
-        .elementsScope([.appearedElement(predicate)])
-    }
-
-    static func disappeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr {
-        .elementsScope([.disappearedElement(predicate)])
-    }
-
-    static func updated(_ change: AnyPropertyChangeExpr) -> ChangePredicateExpr {
-        .elementsScope([.updatedElement(ElementUpdatePredicateExpr(change: change))])
-    }
-
-    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ChangePredicateExpr {
-        .elementsScope([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
-    }
-
-    static func all(_ first: ChangeScopePredicateExpr, _ rest: ChangeScopePredicateExpr...) -> ChangePredicateExpr {
-        .allScopes(NonEmptyArray(first, rest: rest))
-    }
-}
-
-public extension ChangeScopePredicateExpr {
-    static var screenChanged: ChangeScopePredicateExpr {
-        .screen([])
-    }
-
-    static func screenChanged(_ assertions: [StatePredicateExpr]) -> ChangeScopePredicateExpr {
-        .screen(assertions)
-    }
-
-    static func screenChanged(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangeScopePredicateExpr {
-        .screen([first] + rest)
-    }
-
-    static func elements(_ first: ElementDeltaPredicateExpr, _ rest: ElementDeltaPredicateExpr...) -> ChangeScopePredicateExpr {
-        .elements([first] + rest)
-    }
-
-    static func appeared(_ predicate: ElementPredicateTemplate) -> ChangeScopePredicateExpr {
-        .elements([.appearedElement(predicate)])
-    }
-
-    static func disappeared(_ predicate: ElementPredicateTemplate) -> ChangeScopePredicateExpr {
-        .elements([.disappearedElement(predicate)])
-    }
-
-    static func updated(_ change: AnyPropertyChangeExpr) -> ChangeScopePredicateExpr {
-        .elements([.updatedElement(ElementUpdatePredicateExpr(change: change))])
-    }
-
-    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ChangeScopePredicateExpr {
-        .elements([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
-    }
-
-    static func all(_ first: ChangeScopePredicateExpr, _ rest: ChangeScopePredicateExpr...) -> ChangeScopePredicateExpr {
-        .all(NonEmptyArray(first, rest: rest))
-    }
-}
-
-public extension AccessibilityPredicate.Change {
-    static var screenChanged: AccessibilityPredicate.Change {
-        .screenScope([])
-    }
-
-    static func screenChanged(_ assertions: [AccessibilityPredicate.State]) -> AccessibilityPredicate.Change {
-        .screenScope(assertions)
-    }
-
-    static func screenChanged(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change {
-        .screenScope([first] + rest)
-    }
-
-    static func elements() -> AccessibilityPredicate.Change {
-        .elementsScope([])
-    }
-
-    static func elements(_ first: ElementDeltaPredicate, _ rest: ElementDeltaPredicate...) -> AccessibilityPredicate.Change {
-        .elementsScope([first] + rest)
-    }
-
-    static func appeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change {
-        .elementsScope([.appearedElement(predicate)])
-    }
-
-    static func disappeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change {
-        .elementsScope([.disappearedElement(predicate)])
-    }
-
-    static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.Change {
-        .elementsScope([.updatedElement(ElementUpdatePredicate(change: change))])
-    }
-
-    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> AccessibilityPredicate.Change {
-        .elementsScope([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
-    }
-
-    static func all(_ first: AccessibilityPredicate.ChangeScope, _ rest: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate.Change {
-        .allScopes(NonEmptyArray(first, rest: rest))
-    }
-}
-
-public extension AccessibilityPredicate.ChangeScope {
-    static var screenChanged: AccessibilityPredicate.ChangeScope {
-        .screen([])
-    }
-
-    static func screenChanged(_ assertions: [AccessibilityPredicate.State]) -> AccessibilityPredicate.ChangeScope {
-        .screen(assertions)
-    }
-
-    static func screenChanged(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.ChangeScope {
-        .screen([first] + rest)
-    }
-
-    static func elements(_ first: ElementDeltaPredicate, _ rest: ElementDeltaPredicate...) -> AccessibilityPredicate.ChangeScope {
-        .elements([first] + rest)
-    }
-
-    static func appeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.ChangeScope {
-        .elements([.appearedElement(predicate)])
-    }
-
-    static func disappeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.ChangeScope {
-        .elements([.disappearedElement(predicate)])
-    }
-
-    static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.ChangeScope {
-        .elements([.updatedElement(ElementUpdatePredicate(change: change))])
-    }
-
-    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> AccessibilityPredicate.ChangeScope {
-        .elements([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
-    }
-
-    static func all(_ first: AccessibilityPredicate.ChangeScope, _ rest: AccessibilityPredicate.ChangeScope...) -> AccessibilityPredicate.ChangeScope {
-        .all(NonEmptyArray(first, rest: rest))
-    }
-}
-
-public extension ElementDeltaPredicateExpr {
-    static func appeared(_ predicate: ElementPredicateTemplate) -> ElementDeltaPredicateExpr {
-        .appearedElement(predicate)
-    }
-
-    static func disappeared(_ predicate: ElementPredicateTemplate) -> ElementDeltaPredicateExpr {
-        .disappearedElement(predicate)
-    }
-
-    static func updated(_ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr {
-        .updatedElement(ElementUpdatePredicateExpr(change: change))
-    }
-
-    static func updated(_ element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr {
-        .updatedElement(ElementUpdatePredicateExpr(element: element, change: change))
-    }
-}
-
-public extension ElementDeltaPredicate {
-    static func appeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate {
-        .appearedElement(predicate)
-    }
-
-    static func disappeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate {
-        .disappearedElement(predicate)
-    }
-
-    static func updated(_ change: AnyPropertyChange) -> ElementDeltaPredicate {
-        .updatedElement(ElementUpdatePredicate(change: change))
-    }
-
-    static func updated(_ element: ElementPredicate, _ change: AnyPropertyChange) -> ElementDeltaPredicate {
-        .updatedElement(ElementUpdatePredicate(element: element, change: change))
     }
 }

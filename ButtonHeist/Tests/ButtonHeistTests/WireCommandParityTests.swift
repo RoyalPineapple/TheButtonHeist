@@ -301,8 +301,9 @@ final class WireCommandParityTests: XCTestCase {
         case .wait:
             return [
                 "predicate": .object([
-                    "type": .string("change"),
-                    "scopes": .array([.object(["type": .string("elements")])]),
+                    "type": .string("changed"),
+                    "scope": .string("elements"),
+                    "assertions": .array([]),
                 ]),
                 "timeout": .double(10),
             ]

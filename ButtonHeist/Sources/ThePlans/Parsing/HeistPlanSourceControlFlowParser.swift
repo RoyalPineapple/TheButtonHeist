@@ -25,7 +25,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
-            let predicate = try parseStatePredicateExpr()
+            let predicate = try parseScreenAssertion()
             try expectSymbol(")")
             let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "If")
             return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
@@ -128,11 +128,10 @@ extension HeistPlanSourceParser {
             switch chain {
             case "expect":
                 try expectSymbol("(")
-                let predicate: AccessibilityPredicateExpr
+                let predicate: AccessibilityPredicate<RootContext>
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
-                    predicate = .change()
-                    timeout = nil
+                    throw error(currentToken, ".expect(...) requires a canonical predicate")
                 } else {
                     predicate = try parseAccessibilityPredicateExpr()
                     timeout = try parseTrailingTimeout(defaultValue: nil)
@@ -166,7 +165,7 @@ extension HeistPlanSourceParser {
         if let string = try parseStringExprIfPresent() {
             return .string(string)
         }
-        return .elementTarget(try parseTargetExpr())
+        return .accessibilityTarget(try parseTargetExpr())
     }
 
     mutating func parseWarn() throws -> HeistStep {
@@ -197,7 +196,7 @@ extension HeistPlanSourceParser {
                     throw error(token, "Case must appear before Else")
                 }
                 try expectSymbol("(")
-                let predicate = try parseStatePredicateExpr()
+                let predicate = try parseScreenAssertion()
                 try expectSymbol(")")
                 cases.append(PredicateCase(predicate: predicate, body: try parseHeistBlock()))
             case "Else":
@@ -213,7 +212,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseSinglePredicateBranches(
-        predicate: StatePredicateExpr,
+        predicate: AccessibilityPredicate<ScreenAssertionContext>,
         chainContext: String
     ) throws -> ParsedPredicateBranches {
         let body = try parseHeistBlock()

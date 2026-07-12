@@ -221,7 +221,7 @@ struct PublicRotorTextRange: Encodable {
 struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
-    let expected: AccessibilityPredicate?
+    let expected: AccessibilityPredicate<RootContext>?
     let hint: String?
 
     init(projection: ExpectationProjection) {
@@ -246,6 +246,7 @@ struct PublicDelta: Encodable {
         case elementCount
         case captureEdge
         case interactionDigest
+        case accessibilityNotifications
         case transient
         case edits
         case newInterface
@@ -290,6 +291,9 @@ struct PublicDelta: Encodable {
         try container.encode(metadata.elementCount, forKey: .elementCount)
         try container.encodeIfPresent(metadata.captureEdge, forKey: .captureEdge)
         try container.encodeIfPresent(metadata.interactionDigest, forKey: .interactionDigest)
+        if !metadata.accessibilityNotifications.isEmpty {
+            try container.encode(metadata.accessibilityNotifications, forKey: .accessibilityNotifications)
+        }
         try container.encodeIfPresent(Self.elements(metadata.transient.elements), forKey: .transient)
     }
 
@@ -585,7 +589,7 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
 }
 
 struct PublicHeistCaseMatchResult: Encodable {
-    let predicate: AccessibilityPredicate
+    let predicate: AccessibilityPredicate<RootContext>
     let met: Bool
     let actual: String?
 
@@ -640,7 +644,7 @@ struct PublicHeistForEachElementEvidence: Encodable {
 
 struct PublicHeistRepeatUntilEvidence: Encodable {
     let outcome: HeistPredicateEvidenceOutcome
-    let predicate: AccessibilityPredicate
+    let predicate: AccessibilityPredicate<RootContext>
     let timeout: Double
     let iterationCount: Int
     let iterationOrdinal: Int?

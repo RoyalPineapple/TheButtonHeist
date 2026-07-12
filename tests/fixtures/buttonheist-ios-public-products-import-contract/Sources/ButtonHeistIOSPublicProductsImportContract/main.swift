@@ -24,7 +24,7 @@ struct ButtonHeistIOSPublicProductsImportContract {
 func xctestShapeCompiles() async throws {
     try await runHeist("Checkout.pay") {
         Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 }
 
@@ -32,12 +32,12 @@ func xctestShapeCompiles() async throws {
 func argumentShapesCompile() async throws {
     try await runHeist("Cart.addItem", argument: "Milk") { item in
         Activate(.label(item))
-            .expect(.appeared(.label("Milk")))
+            .expect(.changed(.elements([.appeared(.label("Milk"))])))
     }
 
     try await runHeist("Rows.activate", argument: .label("Milk")) { target in
         Activate(target)
-            .expect(.appeared(.label("Milk")))
+            .expect(.changed(.elements([.appeared(.label("Milk"))])))
     }
 }
 
@@ -45,7 +45,7 @@ func argumentShapesCompile() async throws {
 func prebuiltPlanShapeCompiles() async throws {
     let plan = try HeistPlan("Checkout.pay") {
         Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 
     _ = try await runHeist(plan)
@@ -67,7 +67,7 @@ func kifStyleReplacementShapeCompiles() {
 
     runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
         Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+            .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 }
 
@@ -92,7 +92,7 @@ func systemDialogPairingInAppContractShapeCompiles() {
         WaitFor(.exists(.label("Location Enabled")), timeout: .seconds(5))
 
         Activate(.label("Continue"))
-            .expect(.appeared(.label("Map")))
+            .expect(.changed(.elements([.appeared(.label("Map"))])))
     }
 }
 

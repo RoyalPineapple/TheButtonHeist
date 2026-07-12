@@ -114,8 +114,8 @@ extension HeistPlanSourceParser {
             return .none
         case "String":
             return .string
-        case "ElementTarget":
-            return .elementTarget
+        case "AccessibilityTarget":
+            return .accessibilityTarget
         default:
             throw error(previous, "unsupported HeistDef parameter type '\(type)'")
         }
@@ -137,19 +137,19 @@ extension HeistPlanSourceParser {
                 throw error(previous, "HeistDef<Void> must not declare parameter:")
             case .string:
                 parameter = .string(name: parameterName)
-            case .elementTarget:
-                parameter = .elementTarget(name: parameterName)
+            case .accessibilityTarget:
+                parameter = .accessibilityTarget(name: parameterName)
             }
         }
         try expectSymbol(")")
 
         switch (parameterKind, parameter) {
-        case (.none, .none), (.string, .string), (.elementTarget, .elementTarget):
+        case (.none, .none), (.string, .string), (.accessibilityTarget, .accessibilityTarget):
             break
         case (.string, .none):
             throw error(previous, "HeistDef<String> must declare `parameter: \"name\"`")
-        case (.elementTarget, .none):
-            throw error(previous, "HeistDef<ElementTarget> must declare `parameter: \"name\"`")
+        case (.accessibilityTarget, .none):
+            throw error(previous, "HeistDef<AccessibilityTarget> must declare `parameter: \"name\"`")
         default:
             throw error(previous, "HeistDef parameter type does not match its parameter declaration")
         }
@@ -311,7 +311,7 @@ extension HeistPlanSourceParser {
         }
         if consumeIdentifier("targetParameter") != nil {
             try expectSymbol(":")
-            return .elementTarget(name: try parseReferenceNameLiteral(role: "targetParameter"))
+            return .accessibilityTarget(name: try parseReferenceNameLiteral(role: "targetParameter"))
         }
         throw error(currentToken, "expected parameter: or targetParameter:")
     }

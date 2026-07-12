@@ -444,6 +444,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment
     ) -> ActionCommandResolution {
         do {
+            try command.reportTarget?.validateElementActionShape(in: environment)
             return .resolved(try command.resolveForRuntimeDispatch(in: environment))
         } catch {
             return .failed(ActionCommandResolutionFailure(command: command, error: error))
@@ -632,16 +633,18 @@ extension TheBrains {
               let elements = result.accessibilityTrace?.captures.last?.interface.projectedElements else {
             return nil
         }
+        guard let predicate = failureSuggestionPredicate(for: target) else { return nil }
+        return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+    }
+
+    private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ElementPredicate? {
         switch target {
-        case .predicate(let predicate, _):
-            return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+        case .predicate(let template, _):
+            return try? template.resolve(in: .empty)
         case .within(_, let target):
-            switch target {
-            case .predicate(let predicate, _):
-                return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
-            case .within:
-                return nil
-            }
+            return failureSuggestionPredicate(for: target)
+        case .container, .ref:
+            return nil
         }
     }
 
@@ -652,6 +655,26 @@ extension TheBrains {
             receipt.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
             receipt.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
+    }
+}
+
+private extension AccessibilityTarget {
+    func validateElementActionShape(
+        in environment: HeistExecutionEnvironment
+    ) throws(ElementInflation.ElementActionTargetResolutionFailure) {
+        switch self {
+        case .predicate:
+            return
+        case .container:
+            throw .containerTarget
+        case .ref(let reference):
+            guard let target = environment.targets[reference] else {
+                throw .unresolvedReference(reference)
+            }
+            try target.validateElementActionShape(in: environment)
+        case .within(_, let target):
+            try target.validateElementActionShape(in: environment)
+        }
     }
 }
 

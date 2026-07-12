@@ -100,21 +100,25 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
@@ -165,6 +169,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordTopLevelTypealias(node)
         recordCompatibilitySurface(
             node: node,
@@ -173,6 +178,27 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
             name: node.name.text
         )
         return .skipChildren
+    }
+
+    private func recordArchitectureCurrencyDeclaration(
+        node: some SyntaxProtocol,
+        name: String
+    ) {
+        guard let owner = architectureCurrencyOwnerPaths[name],
+              filePath != owner,
+              !isButtonHeistDSLFacade(file.path) else {
+            return
+        }
+        failures.append(
+            file.failure(
+                at: node,
+                message: "architecture currency declared outside its canonical owner",
+                evidence: ViolationEvidence(
+                    observed: "\(name) in \(filePath)",
+                    expectation: "\(name) is declared only in \(owner)"
+                )
+            )
+        )
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -691,14 +717,12 @@ private let explicitAccessRequiredPaths: Set<String> = [
     "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Decoding.swift",
     "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Factories.swift",
     "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameterBlocks.swift",
-    "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift",
     "ButtonHeist/Sources/ThePlans/Model/ElementPropertyKind.swift",
     "ButtonHeist/Sources/ThePlans/Model/ElementPropertyMatches.swift",
     "ButtonHeist/Sources/ThePlans/Model/ElementPropertyChange.swift",
-    "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+AnyChange.swift",
-    "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+Codable.swift",
-    "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate+Description.swift",
-    "ButtonHeist/Sources/ThePlans/Model/ElementUpdatePredicate.swift",
+    "ButtonHeist/Sources/ThePlans/Model/ElementPropertyChange+Any.swift",
+    "ButtonHeist/Sources/ThePlans/Model/ElementPropertyChange+Codable.swift",
+    "ButtonHeist/Sources/ThePlans/Model/ElementPropertyChange+Description.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+State.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Resolution.swift",
@@ -722,6 +746,17 @@ private let explicitAccessRequiredPaths: Set<String> = [
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilPredicateEvaluation.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilReceipts.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilFailures.swift",
+]
+
+private let architectureCurrencyOwnerPaths: [String: String] = [
+    "AccessibilityPredicate": "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift",
+    "AccessibilityTarget": "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift",
+    "AccessibilityTrace": "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift",
+    "ChangeFact": "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift",
+    "ElementMatchGraph": "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift",
+    "InterfaceQuery": "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift",
+    "ObservationWindow": "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift",
+    "Screen": "ButtonHeist/Sources/TheInsideJob/TheStash/Screen.swift",
 ]
 
 private let anyBoundaryAllowedPaths: Set<String> = [

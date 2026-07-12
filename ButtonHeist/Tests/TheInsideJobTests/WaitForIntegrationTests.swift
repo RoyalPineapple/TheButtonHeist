@@ -101,13 +101,16 @@ final class WaitForIntegrationTests: XCTestCase {
         absent: Bool = false,
         timeout: Double? = nil
     ) async -> ActionResult? {
-        let state: AccessibilityPredicate.State = absent ? .missing(target) : .exists(target)
-        let waitTarget = WaitTarget(predicate: .state(state), timeout: timeout)
+        let accessibilityTarget = literalTarget(target)
+        let predicate: AccessibilityPredicate<RootContext> = absent
+            ? .missing(accessibilityTarget)
+            : .exists(accessibilityTarget)
+        let waitTarget = WaitTarget(predicate: predicate, timeout: timeout)
         return await insideJob.brains.performWait(target: waitTarget)
     }
 
     private func changedWait(
-        expectation: AccessibilityPredicate,
+        expectation: AccessibilityPredicate<RootContext>,
         timeout: Double? = nil
     ) async -> ActionResult {
         await insideJob.brains.executeChangedWait(
@@ -389,7 +392,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .exists(ElementPredicate(label: "WaitForChange-AlreadyPresent")),
+            expectation: .exists(literalTarget(ElementPredicate(label: "WaitForChange-AlreadyPresent"))),
             timeout: 0.2
         )
 
@@ -403,7 +406,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     func testWaitForStateAbsentAlreadyAbsentSucceedsFromCurrentState() async throws {
         let result = await changedWait(
-            expectation: .missing(ElementPredicate(label: "WaitForChange-NeverExisted")),
+            expectation: .missing(literalTarget(ElementPredicate(label: "WaitForChange-NeverExisted"))),
             timeout: 0.2
         )
 
@@ -425,7 +428,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { delayedLabel?.removeFromSuperview() }
         let waitTask = Task { @MainActor in
             await self.changedWait(
-                expectation: .exists(ElementPredicate(label: "WaitForChange-Delayed")),
+                expectation: .exists(literalTarget(ElementPredicate(label: "WaitForChange-Delayed"))),
                 timeout: 5.0
             )
         }
@@ -438,9 +441,9 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("matched after") == true, result.message ?? "missing wait message")
-        guard case .elementsChanged = result.accessibilityTrace?.endpointDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
-        }
+        XCTAssertTrue(result.accessibilityTrace?.changeFacts.contains {
+            if case .elementsChanged = $0 { true } else { false }
+        } == true)
     }
 
     func testWaitForStateAbsentOnNextEventReturnsThroughWaitPath() async throws {
@@ -450,7 +453,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let waitTask = Task { @MainActor in
             await self.changedWait(
-                expectation: .missing(ElementPredicate(label: "WaitForChange-Removed")),
+                expectation: .missing(literalTarget(ElementPredicate(label: "WaitForChange-Removed"))),
                 timeout: 5.0
             )
         }
@@ -465,21 +468,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("absent confirmed after") == true, result.message ?? "missing wait message")
-        guard let endpointDelta = result.accessibilityTrace?.endpointDelta else {
-            return XCTFail("Expected a two-capture semantic delta")
-        }
-        switch endpointDelta {
-        case .elementsChanged:
-            break
-        case .screenChanged(let payload):
-            XCTAssertEqual(
-                payload.interactionDigest?.elementSetChanged,
-                true,
-                "A screen transition must still prove the element set changed"
-            )
-        case .noChange:
-            XCTFail("Expected a semantic change, got noChange")
-        }
+        let facts = try XCTUnwrap(result.accessibilityTrace?.changeFacts)
+        XCTAssertTrue(facts.contains { if case .elementsChanged = $0 { true } else { false } })
     }
 
     func testWaitForChangeElementsChangedRequiresFutureSettledDelta() async throws {
@@ -489,14 +479,14 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(didObserveBaseline)
 
         let result = await changedWait(
-            expectation: .change(.elements()),
+            expectation: .changed(.elements()),
             timeout: 0.2
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: change(elements(*))") == true)
+        XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 
     func testWaitForChangeTimeoutZeroPerformsOneBoundedSettledCheck() async throws {
@@ -507,7 +497,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
-            expectation: .exists(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing")),
+            expectation: .exists(literalTarget(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing"))),
             timeout: 0
         )
         let elapsed = CFAbsoluteTimeGetCurrent() - start
@@ -518,7 +508,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.outcome.errorKind, .timeout)
         XCTAssertLessThan(elapsed, 1.0)
         XCTAssertTrue(
-            message.contains("expected: label=\"WaitForChange-TimeoutZeroMissing\" ordinal=0"),
+            message.contains("expected: label=\"WaitForChange-TimeoutZeroMissing\""),
             "Unexpected message: \(message)"
         )
         XCTAssertTrue(message.contains("last result:"), "Unexpected message: \(message)")
@@ -558,7 +548,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let waitTask = Task { @MainActor in
             await self.changedWait(
-                expectation: .change(.elements()),
+                expectation: .changed(.elements()),
                 timeout: 5.0
             )
         }
@@ -581,7 +571,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .missing(ElementPredicate(label: "WaitForChange-StillPresent")),
+            expectation: .missing(literalTarget(ElementPredicate(label: "WaitForChange-StillPresent"))),
             timeout: 0.2
         )
 
@@ -589,7 +579,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
         XCTAssertTrue(
-            result.message?.contains("expected: label=\"WaitForChange-StillPresent\" ordinal=0") == true
+            result.message?.contains("expected: label=\"WaitForChange-StillPresent\"") == true
         )
         XCTAssertTrue(result.message?.contains("element still present") == true)
     }
@@ -599,7 +589,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .change(.screenChanged),
+            expectation: .changed(.screen()),
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -607,7 +597,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
-        XCTAssertTrue(message.contains("expected: change(screen(*))"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expected: changed(screen(*))"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("last observed:"), "Unexpected message: \(message)")
     }
 
@@ -616,7 +606,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .change(.elements()),
+            expectation: .changed(.elements()),
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -624,7 +614,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
-        XCTAssertTrue(message.contains("expected: change(elements(*))"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expected: changed(elements(*))"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {
@@ -633,9 +623,10 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .change(.elements(.updatedElement(ElementUpdatePredicate(
-                change: .value(before: "Loading", after: "Ready")
-            )))),
+            expectation: .changed(.elements([.updated(
+                .label("WaitForChange-UpdateOldValue"),
+                .value(before: "Loading", after: "Ready")
+            )])),
             timeout: 0.2
         )
 

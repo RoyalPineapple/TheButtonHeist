@@ -200,12 +200,28 @@ package struct ElementMatchGraph: Sendable, Equatable {
         ElementMatchSet(predicateGraph.resolve(predicate).matches.map(\.subject))
     }
 
-    package func resolve(_ target: ElementTarget) -> ElementMatchSet {
+    package func resolve(_ target: AccessibilityTarget) -> AccessibilityTargetMatchSet {
         switch target {
-        case .predicate:
-            let resolved = predicateGraph.resolve(target)
-            return ElementMatchSet(resolved.matches.map(\.subject))
-        case .within(let container, let nestedTarget):
+        case .predicate(let template, let ordinal):
+            guard let predicate = try? template.resolve(in: .empty) else { return .empty }
+            let matches = predicateGraph.resolve(predicate).matches.map(\.subject)
+            if let ordinal {
+                guard matches.indices.contains(ordinal) else { return .empty }
+                return AccessibilityTargetMatchSet(elements: ElementMatchSet([matches[ordinal]]))
+            }
+            return AccessibilityTargetMatchSet(elements: ElementMatchSet(matches))
+        case .container(let expression, let ordinal):
+            guard let predicate = try? expression.resolve(in: .empty) else { return .empty }
+            let paths = containers.paths(matching: predicate)
+            if let ordinal {
+                guard paths.indices.contains(ordinal) else { return .empty }
+                return AccessibilityTargetMatchSet(containerPaths: [paths[ordinal]])
+            }
+            return AccessibilityTargetMatchSet(containerPaths: Set(paths))
+        case .ref:
+            return .empty
+        case .within(let containerExpression, let nestedTarget):
+            guard let container = try? containerExpression.resolve(in: .empty) else { return .empty }
             return scoped(to: container).resolve(nestedTarget)
         }
     }
@@ -237,5 +253,34 @@ package struct ElementMatchGraph: Sendable, Equatable {
             identity: \.path,
             traversalOrder: \.traversalOrder
         )
+    }
+}
+
+package struct AccessibilityTargetMatchSet: Sendable, Equatable {
+    package static let empty = AccessibilityTargetMatchSet()
+
+    package let elements: ElementMatchSet
+    package let containerPaths: Set<TreePath>
+
+    package init(
+        elements: ElementMatchSet = .empty,
+        containerPaths: Set<TreePath> = []
+    ) {
+        self.elements = elements
+        self.containerPaths = containerPaths
+    }
+
+    package var isEmpty: Bool {
+        elements.isEmpty && containerPaths.isEmpty
+    }
+
+    package var paths: Set<TreePath> {
+        Set(elements.orderedPaths).union(containerPaths)
+    }
+}
+
+private extension ContainerMatchSet {
+    func paths(matching predicate: ContainerPredicate) -> [TreePath] {
+        Array(matches.lazy.filter { predicate.matches($0.facts) }.map(\.path))
     }
 }

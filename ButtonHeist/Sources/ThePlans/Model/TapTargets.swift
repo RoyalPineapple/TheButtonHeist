@@ -50,7 +50,7 @@ public struct LongPressTarget: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "long press target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.selection = try GesturePointSelection(
-            element: try container.decodeIfPresent(ElementTarget.self, forKey: .element),
+            element: try container.decodeIfPresent(AccessibilityTarget.self, forKey: .element),
             unitPoint: try container.decodeIfPresent(UnitPoint.self, forKey: .unitPoint),
             point: try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
         )

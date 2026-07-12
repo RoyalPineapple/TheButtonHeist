@@ -1,5 +1,5 @@
 public enum DragGestureSelection: Sendable, Equatable, CustomStringConvertible {
-    case elementToPoint(ElementTarget, start: UnitPoint?, end: ScreenPoint)
+    case elementToPoint(AccessibilityTarget, start: UnitPoint?, end: ScreenPoint)
     case pointToPoint(start: ScreenPoint, end: ScreenPoint)
 
     public var description: String {
@@ -32,11 +32,11 @@ private struct DragElementToPointPayload: Codable, Sendable, Equatable {
         case end
     }
 
-    let element: ElementTarget
+    let element: AccessibilityTarget
     let start: UnitPoint?
     let end: ScreenPoint
 
-    init(element: ElementTarget, start: UnitPoint? = nil, end: ScreenPoint) {
+    init(element: AccessibilityTarget, start: UnitPoint? = nil, end: ScreenPoint) {
         self.element = element
         self.start = start
         self.end = end
@@ -46,7 +46,7 @@ private struct DragElementToPointPayload: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element-to-point drag")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            element: try container.decode(ElementTarget.self, forKey: .element),
+            element: try container.decode(AccessibilityTarget.self, forKey: .element),
             start: try container.decodeIfPresent(UnitPoint.self, forKey: .start),
             end: try container.decode(ScreenPoint.self, forKey: .end)
         )

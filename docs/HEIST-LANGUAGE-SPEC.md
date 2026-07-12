@@ -11,8 +11,8 @@ rendering, or replay MUST be represented as a validated `HeistPlan`.
 Durable heists MAY be authored through canonical ButtonHeist source, trusted
 local Swift DSL that compiles to a `HeistPlan`, or generated `.heist` artifacts.
 The durable artifact format is described in [Heist format](HEIST-FORMAT.md).
-The authoring surface — step types, passables, target forms, and the
-state/change predicate split — is drawn in the
+The authoring surface — step types, passables, target forms, and context-typed
+predicate grammar — is drawn in the
 [DSL grammar diagram](diagrams/dsl-grammar.md); the termination guarantees are
 drawn in the [totality diagram](diagrams/totality.md).
 
@@ -121,16 +121,17 @@ Direct client commands MAY use live container or viewport context while
 inspecting the current interface. Those live names and positions are client
 context only; they MUST NOT be promoted into durable selectors.
 
-## Selector durability
+## Target durability
 
-Durable selectors describe semantic element identity, not a captured screen
-instance. A selector is durable when it is built from Button Heist element
-predicates that can be re-resolved after storage, packaging, canonical
-rendering, and replay. How a selector resolves at runtime — exact-or-miss
-matching, ordinals, and diagnostics — is drawn in the
+`AccessibilityTarget` is the one target language for actions, predicates, and
+`get_interface` subtree queries. Durable targets describe semantic
+accessibility-node identity, not a captured screen instance. A target is durable
+when it can be re-resolved after storage, packaging, canonical rendering, and
+replay. How a target resolves at runtime — exact-or-miss matching, ordinals,
+container scope, and diagnostics — is drawn in the
 [element inflation diagram](diagrams/element-inflation.md).
 
-The durable selector forms are:
+The durable target forms are:
 
 - exact labels and structured label predicates, such as `.label("Pay")`,
   `.label(.prefix("Delete"))`, or `.element(.label(.contains("Search")))`
@@ -139,6 +140,11 @@ The durable selector forms are:
   identity or state assertion
 - trait-constrained element selectors, such as
   `.element(.label("Pay"), .traits([.button]))`
+- container selectors such as `.container(.identifier("Checkout"))`; an
+  identifier can match any delivered parser container type, not only a semantic
+  group
+- descendant scope such as
+  `.within(container: .identifier("Checkout"), .label("Pay"))`
 - ordinal disambiguation only when attached to a semantic base selector, such as
   `.target(.element(.label("Delete"), .traits([.button])), ordinal: 1)`
 
@@ -197,6 +203,36 @@ widens the match. Broad matching is explicit and opt-in: `.contains`,
 `.prefix`, and `.suffix` apply the same normalization and require non-empty
 patterns.
 
+## Accessibility predicate grammar
+
+`AccessibilityPredicate<Context>` is one AST whose generic context exposes only
+valid constructors:
+
+- Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`,
+  `.noChange`, and `.announcement(...)`.
+- Screen declaration: `.changed(.screen([.exists(target),
+  .missing(target)]))`.
+- Elements declaration: `.changed(.elements([.exists(target),
+  .missing(target), .appeared(target), .disappeared(target),
+  .updated(target, change)]))`.
+
+`exists` and `missing` always read the current delivered interface tree. They
+use the same `AccessibilityTarget` resolution as actions and subtree queries,
+including container-only and descendant-scoped targets. `appeared`,
+`disappeared`, and `updated` read the ordered temporal fact stream. There is no
+root-level generic changed predicate and no alternate spelling.
+
+A screen boundary is also an element lifecycle change: every old-tree node
+disappears, the screen marker occurs, and every new-tree node appears. Therefore
+`changed(.elements(...))` can match appearances or disappearances across a
+screen boundary. `updated` can only match two captures in the same screen
+generation.
+
+`.noChange` requires a complete observation window with no facts. Screen,
+layout, value, and announcement notifications are edge evidence and prevent
+`noChange`. A transition assertion never passes solely because its implied
+final state is true.
+
 ## Timeouts
 
 Every timeout in the language is a `Double` in **seconds**. DSL source SHOULD
@@ -230,7 +266,7 @@ Use `HeistPlan` for reusable or multi-step behavior:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.screenChanged(.exists(.label("Receipt"))))
+        .expect(.changed(.screen([.exists(.label("Receipt"))])))
 
     WaitFor(.label("Receipt"), timeout: .seconds(10))
 }
@@ -240,26 +276,23 @@ Use `perform(step:)` for one durable step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.screenChanged(.exists(.label("Receipt"))))
+    .expect(.changed(.screen([.exists(.label("Receipt"))])))
 ```
 
-`WaitFor(...)` is final-state oriented. Snapshot predicates pass when the
-current settled screen satisfies the predicate. Element transition predicates
-such as `.appeared(...)`, `.disappeared(...)`, and `.updated(...)` still try to
-observe the transition, but standalone waits may pass with a warning when the
-implied final state is already true or becomes true without transition evidence.
-Action `.expect(...)` and `RunHeist(...).expect(...)` remain strict transition
-assertions.
+`WaitFor(...)` evaluates the same predicate language as action expectations.
+Current-tree predicates pass when the current delivered tree satisfies them.
+Change declarations require observed facts; standalone waits do not infer an
+appearance, disappearance, or update from final state.
 
-Container presence is a snapshot predicate, not a transition predicate. Use
-`.exists(container: .label("Checkout"))` when a heist needs to assert that the
+Container presence is a current-tree predicate, not a transition predicate. Use
+`.exists(.container(.identifier("Checkout")))` when a heist needs to assert that the
 current settled hierarchy contains a matching semantic container without
-requiring a preceding screen-change delta. Container predicates can match
+requiring a preceding screen-change fact. Container predicates can match
 semantic-group label and value, identifier on any container, role shorthands
 such as `.list` or `.dataTable(rowCount:columnCount:)`, scrollability, custom
 actions, modal boundary, or `.matching(...)` combinations. Use
 `.within(container: .label("Checkout"), .label("Pay"))` when an element target
-must resolve inside that container. Use `.screenChanged(...)` when the action
+must resolve inside that container. Use `.changed(.screen())` when the action
 itself must prove navigation occurred.
 
 Use `RepeatUntil` for bounded repetition toward a settled outcome. The body
@@ -290,7 +323,7 @@ HeistPlan("cart") {
             .expect(.exists(.element(.label("Search Items"), .value(item))))
 
         Activate(.label(item))
-            .expect(.appeared(.label("Cart")))
+            .expect(.changed(.elements([.appeared(.label("Cart"))])))
     }
 
     RunHeist("Cart.addItem", "Milk")

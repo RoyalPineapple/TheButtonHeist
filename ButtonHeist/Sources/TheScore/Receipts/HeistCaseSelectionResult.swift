@@ -180,7 +180,7 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
 
 public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
     public let result: ExpectationResult
-    public var predicate: AccessibilityPredicate {
+    public var predicate: AccessibilityPredicate<RootContext> {
         guard let predicate = result.predicate else {
             preconditionFailure("HeistCaseMatchResult requires a predicate")
         }
@@ -188,7 +188,7 @@ public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
     }
 
     public init(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate<RootContext>,
         result: ExpectationResult
     ) {
         precondition(
@@ -206,7 +206,7 @@ public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case match result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
+        let predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
         let result = try container.decode(ExpectationResult.self, forKey: .result)
         guard result.predicate == Optional(predicate) else {
             throw DecodingError.dataCorruptedError(

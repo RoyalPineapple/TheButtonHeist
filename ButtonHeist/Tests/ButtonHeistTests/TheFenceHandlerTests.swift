@@ -6,19 +6,6 @@ import ButtonHeistSupport
 @_spi(ButtonHeistInternals) import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
-private extension AccessibilityTrace.Delta {
-    var testKind: String {
-        switch self {
-        case .noChange:
-            return AccessibilityTrace.DeltaKind.noChange.rawValue
-        case .elementsChanged:
-            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
-        case .screenChanged:
-            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
-        }
-    }
-}
-
 private func invocationPath(_ dottedName: String) -> HeistInvocationPath {
     .preconditionValidated(dottedName: dottedName)
 }
@@ -27,8 +14,8 @@ private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
     HeistSemanticStringMatch(mode: .exact, value: .literal(value))
 }
 
-private func existsLabel(_ label: String) -> AccessibilityPredicateExpr {
-    .state(.exists(.label(label)))
+private func existsLabel(_ label: String) -> AccessibilityPredicate<RootContext> {
+    .exists(.label(label))
 }
 
 private struct FailureClassificationExpectation {
@@ -399,14 +386,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    private func decodedElementTarget(
+    private func decodedAccessibilityTarget(
         target: HeistValue? = nil
-    ) throws -> ElementTarget? {
+    ) throws -> AccessibilityTarget? {
         var arguments: [String: HeistValue] = [:]
         if let target {
             arguments["target"] = target
         }
-        return try TheFence.CommandArgumentEnvelope(values: arguments).decodedElementTarget()
+        return try TheFence.CommandArgumentEnvelope(values: arguments).decodedAccessibilityTarget()
     }
 
     private func selectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
@@ -894,8 +881,9 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .scroll,
             arguments: [
                 "expect": .object([
-                    "type": .string("change"),
-                    "scopes": .array([.object(["type": .string("screen")])]),
+                    "type": .string("changed"),
+                    "scope": .string("screen"),
+                    "assertions": .array([]),
                 ]),
             ],
             equals: "command \"scroll\" direct dispatch does not support expect"
@@ -1073,7 +1061,7 @@ final class TheFenceHandlerTests: XCTestCase {
             TheFence.CommandArgumentEnvelope(values: [
                 "plan": .string("""
                 HeistPlan {
-                    Activate(.label("Pay")).expect(.screenChanged)
+                    Activate(.label("Pay")).expect(.changed(.screen()))
                 }
                 """),
             ])
@@ -1082,7 +1070,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(request.plan.body, [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .change(.screenChanged), timeout: 1)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])
     }
 
@@ -1327,11 +1315,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDecodesInlinePlanWithElementTargetParameter() async throws {
+    func testRunHeistDecodesInlinePlanWithAccessibilityTargetParameter() async throws {
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "tapEach",
-            parameter: .elementTarget(name: "input"),
+            parameter: .accessibilityTarget(name: "input"),
             body: [.action(try ActionStep(command: .activate(.ref("input"))))]
         )
         let plan = try HeistPlan(
@@ -1351,7 +1339,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
                 text: .ref("query"),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
@@ -1374,7 +1362,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
                 text: .ref("query"),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
@@ -1391,36 +1379,36 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDecodesParameterizedRootWithElementTargetArgument() async throws {
+    func testRunHeistDecodesParameterizedRootWithAccessibilityTargetArgument() async throws {
         let fence = TheFence(configuration: .init())
         let plan = try HeistPlan(
             name: "tapRow",
-            parameter: .elementTarget(name: "row"),
+            parameter: .accessibilityTarget(name: "row"),
             body: [.action(try ActionStep(command: .activate(.ref("row"))))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
-            "type": .string("element_target"),
+            "type": .string("accessibility_target"),
             "target": targetValue(label: "Row 1"),
         ])
 
         let request = try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))
 
         XCTAssertEqual(request.plan, plan)
-        XCTAssertEqual(request.argument, .elementTarget(.predicate(.label("Row 1"))))
+        XCTAssertEqual(request.argument, .accessibilityTarget(.predicate(.label("Row 1"))))
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsUnknownElementTargetArgumentKey() async throws {
+    func testRunHeistRejectsUnknownAccessibilityTargetArgumentKey() async throws {
         let fence = TheFence(configuration: .init())
         let plan = try HeistPlan(
             name: "tapRow",
-            parameter: .elementTarget(name: "row"),
+            parameter: .accessibilityTarget(name: "row"),
             body: [.action(try ActionStep(command: .activate(.ref("row"))))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
-            "type": .string("element_target"),
+            "type": .string("accessibility_target"),
             "target": .object([
                 "checks": .array([
                     predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Row 1")),
@@ -1446,7 +1434,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
                 text: .ref("query"),
-                target: .target(.predicate(.label("Search")))
+                target: .predicate(.label("Search"))
             )))]
         )
 
@@ -1946,10 +1934,6 @@ final class TheFenceHandlerTests: XCTestCase {
     func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
             FenceParameterKey.subtree.rawValue: .object([
-                FenceParameterKey.element.rawValue: .object([
-                    FenceParameterKey.label.rawValue: .string("Pay"),
-                    FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
-                ]),
                 FenceParameterKey.container.rawValue: .object([
                     FenceParameterKey.type.rawValue: .string("list"),
                     FenceParameterKey.isModalBoundary.rawValue: .bool(true),
@@ -1960,11 +1944,8 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
 
         let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
-        let element = try XCTUnwrap(try subtree.schemaDictionary(.element))
         let container = try XCTUnwrap(try subtree.schemaDictionary(.container))
         XCTAssertEqual(try subtree.schemaInteger(.ordinal), 2)
-        XCTAssertEqual(try element.schemaString(.label), "Pay")
-        XCTAssertEqual(try element.schemaStringArray(.traits), ["button", "selected"])
         XCTAssertEqual(try container.schemaEnum(.type, as: AccessibilityContainerKind.self), .list)
         XCTAssertEqual(try container.schemaBoolean(.isModalBoundary), true)
         XCTAssertEqual(try container.schemaNumber(.scale), 0.5)
@@ -1973,18 +1954,15 @@ final class TheFenceHandlerTests: XCTestCase {
     func testCommandArgumentEnvelopeNestedSchemaErrorsUseQualifiedFields() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
             FenceParameterKey.subtree.rawValue: .object([
-                FenceParameterKey.element.rawValue: .object([
-                    FenceParameterKey.traits.rawValue: .array([.int(7)]),
-                ]),
+                FenceParameterKey.traits.rawValue: .array([.int(7)]),
             ]),
         ])
 
         let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
-        let element = try XCTUnwrap(try subtree.schemaDictionary(.element))
-        XCTAssertThrowsError(try element.schemaStringArray(.traits)) { error in
+        XCTAssertThrowsError(try subtree.schemaStringArray(.traits)) { error in
             XCTAssertEqual(
                 (error as? SchemaValidationError)?.message,
-                "schema validation failed for subtree.element.traits[0]: observed integer 7; expected string"
+                "schema validation failed for subtree.traits[0]: observed integer 7; expected string"
             )
         }
     }
@@ -2053,8 +2031,8 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithIdentifier() async throws {
-        guard let target = try decodedElementTarget(target: targetValue(identifier: "myButton")),
+    func testAccessibilityTargetWithIdentifier() async throws {
+        guard let target = try decodedAccessibilityTarget(target: targetValue(identifier: "myButton")),
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -2062,14 +2040,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetRejectsHeistIdField() async throws {
+    func testAccessibilityTargetRejectsHeistIdField() async throws {
         // heistId is no longer a targeting field — it is rejected as unknown.
-        XCTAssertThrowsError(try decodedElementTarget(target: legacyHeistIdTargetValue("button_save")))
+        XCTAssertThrowsError(try decodedAccessibilityTarget(target: legacyHeistIdTargetValue("button_save")))
     }
 
     @ButtonHeistActor
-    func testElementTargetWithMatcherFields() async throws {
-        guard let target = try decodedElementTarget(target: targetValue(label: "Save", traits: ["button"])),
+    func testAccessibilityTargetWithMatcherFields() async throws {
+        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save", traits: ["button"])),
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -2080,9 +2058,8 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetPublicPayloadShapesDecodeThroughSamePath() async throws {
-        let expected = ElementTarget.predicate(
-            ElementPredicate(label: "Save", identifier: "saveButton", traits: [.button]),
+    func testAccessibilityTargetPublicPayloadShapesDecodeThroughSamePath() async throws {
+        let expected = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", identifier: "saveButton", traits: [.button]),
             ordinal: 1
         )
         let cliBuiltShape = targetValue(
@@ -2091,7 +2068,7 @@ final class TheFenceHandlerTests: XCTestCase {
             traits: ["button"],
             ordinal: 1
         )
-        let jsonMCPShape = elementTargetValue([
+        let jsonMCPShape = accessibilityTargetValue([
             "checks": .array([
                 .object([
                     "kind": .string("label"),
@@ -2109,15 +2086,15 @@ final class TheFenceHandlerTests: XCTestCase {
             "ordinal": .int(1),
         ])
 
-        XCTAssertEqual(try decodedElementTarget(target: cliBuiltShape), expected)
-        XCTAssertEqual(try decodedElementTarget(target: jsonMCPShape), expected)
+        XCTAssertEqual(try decodedAccessibilityTarget(target: cliBuiltShape), expected)
+        XCTAssertEqual(try decodedAccessibilityTarget(target: jsonMCPShape), expected)
     }
 
     @ButtonHeistActor
-    func testElementTargetRejectsUnknownTargetField() async throws {
+    func testAccessibilityTargetRejectsUnknownTargetField() async throws {
         XCTAssertThrowsError(
-            try decodedElementTarget(
-                target: elementTargetValue([
+            try decodedAccessibilityTarget(
+                target: accessibilityTargetValue([
                     "checks": .array([
                         predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
                     ]),
@@ -2133,8 +2110,8 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithOrdinal() async throws {
-        guard let target = try decodedElementTarget(target: targetValue(label: "Save", ordinal: 2)),
+    func testAccessibilityTargetWithOrdinal() async throws {
+        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save", ordinal: 2)),
               case .predicate(let matcher, let ordinal) = target else {
             return XCTFail("Expected .matcher with ordinal")
         }
@@ -2152,8 +2129,8 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithoutOrdinal() async throws {
-        guard let target = try decodedElementTarget(target: targetValue(label: "Save")),
+    func testAccessibilityTargetWithoutOrdinal() async throws {
+        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save")),
               case .predicate(_, let ordinal) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -2161,8 +2138,51 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetMissing() async throws {
-        XCTAssertNil(try decodedElementTarget())
+    func testAccessibilityTargetMissing() async throws {
+        XCTAssertNil(try decodedAccessibilityTarget())
+    }
+
+    @ButtonHeistActor
+    func testAccessibilityTargetDecodesContainerOnlyTarget() async throws {
+        let target = try decodedAccessibilityTarget(target: .object([
+            "container": .object([
+                "checks": .array([.object([
+                    "kind": .string("scrollable"),
+                    "value": .bool(true),
+                ])]),
+            ]),
+        ]))
+
+        XCTAssertEqual(target, .container(.matching(.scrollable(true))))
+    }
+
+    @ButtonHeistActor
+    func testElementOnlyCommandRejectsContainerTargetWithTypedError() async {
+        let arguments = TheFence.CommandArgumentEnvelope(values: [
+            "target": .object([
+                "container": .object([
+                    "checks": .array([.object([
+                        "kind": .string("scrollable"),
+                        "value": .bool(true),
+                    ])]),
+                ]),
+            ]),
+        ])
+
+        XCTAssertThrowsError(try arguments.requiredAccessibilityTarget(command: .activate)) { error in
+            XCTAssertEqual(error as? TheFence.ContainerTargetRequiresElement, .init(command: .activate))
+        }
+    }
+
+    @ButtonHeistActor
+    func testDirectCommandResolvesTargetRefsAtRuntimeBoundary() async {
+        let arguments = TheFence.CommandArgumentEnvelope(values: [
+            "target": .object(["ref": .string("item")]),
+        ])
+
+        XCTAssertThrowsError(try arguments.requiredAccessibilityTarget(command: .activate)) { error in
+            XCTAssertEqual(error as? HeistExpressionError, .unresolvedTargetReference("item"))
+        }
     }
 
     // MARK: - Schema Validation Diagnostics
@@ -2272,11 +2292,11 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .oneFingerTap,
             arguments: [
-                "element": elementTargetValue([
+                "element": accessibilityTargetValue([
                     "heistId": .string("button_save"),
                 ]),
             ],
-            contains: "Unknown element target field \"heistId\""
+            contains: "Unknown accessibility target field \"heistId\""
         )
     }
 
@@ -2413,11 +2433,11 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
         guard let message = mockConn.sent.sentPlanMessages.last,
               case .swipe(let target) = message,
-              case .elementDirection(let elementTarget, let direction) = target.selection else {
+              case .elementDirection(let target, let direction) = target.selection else {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
         }
-        XCTAssertEqual(elementTarget, .predicate(ElementPredicate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
         XCTAssertEqual(direction, .left)
     }
 
@@ -2466,7 +2486,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDragWithElementTargetAndEndCoordinatesPassesValidation() async {
+    func testDragWithAccessibilityTargetAndEndCoordinatesPassesValidation() async {
         await assertOperationPassesValidation(
             command: .drag,
             arguments: [
@@ -2543,8 +2563,9 @@ final class TheFenceHandlerTests: XCTestCase {
             (.dismissKeyboard, [:]),
             (.wait, [
                 "predicate": .object([
-                    "type": .string("change"),
-                    "scopes": .array([.object(["type": .string("elements")])]),
+                    "type": .string("changed"),
+                    "scope": .string("elements"),
+                    "assertions": .array([]),
                 ]),
                 "timeout": .double(1),
             ]),
@@ -2933,7 +2954,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
         XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
+        XCTAssertEqual(target.target, .predicate(ElementPredicateTemplate(identifier: "search_field")))
         XCTAssertFalse(target.replacingExisting)
     }
 
@@ -2953,7 +2974,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
         XCTAssertEqual(target.text, "")
-        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
+        XCTAssertEqual(target.target, .predicate(ElementPredicateTemplate(identifier: "search_field")))
         XCTAssertTrue(target.replacingExisting)
     }
 
@@ -3049,8 +3070,9 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .getPasteboard,
             arguments: ["expect": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("screen")])]),
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "assertions": .array([]),
             ])],
             contains: "valid get_pasteboard parameter"
         )
@@ -3163,7 +3185,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("exists"),
-                "element": elementPredicateValue(label: "Loading"),
+                "target": elementPredicateValue(label: "Loading"),
             ])]
         )
     }
@@ -3174,7 +3196,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("missing"),
-                "element": elementPredicateValue(label: "Loading"),
+                "target": elementPredicateValue(label: "Loading"),
             ]), "timeout": .double(5.0)]
         )
     }
@@ -3184,8 +3206,9 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             command: .wait,
             arguments: ["predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("screen")])]),
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "assertions": .array([]),
             ])]
         )
     }
@@ -3196,8 +3219,9 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: [
                 "predicate": .object([
-                    "type": .string("change"),
-                    "scopes": .array([.object(["type": .string("elements")])]),
+                    "type": .string("changed"),
+                    "scope": .string("elements"),
+                    "assertions": .array([]),
                 ]),
                 "timeout": .double(5.0),
             ]
@@ -3205,14 +3229,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWaitAllStatesPassesValidation() async {
+    func testWaitScreenAssertionsPassValidation() async {
         await assertPassesValidation(
             command: .wait,
             arguments: ["predicate": .object([
-                "type": .string("all"),
-                "states": .array([
-                    .object(["type": .string("exists"), "element": elementPredicateValue(label: "Done")]),
-                    .object(["type": .string("missing"), "element": elementPredicateValue(label: "Loading")]),
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "assertions": .array([
+                    .object(["type": .string("exists"), "target": elementPredicateValue(label: "Done")]),
+                    .object(["type": .string("missing"), "target": elementPredicateValue(label: "Loading")]),
                 ]),
             ])]
         )
@@ -3223,13 +3248,11 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             command: .wait,
             arguments: ["predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object([
-                    "type": .string("screen"),
-                    "assertions": .array([.object([
-                        "type": .string("exists"),
-                        "element": elementPredicateValue(label: "Home"),
-                    ])]),
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "assertions": .array([.object([
+                    "type": .string("exists"),
+                    "target": elementPredicateValue(label: "Home"),
                 ])]),
             ])]
         )
@@ -3240,8 +3263,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("screen")])]),
+                "type": .string("changed"),
+                "scope": .string("screen"),
+                "assertions": .array([]),
             ]),
             "timeout": .double(8.0),
         ])
@@ -3249,7 +3273,7 @@ final class TheFenceHandlerTests: XCTestCase {
               case .wait(let target) = message else {
             return XCTFail("Expected wait message")
         }
-        XCTAssertEqual(target.predicate, .change(.screenChanged))
+        XCTAssertEqual(target.predicate, .changed(.screen()))
         XCTAssertEqual(target.timeout, 8.0)
     }
 
@@ -3262,14 +3286,18 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             return .actionResult(ActionResult.success(
                 method: .wait,
-                accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 1, edits: ElementEdits())))
+                accessibilityTrace: AccessibilityTrace.elementsChangedForTests(
+                    elementCount: 1,
+                    edits: ElementEdits()
+                )
             ))
         }
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("elements")])]),
+                "type": .string("changed"),
+                "scope": .string("elements"),
+                "assertions": .array([]),
             ]),
         ])
 
@@ -3289,14 +3317,15 @@ final class TheFenceHandlerTests: XCTestCase {
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
+                accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
             ))
         }
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("elements")])]),
+                "type": .string("changed"),
+                "scope": .string("elements"),
+                "assertions": .array([]),
             ]),
         ])
 
@@ -3319,14 +3348,15 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .wait,
                 errorKind: .timeout,
                 message: "timed out after 0.2s — expectation not met",
-                accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
+                accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
             ))
         }
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("change"),
-                "scopes": .array([.object(["type": .string("elements")])]),
+                "type": .string("changed"),
+                "scope": .string("elements"),
+                "assertions": .array([]),
             ]),
             "timeout": .double(0.2),
         ])
@@ -3359,14 +3389,11 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testActionExpectationExecutesAsServerSideExpectationStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let predicate = AccessibilityPredicate.exists(ElementPredicate(label: "Home"))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
         let interface = makeReceiptTestInterface([
             TestHeistElementBuilder(label: "Home").build(),
         ])
-        let trace = AccessibilityTrace.projectingForTests(.screenChanged(.init(
-            elementCount: 1,
-            newInterface: interface
-        )))
+        let trace = AccessibilityTrace.screenChangedForTests(replacementInterface: interface)
 
         mockConn.runtimeActionResponse = { message in
             switch message {
@@ -3390,7 +3417,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "target": targetValue(identifier: "myElement"),
             "expect": .object([
                 "type": .string("exists"),
-                "element": elementPredicateValue(label: "Home"),
+                "target": elementPredicateValue(label: "Home"),
             ]),
         ])
 
@@ -3401,7 +3428,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .action(let step)? = mockConn.sent.sentHeistPlan?.body.first else {
             return XCTFail("Expected a single action step, got \(String(describing: mockConn.sent.sentHeistPlan))")
         }
-        XCTAssertEqual(step.expectationPolicy.expectedStep?.predicate, .predicate(predicate))
+        XCTAssertEqual(step.expectationPolicy.expectedStep?.predicate, predicate)
 
         guard let leaf = response.leafAction else {
             return XCTFail("Expected single-step action response, got \(response)")
@@ -3420,10 +3447,41 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationScreenChangedObject() async throws {
         let result = try parseTypedExpectation(.object([
+            "type": .string("changed"),
+            "scope": .string("screen"),
+            "assertions": .array([]),
+        ]))
+        XCTAssertEqual(result, .changed(.screen()))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationRejectsGenericChangedPredicate() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("changed"),
+            "assertions": .array([]),
+        ]))) { error in
+            XCTAssertTrue(String(describing: error).contains("scope"), "Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationRejectsLegacyChangeScopesShape() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("change"),
             "scopes": .array([.object(["type": .string("screen")])]),
-        ]))
-        XCTAssertEqual(result, .change(.screenChanged))
+        ]))) { error in
+            XCTAssertTrue(String(describing: error).contains("change"), "Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationRejectsLegacyElementExistenceShape() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("exists"),
+            "element": elementPredicateValue(label: "Home"),
+        ]))) { error in
+            XCTAssertTrue(String(describing: error).contains("element"), "Unexpected error: \(error)")
+        }
     }
 
     func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
@@ -3527,7 +3585,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationTopLevelArrayThrows() async {
         XCTAssertThrowsError(try parseTypedExpectation(.array([
             .object(["type": .string("exists")]),
-            .object(["type": .string("change")]),
+            .object(["type": .string("changed")]),
         ]))) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
@@ -3539,10 +3597,9 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testHeistPlanCarriesTypedActionExpectation() async throws {
-        let expectation = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            element: ElementPredicate(identifier: "counter"),
-            change: .value(after: "5")
-        ))))
+        let expectation = AccessibilityPredicate<RootContext>.changed(.elements([
+            .updated(.identifier("counter"), .value(after: "5")),
+        ]))
         let sourceStep = HeistStep.action(try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal("counter"))))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
@@ -3551,7 +3608,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected action step")
         }
 
-        XCTAssertEqual(action.expectationPolicy.expectedStep?.predicate, .predicate(expectation))
+        XCTAssertEqual(action.expectationPolicy.expectedStep?.predicate, expectation)
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape
@@ -3559,46 +3616,43 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationDiscriminatorScreenChanged() async throws {
         let result = try parseTypedExpectation(.object([
-            "type": .string("change"),
-            "scopes": .array([.object(["type": .string("screen")])]),
+            "type": .string("changed"),
+            "scope": .string("screen"),
+            "assertions": .array([]),
         ]))
-        XCTAssertEqual(result, .change(.screenChanged))
+        XCTAssertEqual(result, .changed(.screen()))
     }
 
     @ButtonHeistActor
     func testParseExpectationDiscriminatorElementUpdatedFull() async throws {
         let result = try parseTypedExpectation(.object([
-            "type": .string("change"),
-                "scopes": .array([.object([
-                    "type": .string("elements"),
-                    "assertions": .array([.object([
-                        "type": .string("updated"),
-                        "element": elementPredicateValue(identifier: "slider"),
-                        "before": stringMatchValue(mode: "exact", value: "0"),
-                        "after": stringMatchValue(mode: "exact", value: "50"),
-                        "property": .string("value"),
-                ])]),
+            "type": .string("changed"),
+            "scope": .string("elements"),
+            "assertions": .array([.object([
+                "type": .string("updated"),
+                "target": elementPredicateValue(identifier: "slider"),
+                "before": stringMatchValue(mode: "exact", value: "0"),
+                "after": stringMatchValue(mode: "exact", value: "50"),
+                "property": .string("value"),
             ])]),
         ]))
         XCTAssertEqual(
             result,
-            .change(.elements(.updatedElement(ElementUpdatePredicate(
-                element: ElementPredicate(identifier: "slider"),
-                change: .value(before: "0", after: "50")
-            ))))
+            .changed(.elements([
+                .updated(.identifier("slider"), .value(before: "0", after: "50")),
+            ]))
         )
     }
 
     @ButtonHeistActor
     func testParseExpectationDiscriminatorElementUpdatedInvalidPropertyListsValidValues() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
-            "type": .string("change"),
-            "scopes": .array([.object([
-                "type": .string("elements"),
-                "assertions": .array([.object([
-                    "type": .string("updated"),
-                    "property": .string("bogus"),
-                ])]),
+            "type": .string("changed"),
+            "scope": .string("elements"),
+            "assertions": .array([.object([
+                "type": .string("updated"),
+                "target": elementPredicateValue(identifier: "slider"),
+                "property": .string("bogus"),
             ])]),
         ]))) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -3611,27 +3665,51 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationDiscriminatorElementUpdatedBare() async throws {
-        let result = try parseTypedExpectation(.object([
-            "type": .string("change"),
-            "scopes": .array([.object([
-                "type": .string("elements"),
-                "assertions": .array([.object(["type": .string("updated")])]),
-            ])]),
-        ]))
-        XCTAssertEqual(result, .change(.elements(.updatedElement(.any))))
+    func testParseExpectationDiscriminatorElementUpdatedRequiresTargetAndProperty() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("changed"),
+            "scope": .string("elements"),
+            "assertions": .array([.object(["type": .string("updated")])]),
+        ])))
     }
 
     @ButtonHeistActor
     func testParseExpectationDiscriminatorPresentWithElement() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("exists"),
-            "element": elementPredicateValue(label: "Cart", identifier: "cart.button"),
+            "target": elementPredicateValue(label: "Cart", identifier: "cart.button"),
         ]))
         XCTAssertEqual(
             result,
-            .exists(ElementPredicate(label: "Cart", identifier: "cart.button"))
+            .exists(.predicate(ElementPredicateTemplate(label: "Cart", identifier: "cart.button")))
         )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationAcceptsContainerTarget() async throws {
+        let result = try parseTypedExpectation(.object([
+            "type": .string("exists"),
+            "target": .object([
+                "container": .object([
+                    "checks": .array([.object([
+                        "kind": .string("scrollable"),
+                        "value": .bool(true),
+                    ])]),
+                ]),
+            ]),
+        ]))
+
+        XCTAssertEqual(result, .exists(.container(.matching(.scrollable(true)))))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationResolvesTargetRefsAtRuntimeBoundary() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("exists"),
+            "target": .object(["ref": .string("item")]),
+        ]))) { error in
+            XCTAssertEqual(error as? HeistExpressionError, .unresolvedTargetReference("item"))
+        }
     }
 
     @ButtonHeistActor
@@ -3651,10 +3729,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationTypedPayloadPreservesElementTraits() async throws {
+    func testParseExpectationTypedPayloadPreservesTargetTraits() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("missing"),
-            "element": elementTargetValue([
+            "target": accessibilityTargetValue([
                 "checks": .array([
                     predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Spinner")),
                     predicateCheckValue(kind: "traits", values: [.string("button")]),
@@ -3668,19 +3746,19 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(
             result,
-            .missing(ElementPredicate([
+            .missing(.element(
                 .label("Spinner"),
                 .traits([.button]),
-                .exclude(.traits([.selected])),
-            ]))
+                .exclude(.traits([.selected]))
+            ))
         )
     }
 
     @ButtonHeistActor
-    func testParseExpectationTypedPayloadBadElementFieldNamesField() async {
+    func testParseExpectationTypedPayloadBadTargetTraitField() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("exists"),
-            "element": .object([
+            "target": .object([
                 "checks": .array([
                     predicateCheckValue(kind: "traits", values: [.int(7)]),
                 ]),
@@ -3690,7 +3768,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertEqual(error.field, "element.checks[0].values[0]")
+            XCTAssertEqual(error.field, "target.checks[0].values[0]")
             XCTAssertEqual(error.expected, "trait name")
         }
     }
@@ -3700,26 +3778,33 @@ final class TheFenceHandlerTests: XCTestCase {
         let cases: [(HeistValue, String)] = [
             (
                 .object([
-                    "actions": .array([.object(["custom": .string("")])]),
-                ]),
-                "element.actions[0].custom"
-            ),
-            (
-                .object([
                     "checks": .array([
                         predicateCheckValue(kind: "actions", values: [
                             .object(["custom": .string("")]),
                         ]),
                     ]),
                 ]),
-                "element.checks[0].values[0].custom"
+                "target.checks[0].values[0].custom"
+            ),
+            (
+                .object([
+                    "checks": .array([
+                        predicateCheckValue(
+                            kind: "exclude",
+                            check: predicateCheckValue(kind: "actions", values: [
+                                .object(["custom": .string("")]),
+                            ])
+                        ),
+                    ]),
+                ]),
+                "target.checks[0].check.values[0].custom"
             ),
         ]
 
-        for (element, field) in cases {
+        for (target, field) in cases {
             XCTAssertThrowsError(try parseTypedExpectation(.object([
                 "type": .string("exists"),
-                "element": element,
+                "target": target,
             ]))) { error in
                 guard let error = error as? SchemaValidationError else {
                     XCTFail("Expected SchemaValidationError, got \(error)")
@@ -3739,15 +3824,49 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertTrue(message.contains(#"Unknown predicate type: "delivery""#), message)
+            XCTAssertTrue(message.contains("delivery"), message)
         }
     }
 
     @ButtonHeistActor
-    func testParseExpectationRejectsExtraElementKeys() async {
+    func testParseExpectationAcceptsAnnouncementWithoutMatch() async throws {
+        let result = try parseTypedExpectation(.object([
+            "type": .string("announcement"),
+        ]))
+
+        XCTAssertEqual(result, .announcement)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationAcceptsAnnouncementWithCanonicalMatch() async throws {
+        let result = try parseTypedExpectation(.object([
+            "type": .string("announcement"),
+            "match": stringMatchValue(mode: "contains", value: "Payment complete"),
+        ]))
+
+        XCTAssertEqual(result, .announcement(.contains("Payment complete")))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationRejectsAnnouncementInChangedAssertionContexts() async {
+        for (scope, context) in [("screen", "screen assertion"), ("elements", "elements assertion")] {
+            XCTAssertThrowsError(try parseTypedExpectation(.object([
+                "type": .string("changed"),
+                "scope": .string(scope),
+                "assertions": .array([.object([
+                    "type": .string("announcement"),
+                ])]),
+            ]))) { error in
+                XCTAssertTrue(String(describing: error).contains(context), "Unexpected error: \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationRejectsExtraTargetKeys() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("exists"),
-            "element": .object([
+            "target": .object([
                 "checks": .array([
                     predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Done")),
                 ]),
@@ -3757,22 +3876,22 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"Unknown element predicate field "unknown""#)
+            XCTAssertTrue(message.contains("unknown"), message)
         }
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementRejectsHeistId() async {
+    func testParseExpectationTargetRejectsHeistId() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("exists"),
-            "element": .object([
+            "target": .object([
                 "heistId": .string("button_save"),
             ]),
         ]))) { error in
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"Unknown element predicate field "heistId""#)
+            XCTAssertTrue(message.contains("heistId"), message)
         }
     }
 
@@ -3797,7 +3916,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(message.contains(#"Unknown predicate type: "appeared""#), message)
+            XCTAssertTrue(message.contains(#"Predicate type "appeared" is not valid"#), message)
         }
     }
 
@@ -3810,8 +3929,8 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(message.contains(#"Unknown predicate type: "compound""#), message)
-            XCTAssertTrue(message.contains("change"), message)
+            XCTAssertTrue(message.contains(#"Predicate type "compound" is not valid"#), message)
+            XCTAssertTrue(message.contains("changed"), message)
         }
     }
 
@@ -3822,7 +3941,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Unknown predicate type"))
+            XCTAssertTrue(msg.contains(#"Predicate type "bogus_type" is not valid"#))
         }
     }
 
@@ -3838,7 +3957,6 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
         XCTAssertNil(query.subtree)
-        XCTAssertFalse(query.matcher.hasPredicates)
         XCTAssertNil(query.maxScrollsPerContainer)
         XCTAssertNil(query.maxScrollsPerDiscovery)
     }
@@ -3973,11 +4091,11 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .getInterface,
             arguments: [
                 "subtree": .object([
-                    "element": .object(["heistId": .string("button_save")]),
+                    "heistId": .string("button_save"),
                     "ordinal": .int(1),
                 ]),
             ],
-            contains: "Unknown element target field \"heistId\""
+            contains: "Unknown accessibility target field \"heistId\""
         )
     }
 
@@ -3987,12 +4105,10 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .getInterface,
             arguments: [
                 "subtree": .object([
-                    "element": .object([
-                        "checks": .array([
-                            predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
-                        ]),
-                        "unexpectedTargetField": .string("button_save"),
+                    "checks": .array([
+                        predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
                     ]),
+                    "unexpectedTargetField": .string("button_save"),
                 ]),
             ],
             contains: "unexpectedTargetField"
@@ -4015,42 +4131,6 @@ final class TheFenceHandlerTests: XCTestCase {
             compact
         )
         XCTAssertFalse(compact.contains("stableId"), compact)
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSendsMatcherInObservationQuery() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let submit = TestHeistElementBuilder(label: "Submit", traits: [.button]).build()
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(makeReceiptTestInterface([submit]))
-            default:
-                return .actionResult(ActionResult.success(method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(
-            command: .getInterface,
-            values: [
-                "checks": .array([
-                    predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Submit")),
-                ]),
-            ]
-        )
-
-        guard let (message, _) = mockConn.sent.last,
-              case .requestInterface(let query) = message else {
-            XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
-            return
-        }
-        XCTAssertEqual(query.matcher.checks, [.label(.exact("Submit"))])
-
-        let tree = try publicJSONProbe(response).object("interface").array("tree")
-        XCTAssertEqual(tree.count, 1)
-        let element = try tree[0].object("element")
-        XCTAssertEqual(try element.string("label"), "Submit")
-        try element.assertMissing("heistId")
     }
 
     @ButtonHeistActor
@@ -4086,7 +4166,7 @@ private struct ExpectedDiagnosticFailure {
 }
 
 private func legacyHeistIdTargetValue(_ legacyHeistId: String) -> HeistValue {
-    elementTargetValue(["heistId": .string(legacyHeistId)])
+    accessibilityTargetValue(["heistId": .string(legacyHeistId)])
 }
 
 private func targetValue(
@@ -4111,7 +4191,7 @@ private func targetValue(
     }
     var target: [String: HeistValue] = ["checks": .array(checks)]
     if let ordinal { target["ordinal"] = .int(ordinal) }
-    return elementTargetValue(target)
+    return accessibilityTargetValue(target)
 }
 
 private func elementPredicateValue(
@@ -4133,7 +4213,7 @@ private func elementPredicateValue(
     if let traits {
         checks.append(predicateCheckValue(kind: "traits", values: traits.map { .string($0) }))
     }
-    return elementTargetValue(["checks": .array(checks)])
+    return accessibilityTargetValue(["checks": .array(checks)])
 }
 
 private func stringMatchValue(mode: String, value: String) -> HeistValue {
@@ -4143,7 +4223,7 @@ private func stringMatchValue(mode: String, value: String) -> HeistValue {
     ])
 }
 
-private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
+private func accessibilityTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
     .object(fields)
 }
 
@@ -4202,7 +4282,7 @@ private func assertCompactHeistSummary(
     XCTAssertEqual(lines.last, stepLine, file: file, line: line)
 }
 
-private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate? {
+private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate<RootContext>? {
     var values: [String: HeistValue] = [:]
     if let expectation {
         values["expect"] = expectation

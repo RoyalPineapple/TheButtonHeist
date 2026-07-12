@@ -4,7 +4,7 @@ import Foundation
 public struct TypeTextTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case text
-        case elementTarget
+        case target
         case replacingExisting
     }
 
@@ -12,35 +12,35 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
     public let text: String
     /// Optional element to tap first to bring up keyboard (text field).
     /// Also used to read back the current value after typing.
-    public let elementTarget: ElementTarget?
+    public let target: AccessibilityTarget?
     /// Whether to clear the focused input before typing `text`.
     public let replacingExisting: Bool
 
-    public init(text: String, elementTarget: ElementTarget? = nil) {
-        self.init(text: text, elementTarget: elementTarget, replacingExisting: false)
+    public init(text: String, target: AccessibilityTarget? = nil) {
+        self.init(text: text, target: target, replacingExisting: false)
     }
 
     public init(
         text: String,
-        elementTarget: ElementTarget? = nil,
+        target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) {
         self.text = text
-        self.elementTarget = elementTarget
+        self.target = target
         self.replacingExisting = replacingExisting
     }
 
-    public init(validatingText text: String, elementTarget: ElementTarget? = nil) throws {
-        try self.init(validatingText: text, elementTarget: elementTarget, replacingExisting: false)
+    public init(validatingText text: String, target: AccessibilityTarget? = nil) throws {
+        try self.init(validatingText: text, target: target, replacingExisting: false)
     }
 
     public init(
         validatingText text: String,
-        elementTarget: ElementTarget? = nil,
+        target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) throws {
         try Self.validate(text, replacingExisting: replacingExisting)
-        self.init(text: text, elementTarget: elementTarget, replacingExisting: replacingExisting)
+        self.init(text: text, target: target, replacingExisting: replacingExisting)
     }
 
     public static func validate(_ text: String) throws {
@@ -66,13 +66,13 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
                 debugDescription: "text must be non-empty unless replacingExisting is true"
             ))
         }
-        elementTarget = try container.decodeIfPresent(ElementTarget.self, forKey: .elementTarget)
+        target = try container.decodeIfPresent(AccessibilityTarget.self, forKey: .target)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(text, forKey: .text)
-        try container.encodeIfPresent(elementTarget, forKey: .elementTarget)
+        try container.encodeIfPresent(target, forKey: .target)
         if replacingExisting {
             try container.encode(replacingExisting, forKey: .replacingExisting)
         }
@@ -94,7 +94,7 @@ extension TypeTextTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("typeText", [
             ScoreDescription.stringField("text", text),
-            elementTarget?.description,
+            target?.description,
             replacingExisting ? "replacingExisting=true" : nil,
         ].compactMap { $0 })
     }
@@ -206,11 +206,11 @@ extension EditActionTarget: CustomStringConvertible {
 /// ride through intermediate settled states until the requested change is met.
 public struct WaitTarget: Codable, Sendable, Equatable {
     /// The predicate to wait on.
-    public let predicate: AccessibilityPredicate
+    public let predicate: AccessibilityPredicate<RootContext>
     /// Maximum time to wait in seconds (default: 30, max: 30).
     public let timeout: Double?
 
-    public init(predicate: AccessibilityPredicate, timeout: Double? = nil) {
+    public init(predicate: AccessibilityPredicate<RootContext>, timeout: Double? = nil) {
         self.predicate = predicate
         self.timeout = timeout
     }
@@ -224,7 +224,7 @@ public struct WaitTarget: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
+        self.predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
     }
 

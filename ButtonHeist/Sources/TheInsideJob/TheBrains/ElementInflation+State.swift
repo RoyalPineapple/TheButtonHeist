@@ -7,12 +7,12 @@ import ThePlans
 extension ElementInflation {
 
     internal struct InflatedElementTarget {
-        internal let target: ElementTarget
+        internal let target: AccessibilityTarget
         internal let screenElement: TheStash.ScreenElement
         internal let liveTarget: TheStash.LiveActionTarget
 
         internal init(
-            target: ElementTarget,
+            target: AccessibilityTarget,
             screenElement: TheStash.ScreenElement,
             liveTarget: TheStash.LiveActionTarget
         ) {
@@ -85,7 +85,7 @@ extension ElementInflation {
         case resolving(ResolutionPass)
         case revealing(treeElement: TheStash.ScreenElement, attempt: Int)
         case refreshing(
-            target: ElementTarget,
+            target: AccessibilityTarget,
             screenElement: TheStash.ScreenElement,
             attempt: Int,
             didReveal: Bool

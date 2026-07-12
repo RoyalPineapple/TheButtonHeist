@@ -187,11 +187,6 @@ enum ButtonHeistPrivateSPI {
         return cast(symbol, to: Signature.self)
     }
 
-    static func uniquePreservingOrder(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
-    }
-
     private static func symbol(_ name: SPISymbolName, in handle: LibraryHandle) -> UnsafeMutableRawPointer? {
         dlsym(handle.rawValue, name.rawValue)
     }

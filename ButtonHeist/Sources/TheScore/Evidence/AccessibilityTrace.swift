@@ -5,8 +5,8 @@ import Foundation
 
 /// Accessibility state observed during a session.
 ///
-/// Captures are the durable source of truth. Deltas are derived projections
-/// for callers that need compact change summaries.
+/// Captures are the durable source of truth. Change facts are derived
+/// projections for callers that need compact change summaries.
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public let captures: [Capture]
 

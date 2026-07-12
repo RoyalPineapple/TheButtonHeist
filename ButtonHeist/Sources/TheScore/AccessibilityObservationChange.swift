@@ -13,36 +13,29 @@ public enum AccessibilityObservationFallbackReason: String, Codable, Sendable, E
 
 enum AccessibilityObservationChangeSource: Equatable, Sendable {
     case screenChangedNotification
+    case observationGeneration
     case settledSnapshot
     case fallback(AccessibilityObservationFallbackReason)
 }
 
 enum AccessibilityObservationChange: Equatable, Sendable {
-    case unchanged
     case elementChanged(source: AccessibilityObservationChangeSource)
     case screenChanged(source: AccessibilityObservationChangeSource)
-
-    var isScreenChange: Bool {
-        if case .screenChanged = self { return true }
-        return false
-    }
-
-    var isChange: Bool {
-        if case .unchanged = self { return false }
-        return true
-    }
-
 }
 
 enum AccessibilityObservationChangeReducer {
     static func reduce(
         before: AccessibilityTrace.Capture,
-        after: AccessibilityTrace.Capture,
-        projection: AccessibilityTrace.DeltaProjection
+        after: AccessibilityTrace.Capture
     ) -> AccessibilityObservationChange {
         let notificationKinds = after.transition.accessibilityNotifications.map(\.kind)
         if notificationKinds.contains(.screenChanged) {
             return .screenChanged(source: .screenChangedNotification)
+        }
+        if let beforeGeneration = before.context.observationGeneration,
+           let afterGeneration = after.context.observationGeneration,
+           beforeGeneration != afterGeneration {
+            return .screenChanged(source: .observationGeneration)
         }
         if let fallbackReason = after.transition.fallbackReason {
             return .screenChanged(source: .fallback(fallbackReason))
@@ -50,8 +43,11 @@ enum AccessibilityObservationChangeReducer {
         if before.context.screenId != after.context.screenId {
             return .screenChanged(source: .fallback(.screenIdentifierChanged))
         }
-        if !projection.includesGeometry, before.hash == after.hash {
-            return .unchanged
+        if notificationKinds.contains(where: \.isElementChangeEvidence) {
+            return .elementChanged(source: .settledSnapshot)
+        }
+        if !after.transition.transient.isEmpty {
+            return .elementChanged(source: .settledSnapshot)
         }
         return .elementChanged(source: .settledSnapshot)
     }

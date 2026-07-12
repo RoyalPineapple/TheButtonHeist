@@ -66,7 +66,7 @@ struct HeistPlanToolTests {
         #expect(result.stdout == """
         HeistPlan("loginFlow") {
             TypeText("alex@example.com", into: .identifier("email"))
-                .expect(.updated(.value("alex@example.com")))
+                .expect(.changed(.elements([.updated(.identifier("email"), .value("alex@example.com"))])))
 
             Warn("done")
         }
@@ -115,7 +115,9 @@ struct HeistPlanToolTests {
 private func representativePlan() throws -> HeistPlan {
     try HeistPlan("loginFlow") {
         TypeText("alex@example.com", into: .identifier("email"))
-            .expect(.updated(.value("alex@example.com")), timeout: .seconds(1))
+            .expect(.changed(.elements([
+                .updated(.identifier("email"), .value("alex@example.com")),
+            ])), timeout: .seconds(1))
 
         Warn("done")
     }

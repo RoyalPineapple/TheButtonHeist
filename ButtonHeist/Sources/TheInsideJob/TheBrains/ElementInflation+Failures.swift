@@ -1,11 +1,27 @@
 #if canImport(UIKit) && DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 extension ElementInflation {
 
+    internal enum ElementActionTargetResolutionFailure: Error, Equatable, CustomStringConvertible {
+        case containerTarget
+        case unresolvedReference(HeistReferenceName)
+
+        internal var description: String {
+            switch self {
+            case .containerTarget:
+                return "container targets are not valid for element actions"
+            case .unresolvedReference(let reference):
+                return "target reference \(reference) was not resolved before element action dispatch"
+            }
+        }
+    }
+
     internal enum ElementInflationFailureStep: String {
+        case targetResolution
         case notFound
         case ambiguous
         case noRevealPath
@@ -18,6 +34,18 @@ extension ElementInflation {
         internal let failedStep: ElementInflationFailureStep
         internal let failureKind: TheSafecracker.FailureKind
         internal let message: String
+        internal let targetResolutionFailure: ElementActionTargetResolutionFailure?
+
+        internal static func targetResolution(
+            _ failure: ElementActionTargetResolutionFailure
+        ) -> ElementInflationFailure {
+            .init(
+                .targetResolution,
+                failureKind: .targetUnavailable,
+                message: failure.description,
+                targetResolutionFailure: failure
+            )
+        }
 
         internal static func notFound(_ message: String) -> ElementInflationFailure {
             .init(.notFound, failureKind: .targetUnavailable, message: message)
@@ -56,10 +84,12 @@ extension ElementInflation {
         private init(
             _ step: ElementInflationFailureStep,
             failureKind: TheSafecracker.FailureKind,
-            message: String
+            message: String,
+            targetResolutionFailure: ElementActionTargetResolutionFailure? = nil
         ) {
             failedStep = step
             self.failureKind = failureKind
+            self.targetResolutionFailure = targetResolutionFailure
             self.message = message.contains("[\(step.rawValue)]")
                 ? message
                 : "element inflation failed [\(step.rawValue)]: \(message)"
@@ -93,6 +123,24 @@ extension ElementInflation {
         return .noRevealPath(
             "target \(description) has no live scrollable ancestor to make activation point actionable"
         )
+    }
+}
+
+extension AccessibilityTarget {
+    internal func validatedForElementAction() throws(
+        ElementInflation.ElementActionTargetResolutionFailure
+    ) -> AccessibilityTarget {
+        switch self {
+        case .predicate:
+            return self
+        case .container:
+            throw .containerTarget
+        case .ref(let reference):
+            throw .unresolvedReference(reference)
+        case .within(_, let target):
+            _ = try target.validatedForElementAction()
+            return self
+        }
     }
 }
 

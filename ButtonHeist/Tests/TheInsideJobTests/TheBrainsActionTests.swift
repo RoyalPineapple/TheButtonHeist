@@ -280,7 +280,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Live")))
+        let result = await brains.actions.executeIncrement(literalTarget(ElementPredicate(label: "Live")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -302,7 +302,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeDecrement(.predicate(ElementPredicate(label: "Live")))
+        let result = await brains.actions.executeDecrement(literalTarget(ElementPredicate(label: "Live")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .decrement)
@@ -329,7 +329,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Share")
+            CustomActionTarget(target: literalTarget(ElementPredicate(label: "Options")), actionName: "Share")
         )
 
         XCTAssertFalse(result.success)
@@ -361,7 +361,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Delete")
+            CustomActionTarget(target: literalTarget(ElementPredicate(label: "Options")), actionName: "Delete")
         )
 
         XCTAssertFalse(result.success)
@@ -393,7 +393,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Archive")
+            CustomActionTarget(target: literalTarget(ElementPredicate(label: "Options")), actionName: "Archive")
         )
 
         XCTAssertTrue(result.success)
@@ -419,7 +419,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Archive")
+            CustomActionTarget(target: literalTarget(ElementPredicate(label: "Options")), actionName: "Archive")
         )
 
         XCTAssertFalse(result.success)
@@ -451,7 +451,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(identifier: "plain_action")))
+        let result = await brains.actions.executeActivate(literalTarget(ElementPredicate(identifier: "plain_action")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -467,7 +467,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Plain label")))
+        let result = await brains.actions.executeActivate(literalTarget(ElementPredicate(label: "Plain label")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -507,11 +507,11 @@ final class TheBrainsActionTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        let success = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(identifier: "trace_success"))))
+        let success = await brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate(identifier: "trace_success"))))
         XCTAssertTrue(success.outcome.isSuccess, success.message ?? "activate failed")
         XCTAssertNotNil(success.accessibilityTrace?.captures.last)
 
-        let failure = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(identifier: "trace_failure"))))
+        let failure = await brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate(identifier: "trace_failure"))))
         XCTAssertFalse(failure.outcome.isSuccess)
         XCTAssertEqual(failure.method, .activate)
         let afterCapture = try XCTUnwrap(failure.accessibilityTrace?.captures.last)
@@ -529,7 +529,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Disabled action")))
+        let result = await brains.actions.executeActivate(literalTarget(ElementPredicate(label: "Disabled action")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -546,7 +546,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Live")))
+        let result = await brains.actions.executeIncrement(literalTarget(ElementPredicate(label: "Live")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -567,7 +567,7 @@ final class TheBrainsActionTests: XCTestCase {
         let liveObject = AdjustableGeometryView(frame: staleObjectFrame, activationPoint: staleObjectPoint)
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
-        let resolved = brains.stash.resolveTarget(.predicate(ElementPredicate(label: "Moving"))).resolved
+        let resolved = brains.stash.resolveTarget(literalTarget(ElementPredicate(label: "Moving"))).resolved
         let liveTarget: TheStash.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
@@ -580,7 +580,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveTarget?.activationPoint, capturePoint)
         XCTAssertNotEqual(liveTarget?.activationPoint, staleObjectPoint)
 
-        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Moving")))
+        let result = await brains.actions.executeIncrement(literalTarget(ElementPredicate(label: "Moving")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -648,26 +648,26 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistCommandsMatchSingleCommandMatcherFailures() async throws {
         let matcher = ElementPredicate(identifier: "missing_target")
-        let target = ElementTarget.predicate(matcher)
-        let customAction = CustomActionTarget(elementTarget: target, actionName: "Archive")
-        let rotor = RotorTarget(elementTarget: target, selection: .named("Links"))
+        let target = literalTarget(matcher)
+        let customAction = CustomActionTarget(target: target, actionName: "Archive")
+        let rotor = RotorTarget(target: target, selection: .named("Links"))
         let tap = TapTarget(selection: .element(target))
         let swipe = SwipeTarget(selection: .elementDirection(target, .left))
-        let typeText = TypeTextTarget(text: "hello", elementTarget: target)
-        let wait = WaitTarget(predicate: .state(.exists(matcher)), timeout: 0.01)
+        let typeText = TypeTextTarget(text: "hello", target: target)
+        let wait = WaitTarget(predicate: .exists(literalTarget(matcher)), timeout: 0.01)
         let commands: [(String, RuntimeActionMessage, HeistStep, Bool)] = [
-            ("activate", .activate(target), .action(try ActionStep(command: .activate(.target(target)))), false),
+            ("activate", .activate(target), .action(try ActionStep(command: .activate(target))), false),
             ("custom action", .performCustomAction(customAction), .action(try ActionStep(
-                command: .customAction(name: customAction.actionName, target: .target(customAction.elementTarget))
+                command: .customAction(name: customAction.actionName, target: customAction.target)
             )), false),
             ("rotor", .rotor(rotor), .action(try ActionStep(
-                command: .rotor(selection: rotor.selection, target: .target(rotor.elementTarget), direction: rotor.direction)
+                command: .rotor(selection: rotor.selection, target: rotor.target, direction: rotor.direction)
             )), false),
             ("tap", .oneFingerTap(tap), .action(try ActionStep(command: .mechanicalTap(tap))), false),
             ("swipe", .swipe(swipe), .action(try ActionStep(command: .mechanicalSwipe(swipe))), false),
             ("type text", .typeText(typeText), .action(try ActionStep(command: .typeText(
                 text: .literal(typeText.text),
-                target: typeText.elementTarget.map(ElementTargetExpr.target),
+                target: typeText.target,
                 replacingExisting: typeText.replacingExisting
             ))), false),
             ("wait", .wait(wait), .wait(WaitStep(predicate: wait.predicate, timeout: wait.resolvedTimeout)), true),
@@ -688,15 +688,15 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistPlanDispatchesEveryDurableActionCommandThroughRuntime() async throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let commands: [HeistActionCommand] = [
-            .activate(.target(target)),
-            .increment(.target(target)),
-            .decrement(.target(target)),
-            .customAction(name: "Archive", target: .target(target)),
-            .rotor(selection: .named("Errors"), target: .target(target), direction: .next),
-            .typeText(text: .literal("hello"), target: .target(target)),
+            .activate(target),
+            .increment(target),
+            .decrement(target),
+            .customAction(name: "Archive", target: target),
+            .rotor(selection: .named("Errors"), target: target, direction: .next),
+            .typeText(text: .literal("hello"), target: target),
             .mechanicalTap(TapTarget(selection: point)),
             .mechanicalLongPress(LongPressTarget(selection: point)),
             .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(ScreenPoint(x: 20, y: 20)), destination: .direction(.left)))),
@@ -733,8 +733,8 @@ final class TheBrainsActionTests: XCTestCase {
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
         ))
-        let target = ElementTarget.predicate(ElementPredicate(label: "Search all items"))
-        let command = HeistActionCommand.activate(.target(target))
+        let target = literalTarget(ElementPredicate(label: "Search all items"))
+        let command = HeistActionCommand.activate(target)
         let runtime = heistRuntime(observations: []) { _ in
             ActionResult.failure(
                 method: .activate,
@@ -757,10 +757,10 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         let commands: [(HeistActionCommand, RuntimeActionType)] = [
             (.viewportScroll(ScrollTarget(direction: .down)), .scroll),
-            (.viewportScrollToVisible(.target(target)), .scrollToVisible),
+            (.viewportScrollToVisible(target), .scrollToVisible),
             (.viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)), .scrollToEdge),
         ]
 
@@ -772,7 +772,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
         let observedReady = observedState(labels: ["Ready"])
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         var dispatchedTypes: [RuntimeActionType] = []
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         let runtime = heistRuntime(
@@ -790,9 +790,9 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Ready"))),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Ready"))),
                 timeout: 0
             )),
         ])
@@ -806,7 +806,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(dispatchedTypes, [.activate])
         XCTAssertEqual(waitRequests.count, 1)
         if case .standalone(let request)? = waitRequests.first {
-            XCTAssertEqual(request.predicate, .state(.exists(ElementPredicate(label: "Ready"))))
+            XCTAssertEqual(request.predicate, .exists(literalTarget(ElementPredicate(label: "Ready"))))
         } else {
             XCTFail("Expected standalone wait request")
         }
@@ -819,7 +819,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActivateRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let target = literalTarget(ElementPredicate(label: "Checkout"))
         let subject = makeTestHeistElement(
             label: "Checkout",
             traits: [.staticText],
@@ -839,7 +839,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -860,7 +860,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistTypeTextRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Notes"))
+        let target = literalTarget(ElementPredicate(label: "Notes"))
         let subject = makeTestHeistElement(
             label: "Notes",
             traits: [.staticText],
@@ -882,7 +882,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(command: .typeText(
                 text: .literal("hello"),
-                target: .target(target)
+                target: target
             ))),
         ])
 
@@ -900,7 +900,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         let screenshot = ScreenPayload(
             pngData: "png",
             width: 10,
@@ -921,7 +921,7 @@ final class TheBrainsActionTests: XCTestCase {
             )
         }
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -944,7 +944,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistFailurePhaseSkipsRemainingStepsWithoutDispatchingActions() async throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         var dispatchedTypes: [RuntimeActionType] = []
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
@@ -958,7 +958,7 @@ final class TheBrainsActionTests: XCTestCase {
             )
         }
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .activate(target))),
             .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "not dispatched")))),
             .heist(try HeistPlan(body: [
                 .action(try ActionStep(command: .dismissKeyboard)),
@@ -1040,7 +1040,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Home"))),
                 timeout: 0
             )),
         ])
@@ -1061,7 +1061,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Home"))),
                 timeout: 0,
                 elseBody: [.warn(WarnStep(message: "no known state appeared"))]
             )),
@@ -1157,7 +1157,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistRepeatUntilUsesActionTraceProgressBeforePostBodyWait() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.element(.identifier("quantity"), .value("2")))
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let firstMutation = observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")])
         let secondMutation = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
@@ -1181,7 +1181,7 @@ final class TheBrainsActionTests: XCTestCase {
                 switch request {
                 case .immediate:
                     let initialTrace = AccessibilityTrace(capture: initialState.capture)
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
+                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
@@ -1391,7 +1391,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistRepeatUntilPostBodyMatchedWaitWithoutObservedSequenceDoesNotReusePreviousSequence() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.element(.identifier("quantity"), .value("2")))
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let matchedState = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
@@ -1401,7 +1401,7 @@ final class TheBrainsActionTests: XCTestCase {
             wait: { request in
                 switch request {
                 case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
+                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
@@ -1411,7 +1411,7 @@ final class TheBrainsActionTests: XCTestCase {
                     )
                 case .afterObservation:
                     afterObservationCount += 1
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: matchedTrace)
+                    let expectation = PredicateEvaluation.evaluate(predicate, in: matchedTrace, isComplete: false)
                     return .matched(
                         message: expectation.actual,
                         accessibilityTrace: matchedTrace,
@@ -1454,14 +1454,14 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistRepeatUntilPostBodyNilTraceWithNewSequenceDoesNotReuseStaleTraceOrSummary() async throws {
-        let predicate = AccessibilityPredicate.exists(.element(.identifier("quantity"), .value("2")))
+        let predicate = AccessibilityPredicate<RootContext>.exists(.element(.identifier("quantity"), .value("2")))
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let runtime = repeatUntilReceiptRuntime(
             wait: { request in
                 switch request {
                 case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace)
+                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
@@ -1473,7 +1473,11 @@ final class TheBrainsActionTests: XCTestCase {
                     return .timedOut(
                         message: "no observed accessibility trace",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(met: false, predicate: .change(), actual: "no observed accessibility trace"),
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: .changed(.elements()),
+                            actual: "no observed accessibility trace"
+                        ),
                         observedSequence: 2,
                         observationSummary: nil
                     )
@@ -1569,7 +1573,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testPredicateObservationStreamSeparatesStateAndChangeEvidence() async throws {
-        let readyPredicate = ElementPredicate(label: "Ready")
+        let readyTarget = literalTarget(ElementPredicate(label: "Ready"))
         let source = ScriptedHeistObservationSource(
             observations: [
                 observedState(labels: ["Loading"]),
@@ -1586,7 +1590,7 @@ final class TheBrainsActionTests: XCTestCase {
         let baselineObservation = try XCTUnwrap(source.next(scope: .visible, timeout: 0))
         let seeded = stream.reducing(
             baselineObservation,
-            predicate: .change(.appeared(readyPredicate)),
+            predicate: .changed(.elements([.appeared(readyTarget)])),
             baselineSeed: .previousObservationIfAvailable
         )
         stream = seeded.state
@@ -1594,25 +1598,22 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(seeded.reduction.expectation.met)
         XCTAssertEqual(
             seeded.reduction.expectation.actual,
-            "change predicate requires future settled observation after baseline"
+            "noChange"
         )
 
         let changedObservation = try XCTUnwrap(source.next(scope: .visible, timeout: 0))
         let changed = stream.reducing(
             changedObservation,
-            predicate: .change(.appeared(readyPredicate))
+            predicate: .changed(.elements([.appeared(readyTarget)]))
         )
         let stateExpectation = PredicateEvaluation.evaluate(
-            .exists(readyPredicate),
+            .exists(readyTarget),
             in: changed.reduction.evidence
         )
 
         XCTAssertTrue(stateExpectation.met)
         XCTAssertTrue(changed.reduction.expectation.met)
         XCTAssertEqual(changed.reduction.changeBaseline?.cursor.sequence, baselineObservation.event.sequence)
-        guard case .changed? = changed.reduction.changeVerdict else {
-            return XCTFail("Expected changed observation-window verdict")
-        }
     }
 
     func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {
@@ -1668,7 +1669,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistWaitTimeoutZeroTurnsObservationCrankOnce() async throws {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Never Appears"))),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Never Appears"))),
                 timeout: 0
             )),
         ])
@@ -1683,7 +1684,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
         XCTAssertDiagnostic(step.reportActionResult?.message, contains: [
             "last settled: sequence ",
-            "last delta:",
+            "last change:",
         ])
     }
 
@@ -1695,7 +1696,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
-                predicate: .state(.exists(ElementPredicate(label: "Home"))),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Home"))),
                 timeout: 0
             )),
         ])
@@ -1714,7 +1715,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
         let result = await inactiveBrains.performWait(target: WaitTarget(
-            predicate: .state(.exists(ElementPredicate(label: "Home"))),
+            predicate: .exists(literalTarget(ElementPredicate(label: "Home"))),
             timeout: 0
         ))
 
@@ -1730,7 +1731,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
         let result = await inactiveBrains.executeRuntimeAction(.wait(WaitTarget(
-            predicate: .state(.exists(ElementPredicate(label: "Home"))),
+            predicate: .exists(literalTarget(ElementPredicate(label: "Home"))),
             timeout: 0
         )))
 
@@ -1753,7 +1754,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .exists(ElementPredicate(label: "Loaded")),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Loaded"))),
                 timeout: 1
             ))
         }
@@ -1769,9 +1770,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
-        guard case .elementsChanged? = trace.endpointDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDelta))")
-        }
+        XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
     }
 
     func testActionExpectationWithMatchingInitialTracePollsForSettledMatch() async throws {
@@ -1806,7 +1805,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(
-                WaitStep(predicate: .exists(ElementPredicate(label: "Ready")), timeout: 1),
+                WaitStep(predicate: .exists(literalTarget(ElementPredicate(label: "Ready"))), timeout: 1),
                 initialTrace: initialTrace
             )
         }
@@ -1856,7 +1855,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(
-                WaitStep(predicate: .exists(ElementPredicate(label: "Ready")), timeout: 0.05),
+                WaitStep(predicate: .exists(literalTarget(ElementPredicate(label: "Ready"))), timeout: 0.05),
                 initialTrace: initialTrace
             )
         }
@@ -1867,7 +1866,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertEqual(receipt.expectation.actual, "no element matches predicate(label=\"Ready\")")
+        XCTAssertEqual(receipt.expectation.actual, "expected target(predicate(label=\"Ready\")) to exist")
     }
 
     func testChangedActionExpectationUsesPreActionBaselineForSettledActionResult() async throws {
@@ -1908,16 +1907,19 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
             WaitStep(
-                predicate: .change(.screenChanged(.exists(ElementPredicate(label: "Controls Demo", traits: [.header])))),
+                predicate: .changed(.screen([.exists(literalTarget(ElementPredicate(
+                    label: "Controls Demo",
+                    traits: [.header]
+                )))])),
                 timeout: 1
             ),
             initialTrace: initialTrace
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        guard case .screenChanged? = receipt.actionResult.accessibilityTrace?.endpointDelta else {
-            return XCTFail("Expected screenChanged delta, got \(String(describing: receipt.actionResult.accessibilityTrace?.endpointDelta))")
-        }
+        XCTAssertTrue(receipt.actionResult.accessibilityTrace?.changeFacts.contains {
+            if case .screenChanged = $0 { true } else { false }
+        } == true)
     }
 
     func testWaitReceiptTimeoutDiagnosticUsesFinalSettledObservation() async throws {
@@ -1928,7 +1930,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .exists(ElementPredicate(label: "Missing")),
+                predicate: .exists(literalTarget(ElementPredicate(label: "Missing"))),
                 timeout: 0.05
             ))
         }
@@ -1945,7 +1947,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
         let expectation = WaitStep(
-            predicate: .state(.missing(ElementPredicate(label: "Loading"))),
+            predicate: .missing(literalTarget(ElementPredicate(label: "Loading"))),
             timeout: 0
         )
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
@@ -1983,7 +1985,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testActionExpectationSettlesWithDiscoveryScope() async throws {
         let observedReady = observedState(labels: ["Long List"])
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let target = literalTarget(ElementPredicate(identifier: "target"))
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedReady],
@@ -1996,9 +1998,9 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.target(target)),
+                command: .activate(target),
                 expectationPolicy: .expect(ActionExpectation(
-                    predicate: .exists(ElementPredicate(label: "Long List")),
+                    predicate: .exists(literalTarget(ElementPredicate(label: "Long List"))),
                     timeout: 0.01
                 )))),
         ])
@@ -2016,7 +2018,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
             XCTAssertTrue(String(describing: error).contains("$.body[0].action.command.payload.target"))
-            XCTAssertTrue(String(describing: error).contains("target_ref must resolve"))
+            XCTAssertTrue(String(describing: error).contains("target ref must resolve"))
         }
     }
 
@@ -2028,7 +2030,7 @@ final class TheBrainsActionTests: XCTestCase {
                 body: [
                     .action(try ActionStep(command: .typeText(
                         text: .ref("item"),
-                        target: .target(.predicate(.label("Search")))
+                        target: .predicate(.label("Search"))
                     ))),
                 ]
             )),
@@ -2090,15 +2092,15 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(ElementPredicate(label: "Milk"))),
-            .activate(.predicate(ElementPredicate(label: "Add to Cart"))),
+            .activate(literalTarget(ElementPredicate(label: "Milk"))),
+            .activate(literalTarget(ElementPredicate(label: "Add to Cart"))),
         ])
     }
 
     func testHeistInvocationExpectationReturnsEvidenceOnInvokeNode() async throws {
         var executedCommands: [RuntimeActionMessage] = []
         let expectation = WaitStep(
-            predicate: .change(.elements(.appearedElement(.label("subtotal")))),
+            predicate: .changed(.elements([.appeared(.label("subtotal"))])),
             timeout: defaultActionExpectationTimeout
         )
         let runtime = heistRuntime(
@@ -2142,7 +2144,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(ElementPredicate(label: "Milk"))),
+            .activate(literalTarget(ElementPredicate(label: "Milk"))),
         ])
         XCTAssertEqual(heist.expectationsChecked, 1)
         XCTAssertEqual(heist.expectationsMet, 1)
@@ -2224,10 +2226,10 @@ final class TheBrainsActionTests: XCTestCase {
                     path: ["Cart", "addItem"],
                     argument: .string(.literal("Eggs")),
                     expectation: WaitStep(
-                        predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                            element: .label("subtotal"),
-                            change: .value(after: .contains("2 items"))
-                        )))),
+                        predicate: .changed(.elements([.updated(
+                            .label("subtotal"),
+                            .value(after: .contains("2 items"))
+                        )])),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -2266,7 +2268,7 @@ final class TheBrainsActionTests: XCTestCase {
                 .invoke(HeistInvocationStep(
                     path: ["Checkout", "pay"],
                     expectation: WaitStep(
-                        predicate: .change(.screenChanged(.exists(.label("Receipt")))),
+                        predicate: .changed(.screen([.exists(.label("Receipt"))])),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -2314,10 +2316,10 @@ final class TheBrainsActionTests: XCTestCase {
                     path: ["Cart", "addItem"],
                     argument: .string(.literal("Eggs")),
                     expectation: WaitStep(
-                        predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                            element: .label("subtotal"),
-                            change: .value(after: .contains("2 items"))
-                        )))),
+                        predicate: .changed(.elements([.updated(
+                            .label("subtotal"),
+                            .value(after: .contains("2 items"))
+                        )])),
                         timeout: defaultActionExpectationTimeout
                     )
                 )),
@@ -2365,7 +2367,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(ElementPredicate(label: "Pay"))),
+            .activate(literalTarget(ElementPredicate(label: "Pay"))),
         ])
     }
 
@@ -2384,7 +2386,7 @@ final class TheBrainsActionTests: XCTestCase {
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]
         )
@@ -2399,12 +2401,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(executedCommands, [
             .typeText(TypeTextTarget(
                 text: "milk",
-                elementTarget: .predicate(ElementPredicate(label: "Search"))
+                target: literalTarget(ElementPredicate(label: "Search"))
             )),
         ])
     }
 
-    func testHeistExecutionBindsRootElementTargetArgument() async throws {
+    func testHeistExecutionBindsRootAccessibilityTargetArgument() async throws {
         var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [],
@@ -2415,7 +2417,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(
             name: "tapRow",
-            parameter: .elementTarget(name: "row"),
+            parameter: .accessibilityTarget(name: "row"),
             body: [
                 .action(try ActionStep(command: .activate(.ref("row")))),
             ]
@@ -2423,13 +2425,13 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeHeistPlanForTest(
             plan,
-            argument: .elementTarget(.target(.label("Row 1"))),
+            argument: .accessibilityTarget(.label("Row 1")),
             runtime: runtime
         )
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(ElementPredicate(label: "Row 1"))),
+            .activate(literalTarget(ElementPredicate(label: "Row 1"))),
         ])
     }
 
@@ -2441,7 +2443,7 @@ final class TheBrainsActionTests: XCTestCase {
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
-                    target: .target(.predicate(.label("Search")))
+                    target: .predicate(.label("Search"))
                 ))),
             ]
         )
@@ -2467,7 +2469,7 @@ final class TheBrainsActionTests: XCTestCase {
                 name: "setup",
                 definitions: [
                     try HeistPlan(name: "setup", body: [
-                        .action(try ActionStep(command: .activate(.target(.predicate(.label("Nested Setup")))))),
+                        .action(try ActionStep(command: .activate(.predicate(.label("Nested Setup"))))),
                     ]),
                 ],
                 body: [
@@ -2482,7 +2484,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(ElementPredicate(label: "Nested Setup"))),
+            .activate(literalTarget(ElementPredicate(label: "Nested Setup"))),
         ])
     }
 
@@ -2510,7 +2512,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
-        let expectation = WaitStep(predicate: .change(.screenChanged), timeout: 0)
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -2546,12 +2548,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(step.actionEvidence?.expectationResult?.outcome.isSuccess == true)
         XCTAssertEqual(step.actionEvidence?.expectationResult?.accessibilityTrace, trace)
         XCTAssertEqual(step.reportExpectation?.met, true)
-        XCTAssertEqual(step.reportExpectation?.actual, "screenChanged")
+        XCTAssertNil(step.reportExpectation?.actual)
     }
 
     func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
         let expectation = WaitStep(
-            predicate: .missing(ElementPredicate(label: "Loading")),
+            predicate: .missing(literalTarget(ElementPredicate(label: "Loading"))),
             timeout: 0.2
         )
         let runtime = heistRuntime(
@@ -2564,7 +2566,7 @@ final class TheBrainsActionTests: XCTestCase {
                     method: .wait,
                     errorKind: .timeout,
                     message: "timed out after 0.2s — expectation not met",
-                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
+                    accessibilityTrace: .noChangeForTests(elementCount: 1)
                 )
             }
         )
@@ -2888,9 +2890,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 3)
         XCTAssertEqual(forEachResult.iterationCount, 3)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 1)),
-            .activate(.predicate(matching, ordinal: 2)),
+            .activate(literalTarget(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 1)),
+            .activate(literalTarget(matching, ordinal: 2)),
         ])
         XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
         XCTAssertEqual(step.children.flatMap(\.children).map(\.kind), [.action, .action, .action])
@@ -2932,8 +2934,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 1)),
+            .activate(literalTarget(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 1)),
         ])
     }
 
@@ -2973,8 +2975,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertNil(forEachResult.failureReason)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 0)),
         ])
     }
 
@@ -3013,8 +3015,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 0)),
         ])
     }
 
@@ -3052,8 +3054,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands, [
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 1)),
+            .activate(literalTarget(matching, ordinal: 0)),
+            .activate(literalTarget(matching, ordinal: 1)),
         ])
     }
 
@@ -3145,7 +3147,7 @@ final class TheBrainsActionTests: XCTestCase {
                     .action(try ActionStep(
                         command: .activate(.ref("target")),
                         expectationPolicy: .expect(ActionExpectation(
-                            predicate: .state(.missingTarget(.ref("target"))),
+                            predicate: .missing(.ref("target")),
                             timeout: 2
                         )))),
                 ]
@@ -3158,10 +3160,10 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(forEachResult.iterationCount, 2)
-        XCTAssertEqual(executedCommands.first, .activate(.predicate(matching, ordinal: 0)))
-        XCTAssertEqual(waitedSteps.first?.predicate, .state(.missingTarget(.predicate(matching, ordinal: 0))))
-        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 0)))
-        XCTAssertEqual(waitedSteps.last?.predicate, .state(.missingTarget(.predicate(matching, ordinal: 0))))
+        XCTAssertEqual(executedCommands.first, .activate(literalTarget(matching, ordinal: 0)))
+        XCTAssertEqual(waitedSteps.first?.predicate, .missing(literalTarget(matching, ordinal: 0)))
+        XCTAssertEqual(executedCommands.last, .activate(literalTarget(matching, ordinal: 0)))
+        XCTAssertEqual(waitedSteps.last?.predicate, .missing(literalTarget(matching, ordinal: 0)))
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
@@ -3177,7 +3179,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
-        let resolved = brains.stash.resolveTarget(.predicate(ElementPredicate(label: "Geometry Missing"))).resolved
+        let resolved = brains.stash.resolveTarget(literalTarget(ElementPredicate(label: "Geometry Missing"))).resolved
         let liveTarget: TheStash.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
@@ -3185,7 +3187,7 @@ final class TheBrainsActionTests: XCTestCase {
         } else {
             liveTarget = nil
         }
-        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Geometry Missing")))
+        let result = await brains.actions.executeIncrement(literalTarget(ElementPredicate(label: "Geometry Missing")))
 
         XCTAssertNotNil(resolved)
         XCTAssertNil(liveTarget)
@@ -3232,7 +3234,7 @@ final class TheBrainsActionTests: XCTestCase {
             objects: [HeistId(rawValue: "stale_refreshed_slider"): nil]
         ))
         guard let staleResolved = brains.stash.resolveTarget(
-            .predicate(ElementPredicate(identifier: "refreshed_slider"))
+            literalTarget(ElementPredicate(identifier: "refreshed_slider"))
         ).resolved else {
             XCTFail("Expected stale semantic target to resolve")
             return
@@ -3243,7 +3245,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         let result = await brains.actions.executeIncrement(
-            .predicate(ElementPredicate(identifier: "refreshed_slider"))
+            literalTarget(ElementPredicate(identifier: "refreshed_slider"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
@@ -3282,7 +3284,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeActivate(
-            .predicate(ElementPredicate(identifier: "refresh_activate"))
+            literalTarget(ElementPredicate(identifier: "refresh_activate"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
@@ -3322,7 +3324,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "hello",
-            elementTarget: .predicate(ElementPredicate(identifier: "message_field"))
+            target: literalTarget(ElementPredicate(identifier: "message_field"))
         )))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
@@ -3361,7 +3363,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "hello",
-            elementTarget: .predicate(ElementPredicate(identifier: "message_field"))
+            target: literalTarget(ElementPredicate(identifier: "message_field"))
         )))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
@@ -3407,7 +3409,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "b",
-            elementTarget: .predicate(ElementPredicate(identifier: "message_field")),
+            target: literalTarget(ElementPredicate(identifier: "message_field")),
             replacingExisting: true
         )))
 
@@ -3451,7 +3453,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "",
-            elementTarget: .predicate(ElementPredicate(identifier: "message_field")),
+            target: literalTarget(ElementPredicate(identifier: "message_field")),
             replacingExisting: true
         )))
 
@@ -3479,7 +3481,7 @@ final class TheBrainsActionTests: XCTestCase {
             "focus=none",
             "keyboardVisible=false",
             "activeTextInput=false",
-            "try provide elementTarget for a text field",
+            "try provide target for a text field",
         ])
     }
 
@@ -3571,7 +3573,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementTargetedPointActionFailsWhenElementRemainsKnownOnly() async {
+    func testAccessibilityTargetedPointActionFailsWhenElementRemainsKnownOnly() async {
         let stalePoint = CGPoint(x: 333, y: 777)
         let element = AccessibilityElement.make(
             label: "Below Fold",
@@ -3583,7 +3585,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            selection: .element(.predicate(ElementPredicate(label: "Below Fold"))),
+            selection: .element(literalTarget(ElementPredicate(label: "Below Fold"))),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -3599,7 +3601,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementTargetedPointActionUsesAccessibilityCaptureActivationPoint() async {
+    func testAccessibilityTargetedPointActionUsesAccessibilityCaptureActivationPoint() async {
         let capturePoint = CGPoint(x: 10, y: 20)
         let objectPoint = CGPoint(x: 123, y: 456)
         let heistId: HeistId = "live_button"
@@ -3616,7 +3618,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            selection: .element(.predicate(ElementPredicate(label: "Live"))),
+            selection: .element(literalTarget(ElementPredicate(label: "Live"))),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -3644,7 +3646,7 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .elementUnitPoint(
-                .predicate(ElementPredicate(label: "Live")),
+                literalTarget(ElementPredicate(label: "Live")),
                 UnitPoint(x: 0.25, y: 0.75)
             ),
             method: .syntheticTap
@@ -3699,7 +3701,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Plain rotor host")), selection: .named("Errors"))
+            RotorTarget(target: literalTarget(ElementPredicate(label: "Plain rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -3728,7 +3730,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Live Rotor"))
+            RotorTarget(target: literalTarget(ElementPredicate(label: "Rotor host")), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -3758,7 +3760,7 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(identifier: "edge_rotor_host")), selection: .named("Live Rotor"))
+            RotorTarget(target: literalTarget(ElementPredicate(identifier: "edge_rotor_host")), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -3792,7 +3794,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .predicate(ElementPredicate(identifier: "offscreen_rotor_host")),
+                target: literalTarget(ElementPredicate(identifier: "offscreen_rotor_host")),
                 selection: .named("Live Rotor")
             )
         )
@@ -3873,7 +3875,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .predicate(ElementPredicate(identifier: .exact(hostHeistId.rawValue))),
+                target: literalTarget(ElementPredicate(identifier: .exact(hostHeistId.rawValue))),
                 selection: .named("Live Rotor")
             )
         )
@@ -3902,7 +3904,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
+            RotorTarget(target: literalTarget(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -3929,7 +3931,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
+            RotorTarget(target: literalTarget(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -3952,7 +3954,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
+            RotorTarget(target: literalTarget(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -3977,7 +3979,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitTarget(
-            predicate: .state(.exists(ElementPredicate(label: "never"))),
+            predicate: .exists(literalTarget(ElementPredicate(label: "never"))),
             timeout: 0
         )
         let result = await withNoTraversableWindows {
@@ -4076,7 +4078,7 @@ final class TheBrainsActionTests: XCTestCase {
     private func matcherTarget(
         label: String,
         in screen: Screen
-    ) throws -> ElementTarget {
+    ) throws -> AccessibilityTarget {
         let screenElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
         let elements = screen.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
@@ -4170,8 +4172,6 @@ final class TheBrainsActionTests: XCTestCase {
            single.contains("No match for:"),
            heist.contains("No match for:") {
             XCTAssertEqual(firstLine(single), firstLine(heist), name, file: file, line: line)
-            XCTAssertTrue(single.contains("Next:"), name, file: file, line: line)
-            XCTAssertTrue(heist.contains("Next:"), name, file: file, line: line)
             return
         }
         XCTAssertEqual(heist, single, name, file: file, line: line)
@@ -4179,6 +4179,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func isPreDispatchMatcherFailure(_ result: ActionResult) -> Bool {
         guard result.outcome.isSuccess == false,
+              [.actionFailed, .elementNotFound].contains(result.outcome.errorKind),
               let message = result.message
         else { return false }
         return message.contains("No match for:")
@@ -4332,7 +4333,7 @@ final class TheBrainsActionTests: XCTestCase {
             return heistWaitReceipt(for: waitStep, result: await wait(request))
         }
         if let initialTrace, afterSequence == nil {
-            let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace)
+            let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace, isComplete: false)
             if expectation.met || waitStep.timeout == 0 {
                 let result = makeWaitActionResult(
                     met: expectation.met,
@@ -4484,8 +4485,8 @@ final class TheBrainsActionTests: XCTestCase {
                 options: .regularExpression
             )
             .replacingOccurrences(
-                of: #"last delta: (none|no_change)"#,
-                with: "last delta: <settled>",
+                of: #"last change: (none|no_change)"#,
+                with: "last change: <settled>",
                 options: .regularExpression
             )
     }
@@ -4604,14 +4605,12 @@ private final class ScriptedHeistObservationSource {
             scope: scope,
             observation: settledObservation,
             previous: previousObservation,
-            trace: trace,
-            delta: trace.endpointDelta
+            trace: trace
         )
         return HeistSemanticObservation(
             event: event,
             state: state,
             accessibilityTrace: trace,
-            delta: event.delta,
             summary: "known: \(state.interface.projectedElements.count) elements"
         )
     }

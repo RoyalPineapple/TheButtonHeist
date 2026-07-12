@@ -20,6 +20,7 @@ enum SemanticObservationEventFactory {
             for: observation,
             sequence: previousCapture == nil ? 1 : 2,
             parentHash: previousCapture?.hash,
+            generation: generation,
             stash: stash,
             pendingAccessibilityNotifications: pendingAccessibilityNotifications,
             notificationIdentityScreen: notificationIdentityScreen,
@@ -38,8 +39,7 @@ enum SemanticObservationEventFactory {
             previous: previous?.observation,
             previousCursor: previous?.cursor,
             notificationSequence: notificationSequence,
-            trace: trace,
-            delta: trace.endpointDelta
+            trace: trace
         )
     }
 
@@ -48,6 +48,7 @@ enum SemanticObservationEventFactory {
         for observation: SettledSemanticObservation,
         sequence: Int,
         parentHash: String?,
+        generation: ObservationGeneration,
         stash: TheStash,
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
         notificationIdentityScreen: Screen?,
@@ -78,6 +79,7 @@ enum SemanticObservationEventFactory {
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
                 screenId: screen.id,
+                observationGeneration: generation.rawValue,
                 windowStack: windows
             ),
             transition: AccessibilityTrace.Transition(

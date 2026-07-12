@@ -56,7 +56,9 @@ extension TheFence {
             Command.typeText,
             .typeText(
                 text: .literal(text),
-                target: try input.decodedElementTarget().map(ElementTargetExpr.target),
+                target: try input.decodedAccessibilityTarget().map {
+                    try $0.resolvedElementTarget(command: .typeText)
+                },
                 replacingExisting: replacingExisting
             ),
             expectationPayload: expectationPayload

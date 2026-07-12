@@ -198,13 +198,14 @@ extension TheBrains {
         }
         let progressTimeout = min(defaultActionExpectationTimeout, remaining)
         let receipt = await context.runtime.wait(.afterObservation(
-            ResolvedWaitStep(predicate: .change(), timeout: progressTimeout),
+            ResolvedWaitStep(predicate: .changed(.elements()), timeout: progressTimeout),
             baselineTrace: observation.trace,
             sequence: observation.sequence
         ))
         let expectation = repeatUntilStopExpectation(
             step.predicate,
             trace: receipt.accessibilityTrace,
+            isComplete: true,
             fallback: receipt.message ?? receipt.expectation.actual
         )
         let stopCheck = PredicateExpectationCheck(expectation)
@@ -253,6 +254,7 @@ extension TheBrains {
         let stopExpectation = repeatUntilStopExpectation(
             step.predicate,
             trace: trace,
+            isComplete: result.settled != false,
             fallback: result.message
         )
         let sequence = repeatUntilObservedSequence(after: observation, result: result)
@@ -285,13 +287,9 @@ extension TheBrains {
         guard result.outcome.isSuccess,
               result.settled == true,
               let trace = result.accessibilityTrace,
-              let lastCapture = trace.captures.last
+              !trace.captures.isEmpty
         else { return false }
-        return PredicateEvaluation.evaluate(
-            .change(),
-            currentElements: lastCapture.interface.projectedElements,
-            accumulatedDelta: trace.accumulatedDelta
-        ).met
+        return !trace.changeFacts.isEmpty
     }
 
     private func repeatUntilObservedSequence(
@@ -313,8 +311,9 @@ extension TheBrains {
     }
 
     private func repeatUntilStopExpectation(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicate<RootContext>,
         trace: AccessibilityTrace?,
+        isComplete: Bool,
         fallback: String?
     ) -> ExpectationResult {
         guard let trace else {
@@ -324,11 +323,7 @@ extension TheBrains {
                 actual: fallback ?? "no observed accessibility trace"
             )
         }
-        return PredicateEvaluation.evaluate(
-            predicate,
-            currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            accumulatedDelta: trace.accumulatedDelta
-        )
+        return PredicateEvaluation.evaluate(predicate, in: trace, isComplete: isComplete)
     }
 }
 

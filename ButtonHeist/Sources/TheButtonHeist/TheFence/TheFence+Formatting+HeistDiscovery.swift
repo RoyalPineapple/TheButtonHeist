@@ -143,7 +143,7 @@ extension HeistActionCommandType {
     }
 }
 
-extension AccessibilityPredicateExpr {
+extension AccessibilityPredicate {
     var heistDiscoveryDisplayValue: String {
         description
     }
@@ -156,8 +156,10 @@ extension HeistTargetPredicateFact {
             return predicate.description
         case .template(let predicate):
             return predicate.description
+        case .container(let predicate):
+            return predicate.description
         case .targetReference(let reference):
-            return "target_ref(\(reference.rawValue))"
+            return "ref(\(reference.rawValue))"
         }
     }
 }

@@ -24,32 +24,18 @@ package struct HeistActionCommandTargetOccurrence: Sendable, Equatable {
         }
     }
 
-    package enum Target: Sendable, Equatable {
-        case expression(ElementTargetExpr)
-        case element(ElementTarget)
-
-        package var reportTarget: ElementTarget? {
-            switch self {
-            case .expression(let target):
-                return try? target.resolve(in: .empty)
-            case .element(let target):
-                return target
-            }
-        }
-    }
-
     package let role: Role
     package let path: Path
-    package let target: Target
+    package let target: AccessibilityTarget
 
-    package init(role: Role, path: Path, target: Target) {
+    package init(role: Role, path: Path, target: AccessibilityTarget) {
         self.role = role
         self.path = path
         self.target = target
     }
 
-    package var reportTarget: ElementTarget? {
-        target.reportTarget
+    package var reportTarget: AccessibilityTarget? {
+        try? target.resolve(in: .empty)
     }
 }
 
@@ -115,22 +101,22 @@ public extension HeistActionCommand {
         }
     }
 
-    var reportTarget: ElementTarget? {
+    var reportTarget: AccessibilityTarget? {
         targetOccurrences.lazy.compactMap { $0.reportTarget }.first
     }
 }
 
 private extension HeistActionCommandTargetOccurrence {
-    static func semantic(_ target: ElementTargetExpr) -> Self {
-        Self(role: .semantic, path: .payloadTarget, target: .expression(target))
+    static func semantic(_ target: AccessibilityTarget) -> Self {
+        Self(role: .semantic, path: .payloadTarget, target: target)
     }
 
-    static func scroll(_ target: ElementTargetExpr) -> Self {
-        Self(role: .scroll, path: .payloadTarget, target: .expression(target))
+    static func scroll(_ target: AccessibilityTarget) -> Self {
+        Self(role: .scroll, path: .payloadTarget, target: target)
     }
 
-    static func element(_ target: ElementTarget, role: Role, path: Path) -> Self {
-        Self(role: role, path: path, target: .element(target))
+    static func element(_ target: AccessibilityTarget, role: Role, path: Path) -> Self {
+        Self(role: role, path: path, target: target)
     }
 }
 

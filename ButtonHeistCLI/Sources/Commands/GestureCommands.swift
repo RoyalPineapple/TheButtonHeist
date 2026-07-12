@@ -29,7 +29,7 @@ struct CLIGesturePayload: Equatable {
     let key: FenceParameterKey
     let object: CLIRequestObject
 
-    static func element(_ target: ElementTarget) -> Self {
+    static func element(_ target: AccessibilityTarget) -> Self {
         Self(key: .element, object: CLIRequestBuilder.targetObject(target))
     }
 
@@ -38,7 +38,7 @@ struct CLIGesturePayload: Equatable {
     }
 
     static func elementUnitPoints(
-        element: ElementTarget,
+        element: AccessibilityTarget,
         start: CLIPointArgument,
         end: CLIPointArgument
     ) -> Self {
@@ -52,7 +52,7 @@ struct CLIGesturePayload: Equatable {
         )
     }
 
-    static func elementDirection(element: ElementTarget, direction: SwipeDirection) -> Self {
+    static func elementDirection(element: AccessibilityTarget, direction: SwipeDirection) -> Self {
         Self(
             key: .elementDirection,
             object: CommandArgumentWriter.object(
@@ -82,7 +82,7 @@ struct CLIGesturePayload: Equatable {
         )
     }
 
-    static func elementToPoint(element: ElementTarget, end: CLIPointArgument) -> Self {
+    static func elementToPoint(element: AccessibilityTarget, end: CLIPointArgument) -> Self {
         Self(
             key: .elementToPoint,
             object: CommandArgumentWriter.object(
@@ -103,7 +103,7 @@ extension GestureCLICommandContract {
         }))
     }
 
-    static func elementObject(_ target: ElementTarget) -> CLIRequestObject {
+    static func elementObject(_ target: AccessibilityTarget) -> CLIRequestObject {
         CLIRequestBuilder.targetObject(target)
     }
 
@@ -140,7 +140,7 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Option(name: .long, help: "X coordinate")
     var x: Double?
@@ -172,7 +172,7 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Option(name: .long, help: "X coordinate")
     var x: Double?
@@ -216,7 +216,7 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Option(name: .customLong("start-x"), help: "Unit-point start X (0-1 relative to element frame)")
     var startUnitX: Double?
@@ -340,7 +340,7 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
-    @OptionGroup var element: ElementTargetOptions
+    @OptionGroup var element: AccessibilityTargetOptions
 
     @Option(name: .customLong("from-x"), help: "Start X coordinate")
     var fromX: Double?
