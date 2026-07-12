@@ -577,7 +577,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged,
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(identity),
             associatedElement: .none
@@ -603,7 +603,7 @@ final class TheStashResolutionTests: XCTestCase {
         ])
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged,
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(AccessibilityNotificationObjectIdentity(
                 object: payloadObject,
@@ -700,7 +700,10 @@ final class TheStashResolutionTests: XCTestCase {
         guard case .committed(let event) = result.result else {
             return XCTFail("Expected clean settle to commit")
         }
-        XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
+        XCTAssertEqual(
+            event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.valueChanged]
+        )
         guard case .noChange? = event.delta else {
             return XCTFail("Expected same-value recapture to stay noChange, got \(String(describing: event.delta))")
         }
@@ -735,10 +738,14 @@ final class TheStashResolutionTests: XCTestCase {
         guard case .committed(let event) = result.result else {
             return XCTFail("Expected clean settle to commit")
         }
-        XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
+        XCTAssertEqual(
+            event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.valueChanged]
+        )
         guard case .elementsChanged(let payload)? = event.delta else {
             return XCTFail("Expected value edit to drive elementsChanged, got \(String(describing: event.delta))")
         }
+        XCTAssertEqual(payload.accessibilityNotifications.map(\.kind), [.valueChanged])
         let change = try XCTUnwrap(payload.edits.updated.first?.changes.first)
         XCTAssertEqual(change.property, .value)
         XCTAssertEqual(change.oldDisplayText, "50%")

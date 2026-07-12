@@ -575,7 +575,7 @@ struct PendingAccessibilityNotificationEvent {
         case 1000:
             .screenChanged
         case 1001:
-            .elementChanged
+            .layoutChanged
         case 1005:
             .valueChanged
         case 1008:
@@ -600,14 +600,6 @@ struct PendingAccessibilityNotificationEvent {
         kind == .screenChanged
     }
 
-    var isTraceTransitionEvidence: Bool {
-        switch kind {
-        case .screenChanged, .announcement:
-            return true
-        case .elementChanged, .valueChanged:
-            return false
-        }
-    }
 }
 
 enum PendingAccessibilityNotificationPayload {

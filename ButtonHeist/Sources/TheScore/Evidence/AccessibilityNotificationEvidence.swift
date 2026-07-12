@@ -2,12 +2,12 @@ import Foundation
 
 public enum AccessibilityNotificationKind: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
     case screenChanged
-    case elementChanged
+    case layoutChanged = "elementChanged"
     case valueChanged
     case announcement
 
-    var isElementTransition: Bool {
-        self == .elementChanged || self == .valueChanged
+    var isElementChangeEvidence: Bool {
+        self != .screenChanged
     }
 }
 
@@ -44,7 +44,7 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
 
 /// Normalized spoken accessibility text observed from UIKit accessibility
 /// notifications. The source notification may be `announcement`,
-/// `elementChanged`, `valueChanged`, or `screenChanged`; the text is exposed
+/// `layoutChanged`, `valueChanged`, or `screenChanged`; the text is exposed
 /// uniformly because VoiceOver presents these string payloads as spoken output.
 public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64

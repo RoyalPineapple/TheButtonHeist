@@ -177,7 +177,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let notifications = [
             AccessibilityNotificationEvidence(
                 sequence: 7,
-                kind: .elementChanged,
+                kind: .layoutChanged,
                 timestamp: Date(timeIntervalSince1970: 7),
                 notificationData: .unresolvedObject(AccessibilityNotificationObjectPayload(
                     className: "UICollectionView",
@@ -210,7 +210,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(decoded.transition.accessibilityNotifications, notifications)
         XCTAssertEqual(
             decoded.transition.accessibilityNotifications.map(\.kind),
-            [.elementChanged, .screenChanged]
+            [.layoutChanged, .screenChanged]
         )
     }
 
@@ -229,7 +229,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode([AccessibilityNotificationEvidence].self, from: data)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
 
-        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .elementChanged, .valueChanged, .announcement])
+        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .layoutChanged, .valueChanged, .announcement])
         XCTAssertEqual(
             json.compactMap { $0["kind"] as? String },
             ["screenChanged", "elementChanged", "valueChanged", "announcement"]

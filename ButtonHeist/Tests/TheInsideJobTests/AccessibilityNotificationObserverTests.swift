@@ -60,8 +60,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let element = UIAccessibilityElement(accessibilityContainer: container)
         element.accessibilityLabel = "BH layout element payload"
         UIAccessibility.post(notification: .layoutChanged, argument: element)
-        let layoutChange = try await waitForNotification(kind: .elementChanged, in: bus)
-        XCTAssertEqual(layoutChange.kind, .elementChanged)
+        let layoutChange = try await waitForNotification(kind: .layoutChanged, in: bus)
+        XCTAssertEqual(layoutChange.kind, .layoutChanged)
         guard case .object(let objectIdentity) = layoutChange.notificationData else {
             return XCTFail("Expected element notification data, got \(layoutChange.notificationData)")
         }
@@ -94,7 +94,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let claimed = action.finishEvents()
 
         XCTAssertEqual(claimed.map(\.kind), [.valueChanged, .announcement])
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.elementChanged, .valueChanged, .announcement])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.layoutChanged, .valueChanged, .announcement])
     }
 
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
@@ -118,7 +118,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let announcements = bus.announcements()
         XCTAssertEqual(announcements.map(\.text), ["Item deleted", "3 items selected", "Checkout"])
-        XCTAssertEqual(announcements.map(\.kind), [.announcement, .elementChanged, .screenChanged])
+        XCTAssertEqual(announcements.map(\.kind), [.announcement, .layoutChanged, .screenChanged])
     }
 
     func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async {
@@ -138,7 +138,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let announcement = await result
         XCTAssertEqual(announcement?.text, "3 items selected")
-        XCTAssertEqual(announcement?.kind, .elementChanged)
+        XCTAssertEqual(announcement?.kind, .layoutChanged)
     }
 
     // MARK: - Transition Waiter

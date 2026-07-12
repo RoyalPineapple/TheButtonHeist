@@ -545,7 +545,7 @@ private enum AccessibilityTraceAccumulatedDelta {
                 interactionDigest: interactionDigest,
                 transient: transient,
                 accessibilityNotifications: accessibilityNotifications.filter {
-                    $0.kind.isElementTransition
+                    $0.kind.isElementChangeEvidence
                 }
             )
             : nil

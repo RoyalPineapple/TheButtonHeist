@@ -354,8 +354,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: JSONEncoder().encode(delta)), delta)
     }
 
-    func testElementChangedNotificationProducesSameScreenDeltaWithoutSemanticEdits() throws {
-        let notification = notification(kind: .elementChanged, sequence: 1)
+    func testLayoutChangedNotificationDoesNotProduceSemanticDelta() throws {
+        let notification = notification(kind: .layoutChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -367,15 +367,14 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
 
         let delta = AccessibilityTrace.Delta.between(before, after)
-        guard case .elementsChanged(let payload) = delta else {
-            return XCTFail("Expected elementsChanged from the scoped elementChanged notification")
+        guard case .noChange = delta else {
+            return XCTFail("Expected layoutChanged to trigger recapture without inventing a semantic delta")
         }
-        XCTAssertTrue(payload.edits.isEmpty)
-        XCTAssertEqual(payload.accessibilityNotifications, [notification])
+        XCTAssertEqual(after.transition.accessibilityNotifications, [notification])
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: JSONEncoder().encode(delta)), delta)
     }
 
-    func testValueChangedNotificationProducesElementDeltaWithoutSemanticEdits() throws {
+    func testValueChangedNotificationDoesNotProduceSemanticDeltaWithoutValueDiff() throws {
         let notification = notification(kind: .valueChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
         let after = AccessibilityTrace.Capture(
@@ -386,11 +385,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
 
         let delta = AccessibilityTrace.Delta.between(before, after)
-        guard case .elementsChanged(let payload) = delta else {
-            return XCTFail("Expected elementsChanged from the valueChanged notification")
+        guard case .noChange = delta else {
+            return XCTFail("Expected valueChanged to trigger recapture without inventing a semantic delta")
         }
-        XCTAssertTrue(payload.edits.isEmpty)
-        XCTAssertEqual(payload.accessibilityNotifications, [notification])
+        XCTAssertEqual(after.transition.accessibilityNotifications, [notification])
     }
 
     func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
