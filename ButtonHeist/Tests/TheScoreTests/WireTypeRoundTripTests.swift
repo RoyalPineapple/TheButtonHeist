@@ -1242,7 +1242,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try decoder.decode(HeistActionEvidence.self, from: Data(invalid.utf8))) { error in
-            assertDecodingError(error, contains: ["commandless_dispatch heist action evidence cannot include warning"])
+            assertDecodingError(error, contains: ["Unknown heist action evidence field \"warning\""])
         }
     }
 

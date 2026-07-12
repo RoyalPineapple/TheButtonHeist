@@ -423,7 +423,7 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
 
-        _ = try json.object("evidence").object("accessibilityTrace")
+        _ = try json.object("evidence").object("observation").object("accessibilityTrace")
     }
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
@@ -514,7 +514,15 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
-        {"type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"typeText","payload":{"kind":"value","data":"Hello"}}}
+        {
+          "type": "actionResult",
+          "payload": {
+            "outcome": { "kind": "success" },
+            "method": "typeText",
+            "payload": { "kind": "value", "data": "Hello" },
+            "evidence": { "observation": { "kind": "none" } }
+          }
+        }
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -529,7 +537,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultWithoutOptionalFieldsFromExplicitJSON() throws {
         let json = """
-        {"type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"syntheticTap"}}
+        {"type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"syntheticTap","evidence":{"observation":{"kind":"none"}}}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
