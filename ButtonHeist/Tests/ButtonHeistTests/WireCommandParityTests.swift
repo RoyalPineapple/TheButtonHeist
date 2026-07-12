@@ -252,6 +252,29 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testCLIAndMCPRoutesShareAdmissionFailures() async throws {
+        let (fence, _) = makeConnectedFence()
+        let invalidMode = HeistValue.string("invalid-mode")
+        let mcpInput = try TheFence.Command.routeToolRequest(
+            named: TheFence.Command.getScreen.rawValue,
+            arguments: .init(values: [FenceParameterKey.mode.rawValue: invalidMode])
+        ).get()
+        let cliInput = try TheFence.Command.routeCLICommandEnvelope(
+            .init(values: [
+                FenceParameterKey.command.rawValue: .string(TheFence.Command.getScreen.rawValue),
+                FenceParameterKey.mode.rawValue: invalidMode,
+            ]),
+            context: "test"
+        ).get()
+
+        for input in [mcpInput, cliInput] {
+            XCTAssertThrowsError(try fence.admit(input)) { error in
+                XCTAssertEqual((error as? SchemaValidationError)?.field, FenceParameterKey.mode.rawValue)
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testAdmissionRejectsUnknownMalformedAndMissingFields() async throws {
         let (fence, _) = makeConnectedFence()
 
@@ -442,6 +465,9 @@ final class WireCommandParityTests: XCTestCase {
 
     private func invalidValues(for parameter: FenceParameterSpec) -> [HeistValue] {
         var values = [incompatibleValue(for: parameter.type)]
+        if parameter.enumValues != nil {
+            values.append(.string("__invalid_enum_value__"))
+        }
         if let minLength = parameter.minLength {
             values.append(.string(String(repeating: "x", count: max(0, minLength - 1))))
         }

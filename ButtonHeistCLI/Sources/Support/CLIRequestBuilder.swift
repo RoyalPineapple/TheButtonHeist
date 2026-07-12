@@ -56,33 +56,12 @@ enum CLIRequestBuilder {
             )
         }
         let requestId = envelope.requestId
-        do {
-            switch TheFence.Command.routeCLICommandEnvelope(envelope.arguments, context: "JSON input") {
-            case .success(let input):
-                try input.validatePublicContract()
-                return CLIParsedRequest(
-                    input: input,
-                    requestId: requestId
-                )
-            case .failure(let error):
-                throw CLIRequestBuildError(
-                    diagnosticFailure: DiagnosticFailure(message: error.message, details: error.details),
-                    requestId: requestId
-                )
-            }
-        } catch let error as CLIRequestBuildError {
-            throw error
-        } catch let error as SchemaValidationError {
+        switch TheFence.Command.routeCLICommandEnvelope(envelope.arguments, context: "JSON input") {
+        case .success(let input):
+            return CLIParsedRequest(input: input, requestId: requestId)
+        case .failure(let error):
             throw CLIRequestBuildError(
-                diagnosticFailure: DiagnosticFailure(
-                    message: error.message,
-                    details: FailureDetails(code: .requestValidationError)
-                ),
-                requestId: requestId
-            )
-        } catch {
-            throw CLIRequestBuildError(
-                diagnosticFailure: diagnosticFailure(for: error),
+                diagnosticFailure: DiagnosticFailure(message: error.message, details: error.details),
                 requestId: requestId
             )
         }

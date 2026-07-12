@@ -70,7 +70,7 @@ extension TheFence {
         ) throws {
             let command = input.command
             let arguments = input.arguments
-            try input.validatePublicContract()
+            try Self.validateBoundaryShape(command: command, arguments: arguments)
             let requestId = try Self.requestId(arguments: arguments)
             let expectationPayload = try ExpectationPayload(arguments: arguments)
             let dispatch: DecodedRequestDispatch
@@ -161,16 +161,29 @@ extension TheFence {
             self.dispatch = dispatch
         }
 
-        private static func requestId(arguments: CommandArgumentEnvelope) throws -> String {
-            guard let requestId = arguments.value(for: .requestId) else { return UUID().uuidString }
-            guard case .string(let value) = requestId else {
+        private static func validateBoundaryShape(
+            command: Command,
+            arguments: CommandArgumentEnvelope
+        ) throws {
+            guard command.descriptor.isPublicRequestContract else {
                 throw SchemaValidationError(
-                    field: FenceParameterKey.requestId.rawValue,
-                    observed: requestId.schemaObservedDescription,
-                    expected: "string"
+                    field: "command",
+                    observed: "string \"\(command.rawValue)\"",
+                    expected: "public command for The Button Heist"
                 )
             }
-            return value
+            let allowedKeys = command.descriptor.topLevelParameterKeys.union([FenceParameterKey.requestId.rawValue])
+            if let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) {
+                throw SchemaValidationError(
+                    field: arguments.field(forUnknownKey: unexpectedKey),
+                    observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
+                    expected: "valid \(command.rawValue) parameter"
+                )
+            }
+        }
+
+        private static func requestId(arguments: CommandArgumentEnvelope) throws -> String {
+            try arguments.value(FenceParameters.requestId) ?? UUID().uuidString
         }
 
         @ButtonHeistActor
@@ -229,7 +242,7 @@ extension TheFence {
             expectation: ExpectationPayload
         ) throws -> DecodedRequestDispatch {
             let target = try arguments.requiredAccessibilityTarget(command: .activate)
-            let actionName = try arguments.optionalNonEmptyValue(FenceParameters.actionName)
+            let actionName = try arguments.value(FenceParameters.actionName)
             return try TheFence.appInteractionDispatch(
                 .activate,
                 TheFence.accessibilityActionCommand(target: target, actionName: actionName),
@@ -384,9 +397,9 @@ extension TheFence {
         return .directAction(DirectActionRequest(command: command, action: actions.first))
     }
 
-    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        let input = FenceCommandInput(command: command, arguments: arguments)
-        return ParsedRequest(admission: try CommandAdmission(fence: self, input: input))
+    /// Admit a routed public command input into TheFence's typed runtime.
+    @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
+        FenceOperationRequest(parsed: ParsedRequest(admission: try CommandAdmission(fence: self, input: input)))
     }
 
 }

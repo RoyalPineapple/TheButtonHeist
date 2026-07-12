@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -19,37 +20,23 @@ extension FenceParameter where Value == String {
         defaultValue: String? = nil,
         minLength: Int? = nil
     ) -> Self {
-        FenceParameter(
+        let spec = param(
+            key,
+            .string,
+            required: required,
+            defaultValue: defaultValue.map(HeistValue.string),
+            minLength: minLength
+        )
+        return FenceParameter(
             key: key,
-            spec: param(
-                key,
-                .string,
-                required: required,
-                defaultValue: defaultValue.map(HeistValue.string),
-                minLength: minLength
-            ),
-            expectedTypeDescription: "string",
+            spec: spec,
             defaultValue: defaultValue,
-            decodeValue: { value, field in
-                let string = try decodeString(value, field: field)
-                if let minLength, string.count < minLength {
-                    throw SchemaValidationError(
-                        field: field,
-                        observed: value.schemaObservedDescription,
-                        expected: minLength == 1 ? "non-empty string" : "string with length >= \(minLength)"
-                    )
-                }
-                return string
+            convertValue: {
+                guard case .string(let value) = $0 else { return nil }
+                return value
             },
             encodeValue: { .string($0) }
         )
-    }
-
-    private static func decodeString(_ value: HeistValue, field: String) throws -> String {
-        guard case .string(let string) = value else {
-            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "string")
-        }
-        return string
     }
 }
 
@@ -61,38 +48,21 @@ extension FenceParameter where Value == Int {
         minimum: Double? = nil,
         maximum: Double? = nil
     ) -> Self {
-        FenceParameter(
+        let spec = param(
+            key,
+            .integer,
+            required: required,
+            defaultValue: defaultValue.map(HeistValue.int),
+            minimum: minimum,
+            maximum: maximum
+        )
+        return FenceParameter(
             key: key,
-            spec: param(
-                key,
-                .integer,
-                required: required,
-                defaultValue: defaultValue.map(HeistValue.int),
-                minimum: minimum,
-                maximum: maximum
-            ),
-            expectedTypeDescription: "integer",
+            spec: spec,
             defaultValue: defaultValue,
-            decodeValue: { value, field in
-                let integer = try decodeInteger(value, field: field)
-                try validateInteger(
-                    integer,
-                    source: value,
-                    field: field,
-                    minimum: minimum,
-                    maximum: maximum
-                )
-                return integer
-            },
+            convertValue: { $0.integerValue },
             encodeValue: { .int($0) }
         )
-    }
-
-    private static func decodeInteger(_ value: HeistValue, field: String) throws -> Int {
-        guard let integer = value.integerValue else {
-            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "integer")
-        }
-        return integer
     }
 }
 
@@ -101,41 +71,43 @@ extension FenceParameter where Value == Double {
         _ key: FenceParameterKey,
         required: Bool = false,
         defaultValue: Double? = nil,
+        minimum: Double? = nil,
         maximum: Double? = nil,
         exclusiveMinimum: Double? = nil
     ) -> Self {
-        FenceParameter(
+        let spec = param(
+            key,
+            .number,
+            required: required,
+            defaultValue: defaultValue.map(jsonSchemaNumber),
+            minimum: minimum,
+            maximum: maximum,
+            exclusiveMinimum: exclusiveMinimum
+        )
+        return FenceParameter(
             key: key,
-            spec: param(
-                key,
-                .number,
-                required: required,
-                defaultValue: defaultValue.map(jsonSchemaNumber),
-                maximum: maximum,
-                exclusiveMinimum: exclusiveMinimum
-            ),
-            expectedTypeDescription: "number",
+            spec: spec,
             defaultValue: defaultValue,
-            decodeValue: { value, field in
-                let number = try decodeNumber(value, field: field)
-                try validateNumber(
-                    number,
-                    source: value,
-                    field: field,
-                    maximum: maximum,
-                    exclusiveMinimum: exclusiveMinimum
-                )
-                return number
-            },
+            convertValue: { $0.numberValue },
             encodeValue: { jsonSchemaNumber($0) }
         )
     }
+}
 
-    private static func decodeNumber(_ value: HeistValue, field: String) throws -> Double {
-        guard let number = value.numberValue else {
-            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "number")
-        }
-        return number
+extension FenceParameter where Value == GestureDuration {
+    internal static func gestureDuration(_ key: FenceParameterKey) -> Self {
+        let spec = param(
+            key,
+            .number,
+            maximum: GestureDuration.maximumSeconds,
+            exclusiveMinimum: 0
+        )
+        return FenceParameter(
+            key: key,
+            spec: spec,
+            convertValue: { value in value.numberValue.map { GestureDuration(seconds: $0) } },
+            encodeValue: { jsonSchemaNumber($0.seconds) }
+        )
     }
 }
 
@@ -145,26 +117,22 @@ extension FenceParameter where Value == Bool {
         required: Bool = false,
         defaultValue: Bool? = nil
     ) -> Self {
-        FenceParameter(
+        let spec = param(
+            key,
+            .boolean,
+            required: required,
+            defaultValue: defaultValue.map(HeistValue.bool)
+        )
+        return FenceParameter(
             key: key,
-            spec: param(
-                key,
-                .boolean,
-                required: required,
-                defaultValue: defaultValue.map(HeistValue.bool)
-            ),
-            expectedTypeDescription: "boolean",
+            spec: spec,
             defaultValue: defaultValue,
-            decodeValue: { value, field in try decodeBoolean(value, field: field) },
+            convertValue: {
+                guard case .bool(let value) = $0 else { return nil }
+                return value
+            },
             encodeValue: { .bool($0) }
         )
-    }
-
-    private static func decodeBoolean(_ value: HeistValue, field: String) throws -> Bool {
-        guard case .bool(let bool) = value else {
-            throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "boolean")
-        }
-        return bool
     }
 }
 
@@ -175,30 +143,20 @@ extension FenceParameter where Value: CaseIterable & RawRepresentable, Value.Raw
         defaultValue: Value? = nil
     ) -> Self {
         let rawValues = Value.allCases.map(\.rawValue)
+        let spec = param(
+            key,
+            .string,
+            required: required,
+            enumValues: rawValues,
+            defaultValue: defaultValue.map { .string($0.rawValue) }
+        )
         return FenceParameter(
             key: key,
-            spec: param(
-                key,
-                .string,
-                required: required,
-                enumValues: rawValues,
-                defaultValue: defaultValue.map { .string($0.rawValue) }
-            ),
-            expectedTypeDescription: SchemaValidationError.expectedEnumValues(rawValues),
+            spec: spec,
             defaultValue: defaultValue,
-            allowedRawValues: rawValues,
-            decodeValue: { value, field in
-                guard case .string(let rawValue) = value else {
-                    throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "string")
-                }
-                guard let enumValue = Value(rawValue: rawValue) else {
-                    throw SchemaValidationError(
-                        field: field,
-                        observed: "string \"\(rawValue)\"",
-                        expected: SchemaValidationError.expectedEnumValues(rawValues)
-                    )
-                }
-                return enumValue
+            convertValue: {
+                guard case .string(let rawValue) = $0 else { return nil }
+                return Value(rawValue: rawValue)
             },
             encodeValue: { .string($0.rawValue) }
         )
@@ -214,9 +172,10 @@ private func validateInteger(
     _ integer: Int,
     source: HeistValue,
     field: String,
-    minimum: Double?,
-    maximum: Double?
+    constraints: FenceParameterScalarConstraints
 ) throws {
+    let minimum = constraints.minimum
+    let maximum = constraints.maximum
     if let minimum, Double(integer) < minimum {
         throw SchemaValidationError(
             field: field,
@@ -237,9 +196,11 @@ private func validateNumber(
     _ number: Double,
     source: HeistValue,
     field: String,
-    maximum: Double?,
-    exclusiveMinimum: Double?
+    constraints: FenceParameterScalarConstraints
 ) throws {
+    let minimum = constraints.minimum
+    let maximum = constraints.maximum
+    let exclusiveMinimum = constraints.exclusiveMinimum
     if let exclusiveMinimum, number <= exclusiveMinimum {
         throw SchemaValidationError(
             field: field,
@@ -247,13 +208,72 @@ private func validateNumber(
             expected: "number > \(formatConstraintNumber(exclusiveMinimum))"
         )
     }
+    if let minimum, number < minimum {
+        throw SchemaValidationError(
+            field: field,
+            observed: source.schemaObservedDescription,
+            expected: numberBoundsDescription(minimum: minimum, maximum: maximum)
+        )
+    }
     if let maximum, number > maximum {
         let expected = if let exclusiveMinimum {
             "number in \(formatConstraintNumber(exclusiveMinimum))...\(formatNumberUpperBound(maximum))"
+        } else if let minimum {
+            numberBoundsDescription(minimum: minimum, maximum: maximum)
         } else {
             "number <= \(formatConstraintNumber(maximum))"
         }
         throw SchemaValidationError(field: field, observed: source.schemaObservedDescription, expected: expected)
+    }
+}
+
+private func numberBoundsDescription(minimum: Double, maximum: Double?) -> String {
+    guard let maximum else { return "number >= \(formatConstraintNumber(minimum))" }
+    return "number in \(formatConstraintNumber(minimum))...\(formatConstraintNumber(maximum))"
+}
+
+internal extension FenceParameterSpec {
+    func validateScalar(_ value: HeistValue, field: String) throws {
+        guard case .scalar(let scalar) = schema else {
+            preconditionFailure("FenceParameter requires a scalar schema")
+        }
+
+        switch scalar.kind {
+        case .string:
+            guard case .string(let string) = value else {
+                throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "string")
+            }
+            if let minLength = scalar.constraints.minLength, string.count < minLength {
+                throw SchemaValidationError(
+                    field: field,
+                    observed: value.schemaObservedDescription,
+                    expected: minLength == 1 ? "non-empty string" : "string with length >= \(minLength)"
+                )
+            }
+            if let enumValues = scalar.constraints.enumValues, !enumValues.contains(string) {
+                throw SchemaValidationError(
+                    field: field,
+                    observed: value.schemaObservedDescription,
+                    expected: SchemaValidationError.expectedEnumValues(enumValues)
+                )
+            }
+        case .integer:
+            guard let integer = value.integerValue else {
+                throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "integer")
+            }
+            try validateInteger(integer, source: value, field: field, constraints: scalar.constraints)
+        case .number:
+            guard let number = value.numberValue else {
+                throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "number")
+            }
+            try validateNumber(number, source: value, field: field, constraints: scalar.constraints)
+        case .boolean:
+            guard case .bool = value else {
+                throw SchemaValidationError(field: field, observed: value.schemaObservedDescription, expected: "boolean")
+            }
+        case .stringMatch:
+            preconditionFailure("StringMatch schemas are decoded as payloads, not FenceParameter scalars")
+        }
     }
 }
 

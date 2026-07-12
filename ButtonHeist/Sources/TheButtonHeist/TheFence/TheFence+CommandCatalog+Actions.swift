@@ -70,7 +70,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .viewportDebug,
                 parameters: FenceParameterBlocks.target + [
-                    param(.containerName, .string),
+                    FenceParameters.containerName.spec,
                     FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
@@ -98,7 +98,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .viewportDebug,
                 parameters: FenceParameterBlocks.target + [
-                    param(.containerName, .string),
+                    FenceParameters.containerName.spec,
                     FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
@@ -124,7 +124,7 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .semanticAction,
                 parameters: FenceParameterBlocks.target
-                    + [param(.action, .string)] + FenceParameterBlocks.expectation,
+                    + [FenceParameters.actionName.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
                 responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],

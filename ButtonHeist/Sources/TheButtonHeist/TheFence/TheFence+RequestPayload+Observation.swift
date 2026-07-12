@@ -23,7 +23,10 @@ extension TheFence {
 
     func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         return GetInterfaceRequest(
-            detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
+            detail: try arguments.value(
+                FenceParameters.interfaceDetail,
+                defaultFrom: Command.getInterface.descriptor
+            ),
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeTarget(arguments),
                 maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
@@ -53,14 +56,14 @@ extension TheFence {
     ) throws -> ScreenRequest {
         return ScreenRequest(
             destination: try screenshotDestination(arguments),
-            mode: try arguments.value(FenceParameters.screenMode) ?? .raw,
+            mode: try arguments.value(FenceParameters.screenMode, defaultFrom: Command.getScreen.descriptor),
             requestId: requestId
         )
     }
 
     private func screenshotDestination(_ arguments: CommandArgumentEnvelope) throws -> ScreenshotDestination {
         let outputPath = try arguments.value(FenceParameters.output)
-        let inlineData = try arguments.value(FenceParameters.inlineData) ?? false
+        let inlineData = try arguments.value(FenceParameters.inlineData, defaultFrom: Command.getScreen.descriptor)
         switch (inlineData, outputPath) {
         case (true, nil):
             return .inlineData

@@ -131,11 +131,6 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    /// Admit a routed public command input into TheFence's typed runtime.
-    @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
-        FenceOperationRequest(parsed: try parseRequest(command: input.command, arguments: input.arguments))
-    }
-
     /// Execute an admitted command request.
     @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {
         try await execute(parsed: request.parsed)

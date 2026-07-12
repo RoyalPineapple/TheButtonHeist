@@ -3,29 +3,39 @@ import TheScore
 @_spi(ButtonHeistTooling) public struct FenceParameter<Value: Sendable>: Sendable {
     public let key: FenceParameterKey
     public let defaultValue: Value?
-    public let allowedRawValues: [String]?
 
     internal let spec: FenceParameterSpec
-    internal let expectedTypeDescription: String
-    private let decodeValue: @Sendable (HeistValue, String) throws -> Value
+    private let convertValue: @Sendable (HeistValue) -> Value?
     private let encodeValue: @Sendable (Value) -> HeistValue
 
     internal init(
         key: FenceParameterKey,
         spec: FenceParameterSpec,
-        expectedTypeDescription: String,
         defaultValue: Value? = nil,
-        allowedRawValues: [String]? = nil,
-        decodeValue: @escaping @Sendable (HeistValue, String) throws -> Value,
+        convertValue: @escaping @Sendable (HeistValue) -> Value?,
         encodeValue: @escaping @Sendable (Value) -> HeistValue
     ) {
+        precondition(spec.key == key.rawValue, "FenceParameter key must match its schema")
+        guard case .scalar = spec.schema else {
+            preconditionFailure("FenceParameter requires a scalar schema")
+        }
+        precondition(
+            defaultValue.map(encodeValue) == spec.defaultValue,
+            "FenceParameter default must match its schema"
+        )
         self.key = key
         self.spec = spec
-        self.expectedTypeDescription = expectedTypeDescription
         self.defaultValue = defaultValue
-        self.allowedRawValues = allowedRawValues
-        self.decodeValue = decodeValue
+        self.convertValue = convertValue
         self.encodeValue = encodeValue
+    }
+
+    public var allowedRawValues: [String]? {
+        spec.enumValues
+    }
+
+    internal var expectedTypeDescription: String {
+        spec.expectedTypeDescription
     }
 
     public func heistValue(for value: Value) -> HeistValue {
@@ -33,7 +43,11 @@ import TheScore
     }
 
     internal func decode(_ value: HeistValue, field: String) throws -> Value {
-        try decodeValue(value, field)
+        try spec.validateScalar(value, field: field)
+        guard let decoded = convertValue(value) else {
+            preconditionFailure("FenceParameter converter disagrees with schema for \(key.rawValue)")
+        }
+        return decoded
     }
 }
 

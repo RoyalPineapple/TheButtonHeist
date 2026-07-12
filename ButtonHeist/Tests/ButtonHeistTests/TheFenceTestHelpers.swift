@@ -40,6 +40,11 @@ extension TheFence {
     }
 
     @ButtonHeistActor
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
+        try admit(FenceCommandInput(command: command, arguments: arguments)).parsed
+    }
+
+    @ButtonHeistActor
     func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
         let request: FenceOperationRequest
         do {

@@ -2,8 +2,9 @@ import ThePlans
 import TheScore
 
 @_spi(ButtonHeistTooling) public enum FenceParameters {
-    public static let actionName = FenceParameter<String>.string(.action)
+    public static let actionName = FenceParameter<String>.string(.action, minLength: 1)
     public static let commandName = FenceParameter<String>.string(.command, required: true)
+    public static let containerName = FenceParameter<String>.string(.containerName, minLength: 1)
     public static let connectionTarget = FenceParameter<String>.string(.target)
     public static let device = FenceParameter<String>.string(.device)
     public static let editAction = FenceParameter<EditAction>.enumValue(.action, required: true)
@@ -13,9 +14,10 @@ import TheScore
         defaultValue: .summary
     )
     public static let heistName = FenceParameter<String>.string(.heist, required: true)
-    public static let inlineData = FenceParameter<Bool>.boolean(.inlineData)
+    public static let gestureDuration = FenceParameter<GestureDuration>.gestureDuration(.duration)
+    public static let inlineData = FenceParameter<Bool>.boolean(.inlineData, defaultValue: false)
     public static let inlinePlan = FenceParameter<String>.string(.plan)
-    public static let interfaceDetail = FenceParameter<InterfaceDetail>.enumValue(.detail)
+    public static let interfaceDetail = FenceParameter<InterfaceDetail>.enumValue(.detail, defaultValue: .summary)
     public static let maxScrollsPerContainer = FenceParameter<Int>.integer(
         .maxScrollsPerContainer,
         minimum: 1,
@@ -31,6 +33,9 @@ import TheScore
     public static let performStep = FenceParameter<String>.string(.step, required: true, minLength: 1)
     public static let planPath = FenceParameter<String>.string(.path)
     public static let replacingExisting = FenceParameter<Bool>.boolean(.replacingExisting, defaultValue: false)
+    public static let requestId = FenceParameter<String>.string(.requestId)
+    public static let screenPointX = FenceParameter<Double>.number(.x, required: true)
+    public static let screenPointY = FenceParameter<Double>.number(.y, required: true)
     public static let screenMode = FenceParameter<ScreenCaptureMode>.enumValue(.mode, defaultValue: .raw)
     public static let rotorDirection = FenceParameter<RotorDirection>.enumValue(.direction, defaultValue: .next)
     public static let rotorIndex = FenceParameter<Int>.integer(.rotorIndex, minimum: 0)
@@ -45,6 +50,8 @@ import TheScore
         exclusiveMinimum: 0
     )
     public static let token = FenceParameter<String>.string(.token)
+    public static let unitPointX = FenceParameter<Double>.number(.x, required: true, minimum: 0, maximum: 1)
+    public static let unitPointY = FenceParameter<Double>.number(.y, required: true, minimum: 0, maximum: 1)
 }
 
 internal func param(
