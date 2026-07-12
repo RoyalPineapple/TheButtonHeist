@@ -1918,9 +1918,39 @@ final class TheBrainsActionTests: XCTestCase {
             ),
             transition: before.capture.transition
         )
-        let initialTrace = AccessibilityTrace(captures: [detachedBeforeCapture, after.capture])
+        let screenChanged = AccessibilityNotificationEvidence(
+            sequence: 1,
+            kind: .screenChanged,
+            timestamp: Date(timeIntervalSince1970: 0),
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let classification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: after.screenSnapshot,
+            notifications: [screenChanged.kind]
+        )
+        let initialTrace = isolatedBrains.postActionObservation.makeAccessibilityTrace(
+            afterInterface: after.interface,
+            parentCapture: detachedBeforeCapture,
+            classification: classification,
+            accessibilityNotifications: [screenChanged]
+        )
+        let actionResult = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultSuccessEvidence(observation: .settledTrace(
+                initialTrace,
+                .settled(durationMs: 0)
+            ))
+        )
 
+        XCTAssertEqual(classification, .screenChangedNotification)
         XCTAssertNotEqual(initialTrace.captures.first?.hash, afterEvent.trace.captures.first?.hash)
+        XCTAssertEqual(initialTrace.captures.first?.hash, detachedBeforeCapture.hash)
+        XCTAssertEqual(initialTrace.captures.last?.interface, after.interface)
+        XCTAssertEqual(initialTrace.captures.last?.transition.accessibilityNotifications, [screenChanged])
+        XCTAssertNil(initialTrace.captures.last?.transition.fallbackReason)
+        XCTAssertEqual(actionResult.settled, true)
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
             WaitStep(
@@ -1930,7 +1960,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )))])),
                 timeout: 1
             ),
-            initialTrace: initialTrace
+            initialTrace: actionResult.accessibilityTrace
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
@@ -2535,15 +2565,31 @@ final class TheBrainsActionTests: XCTestCase {
             sequence: 2,
             interface: afterState.interface,
             parentHash: beforeCapture.hash,
-            context: AccessibilityTrace.Context(screenId: "buttons_actions")
+            context: AccessibilityTrace.Context(screenId: "buttons_actions"),
+            transition: AccessibilityTrace.Transition(accessibilityNotifications: [
+                AccessibilityNotificationEvidence(
+                    sequence: 1,
+                    kind: .screenChanged,
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    notificationData: .none,
+                    associatedElement: .none
+                ),
+            ])
         )
         let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
+        XCTAssertEqual(
+            trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
                 ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                    evidence: ActionResultSuccessEvidence(observation: .settledTrace(
+                        trace,
+                        .settled(durationMs: 7)
+                    ))
                 )
             }
         )
@@ -2558,6 +2604,9 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(step.actionEvidence?.dispatchResult?.settled, true)
+        XCTAssertEqual(step.actionEvidence?.dispatchResult?.settleTimeMs, 7)
+        XCTAssertEqual(step.actionEvidence?.dispatchResult?.accessibilityTrace, trace)
         XCTAssertEqual(step.actionEvidence?.expectationResult?.method, .wait)
         XCTAssertTrue(step.actionEvidence?.expectationResult?.outcome.isSuccess == true)
         XCTAssertEqual(step.actionEvidence?.expectationResult?.accessibilityTrace, trace)
