@@ -1803,16 +1803,20 @@ final class TheFenceHandlerTests: XCTestCase {
     func testHeistExecutionResponseFailureDrivenByFailedStepNotFailedIndex() throws {
         // A failed child must mark the response as failure even when the top-level
         // abort location is carried by the receipt instead of an index.
-        let childPath = "$.body[0].heist.body[0]"
+        let childPath = "$.body[0].invoke.body[0]"
+        let invocation = HeistInvocationStep(path: ["heist"])
         let child = HeistExecutionStepResult.failed(
             path: childPath,
             receiptKind: .action,
             durationMs: 5,
             evidence: .dispatch(
+                command: .activate(.predicate(.label("Button"))),
                 dispatchResult: ActionResult.failure(
                     method: .activate,
                     errorKind: .actionFailed,
-                    message: "boom")
+                    message: "boom"
+                ),
+                warning: nil
             ),
             failure: HeistFailureDetail(
                 category: .action,
@@ -1824,11 +1828,13 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 .childAborted(
                     path: "$.body[0]",
-                    receiptKind: .heist,
+                    receiptKind: .invocation,
                     durationMs: 5,
-                    evidence: .heist(
+                    evidence: .invocation(
+                        invocation: invocation,
                         name: "heist",
-                        childFailedPath: childPath
+                        argument: nil,
+                        outcome: .childFailed(path: childPath)
                     ),
                     failure: HeistFailureDetail(
                         category: .invocation,
@@ -3286,9 +3292,11 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             return .actionResult(ActionResult.success(
                 method: .wait,
-                accessibilityTrace: AccessibilityTrace.elementsChangedForTests(
-                    elementCount: 1,
-                    edits: ElementEdits()
+                evidence: ActionResultEvidence(
+                    accessibilityTrace: AccessibilityTrace.elementsChangedForTests(
+                        elementCount: 1,
+                        edits: ElementEdits()
+                    )
                 )
             ))
         }
@@ -3317,7 +3325,9 @@ final class TheFenceHandlerTests: XCTestCase {
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
+                evidence: ActionResultEvidence(
+                    accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
+                )
             ))
         }
 
@@ -3348,7 +3358,9 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .wait,
                 errorKind: .timeout,
                 message: "timed out after 0.2s — expectation not met",
-                accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
+                evidence: ActionResultEvidence(
+                    accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
+                )
             ))
         }
 
@@ -3400,13 +3412,13 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult.success(
                     method: .activate,
-                    accessibilityTrace: trace
+                    evidence: ActionResultEvidence(accessibilityTrace: trace)
                 ))
             case .wait:
                 return .actionResult(ActionResult.success(
                     method: .wait,
                     message: "expectation met after observed change",
-                    accessibilityTrace: trace
+                    evidence: ActionResultEvidence(accessibilityTrace: trace)
                 ))
             default:
                 return .actionResult(ActionResult.success(method: .activate))
