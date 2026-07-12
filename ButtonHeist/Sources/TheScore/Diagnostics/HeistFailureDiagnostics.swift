@@ -81,19 +81,20 @@ public enum HeistFailureDiagnostics {
 }
 
 public extension HeistExecutionResult {
-    var failureScreenshotStep: HeistExecutionStepResult? {
+    package var failureScreenshotStep: HeistExecutionStepResult? {
         steps.firstFailureScreenshotStep
     }
 
-    var failureScreenshotPayload: ScreenPayload? {
+    package var failureScreenshotPayload: ScreenPayload? {
         failureScreenshotStep?.screenshotPayload
     }
 
-    var settledInterfaceAtFailure: Interface? {
+    package var settledInterfaceAtFailure: Interface? {
         firstFailedStep?.settledInterfaceAtStep
     }
 
-    var failureDiagnosticInterface: Interface? {
+    /// Failure evidence for diagnostic rendering, not current semantic interface state.
+    package var failureDiagnosticInterface: Interface? {
         failureScreenshotPayload?.interface ?? settledInterfaceAtFailure
     }
 
@@ -118,11 +119,11 @@ public extension HeistExecutionResult {
 }
 
 public extension HeistExecutionStepResult {
-    var settledInterfaceAtStep: Interface? {
+    package var settledInterfaceAtStep: Interface? {
         reportFacts.results.traceEvidenceResult?.accessibilityTrace?.captures.last?.interface
     }
 
-    var screenshotPayload: ScreenPayload? {
+    package var screenshotPayload: ScreenPayload? {
         guard case .screenshot(let screenshot) = actionEvidence?.dispatchResult?.payload else {
             return nil
         }

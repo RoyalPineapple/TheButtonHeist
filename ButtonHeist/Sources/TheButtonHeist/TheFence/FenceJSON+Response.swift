@@ -27,36 +27,26 @@ struct PublicStatus: Encodable {
 struct PublicErrorResponse: FencePublicJSONResponse {
     let status = PublicStatus.error
     let message: String
-    let code: String
-    let kind: String
-    let phase: String?
-    let retryable: Bool?
-    let hint: String?
+    let code: KnownFailureCode
     let details: PublicErrorDetails
 
     init(failure: DiagnosticFailure) {
         self.message = failure.message
-        self.code = failure.code
-        self.kind = failure.kind.rawValue
-        self.phase = failure.details.phase.rawValue
-        self.retryable = failure.details.retryable
-        self.hint = failure.details.hint
+        self.code = failure.failureCode
         self.details = PublicErrorDetails(failure: failure)
     }
 }
 
 struct PublicErrorDetails: Encodable {
-    let code: String
-    let kind: String
-    let phase: String
+    let kind: DiagnosticFailureKind
+    let phase: FailurePhase
     let retryable: Bool
     let hint: String?
     let buildDiagnostics: [PublicHeistBuildDiagnostic]?
 
     init(failure: DiagnosticFailure) {
-        self.code = failure.code
-        self.kind = failure.kind.rawValue
-        self.phase = failure.details.phase.rawValue
+        self.kind = failure.kind
+        self.phase = failure.details.phase
         self.retryable = failure.details.retryable
         self.hint = failure.details.hint
         self.buildDiagnostics = failure.buildDiagnostics.isEmpty

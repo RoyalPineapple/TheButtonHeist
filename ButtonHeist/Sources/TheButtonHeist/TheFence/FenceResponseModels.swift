@@ -156,7 +156,10 @@ enum DiagnosticFailureMapper {
         case let routingError as FenceOperationRoutingError:
             return DiagnosticFailure(message: routingError.message, details: routingError.details)
         default:
-            return DiagnosticFailure(message: error.displayMessage, details: nil)
+            return DiagnosticFailure(
+                message: error.displayMessage,
+                details: FailureDetails(code: .clientUnknown)
+            )
         }
     }
 
