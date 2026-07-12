@@ -178,7 +178,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
         XCTAssertEqual(advanced, bus.transitionCursor())
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown(rawCode: 4002), .announcement])
+        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown, .announcement])
         XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [4002, nil])
         XCTAssertGreaterThan(bus.transitionCursor().sequence, cursor.sequence)
     }
@@ -204,7 +204,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(bus.latestSequence, 2)
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
-            [.unknown(rawCode: 1009), .unknown(rawCode: 4002)]
+            [.unknown, .unknown]
         )
         XCTAssertEqual(bus.pendingEvents().map(\.rawCode), [1009, 4002])
         XCTAssertEqual(bus.transitionCursor().sequence, 2)

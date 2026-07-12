@@ -241,7 +241,8 @@ final class AccessibilityTraceTests: XCTestCase {
     func testUnknownNotificationEvidencePreservesRawCodeAndPayload() throws {
         let notification = AccessibilityNotificationEvidence(
             sequence: 9,
-            kind: .unknown(rawCode: 4002),
+            kind: .unknown,
+            rawCode: 4002,
             timestamp: Date(timeIntervalSince1970: 9),
             notificationData: .string("private notification"),
             associatedElement: .unresolvedObject(AccessibilityNotificationObjectPayload(

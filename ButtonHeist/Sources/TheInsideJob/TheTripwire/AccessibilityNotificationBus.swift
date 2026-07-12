@@ -563,10 +563,10 @@ struct PendingAccessibilityNotificationEvent {
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
+        precondition((kind == .unknown) == (rawCode != nil))
         self.sequence = sequence
-        let normalizedKind = rawCode.map(AccessibilityNotificationKind.init(rawCode:)) ?? kind
-        self.kind = normalizedKind
-        self.rawCode = normalizedKind.rawCode
+        self.kind = kind
+        self.rawCode = rawCode
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
@@ -579,10 +579,17 @@ struct PendingAccessibilityNotificationEvent {
         notificationData: PendingAccessibilityNotificationPayload,
         associatedElement: PendingAccessibilityNotificationPayload
     ) {
+        let kind: AccessibilityNotificationKind = switch rawCode {
+        case 1000: .screenChanged
+        case 1001: .layoutChanged
+        case 1005: .valueChanged
+        case 1008: .announcement
+        default: .unknown
+        }
         self.init(
             sequence: sequence,
-            kind: AccessibilityNotificationKind(rawCode: rawCode),
-            rawCode: rawCode,
+            kind: kind,
+            rawCode: kind == .unknown ? rawCode : nil,
             timestamp: timestamp,
             notificationData: notificationData,
             associatedElement: associatedElement
