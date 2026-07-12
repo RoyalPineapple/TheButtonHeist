@@ -52,7 +52,7 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Programmatic Scroll Safety
 
     func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() {
-        let result = TheSafecracker.InteractionResult.failure(
+        let result = TheSafecracker.ActionDispatchOutcome.failure(
             .scrollToVisible,
             message: "element inflation failed [notFound]: missing",
             failureKind: .targetUnavailable
@@ -1159,7 +1159,7 @@ final class TheBrainsScrollTests: XCTestCase {
             requireInteractive: false
         ) { _ in
             didDispatch = true
-            return TheSafecracker.InteractionResult.success(method: .activate)
+            return TheSafecracker.ActionDispatchOutcome.success(method: .activate)
         }
 
         XCTAssertFalse(didDispatch)

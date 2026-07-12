@@ -2,7 +2,6 @@ import XCTest
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import ThePlans
-import TheScore
 @testable import ButtonHeistCLIExe
 
 final class CLICommandSyncTests: XCTestCase {
@@ -22,6 +21,13 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(help.contains("run_heist"))
         XCTAssertTrue(help.contains("list_heists"))
         XCTAssertTrue(help.contains("describe_heist"))
+    }
+
+    func testTopLevelSubcommandsMatchFenceCLIExposure() {
+        let descriptorNames = TheFence.Command.cliDirectCommandDescriptors.map(\.command.rawValue)
+        let expected = (descriptorNames + ["json_lines"]).sorted()
+
+        XCTAssertEqual(topLevelCommandNames().sorted(), expected)
     }
 
     func testJSONLinesDefaultOutputIsCanonicalJSON() {
@@ -77,7 +83,20 @@ final class CLICommandSyncTests: XCTestCase {
     func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
         let command = try WaitCommand.parse(["--change", "screen"])
 
-        XCTAssertEqual(command.timeout, 10)
+        XCTAssertEqual(command.timeout, CLITimeoutDefaults.wait)
+    }
+
+    func testParsedTimeoutDefaultsComeFromFenceDescriptorsWhenExposed() throws {
+        XCTAssertEqual(try WaitCommand.parse(["--change", "screen"]).timeout, CLITimeoutDefaults.wait)
+        XCTAssertEqual(
+            try TypeCommand.parse(["--text", "hello"]).timeout,
+            try XCTUnwrap(TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds)
+        )
+        XCTAssertEqual(
+            try ScrollToVisibleCommand.parse(["--label", "Item"]).timeout,
+            try XCTUnwrap(TheFence.Command.scrollToVisible.descriptor.timeout.fixedSeconds)
+        )
+        XCTAssertEqual(try ActivateCommand.parse(["--label", "Item"]).timeoutOption.timeout, CLITimeoutDefaults.common)
     }
 
     func testTypeTextRequiresText() {

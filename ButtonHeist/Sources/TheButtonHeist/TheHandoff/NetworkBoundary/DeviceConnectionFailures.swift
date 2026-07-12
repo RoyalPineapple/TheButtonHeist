@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 /// Structured reason for why a connection was closed.
 ///
@@ -10,7 +11,7 @@ import Foundation
 /// is the single thrown error type for all of TheFence, TheHandoff, and
 /// DeviceResolver.
 enum DisconnectReason: Error, LocalizedError {
-    case networkError(Error)
+    case networkError(NetworkTransportFailure)
     case bufferOverflow
     case eventBacklogOverflow(maxEvents: Int)
     case serverClosed
@@ -53,10 +54,10 @@ enum DisconnectReason: Error, LocalizedError {
 
     var diagnostic: HandoffFailureDiagnostic {
         switch self {
-        case .networkError(let error):
+        case .networkError(let failure):
             return HandoffFailureDiagnostic(
                 target: nil,
-                cause: "Network error: \(error.localizedDescription)",
+                cause: "Network error: \(failure.description)",
                 code: .transportNetworkError
             )
         case .bufferOverflow:
@@ -119,12 +120,8 @@ enum DisconnectReason: Error, LocalizedError {
 extension DisconnectReason: Equatable {
     static func == (lhs: DisconnectReason, rhs: DisconnectReason) -> Bool {
         switch (lhs, rhs) {
-        case (.networkError(let lhsError), .networkError(let rhsError)):
-            let lhsNSError = lhsError as NSError
-            let rhsNSError = rhsError as NSError
-            return lhsNSError.domain == rhsNSError.domain &&
-                lhsNSError.code == rhsNSError.code &&
-                lhsNSError.localizedDescription == rhsNSError.localizedDescription
+        case (.networkError(let lhsFailure), .networkError(let rhsFailure)):
+            return lhsFailure == rhsFailure
         case (.bufferOverflow, .bufferOverflow),
              (.serverClosed, .serverClosed),
              (.localDisconnect, .localDisconnect),

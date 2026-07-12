@@ -12,7 +12,7 @@ import XCTest
 @MainActor
 final class HeistReceiptTests: XCTestCase {
 
-    func testReceiptFolderBuildsPassedOutcome() {
+    func testReceiptHelperBuildsPassedAction() {
         let brains = TheBrains(tripwire: TheTripwire())
         let intent = receiptActionIntent()
         let evidence = receiptActionEvidence()
@@ -21,7 +21,7 @@ final class HeistReceiptTests: XCTestCase {
             path: "$.body[0]",
             durationMs: 12,
             intent: intent,
-            outcome: .passed(evidence: .action(evidence))
+            evidence: .action(evidence)
         )
 
         XCTAssertEqual(
@@ -36,7 +36,7 @@ final class HeistReceiptTests: XCTestCase {
         )
     }
 
-    func testReceiptFolderBuildsFailedOutcome() {
+    func testReceiptHelperBuildsFailedAction() {
         let brains = TheBrains(tripwire: TheTripwire())
         let evidence = receiptActionEvidence(success: false)
         let failure = receiptFailure(observed: "expected failure")
@@ -46,7 +46,8 @@ final class HeistReceiptTests: XCTestCase {
             path: "$.body[0]",
             durationMs: 7,
             intent: intent,
-            outcome: .failed(evidence: .action(evidence), failure: failure)
+            evidence: .action(evidence),
+            failure: failure
         )
 
         XCTAssertEqual(
@@ -62,11 +63,9 @@ final class HeistReceiptTests: XCTestCase {
         )
     }
 
-    func testReceiptFolderBuildsChildAbortedOutcome() throws {
+    func testReceiptHelperDerivesChildAbortedLoopFromChildren() {
         let brains = TheBrains(tripwire: TheTripwire())
-        let evidence = receiptActionEvidence()
         let failure = receiptFailure(observed: "child failed")
-        let intent = receiptActionIntent()
         let child = HeistExecutionStepResult.failed(
             path: "$.body[0].children[0]",
             kind: .fail,
@@ -75,27 +74,40 @@ final class HeistReceiptTests: XCTestCase {
             failure: receiptFailure(observed: "stop")
         )
         let children = TheBrains.HeistReceiptChildren([child])
-        let abortedChildren = try XCTUnwrap(children.aborted)
+        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
+            parameter: "item",
+            count: 1,
+            iterationCount: 1,
+            iterationOrdinal: 0,
+            value: "Milk",
+            failureReason: "child failed at \(child.path)"
+        ))
 
-        let receipt = brains.heistActionReceipt(
+        let receipt = brains.heistLoopReceipt(
             path: "$.body[0]",
+            kind: .forEachIteration,
             durationMs: 9,
-            intent: intent,
-            outcome: .childAborted(
-                evidence: .action(evidence),
-                failure: failure,
-                abortedChildren: abortedChildren
-            )
+            intent: .forEachString(parameter: "item", count: 1),
+            evidence: evidence,
+            children: children,
+            childFailure: { _ in failure }
         )
 
         XCTAssertEqual(
             receipt,
             .childAborted(
                 path: "$.body[0]",
-                receiptKind: .action,
+                receiptKind: .forEachStringIteration,
                 durationMs: 9,
-                intent: intent,
-                evidence: evidence,
+                intent: .forEachString(parameter: "item", count: 1),
+                evidence: HeistForEachStringEvidence(
+                    parameter: "item",
+                    count: 1,
+                    iterationCount: 1,
+                    iterationOrdinal: 0,
+                    value: "Milk",
+                    failureReason: "child failed at \(child.path)"
+                ),
                 failure: failure,
                 abortedAtChildPath: child.path,
                 children: [child]

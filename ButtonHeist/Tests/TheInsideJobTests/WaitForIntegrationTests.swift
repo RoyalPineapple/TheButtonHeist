@@ -57,15 +57,16 @@ final class WaitForIntegrationTests: XCTestCase {
         return scene
     }
 
-    private func collectResponse() -> (respond: @Sendable (Data) -> Void, result: () -> ActionResult?) {
+    private func collectResponse() -> (respond: SocketResponseHandler, result: () -> ActionResult?) {
         // Test-only inspection box. Mutated only from within the @Sendable
         // closure that captures it; not shared across threads in practice.
         final class Box: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
             var data: Data?
         }
         let box = Box()
-        let respond: @Sendable (Data) -> Void = { data in
+        let respond: SocketResponseHandler = { data in
             box.data = data
+            return .delivered
         }
         return (respond, {
             guard let data = box.data else { return nil }

@@ -226,156 +226,25 @@ public struct HeistCallGraph: Sendable, Equatable {
 
 // MARK: - Graph Building
 
-private struct HeistCallGraphBuilder {
+private struct HeistCallGraphBuilder: HeistPlanTraversalVisitor {
     var nodes: Set<HeistCallGraph.Node> = []
     var edges: Set<HeistCallGraph.NodeEdge> = []
 
     mutating func collect(plan: HeistPlan) {
-        let rootScope = HeistDefinitionScope(definitions: plan.definitions)
-        collectDefinitions(plan.definitions, pathPrefix: [], rootDefinitionScope: rootScope)
-        collectAnonymousDefinitionScopes(in: plan.body)
+        let traversal = HeistPlanTraversal(expandsInvocations: false)
+        traversal.walk(plan, visitor: &self)
     }
 
-    private mutating func collectDefinitions(
-        _ definitions: [HeistPlan],
-        pathPrefix: [String],
-        rootDefinitionScope: HeistDefinitionScope
-    ) {
-        let definitionScope = HeistDefinitionScope(definitions: definitions, pathPrefix: pathPrefix)
-        definitions.forEach {
-            collectDefinition($0, definitionScope: definitionScope, rootDefinitionScope: rootDefinitionScope)
-        }
+    mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
+        nodes.insert(HeistCallGraph.Node(namePath: context.definitionScope.pathPrefix + [plan.name ?? ""]))
     }
 
-    private mutating func collectDefinition(
-        _ definition: HeistPlan,
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope
-    ) {
-        let namePath = definitionScope.pathPrefix + [definition.name ?? ""]
-        let definitionNode = HeistCallGraph.Node(namePath: namePath)
-        nodes.insert(definitionNode)
-
-        let childScope = HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath)
-        collectEdges(
-            in: definition.body,
-            caller: definitionNode,
-            definitionScope: childScope,
-            rootDefinitionScope: rootDefinitionScope
-        )
-        collectDefinitions(definition.definitions, pathPrefix: namePath, rootDefinitionScope: rootDefinitionScope)
-    }
-
-    private mutating func collectEdges(
-        in steps: [HeistStep],
-        caller: HeistCallGraph.Node,
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope
-    ) {
-        steps.forEach {
-            collectEdges(
-                in: $0,
-                caller: caller,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope
-            )
-        }
-    }
-
-    private mutating func collectEdges(
-        in step: HeistStep,
-        caller: HeistCallGraph.Node,
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope
-    ) {
-        switch step {
-        case .action, .wait, .warn, .fail:
-            break
-        case .conditional(let conditional):
-            conditional.cases.forEach {
-                collectEdges(
-                    in: $0.body,
-                    caller: caller,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope
-                )
-            }
-            if let elseBody = conditional.elseBody {
-                collectEdges(
-                    in: elseBody,
-                    caller: caller,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope
-                )
-            }
-        case .forEachElement(let forEach):
-            collectEdges(
-                in: forEach.body,
-                caller: caller,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope
-            )
-        case .forEachString(let forEach):
-            collectEdges(
-                in: forEach.body,
-                caller: caller,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope
-            )
-        case .repeatUntil(let repeatUntil):
-            collectEdges(
-                in: repeatUntil.body,
-                caller: caller,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope
-            )
-            if let elseBody = repeatUntil.elseBody {
-                collectEdges(
-                    in: elseBody,
-                    caller: caller,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope
-                )
-            }
-        case .heist(let plan):
-            let inlineScope = HeistDefinitionScope(definitions: plan.definitions)
-            collectDefinitions(plan.definitions, pathPrefix: [], rootDefinitionScope: inlineScope)
-            collectEdges(in: plan.body, caller: caller, definitionScope: inlineScope, rootDefinitionScope: inlineScope)
-        case .invoke(let invocation):
-            guard let resolved = definitionScope.resolveInvocation(
-                path: invocation.invocationPath,
-                rootScope: rootDefinitionScope
-            ) else { return }
-            let callee = resolved.callGraphNode
-            nodes.insert(callee)
-            edges.insert(HeistCallGraph.NodeEdge(caller: caller, callee: callee))
-        }
-    }
-
-    private mutating func collectAnonymousDefinitionScopes(in steps: [HeistStep]) {
-        steps.forEach { collectAnonymousDefinitionScopes(in: $0) }
-    }
-
-    private mutating func collectAnonymousDefinitionScopes(in step: HeistStep) {
-        switch step {
-        case .action, .wait, .warn, .fail, .invoke:
-            break
-        case .conditional(let conditional):
-            conditional.cases.forEach { collectAnonymousDefinitionScopes(in: $0.body) }
-            if let elseBody = conditional.elseBody {
-                collectAnonymousDefinitionScopes(in: elseBody)
-            }
-        case .forEachElement(let forEach):
-            collectAnonymousDefinitionScopes(in: forEach.body)
-        case .forEachString(let forEach):
-            collectAnonymousDefinitionScopes(in: forEach.body)
-        case .repeatUntil(let repeatUntil):
-            collectAnonymousDefinitionScopes(in: repeatUntil.body)
-            if let elseBody = repeatUntil.elseBody {
-                collectAnonymousDefinitionScopes(in: elseBody)
-            }
-        case .heist(let plan):
-            collect(plan: plan)
-        }
+    mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext) {
+        guard let caller = context.invocationStack.last,
+              let resolved = context.resolveInvocation(path: step.invocationPath)
+        else { return }
+        let callee = resolved.callGraphNode
+        nodes.insert(callee)
+        edges.insert(HeistCallGraph.NodeEdge(caller: caller, callee: callee))
     }
 }

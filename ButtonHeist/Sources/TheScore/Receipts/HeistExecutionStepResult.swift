@@ -327,6 +327,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         self.intent = intent
         self.outcome = outcome
         do {
+            try Self.validateIntent(intent, matches: kind, codingPath: [])
             try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: [])
         } catch {
             preconditionFailure("Invalid heist execution step result at \(path): \(error)")
@@ -360,12 +361,18 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        path = try container.decode(String.self, forKey: .path)
-        kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
-        durationMs = try container.decode(Int.self, forKey: .durationMs)
-        intent = try container.decodeIfPresent(HeistStepIntent.self, forKey: .intent)
-        outcome = try container.decode(HeistExecutionStepOutcome.self, forKey: .outcome)
+        let path = try container.decode(String.self, forKey: .path)
+        let kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
+        let durationMs = try container.decode(Int.self, forKey: .durationMs)
+        let intent = try container.decodeIfPresent(HeistStepIntent.self, forKey: .intent)
+        let outcome = try container.decode(HeistExecutionStepOutcome.self, forKey: .outcome)
+        try Self.validateIntent(intent, matches: kind, codingPath: container.codingPath + [CodingKeys.intent])
         try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: container.codingPath + [CodingKeys.outcome])
+        self.path = path
+        self.kind = kind
+        self.durationMs = durationMs
+        self.intent = intent
+        self.outcome = outcome
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -514,6 +521,31 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             throw receiptError(
                 "\(kind.rawValue) heist execution step cannot include \(evidence.receiptKindDescription) evidence",
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
+            )
+        }
+    }
+
+    private static func validateIntent(
+        _ intent: HeistStepIntent?,
+        matches kind: HeistExecutionStepKind,
+        codingPath: [CodingKey]
+    ) throws {
+        guard let intent else { return }
+        let isCompatible: Bool
+        switch (kind, intent) {
+        case (.action, .action), (.wait, .wait), (.conditional, .conditional),
+             (.forEachElement, .forEachElement), (.forEachString, .forEachString),
+             (.forEachIteration, .forEachElement), (.forEachIteration, .forEachString),
+             (.repeatUntil, .repeatUntil), (.repeatUntilIteration, .repeatUntil),
+             (.warn, .warn), (.fail, .fail), (.heist, .heist), (.invoke, .invoke):
+            isCompatible = true
+        default:
+            isCompatible = false
+        }
+        guard isCompatible else {
+            throw receiptError(
+                "\(kind.rawValue) heist execution step cannot include mismatched intent",
+                codingPath: codingPath
             )
         }
     }

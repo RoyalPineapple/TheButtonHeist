@@ -2,6 +2,13 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
+    private static let defaultTimeout: Double = {
+        guard let seconds = TheFence.Command.scrollToVisible.descriptor.timeout.fixedSeconds else {
+            preconditionFailure("scroll_to_visible descriptor must expose a fixed timeout")
+        }
+        return seconds
+    }()
+
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll a resolved element into view",
@@ -20,8 +27,8 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 15.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(ScrollToVisibleCommand.defaultTimeout)))")
+    var timeout: Double = ScrollToVisibleCommand.defaultTimeout
 
     @ButtonHeistActor
     mutating func run() async throws {

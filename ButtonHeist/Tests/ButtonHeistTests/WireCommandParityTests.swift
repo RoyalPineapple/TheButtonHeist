@@ -12,15 +12,15 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     func testCommandFamiliesHaveNoDuplicateRawValuesAndCoverEveryCommand() {
-        let familyDescriptors = FenceCommandRegistry.families.flatMap(\.descriptors)
-        let familyCommands = familyDescriptors.map(\.command)
+        let descriptors = TheFence.Command.descriptors
+        let descriptorCommands = descriptors.map(\.command)
 
-        XCTAssertEqual(familyCommands.count, TheFence.Command.allCases.count)
-        XCTAssertEqual(Set(familyCommands), Set(TheFence.Command.allCases))
-        XCTAssertEqual(familyCommands.count, Set(familyCommands).count)
+        XCTAssertEqual(descriptorCommands.count, TheFence.Command.allCases.count)
+        XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
+        XCTAssertEqual(descriptorCommands.count, Set(descriptorCommands).count)
         XCTAssertEqual(
-            familyDescriptors.map(\.family),
-            familyDescriptors.map { $0.command.family }
+            descriptors.map(\.family),
+            descriptors.map { $0.command.family }
         )
     }
 
@@ -38,8 +38,8 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.listHeists.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.describeHeist.family, .heistRuntime)
 
-        XCTAssertNil(ObservationCommand(rawValue: TheFence.Command.wait.rawValue))
-        XCTAssertEqual(AssertionCommand.wait.command, .wait)
+        XCTAssertEqual(TheFence.Command.wait.descriptor.command, .wait)
+        XCTAssertEqual(TheFence.Command.wait.descriptor.family, .assertion)
         XCTAssertTrue(TheFence.Command.wait.lowersToHeistPrimitive)
         XCTAssertFalse(TheFence.Command.wait.dispatchesAppInteraction)
         XCTAssertFalse(TheFence.Command.wait.usesPayloadCheckedHeistPrimitive)
@@ -53,19 +53,20 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(TheFence.Command.oneFingerTap.usesPayloadCheckedHeistPrimitive)
 
         XCTAssertTrue(TheFence.Command.scroll.dispatchesAppInteraction)
-        XCTAssertNotNil(TheFence.Command.scroll.viewportDebugCommand)
+        XCTAssertTrue(TheFence.Command.scroll.isViewportDebugCommand)
         XCTAssertFalse(TheFence.Command.scroll.lowersToHeistPrimitive)
         XCTAssertFalse(TheFence.Command.scroll.usesPayloadCheckedHeistPrimitive)
     }
 
-    func testGeneratedCommandReferenceDisplaysFamilyGrouping() {
-        let reference = FenceCommandReference.commandMarkdown()
+    func testDescriptorBackedCLIHelpDisplaysFamilyGrouping() {
+        let help = TheFence.Command.cliJSONLinesHelp
 
-        XCTAssertTrue(reference.contains("| Command | Family | CLI | MCP | Description |"), reference)
-        XCTAssertTrue(reference.contains("| `wait` | `assertion` |"), reference)
-        XCTAssertTrue(reference.contains("| `scroll` | `viewportDebug` |"), reference)
-        XCTAssertFalse(reference.contains("Recordable"), reference)
-        XCTAssertFalse(reference.contains("Durable"), reference)
+        XCTAssertTrue(help.contains("wait"), help)
+        XCTAssertTrue(help.contains("[assertion]"), help)
+        XCTAssertTrue(help.contains("scroll"), help)
+        XCTAssertTrue(help.contains("[viewportDebug]"), help)
+        XCTAssertFalse(help.contains("Recordable"), help)
+        XCTAssertFalse(help.contains("Durable"), help)
     }
 
     func testRunHeistDescriptorDoesNotAdvertiseRawJSONIRFields() {
@@ -104,6 +105,47 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(
             TheFence.Command.listHeists.descriptor.requiredDefaultValue(for: FenceParameters.heistCatalogDetail),
             .summary
+        )
+    }
+
+    func testDescriptorTimeoutSemanticsOwnCommandTimeouts() {
+        XCTAssertEqual(TheFence.Command.ping.descriptor.timeout, .fixed(.health))
+        XCTAssertEqual(TheFence.Command.getInterface.descriptor.timeout, .fixed(.explore))
+        XCTAssertEqual(TheFence.Command.getScreen.descriptor.timeout, .fixed(.screenCapture))
+        XCTAssertEqual(TheFence.Command.runHeist.descriptor.timeout, .fixed(.longAction))
+        XCTAssertEqual(TheFence.Command.wait.descriptor.timeout, .wait)
+        XCTAssertEqual(TheFence.Command.activate.descriptor.timeout, .singleStepAction(base: .standardAction))
+        XCTAssertEqual(TheFence.Command.typeText.descriptor.timeout, .singleStepAction(base: .longAction))
+        XCTAssertEqual(TheFence.Command.perform.descriptor.timeout, .performStep)
+    }
+
+    func testDescriptorResponseAndFailureProjectionMetadata() {
+        XCTAssertEqual(TheFence.Command.ping.descriptor.responseProjection, .pong)
+        XCTAssertEqual(TheFence.Command.getInterface.descriptor.responseProjection, .interface)
+        XCTAssertEqual(TheFence.Command.getScreen.descriptor.responseProjection, .screenshot)
+        XCTAssertEqual(TheFence.Command.activate.descriptor.responseProjection, .heistExecution)
+        XCTAssertEqual(TheFence.Command.scroll.descriptor.responseProjection, .action)
+        XCTAssertEqual(TheFence.Command.listHeists.descriptor.responseProjection, .heistCatalog)
+        XCTAssertEqual(TheFence.Command.describeHeist.descriptor.responseProjection, .heistDescription)
+        XCTAssertTrue(TheFence.Command.descriptors.allSatisfy { $0.failureProjection == .diagnosticFailure })
+    }
+
+    @ButtonHeistActor
+    func testTransientSingleStepDirectActionsUseDescriptorDispatchTimeout() async throws {
+        let (fence, _) = makeConnectedFence()
+        let request = try fence.parseRequest(command: .rotor, values: [
+            "target": targetArgumentValue(identifier: "target"),
+            "rotorIndex": .int(0),
+        ])
+
+        guard case .directAction(let directAction) = request.dispatch else {
+            return XCTFail("Indexed rotor should decode as transient direct action")
+        }
+        XCTAssertEqual(directAction.command, .rotor)
+        XCTAssertNotNil(directAction.action.durableHeistActionFailure)
+        XCTAssertEqual(
+            TheFence.Command.rotor.descriptor.timeout.requiredDirectDispatchSeconds,
+            FenceCommandFixedTimeout.standardAction.seconds
         )
     }
 
@@ -149,12 +191,12 @@ final class WireCommandParityTests: XCTestCase {
             switch singleRequest.dispatch {
             case .singleStepHeist(let heistRequest):
                 let plan = try fence.singleStepHeistPlan(for: heistRequest)
-                if case .wait(let wait) = heistRequest {
+                if case .wait(_, let wait) = heistRequest {
                     XCTAssertEqual(plan.body, [.wait(wait)], command.rawValue)
                     continue
                 }
 
-                guard case .actions(let actions, _) = heistRequest else {
+                guard case .actions(_, let actions, _) = heistRequest else {
                     XCTFail("Unknown single-step request for \(command.rawValue)")
                     continue
                 }
@@ -184,7 +226,7 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
             XCTAssertEqual(descriptor.mcpExposure, .notExposed, command.rawValue)
             XCTAssertTrue(command.dispatchesAppInteraction, command.rawValue)
-            XCTAssertNotNil(command.viewportDebugCommand, command.rawValue)
+            XCTAssertTrue(command.isViewportDebugCommand, command.rawValue)
             XCTAssertFalse(command.lowersToHeistPrimitive, command.rawValue)
             XCTAssertFalse(command.usesPayloadCheckedHeistPrimitive, command.rawValue)
 
@@ -202,7 +244,7 @@ final class WireCommandParityTests: XCTestCase {
 
         for command in [TheFence.Command.activate, .oneFingerTap, .typeText, .setPasteboard] {
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            guard case .singleStepHeist(.actions(let actions, _)) = request.dispatch else {
+            guard case .singleStepHeist(.actions(_, let actions, _)) = request.dispatch else {
                 return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
             let singleCommands = actions.values

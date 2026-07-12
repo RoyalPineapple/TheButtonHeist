@@ -1,6 +1,7 @@
 import ButtonHeistTestSupport
 import XCTest
 import Network
+import ButtonHeistSupport
 
 @testable import TheInsideJob
 
@@ -293,7 +294,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
     }
 
     func testServerTransportFailurePreservesNetworkDiagnosticReason() {
-        let diagnostic = ServerTransportFailure(.posix(.ECONNRESET))
+        let diagnostic = NetworkTransportFailure(.posix(.ECONNRESET))
         let failure = ServerSendFailure.transportFailed(clientId: 12, diagnostic: diagnostic)
 
         guard case .transportFailed(let clientId, let capturedDiagnostic) = failure else {

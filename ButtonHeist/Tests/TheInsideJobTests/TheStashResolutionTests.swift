@@ -577,7 +577,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged,
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(identity),
             associatedElement: .none
@@ -603,7 +603,7 @@ final class TheStashResolutionTests: XCTestCase {
         ])
         let event = PendingAccessibilityNotificationEvent(
             sequence: 1,
-            kind: .elementChanged,
+            kind: .layoutChanged,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(AccessibilityNotificationObjectIdentity(
                 object: payloadObject,
@@ -672,6 +672,157 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
         XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().map(\.kind), [.announcement])
+    }
+
+    func testRecaptureOnlyValueChangedNotificationDoesNotForceSemanticDelta() async throws {
+        let screen = Screen.makeForTests(elements: [
+            (element(label: "Volume", value: "50%", traits: .adjustable), "volume"),
+        ])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(screen)
+
+        let action = bagman.accessibilityNotifications.beginActionWindow()
+        bagman.accessibilityNotifications.record(
+            code: 1005,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: SettleSession.Outcome(
+                outcome: .settled(timeMs: 1),
+                events: [],
+                finalScreen: screen,
+                elementsByKey: [:]
+            ),
+            notificationWindow: action
+        )
+
+        guard case .committed(let event) = result.result else {
+            return XCTFail("Expected clean settle to commit")
+        }
+        XCTAssertEqual(
+            event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.valueChanged]
+        )
+        guard case .noChange? = event.delta else {
+            return XCTFail("Expected same-value recapture to stay noChange, got \(String(describing: event.delta))")
+        }
+    }
+
+    func testValueChangedNotificationRequiresAccessibilityValueChangeForElementDelta() async throws {
+        let before = Screen.makeForTests(elements: [
+            (element(label: "Volume", value: "50%", traits: .adjustable), "volume"),
+        ])
+        let after = Screen.makeForTests(elements: [
+            (element(label: "Volume", value: "75%", traits: .adjustable), "volume"),
+        ])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(before)
+
+        let action = bagman.accessibilityNotifications.beginActionWindow()
+        bagman.accessibilityNotifications.record(
+            code: 1005,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: SettleSession.Outcome(
+                outcome: .settled(timeMs: 1),
+                events: [],
+                finalScreen: after,
+                elementsByKey: [:]
+            ),
+            notificationWindow: action
+        )
+
+        guard case .committed(let event) = result.result else {
+            return XCTFail("Expected clean settle to commit")
+        }
+        XCTAssertEqual(
+            event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.valueChanged]
+        )
+        guard case .elementsChanged(let payload)? = event.delta else {
+            return XCTFail("Expected value edit to drive elementsChanged, got \(String(describing: event.delta))")
+        }
+        XCTAssertEqual(payload.accessibilityNotifications.map(\.kind), [.valueChanged])
+        let change = try XCTUnwrap(payload.edits.updated.first?.changes.first)
+        XCTAssertEqual(change.property, .value)
+        XCTAssertEqual(change.oldDisplayText, "50%")
+        XCTAssertEqual(change.newDisplayText, "75%")
+    }
+
+    func testAnnouncementNotificationIsPreservedWithoutForcingSemanticDelta() async {
+        let screen = Screen.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(screen)
+
+        let action = bagman.accessibilityNotifications.beginActionWindow()
+        bagman.accessibilityNotifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
+            associatedElement: .none
+        )
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: SettleSession.Outcome(
+                outcome: .settled(timeMs: 1),
+                events: [],
+                finalScreen: screen,
+                elementsByKey: [:]
+            ),
+            notificationWindow: action
+        )
+
+        guard case .committed(let event) = result.result else {
+            return XCTFail("Expected clean settle to commit")
+        }
+        XCTAssertEqual(event.trace.capturedAnnouncements.map(\.text), ["Saved"])
+        XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind), [.announcement])
+        guard case .noChange? = event.delta else {
+            return XCTFail("Expected announcement-only recapture to stay noChange, got \(String(describing: event.delta))")
+        }
+    }
+
+    func testScreenChangedNotificationStartsGenerationAndClearsComparisonState() throws {
+        let first = Screen.makeForTests(elements: [(element(label: "Menu", traits: .header), "menu")])
+        let firstEvent = bagman.semanticObservationStream.commitSettledVisibleObservation(first)
+        let action = bagman.accessibilityNotifications.beginActionWindow()
+        defer { action.cancel() }
+        bagman.accessibilityNotifications.record(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let pendingNotifications = action.finishEvents()
+        let second = Screen.makeForTests(elements: [(element(label: "Checkout", traits: .header), "checkout")])
+
+        let secondEvent = bagman.semanticObservationStream.commitSettledVisibleObservation(
+            second,
+            pendingAccessibilityNotifications: pendingNotifications
+        )
+
+        XCTAssertNotEqual(secondEvent.generation, firstEvent.generation)
+        XCTAssertNil(secondEvent.previous)
+        XCTAssertNil(secondEvent.previousCursor)
+        XCTAssertEqual(secondEvent.trace.captures.count, 1)
+
+        let baseline = try XCTUnwrap(firstEvent.settledCapture)
+        let window = try XCTUnwrap(bagman.semanticObservationStream.observationWindow(
+            from: baseline,
+            through: secondEvent,
+            projection: .semantic
+        ))
+        guard case .incomplete(let gap) = window.completeness else {
+            return XCTFail("Expected screenChanged to end the previous observation generation")
+        }
+        XCTAssertEqual(gap.reason, .generationChanged)
+        guard case .changed(let facts)? = window.verdict else {
+            return XCTFail("Expected the cross-generation window to retain screen change evidence")
+        }
+        XCTAssertTrue(facts.transitions.contains {
+            if case .screenAppearance = $0 { return true }
+            return false
+        })
     }
 
     func testPostActionFailedSettlePreservesPendingAccessibilityNotificationsDuringHeistScope() async {

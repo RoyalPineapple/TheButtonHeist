@@ -65,7 +65,6 @@ let package = Package(
         .target(
             name: "HeistDoctorCore",
             dependencies: [
-                "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
             ],
@@ -89,6 +88,7 @@ let package = Package(
                 "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
                 .product(
                     name: "AccessibilitySnapshotParser",
                     package: "AccessibilitySnapshotBH",
@@ -147,7 +147,12 @@ let package = Package(
         ),
         .testTarget(
             name: "TheScoreTests",
-            dependencies: ["ButtonHeistTestSupport", "ThePlans", "TheScore"],
+            dependencies: [
+                "ButtonHeistTestSupport",
+                "ThePlans",
+                "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+            ],
             path: "ButtonHeist/Tests/TheScoreTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -169,7 +174,6 @@ let package = Package(
                 "ButtonHeistTestSupport",
                 "HeistDoctorCore",
                 "TheScore",
-                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "ButtonHeist/Tests/HeistDoctorCoreTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -188,6 +192,7 @@ let package = Package(
                 "ButtonHeistSupport",
                 "ThePlans",
                 "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "ButtonHeist/Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -201,6 +206,7 @@ let package = Package(
                 "TheInsideJob",
                 "ThePlans",
                 "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "ButtonHeist/Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v6)]

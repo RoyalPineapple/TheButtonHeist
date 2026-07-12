@@ -35,7 +35,7 @@ extension ElementInflation {
                 method: method,
                 reason: reason
             ) {
-            case .success(let inflatedTarget):
+            case .inflated(let inflatedTarget):
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
                     attempt: attempt,
@@ -45,8 +45,12 @@ extension ElementInflation {
                 )
             case .failure(let failure):
                 return .failed(failure)
-            case .retry:
+            case .screenElement, .timedOut:
                 return .retrying(failedAttempt: attempt, reason: reason)
+            case .cancelled:
+                return .failed(.cancelled(
+                    "stale live target refresh was cancelled after \(reason.failureDescription)"
+                ))
             }
         case .failure(let failure):
             return .failed(failure)

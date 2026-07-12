@@ -3,7 +3,7 @@ import TheScore
 /// Per-client send-buffer accounting: reservations are admitted only while
 /// total queued bytes stay within the configured high-water mark.
 struct SocketSendBuffer: Equatable, Sendable {
-    enum Rejection: Equatable, Sendable {
+    enum Rejection: Error, Equatable, Sendable {
         case payloadTooLarge(byteCount: Int, maxBytes: Int)
         case bufferFull(pendingBytes: Int, byteCount: Int, maxBytes: Int)
 

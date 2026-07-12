@@ -19,9 +19,9 @@ extension Actions {
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
         deallocatedBoundary: String = "element action",
-        preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
-        action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.InteractionResult
-    ) async -> TheSafecracker.InteractionResult {
+        preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
+        action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.ActionDispatchOutcome
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
             Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
         }
@@ -36,10 +36,10 @@ extension Actions {
         let targetResolutionMs = elapsedMilliseconds(since: resolutionStart)
 
         let dispatchStart = CFAbsoluteTimeGetCurrent()
-        let result: TheSafecracker.InteractionResult
+        let result: TheSafecracker.ActionDispatchOutcome
         switch inflation {
         case .failed(let failure):
-            result = failure.interactionResult(commandMethod: method)
+            result = failure.actionDispatchOutcome(commandMethod: method)
         case .inflated(let context):
             if let failure = preflight?(context.screenElement) {
                 result = failure
@@ -66,7 +66,7 @@ extension Actions {
         _ context: ElementInflation.InflatedElementTarget,
         method: ActionMethod,
         requireInteractive: Bool
-    ) -> TheSafecracker.InteractionResult? {
+    ) -> TheSafecracker.ActionDispatchOutcome? {
         guard requireInteractive else { return nil }
         let screenElement = context.screenElement
         let liveTarget = context.liveTarget
@@ -93,7 +93,7 @@ extension Actions {
     /// Deliver `activate` through the accessibility contract:
     /// semantic target -> reveal -> activation refresh ->
     /// one `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
-    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .activate
@@ -110,7 +110,7 @@ extension Actions {
                             liveTarget: inflatedTarget.liveTarget
                         )
                     case .failed(let failure):
-                        return .failure(failure.interactionResult(commandMethod: .activate))
+                        return .failure(failure.actionDispatchOutcome(commandMethod: .activate))
                     }
                 },
                 activationPointDispatch: safecracker.tap,
@@ -123,7 +123,7 @@ extension Actions {
     private func textEntryActivationFailure(
         screenElement: TheStash.ScreenElement,
         activationTrace: ActivationTrace
-    ) async -> TheSafecracker.InteractionResult? {
+    ) async -> TheSafecracker.ActionDispatchOutcome? {
         guard screenElement.element.traits.contains(.textEntry) else { return nil }
         guard await safecracker.waitForActiveTextInput() else {
             return .failure(
@@ -140,7 +140,7 @@ extension Actions {
         return nil
     }
 
-    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -165,7 +165,7 @@ extension Actions {
         )
     }
 
-    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .decrement,
@@ -192,7 +192,7 @@ extension Actions {
 
     func executeCustomAction(
         _ target: CustomActionTarget
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
             target: target.elementTarget,
             method: .customAction,
@@ -237,7 +237,7 @@ extension Actions {
 
     private enum CustomActionDispatchContextResolution {
         case resolved(ElementInflation.InflatedElementTarget)
-        case failed(TheSafecracker.InteractionResult)
+        case failed(TheSafecracker.ActionDispatchOutcome)
     }
 
     private func customActionDispatchContext(
@@ -258,7 +258,7 @@ extension Actions {
         case .inflated(let refreshedContext):
             return .resolved(refreshedContext)
         case .failed(let failure):
-            return .failed(failure.interactionResult(commandMethod: .customAction))
+            return .failed(failure.actionDispatchOutcome(commandMethod: .customAction))
         }
     }
 

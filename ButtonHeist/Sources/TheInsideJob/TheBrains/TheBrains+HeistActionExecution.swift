@@ -257,17 +257,12 @@ extension TheBrains {
                 expectation: evaluation.receipt.expectation,
                 warning: actionWarning(command: command, actionResult: actionResult)
             )
-            let outcome: HeistStepReceiptOutcome
-            if let failure = evaluation.failure {
-                outcome = .failed(evidence: .action(evidence), failure: failure)
-            } else {
-                outcome = .passed(evidence: .action(evidence))
-            }
             return heistActionReceipt(
                 path: path,
                 durationMs: elapsedMilliseconds(since: start),
                 intent: actionIntent(command),
-                outcome: outcome
+                evidence: .action(evidence),
+                failure: evaluation.failure
             )
         }
     }
@@ -280,17 +275,12 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let failure = actionDispatchFailure(command: command, result: actionResult)
         let evidence = actionEvidence(command: command, actionResult: actionResult)
-        let outcome: HeistStepReceiptOutcome
-        if let failure {
-            outcome = .failed(evidence: .action(evidence), failure: failure)
-        } else {
-            outcome = .passed(evidence: .action(evidence))
-        }
         return heistActionReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            outcome: outcome
+            evidence: .action(evidence),
+            failure: failure
         )
     }
 
@@ -345,18 +335,13 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let evidence = waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome)
-        let outcome: HeistStepReceiptOutcome
-        switch evaluation {
-        case .matched:
-            outcome = .passed(evidence: .wait(evidence))
-        case .failed(let failedEvaluation):
-            outcome = .failed(evidence: .wait(evidence), failure: failedEvaluation.detail)
-        }
+        let failure = evaluation.failure
         return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            outcome: outcome
+            evidence: .wait(evidence),
+            failure: failure
         )
     }
 
@@ -379,18 +364,15 @@ extension TheBrains {
         )
         let evidence = waitEvidencePayload(receipt, outcome: .handledElse)
         let childExecution = HeistReceiptChildren(children)
-        let outcome = childAwarePassedOutcome(
-            evidence: .wait(evidence),
-            children: childExecution,
-            childFailure: { childPath in
-                childFailureDetail(category: .wait, childPath: childPath)
-            }
-        )
         return heistWaitReceipt(
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            outcome: outcome
+            evidence: .wait(evidence),
+            children: childExecution,
+            childFailure: { childPath in
+                self.childFailureDetail(category: .wait, childPath: childPath)
+            }
         )
     }
 
@@ -478,10 +460,8 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            outcome: .failed(
-                evidence: .action(.commandResolutionFailure(command: command)),
-                failure: failure.detail
-            )
+            evidence: .action(.commandResolutionFailure(command: command)),
+            failure: failure.detail
         )
     }
 
@@ -529,16 +509,14 @@ extension TheBrains {
             path: path,
             durationMs: elapsedMilliseconds(since: start),
             intent: actionIntent(command),
-            outcome: .failed(
-                evidence: .action(.expectation(
-                    command: command,
-                    dispatchResult: actionResult,
-                    expectationResult: expectationActionResult,
-                    expectation: expectation,
-                    warning: actionWarning(command: command, actionResult: actionResult)
-                )),
-                failure: failure.detail
-            )
+            evidence: .action(.expectation(
+                command: command,
+                dispatchResult: actionResult,
+                expectationResult: expectationActionResult,
+                expectation: expectation,
+                warning: actionWarning(command: command, actionResult: actionResult)
+            )),
+            failure: failure.detail
         )
     }
 

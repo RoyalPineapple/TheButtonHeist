@@ -1,7 +1,6 @@
 import Foundation
 import MCP
 @_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
-import TheScore
 
 @main
 struct ButtonHeistMCPServer {
@@ -99,14 +98,13 @@ struct ButtonHeistMCPServer {
             message: "Failed to encode structured tool response: \(error.localizedDescription)",
             details: FailureDetails(code: .formattingJSONEncodingFailed)
         )
-        return structuredErrorValue(failure, presenter: FenceResponsePresenter(profile: .mcp))
-    }
-
-    private static func structuredErrorValue(
-        _ failure: DiagnosticFailure,
-        presenter: FenceResponsePresenter
-    ) -> Value {
-        MCPValueBridge.structuredErrorValue(failure, presenter: presenter)
+        return (try? MCPValueBridge.structuredContent(
+            for: .error(failure),
+            presenter: FenceResponsePresenter(profile: .mcp)
+        )) ?? .object([
+            "status": .string("error"),
+            "message": .string(failure.message),
+        ])
     }
 
 }

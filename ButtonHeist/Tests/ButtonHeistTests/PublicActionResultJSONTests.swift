@@ -13,11 +13,11 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: rotorActionResult()
         )
 
-        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+        let result = try publicJSONProbe(response).object()
 
         try assertRotorSuccess(result, method: "rotor")
-        XCTAssertNil(result.expectation)
-        XCTAssertNil(result.omitted)
+        try result.assertMissing("expectation")
+        try result.assertMissing("omitted")
     }
 
     func testStandaloneActionResponseEncodesValuePayload() throws {
@@ -29,13 +29,11 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let json = try publicJSONProbe(response).object()
-        XCTAssertEqual(try json.string("value"), "Hello")
-        try json.assertMissing("rotor")
+        let result = try publicJSONProbe(response).object()
 
-        let result = try json.decode(PublicHeistActionResultDTO.self)
-        XCTAssertEqual(result.value, "Hello")
-        XCTAssertNil(result.rotor)
+        XCTAssertEqual(try result.string("value"), "Hello")
+        try result.assertMissing("rotor")
+        try result.assertMissing("omitted")
     }
 
     func testStandaloneActionResponseEncodesScreenshotPayloadSummary() throws {
@@ -47,12 +45,14 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+        let result = try publicJSONProbe(response).object()
+        let screenshot = try result.object("screenshot")
 
-        XCTAssertEqual(result.screenshot, PublicScreenshotResultDTO(width: 393, height: 852))
-        XCTAssertNil(result.value)
-        XCTAssertNil(result.rotor)
-        XCTAssertNil(result.heistExecution)
+        XCTAssertEqual(try screenshot.double("width"), 393)
+        XCTAssertEqual(try screenshot.double("height"), 852)
+        try result.assertMissing("value")
+        try result.assertMissing("rotor")
+        try result.assertMissing("heistExecution")
     }
 
     func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
@@ -75,12 +75,12 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+        let result = try publicJSONProbe(response).object()
 
-        XCTAssertEqual(result.heistExecution, PublicHeistExecutionActionResultDTO(stepCount: 1))
-        XCTAssertNil(result.value)
-        XCTAssertNil(result.rotor)
-        XCTAssertNil(result.screenshot)
+        XCTAssertEqual(try result.object("heistExecution").int("stepCount"), 1)
+        try result.assertMissing("value")
+        try result.assertMissing("rotor")
+        try result.assertMissing("screenshot")
     }
 
     func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
@@ -92,17 +92,12 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let json = try publicJSONProbe(response).object()
-        try json.assertMissing("value")
-        try json.assertMissing("rotor")
-        try json.assertMissing("screenshot")
-        try json.assertMissing("heistExecution")
+        let result = try publicJSONProbe(response).object()
 
-        let result = try json.decode(PublicHeistActionResultDTO.self)
-        XCTAssertNil(result.value)
-        XCTAssertNil(result.rotor)
-        XCTAssertNil(result.screenshot)
-        XCTAssertNil(result.heistExecution)
+        try result.assertMissing("value")
+        try result.assertMissing("rotor")
+        try result.assertMissing("screenshot")
+        try result.assertMissing("heistExecution")
     }
 
     func testStandaloneActionResponseEncodesStructuredFailure() throws {
@@ -111,26 +106,26 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: treeUnavailableActionResult()
         )
 
-        let result = try publicJSONProbe(response).decode(PublicHeistActionResultDTO.self)
+        let result = try publicJSONProbe(response).object()
 
         try assertTreeUnavailableFailure(result, method: "activate")
-        XCTAssertNil(result.expectation)
-        XCTAssertNil(result.omitted)
+        try result.assertMissing("expectation")
+        try result.assertMissing("omitted")
     }
 
     func testNestedHeistActionResultEncodesSuccessRotorPayload() throws {
-        let result = try nestedHeistActionResultDTO(result: rotorActionResult(), status: .passed)
+        let result = try nestedHeistActionResultJSON(result: rotorActionResult(), status: .passed)
 
         try assertRotorSuccess(result, method: "rotor")
-        XCTAssertNil(result.expectation)
-        XCTAssertNil(result.omitted)
+        try result.assertMissing("expectation")
+        try result.assertMissing("omitted")
     }
 
     func testNestedHeistActionResultEncodesStructuredFailureAndOmissions() throws {
         let actionResult = treeUnavailableActionResult(
             accessibilityTrace: makeBackgroundElementsChangedTrace(elementCount: 2)
         )
-        let result = try nestedHeistActionResultDTO(
+        let result = try nestedHeistActionResultJSON(
             result: actionResult,
             status: .failed,
             failure: HeistFailureDetail(
@@ -141,10 +136,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
 
         try assertTreeUnavailableFailure(result, method: "activate")
-        let accessibilityTrace = try XCTUnwrap(result.omitted?.accessibilityTrace)
-        XCTAssertEqual(accessibilityTrace.reason, ProjectionOmissionReason.rawAccessibilityTrace.rawValue)
-        XCTAssertEqual(accessibilityTrace.projectedAs, "delta")
-        XCTAssertEqual(accessibilityTrace.omittedCount, 2)
+        try assertAccessibilityTraceProjectedAsDelta(result, omittedCount: 2)
     }
 
     func testHeistReportNodeFailureEncodesCanonicalFailureDetails() throws {
@@ -172,19 +164,19 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
-        let failure = try XCTUnwrap(node.failure)
-        let action = try XCTUnwrap(node.evidence?.action?.result)
+        let report = try publicHeistReportJSON(response)
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        let failure = try node.object("failure")
+        let action = try node.object("evidence").object("action").object("result")
 
-        XCTAssertEqual(failure.code, "request.element_not_found")
-        XCTAssertEqual(failure.kind, "request")
-        XCTAssertEqual(failure.phase, "request")
-        XCTAssertEqual(failure.retryable, false)
-        XCTAssertEqual(action.code, failure.code)
-        XCTAssertEqual(action.kind, failure.kind)
-        XCTAssertEqual(action.phase, failure.phase)
-        XCTAssertEqual(action.retryable, failure.retryable)
+        XCTAssertEqual(try failure.string("code"), "request.element_not_found")
+        XCTAssertEqual(try failure.string("kind"), "request")
+        XCTAssertEqual(try failure.string("phase"), "request")
+        XCTAssertEqual(try failure.bool("retryable"), false)
+        XCTAssertEqual(try action.string("code"), try failure.string("code"))
+        XCTAssertEqual(try action.string("kind"), try failure.string("kind"))
+        XCTAssertEqual(try action.string("phase"), try failure.string("phase"))
+        XCTAssertEqual(try action.bool("retryable"), try failure.bool("retryable"))
     }
 
     func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
@@ -198,12 +190,14 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let result = try nestedHeistActionResultDTO(result: actionResult, status: .passed)
+        let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
 
-        let subjectEvidence = try XCTUnwrap(result.omitted?.subjectEvidence)
-        XCTAssertEqual(subjectEvidence.reason, ProjectionOmissionReason.rawSubjectEvidence.rawValue)
-        XCTAssertNil(subjectEvidence.projectedAs)
-        XCTAssertNil(subjectEvidence.omittedCount)
+        try assertPublicProjectionOmission(
+            result.object("omitted").object("subjectEvidence"),
+            reason: ProjectionOmissionReason.rawSubjectEvidence.rawValue,
+            projectedAs: nil,
+            omittedCount: nil
+        )
     }
 
     func testNestedHeistActionResultEncodesElementEditOmissions() throws {
@@ -218,17 +212,17 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let result = try nestedHeistActionResultDTO(result: actionResult, status: .passed)
+        let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
 
-        let delta = try XCTUnwrap(result.delta)
-        let edits = try XCTUnwrap(delta.edits)
-        let added = try XCTUnwrap(edits.added)
-        let omitted = try XCTUnwrap(edits.omitted)
-        XCTAssertEqual(delta.kind, "elementsChanged")
+        let delta = try result.object("delta")
+        let edits = try delta.object("edits")
+        let added = try edits.array("added")
+        let omitted = try edits.object("omitted")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
         XCTAssertEqual(added.count, 5)
-        XCTAssertEqual(omitted.added, 3)
+        XCTAssertEqual(try omitted.int("added"), 3)
         XCTAssertEqual(
-            omitted.addedKeys,
+            try omitted.strings("addedKeys"),
             ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
         )
     }
@@ -245,12 +239,15 @@ final class PublicActionResultJSONTests: XCTestCase {
             )
         )
 
-        let standalone = try standaloneActionResultDTO(result: actionResult, profile: .mcp)
-        let nested = try nestedHeistActionResultDTO(result: actionResult, status: .passed)
+        let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
+        let nested = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
 
-        XCTAssertEqual(standalone.delta, nested.delta)
-        XCTAssertNil(standalone.omitted)
-        XCTAssertEqual(nested.omitted, .accessibilityTraceProjectedAsDelta(omittedCount: 2))
+        XCTAssertEqual(
+            try standalone.object("delta").decode(JSONValue.self),
+            try nested.object("delta").decode(JSONValue.self)
+        )
+        try standalone.assertMissing("omitted")
+        try assertAccessibilityTraceProjectedAsDelta(nested, omittedCount: 2)
     }
 
     func testNestedHeistActionResultEncodesTransientOmissions() throws {
@@ -277,16 +274,16 @@ final class PublicActionResultJSONTests: XCTestCase {
             accessibilityTrace: AccessibilityTrace(captures: [before, after])
         )
 
-        let result = try nestedHeistActionResultDTO(result: actionResult, status: .passed)
+        let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
 
-        let delta = try XCTUnwrap(result.delta)
-        let encodedTransient = try XCTUnwrap(delta.transient)
-        let omitted = try XCTUnwrap(delta.omitted)
-        XCTAssertEqual(delta.kind, "noChange")
+        let delta = try result.object("delta")
+        let encodedTransient = try delta.array("transient")
+        let omitted = try delta.object("omitted")
+        XCTAssertEqual(try delta.string("kind"), "noChange")
         XCTAssertEqual(encodedTransient.count, 5)
-        XCTAssertEqual(omitted.transient, 3)
+        XCTAssertEqual(try omitted.int("transient"), 3)
         XCTAssertEqual(
-            omitted.transientKeys,
+            try omitted.strings("transientKeys"),
             ["identifier:toast_5", "identifier:toast_6", "identifier:toast_7"]
         )
     }
@@ -315,12 +312,15 @@ final class PublicActionResultJSONTests: XCTestCase {
             accessibilityTrace: AccessibilityTrace(captures: [before, after])
         )
 
-        let standalone = try standaloneActionResultDTO(result: actionResult, profile: .mcp)
-        let nested = try nestedHeistActionResultDTO(result: actionResult, status: .passed)
+        let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
+        let nested = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
 
-        XCTAssertEqual(standalone.delta, nested.delta)
-        XCTAssertNil(standalone.omitted)
-        XCTAssertEqual(nested.omitted, .accessibilityTraceProjectedAsDelta(omittedCount: 2))
+        XCTAssertEqual(
+            try standalone.object("delta").decode(JSONValue.self),
+            try nested.object("delta").decode(JSONValue.self)
+        )
+        try standalone.assertMissing("omitted")
+        try assertAccessibilityTraceProjectedAsDelta(nested, omittedCount: 2)
     }
 
     private func rotorActionResult() -> ActionResult {
@@ -348,11 +348,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
     }
 
-    private func nestedHeistActionResultDTO(
+    private func nestedHeistActionResultJSON(
         result: ActionResult,
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
-    ) throws -> PublicHeistActionResultDTO {
+    ) throws -> JSONProbe {
         let evidence = HeistActionEvidence.dispatch(dispatchResult: result)
         let step = status == .failed
             ? HeistExecutionStepResult.failed(
@@ -376,22 +376,21 @@ final class PublicActionResultJSONTests: XCTestCase {
             plan: try minimalPlan(),
             result: HeistExecutionResult(steps: [step], durationMs: 7)
         )
-        let report = try publicHeistReportResponseDTO(response).report
-        let node = try XCTUnwrap(report.nodes.first)
-        let action = try XCTUnwrap(node.evidence?.action)
-        return try XCTUnwrap(action.result)
+        let report = try publicHeistReportJSON(response)
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        return try node.object("evidence").object("action").object("result")
     }
 
-    private func standaloneActionResultDTO(
+    private func standaloneActionResultJSON(
         result: ActionResult,
         profile: ProjectionProfile
-    ) throws -> PublicHeistActionResultDTO {
+    ) throws -> JSONProbe {
         let response = PublicResponseModel(
             response: FenceResponse.action(command: .activate, result: result),
             profile: profile
         )
         let data = try JSONEncoder().encode(response)
-        return try JSONProbe(data: data).decode(PublicHeistActionResultDTO.self)
+        return try JSONProbe(data: data).object()
     }
 
     private func minimalPlan() throws -> HeistPlan {
@@ -401,50 +400,45 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func assertRotorSuccess(
-        _ result: PublicHeistActionResultDTO,
+        _ result: JSONProbe,
         method: String,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        XCTAssertEqual(result.status, "ok", file: file, line: line)
-        XCTAssertEqual(result.method, method, file: file, line: line)
-        XCTAssertEqual(result.message, "moved to next heading", file: file, line: line)
-        XCTAssertNil(result.value, file: file, line: line)
-        XCTAssertNil(result.errorClass, file: file, line: line)
+        XCTAssertEqual(try result.string("status"), "ok", file: file, line: line)
+        XCTAssertEqual(try result.string("method"), method, file: file, line: line)
+        XCTAssertEqual(try result.string("message"), "moved to next heading", file: file, line: line)
+        try result.assertMissing("value")
+        try result.assertMissing("errorClass")
 
-        let rotor = try XCTUnwrap(result.rotor, file: file, line: line)
-        XCTAssertEqual(rotor.name, "Headings", file: file, line: line)
-        XCTAssertEqual(rotor.direction, "next", file: file, line: line)
-        let textRange = try XCTUnwrap(rotor.textRange, file: file, line: line)
-        XCTAssertEqual(textRange.rangeDescription, "0..<9", file: file, line: line)
-        XCTAssertEqual(textRange.text, "Chapter 1", file: file, line: line)
-        XCTAssertEqual(textRange.startOffset, 0, file: file, line: line)
-        XCTAssertEqual(textRange.endOffset, 9, file: file, line: line)
+        let rotor = try result.object("rotor")
+        XCTAssertEqual(try rotor.string("name"), "Headings", file: file, line: line)
+        XCTAssertEqual(try rotor.string("direction"), "next", file: file, line: line)
+        let textRange = try rotor.object("textRange")
+        XCTAssertEqual(try textRange.string("rangeDescription"), "0..<9", file: file, line: line)
+        XCTAssertEqual(try textRange.string("text"), "Chapter 1", file: file, line: line)
+        XCTAssertEqual(try textRange.int("startOffset"), 0, file: file, line: line)
+        XCTAssertEqual(try textRange.int("endOffset"), 9, file: file, line: line)
     }
 
     private func assertTreeUnavailableFailure(
-        _ result: PublicHeistActionResultDTO,
+        _ result: JSONProbe,
         method: String,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        XCTAssertEqual(result.status, "error", file: file, line: line)
-        XCTAssertEqual(result.method, method, file: file, line: line)
-        XCTAssertEqual(result.message, Self.treeUnavailableMessage, file: file, line: line)
-        XCTAssertNil(result.value, file: file, line: line)
-        XCTAssertNil(result.rotor, file: file, line: line)
-        XCTAssertEqual(result.errorClass, "accessibilityTreeUnavailable", file: file, line: line)
-        XCTAssertEqual(
-            result.code,
-            "request.accessibility_tree_unavailable",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(result.kind, "request", file: file, line: line)
-        XCTAssertEqual(result.phase, "request", file: file, line: line)
-        XCTAssertEqual(result.retryable, true, file: file, line: line)
+        XCTAssertEqual(try result.string("status"), "error", file: file, line: line)
+        XCTAssertEqual(try result.string("method"), method, file: file, line: line)
+        XCTAssertEqual(try result.string("message"), Self.treeUnavailableMessage, file: file, line: line)
+        try result.assertMissing("value")
+        try result.assertMissing("rotor")
+        XCTAssertEqual(try result.string("errorClass"), "accessibilityTreeUnavailable", file: file, line: line)
+        XCTAssertEqual(try result.string("code"), "request.accessibility_tree_unavailable", file: file, line: line)
+        XCTAssertEqual(try result.string("kind"), "request", file: file, line: line)
+        XCTAssertEqual(try result.string("phase"), "request", file: file, line: line)
+        XCTAssertEqual(try result.bool("retryable"), true, file: file, line: line)
         XCTAssertTrue(
-            result.hint?.contains("traversable app window") == true,
+            try result.string("hint").contains("traversable app window"),
             file: file,
             line: line
         )

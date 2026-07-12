@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import ButtonHeistSupport
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeviceConnectionTLSTests: XCTestCase {
@@ -23,7 +24,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
     func testAllDisconnectReasonsHaveDescriptions() {
         let reasons: [DisconnectReason] = [
-            .networkError(NSError(domain: "test", code: 1)),
+            .networkError(NetworkTransportFailure(.posix(.ECONNRESET))),
             .bufferOverflow,
             .eventBacklogOverflow(maxEvents: 512),
             .serverClosed,
@@ -42,7 +43,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
     func testDisconnectReasonTaxonomy() {
         let cases: [(DisconnectReason, KnownFailureCode, FailurePhase, Bool)] = [
-            (.networkError(NSError(domain: "test", code: 1)), .transportNetworkError, .transport, true),
+            (.networkError(NetworkTransportFailure(.posix(.ECONNRESET))), .transportNetworkError, .transport, true),
             (.bufferOverflow, .transportBufferOverflow, .transport, false),
             (.eventBacklogOverflow(maxEvents: 512), .transportEventBacklogOverflow, .transport, true),
             (.serverClosed, .transportServerClosed, .transport, true),
@@ -87,7 +88,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     func testDeviceTransportSendFailurePreservesNetworkDiagnosticReason() {
-        let diagnostic = DeviceTransportFailure(.posix(.ECONNRESET))
+        let diagnostic = NetworkTransportFailure(.posix(.ECONNRESET))
         let failure = DeviceSendFailure.transportFailed(diagnostic)
 
         guard case .transportFailed(let capturedDiagnostic) = failure else {
@@ -151,10 +152,11 @@ final class DeviceConnectionTLSTests: XCTestCase {
             connection: transportConnection
         )
 
-        guard let reason = disconnectReason, case .networkError(let error) = reason else {
+        guard let reason = disconnectReason, case .networkError(let failure) = reason else {
             return XCTFail("Expected network error disconnect, got \(String(describing: disconnectReason))")
         }
-        XCTAssertEqual(String(describing: error), String(describing: expectedError))
+        XCTAssertEqual(failure, NetworkTransportFailure(expectedError))
+        XCTAssertTrue(failure.description.contains("posix"))
         XCTAssertFalse(deliveredMessage)
         assertDeviceConnectionDisconnected(connection)
     }

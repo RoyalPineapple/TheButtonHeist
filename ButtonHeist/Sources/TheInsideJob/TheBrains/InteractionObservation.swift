@@ -127,16 +127,16 @@ final class InteractionObservation {
         settleOutcome: SettleSession.Outcome? = nil,
         notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> ActionResult {
-        let settleEvidence = await postActionObservation.settleEvidence(
+        let settledObservation = await postActionObservation.settleObservation(
             before: before,
             commitScope: postActionCommitScope,
             outcome: settleOutcome,
             notificationWindow: notificationWindow
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
-        let observationOutcome = await postActionObservation.observationOutcome(
+        let settledResult = postActionObservation.settledObservationResult(
             before: before,
-            settleEvidence: settleEvidence
+            observation: settledObservation
         )
         let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
 
@@ -145,12 +145,10 @@ final class InteractionObservation {
             postActionMethod: method,
             outcome: outcome,
             message: message,
-            before: before,
-            settleEvidence: settleEvidence,
-            observationOutcome: observationOutcome
+            settledObservation: settledResult
         )
         return result.withTiming(ActionPerformanceTiming(
-            settleMs: settleEvidence.timeMs,
+            settleMs: settledResult.settleTimeMs,
             finalSemanticEvidenceMs: finalSemanticEvidenceMs,
             receiptGenerationMs: elapsedMilliseconds(since: receiptStart)
         ))

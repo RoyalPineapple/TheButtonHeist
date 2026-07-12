@@ -1,17 +1,12 @@
 import TheScore
 import ThePlans
 
-enum ObservationCommand: String, CaseIterable, FenceCommand {
-    case getInterface = "get_interface"
-    case getScreen = "get_screen"
-    case getPasteboard = "get_pasteboard"
-    case getAnnouncements = "get_announcements"
-
-    var descriptor: FenceCommandDescriptor {
+extension TheFence.Command {
+    func makeObservationDescriptor() -> FenceCommandDescriptor {
         switch self {
         case .getInterface:
-            return TheFence.Command.commandDescriptor(
-                command, family: .observation,
+            return makeDescriptor(
+                family: .observation,
                 requestDecoder: TheFence.decodeGetInterfaceRequest,
                 parameters: FenceParameterBlocks.elementFilter + [
                     FenceParameterBlocks.interfaceSubtree,
@@ -19,6 +14,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     FenceParameters.maxScrollsPerContainer.spec,
                     FenceParameters.maxScrollsPerDiscovery.spec,
                 ],
+                timeout: .fixed(.explore),
+                responseProjection: .interface,
                 projection: .cliAndMCP(
                     """
                     Read the app accessibility hierarchy, optionally scoped to a subtree.
@@ -40,45 +37,59 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 )
             )
         case .getScreen:
-            return TheFence.Command.commandDescriptor(
-                command, family: .observation,
+            return makeDescriptor(
+                family: .observation,
                 requestDecoder: TheFence.decodeGetScreenRequest,
                 parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec, FenceParameters.screenMode.spec],
+                timeout: .fixed(.screenCapture),
+                responseProjection: .screenshot,
                 projection: .cliAndMCP(
                     "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )
         case .getPasteboard:
-            return TheFence.Command.commandDescriptor(
-                command, family: .observation,
+            return makeDescriptor(
+                family: .observation,
                 requestDecoder: TheFence.decodeGetPasteboardRequest,
+                timeout: .fixed(.health),
+                responseProjection: .action,
                 projection: .cliAndMCP(
                     "Read text from the general pasteboard.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
                 )
             )
         case .getAnnouncements:
-            return TheFence.Command.commandDescriptor(
-                command, family: .observation,
+            return makeDescriptor(
+                family: .observation,
                 requestDecoder: TheFence.decodeGetAnnouncementsRequest,
+                timeout: .fixed(.health),
+                responseProjection: .announcements,
                 projection: .cliAndMCP(
                     "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )
+        case .ping, .listDevices, .getSessionState, .connect, .listTargets, .wait,
+             .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToVisible, .scrollToEdge,
+             .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
+             .perform, .runHeist, .listHeists, .describeHeist:
+            preconditionFailure("\(rawValue) is not an observation command")
         }
     }
 }
 
-enum AssertionCommand: String, CaseIterable, FenceCommand {
-    case wait
-
-    var descriptor: FenceCommandDescriptor {
-        TheFence.Command.commandDescriptor(
-            command, family: .assertion,
+extension TheFence.Command {
+    func makeAssertionDescriptor() -> FenceCommandDescriptor {
+        guard self == .wait else {
+            preconditionFailure("\(rawValue) is not an assertion command")
+        }
+        return makeDescriptor(
+            family: .assertion,
             requestDecoder: TheFence.decodeWaitRequest,
             parameters: FenceParameterBlocks.wait,
+            timeout: .wait,
+            responseProjection: .heistExecution,
             execution: [.heistPrimitive],
             projection: .cliOnly(
                 "Assert that an accessibility predicate is satisfied within timeout "

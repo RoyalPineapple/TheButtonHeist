@@ -177,7 +177,7 @@ final class AccessibilityTraceTests: XCTestCase {
         let notifications = [
             AccessibilityNotificationEvidence(
                 sequence: 7,
-                kind: .elementChanged,
+                kind: .layoutChanged,
                 timestamp: Date(timeIntervalSince1970: 7),
                 notificationData: .unresolvedObject(AccessibilityNotificationObjectPayload(
                     className: "UICollectionView",
@@ -210,11 +210,11 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(decoded.transition.accessibilityNotifications, notifications)
         XCTAssertEqual(
             decoded.transition.accessibilityNotifications.map(\.kind),
-            [.elementChanged, .screenChanged]
+            [.layoutChanged, .screenChanged]
         )
     }
 
-    func testNotificationEvidenceEncodesProductKindsWithoutUIKitCodeOrName() throws {
+    func testNotificationEvidenceNamesLayoutChangedInSwiftButKeepsLegacyWireSpelling() throws {
         let notifications = AccessibilityNotificationKind.allCases.enumerated().map { offset, kind in
             AccessibilityNotificationEvidence(
                 sequence: UInt64(offset + 1),
@@ -229,13 +229,35 @@ final class AccessibilityTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode([AccessibilityNotificationEvidence].self, from: data)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
 
-        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .elementChanged, .valueChanged, .announcement])
+        XCTAssertEqual(decoded.map(\.kind), [.screenChanged, .layoutChanged, .valueChanged, .announcement])
         XCTAssertEqual(
             json.compactMap { $0["kind"] as? String },
             ["screenChanged", "elementChanged", "valueChanged", "announcement"]
         )
         XCTAssertTrue(json.allSatisfy { $0["code"] == nil })
         XCTAssertTrue(json.allSatisfy { $0["name"] == nil })
+    }
+
+    func testUnknownNotificationEvidencePreservesRawCodeAndPayload() throws {
+        let notification = AccessibilityNotificationEvidence(
+            sequence: 9,
+            kind: .unknown,
+            rawCode: 4002,
+            timestamp: Date(timeIntervalSince1970: 9),
+            notificationData: .string("private notification"),
+            associatedElement: .unresolvedObject(AccessibilityNotificationObjectPayload(
+                className: "NSObject",
+                summary: "payload summary"
+            ))
+        )
+
+        let data = try JSONEncoder().encode(notification)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let decoded = try JSONDecoder().decode(AccessibilityNotificationEvidence.self, from: data)
+
+        XCTAssertEqual(json["kind"] as? String, "unknown")
+        XCTAssertEqual(json["rawCode"] as? Int, 4002)
+        XCTAssertEqual(decoded, notification)
     }
 
     func testNotificationPayloadRejectsFieldsFromOtherVariants() {
@@ -396,6 +418,9 @@ final class AccessibilityTraceTests: XCTestCase {
         let accumulated = try XCTUnwrap(trace.accumulatedDelta)
         XCTAssertNotNil(accumulated.elementsChanged)
         XCTAssertNotNil(accumulated.screenChanged)
+        guard case .screenAndElementsChanged = accumulated.change else {
+            return XCTFail("Expected canonical change facts to preserve screen and element evidence")
+        }
 
         let predicate = AccessibilityPredicate.change(
             .elements(.updatedElement(ElementUpdatePredicate(

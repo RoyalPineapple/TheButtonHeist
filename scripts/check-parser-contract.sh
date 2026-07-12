@@ -10,6 +10,7 @@ cd "$REPO_ROOT"
 PARSER_REPO_URL="https://github.com/RoyalPineapple/AccessibilitySnapshotBH"
 PARSER_IDENTITY="accessibilitysnapshotbh"
 SUBMODULE_PATH="submodules/AccessibilitySnapshotBH"
+ROOT_MANIFEST="Package.swift"
 SEMVER_PATTERN='[0-9]+\.[0-9]+\.[0-9]+'
 
 fail() {
@@ -44,31 +45,25 @@ done < <(tracked_files_referencing_parser '*Package.resolved')
 
 [[ "${#MANIFEST_FILES[@]}" -gt 0 ]] || fail "no tracked Package.swift declares $PARSER_REPO_URL"
 
+ROOT_TAGS=$(grep -F "$PARSER_REPO_URL" "$ROOT_MANIFEST" \
+    | grep -oE "exact:[[:space:]]*\"$SEMVER_PATTERN\"" \
+    | grep -oE "$SEMVER_PATTERN" || true)
+ROOT_TAG_COUNT=$(printf '%s\n' "$ROOT_TAGS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+[[ "$ROOT_TAG_COUNT" == "1" ]] \
+    || fail "$ROOT_MANIFEST must contain exactly one canonical AccessibilitySnapshotBH exact pin"
+PACKAGE_TAG="$ROOT_TAGS"
+
 MANIFEST_TAGS=()
 for manifest in "${MANIFEST_FILES[@]}"; do
     manifest_tags=$(grep -F "$PARSER_REPO_URL" "$manifest" \
         | grep -oE "exact:[[:space:]]*\"$SEMVER_PATTERN\"" \
         | grep -oE "$SEMVER_PATTERN" || true)
 
-    if [[ -z "$manifest_tags" ]]; then
-        fail "$manifest must pin AccessibilitySnapshotBH with exact: \"x.y.z\". Semver ranges can silently pull parser semantics that were not released with Button Heist."
-    fi
-
-    while IFS= read -r manifest_tag; do
-        [[ -n "$manifest_tag" ]] || continue
-        MANIFEST_TAGS+=("$manifest:$manifest_tag")
-    done <<< "$manifest_tags"
+    manifest_tag_count=$(printf '%s\n' "$manifest_tags" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+    [[ "$manifest_tag_count" == "1" ]] \
+        || fail "$manifest must contain exactly one AccessibilitySnapshotBH exact pin"
+    MANIFEST_TAGS+=("$manifest:$manifest_tags")
 done
-
-CANONICAL_TAGS=$(printf '%s\n' "${MANIFEST_TAGS[@]}" | sed 's/^.*://' | sort -u)
-CANONICAL_TAG_COUNT=$(printf '%s\n' "$CANONICAL_TAGS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
-if [[ "$CANONICAL_TAG_COUNT" != "1" ]]; then
-    echo "::error::Tracked Package.swift files disagree on AccessibilitySnapshotBH exact tags:"
-    printf '  %s\n' "${MANIFEST_TAGS[@]}"
-    exit 1
-fi
-
-PACKAGE_TAG="$CANONICAL_TAGS"
 
 SUBMODULE_SHA=$(git ls-tree HEAD "$SUBMODULE_PATH" | awk '{print $3}')
 [[ -n "$SUBMODULE_SHA" ]] || fail "$SUBMODULE_PATH is not tracked as a submodule"
@@ -82,7 +77,7 @@ if [[ -z "$TAG_SHA" ]]; then
 fi
 
 echo "AccessibilitySnapshotBH contract:"
-echo "  Canonical exact tag:     $PACKAGE_TAG"
+echo "  Root Package.swift tag:  $PACKAGE_TAG"
 echo "  Tagged commit:           ${TAG_SHA:-<missing>}"
 echo "  Submodule pin:           $SUBMODULE_SHA"
 echo "  Main branch tip:         $BRANCH_TIP"

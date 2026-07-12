@@ -132,6 +132,30 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(encodedProjection.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
     }
 
+    func testDecodeRejectsActivationPointContradictingCanonicalEvidence() {
+        let json = """
+        {
+          "description": "Save",
+          "label": "Save",
+          "traits": [],
+          "frameX": 0,
+          "frameY": 0,
+          "frameWidth": 100,
+          "frameHeight": 44,
+          "activationPointX": 50,
+          "activationPointY": 22,
+          "activationPointEvidence": {
+            "source": "explicit",
+            "point": {"x": 51, "y": 22}
+          },
+          "respondsToUserInteraction": true,
+          "actions": []
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8)))
+    }
+
     // MARK: - Helpers
 
     private func makeElement(label: String) -> HeistElement {

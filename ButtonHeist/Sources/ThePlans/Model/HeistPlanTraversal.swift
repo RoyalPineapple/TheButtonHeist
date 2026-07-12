@@ -110,16 +110,18 @@ extension HeistPlanTraversalVisitor {
 
 struct HeistPlanTraversal {
     let callGraph: HeistCallGraph?
+    let expandsInvocations: Bool
 
-    init(callGraph: HeistCallGraph? = nil) {
+    init(callGraph: HeistCallGraph? = nil, expandsInvocations: Bool = true) {
         self.callGraph = callGraph
+        self.expandsInvocations = expandsInvocations
     }
 
     func walk<V: HeistPlanTraversalVisitor>(
         _ plan: HeistPlan,
         visitor: inout V
     ) {
-        let callGraph = callGraph ?? HeistCallGraph(plan: plan)
+        let callGraph = callGraph ?? (expandsInvocations ? HeistCallGraph(plan: plan) : nil)
         let rootBindings = plan.parameterReferenceBindings
         let rootDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let context = HeistTraversalContext(
@@ -384,6 +386,7 @@ struct HeistPlanTraversal {
                 context: invokeContext.child(path: invokeContext.path.child(.expectation))
             )
         }
+        guard expandsInvocations else { return }
         guard let resolved = context.resolveInvocation(path: invoke.invocationPath) else { return }
         let resolvedNode = resolved.callGraphNode
         guard context.callGraphCycle(closing: resolvedNode) == nil,

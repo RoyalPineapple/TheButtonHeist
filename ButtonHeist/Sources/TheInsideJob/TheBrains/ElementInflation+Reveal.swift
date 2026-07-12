@@ -7,12 +7,6 @@ import ThePlans
 
 extension ElementInflation {
 
-    private enum RevealPathGraceOutcome {
-        case resolved(TheStash.ScreenElement, didReveal: Bool)
-        case failed(ElementInflationFailure)
-        case timedOut
-    }
-
     private enum TargetRefreshGraceMode {
         case revealPath
         case liveTarget(method: ActionMethod)
@@ -23,13 +17,6 @@ extension ElementInflation {
         case liveTarget(InflatedElementTarget)
         case failed(ElementInflationFailure)
         case missing
-    }
-
-    private enum TargetRefreshGraceOutcome {
-        case resolved(TheStash.ScreenElement, didReveal: Bool)
-        case inflated(InflatedElementTarget)
-        case failed(ElementInflationFailure)
-        case timedOut
     }
 
     internal func stateAfterReveal(
@@ -61,20 +48,32 @@ extension ElementInflation {
             case nil:
                 break
             }
-            switch await awaitRevealPathGrace(for: target) {
-            case .resolved(let resolved, let didReveal):
+            switch await awaitTargetRefreshGrace(for: target, mode: .revealPath) {
+            case .screenElement(let resolved, let didReveal):
                 return .refreshing(
                     target: target,
                     screenElement: resolved,
                     attempt: attempt,
                     didReveal: didReveal
                 )
-            case .failed(let graceFailure):
+            case .failure(let graceFailure):
                 return .failed(graceFailure)
+            case .inflated(let inflatedTarget):
+                return .refreshing(
+                    target: target,
+                    screenElement: inflatedTarget.screenElement,
+                    attempt: attempt,
+                    didReveal: false
+                )
             case .timedOut:
                 return .failed(.noRevealPath(
                     semanticRevealFailureMessage(failure, entry: treeElement)
                         + "; no reveal path appeared within \(Int(revealPathGraceTimeout * 1_000))ms"
+                ))
+            case .cancelled:
+                return .failed(.noRevealPath(
+                    semanticRevealFailureMessage(failure, entry: treeElement)
+                        + "; reveal path wait was cancelled before a path appeared"
                 ))
             }
         }
@@ -90,23 +89,15 @@ extension ElementInflation {
         for target: ElementTarget,
         method: ActionMethod,
         reason: RetryReason
-    ) async -> StaleLiveTargetGraceResult {
+    ) async -> TargetRefreshGraceTerminal {
         switch reason {
         case .objectDeallocated, .staleTarget:
             break
         case .activationPointOffscreen:
-            return .retry
+            return .timedOut
         }
 
-        switch await awaitTargetRefreshGrace(for: target, mode: .liveTarget(method: method)) {
-        case .inflated(let inflatedTarget):
-            return .success(inflatedTarget)
-        case .failed(let failure):
-            return .failure(failure)
-        case .resolved,
-             .timedOut:
-            return .retry
-        }
+        return await awaitTargetRefreshGrace(for: target, mode: .liveTarget(method: method))
     }
 
     private func refreshedVisibleTargetResolution(
@@ -131,23 +122,10 @@ extension ElementInflation {
     /// Every iteration suspends — first on the notification waiter, then on a
     /// one-frame real-time floor — so the window can never starve the main
     /// actor, and task cancellation exits promptly.
-    private func awaitRevealPathGrace(for target: ElementTarget) async -> RevealPathGraceOutcome {
-        switch await awaitTargetRefreshGrace(for: target, mode: .revealPath) {
-        case .resolved(let resolved, let didReveal):
-            return .resolved(resolved, didReveal: didReveal)
-        case .inflated(let inflatedTarget):
-            return .resolved(inflatedTarget.screenElement, didReveal: false)
-        case .failed(let failure):
-            return .failed(failure)
-        case .timedOut:
-            return .timedOut
-        }
-    }
-
     private func awaitTargetRefreshGrace(
         for target: ElementTarget,
         mode: TargetRefreshGraceMode
-    ) async -> TargetRefreshGraceOutcome {
+    ) async -> TargetRefreshGraceTerminal {
         let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
         var driver = StateDriver(
             initial: RevealPathGraceState.idle,
@@ -189,7 +167,7 @@ extension ElementInflation {
                     else {
                         preconditionFailure("Reveal path grace visible resolution did not finish as resolved.")
                     }
-                    return .resolved(visible, didReveal: didReveal)
+                    return .screenElement(visible, didReveal: didReveal)
                 case .liveTarget(let inflatedTarget):
                     guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
                     else {
@@ -201,7 +179,7 @@ extension ElementInflation {
                     else {
                         preconditionFailure("Reveal path grace visible failure did not finish as failed.")
                     }
-                    return .failed(failure)
+                    return .failure(failure)
                 case .missing:
                     effect = driver.send(.visibleTargetMissing(
                         remaining: revealPathGraceRemainingTime(until: deadline)
@@ -231,7 +209,7 @@ extension ElementInflation {
                         ).revealPathGraceEffect else {
                             preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
                         }
-                        return .resolved(fresh, didReveal: effectDidReveal)
+                        return .screenElement(fresh, didReveal: effectDidReveal)
                     }
 
                 case .liveTarget:
@@ -241,8 +219,10 @@ extension ElementInflation {
                     )).revealPathGraceEffect
                 }
 
-            case .finish(.timedOut), .finish(.cancelled):
+            case .finish(.timedOut):
                 return .timedOut
+            case .finish(.cancelled):
+                return .cancelled
 
             case .finish(.resolvedVisible),
                  .finish(.failedVisibleTarget),

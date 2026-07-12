@@ -9,7 +9,7 @@ import ThePlans
 
 extension Navigation {
 
-    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
+    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScroll(
             selection: target.selection,
             direction: target.direction
@@ -19,7 +19,7 @@ extension Navigation {
     func executeScroll(
         selection: ScrollContainerSelection,
         direction: ScrollDirection
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
@@ -32,15 +32,20 @@ extension Navigation {
             let proof = await scrollOnePageAndSettle(
                 scrollTarget, direction: uiDirection, animated: false
             )
-            return proof.result == .moved
-                ? .success(method: .scroll)
-                : .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
+            switch proof.result {
+            case .moved:
+                return .success(method: .scroll)
+            case .unchanged:
+                return .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
+            case .unavailable:
+                return .failure(.scroll, message: "scroll failed: selected container cannot be scrolled")
+            }
         case .failed(let failure):
             return .failure(failure.command.method, message: failure.message, failureKind: .targetUnavailable)
         }
     }
 
-    func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
+    func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScrollToEdge(
             selection: target.selection,
             edge: target.edge
@@ -50,7 +55,7 @@ extension Navigation {
     func executeScrollToEdge(
         selection: ScrollContainerSelection,
         edge: ScrollEdge
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
@@ -66,12 +71,16 @@ extension Navigation {
                     failureKind: .targetUnavailable
                 )
             }
-            switch safecracker.scrollToEdge(scrollView, edge: edge, animated: false) {
+            let proof = await performViewportTransition(
+                primitiveResult: safecracker.scrollToEdge(scrollView, edge: edge, animated: false),
+                previousVisibleIds: stash.visibleIds,
+                animated: false,
+                commitViewportMoves: true
+            )
+            switch proof.result {
             case .moved:
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                stash.refreshTreeAfterViewportMove()
                 return .success(method: .scrollToEdge)
-            case .alreadyAtEdge:
+            case .unchanged:
                 return .success(method: .scrollToEdge)
             case .unavailable:
                 return .failure(
@@ -94,35 +103,36 @@ extension Navigation {
 
         switch target {
         case .uiScrollView(let sv):
-            let moved = safecracker.scrollByPage(sv, direction: direction, animated: animated)
-            guard moved else {
-                return ScrollSettleProof(result: .unchanged, previousVisibleIds: before)
-            }
-            if animated {
-                _ = await tripwire.waitForAllClear(timeout: 0.5)
-            } else {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-            }
-            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
-            return ScrollSettleProof(result: .moved, previousVisibleIds: before)
+            return await performViewportTransition(
+                primitiveResult: safecracker.scrollByPage(sv, direction: direction, animated: animated),
+                previousVisibleIds: before,
+                animated: animated,
+                commitViewportMoves: commitViewportMoves
+            )
         case .swipeable(let frame, let contentSize):
             let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
             let isDirectionChange = lastSwipeDirectionByTarget[targetKey].map { $0 != direction } ?? false
-            let dispatched = await safecracker.scrollBySwipe(
-                frame: frame,
-                direction: direction,
-                duration: Self.swipeGestureDuration
-            )
-            guard dispatched else {
-                return ScrollSettleProof(result: .unchanged, previousVisibleIds: before)
-            }
-            let result = await settleSwipeMotion(
+            let proof = await performViewportTransition(
+                primitiveResult: await safecracker.scrollBySwipe(
+                    frame: frame,
+                    direction: direction,
+                    duration: Self.swipeGestureDuration
+                ),
                 previousVisibleIds: before,
-                requireDirectionChangeSettle: isDirectionChange,
-                commitViewportMoves: commitViewportMoves
+                animated: false,
+                commitViewportMoves: commitViewportMoves,
+                settleAfterMove: {
+                    await self.settleSwipeMotion(
+                        previousVisibleIds: before,
+                        requireDirectionChangeSettle: isDirectionChange,
+                        commitViewportMoves: commitViewportMoves
+                    )
+                }
             )
-            lastSwipeDirectionByTarget[targetKey] = direction
-            return ScrollSettleProof(result: result, previousVisibleIds: before)
+            if proof.result != .unavailable {
+                lastSwipeDirectionByTarget[targetKey] = direction
+            }
+            return proof
         }
     }
 

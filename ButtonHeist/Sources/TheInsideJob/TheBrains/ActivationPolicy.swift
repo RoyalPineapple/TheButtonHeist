@@ -21,17 +21,17 @@ struct ActivationPolicy {
             screenElement: TheStash.ScreenElement,
             liveTarget: TheStash.LiveActionTarget
         )
-        case failure(TheSafecracker.InteractionResult)
+        case failure(TheSafecracker.ActionDispatchOutcome)
     }
 
     var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var activationPointDispatch: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
-    var textEntryActivationFailure: @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.InteractionResult?
+    var textEntryActivationFailure: @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
 
     @MainActor
-    func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
+    func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
         let screenElement: TheStash.ScreenElement
         let refreshedLiveTarget: TheStash.LiveActionTarget
         switch await refreshAndResolve() {

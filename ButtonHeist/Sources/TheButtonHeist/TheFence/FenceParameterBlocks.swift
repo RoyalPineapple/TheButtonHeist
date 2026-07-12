@@ -2,8 +2,8 @@ import ThePlans
 import TheScore
 
 internal enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = ElementTarget.predicateSchemaFields.map(elementTargetFieldSpec)
-    internal static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
+    private static let matcherFields = ElementTarget.predicateSchemaFields.map { elementTargetFieldSpec($0) }
+    internal static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map { elementTargetFieldSpec($0) }
 
     internal static let elementTarget: [FenceParameterSpec] = [
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
@@ -97,7 +97,7 @@ internal enum FenceParameterBlocks: Sendable {
 
     private static let predicateType = param(
         .type, .string, required: true,
-        enumValues: AccessibilityPredicate.wireTypeValues
+        enumValues: AccessibilityPredicateContract.PredicateWireType.values
     )
 
     /// Documented fields of an `AccessibilityPredicate.State` object (`exists`,
@@ -105,7 +105,7 @@ internal enum FenceParameterBlocks: Sendable {
     /// so item objects allow additional keys and the decoder enforces the
     /// per-type required-field rules.
     private static let stateProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "all"]),
+        param(.type, .string, enumValues: AccessibilityPredicateContract.StateWireType.values),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
         containerPredicateParam(.container),
@@ -114,7 +114,7 @@ internal enum FenceParameterBlocks: Sendable {
     ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["exists", "missing", "all", "appeared", "disappeared", "updated"]),
+        param(.type, .string, enumValues: assertionWireTypeValues),
         objectParam(.element, properties: matcherFields, validation: .customPayload),
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),
         containerPredicateParam(.container),
@@ -126,7 +126,7 @@ internal enum FenceParameterBlocks: Sendable {
     ]
 
     private static let changeScopeProperties: [FenceParameterSpec] = [
-        param(.type, .string, enumValues: ["screen", "elements", "all"]),
+        param(.type, .string, enumValues: AccessibilityPredicateContract.ChangeScopeWireType.values),
         arrayParam(
             .assertions,
             items: .object(properties: assertionProperties, additionalProperties: true)
@@ -188,4 +188,16 @@ internal enum FenceParameterBlocks: Sendable {
         maximum: GestureDuration.maximumSeconds,
         exclusiveMinimum: 0
     )
+
+    private static var assertionWireTypeValues: [String] {
+        AccessibilityPredicateContract.StateWireType.values + elementDeltaPredicateWireTypeValues
+    }
+
+    private static var elementDeltaPredicateWireTypeValues: [String] {
+        [
+            ElementDeltaPredicate.appearedElement(.label("sample")),
+            ElementDeltaPredicate.disappearedElement(.label("sample")),
+            ElementDeltaPredicate.updatedElement(.any),
+        ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.type.rawValue) }
+    }
 }

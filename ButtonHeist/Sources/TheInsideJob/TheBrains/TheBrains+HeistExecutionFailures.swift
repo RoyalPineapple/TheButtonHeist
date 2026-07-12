@@ -28,17 +28,12 @@ extension TheBrains {
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
         let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result)
-        let outcome: HeistStepReceiptOutcome
-        if let failure = failureScreenshotDetail(for: result) {
-            outcome = .failed(evidence: .action(evidence), failure: failure)
-        } else {
-            outcome = .passed(evidence: .action(evidence))
-        }
         return heistActionReceipt(
             path: "\(failedPath).failure.actions[0]",
             durationMs: elapsedMilliseconds(since: start),
             intent: .action(command: command),
-            outcome: outcome
+            evidence: .action(evidence),
+            failure: failureScreenshotDetail(for: result)
         )
     }
 

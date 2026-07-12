@@ -2,6 +2,7 @@ import Foundation
 import Network
 import os
 
+import ButtonHeistSupport
 import TheScore
 
 private let sendLogger = ButtonHeistLog.logger(.handoff(.server))
@@ -9,7 +10,7 @@ private let sendLogger = ButtonHeistLog.logger(.handoff(.server))
 extension SimpleSocketServer {
     /// Send data to a specific client.
     @discardableResult
-    func send(_ data: Data, to clientId: Int) -> ServerSendOutcome {
+    func send(_ data: Data, to clientId: Int) async -> ServerSendOutcome {
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
             dataToSend.append(WireFrameLimits.newlineDelimiterByte)
@@ -33,27 +34,41 @@ extension SimpleSocketServer {
             return .failed(rejection.sendFailure)
         }
 
-        sendContent(connection, dataToSend, .contentProcessed { [weak self] error in
-            if let error {
-                sendLogger.error("Send error to client \(clientId): \(error)")
-            }
-            guard let self else { return }
-            self.spawnTrackedTask { server in
-                await server.completedSend(clientId: clientId, byteCount: byteCount, error: error)
-            }
-        })
-        return .enqueued
+        return await withCheckedContinuation { continuation in
+            sendContent(connection, dataToSend, .contentProcessed { [weak self] error in
+                if let error {
+                    sendLogger.error("Send error to client \(clientId): \(error)")
+                }
+                guard let self else {
+                    continuation.resume(returning: .failed(.transportUnavailable))
+                    return
+                }
+                self.spawnTrackedTask { server in
+                    let outcome = await server.completedSend(clientId: clientId, byteCount: byteCount, error: error)
+                    continuation.resume(returning: outcome)
+                }
+            })
+        }
     }
 
     /// Called when NWConnection finishes processing a send.
-    private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
-        clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
+    private func completedSend(clientId: Int, byteCount: Int, error: NWError?) -> ServerSendOutcome {
+        let clientWasStillConnected = clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
         if let error {
-            clientLifecycle.sendFailed(
-                clientId,
-                failure: .transportFailed(clientId: clientId, diagnostic: ServerTransportFailure(error))
+            let failure = ServerSendFailure.transportFailed(
+                clientId: clientId,
+                diagnostic: NetworkTransportFailure(error)
             )
+            if clientWasStillConnected {
+                removeClient(clientId)
+            }
+            return .failed(failure)
         }
+
+        guard clientWasStillConnected else {
+            return .failed(.clientNotFound(clientId))
+        }
+        return .delivered
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.

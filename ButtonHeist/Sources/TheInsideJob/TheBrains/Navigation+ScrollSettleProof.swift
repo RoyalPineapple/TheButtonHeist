@@ -11,6 +11,7 @@ extension Navigation {
     enum ScrollSettleResult: Equatable {
         case moved
         case unchanged
+        case unavailable
 
         var didMove: Bool {
             self == .moved
@@ -20,6 +21,35 @@ extension Navigation {
     struct ScrollSettleProof {
         let result: ScrollSettleResult
         let previousVisibleIds: Set<HeistId>
+    }
+
+    func performViewportTransition(
+        primitiveResult: TheSafecracker.ScrollPrimitiveResult,
+        previousVisibleIds: Set<HeistId>,
+        animated: Bool,
+        commitViewportMoves: Bool,
+        settleAfterMove: (() async -> ScrollSettleResult)? = nil
+    ) async -> ScrollSettleProof {
+        switch primitiveResult {
+        case .moved:
+            if let settleAfterMove {
+                return ScrollSettleProof(
+                    result: await settleAfterMove(),
+                    previousVisibleIds: previousVisibleIds
+                )
+            }
+            if animated {
+                _ = await tripwire.waitForAllClear(timeout: 0.5)
+            } else {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+            }
+            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
+            return ScrollSettleProof(result: .moved, previousVisibleIds: previousVisibleIds)
+        case .alreadyInPosition:
+            return ScrollSettleProof(result: .unchanged, previousVisibleIds: previousVisibleIds)
+        case .unavailable:
+            return ScrollSettleProof(result: .unavailable, previousVisibleIds: previousVisibleIds)
+        }
     }
 
     /// Parse through post-gesture spring/inertia and consider the swipe settled

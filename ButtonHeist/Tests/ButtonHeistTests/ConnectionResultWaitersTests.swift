@@ -17,7 +17,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.cancel(id: cancelledID)
         assertCancellation(await cancelledTask.value)
 
-        waiters.resolve(attemptID: attemptID, with: .connected)
+        waiters.resolve(attemptID: attemptID, with: .success(()))
         assertSuccess(await liveTask.value)
     }
 
@@ -33,7 +33,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.fail(id: waiterID, attemptID: UUID(), with: HandoffConnectionError.timeout)
         await Task.yield()
 
-        waiters.resolve(attemptID: attemptID, with: .connected)
+        waiters.resolve(attemptID: attemptID, with: .success(()))
         assertSuccess(await waitTask.value)
     }
 
@@ -59,7 +59,10 @@ final class ConnectionResultWaitersTests: XCTestCase {
         let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
         await Task.yield()
 
-        waiters.resolve(attemptID: attemptID, with: .failed(.disconnected(.serverClosed)))
+        waiters.resolve(
+            attemptID: attemptID,
+            with: .failure(HandoffConnectionError.disconnected(.serverClosed))
+        )
         assertConnectionError(await waitTask.value, .disconnected(.serverClosed))
     }
 
@@ -118,4 +121,5 @@ final class ConnectionResultWaitersTests: XCTestCase {
         }
         XCTAssertEqual(error, expected, file: file, line: line)
     }
+
 }

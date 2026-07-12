@@ -7,8 +7,8 @@ enum ClientDelivery: Sendable {
         var disconnectClient: @Sendable (_ clientId: Int) async -> Void
         var onClientAuthenticated: @MainActor @Sendable (
             _ clientId: Int,
-            _ respond: @escaping @Sendable (Data) -> Void
-        ) -> Void
+            _ respond: @escaping SocketResponseHandler
+        ) async -> Void
     }
 
     enum CallbackOutcome: Equatable, Sendable {
@@ -50,7 +50,7 @@ enum ClientDelivery: Sendable {
     @discardableResult
     func clientAuthenticated(
         _ clientId: Int,
-        respond: @escaping @Sendable (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async -> CallbackOutcome {
         guard case .wired(let callbacks) = self else {
             return .failed(.callbacksNotInstalled("onClientAuthenticated"))

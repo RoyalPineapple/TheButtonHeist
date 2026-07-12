@@ -5,10 +5,13 @@ struct OutputOptions: ParsableArguments {
     var format: OutputFormat?
 }
 
+enum CLITimeoutDefaults {
+    static let common: Double = 10
+    static let wait: Double = common
+}
+
 /// Shared timeout option for commands that pass a per-request timeout to TheFence.
-/// Use for the common 10s default; commands with non-default timeouts declare
-/// their own option locally.
 struct TimeoutOption: ParsableArguments {
-    @Option(name: .shortAndLong, help: "Per-request timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Per-request timeout in seconds (default: \(Int(CLITimeoutDefaults.common)))")
+    var timeout: Double = CLITimeoutDefaults.common
 }

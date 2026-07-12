@@ -10,6 +10,7 @@ extension ElementInflation {
         case ambiguous
         case noRevealPath
         case staleRefresh
+        case cancelled
         case geometryNotActionable
     }
 
@@ -37,6 +38,10 @@ extension ElementInflation {
             .init(.staleRefresh, failureKind: failureKind, message: message)
         }
 
+        internal static func cancelled(_ message: String) -> ElementInflationFailure {
+            .init(.cancelled, failureKind: .actionFailed, message: message)
+        }
+
         internal static func geometryNotActionable(
             _ message: String,
             failureKind: TheSafecracker.FailureKind = .actionFailed
@@ -44,7 +49,7 @@ extension ElementInflation {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
         }
 
-        internal func interactionResult(commandMethod: ActionMethod) -> TheSafecracker.InteractionResult {
+        internal func actionDispatchOutcome(commandMethod: ActionMethod) -> TheSafecracker.ActionDispatchOutcome {
             .failure(commandMethod, message: message, failureKind: failureKind)
         }
 

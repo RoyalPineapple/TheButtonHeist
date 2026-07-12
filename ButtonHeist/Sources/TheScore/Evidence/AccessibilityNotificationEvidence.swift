@@ -2,13 +2,44 @@ import Foundation
 
 public enum AccessibilityNotificationKind: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
     case screenChanged
-    case elementChanged
+    case layoutChanged = "elementChanged"
     case valueChanged
     case announcement
+    case unknown
 
-    var isElementTransition: Bool {
-        self == .elementChanged || self == .valueChanged
+    public static let allCases: [AccessibilityNotificationKind] = [.screenChanged, .layoutChanged, .valueChanged, .announcement]
+
+    var isElementChangeEvidence: Bool {
+        self != .screenChanged
     }
+}
+
+private enum AccessibilityNotificationIdentity {
+    static func isValid(kind: AccessibilityNotificationKind, rawCode: UInt32?) -> Bool {
+        (kind == .unknown) == (rawCode != nil)
+    }
+
+    static func decode<Keys: CodingKey>(
+        from container: KeyedDecodingContainer<Keys>,
+        kindKey: Keys,
+        rawCodeKey: Keys
+    ) throws -> AccessibilityNotificationIdentityValue {
+        let kind = try container.decode(AccessibilityNotificationKind.self, forKey: kindKey)
+        let rawCode = try container.decodeIfPresent(UInt32.self, forKey: rawCodeKey)
+        guard isValid(kind: kind, rawCode: rawCode) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: rawCodeKey,
+                in: container,
+                debugDescription: "rawCode is required only for unknown accessibility notification evidence"
+            )
+        }
+        return AccessibilityNotificationIdentityValue(kind: kind, rawCode: rawCode)
+    }
+}
+
+private struct AccessibilityNotificationIdentityValue {
+    let kind: AccessibilityNotificationKind
+    let rawCode: UInt32?
 }
 
 /// Ordered accessibility-notification evidence observed while moving between
@@ -23,9 +54,27 @@ public enum AccessibilityNotificationKind: String, Codable, Sendable, Equatable,
 public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64
     public let kind: AccessibilityNotificationKind
+    public let rawCode: UInt32?
     public let timestamp: Date
     public let notificationData: AccessibilityNotificationPayload
     public let associatedElement: AccessibilityNotificationPayload
+
+    public init(
+        sequence: UInt64,
+        kind: AccessibilityNotificationKind,
+        rawCode: UInt32? = nil,
+        timestamp: Date,
+        notificationData: AccessibilityNotificationPayload,
+        associatedElement: AccessibilityNotificationPayload
+    ) {
+        precondition(AccessibilityNotificationIdentity.isValid(kind: kind, rawCode: rawCode))
+        self.sequence = sequence
+        self.kind = kind
+        self.rawCode = rawCode
+        self.timestamp = timestamp
+        self.notificationData = notificationData
+        self.associatedElement = associatedElement
+    }
 
     public init(
         sequence: UInt64,
@@ -34,24 +83,77 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
         notificationData: AccessibilityNotificationPayload,
         associatedElement: AccessibilityNotificationPayload
     ) {
-        self.sequence = sequence
-        self.kind = kind
-        self.timestamp = timestamp
-        self.notificationData = notificationData
-        self.associatedElement = associatedElement
+        self.init(
+            sequence: sequence,
+            kind: kind,
+            rawCode: nil,
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case sequence
+        case kind
+        case rawCode
+        case timestamp
+        case notificationData
+        case associatedElement
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let identity = try AccessibilityNotificationIdentity.decode(
+            from: container,
+            kindKey: .kind,
+            rawCodeKey: .rawCode
+        )
+        self.init(
+            sequence: try container.decode(UInt64.self, forKey: .sequence),
+            kind: identity.kind,
+            rawCode: identity.rawCode,
+            timestamp: try container.decode(Date.self, forKey: .timestamp),
+            notificationData: try container.decode(
+                AccessibilityNotificationPayload.self,
+                forKey: .notificationData
+            ),
+            associatedElement: try container.decode(
+                AccessibilityNotificationPayload.self,
+                forKey: .associatedElement
+            )
+        )
     }
 }
 
 /// Normalized spoken accessibility text observed from UIKit accessibility
 /// notifications. The source notification may be `announcement`,
-/// `elementChanged`, `valueChanged`, or `screenChanged`; the text is exposed
+/// `layoutChanged`, `valueChanged`, or `screenChanged`; the text is exposed
 /// uniformly because VoiceOver presents these string payloads as spoken output.
 public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
     public let sequence: UInt64
     public let text: String
     public let timestamp: Date
     public let kind: AccessibilityNotificationKind
+    public let rawCode: UInt32?
     public let associatedElement: AccessibilityNotificationPayload
+
+    public init(
+        sequence: UInt64,
+        text: String,
+        timestamp: Date,
+        kind: AccessibilityNotificationKind,
+        rawCode: UInt32? = nil,
+        associatedElement: AccessibilityNotificationPayload = .none
+    ) {
+        precondition(AccessibilityNotificationIdentity.isValid(kind: kind, rawCode: rawCode))
+        self.sequence = sequence
+        self.text = text
+        self.timestamp = timestamp
+        self.kind = kind
+        self.rawCode = rawCode
+        self.associatedElement = associatedElement
+    }
 
     public init(
         sequence: UInt64,
@@ -60,11 +162,43 @@ public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
         kind: AccessibilityNotificationKind,
         associatedElement: AccessibilityNotificationPayload = .none
     ) {
-        self.sequence = sequence
-        self.text = text
-        self.timestamp = timestamp
-        self.kind = kind
-        self.associatedElement = associatedElement
+        self.init(
+            sequence: sequence,
+            text: text,
+            timestamp: timestamp,
+            kind: kind,
+            rawCode: nil,
+            associatedElement: associatedElement
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case sequence
+        case text
+        case timestamp
+        case kind
+        case rawCode
+        case associatedElement
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let identity = try AccessibilityNotificationIdentity.decode(
+            from: container,
+            kindKey: .kind,
+            rawCodeKey: .rawCode
+        )
+        self.init(
+            sequence: try container.decode(UInt64.self, forKey: .sequence),
+            text: try container.decode(String.self, forKey: .text),
+            timestamp: try container.decode(Date.self, forKey: .timestamp),
+            kind: identity.kind,
+            rawCode: identity.rawCode,
+            associatedElement: try container.decode(
+                AccessibilityNotificationPayload.self,
+                forKey: .associatedElement
+            )
+        )
     }
 }
 
@@ -172,6 +306,7 @@ public extension AccessibilityNotificationEvidence {
             text: text,
             timestamp: timestamp,
             kind: kind,
+            rawCode: rawCode,
             associatedElement: associatedElement
         )
     }

@@ -97,16 +97,6 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
     case elementsScope([ElementDeltaPredicateExpr] = [])
     case allScopes(NonEmptyArray<ChangeScopePredicateExpr>)
 
-    private enum PredicateWireType: String {
-        case change
-    }
-
-    private enum ScopeWireType: String, CaseIterable {
-        case screen
-        case elements
-        case all
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, scopes, assertions
     }
@@ -140,7 +130,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        if typeString == PredicateWireType.change.rawValue {
+        if typeString == AccessibilityPredicateContract.PredicateWireType.change.rawValue {
             try decoder.rejectUnknownKeys(allowed: ["type", "scopes"], typeName: "change predicate expression")
             let scopes = try container.decodeIfPresent([ChangeScopePredicateExpr].self, forKey: .scopes) ?? []
             self = Self.composed(scopes)
@@ -151,7 +141,7 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(PredicateWireType.change.rawValue, forKey: .type)
+        try container.encode(AccessibilityPredicateContract.PredicateWireType.change.rawValue, forKey: .type)
         let scopes = Self.flatten(self)
         if !scopes.isEmpty {
             try container.encode(scopes, forKey: .scopes)
@@ -186,12 +176,6 @@ public enum ChangeScopePredicateExpr: Codable, Sendable, Equatable {
     case screen([StatePredicateExpr] = [])
     case elements([ElementDeltaPredicateExpr] = [])
     case all(NonEmptyArray<ChangeScopePredicateExpr>)
-
-    private enum ScopeWireType: String, CaseIterable {
-        case screen
-        case elements
-        case all
-    }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, assertions, scopes
@@ -247,11 +231,11 @@ public enum ChangeScopePredicateExpr: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "change scope expression")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        guard let type = ScopeWireType(rawValue: typeString) else {
+        guard let type = AccessibilityPredicateContract.ChangeScopeWireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown change scope type: \"\(typeString)\". Valid: \(ScopeWireType.allCases.map(\.rawValue).joined(separator: ", "))"
+                debugDescription: "Unknown change scope type: \"\(typeString)\". Valid: \(AccessibilityPredicateContract.ChangeScopeWireType.validDescription)"
             )
         }
         switch type {
@@ -276,17 +260,17 @@ public enum ChangeScopePredicateExpr: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .screen(let assertions):
-            try container.encode(ScopeWireType.screen.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.screen.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
         case .elements(let assertions):
-            try container.encode(ScopeWireType.elements.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.elements.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
         case .all(let changes):
-            try container.encode(ScopeWireType.all.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.all.rawValue, forKey: .type)
             try container.encode(changes.flatMap(Self.flatten), forKey: .scopes)
         }
     }
@@ -358,18 +342,20 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: PredicateProbeKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        switch typeString {
-        case "exists", "missing", "all":
+        guard let wireType = AccessibilityPredicateContract.PredicateWireType(rawValue: typeString) else {
+            self = .predicate(try AccessibilityPredicate(from: decoder))
+            return
+        }
+        switch wireType {
+        case .exists, .missing, .all:
             self = .state(try StatePredicateExpr(from: decoder))
-        case "change":
+        case .change:
             self = .changePredicate(try ChangePredicateExpr(from: decoder))
-        case "no_change":
+        case .noChange:
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate expression")
             self = .noChangePredicate
-        case "announcement":
+        case .announcement:
             self = .announcement(try AnnouncementPredicateExpr(from: decoder))
-        default:
-            self = .predicate(try AccessibilityPredicate(from: decoder))
         }
     }
 
@@ -383,10 +369,10 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
             try change.encode(to: encoder)
         case .noChangePredicate:
             var container = encoder.container(keyedBy: PredicateProbeKeys.self)
-            try container.encode("no_change", forKey: .type)
+            try container.encode(AccessibilityPredicateContract.PredicateWireType.noChange.rawValue, forKey: .type)
         case .announcement(let announcement):
             var container = encoder.container(keyedBy: PredicateProbeKeys.self)
-            try container.encode("announcement", forKey: .type)
+            try container.encode(AccessibilityPredicateContract.PredicateWireType.announcement.rawValue, forKey: .type)
             try announcement.encode(to: encoder)
         }
     }

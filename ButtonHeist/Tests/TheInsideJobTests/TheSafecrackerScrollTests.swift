@@ -41,24 +41,24 @@ final class TheSafecrackerScrollTests: XCTestCase {
         )
         // Page = 800 - 44 = 756, content max = 1000 - 800 = 200
         let moved = safecracker.scrollByPage(sv, direction: .down, animated: false)
-        XCTAssertTrue(moved)
+        XCTAssertEqual(moved, .moved)
         XCTAssertEqual(sv.contentOffset.y, 200, accuracy: 0.01)
     }
 
-    func testScrollByPageDownReturnsFalseAtEdge() {
+    func testScrollByPageDownReportsAlreadyInPositionAtEdge() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 1000),
             contentOffset: CGPoint(x: 0, y: 200)
         )
         let moved = safecracker.scrollByPage(sv, direction: .down, animated: false)
-        XCTAssertFalse(moved, "Should return false when already at bottom edge")
+        XCTAssertEqual(moved, .alreadyInPosition)
     }
 
     func testScrollByPageUpFromMiddle() {
         let sv = makeScrollView(contentOffset: CGPoint(x: 0, y: 1000))
         let moved = safecracker.scrollByPage(sv, direction: .up, animated: false)
-        XCTAssertTrue(moved)
+        XCTAssertEqual(moved, .moved)
         // 1000 - (800 - 44) = 244
         XCTAssertEqual(sv.contentOffset.y, 244, accuracy: 0.01)
     }
@@ -66,7 +66,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
     func testScrollByPageUpClampsToTop() {
         let sv = makeScrollView(contentOffset: CGPoint(x: 0, y: 100))
         let moved = safecracker.scrollByPage(sv, direction: .up, animated: false)
-        XCTAssertTrue(moved)
+        XCTAssertEqual(moved, .moved)
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
@@ -77,7 +77,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
         )
         // Page = 400 - 44 = 356, content max = 600 - 400 = 200
         let moved = safecracker.scrollByPage(sv, direction: .right, animated: false)
-        XCTAssertTrue(moved)
+        XCTAssertEqual(moved, .moved)
         XCTAssertEqual(sv.contentOffset.x, 200, accuracy: 0.01)
     }
 
@@ -102,7 +102,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
     func testScrollToEdgeReportsAlreadyAtEdge() {
         let sv = makeScrollView(contentOffset: .zero)
         let result = safecracker.scrollToEdge(sv, edge: .top)
-        XCTAssertEqual(result, .alreadyAtEdge)
+        XCTAssertEqual(result, .alreadyInPosition)
     }
 
     // MARK: - scrollByPage: overlap verification
@@ -124,7 +124,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
 
     // MARK: - scrollToMakeScreenPointVisible
 
-    func testScrollToMakeScreenPointVisibleReturnsTrueWhenAlreadyInPreferredScreenRect() {
+    func testScrollToMakeScreenPointVisibleReportsAlreadyInPositionWhenAlreadyInPreferredScreenRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
             contentSize: CGSize(width: 400, height: 3000),
@@ -138,7 +138,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
             minimumScreenRect: CGRect(x: 0, y: 0, width: 400, height: 874)
         )
 
-        XCTAssertTrue(result)
+        XCTAssertEqual(result, .alreadyInPosition)
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
@@ -156,11 +156,11 @@ final class TheSafecrackerScrollTests: XCTestCase {
             minimumScreenRect: CGRect(x: 0, y: 0, width: 400, height: 874)
         )
 
-        XCTAssertTrue(result)
+        XCTAssertEqual(result, .moved)
         XCTAssertEqual(sv.contentOffset.y, 468, accuracy: 0.01)
     }
 
-    func testScrollToMakeScreenPointVisibleReturnsFalseWhenClampLeavesPointOutsideMinimumRect() {
+    func testScrollToMakeScreenPointVisibleReportsUnavailableWhenClampLeavesPointOutsideMinimumRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
             contentSize: CGSize(width: 400, height: 3000),
@@ -174,7 +174,7 @@ final class TheSafecrackerScrollTests: XCTestCase {
             minimumScreenRect: CGRect(x: 0, y: 0, width: 400, height: 874)
         )
 
-        XCTAssertFalse(result)
+        XCTAssertEqual(result, .unavailable)
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 }

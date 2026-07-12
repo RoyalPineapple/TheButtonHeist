@@ -29,14 +29,14 @@ enum ResponseDeliveryResult: Sendable, Equatable, CustomStringConvertible {
         }
     }
 
-    init(clientId: Int, sendFailure: ServerSendFailure) {
+    init(sendFailure: ServerSendFailure) {
         switch sendFailure {
-        case .clientNotFound:
+        case .clientNotFound(let clientId):
             self = .failed(.connectionClosed(clientId: clientId))
         case .transportUnavailable:
-            self = .transportUnavailable(clientId: clientId)
+            self = .transportUnavailable(clientId: nil)
         case .transportFailed, .payloadTooLarge, .sendBufferFull:
-            self = .failed(.sendFailed(clientId: clientId, sendFailure))
+            self = .failed(.sendFailed(sendFailure))
         }
     }
 }
@@ -45,7 +45,7 @@ enum ResponseDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertibl
     case sessionContractViolation(String)
     case responseEncodingFailed(ResponseEncodingFailure)
     case connectionClosed(clientId: Int)
-    case sendFailed(clientId: Int, ServerSendFailure)
+    case sendFailed(ServerSendFailure)
 
     var description: String {
         switch self {
@@ -55,8 +55,8 @@ enum ResponseDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertibl
             return failure.description
         case .connectionClosed(let clientId):
             return "Connection failure while delivering response envelope to client \(clientId): client is no longer connected"
-        case .sendFailed(let clientId, let failure):
-            return "Send failure while delivering response envelope to client \(clientId): \(failure.localizedDescription)"
+        case .sendFailed(let failure):
+            return "Send failure while delivering response envelope: \(failure.localizedDescription)"
         }
     }
 }
@@ -92,16 +92,20 @@ enum ResponseEnvelopeDelivery {
     static func sendMessage(
         _ message: ServerMessage,
         requestId: String? = nil,
-        respond: @escaping (Data) -> Void
-    ) -> ResponseDeliveryResult {
+        respond: @escaping SocketResponseHandler
+    ) async -> ResponseDeliveryResult {
         switch encodeEnvelope(
             message,
             requestId: requestId
         ) {
         case .success(let data):
             insideJobLogger.debug("Sending \(data.count) bytes")
-            respond(data)
-            return .delivered
+            switch await respond(data) {
+            case .delivered:
+                return .delivered
+            case .failed(let failure):
+                return ResponseDeliveryResult(sendFailure: failure)
+            }
         case .failure(let failure):
             return .failed(.responseEncodingFailed(failure))
         }
@@ -145,19 +149,19 @@ extension TheGetaway {
     func sendMessage(
         _ message: ServerMessage,
         requestId: String? = nil,
-        respond: @escaping (Data) -> Void
-    ) -> DeliveryResult {
-        let result = ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
+        respond: @escaping SocketResponseHandler
+    ) async -> DeliveryResult {
+        let result = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
         logDeliveryResult(result)
         return result
     }
 
     func sendEncodedData(_ data: Data, toClient clientId: Int) async -> DeliveryResult {
         switch await muscle.sendData(data, toClient: clientId) {
-        case .enqueued:
+        case .delivered:
             return .delivered
         case .failed(let sendFailure):
-            return DeliveryResult(clientId: clientId, sendFailure: sendFailure)
+            return DeliveryResult(sendFailure: sendFailure)
         }
     }
 }

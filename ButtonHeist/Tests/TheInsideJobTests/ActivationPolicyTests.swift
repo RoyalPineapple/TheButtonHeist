@@ -12,7 +12,7 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testElementInflationFailureMapsNoRevealPathToCommandMethod() {
         let result = ElementInflation.ElementInflationFailure.noRevealPath("target has no reveal path")
-            .interactionResult(commandMethod: .activate)
+            .actionDispatchOutcome(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -21,12 +21,30 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testElementInflationFailurePreservesElementNotFoundMethod() {
         let result = ElementInflation.ElementInflationFailure.notFound("no such element")
-            .interactionResult(commandMethod: .activate)
+            .actionDispatchOutcome(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(result.message, "element inflation failed [notFound]: no such element")
+    }
+
+    func testElementInflationCancellationPreservesTypedTerminalFailure() {
+        let failure = ElementInflation.ElementInflationFailure.cancelled(
+            "stale live target refresh was cancelled after the live target no longer matched"
+        )
+
+        XCTAssertEqual(failure.failedStep, .cancelled)
+        XCTAssertEqual(failure.failureKind, .actionFailed)
+        XCTAssertEqual(
+            failure.message,
+            "element inflation failed [cancelled]: stale live target refresh was cancelled "
+                + "after the live target no longer matched"
+        )
+        let result = failure.actionDispatchOutcome(commandMethod: .activate)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.failureKind, .actionFailed)
     }
 
     func testRefreshReresolveActivateSuccessStopsPolicy() async {
@@ -232,7 +250,10 @@ final class ActivationPolicyTests: XCTestCase {
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
         activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
-        textEntryActivationFailure: @escaping @MainActor (TheStash.ScreenElement, ActivationTrace) async -> TheSafecracker.InteractionResult? = { _, _ in nil }
+        textEntryActivationFailure: @escaping @MainActor (
+            TheStash.ScreenElement,
+            ActivationTrace
+        ) async -> TheSafecracker.ActionDispatchOutcome? = { _, _ in nil }
     ) -> ActivationPolicy {
         ActivationPolicy(
             accessibilityActivate: accessibilityActivate,

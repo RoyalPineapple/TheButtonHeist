@@ -623,6 +623,7 @@ private let frameworkSandboxes: [FrameworkImportSandbox] = [
         exactImports: ["Network"],
         importPrefixes: [],
         allowedPaths: [
+            "ButtonHeist/Sources/ButtonHeistSupport/NetworkTransportFailure.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscoveryAdvertisement.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift",
@@ -634,7 +635,7 @@ private let frameworkSandboxes: [FrameworkImportSandbox] = [
             "ButtonHeist/Sources/TheButtonHeist/TheHandoff/NetworkBoundary/",
             "ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/",
         ],
-        expectation: "Network imports stay in TheHandoff, server network boundaries, or TLS key material."
+        expectation: "Network imports stay in shared transport diagnostics, TheHandoff, server network boundaries, or TLS key material."
     ),
     FrameworkImportSandbox(
         displayName: "Security",

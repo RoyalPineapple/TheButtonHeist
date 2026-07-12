@@ -446,6 +446,19 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
             totalMs: other.totalMs ?? totalMs
         )
     }
+
+    fileprivate func replacingSettleMs(_ settleMs: Int?) -> ActionPerformanceTiming {
+        ActionPerformanceTiming(
+            beforeObservationMs: beforeObservationMs,
+            targetResolutionMs: targetResolutionMs,
+            actionDispatchMs: actionDispatchMs,
+            interactionMs: interactionMs,
+            settleMs: settleMs,
+            finalSemanticEvidenceMs: finalSemanticEvidenceMs,
+            receiptGenerationMs: receiptGenerationMs,
+            totalMs: totalMs
+        )
+    }
 }
 
 /// The delivered outcome of an action command.
@@ -570,7 +583,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let message: String?
     /// First spoken accessibility text observed during this action, sourced
     /// from string payloads on announcement, element-changed, or screen-changed notifications.
-    public let announcement: String?
+    private let legacyAnnouncement: String?
+    public var announcement: String? { capturedAnnouncement?.text ?? legacyAnnouncement }
+    public let capturedAnnouncement: CapturedAnnouncement?
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload? { methodAndPayload.resultPayload }
     /// Source-of-truth accessibility capture receipt for this action.
@@ -584,13 +599,17 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
-    public let settleTimeMs: Int?
+    private let settlementDurationMs: Int?
+    public var settleTimeMs: Int? { settlementDurationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public let subjectEvidence: ActionSubjectEvidence?
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
     public let activationTrace: ActivationTrace?
     /// Optional measured durations for the local observed action pipeline.
-    public let timing: ActionPerformanceTiming?
+    private let performanceTiming: ActionPerformanceTiming?
+    public var timing: ActionPerformanceTiming? {
+        performanceTiming?.replacingSettleMs(settlementDurationMs)
+    }
 
     // MARK: - Init
 
@@ -760,16 +779,30 @@ public struct ActionResult: Codable, Sendable, Equatable {
         timing: ActionPerformanceTiming? = nil,
         announcement: String? = nil
     ) {
+        if let settleTimeMs, let timingSettleMs = timing?.settleMs {
+            precondition(
+                settleTimeMs == timingSettleMs,
+                "settleTimeMs must match timing.settleMs"
+            )
+        }
+        let traceAnnouncement = accessibilityTrace?.capturedAnnouncements.first
+        if let announcement, let traceAnnouncement {
+            precondition(
+                announcement == traceAnnouncement.text,
+                "announcement must match accessibilityTrace captured announcement"
+            )
+        }
         self.outcome = outcome
         self.methodAndPayload = methodAndPayload
         self.message = message
-        self.announcement = announcement ?? accessibilityTrace?.capturedAnnouncements.first?.text
+        self.capturedAnnouncement = traceAnnouncement
+        self.legacyAnnouncement = traceAnnouncement == nil ? announcement : nil
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
-        self.settleTimeMs = settleTimeMs
+        self.settlementDurationMs = timing?.settleMs ?? settleTimeMs
         self.subjectEvidence = subjectEvidence
         self.activationTrace = activationTrace
-        self.timing = timing
+        self.performanceTiming = timing?.replacingSettleMs(nil)
     }
 
     // MARK: - Coding
@@ -800,17 +833,38 @@ public struct ActionResult: Codable, Sendable, Equatable {
             codingPath: container.codingPath + [CodingKeys.payload]
         )
 
+        let accessibilityTrace = try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace)
+        let settleTimeMs = try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
+        let timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
+        let announcement = try container.decodeIfPresent(String.self, forKey: .announcement)
+        if let settleTimeMs, let timingSettleMs = timing?.settleMs, settleTimeMs != timingSettleMs {
+            throw DecodingError.dataCorruptedError(
+                forKey: .settleTimeMs,
+                in: container,
+                debugDescription: "settleTimeMs must match timing.settleMs"
+            )
+        }
+        if let announcement,
+           let capturedAnnouncement = accessibilityTrace?.capturedAnnouncements.first,
+           announcement != capturedAnnouncement.text {
+            throw DecodingError.dataCorruptedError(
+                forKey: .announcement,
+                in: container,
+                debugDescription: "announcement must match accessibilityTrace captured announcement"
+            )
+        }
+
         self.init(
             outcome: outcome,
             methodAndPayload: methodAndPayload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
+            accessibilityTrace: accessibilityTrace,
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
-            settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
+            settleTimeMs: settleTimeMs,
             subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence),
             activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
-            timing: try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing),
-            announcement: try container.decodeIfPresent(String.self, forKey: .announcement)
+            timing: timing,
+            announcement: announcement
         )
     }
 
@@ -833,16 +887,17 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
+        let mergedTiming = self.timing?.merging(timing) ?? timing
         return ActionResult(
             outcome: outcome,
             methodAndPayload: methodAndPayload,
             message: message,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
-            settleTimeMs: settleTimeMs,
+            settleTimeMs: mergedTiming.settleMs ?? settleTimeMs,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
-            timing: self.timing?.merging(timing) ?? timing,
+            timing: mergedTiming,
             announcement: announcement
         )
     }

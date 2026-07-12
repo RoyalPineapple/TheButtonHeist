@@ -716,7 +716,10 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        XCTAssertEqual(dispatchedTypes, commands.map(\.runtimeActionType))
+        let expectedTypes = try commands.map {
+            try $0.resolveForRuntimeDispatch(in: .empty).runtimeType
+        }
+        XCTAssertEqual(dispatchedTypes, expectedTypes)
         guard case .heistExecution(let heist) = result.payload else {
             return XCTFail("Expected heist execution payload")
         }
@@ -4108,8 +4111,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func assertSameInteraction(
         _ name: String,
-        single singleResult: TheSafecracker.InteractionResult,
-        heist heistResult: TheSafecracker.InteractionResult,
+        single singleResult: TheSafecracker.ActionDispatchOutcome,
+        heist heistResult: TheSafecracker.ActionDispatchOutcome,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {

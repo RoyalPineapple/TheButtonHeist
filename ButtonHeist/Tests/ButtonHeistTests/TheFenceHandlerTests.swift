@@ -1,6 +1,7 @@
 import ButtonHeistTestSupport
 import XCTest
 import Network
+import ButtonHeistSupport
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
@@ -766,6 +767,43 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failure.details.retryable, true)
     }
 
+    func testAmbiguousDeviceTargetKeepsDistinctFailureProjection() throws {
+        let response = FenceResponse.failure(HandoffConnectionError.ambiguousDeviceTarget(
+            filter: "Demo",
+            matches: ["Demo#one", "Demo#two"]
+        ))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, .discoveryAmbiguousDeviceTarget)
+        XCTAssertNotEqual(failure.failureCode, .discoveryNoMatchingDevice)
+        XCTAssertEqual(failure.code, KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
+        XCTAssertEqual(failure.kind, .discovery)
+        XCTAssertEqual(failure.phase, .discovery)
+        XCTAssertFalse(failure.retryable)
+        XCTAssertEqual(failure.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
+        XCTAssertEqual(failure.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("code"), KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.discovery.rawValue)
+        XCTAssertEqual(try json.string("phase"), FailurePhase.discovery.rawValue)
+    }
+
+    func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
+        let transportFailure = NetworkTransportFailure(.posix(.ECONNRESET))
+        let response = FenceResponse.failure(HandoffConnectionError.disconnected(.networkError(transportFailure)))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, .transportNetworkError)
+        XCTAssertEqual(failure.code, KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(failure.kind, .connection)
+        XCTAssertEqual(failure.phase, .transport)
+        XCTAssertTrue(failure.retryable)
+        XCTAssertEqual(failure.hint, KnownFailureCode.transportNetworkError.defaultHint)
+        XCTAssertTrue(failure.message.contains("posix"), failure.message)
+        XCTAssertTrue(failure.message.contains("connection failed in transport"), failure.message)
+    }
     func testAuthFailureMappingPreservesSourceHint() throws {
         let hint = "Retry with the configured token."
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(
@@ -814,7 +852,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testTransportSendFailureUsesNetworkDiagnosticShape() async throws {
         let (fence, mockConn) = makeConnectedFence(configuration: .init(autoReconnect: false))
-        mockConn.sendOutcome = .failed(.transportFailed(DeviceTransportFailure(.posix(.ECONNRESET))))
+        mockConn.sendOutcome = .failed(.transportFailed(NetworkTransportFailure(.posix(.ECONNRESET))))
 
         let response: FenceResponse
         do {
@@ -1069,12 +1107,10 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")
-        let report = try publicHeistReportResponseDTO(response).report
-        let firstNode = try XCTUnwrap(report.nodes.first)
-        XCTAssertEqual(firstNode.kind, "action")
-        XCTAssertFalse(firstNode.containsKey("action"))
-        let evidence = try XCTUnwrap(firstNode.evidence)
-        XCTAssertNotNil(evidence.action)
+        let firstNode = try XCTUnwrap(try json.object("report").array("nodes").first)
+        XCTAssertEqual(try firstNode.string("kind"), "action")
+        try firstNode.assertMissing("action")
+        try firstNode.object("evidence").assertPresent("action")
     }
 
     @ButtonHeistActor

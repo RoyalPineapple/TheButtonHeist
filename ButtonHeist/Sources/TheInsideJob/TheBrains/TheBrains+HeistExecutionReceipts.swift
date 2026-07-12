@@ -46,17 +46,14 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            outcome: .failed(
-                evidence: .invocation(HeistInvocationEvidence.invocation(
-                    context.invoke,
-                    name: context.requestedName
-                )),
-                failure: HeistFailureDetail(
-                    category: .invocation,
-                    contract: "heist invocation must not recurse",
-                    observed: observed
-                ),
-                children: .empty
+            evidence: .invocation(HeistInvocationEvidence.invocation(
+                context.invoke,
+                name: context.requestedName
+            )),
+            failure: HeistFailureDetail(
+                category: .invocation,
+                contract: "heist invocation must not recurse",
+                observed: observed
             )
         )
     }
@@ -69,18 +66,15 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            outcome: .failed(
-                evidence: .invocation(HeistInvocationEvidence.invocation(
-                    context.invoke,
-                    name: context.requestedName
-                )),
-                failure: HeistFailureDetail(
-                    category: .invocation,
-                    contract: "heist invocation path resolves to a definition",
-                    observed: observed,
-                    expected: context.requestedName
-                ),
-                children: .empty
+            evidence: .invocation(HeistInvocationEvidence.invocation(
+                context.invoke,
+                name: context.requestedName
+            )),
+            failure: HeistFailureDetail(
+                category: .invocation,
+                contract: "heist invocation path resolves to a definition",
+                observed: observed,
+                expected: context.requestedName
             )
         )
     }
@@ -94,17 +88,14 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            outcome: .failed(
-                evidence: .invocation(HeistInvocationEvidence.invocation(
-                    context.invoke,
-                    name: context.requestedName
-                )),
-                failure: HeistFailureDetail(
-                    category: .validation,
-                    contract: "heist invocation argument binds to the target parameter",
-                    observed: observed
-                ),
-                children: .empty
+            evidence: .invocation(HeistInvocationEvidence.invocation(
+                context.invoke,
+                name: context.requestedName
+            )),
+            failure: HeistFailureDetail(
+                category: .validation,
+                contract: "heist invocation argument binds to the target parameter",
+                observed: observed
             )
         )
     }
@@ -129,23 +120,20 @@ extension TheBrains {
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            outcome: .failed(
-                evidence: .invocation(HeistInvocationEvidence.invocation(
-                    context.invoke,
-                    name: context.requestedName,
-                    argument: context.argumentSummary,
-                    expectation: .init(
-                        actionResult: expectationActionResult,
-                        expectation: expectationResult
-                    )
-                )),
-                failure: HeistFailureDetail(
-                    category: .expectation,
-                    contract: "heist invocation expectation predicate resolves before evaluation",
-                    observed: observed,
-                    expected: expectation.predicate.description
-                ),
-                children: .empty
+            evidence: .invocation(HeistInvocationEvidence.invocation(
+                context.invoke,
+                name: context.requestedName,
+                argument: context.argumentSummary,
+                expectation: .init(
+                    actionResult: expectationActionResult,
+                    expectation: expectationResult
+                )
+            )),
+            failure: HeistFailureDetail(
+                category: .expectation,
+                contract: "heist invocation expectation predicate resolves before evaluation",
+                observed: observed,
+                expected: expectation.predicate.description
             )
         )
     }
@@ -173,31 +161,22 @@ extension TheBrains {
             childFailedPath: childExecution.abortedAtChildPath,
             expectation: invocationExpectation
         )
-        let outcome: HeistStepReceiptOutcome
-        switch expectationOutcome {
+        let failure: HeistFailureDetail? = switch expectationOutcome {
         case .notEvaluated, .matched:
-            outcome = childAwarePassedOutcome(
-                evidence: .invocation(evidence),
-                children: childExecution,
-                childFailure: { childPath in
-                    childFailureDetail(category: .invocation, childPath: childPath)
-                }
-            )
+            nil
         case .failed(receipt: _, detail: let detail):
-            outcome = childAwareFailedOutcome(
-                evidence: .invocation(evidence),
-                failure: detail,
-                children: childExecution,
-                childFailure: { childPath in
-                    childFailureDetail(category: .invocation, childPath: childPath)
-                }
-            )
+            detail
         }
         return heistInvocationReceipt(
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: context.intent,
-            outcome: outcome
+            evidence: .invocation(evidence),
+            failure: failure,
+            children: childExecution,
+            childFailure: { childPath in
+                self.childFailureDetail(category: .invocation, childPath: childPath)
+            }
         )
     }
 

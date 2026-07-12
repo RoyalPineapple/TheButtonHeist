@@ -26,7 +26,7 @@ extension TheFence {
             .automatic
         }
         return try appInteractionDispatch(
-            SemanticActionCommand.rotor.command,
+            Command.rotor,
             .rotor(
                 selection: selection,
                 target: .target(try input.requiredElementTarget(command: .rotor)),

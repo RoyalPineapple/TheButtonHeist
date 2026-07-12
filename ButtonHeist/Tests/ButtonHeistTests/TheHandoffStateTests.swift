@@ -517,6 +517,10 @@ final class TheHandoffStateTests: XCTestCase {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 60
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        var observedPhases: [HandoffConnectionPhase] = []
+        handoff.onConnectionStateChanged = { phase in
+            observedPhases.append(phase)
+        }
 
         handoff.makeConnection = { _ in
             let connection = MockConnection()
@@ -531,6 +535,11 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
 
         assertReconnecting(handoff.connectionPhase, device: device)
+        XCTAssertEqual(handoff.connectionDiagnosticFailure, .disconnected(.serverClosed))
+        XCTAssertTrue(observedPhases.contains { phase in
+            guard case .reconnecting(let attempt) = phase else { return false }
+            return attempt.target.device == device
+        })
         handoff.disableAutoReconnect()
     }
 

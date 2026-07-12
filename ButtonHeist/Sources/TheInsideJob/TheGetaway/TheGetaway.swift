@@ -47,7 +47,7 @@ final class TheGetaway {
 
     // MARK: - Message Dispatch
 
-    func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping (Data) -> Void) async {
+    func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
         let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
@@ -58,7 +58,7 @@ final class TheGetaway {
         switch message {
         case .clientHello, .authenticate:
             insideJobLogger.fault("Protocol message reached app dispatch after admission")
-            sendMessage(
+            await sendMessage(
                 .error(ServerError(
                     kind: .validationError,
                     message: "Protocol messages are handled by admission before app dispatch."
@@ -71,16 +71,16 @@ final class TheGetaway {
             await sendInterface(query: query, requestId: requestId, respond: respond)
         case .ping:
             await muscle.noteClientActivity(clientId)
-            sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
+            await sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
         case .status:
-            sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
+            await sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
 
         // Observation
         case .getPasteboard:
             let result = brains.executePasteboardRead()
-            sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            await sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .getAnnouncements:
-            sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
+            await sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
         case .requestScreen(let payload):
             await handleScreen(
                 mode: payload.mode,
@@ -176,9 +176,9 @@ final class TheGetaway {
         command: ClientMessage,
         actionResult: ActionResult,
         requestId: String?,
-        respond: @escaping (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async {
-        sendMessage(
+        await sendMessage(
             .actionResult(actionResult),
             requestId: requestId,
             respond: respond
@@ -189,19 +189,23 @@ final class TheGetaway {
     func sendInterface(
         query: InterfaceQuery = InterfaceQuery(),
         requestId: String? = nil,
-        respond: @escaping (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async {
         switch await brains.observeInterface(query) {
         case .success(let interface):
             insideJobLogger.info("Interface: \(interface.projectedElements.count) elements")
-            sendMessage(
+            await sendMessage(
                 .interface(interface),
                 requestId: requestId,
                 respond: respond
             )
             await brains.recordSentState()
         case .failure(let error):
-            sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
+            await sendMessage(
+                .error(ServerError(kind: .general, message: error.message)),
+                requestId: requestId,
+                respond: respond
+            )
         }
     }
 
@@ -210,16 +214,20 @@ final class TheGetaway {
     func handleScreen(
         mode: ScreenCaptureMode = .raw,
         requestId: String? = nil,
-        respond: @escaping (Data) -> Void
+        respond: @escaping SocketResponseHandler
     ) async {
         insideJobLogger.debug("Screen requested")
 
         switch await brains.captureScreenPayload(mode: mode) {
         case .success(let payload):
-            sendMessage(.screen(payload), requestId: requestId, respond: respond)
+            await sendMessage(.screen(payload), requestId: requestId, respond: respond)
             insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
-            sendMessage(.error(ServerError(kind: .general, message: failure.message)), requestId: requestId, respond: respond)
+            await sendMessage(
+                .error(ServerError(kind: .general, message: failure.message)),
+                requestId: requestId,
+                respond: respond
+            )
         }
     }
 }

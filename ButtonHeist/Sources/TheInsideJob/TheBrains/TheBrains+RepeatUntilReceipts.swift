@@ -322,25 +322,11 @@ extension TheBrains {
         }
         let stepEvidence = HeistStepEvidence.repeatUntil(evidence)
         let childExecution = HeistReceiptChildren(children)
-        let receiptOutcome: HeistStepReceiptOutcome
-        switch outcome {
+        let failure: HeistFailureDetail? = switch outcome {
         case .predicateMet, .continued:
-            receiptOutcome = childAwarePassedOutcome(
-                evidence: stepEvidence,
-                children: childExecution,
-                childFailure: { childPath in
-                    childFailureDetail(category: .loop, childPath: childPath)
-                }
-            )
+            nil
         case .failed(expectation: _, childPath: let childPath):
-            receiptOutcome = childAwareFailedOutcome(
-                evidence: stepEvidence,
-                failure: childFailureDetail(category: .loop, childPath: childPath),
-                children: childExecution,
-                childFailure: { childPath in
-                    childFailureDetail(category: .loop, childPath: childPath)
-                }
-            )
+            childFailureDetail(category: .loop, childPath: childPath)
         }
         return heistLoopReceipt(
             path: frame.path,
@@ -350,7 +336,12 @@ extension TheBrains {
                 predicate: step.predicateExpression,
                 timeout: step.timeout
             ),
-            outcome: receiptOutcome
+            evidence: stepEvidence,
+            failure: failure,
+            children: childExecution,
+            childFailure: { childPath in
+                self.childFailureDetail(category: .loop, childPath: childPath)
+            }
         )
     }
 }

@@ -99,6 +99,16 @@ enum HeistValuePayloadDataCorruptedHandling {
 }
 
 extension TheFence {
+    /// Canonical descriptor/projection bridge for turning typed JSON contracts
+    /// into `HeistValue`. Raw public request envelopes still must pass their
+    /// byte/depth/key admission checks before being converted into `HeistValue`.
+    @_spi(ButtonHeistTooling) public enum HeistValuePayloadEncoder {
+        @_spi(ButtonHeistTooling) public static func encode<Value: Encodable>(_ value: Value) throws -> HeistValue {
+            let data = try JSONEncoder().encode(value)
+            return try JSONDecoder().decode(HeistValue.self, from: data)
+        }
+    }
+
     enum HeistValuePayloadDecoder {
         static func decode<T: Decodable>(
             _ value: HeistValue,

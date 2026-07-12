@@ -33,7 +33,6 @@ enum AccessibilityTraceDiff {
             before.interface,
             after.interface,
             isScreenChange: screenChanged,
-            forceElementChange: change.isElementNotification,
             projection: projection,
             captureEdge: edge,
             interactionDigest: interactionDigest,
@@ -49,7 +48,7 @@ enum AccessibilityTraceDiff {
                 interactionDigest: interactionDigest,
                 transient: after.transition.transient,
                 accessibilityNotifications: after.transition.accessibilityNotifications.filter {
-                    $0.kind.isElementTransition
+                    $0.kind.isElementChangeEvidence
                 }
             ))
         }
@@ -60,7 +59,6 @@ enum AccessibilityTraceDiff {
         _ before: Interface,
         _ after: Interface,
         isScreenChange: Bool,
-        forceElementChange: Bool,
         projection: AccessibilityTrace.DeltaProjection,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
@@ -98,13 +96,12 @@ enum AccessibilityTraceDiff {
         return projectElementDelta(
             edits: edits,
             unpairedEdits: unpairedEdits,
-            forceChange: forceElementChange,
             elementCount: afterElements.count,
             captureEdge: captureEdge,
             interactionDigest: interactionDigest,
             transient: transition.transient,
             accessibilityNotifications: transition.accessibilityNotifications.filter {
-                $0.kind.isElementTransition
+                $0.kind.isElementChangeEvidence
             }
         )
     }
@@ -112,7 +109,6 @@ enum AccessibilityTraceDiff {
     private static func projectElementDelta(
         edits: ElementEdits,
         unpairedEdits: ElementEdits?,
-        forceChange: Bool,
         elementCount: Int,
         captureEdge: AccessibilityTrace.CaptureEdge,
         interactionDigest: AccessibilityTrace.InteractionDigest,
@@ -130,21 +126,11 @@ enum AccessibilityTraceDiff {
                     accessibilityNotifications: accessibilityNotifications
                 ))
             }
-            guard forceChange else {
-                return .noChange(AccessibilityTrace.NoChange(
-                    elementCount: elementCount,
-                    captureEdge: captureEdge,
-                    interactionDigest: interactionDigest,
-                    transient: transient
-                ))
-            }
-            return .elementsChanged(AccessibilityTrace.ElementsChanged(
+            return .noChange(AccessibilityTrace.NoChange(
                 elementCount: elementCount,
-                edits: ElementEdits(),
                 captureEdge: captureEdge,
                 interactionDigest: interactionDigest,
-                transient: transient,
-                accessibilityNotifications: accessibilityNotifications
+                transient: transient
             ))
         }
         return .elementsChanged(AccessibilityTrace.ElementsChanged(

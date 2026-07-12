@@ -38,20 +38,26 @@ struct ToolSyncTests {
 
     @Test("MCP tool surface stays source-oriented")
     func mcpToolSurfaceStaysSourceOriented() {
-        let expected = [
-            "connect",
-            "describe_heist",
-            "get_announcements",
-            "get_interface",
-            "get_pasteboard",
-            "get_screen",
-            "get_session_state",
-            "list_heists",
-            "perform",
-            "run_heist",
-        ].sorted()
+        let expected = directToolDescriptors().map(\.command.rawValue).sorted()
 
         #expect(ToolDefinitions.all.map(\.name).sorted() == expected)
+    }
+
+    @Test("MCP tool definitions are descriptor projections")
+    func toolDefinitionsAreDescriptorProjections() throws {
+        let toolsByName = Dictionary(grouping: ToolDefinitions.all, by: \.name)
+
+        for descriptor in directToolDescriptors() {
+            let tool = try #require(
+                toolsByName[descriptor.command.rawValue]?.first,
+                "Missing MCP tool for descriptor \(descriptor.command.rawValue)"
+            )
+            let expectedInputSchema = try inputSchemaValue(for: descriptor.command)
+
+            #expect(tool.name == descriptor.command.rawValue)
+            #expect(tool.description == descriptor.description)
+            #expect(tool.inputSchema == expectedInputSchema)
+        }
     }
 
     @Test("StringMatch command schemas advertise object form without combinators")
@@ -277,6 +283,10 @@ private func schemaValue(at path: [String], in root: Value) -> Value? {
 private func inputSchemaValue(for command: TheFence.Command) throws -> Value {
     let data = try JSONEncoder().encode(command.descriptor.inputJSONSchema)
     return try JSONDecoder().decode(Value.self, from: data)
+}
+
+private func directToolDescriptors() -> [FenceCommandDescriptor] {
+    TheFence.Command.descriptors.filter { $0.mcpExposure == .directTool }
 }
 
 private func assertStringMatchSchema(_ schema: Value, path: String) {

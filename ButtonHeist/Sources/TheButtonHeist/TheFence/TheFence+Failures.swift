@@ -9,6 +9,7 @@ public enum FenceError: Error {
     case heistBuildDiagnostics([HeistBuildDiagnostic])
     case noDeviceFound
     case noMatchingDevice(filter: String, available: [String])
+    case ambiguousDeviceTarget(filter: String, matches: [String])
     case connectionTimeout
     case connectionFailed(String)
     case connectionFailure(ConnectionFailure)

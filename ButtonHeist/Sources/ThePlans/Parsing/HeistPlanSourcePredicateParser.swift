@@ -643,14 +643,10 @@ extension HeistPlanSourceParser {
     }
 
     private static var validElementPropertyNames: Set<String> {
-        Set(validElementUpdateProperties.map(\.rawValue))
-    }
-
-    private static var validElementUpdateProperties: [ElementProperty] {
-        ElementProperty.allCases.filter { $0 != .label && $0 != .identifier }
+        Set(ElementProperty.updateProperties.map(\.rawValue))
     }
 
     private static var validElementProperties: String {
-        validElementUpdateProperties.map(\.rawValue).joined(separator: ", ")
+        ElementProperty.updatePropertyNameList
     }
 }

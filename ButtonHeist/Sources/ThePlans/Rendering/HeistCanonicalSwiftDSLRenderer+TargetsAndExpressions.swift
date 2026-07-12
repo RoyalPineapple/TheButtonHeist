@@ -1,6 +1,133 @@
 import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
+    func renderCorrection(target: ElementTargetExpr) -> String {
+        switch target {
+        case .target(let target):
+            return render(target: target)
+        case .predicate(let predicate, let ordinal):
+            let rendered = renderCorrection(predicate: predicate)
+            return ordinal.map { ".target(\(rendered), ordinal: \($0))" } ?? rendered
+        case .ref(let reference):
+            return reference.rawValue
+        case .within(let container, let target):
+            return ".within(container: \(renderCorrection(container: container)), \(renderCorrection(target: target)))"
+        }
+    }
+
+    func renderCorrection(target: ElementTargetExpr, addingOrdinal ordinal: Int) -> String {
+        switch target {
+        case .target(let target):
+            return renderCorrection(target: ElementTargetExpr(target), addingOrdinal: ordinal)
+        case .predicate(let predicate, _):
+            return ".target(\(renderCorrection(predicate: predicate)), ordinal: \(ordinal))"
+        case .ref(let reference):
+            return reference.rawValue
+        case .within(let container, let target):
+            return ".within(container: \(renderCorrection(container: container)), \(renderCorrection(target: target, addingOrdinal: ordinal)))"
+        }
+    }
+
+    func renderCorrection(predicate: ElementPredicateTemplate) -> String {
+        guard predicate.checks.count != 1 else {
+            return renderCorrection(singleCheck: predicate.checks[0])
+        }
+        return ".element(\(predicate.checks.map { renderCorrection(check: $0) }.joined(separator: ", ")))"
+    }
+
+    private func renderCorrection(singleCheck check: ElementPredicateCheck<StringExpr>) -> String {
+        switch check {
+        case .traits:
+            return ".element(\(renderCorrection(check: check)))"
+        default:
+            return renderCorrection(check: check)
+        }
+    }
+
+    private func renderCorrection(check: ElementPredicateCheck<StringExpr>) -> String {
+        switch check {
+        case .label(let match): return ".label(\(renderCorrection(match: match)))"
+        case .identifier(let match): return ".identifier(\(renderCorrection(match: match)))"
+        case .value(let match): return ".value(\(renderCorrection(match: match)))"
+        case .hint(let match): return ".hint(\(renderCorrection(match: match)))"
+        case .traits(let traits): return ".traits(\(renderTraitArray(traits)))"
+        case .actions(let actions): return ".actions(\(renderActionArray(actions)))"
+        case .customContent(let match): return ".customContent(\(renderCorrection(customContent: match)))"
+        case .rotors(let matches): return ".rotors(\(renderCorrection(matches: matches)))"
+        case .exclude(let excluded): return ".exclude(\(renderCorrection(check: excluded)))"
+        }
+    }
+
+    private func renderCorrection(container: ContainerPredicateExpr) -> String {
+        if container.checks.count == 1 {
+            switch container.checks[0] {
+            case .type(let type):
+                return type == .dataTable ? ".dataTable()" : ".\(type.rawValue)"
+            case .semantic(let predicate):
+                return renderCorrection(semanticContainer: predicate)
+            case .scrollable(true):
+                return ".scrollable"
+            case .actions(let actions):
+                return ".actions(\(renderActionArray(actions)))"
+            case .rowCount, .columnCount, .modalBoundary, .scrollable(false):
+                break
+            }
+        }
+        return ".matching(\(container.checks.map { renderCorrection(containerCheck: $0) }.joined(separator: ", ")))"
+    }
+
+    private func renderCorrection(containerCheck check: ContainerPredicateCheck<StringExpr>) -> String {
+        switch check {
+        case .type(let type):
+            return ".type(.\(type.rawValue))"
+        case .semantic(let predicate):
+            return ".semantic(\(renderCorrection(semanticContainer: predicate)))"
+        case .rowCount(let count): return ".rowCount(\(count))"
+        case .columnCount(let count): return ".columnCount(\(count))"
+        case .modalBoundary(let required): return ".modalBoundary(\(required))"
+        case .scrollable(let required): return ".scrollable(\(required))"
+        case .actions(let actions): return ".actions(\(renderActionArray(actions)))"
+        }
+    }
+
+    private func renderCorrection(semanticContainer predicate: SemanticContainerPredicate<StringExpr>) -> String {
+        switch predicate {
+        case .label(let match): return ".label(\(renderCorrection(match: match)))"
+        case .value(let match): return ".value(\(renderCorrection(match: match)))"
+        case .identifier(let match): return ".identifier(\(renderCorrection(match: match)))"
+        }
+    }
+
+    private func renderCorrection(customContent match: CustomContentMatch<StringExpr>) -> String {
+        let fields = [
+            match.label.map { "label: \(renderCorrection(match: $0))" },
+            match.value.map { "value: \(renderCorrection(match: $0))" },
+            match.isImportant.map { "isImportant: \($0)" },
+        ].compactMap { $0 }
+        return ".init(\(fields.joined(separator: ", ")))"
+    }
+
+    private func renderCorrection(matches: [StringMatch<StringExpr>]) -> String {
+        "[\(matches.map { renderCorrection(match: $0) }.joined(separator: ", "))]"
+    }
+
+    private func renderCorrection(match: StringMatch<StringExpr>) -> String {
+        switch match {
+        case .exact(let string): return renderCorrection(string: string)
+        case .contains(let string): return ".contains(\(renderCorrection(string: string)))"
+        case .prefix(let string): return ".prefix(\(renderCorrection(string: string)))"
+        case .suffix(let string): return ".suffix(\(renderCorrection(string: string)))"
+        case .isEmpty: return ".isEmpty"
+        }
+    }
+
+    private func renderCorrection(string: StringExpr) -> String {
+        switch string {
+        case .literal(let literal): return quote(literal)
+        case .ref(let reference): return reference.rawValue
+        }
+    }
+
     func render(target: ElementTargetExpr, environment: RenderEnvironment) throws -> String {
         switch target {
         case .target(let target):

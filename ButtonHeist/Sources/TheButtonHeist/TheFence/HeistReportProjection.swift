@@ -16,25 +16,23 @@ struct HeistReportFailureProjection: Sendable {
 }
 
 struct HeistReportSummaryProjection: Sendable {
-    let executedTopLevelStepCount: Int
-    let executedNodeCount: Int
-    let outputReceiptNodeCount: Int
-    let abortedAtPath: String?
-    let durationMs: Int
-    let expectations: HeistExpectationsProjection?
-    let finalScreenId: String?
+    private let summary: HeistExecutionEvidenceSummary
 
     init(summary: HeistExecutionEvidenceSummary) {
-        executedTopLevelStepCount = summary.executedTopLevelStepCount
-        executedNodeCount = summary.executedNodeCount
-        outputReceiptNodeCount = summary.outputReceiptNodeCount
-        abortedAtPath = summary.abortedAtPath
-        durationMs = summary.durationMs
-        expectations = summary.expectationsChecked > 0
+        self.summary = summary
+    }
+
+    var executedTopLevelStepCount: Int { summary.executedTopLevelStepCount }
+    var executedNodeCount: Int { summary.executedNodeCount }
+    var outputReceiptNodeCount: Int { summary.outputReceiptNodeCount }
+    var abortedAtPath: String? { summary.abortedAtPath }
+    var durationMs: Int { summary.durationMs }
+    var expectations: HeistExpectationsProjection? {
+        summary.expectationsChecked > 0
             ? HeistExpectationsProjection(checked: summary.expectationsChecked, met: summary.expectationsMet)
             : nil
-        finalScreenId = summary.finalScreenId
     }
+    var finalScreenId: String? { summary.finalScreenId }
 }
 
 struct HeistExpectationsProjection: Sendable {
@@ -99,56 +97,48 @@ private extension ProjectionProfile {
 }
 
 struct HeistReportNodeProjection: Sendable {
-    let path: String
-    let kind: String
-    let capability: String?
-    let displayName: String
-    let commandName: String?
-    let target: ElementTarget?
-    let status: HeistExecutionStepStatus
-    let message: String?
-    let durationMs: Int
-    let intent: HeistStepIntent?
-    let evidence: HeistReportEvidenceProjection?
-    let failure: HeistReportFailureProjection?
-    let failureMessage: String?
-    let failureCategory: HeistFailureCategory?
-    let abortedAtChildPath: String?
-    let expectation: ExpectationProjection?
-    let actionErrorKind: ErrorKind?
-    let traceDelta: DeltaProjection?
+    private let node: HeistExecutionEvidenceNode
+    private let profile: ProjectionProfile
     let children: [HeistReportNodeProjection]
 
     init(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
-        let step = node.step
-        let report = node.reportFacts
-        let results = report.results
-        path = report.path
-        kind = report.kind
-        capability = report.capabilityName
-        displayName = report.displayName
-        commandName = report.commandName
-        target = report.target
-        status = report.status
-        message = report.message
-        durationMs = step.durationMs
-        intent = step.intent
-        evidence = HeistReportEvidenceProjection(node: node, profile: profile)
-        failureMessage = report.failureMessage
-        failure = step.failure.map {
+        self.node = node
+        self.profile = profile
+        children = node.children.map { HeistReportNodeProjection(node: $0, profile: profile) }
+    }
+
+    private var step: HeistExecutionStepResult { node.step }
+    private var report: HeistExecutionStepReportFacts { node.reportFacts }
+    private var results: HeistExecutionStepReportResults { report.results }
+
+    var path: String { report.path }
+    var kind: String { report.kind }
+    var capability: String? { report.capabilityName }
+    var displayName: String { report.displayName }
+    var commandName: String? { report.commandName }
+    var target: ElementTarget? { report.target }
+    var status: HeistExecutionStepStatus { report.status }
+    var message: String? { report.message }
+    var durationMs: Int { step.durationMs }
+    var intent: HeistStepIntent? { step.intent }
+    var evidence: HeistReportEvidenceProjection? { HeistReportEvidenceProjection(node: node, profile: profile) }
+    var failureMessage: String? { report.failureMessage }
+    var failure: HeistReportFailureProjection? {
+        step.failure.map {
             HeistReportFailureProjection(
                 detail: $0,
                 message: report.failureMessage ?? $0.observed,
                 actionErrorKind: results.actionErrorKind
             )
         }
-        failureCategory = report.failureCategory
-        abortedAtChildPath = step.abortedAtChildPath
-        expectation = results.expectation.map { ExpectationProjection(result: $0) }
-        actionErrorKind = results.actionErrorKind
-        traceDelta = results.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
+    }
+    var failureCategory: HeistFailureCategory? { report.failureCategory }
+    var abortedAtChildPath: String? { step.abortedAtChildPath }
+    var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
+    var actionErrorKind: ErrorKind? { results.actionErrorKind }
+    var traceDelta: DeltaProjection? {
+        results.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }
-        children = node.children.map { HeistReportNodeProjection(node: $0, profile: profile) }
     }
 }

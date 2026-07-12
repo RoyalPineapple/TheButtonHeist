@@ -139,7 +139,7 @@ extension TheBrains {
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
         afterStatePayload: ((PostActionPayloadContext) -> PostActionObservation.ResolvedActionOutcomePayload)? = nil,
-        interaction: () async -> TheSafecracker.InteractionResult
+        interaction: () async -> TheSafecracker.ActionDispatchOutcome
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: method)
@@ -227,7 +227,7 @@ extension TheBrains {
         return receipt.actionResult
     }
 
-    static func actionErrorKind(for result: TheSafecracker.InteractionResult) -> ErrorKind? {
+    static func actionErrorKind(for result: TheSafecracker.ActionDispatchOutcome) -> ErrorKind? {
         switch result.outcome {
         case .success:
             return nil

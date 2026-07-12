@@ -109,6 +109,42 @@ public enum RotorSelection: Equatable, Hashable, Sendable {
     }
 }
 
+extension RotorSelection {
+    static func decode(
+        name: String?,
+        index: Int?,
+        codingPath: [any CodingKey]
+    ) throws -> Self {
+        if name != nil, index != nil {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "rotor accepts either rotor or rotorIndex, not both"
+            ))
+        }
+        if let index, index < 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "rotorIndex must be non-negative, got \(index)"
+            ))
+        }
+        if let name { return .named(name) }
+        if let index { return .index(index) }
+        return .automatic
+    }
+
+    func encode<Key: CodingKey>(
+        to container: inout KeyedEncodingContainer<Key>,
+        nameKey: Key,
+        indexKey: Key
+    ) throws {
+        switch self {
+        case .automatic: break
+        case .named(let name): try container.encode(name, forKey: nameKey)
+        case .index(let index): try container.encode(index, forKey: indexKey)
+        }
+    }
+}
+
 extension RotorSelection: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -164,39 +200,14 @@ extension RotorTarget: Codable {
         elementTarget = try ElementTarget.decodeInline(from: decoder)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
-        if rotor != nil, rotorIndex != nil {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "rotor accepts either rotor or rotorIndex, not both"
-            ))
-        }
-        if let rotorIndex, rotorIndex < 0 {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "rotorIndex must be non-negative, got \(rotorIndex)"
-            ))
-        }
-        selection = if let rotor {
-            .named(rotor)
-        } else if let rotorIndex {
-            .index(rotorIndex)
-        } else {
-            .automatic
-        }
+        selection = try RotorSelection.decode(name: rotor, index: rotorIndex, codingPath: container.codingPath)
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
     }
 
     public func encode(to encoder: Encoder) throws {
         try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch selection {
-        case .automatic:
-            break
-        case .named(let rotor):
-            try container.encode(rotor, forKey: .rotor)
-        case .index(let rotorIndex):
-            try container.encode(rotorIndex, forKey: .rotorIndex)
-        }
+        try selection.encode(to: &container, nameKey: .rotor, indexKey: .rotorIndex)
         try container.encode(direction, forKey: .direction)
     }
 

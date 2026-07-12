@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 import Network
 import TheScore
 
@@ -77,7 +78,7 @@ extension DeviceConnection {
         case .failed(let error):
             deviceConnectionLogger.error("Receive error: \(error)")
             disconnectConnectedSession(session)
-            onEvent?(.disconnected(.networkError(error)))
+            onEvent?(.disconnected(.networkError(NetworkTransportFailure(error))))
         case .content(let content):
             guard appendAndProcess(content, into: &session) else { return }
             receiveNext(connection: connection, sessionID: session.id)

@@ -9,7 +9,7 @@ extension Actions {
 
     enum GestureResolution<Value> {
         case success(Value)
-        case failure(TheSafecracker.InteractionResult)
+        case failure(TheSafecracker.ActionDispatchOutcome)
     }
 
     struct ResolvedGesturePoint {
@@ -32,7 +32,7 @@ extension Actions {
             case .inflated(let target):
                 inflatedTarget = target
             case .failed(let failure):
-                return .failure(failure.interactionResult(commandMethod: method))
+                return .failure(failure.actionDispatchOutcome(commandMethod: method))
             }
         case .coordinate:
             inflatedTarget = nil
@@ -109,7 +109,7 @@ extension Actions {
         method: ActionMethod,
         field: String,
         point: CGPoint
-    ) -> TheSafecracker.InteractionResult? {
+    ) -> TheSafecracker.ActionDispatchOutcome? {
         guard let message = GeometryValidation.validateScreenPoint(point, field: field) else { return nil }
         return .failure(
             method,
@@ -122,7 +122,7 @@ extension Actions {
         method: ActionMethod,
         field: String,
         points: [CGPoint]
-    ) -> TheSafecracker.InteractionResult? {
+    ) -> TheSafecracker.ActionDispatchOutcome? {
         guard let message = GeometryValidation.validateScreenPoints(points, field: field) else { return nil }
         return .failure(
             method,

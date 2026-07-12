@@ -186,7 +186,10 @@ internal func containerPredicateParam(_ key: FenceParameterKey) -> FenceParamete
     )
 }
 
-internal func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> FenceParameterSpec {
+internal func elementTargetFieldSpec(
+    _ field: ElementTarget.SchemaField,
+    nestedTargetDepth: Int = 1
+) -> FenceParameterSpec {
     guard let key = FenceParameterKey(rawValue: field.name) else {
         preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
     }
@@ -217,10 +220,13 @@ internal func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> Fenc
     case .containerPredicate:
         return containerPredicateParam(key)
     case .nestedElementTarget:
+        let properties = nestedTargetDepth > 0
+            ? ElementTarget.inlineSchemaFields.map { elementTargetFieldSpec($0, nestedTargetDepth: nestedTargetDepth - 1) }
+            : []
         return objectParam(
             key,
-            properties: [],
-            additionalProperties: true,
+            properties: properties,
+            additionalProperties: nestedTargetDepth == 0,
             validation: .customPayload
         )
     }
@@ -245,9 +251,17 @@ private func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpe
 }
 
 private let semanticContainerPredicateProperties: [FenceParameterSpec] = [
-    param(.kind, .string, required: true, enumValues: ["label", "value", "identifier"]),
+    param(.kind, .string, required: true, enumValues: semanticContainerPredicateKindValues),
     stringMatchParam(.match, required: true),
 ]
+
+private let semanticContainerPredicateKindValues: [String] = [
+    SemanticContainerPredicate<String>.label("sample"),
+    SemanticContainerPredicate<String>.value("sample"),
+    SemanticContainerPredicate<String>.identifier("sample"),
+].map { semanticPredicate in
+    wireDiscriminatorValue(semanticPredicate, discriminator: FenceParameterKey.kind.rawValue)
+}
 
 private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     param(
@@ -263,3 +277,14 @@ private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     arrayParam(.values, items: .unconstrained),
     unconstrainedParam(.value, validation: .customPayload),
 ]
+
+internal func wireDiscriminatorValue<Value: Encodable>(
+    _ value: Value,
+    discriminator: String
+) -> String {
+    guard case .object(let object) = try? TheFence.HeistValuePayloadEncoder.encode(value),
+          case .string(let rawValue)? = object[discriminator] else {
+        preconditionFailure("Unable to derive \(discriminator) discriminator from \(Value.self)")
+    }
+    return rawValue
+}

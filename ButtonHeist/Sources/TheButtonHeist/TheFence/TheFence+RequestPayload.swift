@@ -42,8 +42,8 @@ extension TheFence {
     }
 
     enum SingleStepHeistRequest: Sendable {
-        case actions(DurableHeistActionCommands, expectation: ExpectationPayload)
-        case wait(WaitStep)
+        case actions(command: Command, DurableHeistActionCommands, expectation: ExpectationPayload)
+        case wait(command: Command, WaitStep)
     }
 
     struct DirectActionRequest: Sendable {
@@ -90,8 +90,8 @@ extension TheFence {
         }
     }
 
-    static func waitDispatch(_ step: WaitStep) -> DecodedRequestDispatch {
-        .singleStepHeist(.wait(step))
+    static func waitDispatch(_ command: Command, _ step: WaitStep) -> DecodedRequestDispatch {
+        .singleStepHeist(.wait(command: command, step))
     }
 
     static func appInteractionDispatch(
@@ -103,7 +103,7 @@ extension TheFence {
         precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
         let actions = NonEmptyArray(firstCommand, rest: additionalCommands)
         if let durableActions = DurableHeistActionCommands(actions) {
-            return .singleStepHeist(.actions(durableActions, expectation: expectationPayload))
+            return .singleStepHeist(.actions(command: command, durableActions, expectation: expectationPayload))
         }
 
         guard actions.count == 1 else {

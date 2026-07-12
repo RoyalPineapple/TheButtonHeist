@@ -23,157 +23,18 @@ extension HeistPlanSourceParser {
             _ = try parseInteger()
             throw error(
                 token,
-                "Ordinal belongs to the target. Use \(actionName)(.target(\(renderTargetCorrection(target)), ordinal: 0))."
+                "Ordinal belongs to the target. Use \(actionName)(\(renderTargetCorrection(target, ordinal: 0)))."
             )
         }
         throw error(token, "\(actionName)(...) accepts a single ElementTargetExpr")
     }
 
     func renderTargetCorrection(_ target: ElementTargetExpr) -> String {
-        switch target {
-        case .predicate(let predicate, _):
-            return renderPredicateCorrection(predicate)
-        case .target(let target):
-            return renderConcreteTargetCorrection(target)
-        case .ref(let reference):
-            return reference.rawValue
-        case .within(let container, let target):
-            return ".within(container: \(container), \(renderTargetCorrection(target)))"
-        }
+        HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target)
     }
 
-    func renderConcreteTargetCorrection(_ target: ElementTarget) -> String {
-        switch target {
-        case .predicate(let predicate, _):
-            return renderPredicateCorrection(ElementPredicateTemplate(predicate))
-        case .within(let container, let target):
-            return ".within(container: \(container), \(renderConcreteTargetCorrection(target)))"
-        }
-    }
-
-    func renderPredicateCorrection(_ predicate: ElementPredicateTemplate) -> String {
-        if predicate.checks.count == 1 {
-            switch predicate.checks[0] {
-            case .label(let match):
-                return ".label(\(renderStringMatchCallArgument(match)))"
-            case .identifier(let match):
-                return ".identifier(\(renderStringMatchCallArgument(match)))"
-            case .value(let match):
-                return ".value(\(renderStringMatchCallArgument(match)))"
-            case .hint(let match):
-                return ".hint(\(renderStringMatchCallArgument(match)))"
-            case .actions(let actions):
-                return ".actions(\(renderActionArrayCorrection(actions)))"
-            case .customContent(let match):
-                return ".customContent(\(renderCustomContentCorrection(match)))"
-            case .rotors(let matches):
-                return ".rotors(\(renderStringMatchArrayCorrection(matches)))"
-            case .exclude(let check):
-                return ".exclude(\(renderPredicateCheckCorrection(check)))"
-            case .traits:
-                break
-            }
-        }
-        let fields = predicate.checks.map(renderPredicateCheckCorrection)
-        return ".element(\(fields.joined(separator: ", ")))"
-    }
-
-    func renderPredicateCheckCorrection(_ check: ElementPredicateCheck<StringExpr>) -> String {
-        switch check {
-        case .label(let match):
-            return ".label(\(renderStringMatchCallArgument(match)))"
-        case .identifier(let match):
-            return ".identifier(\(renderStringMatchCallArgument(match)))"
-        case .value(let match):
-            return ".value(\(renderStringMatchCallArgument(match)))"
-        case .hint(let match):
-            return ".hint(\(renderStringMatchCallArgument(match)))"
-        case .traits(let traits):
-            return ".traits(\(renderTraitArrayCorrection(traits)))"
-        case .actions(let actions):
-            return ".actions(\(renderActionArrayCorrection(actions)))"
-        case .customContent(let match):
-            return ".customContent(\(renderCustomContentCorrection(match)))"
-        case .rotors(let matches):
-            return ".rotors(\(renderStringMatchArrayCorrection(matches)))"
-        case .exclude(let check):
-            return ".exclude(\(renderPredicateCheckCorrection(check)))"
-        }
-    }
-
-    func renderTraitArrayCorrection(_ traits: Set<HeistTrait>) -> String {
-        "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
-    }
-
-    func renderActionArrayCorrection(_ actions: Set<ElementAction>) -> String {
-        "[\(actions.canonicalElementActionArray.map(renderActionCorrection).joined(separator: ", "))]"
-    }
-
-    func renderActionCorrection(_ action: ElementAction) -> String {
-        switch action {
-        case .activate:
-            return ".activate"
-        case .typeText:
-            return ".typeText"
-        case .increment:
-            return ".increment"
-        case .decrement:
-            return ".decrement"
-        case .custom(let name):
-            return ".custom(\(quote(name)))"
-        }
-    }
-
-    func renderCustomContentCorrection(_ match: CustomContentMatch<StringExpr>) -> String {
-        let fields = [
-            match.label.map { "label: \(renderStringMatchFieldArgument($0))" },
-            match.value.map { "value: \(renderStringMatchFieldArgument($0))" },
-            match.isImportant.map { "isImportant: \($0)" },
-        ].compactMap { $0 }
-        return ".init(\(fields.joined(separator: ", ")))"
-    }
-
-    func renderStringMatchArrayCorrection(_ matches: [StringMatch<StringExpr>]) -> String {
-        "[\(matches.map(renderStringMatchCallArgument).joined(separator: ", "))]"
-    }
-
-    func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {
-        switch match {
-        case .exact(let string):
-            return renderStringCorrection(string)
-        case .contains(let string):
-            return ".contains(\(renderStringCorrection(string)))"
-        case .prefix(let string):
-            return ".prefix(\(renderStringCorrection(string)))"
-        case .suffix(let string):
-            return ".suffix(\(renderStringCorrection(string)))"
-        case .isEmpty:
-            return ".isEmpty"
-        }
-    }
-
-    func renderStringMatchFieldArgument(_ match: StringMatch<StringExpr>) -> String {
-        switch match {
-        case .exact(let string):
-            return renderStringCorrection(string)
-        case .contains(let string):
-            return ".contains(\(renderStringCorrection(string)))"
-        case .prefix(let string):
-            return ".prefix(\(renderStringCorrection(string)))"
-        case .suffix(let string):
-            return ".suffix(\(renderStringCorrection(string)))"
-        case .isEmpty:
-            return ".isEmpty"
-        }
-    }
-
-    func renderStringCorrection(_ string: StringExpr) -> String {
-        switch string {
-        case .literal(let value):
-            return quote(value)
-        case .ref(let reference):
-            return reference.rawValue
-        }
+    func renderTargetCorrection(_ target: ElementTargetExpr, ordinal: Int) -> String {
+        HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: ordinal)
     }
 
     mutating func parseTypeTextAction() throws -> HeistActionCommand {

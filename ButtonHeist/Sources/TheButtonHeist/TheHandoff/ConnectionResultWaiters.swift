@@ -1,11 +1,6 @@
 import Foundation
 import ButtonHeistSupport
 
-enum HandoffConnectionAttemptResult: Equatable {
-    case connected
-    case failed(HandoffConnectionError)
-}
-
 /// Invariant: resolving, cancelling, or timing out one waiter cannot affect a different connection attempt.
 @ButtonHeistActor
 final class ConnectionResultWaiters {
@@ -13,13 +8,8 @@ final class ConnectionResultWaiters {
         let attemptID: UUID
         let completion: TimedOneShot<Result<Void, Error>>
 
-        func resolve(with result: HandoffConnectionAttemptResult) {
-            switch result {
-            case .connected:
-                completion.resolve(returning: .success(()))
-            case .failed(let failure):
-                completion.resolve(returning: .failure(failure))
-            }
+        func resolve(with result: Result<Void, Error>) {
+            completion.resolve(returning: result)
         }
 
         func cancel() {
@@ -43,10 +33,10 @@ final class ConnectionResultWaiters {
             key == id && waiter.attemptID == attemptID
         }
         guard let waiter = matchingWaiters.first?.waiter else { return }
-        waiter.resolve(with: .failed(failure))
+        waiter.resolve(with: .failure(failure))
     }
 
-    func resolve(attemptID: UUID, with result: HandoffConnectionAttemptResult) {
+    func resolve(attemptID: UUID, with result: Result<Void, Error>) {
         let matchingWaiters = waiters.removeAll { _, waiter in waiter.attemptID == attemptID }
         for removal in matchingWaiters {
             removal.waiter.resolve(with: result)

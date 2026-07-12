@@ -1134,6 +1134,44 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testHeistExecutionStepRejectsIntentContradictingContentKind() {
+        let json = """
+        {
+          "path": "$.body[0]",
+          "kind": "action",
+          "durationMs": 0,
+          "intent": {"type": "warn", "message": "unexpected"},
+          "outcome": {"type": "passed", "children": []}
+        }
+        """
+
+        XCTAssertThrowsError(
+            try decoder.decode(HeistExecutionStepResult.self, from: Data(json.utf8))
+        ) { error in
+            assertDecodingError(error, contains: ["action heist execution step cannot include mismatched intent"])
+        }
+    }
+
+    func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
+        let actionResult = ActionResult.success(method: .wait)
+        let expectation = MetExpectationResult(predicate: predicate)
+        let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
+            actionResult: actionResult,
+            expectation: expectation
+        ))
+        let waitEvidence = HeistWaitEvidence.matched(check)
+        let evidence = HeistInvocationEvidence.InvocationExpectationEvidence(
+            actionResult: actionResult,
+            expectation: expectation.result,
+            waitEvidence: waitEvidence
+        )
+
+        XCTAssertEqual(evidence.actionResult, waitEvidence.actionResult)
+        XCTAssertEqual(evidence.expectation, waitEvidence.expectation)
+        XCTAssertEqual(evidence.waitEvidence, waitEvidence)
+    }
+
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
         let evidence = HeistActionEvidence.dispatch(
             dispatchResult: ActionResult.success(method: .activate)

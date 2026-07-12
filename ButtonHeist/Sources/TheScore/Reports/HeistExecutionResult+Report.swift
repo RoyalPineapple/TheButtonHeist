@@ -545,7 +545,7 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
 
     package var commandName: String? {
         guard case .action(let evidence) = self else { return nil }
-        return evidence.command?.runtimeActionType.rawValue
+        return evidence.command?.wireType.rawValue
     }
 
     package var target: ElementTarget? {

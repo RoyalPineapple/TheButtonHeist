@@ -1,6 +1,5 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
-import Foundation
 import ThePlans
 
 struct WaitCommand: AsyncParsableCommand, CLICommandContract {
@@ -26,8 +25,8 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 10, max: 30)")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: \(Int(CLITimeoutDefaults.wait)), max: 30)")
+    var timeout: Double = CLITimeoutDefaults.wait
 
     func validate() throws {
         guard timeout > 0 && timeout <= 30 else {
@@ -113,8 +112,7 @@ struct WaitPredicateInput: ParsableArguments {
     }
 
     private static func heistValue(from predicate: AccessibilityPredicate) throws -> HeistValue {
-        let data = try JSONEncoder().encode(predicate)
-        return try JSONDecoder().decode(HeistValue.self, from: data)
+        try TheFence.HeistValuePayloadEncoder.encode(predicate)
     }
 }
 

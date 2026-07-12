@@ -1,6 +1,32 @@
 import Foundation
 import Network
 
+enum SocketClientPhase: Equatable, Sendable {
+    case connected(SocketSendBuffer)
+    case sending(SocketSendBuffer)
+
+    var sendBuffer: SocketSendBuffer {
+        switch self {
+        case .connected(let buffer), .sending(let buffer):
+            return buffer
+        }
+    }
+
+    func reserving(byteCount: Int) -> Result<SocketClientPhase, SocketSendBuffer.Rejection> {
+        var buffer = sendBuffer
+        if let rejection = buffer.reserve(byteCount: byteCount) {
+            return .failure(rejection)
+        }
+        return .success(.sending(buffer))
+    }
+
+    func completing(byteCount: Int) -> SocketClientPhase {
+        var buffer = sendBuffer
+        buffer.complete(byteCount: byteCount)
+        return buffer.pendingBytes > 0 ? .sending(buffer) : .connected(buffer)
+    }
+}
+
 /// Actor-owned client table for `SimpleSocketServer`.
 ///
 /// The server decides transport policy; this registry owns per-client socket
@@ -15,7 +41,7 @@ import Network
 struct SocketClientRegistry {
     struct Client {
         let connection: NWConnection
-        var sendBuffer: SocketSendBuffer
+        var phase: SocketClientPhase
     }
 
     enum SendReservation {
@@ -34,7 +60,7 @@ struct SocketClientRegistry {
         let clientId = nextClientId
         clients[nextClientId] = Client(
             connection: connection,
-            sendBuffer: SocketSendBuffer()
+            phase: .connected(SocketSendBuffer())
         )
         return clientId
     }
@@ -53,18 +79,27 @@ struct SocketClientRegistry {
         clients[clientId]
     }
 
-    mutating func reserveSend(clientId: Int, byteCount: Int) -> SendReservation {
-        guard var client = clients[clientId] else { return .missingClient }
-        if let rejection = client.sendBuffer.reserve(byteCount: byteCount) {
-            return .rejected(rejection, client: client)
-        }
-        clients[clientId] = client
-        return .accepted(connection: client.connection)
+    func phase(for clientId: Int) -> SocketClientPhase? {
+        clients[clientId]?.phase
     }
 
-    mutating func completeSend(clientId: Int, byteCount: Int) {
-        guard var client = clients[clientId] else { return }
-        client.sendBuffer.complete(byteCount: byteCount)
+    mutating func reserveSend(clientId: Int, byteCount: Int) -> SendReservation {
+        guard var client = clients[clientId] else { return .missingClient }
+        switch client.phase.reserving(byteCount: byteCount) {
+        case .success(let phase):
+            client.phase = phase
+            clients[clientId] = client
+            return .accepted(connection: client.connection)
+        case .failure(let rejection):
+            return .rejected(rejection, client: client)
+        }
+    }
+
+    @discardableResult
+    mutating func completeSend(clientId: Int, byteCount: Int) -> Bool {
+        guard var client = clients[clientId] else { return false }
+        client.phase = client.phase.completing(byteCount: byteCount)
         clients[clientId] = client
+        return true
     }
 }

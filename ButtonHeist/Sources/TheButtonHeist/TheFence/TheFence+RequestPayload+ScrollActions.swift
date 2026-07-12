@@ -14,7 +14,7 @@ extension TheFence {
             defaultFrom: Command.scroll.descriptor
         )
         return try appInteractionDispatch(
-            ViewportDebugCommand.scroll.command,
+            Command.scroll,
             .viewportScroll(ScrollTarget(
                 selection: try input.scrollContainerSelection(),
                 direction: direction
@@ -30,7 +30,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            ViewportDebugCommand.scrollToVisible.command,
+            Command.scrollToVisible,
             .viewportScrollToVisible(.target(try input.requiredElementTarget(command: .scrollToVisible))),
             expectationPayload: expectationPayload
         )
@@ -47,7 +47,7 @@ extension TheFence {
             defaultFrom: Command.scrollToEdge.descriptor
         )
         return try appInteractionDispatch(
-            ViewportDebugCommand.scrollToEdge.command,
+            Command.scrollToEdge,
             .viewportScrollToEdge(ScrollToEdgeTarget(
                 selection: try input.scrollContainerSelection(),
                 edge: edge

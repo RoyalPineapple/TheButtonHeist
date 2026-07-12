@@ -194,47 +194,6 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         }
     }
 
-    func testAsyncSendCompletionFailureEmitsTypedCallback() async throws {
-        let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
-        let capturedFailure = OSAllocatedUnfairLock<ServerSendFailure?>(initialState: nil)
-        let clientConnected = expectation(description: "client connected")
-        let sendFailed = expectation(description: "send failed")
-
-        let callbacks = SocketServerCallbacks(
-            onClientConnected: { clientId, _ in
-                capturedClientId.withLock { $0 = clientId }
-                clientConnected.fulfill()
-            },
-            onSendFailed: { _, failure in
-                capturedFailure.withLock { $0 = failure }
-                sendFailed.fulfill()
-            }
-        )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
-        await server.setSendContentForTesting { _, _, completion in
-            if case .contentProcessed(let handler) = completion {
-                handler(.posix(.ECONNRESET))
-            }
-        }
-
-        let client = ButtonHeistNetworkTestClient.plaintext(port: port)
-        defer { client.cancel() }
-
-        try await client.connect()
-        await fulfillment(of: [clientConnected], timeout: 5.0)
-        let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-
-        let outcome = await server.send(Data("response".utf8), to: clientId)
-
-        XCTAssertEqual(outcome, .enqueued)
-        await fulfillment(of: [sendFailed], timeout: 5.0)
-        guard case .transportFailed(let failedClientId, let message) = capturedFailure.withLock({ $0 }) else {
-            return XCTFail("Expected transportFailed callback, got \(String(describing: capturedFailure.withLock { $0 }))")
-        }
-        XCTAssertEqual(failedClientId, clientId)
-        XCTAssertFalse(message.isEmpty)
-    }
-
     func testCanRestartAfterStop() async throws {
         let firstPort = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(firstPort, 0)

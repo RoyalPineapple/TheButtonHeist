@@ -13,7 +13,7 @@ extension Actions {
         selection: GesturePointSelection,
         method: ActionMethod,
         action: (CGPoint) async -> Bool
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         switch await resolveGesturePoint(selection: selection, method: method) {
         case .failure(let result):
             return result
@@ -29,7 +29,7 @@ extension Actions {
 
     // MARK: - Synthetic Gesture Dispatch
 
-    func executeTap(_ target: TapTarget) async -> TheSafecracker.InteractionResult {
+    func executeTap(_ target: TapTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performPointAction(
             selection: target.selection,
             method: .syntheticTap
@@ -38,7 +38,7 @@ extension Actions {
         }
     }
 
-    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
+    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performPointAction(
             selection: target.selection,
             method: .syntheticLongPress
@@ -47,7 +47,7 @@ extension Actions {
         }
     }
 
-    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
+    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.ActionDispatchOutcome {
         switch target.selection {
         case .unitElement(let elementTarget, let start, let end):
             return await performElementFrameSwipe(
@@ -100,7 +100,7 @@ extension Actions {
         start: UnitPoint,
         end: UnitPoint,
         duration: GestureDuration
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: elementTarget,
@@ -110,7 +110,7 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         case .failed(let failure):
-            return failure.interactionResult(commandMethod: .syntheticSwipe)
+            return failure.actionDispatchOutcome(commandMethod: .syntheticSwipe)
         }
         let frame: CGRect
         switch resolveGestureFrame(for: inflatedTarget, method: .syntheticSwipe) {
@@ -138,12 +138,12 @@ extension Actions {
         from startPoint: CGPoint,
         to endPoint: CGPoint,
         duration: GestureDuration
-    ) async -> TheSafecracker.InteractionResult {
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
     }
 
-    func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult {
+    func executeDrag(_ target: DragTarget) async -> TheSafecracker.ActionDispatchOutcome {
         let selection: GesturePointSelection
         let end: ScreenPoint
         switch target.selection {
@@ -174,7 +174,7 @@ extension Actions {
         method: ActionMethod,
         diagnosticPoint: CGPoint,
         success: Bool
-    ) -> TheSafecracker.InteractionResult {
+    ) -> TheSafecracker.ActionDispatchOutcome {
         guard !success else {
             return .success(method: method)
         }

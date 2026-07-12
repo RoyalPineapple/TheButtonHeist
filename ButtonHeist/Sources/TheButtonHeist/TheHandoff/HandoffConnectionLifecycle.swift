@@ -1,11 +1,19 @@
 import Foundation
 import ButtonHeistSupport
 
+private let disconnectedDuringConnectionAttemptMessage =
+    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+
 /// Invariant: runtime phase, live connection handle, keepalive, attempt failure,
 /// and result waiters advance together. The public `phase` is a projection of
 /// this runtime owner so disconnected/failed states cannot retain a live handle.
 @ButtonHeistActor
 final class HandoffConnectionLifecycle {
+    private struct WaiterEffect {
+        let attemptID: UUID
+        let result: Result<Void, Error>
+    }
+
     private struct ConnectingRuntime {
         let attempt: HandoffConnectionAttempt
         let connection: any DeviceConnecting
@@ -86,6 +94,27 @@ final class HandoffConnectionLifecycle {
             if case .connected(let runtime) = self { return runtime }
             return nil
         }
+
+        func waiterEffect(for next: RuntimePhase) -> WaiterEffect? {
+            guard case .connecting(let current, _) = self else { return nil }
+            let attemptID = current.attempt.id
+            let fallback = HandoffConnectionError.connectionFailed(disconnectedDuringConnectionAttemptMessage)
+
+            switch next {
+            case .connected(let runtime) where runtime.session.attemptID == attemptID:
+                return WaiterEffect(attemptID: attemptID, result: .success(()))
+            case .connecting(let runtime, _) where runtime.attempt.id == attemptID:
+                return nil
+            case .failed(let failure):
+                return WaiterEffect(attemptID: attemptID, result: .failure(failure))
+            case .disconnected(let failure),
+                 .reconnecting(_, let failure),
+                 .connecting(_, let failure):
+                return WaiterEffect(attemptID: attemptID, result: .failure(failure ?? fallback))
+            case .connected:
+                return WaiterEffect(attemptID: attemptID, result: .failure(fallback))
+            }
+        }
     }
 
     private var runtimePhase: RuntimePhase = .disconnected(failure: nil)
@@ -160,17 +189,11 @@ final class HandoffConnectionLifecycle {
             ),
             connection: runtime.connection
         )))
-        waiters.resolve(attemptID: attemptID, with: .connected)
         return true
     }
 
     func markFailed(_ failure: HandoffConnectionError) {
-        let attemptID = activeAttemptID
-        let wasActive = runtimePhase.isActive
         setRuntimePhase(.failed(failure))
-        if wasActive, let attemptID {
-            waiters.resolve(attemptID: attemptID, with: .failed(failure))
-        }
     }
 
     @discardableResult
@@ -178,23 +201,15 @@ final class HandoffConnectionLifecycle {
         reason: DisconnectReason? = nil,
         expectedAttemptID: UUID? = nil
     ) -> Bool {
-        let attemptID = activeAttemptID
-        if let expectedAttemptID, attemptID != expectedAttemptID { return false }
+        if let expectedAttemptID, activeAttemptID != expectedAttemptID { return false }
 
         let wasActive = runtimePhase.isActive
         if wasActive {
             if let reason {
                 let failure = HandoffConnectionError.disconnected(reason)
                 setRuntimePhase(.disconnected(failure: failure))
-                if let attemptID {
-                    waiters.resolve(attemptID: attemptID, with: .failed(failure))
-                }
             } else {
-                let failure = HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)
                 setRuntimePhase(.disconnected(failure: nil))
-                if let attemptID {
-                    waiters.resolve(attemptID: attemptID, with: .failed(failure))
-                }
             }
         } else {
             let failure = reason == nil ? nil : runtimePhase.diagnosticFailure
@@ -207,7 +222,6 @@ final class HandoffConnectionLifecycle {
     func disconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) -> Bool {
         guard activeAttemptID == attemptID else { return false }
         setRuntimePhase(.disconnected(failure: failure))
-        waiters.resolve(attemptID: attemptID, with: .failed(failure))
         return true
     }
 
@@ -311,12 +325,17 @@ final class HandoffConnectionLifecycle {
 
     private func setRuntimePhase(_ nextPhase: RuntimePhase) {
         let previousPhase = runtimePhase
+        let waiterEffect = previousPhase.waiterEffect(for: nextPhase)
         cancelOwnedTasksLeaving(previousPhase, for: nextPhase)
         runtimePhase = nextPhase
         let previousProjection = previousPhase.projectedPhase
         let nextProjection = nextPhase.projectedPhase
-        guard !Self.isSameConnectionPhase(previousProjection, nextProjection) else { return }
-        onPhaseChanged?(nextProjection)
+        if !Self.isSameConnectionPhase(previousProjection, nextProjection) {
+            onPhaseChanged?(nextProjection)
+        }
+        if let waiterEffect {
+            waiters.resolve(attemptID: waiterEffect.attemptID, with: waiterEffect.result)
+        }
     }
 
     private func cancelOwnedTasksLeaving(
@@ -349,6 +368,5 @@ final class HandoffConnectionLifecycle {
         }
     }
 
-    private static let disconnectedDuringAttemptMessage =
-        "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+    fileprivate static let disconnectedDuringAttemptMessage = disconnectedDuringConnectionAttemptMessage
 }

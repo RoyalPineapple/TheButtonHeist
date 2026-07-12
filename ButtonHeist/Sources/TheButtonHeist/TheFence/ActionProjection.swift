@@ -43,19 +43,12 @@ enum ActionMethodProjection: Sendable, Equatable, CustomStringConvertible {
 }
 
 struct ActionProjection: Sendable {
-    let status: PublicResponseStatus
     let actionMethod: ActionMethodProjection
-    let message: String?
-    let announcement: String?
-    let payload: ActionPayloadProjection
-    let delta: DeltaProjection?
-    let screenName: String?
-    let screenId: String?
-    let failure: ActionFailureProjection?
-    let expectation: ExpectationProjection?
-    let activationTrace: ActivationTrace?
-    let timing: ActionPerformanceTiming?
-    let omitted: ActionResultOmissionsProjection?
+    let result: ActionResult
+    private let surfacedExpectation: ExpectationResult?
+    private let expectationHint: String?
+    private let profile: ProjectionProfile
+    private let includesOmissions: Bool
 
     init(
         actionMethod: ActionMethodProjection,
@@ -65,35 +58,67 @@ struct ActionProjection: Sendable {
         profile: ProjectionProfile,
         includeOmissions: Bool = false
     ) {
-        let surfacedExpectation = result.outcome.isSuccess ? expectation : nil
-        status = result.publicStatus(expectation: surfacedExpectation)
         self.actionMethod = actionMethod
-        message = result.message
-        announcement = result.announcement
+        self.result = result
+        self.surfacedExpectation = result.outcome.isSuccess ? expectation : nil
+        self.expectationHint = expectationHint
+        self.profile = profile
+        self.includesOmissions = includeOmissions
+    }
+
+    var status: PublicResponseStatus {
+        result.publicStatus(expectation: surfacedExpectation)
+    }
+
+    var message: String? { result.message }
+
+    var announcement: String? { result.announcement }
+
+    var payload: ActionPayloadProjection {
         switch result.payload {
         case .value(let value):
-            payload = .value(value)
+            return .value(value)
         case .rotor(let rotor):
-            payload = .rotor(rotor)
+            return .rotor(rotor)
         case .screenshot(let screen):
-            payload = .screenshot(width: screen.width, height: screen.height)
+            return .screenshot(width: screen.width, height: screen.height)
         case .heistExecution(let heist):
-            payload = .heistExecutionStepCount(heist.steps.count)
+            return .heistExecutionStepCount(heist.steps.count)
         case .none:
-            payload = .none
+            return .none
         }
-        delta = result.accessibilityTrace?.endpointDelta.map {
+    }
+
+    var delta: DeltaProjection? {
+        result.accessibilityTrace?.endpointDelta.map {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }
-        screenName = result.accessibilityTrace?.endpointScreenName
-        screenId = result.accessibilityTrace?.endpointScreenId
-        failure = result.diagnosticFailureProjection(fallbackMessage: actionMethod.rawValue)
-        self.expectation = surfacedExpectation.map {
+    }
+
+    var screenName: String? {
+        result.accessibilityTrace?.endpointScreenName
+    }
+
+    var screenId: String? {
+        result.accessibilityTrace?.endpointScreenId
+    }
+
+    var failure: ActionFailureProjection? {
+        result.diagnosticFailureProjection(fallbackMessage: actionMethod.rawValue)
+    }
+
+    var expectation: ExpectationProjection? {
+        surfacedExpectation.map {
             ExpectationProjection(result: $0, hint: expectationHint)
         }
-        activationTrace = result.activationTrace
-        timing = result.timing
-        omitted = includeOmissions ? ActionResultOmissionsProjection(result: result) : nil
+    }
+
+    var activationTrace: ActivationTrace? { result.activationTrace }
+
+    var timing: ActionPerformanceTiming? { result.timing }
+
+    var omitted: ActionResultOmissionsProjection? {
+        includesOmissions ? ActionResultOmissionsProjection(result: result) : nil
     }
 }
 

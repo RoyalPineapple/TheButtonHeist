@@ -1282,6 +1282,16 @@ import Testing
         .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
     ])
 
+    let scopedOrdinal = try HeistPlanSourceCompiler().compile(root(
+        #"Activate(.within(container: .identifier("Sheet"), .target(.label("Pay"), ordinal: 0)))"#
+    ))
+    #expect(scopedOrdinal.body == [
+        .action(try ActionStep(command: .activate(.within(
+            container: .identifier("Sheet"),
+            target: .predicate(.label("Pay"), ordinal: 0)
+        )))),
+    ])
+
     let traits = try HeistPlanSourceCompiler().compile(root(#"Activate(.element(.label("Pay"), .traits([.button])))"#))
     #expect(traits.body == [
         .action(try ActionStep(command: .activate(.predicate(.element(.label("Pay"), .traits([.button])))))),
@@ -1313,6 +1323,14 @@ import Testing
     expect(
         actionOrdinal,
         contains: #"Ordinal belongs to the target. Use Activate(.target(.label("Pay"), ordinal: 0))."#
+    )
+
+    let scopedActionOrdinal = compileError(root(
+        #"Activate(.within(container: .identifier("Sheet"), .label("Pay")), ordinal: 0)"#
+    ))
+    expect(
+        scopedActionOrdinal,
+        contains: #"Use Activate(.within(container: .identifier("Sheet"), .target(.label("Pay"), ordinal: 0)))."#
     )
 
     let labeledStringMatchMode = compileError(root(#"Activate(.label(contains: "Pay"))"#))
@@ -1388,6 +1406,9 @@ import Testing
     }
     """))
     expect(caseAfterElse, contains: "Case must appear before Else")
+}
+
+@Test func `reported agent update grammar mistakes fail with corrections`() throws {
     let emptyUpdated = compileError(root(#"Activate(.label("Pay")).expect(.updated())"#))
     expect(emptyUpdated, contains: ".updated(...) requires an update matcher")
 

@@ -57,7 +57,7 @@ enum MuscleAdmissionDecision {
 
 /// Owns the unauthenticated ButtonHeist handshake and client auth phases.
 struct TheMuscleAdmission {
-    typealias ResponseHandler = @Sendable (Data) -> Void
+    typealias ResponseHandler = SocketResponseHandler
 
     private var authentication: MuscleAuthenticationFlow
 

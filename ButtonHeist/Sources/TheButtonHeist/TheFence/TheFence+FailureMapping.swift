@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistSupport
 
 import TheScore
 
@@ -11,7 +12,7 @@ extension FenceError {
         case .timeout: self = .connectionTimeout
         case .noDeviceFound: self = .noDeviceFound
         case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
-        case .ambiguousDeviceTarget(let filter, let matches): self = .noMatchingDevice(filter: filter, available: matches)
+        case .ambiguousDeviceTarget(let filter, let matches): self = .ambiguousDeviceTarget(filter: filter, matches: matches)
         }
     }
 
@@ -28,7 +29,15 @@ extension FenceError {
 }
 
 private extension ConnectionFailure {
-    init(deviceTransportFailure failure: DeviceTransportFailure) {
+    init(handoffDiagnostic diagnostic: HandoffFailureDiagnostic) {
+        self.init(
+            message: HandoffFailureFormatter.message(for: diagnostic),
+            failureCode: diagnostic.details.code,
+            hint: diagnostic.hint
+        )
+    }
+
+    init(deviceTransportFailure failure: NetworkTransportFailure) {
         let details = FailureDetails(code: .transportNetworkError)
         self.init(
             message: "Transport send failed: \(failure.description)",

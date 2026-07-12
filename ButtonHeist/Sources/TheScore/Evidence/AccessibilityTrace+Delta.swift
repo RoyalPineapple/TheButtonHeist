@@ -206,12 +206,18 @@ public extension AccessibilityTrace {
         case screenChanged(ScreenChanged)
     }
 
-    enum AccumulatedDeltaChange: Sendable, Equatable {
+    /// Canonical semantic change facts for an observation window. Unlike the
+    /// legacy `Delta` projection, this representation cannot lose simultaneous
+    /// screen and element evidence.
+    enum Change: Sendable, Equatable {
         case noChange
         case elementsChanged(ElementsChanged)
         case screenChanged(ScreenChanged)
         case screenAndElementsChanged(screen: ScreenChanged, elements: ElementsChanged)
     }
+
+    /// Source compatibility for clients that adopted the accumulated name.
+    typealias AccumulatedDeltaChange = Change
 
     struct AccumulatedDelta: Sendable, Equatable {
         public let elementCount: Int
@@ -539,12 +545,12 @@ private enum AccessibilityTraceAccumulatedDelta {
                 interactionDigest: interactionDigest,
                 transient: transient,
                 accessibilityNotifications: accessibilityNotifications.filter {
-                    $0.kind.isElementTransition
+                    $0.kind.isElementChangeEvidence
                 }
             )
             : nil
 
-        let change: AccessibilityTrace.AccumulatedDeltaChange
+        let change: AccessibilityTrace.Change
         switch (screenChanged, elementsChanged) {
         case (.some(let screenChanged), .some(let elementsChanged)):
             change = .screenAndElementsChanged(screen: screenChanged, elements: elementsChanged)

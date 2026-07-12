@@ -45,6 +45,14 @@ public extension FenceError {
                 coreMessage: message,
                 displayMessage: message
             )
+        case .ambiguousDeviceTarget(let filter, let matches):
+            let list = matches.joined(separator: ", ")
+            let message = "Ambiguous device target '\(filter)' (matches: \(list))"
+            return FenceFailureDescriptor(
+                details: FailureDetails(code: .discoveryAmbiguousDeviceTarget),
+                coreMessage: message,
+                displayMessage: message
+            )
         case .connectionTimeout:
             let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
             return FenceFailureDescriptor(
