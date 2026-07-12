@@ -1,5 +1,28 @@
 import Foundation
 
+private struct ResolvedStringLoopPayloadCheck {
+    let referenceBindings: HeistReferenceBindingContext
+    let valuePath: String
+
+    var environment: HeistExecutionEnvironment {
+        referenceBindings.environment
+    }
+
+    func binding(string: String, to parameter: HeistReferenceName) -> Self {
+        Self(
+            referenceBindings: referenceBindings.binding(string: string, to: parameter),
+            valuePath: valuePath
+        )
+    }
+
+    func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> Self {
+        Self(
+            referenceBindings: referenceBindings.binding(target: target, to: parameter),
+            valuePath: valuePath
+        )
+    }
+}
+
 private struct HeistPlanAdmissionTraversalContext {
     let path: HeistTraversalPath
     let depth: Int
@@ -7,6 +30,7 @@ private struct HeistPlanAdmissionTraversalContext {
     let definitionScope: HeistPlanAdmissionDefinitionScope
     let rootDefinitionScope: HeistPlanAdmissionDefinitionScope
     let invocationStack: [HeistCallGraph.Node]
+    let stringLoopPayloadChecks: [ResolvedStringLoopPayloadCheck]
 
     var scope: HeistReferenceScope {
         referenceBindings.scope
@@ -16,22 +40,20 @@ private struct HeistPlanAdmissionTraversalContext {
         referenceBindings.environment
     }
 
-    func child(
-        path: HeistTraversalPath,
-        depth: Int? = nil,
-        referenceBindings: HeistReferenceBindingContext? = nil,
-        definitionScope: HeistPlanAdmissionDefinitionScope? = nil,
-        rootDefinitionScope: HeistPlanAdmissionDefinitionScope? = nil,
-        invocationStack: [HeistCallGraph.Node]? = nil
-    ) -> Self {
+    func child(path: HeistTraversalPath, depth: Int) -> Self {
         Self(
             path: path,
-            depth: depth ?? self.depth,
-            referenceBindings: referenceBindings ?? self.referenceBindings,
-            definitionScope: definitionScope ?? self.definitionScope,
-            rootDefinitionScope: rootDefinitionScope ?? self.rootDefinitionScope,
-            invocationStack: invocationStack ?? self.invocationStack
+            depth: depth,
+            referenceBindings: referenceBindings,
+            definitionScope: definitionScope,
+            rootDefinitionScope: rootDefinitionScope,
+            invocationStack: invocationStack,
+            stringLoopPayloadChecks: stringLoopPayloadChecks
         )
+    }
+
+    func child(path: HeistTraversalPath) -> Self {
+        child(path: path, depth: depth)
     }
 
     func resolveInvocation(path: HeistInvocationPath) -> ResolvedHeistPlanAdmissionDefinition? {
@@ -127,7 +149,8 @@ struct HeistPlanRuntimeSafetyValidator {
             referenceBindings: .runtimeSafetyPlaceholder(for: candidate.parameter),
             definitionScope: rootDefinitionScope,
             rootDefinitionScope: rootDefinitionScope,
-            invocationStack: []
+            invocationStack: [],
+            stringLoopPayloadChecks: []
         )
         validatePlanHeader(candidate, path: context.path, requiresName: false)
         walkDefinitions(
@@ -185,8 +208,13 @@ struct HeistPlanRuntimeSafetyValidator {
         switch step.payload {
         case .action(let action):
             let actionContext = context.child(path: context.path.child(.action))
+            validateResolvedStringLoopAction(action, context: actionContext)
             validateAction(action, path: actionContext.path, scope: context.scope, environment: context.environment)
             if let expectation = action.expectationPolicy.expectedStep {
+                validateResolvedStringLoopWait(
+                    expectation,
+                    context: actionContext.child(path: actionContext.path.child(.expectation))
+                )
                 validateWait(
                     expectation,
                     path: actionContext.path.child(.expectation),
@@ -220,6 +248,7 @@ struct HeistPlanRuntimeSafetyValidator {
         context: HeistPlanAdmissionTraversalContext
     ) {
         let waitContext = context.child(path: context.path.child(.wait))
+        validateResolvedStringLoopWait(wait, context: waitContext)
         validateWait(wait, path: waitContext.path, scope: context.scope, environment: context.environment)
         guard let elseBody = wait.elseBody else { return }
         walk(elseBody, context: context.child(path: waitContext.path.child(.elseBody), depth: context.depth + 1))
@@ -264,15 +293,19 @@ struct HeistPlanRuntimeSafetyValidator {
         let forEachContext = context.child(path: context.path.child(.forEachElement))
         validateCollectionLoopNesting(kind: "for_each_element", path: forEachContext.path)
         validateForEachElement(forEach, path: forEachContext.path)
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(forEach.matching))
         walk(
             forEach.body,
-            context: forEachContext.child(
+            context: HeistPlanAdmissionTraversalContext(
                 path: forEachContext.path.child(.body),
                 depth: context.depth + 1,
-                referenceBindings: context.referenceBindings.binding(
-                    target: .predicate(ElementPredicateTemplate(forEach.matching)),
-                    to: forEach.parameter
-                )
+                referenceBindings: context.referenceBindings.binding(target: target, to: forEach.parameter),
+                definitionScope: context.definitionScope,
+                rootDefinitionScope: context.rootDefinitionScope,
+                invocationStack: context.invocationStack,
+                stringLoopPayloadChecks: context.stringLoopPayloadChecks.map {
+                    $0.binding(target: target, to: forEach.parameter)
+                }
             )
         )
     }
@@ -283,16 +316,27 @@ struct HeistPlanRuntimeSafetyValidator {
     ) {
         let forEachContext = context.child(path: context.path.child(.forEachString))
         validateCollectionLoopNesting(kind: "for_each_string", path: forEachContext.path)
-        validateForEachString(forEach, context: forEachContext)
+        validateForEachString(forEach, path: forEachContext.path)
+        let firstValue = forEach.values.first ?? ""
+        let inheritedChecks = context.stringLoopPayloadChecks.map {
+            $0.binding(string: firstValue, to: forEach.parameter)
+        }
+        let valueChecks = forEach.values.enumerated().map { index, value in
+            ResolvedStringLoopPayloadCheck(
+                referenceBindings: context.referenceBindings.binding(string: value, to: forEach.parameter),
+                valuePath: forEachContext.path.child(.values).index(index).description
+            )
+        }
         walk(
             forEach.body,
-            context: forEachContext.child(
+            context: HeistPlanAdmissionTraversalContext(
                 path: forEachContext.path.child(.body),
                 depth: context.depth + 1,
-                referenceBindings: context.referenceBindings.binding(
-                    string: forEach.values.first ?? "",
-                    to: forEach.parameter
-                )
+                referenceBindings: context.referenceBindings.binding(string: firstValue, to: forEach.parameter),
+                definitionScope: context.definitionScope,
+                rootDefinitionScope: context.rootDefinitionScope,
+                invocationStack: context.invocationStack,
+                stringLoopPayloadChecks: inheritedChecks + valueChecks
             )
         )
     }
@@ -303,8 +347,13 @@ struct HeistPlanRuntimeSafetyValidator {
     ) {
         let repeatContext = context.child(path: context.path.child(.repeatUntil))
         validateRepeatUntil(repeatUntil, path: repeatContext.path)
+        let predicateWait = WaitStep(predicate: repeatUntil.predicate, timeout: repeatUntil.timeout)
+        validateResolvedStringLoopWait(
+            predicateWait,
+            context: repeatContext.child(path: repeatContext.path.child(.predicate))
+        )
         validateWait(
-            WaitStep(predicate: repeatUntil.predicate, timeout: repeatUntil.timeout),
+            predicateWait,
             path: repeatContext.path.child(.predicate),
             scope: repeatContext.scope,
             environment: repeatContext.environment
@@ -326,10 +375,14 @@ struct HeistPlanRuntimeSafetyValidator {
         context: HeistPlanAdmissionTraversalContext
     ) {
         let inlineDefinitionScope = HeistPlanAdmissionDefinitionScope(definitions: candidate.definitions)
-        let heistContext = context.child(
+        let heistContext = HeistPlanAdmissionTraversalContext(
             path: context.path.child(.heist),
+            depth: context.depth,
+            referenceBindings: context.referenceBindings,
             definitionScope: inlineDefinitionScope,
-            rootDefinitionScope: inlineDefinitionScope
+            rootDefinitionScope: inlineDefinitionScope,
+            invocationStack: context.invocationStack,
+            stringLoopPayloadChecks: context.stringLoopPayloadChecks
         )
         validatePlanHeader(candidate, path: heistContext.path, requiresName: false)
         if candidate.parameter != .none {
@@ -360,6 +413,10 @@ struct HeistPlanRuntimeSafetyValidator {
         let invocationContext = context.child(path: context.path.child(.invoke))
         validateInvocation(invocation, context: invocationContext)
         if let expectation = invocation.expectation {
+            validateResolvedStringLoopWait(
+                expectation,
+                context: invocationContext.child(path: invocationContext.path.child(.expectation))
+            )
             validateWait(
                 expectation,
                 path: invocationContext.path.child(.expectation),
@@ -375,9 +432,18 @@ struct HeistPlanRuntimeSafetyValidator {
                 to: resolved.definition.parameter
               )
         else { return }
+        let payloadChecks = context.stringLoopPayloadChecks.compactMap { check in
+            try? ResolvedStringLoopPayloadCheck(
+                referenceBindings: check.referenceBindings.binding(
+                    argument: invocation.argument,
+                    to: resolved.definition.parameter
+                ),
+                valuePath: check.valuePath
+            )
+        }
         walk(
             resolved.definition.body,
-            context: invocationContext.child(
+            context: HeistPlanAdmissionTraversalContext(
                 path: invocationContext.path.child(.body),
                 depth: context.depth + 1,
                 referenceBindings: referenceBindings,
@@ -385,7 +451,9 @@ struct HeistPlanRuntimeSafetyValidator {
                     definitions: resolved.definition.definitions,
                     pathPrefix: resolved.namePath
                 ),
-                invocationStack: context.invocationStack + [resolvedNode]
+                rootDefinitionScope: context.rootDefinitionScope,
+                invocationStack: context.invocationStack + [resolvedNode],
+                stringLoopPayloadChecks: payloadChecks
             )
         )
     }
@@ -440,7 +508,8 @@ struct HeistPlanRuntimeSafetyValidator {
                 referenceBindings: .runtimeSafetyPlaceholder(for: definition.parameter),
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
-                invocationStack: []
+                invocationStack: [],
+                stringLoopPayloadChecks: []
             )
             validatePlanHeader(definition, path: context.path, requiresName: true)
             walkDefinitions(
@@ -452,11 +521,14 @@ struct HeistPlanRuntimeSafetyValidator {
             )
             walk(
                 definition.body,
-                context: context.child(
+                context: HeistPlanAdmissionTraversalContext(
                     path: context.path.child(.body),
                     depth: depth + 1,
+                    referenceBindings: context.referenceBindings,
                     definitionScope: nestedDefinitionScope,
-                    invocationStack: [HeistCallGraph.Node(namePath: definitionPath)]
+                    rootDefinitionScope: rootDefinitionScope,
+                    invocationStack: [HeistCallGraph.Node(namePath: definitionPath)],
+                    stringLoopPayloadChecks: []
                 )
             )
         }
@@ -693,11 +765,7 @@ struct HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateForEachString(
-        _ step: ForEachStringStep,
-        context: HeistPlanAdmissionTraversalContext
-    ) {
-        let path = context.path
+    private mutating func validateForEachString(_ step: ForEachStringStep, path: HeistTraversalPath) {
         validateParameter(step.parameter, path: path.child(.parameter).description, role: "for_each_string parameter")
         if step.values.count > limits.maxForEachStringValues {
             fail(
@@ -709,18 +777,6 @@ struct HeistPlanRuntimeSafetyValidator {
         }
         for (index, value) in step.values.enumerated() {
             addString(value, path: path.child(.values).index(index).description, role: "for_each_string value")
-        }
-
-        for (index, value) in step.values.enumerated() {
-            validateResolvedStringLoopPayloads(
-                step.body,
-                context: context.child(
-                    path: path.child(.body),
-                    depth: context.depth + 1,
-                    referenceBindings: context.referenceBindings.binding(string: value, to: step.parameter)
-                ),
-                valuePath: path.child(.values).index(index).description
-            )
         }
     }
 
@@ -762,269 +818,43 @@ struct HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateResolvedStringLoopPayloads(
-        _ steps: [HeistStep],
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
-    ) {
-        validateResolvedStringLoopPayloads(
-            steps.map(HeistStepAdmissionCandidate.init),
-            context: context,
-            valuePath: valuePath
-        )
-    }
-
-    private mutating func validateResolvedStringLoopPayloads(
-        _ steps: [HeistStepAdmissionCandidate],
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
-    ) {
-        for (index, step) in steps.enumerated() {
-            validateResolvedStringLoopPayload(
-                step,
-                context: context.child(path: context.path.index(index)),
-                valuePath: valuePath
-            )
-        }
-    }
-
-    private mutating func validateResolvedStringLoopPayload(
-        _ step: HeistStepAdmissionCandidate,
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
-    ) {
-        switch step.payload {
-        case .action(let action):
-            let actionContext = context.child(path: context.path.child(.action))
-            validateResolvedStringLoopAction(action, context: actionContext, valuePath: valuePath)
-            if let expectation = action.expectationPolicy.expectedStep {
-                validateResolvedStringLoopWait(
-                    expectation,
-                    context: actionContext.child(path: actionContext.path.child(.expectation)),
-                    valuePath: valuePath
-                )
-            }
-        case .wait(let wait):
-            let waitContext = context.child(path: context.path.child(.wait))
-            validateResolvedStringLoopWait(wait, context: waitContext, valuePath: valuePath)
-            if let elseBody = wait.elseBody {
-                validateResolvedStringLoopPayloads(
-                    elseBody,
-                    context: waitContext.child(path: waitContext.path.child(.elseBody), depth: context.depth + 1),
-                    valuePath: valuePath
-                )
-            }
-        case .conditional(let conditional):
-            let conditionalContext = context.child(path: context.path.child(.conditional))
-            for (index, predicateCase) in conditional.cases.enumerated() {
-                let casePath = conditionalContext.path.child(.cases).index(index)
-                validateResolvedStringLoopPayloads(
-                    predicateCase.body,
-                    context: conditionalContext.child(path: casePath.child(.body), depth: context.depth + 1),
-                    valuePath: valuePath
-                )
-            }
-            if let elseBody = conditional.elseBody {
-                validateResolvedStringLoopPayloads(
-                    elseBody,
-                    context: conditionalContext.child(
-                        path: conditionalContext.path.child(.elseBody),
-                        depth: context.depth + 1
-                    ),
-                    valuePath: valuePath
-                )
-            }
-        case .forEachElement(let forEach):
-            let forEachContext = context.child(path: context.path.child(.forEachElement))
-            validateResolvedStringLoopPayloads(
-                forEach.body,
-                context: forEachContext.child(
-                    path: forEachContext.path.child(.body),
-                    depth: context.depth + 1,
-                    referenceBindings: context.referenceBindings.binding(
-                        target: .predicate(ElementPredicateTemplate(forEach.matching)),
-                        to: forEach.parameter
-                    )
-                ),
-                valuePath: valuePath
-            )
-        case .forEachString(let forEach):
-            let forEachContext = context.child(path: context.path.child(.forEachString))
-            validateResolvedStringLoopPayloads(
-                forEach.body,
-                context: forEachContext.child(
-                    path: forEachContext.path.child(.body),
-                    depth: context.depth + 1,
-                    referenceBindings: context.referenceBindings.binding(
-                        string: forEach.values.first ?? "",
-                        to: forEach.parameter
-                    )
-                ),
-                valuePath: valuePath
-            )
-        case .repeatUntil(let repeatUntil):
-            let repeatContext = context.child(path: context.path.child(.repeatUntil))
-            validateResolvedStringLoopWait(
-                WaitStep(predicate: repeatUntil.predicate, timeout: repeatUntil.timeout),
-                context: repeatContext.child(path: repeatContext.path.child(.predicate)),
-                valuePath: valuePath
-            )
-            validateResolvedStringLoopPayloads(
-                repeatUntil.body,
-                context: repeatContext.child(path: repeatContext.path.child(.body), depth: context.depth + 1),
-                valuePath: valuePath
-            )
-            if let elseBody = repeatUntil.elseBody {
-                validateResolvedStringLoopPayloads(
-                    elseBody,
-                    context: repeatContext.child(path: repeatContext.path.child(.elseBody), depth: context.depth + 1),
-                    valuePath: valuePath
-                )
-            }
-        case .warn, .fail:
-            break
-        case .heist(let candidate):
-            validateResolvedStringLoopInlineHeist(candidate, context: context, valuePath: valuePath)
-        case .invoke(let invocation):
-            validateResolvedStringLoopInvocation(invocation, context: context, valuePath: valuePath)
-        }
-    }
-
-    private mutating func validateResolvedStringLoopInlineHeist(
-        _ candidate: HeistPlanAdmissionCandidate,
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
-    ) {
-        let scope = HeistPlanAdmissionDefinitionScope(definitions: candidate.definitions)
-        let heistContext = context.child(
-            path: context.path.child(.heist),
-            definitionScope: scope,
-            rootDefinitionScope: scope
-        )
-        validateResolvedStringLoopDefinitions(
-            candidate.definitions,
-            path: heistContext.path.child(.definitions),
-            depth: context.depth + 1,
-            definitionScope: scope,
-            rootDefinitionScope: scope,
-            valuePath: valuePath
-        )
-        validateResolvedStringLoopPayloads(
-            candidate.body,
-            context: heistContext.child(path: heistContext.path.child(.body), depth: context.depth + 1),
-            valuePath: valuePath
-        )
-    }
-
-    private mutating func validateResolvedStringLoopDefinitions(
-        _ definitions: [HeistPlanAdmissionCandidate],
-        path: HeistTraversalPath,
-        depth: Int,
-        definitionScope: HeistPlanAdmissionDefinitionScope,
-        rootDefinitionScope: HeistPlanAdmissionDefinitionScope,
-        valuePath: String
-    ) {
-        for (index, definition) in definitions.enumerated() {
-            let definitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
-            let nestedScope = HeistPlanAdmissionDefinitionScope(
-                definitions: definition.definitions,
-                pathPrefix: definitionPath
-            )
-            validateResolvedStringLoopDefinitions(
-                definition.definitions,
-                path: path.index(index).child(.definitions),
-                depth: depth + 1,
-                definitionScope: nestedScope,
-                rootDefinitionScope: rootDefinitionScope,
-                valuePath: valuePath
-            )
-            validateResolvedStringLoopPayloads(
-                definition.body,
-                context: HeistPlanAdmissionTraversalContext(
-                    path: path.index(index).child(.body),
-                    depth: depth + 1,
-                    referenceBindings: .runtimeSafetyPlaceholder(for: definition.parameter),
-                    definitionScope: nestedScope,
-                    rootDefinitionScope: rootDefinitionScope,
-                    invocationStack: [HeistCallGraph.Node(namePath: definitionPath)]
-                ),
-                valuePath: valuePath
-            )
-        }
-    }
-
-    private mutating func validateResolvedStringLoopInvocation(
-        _ invocation: HeistInvocationStep,
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
-    ) {
-        let invocationContext = context.child(path: context.path.child(.invoke))
-        if let expectation = invocation.expectation {
-            validateResolvedStringLoopWait(
-                expectation,
-                context: invocationContext.child(path: invocationContext.path.child(.expectation)),
-                valuePath: valuePath
-            )
-        }
-        guard let resolved = context.resolveInvocation(path: invocation.invocationPath) else { return }
-        let node = resolved.callGraphNode
-        guard context.callGraphCycle(closing: node) == nil,
-              let bindings = try? context.referenceBindings.binding(
-                argument: invocation.argument,
-                to: resolved.definition.parameter
-              )
-        else { return }
-        validateResolvedStringLoopPayloads(
-            resolved.definition.body,
-            context: invocationContext.child(
-                path: invocationContext.path.child(.body),
-                depth: context.depth + 1,
-                referenceBindings: bindings,
-                definitionScope: HeistPlanAdmissionDefinitionScope(
-                    definitions: resolved.definition.definitions,
-                    pathPrefix: resolved.namePath
-                ),
-                invocationStack: context.invocationStack + [node]
-            ),
-            valuePath: valuePath
-        )
-    }
-
     private mutating func validateResolvedStringLoopAction(
         _ action: ActionStep,
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
+        context: HeistPlanAdmissionTraversalContext
     ) {
-        do {
-            try action.command.assertResolvedPayloadAdmissible(in: context.environment)
-        } catch {
-            fail(
-                path: context.path.description,
-                contract: "string loop value must lower through the heist action payload contract",
-                observed: "\(valuePath) resolved to \(summarize(error))",
-                correction: "Use loop string values that keep every referenced command payload valid."
-            )
+        for check in context.stringLoopPayloadChecks {
+            do {
+                try action.command.assertResolvedPayloadAdmissible(in: check.environment)
+            } catch {
+                fail(
+                    path: context.path.description,
+                    contract: "string loop value must lower through the heist action payload contract",
+                    observed: "\(check.valuePath) resolved to \(summarize(error))",
+                    correction: "Use loop string values that keep every referenced command payload valid."
+                )
+            }
         }
     }
 
     private mutating func validateResolvedStringLoopWait(
         _ wait: WaitStep,
-        context: HeistPlanAdmissionTraversalContext,
-        valuePath: String
+        context: HeistPlanAdmissionTraversalContext
     ) {
-        do {
-            let resolved = try wait.resolve(in: context.environment)
-            try HeistRuntimePayloadContractValidator.validate(WaitTarget(
-                predicate: resolved.predicate,
-                timeout: resolved.timeout
-            ))
-        } catch {
-            fail(
-                path: context.path.description,
-                contract: "string loop value must resolve wait predicates",
-                observed: "\(valuePath) resolved to \(summarize(error))",
-                correction: "Use loop string values that keep every referenced wait predicate valid."
-            )
+        for check in context.stringLoopPayloadChecks {
+            do {
+                let resolved = try wait.resolve(in: check.environment)
+                try HeistRuntimePayloadContractValidator.validate(WaitTarget(
+                    predicate: resolved.predicate,
+                    timeout: resolved.timeout
+                ))
+            } catch {
+                fail(
+                    path: context.path.description,
+                    contract: "string loop value must resolve wait predicates",
+                    observed: "\(check.valuePath) resolved to \(summarize(error))",
+                    correction: "Use loop string values that keep every referenced wait predicate valid."
+                )
+            }
         }
     }
 }

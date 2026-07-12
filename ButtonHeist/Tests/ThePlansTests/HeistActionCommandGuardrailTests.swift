@@ -106,6 +106,36 @@ import Testing
     }
 }
 
+@Test func `runtime admission validates every string loop value through invocations`() throws {
+    let candidate = HeistPlanAdmissionCandidate(
+        definitions: [
+            HeistPlanAdmissionCandidate(
+                name: "typeQuery",
+                parameter: .string(name: "query"),
+                body: [.action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .label("Search")
+                )))])
+        ],
+        body: [.forEachString(try ForEachStringStep(
+            values: ["Milk", ""],
+            parameter: "item",
+            body: [.invoke(HeistInvocationStep(
+                path: ["typeQuery"],
+                argument: .string(.ref("item"))
+            ))]
+        ))]
+    )
+
+    let failures = runtimeSafetyFailures(for: candidate)
+
+    #expect(failures.contains {
+        $0.contract == "string loop value must lower through the heist action payload contract"
+            && $0.observed.contains("$.body[0].for_each_string.values[1] resolved to")
+            && $0.observed.contains("text must be non-empty")
+    }, "\(failures)")
+}
+
 @Test func `action command refs encode as accessibility targets`() throws {
     let commands: [HeistActionCommand] = [
         .activate(.ref("field")),

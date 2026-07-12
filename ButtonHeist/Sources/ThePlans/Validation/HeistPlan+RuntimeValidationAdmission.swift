@@ -84,19 +84,7 @@ package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
     }
 
     init(_ step: HeistStep) {
-        switch step {
-        case .action(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.action(step))
-        case .wait(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.wait(step))
-        case .conditional(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.conditional(step))
-        case .forEachElement(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachElement(step))
-        case .forEachString(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.forEachString(step))
-        case .repeatUntil(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.repeatUntil(step))
-        case .warn(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.warn(step))
-        case .fail(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.fail(step))
-        case .heist(let plan):
-            self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.heist(HeistPlanAdmissionCandidate(plan)))
-        case .invoke(let step): self.init(HeistStepWirePayload<HeistPlanAdmissionCandidate>.invoke(step))
-        }
+        self.init(step.wirePayload.mapHeist(HeistPlanAdmissionCandidate.init))
     }
 
     package static func action(_ step: ActionStep) -> Self {
@@ -161,7 +149,13 @@ private extension HeistPlan {
 
 private extension HeistStepAdmissionCandidate {
     func admittedStep(_ admission: HeistPlanRuntimeAdmission) -> HeistStep {
-        switch payload {
+        HeistStep(payload.mapHeist { HeistPlan($0, admittedBy: admission) })
+    }
+}
+
+private extension HeistStepWirePayload {
+    func mapHeist<MappedPlan>(_ transform: (Plan) -> MappedPlan) -> HeistStepWirePayload<MappedPlan> {
+        switch self {
         case .action(let step): return .action(step)
         case .wait(let step): return .wait(step)
         case .conditional(let step): return .conditional(step)
@@ -170,7 +164,7 @@ private extension HeistStepAdmissionCandidate {
         case .repeatUntil(let step): return .repeatUntil(step)
         case .warn(let step): return .warn(step)
         case .fail(let step): return .fail(step)
-        case .heist(let candidate): return .heist(HeistPlan(candidate, admittedBy: admission))
+        case .heist(let plan): return .heist(transform(plan))
         case .invoke(let step): return .invoke(step)
         }
     }
