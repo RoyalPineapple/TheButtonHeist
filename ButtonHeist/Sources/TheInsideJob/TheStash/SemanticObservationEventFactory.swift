@@ -77,9 +77,7 @@ enum SemanticObservationEventFactory {
             interface: interface,
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
-                firstResponder: screen.liveCapture.firstResponderHeistId.flatMap {
-                    stash.minimumUniqueTarget(for: $0, in: screen.tree)
-                },
+                firstResponder: stash.firstResponderTarget(in: screen.tree),
                 screenId: screen.id,
                 observationGeneration: generation.rawValue,
                 windowStack: windows

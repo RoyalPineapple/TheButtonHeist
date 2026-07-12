@@ -60,7 +60,7 @@ struct LiveCapture: Equatable {
     }
 
     var firstResponderHeistId: HeistId? {
-        dispatchReferences.firstResponderHeistId ?? snapshot.firstResponderHeistId
+        snapshot.firstResponderHeistId
     }
 
     var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
@@ -178,9 +178,9 @@ struct LiveCapture: Equatable {
 
     /// Value-only capture metadata retained by settled semantic storage.
     ///
-    /// This preserves parser hierarchy, ids, container names, and
-    /// scroll membership evidence without carrying weak UIKit refs or live dispatch
-    /// lookup tables.
+    /// This preserves parser hierarchy, ids, first-responder identity, container
+    /// names, and scroll membership evidence without carrying weak UIKit refs or
+    /// live dispatch lookup tables.
     struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerNamesByPath: [TreePath: ContainerName]
@@ -208,7 +208,9 @@ struct LiveCapture: Equatable {
             self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
             self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
             self.scrollInventoriesByPath = scrollInventoriesByPath
-            self.firstResponderHeistId = firstResponderHeistId
+            self.firstResponderHeistId = firstResponderHeistId.flatMap { heistId in
+                heistIdsByPath.values.contains(heistId) ? heistId : nil
+            }
         }
 
         static let empty = Snapshot(
@@ -259,18 +261,15 @@ struct LiveCapture: Equatable {
     struct DispatchReferences: Equatable {
         let elementRefs: [HeistId: ElementRef]
         let containerRefsByPath: [TreePath: ContainerRef]
-        let firstResponderHeistId: HeistId?
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
 
         init(
             elementRefs: [HeistId: ElementRef] = [:],
             containerRefsByPath: [TreePath: ContainerRef] = [:],
-            firstResponderHeistId: HeistId? = nil,
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
         ) {
             self.elementRefs = elementRefs
             self.containerRefsByPath = containerRefsByPath
-            self.firstResponderHeistId = firstResponderHeistId
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
         }
 
@@ -317,18 +316,15 @@ struct LiveCapture: Equatable {
         let path: TreePath
         let treeElement: InterfaceTree.Element
         let ref: ElementRef?
-        let isFirstResponder: Bool
 
         init(
             path: TreePath,
             treeElement: InterfaceTree.Element,
-            ref: ElementRef? = nil,
-            isFirstResponder: Bool = false
+            ref: ElementRef? = nil
         ) {
             self.path = path
             self.treeElement = treeElement
             self.ref = ref
-            self.isFirstResponder = isFirstResponder
         }
 
         var heistId: HeistId {
@@ -412,8 +408,7 @@ struct LiveCapture: Equatable {
                 entries.append(LiveElementEntry(
                     path: item.path,
                     treeElement: treeElement,
-                    ref: dispatchReferences.elementRefs[heistId],
-                    isFirstResponder: dispatchReferences.firstResponderHeistId == heistId
+                    ref: dispatchReferences.elementRefs[heistId]
                 ))
             }
 
@@ -459,13 +454,6 @@ struct LiveCapture: Equatable {
                 throw LiveElementTableValidationError.strayElementRef(heistId: heistId)
             }
 
-            if let firstResponderHeistId = dispatchReferences.firstResponderHeistId,
-               !liveHeistIds.contains(firstResponderHeistId) {
-                throw LiveElementTableValidationError.invalidFirstResponderHeistId(
-                    heistId: firstResponderHeistId
-                )
-            }
-
             for path in dispatchReferences.containerRefsByPath.keys.sorted() {
                 switch snapshot.hierarchy.node(at: path) {
                 case nil:
@@ -501,7 +489,6 @@ struct LiveCapture: Equatable {
         case treeElementPathMismatch(heistId: HeistId, snapshotPath: TreePath, treePath: TreePath)
         case treeElementMismatch(heistId: HeistId, path: TreePath)
         case strayElementRef(heistId: HeistId)
-        case invalidFirstResponderHeistId(heistId: HeistId)
         case containerRefForMissingPath(path: TreePath)
         case containerRefForElementPath(path: TreePath)
         case scrollableViewForMissingPath(path: TreePath)
@@ -560,12 +547,6 @@ struct LiveCapture: Equatable {
                 return """
                 LiveElementIndex cannot attach stray element ref for HeistId \
                 "\(heistId.rawValue)"; every live element ref must be backed by a live entry.
-                """
-
-            case .invalidFirstResponderHeistId(let heistId):
-                return """
-                LiveElementIndex cannot attach first responder HeistId "\(heistId.rawValue)"; \
-                first responder state must reference a live element entry.
                 """
 
             case .containerRefForMissingPath(let path):

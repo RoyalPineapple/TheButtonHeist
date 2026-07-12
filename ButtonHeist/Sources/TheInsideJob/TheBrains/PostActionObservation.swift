@@ -522,16 +522,11 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
-            firstResponder: screen.flatMap { firstResponderTarget(in: $0) },
+            firstResponder: screen.flatMap { stash.firstResponderTarget(in: $0.tree) },
             keyboardVisible: safecracker.isKeyboardVisible(),
             screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
-    }
-
-    private func firstResponderTarget(in screen: InterfaceObservation) -> AccessibilityTarget? {
-        guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
-        return stash.minimumUniqueTarget(for: firstResponderHeistId, in: screen.tree)
     }
 
     // MARK: - Result Building
@@ -784,14 +779,12 @@ extension InterfaceObservation {
                 liveCapture.containerObservedScrollContentActivationPointsByPath,
                 using: pathMap
             ),
-            scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap)
+            scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap),
+            firstResponderHeistId: liveCapture.firstResponderHeistId
         )
         let dispatchReferences = LiveCapture.DispatchReferences(
             elementRefs: liveCapture.elementRefs.filter { !removedIds.contains($0.key) },
             containerRefsByPath: Self.remap(liveCapture.containerRefsByPath, using: pathMap),
-            firstResponderHeistId: liveCapture.firstResponderHeistId.flatMap {
-                removedIds.contains($0) ? nil : $0
-            },
             scrollableContainerViewsByPath: Self.remap(
                 liveCapture.scrollableContainerViewsByPath,
                 using: pathMap

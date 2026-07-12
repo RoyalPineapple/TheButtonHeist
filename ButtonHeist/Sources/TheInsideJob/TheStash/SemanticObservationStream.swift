@@ -10,16 +10,10 @@ struct SettledSemanticObservation: Sendable {
     let scope: SemanticObservationScope
     let tripwireSignal: TheTripwire.TripwireSignal
     private let tree: InterfaceTree
-    private let firstResponderHeistId: HeistId?
 
     var screen: InterfaceObservation {
         do {
-            return try InterfaceObservation.build(
-                tree: tree,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    firstResponderHeistId: firstResponderHeistId
-                )
-            )
+            return try InterfaceObservation.build(tree: tree)
         } catch {
             preconditionFailure("Settled semantic observation failed validation: \(error)")
         }
@@ -35,7 +29,6 @@ struct SettledSemanticObservation: Sendable {
         self.scope = scope
         self.tripwireSignal = tripwireSignal
         self.tree = screen.tree
-        self.firstResponderHeistId = screen.liveCapture.firstResponderHeistId
     }
 }
 
@@ -788,12 +781,7 @@ final class SemanticObservationStream {
         settledSequence += 1
         let settledScreen: InterfaceObservation
         do {
-            settledScreen = try InterfaceObservation.build(
-                tree: stash.interfaceTree,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    firstResponderHeistId: stash.firstResponderHeistId
-                )
-            )
+            settledScreen = try InterfaceObservation.build(tree: stash.interfaceTree)
         } catch {
             preconditionFailure("Published semantic observation failed validation: \(error)")
         }

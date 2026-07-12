@@ -83,7 +83,7 @@ import AccessibilitySnapshotParser
                 hierarchy: tree.viewportCapture.hierarchy,
                 elements: tree.viewportCapture.hierarchy.sortedElements
             ),
-            firstResponderHeistId: tree.viewportCapture.firstResponderHeistId
+            firstResponderHeistId: tree.firstResponderHeistId
         )
     }
 

@@ -85,7 +85,6 @@ extension LiveCapture {
                 dispatchReferences: DispatchReferences(
                     elementRefs: elementRefs,
                     containerRefsByPath: containerRefsByPath,
-                    firstResponderHeistId: firstResponderHeistId,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath
                 )
             )
@@ -168,7 +167,6 @@ extension InterfaceObservation {
                 dispatchReferences: LiveCapture.DispatchReferences(
                     elementRefs: elementRefs,
                     containerRefsByPath: containerRefsByPath,
-                    firstResponderHeistId: firstResponderHeistId,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath
                 )
             )

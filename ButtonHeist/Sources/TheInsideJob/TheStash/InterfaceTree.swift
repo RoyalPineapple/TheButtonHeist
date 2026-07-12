@@ -41,6 +41,10 @@ struct InterfaceTree: Sendable, Equatable {
         viewportCapture.heistIds
     }
 
+    var firstResponderHeistId: HeistId? {
+        viewportCapture.firstResponderHeistId.flatMap { elements[$0]?.heistId }
+    }
+
     var elementCount: Int {
         elements.count
     }

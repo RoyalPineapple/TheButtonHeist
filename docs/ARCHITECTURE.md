@@ -181,7 +181,9 @@ served as current.
 TheBurglar owns first-responder capture. A parser read converts responder state
 to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
 the capture. Settled storage never retains a UIKit object as responder identity;
-wire evidence projects the captured id to a semantic `AccessibilityTarget`.
+TheStash alone projects the captured id to a semantic `AccessibilityTarget`
+through the shared minimum-predicate selector used by semantic and post-action
+trace context.
 
 TheStash owns notification-element correlation. While live evidence exists, it
 correlates a notification object to a capture node, then

@@ -83,6 +83,9 @@ extension TheBurglar {
         if firstResponders.count > 1 {
             logEvents.append(.multipleFirstResponders(firstResponders.map(\.heistId)))
         }
+        let firstResponderHeistId = firstResponders.count == 1
+            ? firstResponders.first?.heistId
+            : nil
 
         let heistIdsByPath = Dictionary(
             uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
@@ -94,7 +97,8 @@ extension TheBurglar {
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: facts.scroll.inventoriesByPath
+            scrollInventoriesByPath: facts.scroll.inventoriesByPath,
+            firstResponderHeistId: firstResponderHeistId
         )
         let tree = InterfaceTree(
             elements: Dictionary(
@@ -134,7 +138,6 @@ extension TheBurglar {
                 }
             ),
             containerRefsByPath: liveReferences.containerRefsByPath,
-            firstResponderHeistId: projection.entries.first(where: \.isFirstResponder)?.heistId,
             scrollableContainerViewsByPath: liveReferences.scrollableContainerViewsByPath
         )
         do {

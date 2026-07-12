@@ -116,12 +116,7 @@ extension TheStash {
     /// a fresh parser read replaces it before exploration performs live work.
     func explorationBaseline() -> InterfaceObservation {
         do {
-            return try InterfaceObservation.build(
-                tree: interfaceTree,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    firstResponderHeistId: firstResponderHeistId
-                )
-            )
+            return try InterfaceObservation.build(tree: interfaceTree)
         } catch {
             preconditionFailure("Exploration baseline failed validation: \(error)")
         }
@@ -221,12 +216,7 @@ extension TheStash {
 
     private var currentInterfaceObservation: InterfaceObservation {
         do {
-            return try InterfaceObservation.build(
-                tree: interfaceTree,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    firstResponderHeistId: firstResponderHeistId
-                )
-            )
+            return try InterfaceObservation.build(tree: interfaceTree)
         } catch {
             preconditionFailure("Committed interface observation failed validation: \(error)")
         }

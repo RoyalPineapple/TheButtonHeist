@@ -5,6 +5,11 @@ import TheScore
 import ThePlans
 
 extension TheStash {
+    func firstResponderTarget(in tree: InterfaceTree) -> AccessibilityTarget? {
+        guard let firstResponderHeistId = tree.firstResponderHeistId else { return nil }
+        return minimumUniqueTarget(for: firstResponderHeistId, in: tree)
+    }
+
     func minimumUniqueTarget(for treeElement: InterfaceTree.Element) -> AccessibilityTarget? {
         minimumUniqueTarget(for: treeElement.heistId, in: interfaceTree)
     }
