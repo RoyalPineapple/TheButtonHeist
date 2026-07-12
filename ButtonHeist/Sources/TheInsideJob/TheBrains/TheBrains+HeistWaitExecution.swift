@@ -219,29 +219,30 @@ struct HeistWaitReceipt {
     }
 
     func makeActionResult(method: ActionMethod = .wait) -> ActionResult {
+        let evidence = ActionResultEvidence(
+            accessibilityTrace: accessibilityTrace,
+            announcement: announcement
+        )
         switch status {
         case .matched:
             return ActionResult.success(
                 method: method,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         case .timedOut:
             return ActionResult.failure(
                 method: method,
                 errorKind: .timeout,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         case .failed(let errorKind):
             return ActionResult.failure(
                 method: method,
                 errorKind: errorKind,
                 message: message,
-                accessibilityTrace: accessibilityTrace,
-                announcement: announcement
+                evidence: evidence
             )
         }
     }
