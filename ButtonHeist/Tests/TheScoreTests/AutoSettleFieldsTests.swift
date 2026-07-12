@@ -36,6 +36,34 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(decoded.settleTimeMs, 750)
     }
 
+    func testSettleDurationHasOneCanonicalValueAcrossCompatibilityProjections() throws {
+        let result = ActionResult.success(
+            method: .activate,
+            settled: true,
+            settleTimeMs: 125,
+            timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+        )
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
+
+        XCTAssertEqual(decoded.settleTimeMs, 125)
+        XCTAssertEqual(decoded.timing?.settleMs, 125)
+        XCTAssertEqual(decoded.timing?.actionDispatchMs, 4)
+    }
+
+    func testDecodeRejectsContradictorySettleDurations() {
+        let json = """
+        {
+          "outcome": {"kind": "success"},
+          "method": "activate",
+          "settleTimeMs": 125,
+          "timing": {"settleMs": 126}
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8)))
+    }
+
     func testActionResultDerivesAnnouncementFromTraceNotificationStringPayload() throws {
         let first = AccessibilityTrace.Capture(
             sequence: 1,
@@ -65,7 +93,42 @@ final class AutoSettleFieldsTests: XCTestCase {
 
         XCTAssertEqual(result.announcement, "Checkout")
         XCTAssertEqual(decoded.announcement, "Checkout")
+        XCTAssertEqual(result.capturedAnnouncement, trace.capturedAnnouncements.first)
+        XCTAssertEqual(decoded.capturedAnnouncement, trace.capturedAnnouncements.first)
         XCTAssertEqual(trace.capturedAnnouncements.first?.kind, .screenChanged)
+    }
+
+    func testDecodeRejectsAnnouncementContradictingTraceEvidence() throws {
+        let first = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 1), tree: [])
+        )
+        let second = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 2), tree: []),
+            parentHash: first.hash,
+            transition: AccessibilityTrace.Transition(
+                accessibilityNotifications: [
+                    AccessibilityNotificationEvidence(
+                        sequence: 7,
+                        kind: .announcement,
+                        timestamp: Date(timeIntervalSince1970: 7),
+                        notificationData: .string("Checkout"),
+                        associatedElement: .none
+                    ),
+                ]
+            )
+        )
+        let result = ActionResult.success(
+            method: .activate,
+            accessibilityTrace: AccessibilityTrace(captures: [first, second])
+        )
+        let encoded = try JSONEncoder().encode(result)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["announcement"] = "Cart"
+        let contradictory = try JSONSerialization.data(withJSONObject: object)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: contradictory))
     }
 
     // MARK: - Delta transient payload

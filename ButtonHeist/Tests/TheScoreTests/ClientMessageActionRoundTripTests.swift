@@ -30,8 +30,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
 
         XCTAssertEqual(commands.count, 6)
-        let expectedTypes: [RuntimeActionType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .resignFirstResponder]
-        XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
+        let expectedTypes: [HeistActionCommandType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .resignFirstResponder]
+        XCTAssertEqual(commands.map(\.wireType), expectedTypes)
     }
 
     func testHeistPlanCarriesGestureCommands() throws {
@@ -56,8 +56,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             return action.command
         }
 
-        let expectedTypes: [RuntimeActionType] = [.oneFingerTap, .longPress, .swipe, .drag]
-        XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
+        let expectedTypes: [HeistActionCommandType] = [.oneFingerTap, .longPress, .swipe, .drag]
+        XCTAssertEqual(commands.map(\.wireType), expectedTypes)
     }
 
     func testHeistPlanCarriesWaitStep() throws {

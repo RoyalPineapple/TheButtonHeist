@@ -82,9 +82,14 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public let frameWidth: Double
     public let frameHeight: Double
     /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
-    public let activationPointX: Double
-    public let activationPointY: Double
     public let activationPointEvidence: ActivationPointEvidence
+    private let unavailableActivationPointFallback: ScreenPoint?
+    public var activationPointX: Double {
+        activationPointEvidence.point?.x ?? unavailableActivationPointFallback?.x ?? frameCenter.x
+    }
+    public var activationPointY: Double {
+        activationPointEvidence.point?.y ?? unavailableActivationPointFallback?.y ?? frameCenter.y
+    }
     public let respondsToUserInteraction: Bool
     public let customContent: [HeistCustomContent]?
     public let rotors: [HeistRotor]?
@@ -126,6 +131,11 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         )
         let resolvedEvidence: ActivationPointEvidence
         if let activationPointEvidence {
+            if let point = activationPointEvidence.point,
+               activationPointX != nil,
+               point != fallbackPoint {
+                preconditionFailure("Activation point compatibility coordinates must match activationPointEvidence")
+            }
             resolvedEvidence = activationPointEvidence
         } else if let activationPointX, let activationPointY {
             resolvedEvidence = activationPointX.isFinite && activationPointY.isFinite
@@ -135,8 +145,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
             resolvedEvidence = .defaultCenter(fallbackPoint)
         }
         self.activationPointEvidence = resolvedEvidence
-        self.activationPointX = resolvedEvidence.point?.x ?? fallbackPoint.x
-        self.activationPointY = resolvedEvidence.point?.y ?? fallbackPoint.y
+        self.unavailableActivationPointFallback = resolvedEvidence.point == nil ? fallbackPoint : nil
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
@@ -153,6 +162,10 @@ public extension HeistElement {
             width: frameWidth,
             height: frameHeight
         )
+    }
+
+    private var frameCenter: ScreenPoint {
+        ScreenPoint(x: frameX + (frameWidth / 2), y: frameY + (frameHeight / 2))
     }
 }
 
@@ -191,6 +204,14 @@ extension HeistElement {
             x: sanitizedDouble(activationPointX),
             y: sanitizedDouble(activationPointY)
         ))
+        if let evidencePoint = activationPointEvidence.point,
+           evidencePoint != ScreenPoint(x: activationPointX, y: activationPointY) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .activationPointEvidence,
+                in: container,
+                debugDescription: "activationPointEvidence point must match activationPointX and activationPointY"
+            )
+        }
         self.init(
             description: description,
             label: label,

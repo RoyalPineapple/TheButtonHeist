@@ -179,15 +179,14 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
 }
 
 public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
-    public let predicate: AccessibilityPredicate
     public let result: ExpectationResult
+    public var predicate: AccessibilityPredicate { result.predicate }
 
     public init(
         predicate: AccessibilityPredicate,
         result: ExpectationResult
     ) {
         precondition(result.predicate == predicate, "HeistCaseMatchResult result predicate must match predicate")
-        self.predicate = predicate
         self.result = result
     }
 
@@ -208,7 +207,6 @@ public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
                 debugDescription: "heist case match result predicate must match nested expectation result predicate"
             )
         }
-        self.predicate = predicate
         self.result = result
     }
 

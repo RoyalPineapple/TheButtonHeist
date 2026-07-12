@@ -396,6 +396,9 @@ final class AccessibilityTraceTests: XCTestCase {
         let accumulated = try XCTUnwrap(trace.accumulatedDelta)
         XCTAssertNotNil(accumulated.elementsChanged)
         XCTAssertNotNil(accumulated.screenChanged)
+        guard case .screenAndElementsChanged = accumulated.change else {
+            return XCTFail("Expected canonical change facts to preserve screen and element evidence")
+        }
 
         let predicate = AccessibilityPredicate.change(
             .elements(.updatedElement(ElementUpdatePredicate(

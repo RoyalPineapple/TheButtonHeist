@@ -8,30 +8,6 @@ import ThePlans
 /// `ClientMessage.runtimeAction`. Both lower to `RuntimeActionMessage` for
 /// primitive dispatch inside the app runtime.
 package extension HeistActionCommand {
-    var runtimeActionType: RuntimeActionType {
-        switch self {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .customAction: return .performCustomAction
-        case .rotor: return .rotor
-        case .dismiss: return .dismiss
-        case .magicTap: return .magicTap
-        case .typeText: return .typeText
-        case .mechanicalTap: return .oneFingerTap
-        case .mechanicalLongPress: return .longPress
-        case .mechanicalSwipe: return .swipe
-        case .mechanicalDrag: return .drag
-        case .viewportScroll: return .scroll
-        case .viewportScrollToVisible: return .scrollToVisible
-        case .viewportScrollToEdge: return .scrollToEdge
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .takeScreenshot: return .takeScreenshot
-        case .dismissKeyboard: return .resignFirstResponder
-        }
-    }
-
     func resolveForRuntimeDispatch(in environment: HeistExecutionEnvironment) throws -> RuntimeActionMessage {
         switch self {
         case .activate(let target):
