@@ -79,6 +79,10 @@ let customRules = CustomRuleSet {
         }
     }
 
+    CustomRule("buttonheist.architecture_currency_ownership", severity: .error) { context in
+        architectureCurrencyOwnershipFailures(in: context)
+    }
+
     CustomSyntaxRule("buttonheist.swift_source_shape", severity: .error) { file in
         let visitor = ButtonHeistSourceShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
@@ -107,25 +111,21 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
@@ -176,7 +176,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordArchitectureCurrencyDeclaration(node: node, name: node.name.text)
         recordTopLevelTypealias(node)
         recordCompatibilitySurface(
             node: node,
@@ -185,27 +184,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
             name: node.name.text
         )
         return .skipChildren
-    }
-
-    private func recordArchitectureCurrencyDeclaration(
-        node: some SyntaxProtocol,
-        name: String
-    ) {
-        guard let owner = architectureCurrencyOwnerPaths[name],
-              filePath != owner,
-              !isButtonHeistDSLFacade(file.path) else {
-            return
-        }
-        failures.append(
-            file.failure(
-                at: node,
-                message: "architecture currency declared outside its canonical owner",
-                evidence: ViolationEvidence(
-                    observed: "\(name) in \(filePath)",
-                    expectation: "\(name) is declared only in \(owner)"
-                )
-            )
-        )
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -974,6 +952,97 @@ private let explicitAccessRequiredPaths: Set<String> = [
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilReceipts.swift",
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilFailures.swift",
 ]
+
+private struct ArchitectureCurrencyDeclaration {
+    let path: RelativeFilePath
+    let location: SourcePosition?
+}
+
+private func architectureCurrencyOwnershipFailures(
+    in context: CustomRuleContext
+) -> [CustomRuleFailure] {
+    let configuredPathFailures = Set(architectureCurrencyOwnerPaths.values)
+        .sorted()
+        .compactMap { rawOwnerPath -> CustomRuleFailure? in
+            let symbols = architectureCurrencyOwnerPaths
+                .filter { $0.value == rawOwnerPath }
+                .keys
+                .sorted()
+                .joined(separator: ", ")
+            guard let ownerPath = try? RelativeFilePath(rawOwnerPath) else {
+                return context.files.first.map { file in
+                    CustomRuleFailure(
+                        path: file.path,
+                        message: "configured architecture currency owner path is invalid",
+                        evidence: ViolationEvidence(
+                            observed: rawOwnerPath,
+                            expectation: "\(symbols) have a normalized repository-relative owner path"
+                        )
+                    )
+                }
+            }
+            guard !context.files.contains(where: { $0.path == ownerPath }) else { return nil }
+            return CustomRuleFailure(
+                path: ownerPath,
+                message: "configured architecture currency owner path does not exist",
+                evidence: ViolationEvidence(
+                    observed: rawOwnerPath,
+                    expectation: "owner path for \(symbols) is present in Bumper's source input"
+                )
+            )
+        }
+
+    let missingOwnerPaths = Set(configuredPathFailures.map(\.path))
+    let declarationFailures = architectureCurrencyOwnerPaths
+        .sorted { $0.key < $1.key }
+        .flatMap { ownership -> [CustomRuleFailure] in
+            let (symbol, rawOwnerPath) = ownership
+            guard let ownerPath = try? RelativeFilePath(rawOwnerPath),
+                  !missingOwnerPaths.contains(ownerPath) else {
+                return []
+            }
+
+            let declarations = context.files.flatMap { file in
+                file.nominalTypes
+                    .filter { $0.name == symbol }
+                    .map { declaration in
+                        ArchitectureCurrencyDeclaration(
+                            path: file.path,
+                            location: declaration.location
+                        )
+                    }
+            }
+            guard declarations.count == 1 else {
+                return [
+                    CustomRuleFailure(
+                        path: ownerPath,
+                        message: "architecture currency symbol must be declared exactly once",
+                        evidence: ViolationEvidence(
+                            observed: "\(symbol) has \(declarations.count) declarations",
+                            expectation: "one declaration in \(rawOwnerPath)"
+                        )
+                    ),
+                ]
+            }
+
+            let declaration = declarations[0]
+            guard declaration.path == ownerPath else {
+                return [
+                    CustomRuleFailure(
+                        path: declaration.path,
+                        location: declaration.location,
+                        message: "architecture currency declared outside its canonical owner",
+                        evidence: ViolationEvidence(
+                            observed: "\(symbol) in \(declaration.path.rawValue)",
+                            expectation: "\(symbol) is declared only in \(rawOwnerPath)"
+                        )
+                    ),
+                ]
+            }
+            return []
+        }
+    return configuredPathFailures + declarationFailures
+}
 
 private let architectureCurrencyOwnerPaths: [String: String] = [
     "AccessibilityPredicate": "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift",

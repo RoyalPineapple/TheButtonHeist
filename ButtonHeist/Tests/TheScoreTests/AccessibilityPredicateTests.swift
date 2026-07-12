@@ -36,7 +36,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testContainerSemanticIdentifierEncodeDecode() throws {
+    func testContainerIdentifierEncodeDecode() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier("checkout-container")))
         let data = try JSONEncoder().encode(predicate)
         let object = try JSONProbe(data: data)
@@ -44,28 +44,39 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(try object.string("type"), "exists")
         let checks = try object.object("target").object("container").array("checks")
         XCTAssertEqual(checks.count, 1)
-        XCTAssertEqual(try checks[0].string("kind"), "semantic")
-        let semantic = try checks[0].object("semantic")
-        XCTAssertEqual(try semantic.string("kind"), "identifier")
-        XCTAssertEqual(try semantic.object("match").string("value"), "checkout-container")
+        XCTAssertEqual(try checks[0].string("kind"), "identifier")
+        XCTAssertEqual(try checks[0].object("match").string("value"), "checkout-container")
         XCTAssertEqual(try JSONDecoder().decode(AccessibilityPredicate<RootContext>.self, from: data), predicate)
     }
 
     func testContainerIdentifierPredicatesMatchEveryContainerRole() {
-        let cases: [(AccessibilityContainer.ContainerType, AccessibilityContainerKind, String)] = [
+        let cases: [(AccessibilityContainer.ContainerType, ContainerPredicateRoleFacts, String)] = [
             (.none, .none, "roleless-container"),
-            (.semanticGroup(label: "Checkout", value: nil), .semanticGroup, "checkout-group"),
+            (
+                .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200)),
+                .none,
+                "checkout-scroll"
+            ),
+            (
+                .semanticGroup(label: "Checkout", value: nil),
+                .semanticGroup(label: "Checkout", value: nil),
+                "checkout-group"
+            ),
             (.list, .list, "checkout-list"),
             (.landmark, .landmark, "checkout-landmark"),
-            (.dataTable(rowCount: 3, columnCount: 2, cells: []), .dataTable, "checkout-table"),
+            (
+                .dataTable(rowCount: 3, columnCount: 2, cells: []),
+                .dataTable(rowCount: 3, columnCount: 2),
+                "checkout-table"
+            ),
             (.tabBar, .tabBar, "checkout-tabs"),
             (.series, .series, "checkout-series"),
         ]
 
-        for (type, expectedKind, identifier) in cases {
+        for (type, expectedRole, identifier) in cases {
             let facts = makeTestAccessibilityContainer(type: type, identifier: identifier).containerPredicateFacts
 
-            XCTAssertEqual(facts.type, expectedKind)
+            XCTAssertEqual(facts.role, expectedRole)
             XCTAssertEqual(facts.identifier, identifier)
             XCTAssertTrue(ContainerPredicate.identifier(identifier).matches(facts), "\(type)")
             XCTAssertFalse(ContainerPredicate.identifier("other").matches(facts), "\(type)")
@@ -80,19 +91,19 @@ final class AccessibilityPredicateTests: XCTestCase {
         ).containerPredicateFacts
         let plainListFacts = makeTestAccessibilityContainer(type: .list, identifier: "orders-list").containerPredicateFacts
 
-        XCTAssertTrue(ContainerPredicate.scrollable.matches(scrollableListFacts))
+        XCTAssertTrue(ContainerPredicate.scrollable(true).matches(scrollableListFacts))
         XCTAssertTrue(ContainerPredicate.matching(.type(.list), .scrollable(true)).matches(scrollableListFacts))
-        XCTAssertFalse(ContainerPredicate.scrollable.matches(plainListFacts))
+        XCTAssertFalse(ContainerPredicate.scrollable(true).matches(plainListFacts))
     }
 
-    func testParserScrollableContainerPreservesDistinctPublicKind() {
+    func testParserScrollableContainerUsesOnlyScrollabilityFact() {
         let facts = makeTestAccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200))
         ).containerPredicateFacts
 
-        XCTAssertEqual(facts.type, AccessibilityContainerKind.scrollable)
-        XCTAssertTrue(ContainerPredicate.type(.scrollable).matches(facts))
-        XCTAssertFalse(ContainerPredicate.none.matches(facts))
+        XCTAssertEqual(facts.role, .none)
+        XCTAssertTrue(ContainerPredicate.type(.none).matches(facts))
+        XCTAssertTrue(ContainerPredicate.scrollable(true).matches(facts))
     }
 
     func testContainerActionPredicateMatchesCustomActionsIndependentOfRole() {
@@ -102,9 +113,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         let plainFacts = makeTestAccessibilityContainer(type: .list).containerPredicateFacts
 
         XCTAssertEqual(rolelessFacts.actions, [.custom("Archive")])
-        XCTAssertTrue(ContainerPredicate.actions([.custom("Archive")]).matches(rolelessFacts))
-        XCTAssertTrue(ContainerPredicate.matching(.type(.list), .actions([.custom("Archive")])).matches(listFacts))
-        XCTAssertFalse(ContainerPredicate.actions([.custom("Archive")]).matches(plainFacts))
+        let requiredActions = ContainerPredicateActions(.custom("Archive"))
+        XCTAssertTrue(ContainerPredicate.actions(requiredActions).matches(rolelessFacts))
+        XCTAssertTrue(ContainerPredicate.matching(.type(.list), .actions(requiredActions)).matches(listFacts))
+        XCTAssertFalse(ContainerPredicate.actions(requiredActions).matches(plainFacts))
     }
 
     // MARK: - Presence Evaluation
