@@ -23,111 +23,220 @@ struct LiveCaptureTests {
             ]
         )
 
-        do {
-            _ = try LiveCapture.LiveElementTable(
-                validating: snapshot,
-                dispatchReferences: .empty
-            )
-            Issue.record("Expected duplicate live HeistId validation to fail")
-        } catch let error as LiveCapture.LiveElementTableValidationError {
-            #expect(error == .duplicateHeistId(
+        expectValidationError(
+            .duplicateHeistId(
                 heistId: "shared_button",
                 firstPath: TreePath([0]),
                 duplicatePath: TreePath([1])
+            ),
+            tree: makeTree(snapshot: snapshot)
+        )
+    }
+
+    @Test func `rejects duplicate live paths before indexing`() {
+        let path = TreePath([0])
+        let first = AccessibilityElement.make(label: "First", traits: .button)
+        let second = AccessibilityElement.make(label: "Second", traits: .button)
+
+        do {
+            _ = try LiveCapture.LiveElementTable(entries: [
+                LiveCapture.LiveElementEntry(
+                    path: path,
+                    treeElement: InterfaceTree.Element(
+                        heistId: "first_button",
+                        path: path,
+                        scrollMembership: nil,
+                        element: first
+                    )
+                ),
+                LiveCapture.LiveElementEntry(
+                    path: path,
+                    treeElement: InterfaceTree.Element(
+                        heistId: "second_button",
+                        path: path,
+                        scrollMembership: nil,
+                        element: second
+                    )
+                ),
+            ])
+            Issue.record("Expected duplicate live path validation to fail")
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            #expect(error == .duplicateElementPath(
+                path: path,
+                firstHeistId: "first_button",
+                duplicateHeistId: "second_button"
             ))
-            #expect(
-                error.description == """
-                LiveElementIndex cannot index duplicate live HeistId "shared_button" \
-                at paths [0] and [1]; live HeistIds must be unique before building lookup indexes.
-                """
-            )
         } catch {
             Issue.record("Expected LiveElementTableValidationError, got \(error)")
         }
     }
 
-    @Test func `rejects stray element refs before indexing`() {
+    @Test func `rejects stray element refs`() {
+        let tree = makeSingleElementTree()
+        expectValidationError(
+            .strayElementRef(heistId: "missing_button"),
+            tree: tree,
+            dispatchReferences: LiveCapture.DispatchReferences(
+                elementRefs: [
+                    "missing_button": LiveCapture.ElementRef(
+                        object: NSObject(),
+                        scrollView: nil
+                    )
+                ]
+            )
+        )
+    }
+
+    @Test func `rejects first responder id outside viewport entries`() {
+        expectValidationError(
+            .invalidFirstResponderHeistId(heistId: "missing_button"),
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                firstResponderHeistId: "missing_button"
+            )
+        )
+    }
+
+    @Test func `rejects container refs for missing paths`() {
+        let path = TreePath([9])
+        expectValidationError(
+            .containerRefForMissingPath(path: path),
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                containerRefsByPath: [path: LiveCapture.ContainerRef(object: NSObject())]
+            )
+        )
+    }
+
+    @Test func `rejects container refs on element paths`() {
+        let path = TreePath([0])
+        expectValidationError(
+            .containerRefForElementPath(path: path),
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                containerRefsByPath: [path: LiveCapture.ContainerRef(object: NSObject())]
+            )
+        )
+    }
+
+    @Test func `rejects scroll view refs for missing paths`() {
+        let path = TreePath([9])
+        expectValidationError(
+            .scrollableViewForMissingPath(path: path),
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                scrollableContainerViewsByPath: [
+                    path: LiveCapture.ScrollableViewRef(view: UIScrollView())
+                ]
+            )
+        )
+    }
+
+    @Test func `rejects scroll view refs on element paths`() {
+        let path = TreePath([0])
+        expectValidationError(
+            .scrollableViewForElementPath(path: path),
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                scrollableContainerViewsByPath: [
+                    path: LiveCapture.ScrollableViewRef(view: UIScrollView())
+                ]
+            )
+        )
+    }
+
+    @Test func `rejects scroll view refs on non-scrollable containers`() {
+        let path = TreePath([0])
+        let container = makeTestAccessibilityContainer()
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.container(container, children: [])]
+        )
+        expectValidationError(
+            .scrollableViewForNonScrollablePath(path: path),
+            tree: InterfaceTree(elements: [:], viewportCapture: snapshot),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                scrollableContainerViewsByPath: [
+                    path: LiveCapture.ScrollableViewRef(view: UIScrollView())
+                ]
+            )
+        )
+    }
+
+    @Test func `rejects viewport snapshots with missing semantic elements`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let path = TreePath([0])
         let snapshot = LiveCapture.Snapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): "save_button"]
+            heistIdsByPath: [path: "save_button"]
         )
-        let strayObject = NSObject()
-
-        do {
-            _ = try LiveCapture.LiveElementTable(
-                validating: snapshot,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    elementRefs: [
-                        "missing_button": LiveCapture.ElementRef(
-                            object: strayObject,
-                            scrollView: nil
-                        )
-                    ]
-                )
-            )
-            Issue.record("Expected stray element ref validation to fail")
-        } catch let error as LiveCapture.LiveElementTableValidationError {
-            #expect(error == .strayElementRef(heistId: "missing_button"))
-        } catch {
-            Issue.record("Expected LiveElementTableValidationError, got \(error)")
-        }
+        expectValidationError(
+            .missingTreeElement(heistId: "save_button", path: path),
+            tree: InterfaceTree(elements: [:], viewportCapture: snapshot)
+        )
     }
 
-    @Test func `rejects first responder id outside live entries before indexing`() {
+    @Test func `rejects mismatched viewport snapshot and semantic element path`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let snapshotPath = TreePath([0])
+        let treePath = TreePath([1])
         let snapshot = LiveCapture.Snapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): "save_button"]
+            heistIdsByPath: [snapshotPath: "save_button"]
+        )
+        let tree = InterfaceTree(
+            elements: [
+                "save_button": InterfaceTree.Element(
+                    heistId: "save_button",
+                    path: treePath,
+                    scrollMembership: nil,
+                    element: element
+                )
+            ],
+            viewportCapture: snapshot
         )
 
-        do {
-            _ = try LiveCapture.LiveElementTable(
-                validating: snapshot,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    firstResponderHeistId: "missing_button"
-                )
-            )
-            Issue.record("Expected invalid first responder validation to fail")
-        } catch let error as LiveCapture.LiveElementTableValidationError {
-            #expect(error == .invalidFirstResponderHeistId(heistId: "missing_button"))
-        } catch {
-            Issue.record("Expected LiveElementTableValidationError, got \(error)")
-        }
+        expectValidationError(
+            .treeElementPathMismatch(
+                heistId: "save_button",
+                snapshotPath: snapshotPath,
+                treePath: treePath
+            ),
+            tree: tree
+        )
     }
 
-    @Test func `rejects container refs on element paths before indexing`() {
-        let element = AccessibilityElement.make(label: "Save", traits: .button)
-        let elementPath = TreePath([0])
+    @Test func `rejects mismatched viewport snapshot and semantic element content`() {
+        let snapshotElement = AccessibilityElement.make(label: "Save", traits: .button)
+        let treeElement = AccessibilityElement.make(label: "Delete", traits: .button)
+        let path = TreePath([0])
         let snapshot = LiveCapture.Snapshot(
-            hierarchy: [.element(element, traversalIndex: 0)],
-            heistIdsByPath: [elementPath: "save_button"]
+            hierarchy: [.element(snapshotElement, traversalIndex: 0)],
+            heistIdsByPath: [path: "save_button"]
         )
-        let containerObject = NSObject()
-
-        do {
-            _ = try LiveCapture.LiveElementTable(
-                validating: snapshot,
-                dispatchReferences: LiveCapture.DispatchReferences(
-                    containerRefsByPath: [
-                        elementPath: LiveCapture.ContainerRef(object: containerObject)
-                    ]
+        let tree = InterfaceTree(
+            elements: [
+                "save_button": InterfaceTree.Element(
+                    heistId: "save_button",
+                    path: path,
+                    scrollMembership: nil,
+                    element: treeElement
                 )
-            )
-            Issue.record("Expected container ref path-kind validation to fail")
-        } catch let error as LiveCapture.LiveElementTableValidationError {
-            #expect(error == .containerRefForElementPath(path: elementPath))
-        } catch {
-            Issue.record("Expected LiveElementTableValidationError, got \(error)")
-        }
+            ],
+            viewportCapture: snapshot
+        )
+
+        expectValidationError(
+            .treeElementMismatch(heistId: "save_button", path: path),
+            tree: tree
+        )
     }
 
-    @Test func `valid live captures keep lookup behavior`() {
+    @Test func `valid builder keeps live lookup behavior`() throws {
         let save = AccessibilityElement.make(label: "Save", traits: .button)
         let cancel = AccessibilityElement.make(label: "Cancel", traits: .button)
         let saveObject = NSObject()
         let saveScrollView = UIScrollView()
-        let capture = LiveCapture(
+        let snapshot = LiveCapture.Snapshot(
             hierarchy: [
                 .element(save, traversalIndex: 10),
                 .element(cancel, traversalIndex: 0),
@@ -135,15 +244,21 @@ struct LiveCaptureTests {
             heistIdsByPath: [
                 TreePath([0]): "save_button",
                 TreePath([1]): "cancel_button",
-            ],
-            elementRefs: [
-                "save_button": LiveCapture.ElementRef(
-                    object: saveObject,
-                    scrollView: saveScrollView
-                ),
-            ],
-            firstResponderHeistId: "save_button"
+            ]
         )
+        let observation = try InterfaceObservation.build(
+            tree: makeTree(snapshot: snapshot),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                elementRefs: [
+                    "save_button": LiveCapture.ElementRef(
+                        object: saveObject,
+                        scrollView: saveScrollView
+                    )
+                ],
+                firstResponderHeistId: "save_button"
+            )
+        )
+        let capture = observation.liveCapture
 
         #expect(capture.heistIds == ["cancel_button", "save_button"])
         #expect(capture.contains(heistId: "save_button"))
@@ -157,9 +272,9 @@ struct LiveCaptureTests {
         #expect(capture.firstResponderHeistId == "save_button")
     }
 
-    @Test func `duplicate equal elements keep separate live entries by path`() {
+    @Test func `duplicate equal elements keep separate live entries by path`() throws {
         let repeated = AccessibilityElement.make(label: "Repeat", traits: .button)
-        let capture = LiveCapture(
+        let snapshot = LiveCapture.Snapshot(
             hierarchy: [
                 .element(repeated, traversalIndex: 0),
                 .element(repeated, traversalIndex: 1),
@@ -167,14 +282,60 @@ struct LiveCaptureTests {
             heistIdsByPath: [
                 TreePath([0]): "repeat_button_1",
                 TreePath([1]): "repeat_button_2",
-            ],
-            elementRefs: [:],
-            firstResponderHeistId: nil
+            ]
         )
+        let capture = try InterfaceObservation.build(
+            tree: makeTree(snapshot: snapshot)
+        ).liveCapture
 
         #expect(capture.heistId(forPath: TreePath([0])) == "repeat_button_1")
         #expect(capture.heistId(forPath: TreePath([1])) == "repeat_button_2")
         #expect(capture.orderedElementEntries().map(\.heistId) == ["repeat_button_1", "repeat_button_2"])
+    }
+
+    private func expectValidationError(
+        _ expected: LiveCapture.LiveElementTableValidationError,
+        tree: InterfaceTree,
+        dispatchReferences: LiveCapture.DispatchReferences = .empty
+    ) {
+        do {
+            _ = try InterfaceObservation.build(
+                tree: tree,
+                dispatchReferences: dispatchReferences
+            )
+            Issue.record("Expected live capture validation to fail")
+        } catch let error as LiveCapture.LiveElementTableValidationError {
+            #expect(error == expected)
+        } catch {
+            Issue.record("Expected LiveElementTableValidationError, got \(error)")
+        }
+    }
+
+    private func makeSingleElementTree() -> InterfaceTree {
+        let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.element(element, traversalIndex: 0)],
+            heistIdsByPath: [TreePath([0]): "save_button"]
+        )
+        return makeTree(snapshot: snapshot)
+    }
+
+    private func makeTree(snapshot: LiveCapture.Snapshot) -> InterfaceTree {
+        let elements = snapshot.hierarchy.pathIndexedElements.reduce(
+            into: [HeistId: InterfaceTree.Element]()
+        ) { result, item in
+            guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
+            result[heistId] = InterfaceTree.Element(
+                heistId: heistId,
+                path: item.path,
+                scrollMembership: nil,
+                element: item.element
+            )
+        }
+        return InterfaceTree(
+            elements: elements,
+            viewportCapture: snapshot
+        )
     }
 }
 

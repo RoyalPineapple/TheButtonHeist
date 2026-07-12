@@ -6,6 +6,111 @@ import UIKit
 import ThePlans
 @testable import TheScore
 
+private func requireValidTestValue<Value>(_ build: () throws -> Value) -> Value {
+    do {
+        return try build()
+    } catch {
+        preconditionFailure("Invalid interface observation test fixture: \(error)")
+    }
+}
+
+private func makeTestTree(
+    snapshot: LiveCapture.Snapshot,
+    elements: [HeistId: InterfaceTree.Element] = [:]
+) -> InterfaceTree {
+    let normalizedElements = snapshot.hierarchy.pathIndexedElements.reduce(into: elements) { result, item in
+        guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
+        let supplied = elements[heistId]
+        result[heistId] = InterfaceTree.Element(
+            heistId: heistId,
+            path: item.path,
+            scrollMembership: supplied?.scrollMembership,
+            observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint,
+            element: item.element
+        )
+    }
+    let containers = Dictionary(
+        uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
+            (
+                item.path,
+                InterfaceTree.Container(
+                    container: item.container,
+                    path: item.path,
+                    containerName: snapshot.containerNamesByPath[item.path],
+                    contentRect: snapshot.containerContentFramesByPath[item.path],
+                    scrollMembership: snapshot.containerScrollMembershipsByPath[item.path],
+                    observedScrollContentActivationPoint: snapshot
+                        .containerObservedScrollContentActivationPointsByPath[item.path],
+                    scrollInventory: snapshot.scrollInventoriesByPath[item.path]
+                )
+            )
+        }
+    )
+    return InterfaceTree(
+        elements: normalizedElements,
+        containers: containers,
+        viewportCapture: snapshot
+    )
+}
+
+extension LiveCapture {
+
+    static var empty: LiveCapture {
+        requireValidTestValue {
+            try LiveCapture.build(validating: .empty)
+        }
+    }
+
+    init(
+        hierarchy: [AccessibilityHierarchy],
+        containerNamesByPath: [TreePath: ContainerName] = [:],
+        heistIdsByPath: [TreePath: HeistId] = [:],
+        elementRefs: [HeistId: ElementRef],
+        containerRefsByPath: [TreePath: ContainerRef] = [:],
+        containerContentFramesByPath: [TreePath: ContentRect] = [:],
+        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
+        containerObservedScrollContentActivationPointsByPath: [
+            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
+        ] = [:],
+        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+        firstResponderHeistId: HeistId?,
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
+    ) {
+        let snapshot = Snapshot(
+            hierarchy: hierarchy,
+            containerNamesByPath: containerNamesByPath,
+            heistIdsByPath: heistIdsByPath,
+            containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
+            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
+            scrollInventoriesByPath: scrollInventoriesByPath
+        )
+        self = requireValidTestValue {
+            try LiveCapture.build(
+                validating: makeTestTree(snapshot: snapshot),
+                dispatchReferences: DispatchReferences(
+                    elementRefs: elementRefs,
+                    containerRefsByPath: containerRefsByPath,
+                    firstResponderHeistId: firstResponderHeistId,
+                    scrollableContainerViewsByPath: scrollableContainerViewsByPath
+                )
+            )
+        }
+    }
+
+    init(
+        snapshot: Snapshot,
+        dispatchReferences: DispatchReferences = .empty
+    ) {
+        self = requireValidTestValue {
+            try LiveCapture.build(
+                validating: makeTestTree(snapshot: snapshot),
+                dispatchReferences: dispatchReferences
+            )
+        }
+    }
+}
+
 /// Test-only `InterfaceObservation` factory.
 ///
 /// Replaces the per-file `installScreen` / `seedScreen` /
@@ -16,6 +121,82 @@ import ThePlans
 /// sees them) but are not present in the live hierarchy — modeling an element
 /// retained from a previous exploration that has since scrolled out of view.
 extension InterfaceObservation {
+
+    init(
+        tree: InterfaceTree,
+        liveCapture: LiveCapture
+    ) {
+        let snapshotTree = makeTestTree(
+            snapshot: liveCapture.snapshot,
+            elements: tree.elements
+        )
+        let alignedTree = InterfaceTree(
+            elements: snapshotTree.elements,
+            containers: tree.containers.merging(snapshotTree.containers) { current, _ in current },
+            viewportCapture: liveCapture.snapshot
+        )
+        self = requireValidTestValue {
+            try InterfaceObservation.build(
+                tree: alignedTree,
+                dispatchReferences: liveCapture.dispatchReferences
+            )
+        }
+    }
+
+    init(
+        elements: [HeistId: InterfaceTree.Element],
+        hierarchy: [AccessibilityHierarchy],
+        elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
+        firstResponderHeistId: HeistId?,
+        scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
+    ) {
+        self.init(
+            elements: elements,
+            hierarchy: hierarchy,
+            heistIdsByPath: [:],
+            elementRefs: elementRefs,
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        )
+    }
+
+    init(
+        elements: [HeistId: InterfaceTree.Element],
+        hierarchy: [AccessibilityHierarchy],
+        containerNamesByPath: [TreePath: ContainerName] = [:],
+        heistIdsByPath: [TreePath: HeistId] = [:],
+        elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
+        containerRefsByPath: [TreePath: LiveCapture.ContainerRef] = [:],
+        containerContentFramesByPath: [TreePath: ContentRect] = [:],
+        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
+        containerObservedScrollContentActivationPointsByPath: [
+            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
+        ] = [:],
+        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+        firstResponderHeistId: HeistId?,
+        scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
+    ) {
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: hierarchy,
+            containerNamesByPath: containerNamesByPath,
+            heistIdsByPath: heistIdsByPath,
+            containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
+            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
+            scrollInventoriesByPath: scrollInventoriesByPath
+        )
+        self = requireValidTestValue {
+            try InterfaceObservation.build(
+                tree: makeTestTree(snapshot: snapshot, elements: elements),
+                dispatchReferences: LiveCapture.DispatchReferences(
+                    elementRefs: elementRefs,
+                    containerRefsByPath: containerRefsByPath,
+                    firstResponderHeistId: firstResponderHeistId,
+                    scrollableContainerViewsByPath: scrollableContainerViewsByPath
+                )
+            )
+        }
+    }
 
     struct TestEntry {
         let element: AccessibilityElement

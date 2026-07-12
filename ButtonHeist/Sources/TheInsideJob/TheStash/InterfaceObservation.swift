@@ -18,89 +18,32 @@ struct InterfaceObservation: Equatable {
     let liveCapture: LiveCapture
 
     static var empty: InterfaceObservation {
-        InterfaceObservation(
-            tree: .empty,
-            liveCapture: .empty
-        )
+        do {
+            return try InterfaceObservation.build(tree: .empty)
+        } catch {
+            preconditionFailure("Empty interface observation failed validation: \(error)")
+        }
     }
 
-    // MARK: - Init
-
-    /// Convenience init for tests and call sites that don't have container /
-    /// element index data — defaults the live indices to empty maps.
-    init(
-        elements: [HeistId: InterfaceTree.Element],
-        hierarchy: [AccessibilityHierarchy],
-        elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
-        firstResponderHeistId: HeistId?,
-        scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
-    ) {
-        let liveCapture = LiveCapture(
-            hierarchy: hierarchy,
-            elementRefs: elementRefs,
-            containerRefsByPath: [:],
-            containerContentFramesByPath: [:],
-            containerScrollMembershipsByPath: [:],
-            containerObservedScrollContentActivationPointsByPath: [:],
-            scrollInventoriesByPath: [:],
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        )
-        self.init(
-            tree: InterfaceTree(
-                elements: elements,
-                containers: Self.containers(from: liveCapture)
-            ),
-            liveCapture: liveCapture
-        )
-    }
-
-    /// Memberwise init. Explicit so the convenience overload above can call it.
-    init(
-        elements: [HeistId: InterfaceTree.Element],
-        hierarchy: [AccessibilityHierarchy],
-        containerNamesByPath: [TreePath: ContainerName] = [:],
-        heistIdsByPath: [TreePath: HeistId] = [:],
-        elementRefs: [HeistId: LiveCapture.ElementRef] = [:],
-        containerRefsByPath: [TreePath: LiveCapture.ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: ContentRect] = [:],
-        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
-        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
-        firstResponderHeistId: HeistId?,
-        scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
-    ) {
-        let liveCapture = LiveCapture(
-            hierarchy: hierarchy,
-            containerNamesByPath: containerNamesByPath,
-            heistIdsByPath: heistIdsByPath,
-            elementRefs: elementRefs,
-            containerRefsByPath: containerRefsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath,
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        )
-        self.init(
-            tree: InterfaceTree(
-                elements: elements,
-                containers: Self.containers(from: liveCapture)
-            ),
-            liveCapture: liveCapture
-        )
-    }
-
-    init(
+    /// The production construction boundary for semantic state and its live dispatch evidence.
+    static func build(
         tree: InterfaceTree,
+        dispatchReferences: LiveCapture.DispatchReferences = .empty
+    ) throws -> InterfaceObservation {
+        InterfaceObservation(
+            validatedTree: tree,
+            liveCapture: try LiveCapture.build(
+                validating: tree,
+                dispatchReferences: dispatchReferences
+            )
+        )
+    }
+
+    private init(
+        validatedTree: InterfaceTree,
         liveCapture: LiveCapture
     ) {
-        self.tree = InterfaceTree(
-            elements: tree.elements,
-            containers: tree.containers,
-            viewportCapture: liveCapture.snapshot
-        )
+        tree = validatedTree
         self.liveCapture = liveCapture
     }
 
@@ -143,36 +86,20 @@ struct InterfaceObservation: Equatable {
     }
 
     var viewportOnly: InterfaceObservation {
-        return InterfaceObservation(
-            tree: tree.viewportOnly,
-            liveCapture: liveCapture
-        )
+        do {
+            return try InterfaceObservation.build(
+                tree: tree.viewportOnly,
+                dispatchReferences: liveCapture.dispatchReferences
+            )
+        } catch {
+            preconditionFailure("Viewport-only interface observation failed validation: \(error)")
+        }
     }
 
     var orderedElements: [InterfaceTree.Element] {
         tree.orderedElements
     }
 
-    private static func containers(from liveCapture: LiveCapture) -> [TreePath: InterfaceTree.Container] {
-        Dictionary(
-            uniqueKeysWithValues: liveCapture.hierarchy.pathIndexedContainers.map { item in
-                (
-                    item.path,
-                    InterfaceTree.Container(
-                        container: item.container,
-                        path: item.path,
-                        containerName: liveCapture.containerNamesByPath[item.path],
-                        contentRect: liveCapture.containerContentFrame(forPath: item.path),
-                        scrollMembership: liveCapture.containerScrollMembership(forPath: item.path),
-                        observedScrollContentActivationPoint: liveCapture.containerObservedScrollContentActivationPoint(
-                            forPath: item.path
-                        ),
-                        scrollInventory: liveCapture.scrollInventory(forPath: item.path)
-                    )
-                )
-            }
-        )
-    }
 }
 
 #endif // DEBUG
