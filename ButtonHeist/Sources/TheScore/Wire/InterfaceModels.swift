@@ -93,53 +93,63 @@ public struct ScrollContentPoint: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-public struct ActivationPointEvidence: Codable, Equatable, Hashable, Sendable {
-    public enum Source: String, Codable, Sendable {
+public enum ActivationPointEvidence: Codable, Equatable, Hashable, Sendable {
+    case explicit(ScreenPoint)
+    case defaultCenter(ScreenPoint)
+    case unavailable
+
+    public var point: ScreenPoint? {
+        switch self {
+        case .explicit(let point), .defaultCenter(let point):
+            point
+        case .unavailable:
+            nil
+        }
+    }
+
+    private enum Source: String, Codable {
         case explicit
         case defaultCenter
         case unavailable
     }
 
-    public let source: Source
-    public let point: ScreenPoint?
-
-    public init(source: Source, point: ScreenPoint?) {
-        precondition(
-            (source == .unavailable) == (point == nil),
-            "Activation point evidence requires a point exactly when the source is available"
-        )
-        self.source = source
-        self.point = point
-    }
-
-    public static func explicit(_ point: ScreenPoint) -> ActivationPointEvidence {
-        ActivationPointEvidence(source: .explicit, point: point)
-    }
-
-    public static func defaultCenter(_ point: ScreenPoint) -> ActivationPointEvidence {
-        ActivationPointEvidence(source: .defaultCenter, point: point)
-    }
-
-    public static let unavailable = ActivationPointEvidence(source: .unavailable, point: nil)
-
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case source
         case point
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActivationPointEvidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let source = try container.decode(Source.self, forKey: .source)
-        let point = try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
-        guard (source == .unavailable) == (point == nil) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .point,
-                in: container,
-                debugDescription: "Activation point evidence requires a point exactly when the source is available"
-            )
+        switch try container.decode(Source.self, forKey: .source) {
+        case .explicit:
+            self = .explicit(try container.decode(ScreenPoint.self, forKey: .point))
+        case .defaultCenter:
+            self = .defaultCenter(try container.decode(ScreenPoint.self, forKey: .point))
+        case .unavailable:
+            guard !container.contains(.point) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .point,
+                    in: container,
+                    debugDescription: "Unavailable activation point evidence must not include a point"
+                )
+            }
+            self = .unavailable
         }
-        self.source = source
-        self.point = point
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .explicit(let point):
+            try container.encode(Source.explicit, forKey: .source)
+            try container.encode(point, forKey: .point)
+        case .defaultCenter(let point):
+            try container.encode(Source.defaultCenter, forKey: .source)
+            try container.encode(point, forKey: .point)
+        case .unavailable:
+            try container.encode(Source.unavailable, forKey: .source)
+        }
     }
 }
 

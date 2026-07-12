@@ -553,8 +553,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 0,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 50,
-                activationPointY: 22
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 22))
             ),
         ])
         let afterInterface = makeTestInterface(elements: [
@@ -565,8 +564,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 20,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 60,
-                activationPointY: 42
+                activationPointEvidence: .explicit(ScreenPoint(x: 60, y: 42))
             ),
         ])
         let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
@@ -590,8 +588,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 0,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 50,
-                activationPointY: 22
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 22))
             ),
         ])
         let afterInterface = makeTestInterface(elements: [
@@ -602,8 +599,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 frameY: 20,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 60,
-                activationPointY: 42
+                activationPointEvidence: .explicit(ScreenPoint(x: 60, y: 42))
             ),
         ])
         let trace = AccessibilityTrace(first: beforeInterface).appending(afterInterface)
@@ -650,7 +646,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             explicitProjection.activationPointEvidence,
             .explicit(ScreenPoint(x: 12, y: 34))
         )
-        XCTAssertEqual(unavailableProjection.activationPointEvidence.source, .unavailable)
+        XCTAssertEqual(unavailableProjection.activationPointEvidence, .unavailable)
         XCTAssertNil(unavailableProjection.activationPointEvidence.point)
         XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
     }
@@ -878,14 +874,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             old: makeElement(
                 label: "Button",
                 traits: [.button],
-                activationPointX: 50,
-                activationPointY: 25
+                activationPointEvidence: .explicit(ScreenPoint(x: 50, y: 25))
             ),
             new: makeElement(
                 label: "Button",
                 traits: [.button],
-                activationPointX: 75,
-                activationPointY: 40
+                activationPointEvidence: .explicit(ScreenPoint(x: 75, y: 40))
             )
         ))
         XCTAssertEqual(activationPoint.oldValue, .activationPoint(ElementPropertyPoint(x: 50, y: 25)))
@@ -943,8 +937,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 100,
         frameHeight: Double = 44,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPointEvidence: ActivationPointEvidence = .unavailable,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction] = []
@@ -960,8 +953,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPointX,
-            activationPointY: activationPointY,
+            activationPointEvidence: activationPointEvidence,
             customContent: customContent,
             rotors: rotors,
             actions: actions

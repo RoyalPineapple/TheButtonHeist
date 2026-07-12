@@ -90,8 +90,7 @@ final class AccessibilityHierarchyRemovalTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPoint.x,
-            activationPointY: activationPoint.y,
+            activationPointEvidence: .defaultCenter(activationPoint),
             actions: [.activate]
         )
     }

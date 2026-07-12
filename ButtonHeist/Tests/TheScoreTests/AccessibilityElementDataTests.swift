@@ -33,6 +33,43 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(element, decoded)
     }
 
+    func testActivationPointEvidenceCasesRoundTrip() throws {
+        let cases: [ActivationPointEvidence] = [
+            .explicit(ScreenPoint(x: 12, y: 34)),
+            .defaultCenter(ScreenPoint(x: 50, y: 22)),
+            .unavailable,
+        ]
+
+        for evidence in cases {
+            let data = try JSONEncoder().encode(evidence)
+            XCTAssertEqual(try JSONDecoder().decode(ActivationPointEvidence.self, from: data), evidence)
+        }
+    }
+
+    func testEncodingUsesOnlyCanonicalActivationPointEvidence() throws {
+        let element = HeistElement(
+            description: "Save",
+            label: "Save",
+            value: nil,
+            identifier: nil,
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            activationPointEvidence: .explicit(ScreenPoint(x: 51, y: 22)),
+            actions: []
+        )
+
+        let data = try JSONEncoder().encode(element)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let evidence = try XCTUnwrap(json["activationPointEvidence"] as? [String: Any])
+
+        XCTAssertNil(json["activationPointX"])
+        XCTAssertNil(json["activationPointY"])
+        XCTAssertEqual(evidence["source"] as? String, "explicit")
+        XCTAssertNotNil(evidence["point"])
+    }
+
     func testElementWithAllFields() throws {
         let element = HeistElement(
             description: "A complex button",
@@ -112,8 +149,7 @@ final class HeistElementTests: XCTestCase {
           "frameY": 0,
           "frameWidth": 100,
           "frameHeight": 44,
-          "activationPointX": 50,
-          "activationPointY": 22,
+          "activationPointEvidence": {"source": "unavailable"},
           "respondsToUserInteraction": true,
           "actions": [
             {"custom": "Share"},
@@ -132,7 +168,7 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(encodedProjection.actions, [.activate, .typeText, .custom("Delete"), .custom("Share")])
     }
 
-    func testDecodeRejectsActivationPointContradictingCanonicalEvidence() {
+    func testDecodeRejectsLegacyActivationPointCoordinates() {
         let json = """
         {
           "description": "Save",
@@ -144,10 +180,6 @@ final class HeistElementTests: XCTestCase {
           "frameHeight": 44,
           "activationPointX": 50,
           "activationPointY": 22,
-          "activationPointEvidence": {
-            "source": "explicit",
-            "point": {"x": 51, "y": 22}
-          },
           "respondsToUserInteraction": true,
           "actions": []
         }

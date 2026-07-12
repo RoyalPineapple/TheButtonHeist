@@ -342,8 +342,7 @@ final class ServerMessageTests: XCTestCase {
             "frameY": 0,
             "frameWidth": 100,
             "frameHeight": 44,
-            "activationPointX": 50,
-            "activationPointY": 22,
+            "activationPointEvidence": {"source": "unavailable"},
             "respondsToUserInteraction": true,
             "actions": ["activate"]
           },
@@ -680,8 +679,7 @@ final class ServerMessageTests: XCTestCase {
             frameY: 700,
             frameWidth: 160,
             frameHeight: 48,
-            activationPointX: 100,
-            activationPointY: 724,
+            activationPointEvidence: .explicit(ScreenPoint(x: 100, y: 724)),
             actions: [.activate]
         )
         let payload = ScreenPayload(

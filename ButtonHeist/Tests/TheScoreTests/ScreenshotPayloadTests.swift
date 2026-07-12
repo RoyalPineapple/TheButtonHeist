@@ -47,8 +47,7 @@ final class ScreenshotPayloadTests: XCTestCase {
             frameY: 680,
             frameWidth: 240,
             frameHeight: 32,
-            activationPointX: 132,
-            activationPointY: 696,
+            activationPointEvidence: .explicit(ScreenPoint(x: 132, y: 696)),
             actions: []
         )
         let payload = ScreenPayload(

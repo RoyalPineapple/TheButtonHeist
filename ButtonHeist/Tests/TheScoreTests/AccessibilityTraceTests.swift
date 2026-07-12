@@ -116,8 +116,7 @@ final class AccessibilityTraceTests: XCTestCase {
             frameY: .infinity,
             frameWidth: -.infinity,
             frameHeight: 44,
-            activationPointX: .nan,
-            activationPointY: .infinity,
+            activationPointEvidence: .unavailable,
             actions: [.activate]
         )
         let interface = makeTestInterface(elements: [element])

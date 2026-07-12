@@ -767,8 +767,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             new: makeElement(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
         ))
         let pointUpdate = try XCTUnwrap(projectElementStateChange(
-            old: makeElement(label: "Knob", activationPointX: 10, activationPointY: 12),
-            new: makeElement(label: "Knob", activationPointX: 42, activationPointY: 64)
+            old: makeElement(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 10, y: 12))),
+            new: makeElement(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 42, y: 64)))
         ))
         let action = makeResult(
             success: true,
@@ -1261,8 +1261,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 100,
         frameHeight: Double = 44,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPointEvidence: ActivationPointEvidence = .unavailable,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction] = []
@@ -1278,8 +1277,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointX: activationPointX,
-            activationPointY: activationPointY,
+            activationPointEvidence: activationPointEvidence,
             customContent: customContent,
             rotors: rotors,
             actions: actions
