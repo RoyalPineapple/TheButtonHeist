@@ -1422,18 +1422,19 @@ final class AccessibilityPredicateTests: XCTestCase {
         message: String? = nil,
         trace: AccessibilityTrace? = nil
     ) -> ActionResult {
+        let observation = trace.map(ActionResultObservationEvidence.trace) ?? .none
         if success {
             return ActionResult.success(
                 method: .syntheticTap,
                 message: message,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: observation)
             )
         }
         return ActionResult.failure(
             method: .syntheticTap,
             errorKind: .actionFailed,
             message: message,
-            evidence: ActionResultFailureEvidence(observation: .trace(trace))
+            evidence: ActionResultFailureEvidence(observation: observation)
         )
     }
 
