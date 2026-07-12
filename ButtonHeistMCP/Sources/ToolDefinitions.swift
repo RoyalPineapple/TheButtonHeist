@@ -4,7 +4,7 @@ import MCP
 enum ToolDefinitions {
     static var all: [Tool] {
         TheFence.Command.descriptors
-            .filter { $0.projection.mcpExposure == .directTool }
+            .filter { $0.mcpExposure == .directTool }
             .map(tool(for:))
     }
 

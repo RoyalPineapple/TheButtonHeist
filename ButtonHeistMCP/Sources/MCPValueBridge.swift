@@ -1,7 +1,6 @@
 import Foundation
 import MCP
 @_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
-import TheScore
 
 enum MCPValueBridge {
     static func commandEnvelope(from arguments: MCPRawArgumentObject?) throws -> TheFence.CommandArgumentEnvelope {
@@ -73,17 +72,6 @@ enum MCPValueBridge {
         }
     }
 
-    static func value<Payload: Encodable>(
-        encoding payload: Payload,
-        outputFormatting: JSONEncoder.OutputFormatting = []
-    ) throws -> Value {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = outputFormatting
-        encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(payload)
-        return try value(decodingJSONData: data)
-    }
-
     static func value(decodingJSONData data: Data) throws -> Value {
         try JSONDecoder().decode(Value.self, from: data)
     }
@@ -94,21 +82,6 @@ enum MCPValueBridge {
     ) throws -> Value {
         let data = try presenter.jsonData(for: response, outputFormatting: [])
         return try value(decodingJSONData: data)
-    }
-
-    static func structuredErrorValue(
-        _ failure: DiagnosticFailure,
-        presenter: FenceResponsePresenter
-    ) -> Value {
-        do {
-            let data = try presenter.jsonData(
-                for: .error(failure),
-                outputFormatting: []
-            )
-            return try value(decodingJSONData: data)
-        } catch {
-            return errorFallbackValue(for: failure)
-        }
     }
 
     static func jsonValueNode(_ value: Value) -> PublicJSONValueNode<Value> {
@@ -129,66 +102,6 @@ enum MCPValueBridge {
             return .array(values)
         case .object(let object):
             return .object(object)
-        }
-    }
-
-    private static func errorFallbackValue(for failure: DiagnosticFailure) -> Value {
-        if let encodedValue = try? value(encoding: MCPStructuredErrorFallback(failure: failure)) {
-            return encodedValue
-        }
-
-        return .object([
-            "status": .string("error"),
-            "message": .string(failure.message),
-            "code": .string(failure.code),
-            "kind": .string(failure.kind.rawValue),
-            "phase": .string(failure.phase.rawValue),
-            "retryable": .bool(failure.retryable),
-            "hint": failure.hint.map(Value.string) ?? .null,
-            "details": .object([
-                "code": .string(failure.code),
-                "kind": .string(failure.kind.rawValue),
-                "phase": .string(failure.phase.rawValue),
-                "retryable": .bool(failure.retryable),
-                "hint": failure.hint.map(Value.string) ?? .null,
-            ]),
-        ])
-    }
-}
-
-private struct MCPStructuredErrorFallback: Encodable {
-    let status = "error"
-    let message: String
-    let code: String
-    let kind: String
-    let phase: String
-    let retryable: Bool
-    let hint: String?
-    let details: Details
-
-    init(failure: DiagnosticFailure) {
-        message = failure.message
-        code = failure.code
-        kind = failure.kind.rawValue
-        phase = failure.phase.rawValue
-        retryable = failure.retryable
-        hint = failure.hint
-        details = Details(failure: failure)
-    }
-
-    struct Details: Encodable {
-        let code: String
-        let kind: String
-        let phase: String
-        let retryable: Bool
-        let hint: String?
-
-        init(failure: DiagnosticFailure) {
-            code = failure.code
-            kind = failure.kind.rawValue
-            phase = failure.phase.rawValue
-            retryable = failure.retryable
-            hint = failure.hint
         }
     }
 }

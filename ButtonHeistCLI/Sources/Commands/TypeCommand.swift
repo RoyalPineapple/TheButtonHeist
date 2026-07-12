@@ -22,8 +22,8 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 30.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(CLITimeoutDefaults.typeText)))")
+    var timeout: Double = CLITimeoutDefaults.typeText
 
     func validate() throws {
         if text.isEmpty {

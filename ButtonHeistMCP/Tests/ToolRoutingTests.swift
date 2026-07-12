@@ -16,6 +16,25 @@ struct ToolRoutingTests {
         #expect(operation.arguments.value(for: .target) == .string("demo"))
     }
 
+    @Test("tool routing exposure matches descriptors")
+    func toolRoutingExposureMatchesDescriptors() throws {
+        for descriptor in TheFence.Command.descriptors {
+            let request = try MCPToolRequest(name: descriptor.command.rawValue, arguments: [:])
+            let result = ButtonHeistMCPServer.routedToolRequest(request)
+
+            switch (descriptor.mcpExposure, result) {
+            case (.directTool, .success(let input)):
+                #expect(input.command == descriptor.command)
+            case (.notExposed, .failure(let error)):
+                #expect(error.message == "Unknown tool: \(descriptor.command.rawValue)")
+            case (.directTool, .failure(let error)):
+                Issue.record("Expected \(descriptor.command.rawValue) to route, got \(error.message)")
+            case (.notExposed, .success):
+                Issue.record("Expected \(descriptor.command.rawValue) to be hidden from MCP routing")
+            }
+        }
+    }
+
     @Test("perform routes one DSL step opaquely")
     func performRoutesOneDSLStepOpaquely() throws {
         let operation = try routed(

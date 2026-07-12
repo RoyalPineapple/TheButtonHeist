@@ -2,7 +2,6 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import ThePlans
-import TheScore
 
 struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>

@@ -38,7 +38,7 @@ final class ElementTargetOptionsTests: XCTestCase {
         )
     }
 
-    func testGestureElementObjectUsesSharedCLITargetEncoder() {
+    func testGestureElementObjectUsesCanonicalCodableTargetBridge() {
         let target = ElementTarget.predicate(
             ElementPredicate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
         )
@@ -48,6 +48,7 @@ final class ElementTargetOptionsTests: XCTestCase {
             return XCTFail("Expected semantic target object")
         }
 
+        XCTAssertEqual(object.heistValue, CLICodableHeistValueBridge.value(from: target))
         XCTAssertEqual(object.heistValue, .object(semanticObject))
         XCTAssertEqual(object[.checks], .array([
             .object([
@@ -78,7 +79,7 @@ final class ElementTargetOptionsTests: XCTestCase {
         ]))
     }
 
-    func testScopedTargetEncoderIncludesContainerScrollableAndActionsChecks() {
+    func testScopedTargetBridgeIncludesContainerScrollableAndActionsChecks() {
         let target = ElementTarget.within(
             container: .matching(.scrollable(true), .actions([.custom("Sub"), .activate])),
             .predicate(ElementPredicate(label: "Checkout"))
@@ -86,6 +87,7 @@ final class ElementTargetOptionsTests: XCTestCase {
 
         let object = CLIRequestBuilder.targetObject(target)
 
+        XCTAssertEqual(object.heistValue, CLICodableHeistValueBridge.value(from: target))
         XCTAssertEqual(object[.container], .object([
             "checks": .array([
                 .object([

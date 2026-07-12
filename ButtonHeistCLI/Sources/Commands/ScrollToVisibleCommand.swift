@@ -20,8 +20,8 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 15.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(CLITimeoutDefaults.scrollToVisible)))")
+    var timeout: Double = CLITimeoutDefaults.scrollToVisible
 
     @ButtonHeistActor
     mutating func run() async throws {

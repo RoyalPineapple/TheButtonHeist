@@ -104,11 +104,11 @@ enum CLIRequestBuilder {
     }
 
     static func targetValue(_ target: ElementTarget) -> HeistValue {
-        CLIElementTargetPayloadEncoder.value(target)
+        CLICodableHeistValueBridge.value(from: target)
     }
 
     static func targetObject(_ target: ElementTarget) -> CLIRequestObject {
-        CLIElementTargetPayloadEncoder.object(target)
+        CLICodableHeistValueBridge.object(from: target)
     }
 }
 
