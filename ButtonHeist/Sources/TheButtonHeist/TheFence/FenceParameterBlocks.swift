@@ -2,8 +2,8 @@ import ThePlans
 import TheScore
 
 internal enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = ElementTarget.predicateSchemaFields.map(elementTargetFieldSpec)
-    internal static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
+    private static let matcherFields = ElementTarget.predicateSchemaFields.map { elementTargetFieldSpec($0) }
+    internal static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map { elementTargetFieldSpec($0) }
 
     internal static let elementTarget: [FenceParameterSpec] = [
         objectParam(.target, properties: inlineElementTargetFields, validation: .customPayload),

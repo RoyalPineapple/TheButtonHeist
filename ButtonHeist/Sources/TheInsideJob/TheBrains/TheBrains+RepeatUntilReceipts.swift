@@ -340,7 +340,7 @@ extension TheBrains {
             failure: failure,
             children: childExecution,
             childFailure: { childPath in
-                childFailureDetail(category: .loop, childPath: childPath)
+                self.childFailureDetail(category: .loop, childPath: childPath)
             }
         )
     }

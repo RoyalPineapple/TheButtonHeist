@@ -35,8 +35,7 @@ extension TheGetaway {
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.removeClient(clientId)
         }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = {
-            [weak self] clientId, respond in
+        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] clientId, respond in
             await self?.handleClientConnected(clientId, respond: respond)
         }
         await muscle.installCallbacks(

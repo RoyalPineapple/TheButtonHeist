@@ -304,7 +304,9 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ThePlansTests")),
-            ])
+            ], arguments: .arguments(environmentVariables: [
+                "HEIST_THEPLANS_BUILD_DIR": "$(BUILT_PRODUCTS_DIR)",
+            ]), expandVariableFromTarget: .target("ThePlansTests"))
         ),
         .scheme(
             name: "TheScoreTests",

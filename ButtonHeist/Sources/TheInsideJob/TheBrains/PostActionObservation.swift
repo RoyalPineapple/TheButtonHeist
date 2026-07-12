@@ -431,7 +431,7 @@ final class PostActionObservation {
         )
     }
 
-    private static func remapAccessibilityNotifications(
+    static func remapAccessibilityNotifications(
         _ notifications: [AccessibilityNotificationEvidence],
         from source: BeforeState,
         to destination: BeforeState
@@ -440,6 +440,7 @@ final class PostActionObservation {
             AccessibilityNotificationEvidence(
                 sequence: notification.sequence,
                 kind: notification.kind,
+                rawCode: notification.rawCode,
                 timestamp: notification.timestamp,
                 notificationData: remapAccessibilityNotificationPayload(
                     notification.notificationData,

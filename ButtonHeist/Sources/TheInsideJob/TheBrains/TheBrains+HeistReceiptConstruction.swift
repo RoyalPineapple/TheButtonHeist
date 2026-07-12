@@ -185,7 +185,7 @@ extension TheBrains {
             evidence: evidence,
             children: children,
             childFailure: { childPath in
-                childFailureDetail(category: childFailureCategory, childPath: childPath)
+                self.childFailureDetail(category: childFailureCategory, childPath: childPath)
             }
         )
     }

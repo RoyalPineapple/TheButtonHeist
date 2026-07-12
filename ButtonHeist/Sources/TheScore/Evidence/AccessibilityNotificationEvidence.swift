@@ -23,7 +23,7 @@ private enum AccessibilityNotificationIdentity {
         from container: KeyedDecodingContainer<Keys>,
         kindKey: Keys,
         rawCodeKey: Keys
-    ) throws -> (kind: AccessibilityNotificationKind, rawCode: UInt32?) {
+    ) throws -> AccessibilityNotificationIdentityValue {
         let kind = try container.decode(AccessibilityNotificationKind.self, forKey: kindKey)
         let rawCode = try container.decodeIfPresent(UInt32.self, forKey: rawCodeKey)
         guard isValid(kind: kind, rawCode: rawCode) else {
@@ -33,8 +33,13 @@ private enum AccessibilityNotificationIdentity {
                 debugDescription: "rawCode is required only for unknown accessibility notification evidence"
             )
         }
-        return (kind, rawCode)
+        return AccessibilityNotificationIdentityValue(kind: kind, rawCode: rawCode)
     }
+}
+
+private struct AccessibilityNotificationIdentityValue {
+    let kind: AccessibilityNotificationKind
+    let rawCode: UInt32?
 }
 
 /// Ordered accessibility-notification evidence observed while moving between
@@ -69,6 +74,23 @@ public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, H
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
+    }
+
+    public init(
+        sequence: UInt64,
+        kind: AccessibilityNotificationKind,
+        timestamp: Date,
+        notificationData: AccessibilityNotificationPayload,
+        associatedElement: AccessibilityNotificationPayload
+    ) {
+        self.init(
+            sequence: sequence,
+            kind: kind,
+            rawCode: nil,
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement
+        )
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -131,6 +153,23 @@ public struct CapturedAnnouncement: Codable, Sendable, Equatable, Hashable {
         self.kind = kind
         self.rawCode = rawCode
         self.associatedElement = associatedElement
+    }
+
+    public init(
+        sequence: UInt64,
+        text: String,
+        timestamp: Date,
+        kind: AccessibilityNotificationKind,
+        associatedElement: AccessibilityNotificationPayload = .none
+    ) {
+        self.init(
+            sequence: sequence,
+            text: text,
+            timestamp: timestamp,
+            kind: kind,
+            rawCode: nil,
+            associatedElement: associatedElement
+        )
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

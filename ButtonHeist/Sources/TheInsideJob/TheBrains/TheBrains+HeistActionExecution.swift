@@ -371,7 +371,7 @@ extension TheBrains {
             evidence: .wait(evidence),
             children: childExecution,
             childFailure: { childPath in
-                childFailureDetail(category: .wait, childPath: childPath)
+                self.childFailureDetail(category: .wait, childPath: childPath)
             }
         )
     }

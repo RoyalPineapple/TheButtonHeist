@@ -248,7 +248,7 @@ extension TheBrains {
             evidence: evidence,
             children: children,
             childFailure: { childPath in
-                childFailureDetail(category: .loop, childPath: childPath)
+                self.childFailureDetail(category: .loop, childPath: childPath)
             }
         )
     }
@@ -341,7 +341,7 @@ extension TheBrains {
                 evidence: evidence,
                 children: iterationChildren,
                 childFailure: { childPath in
-                    childFailureDetail(category: .loop, childPath: childPath)
+                    self.childFailureDetail(category: .loop, childPath: childPath)
                 }
             ))
 

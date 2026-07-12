@@ -42,7 +42,7 @@ final class ElementActionRequestContractTests: XCTestCase {
                 assertContainerPredicateSchema(spec, file: #filePath, line: #line)
             case .nestedElementTarget:
                 XCTAssertEqual(spec.type, .object)
-                XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: spec), .bool(true))
+                XCTAssertEqual(projectedJSONSchemaProperty("additionalProperties", in: spec), .bool(false))
             }
         }
     }

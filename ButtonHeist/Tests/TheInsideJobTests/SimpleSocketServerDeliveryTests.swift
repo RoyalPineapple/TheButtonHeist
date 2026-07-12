@@ -10,7 +10,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         let gate = SendCompletionGate()
         await server.setSendContentForTesting { _, _, completion in
             if case .contentProcessed(let handler) = completion {
-                gate.capture(handler)
+                Task { await gate.capture(handler) }
             }
         }
         let clientId = await server.insertClientForTesting(connection: makeConnection())
@@ -20,18 +20,15 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         }
         await gate.waitUntilCaptured()
 
-        XCTAssertEqual(
-            await server.clientPhaseForTesting(clientId),
-            .sending(SocketSendBuffer(pendingBytes: 3))
-        )
+        let sendingPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertEqual(sendingPhase, .sending(SocketSendBuffer(pendingBytes: 3)))
 
-        gate.complete(nil)
+        await gate.complete(nil)
 
-        XCTAssertEqual(await sendTask.value, .delivered)
-        XCTAssertEqual(
-            await server.clientPhaseForTesting(clientId),
-            .connected(SocketSendBuffer())
-        )
+        let outcome = await sendTask.value
+        let connectedPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertEqual(outcome, .delivered)
+        XCTAssertEqual(connectedPhase, .connected(SocketSendBuffer()))
         await server.removeClient(clientId)
     }
 
@@ -40,7 +37,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         let gate = SendCompletionGate()
         await server.setSendContentForTesting { _, _, completion in
             if case .contentProcessed(let handler) = completion {
-                gate.capture(handler)
+                Task { await gate.capture(handler) }
             }
         }
         let clientId = await server.insertClientForTesting(connection: makeConnection())
@@ -51,18 +48,15 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         }
         await gate.waitUntilCaptured()
 
-        XCTAssertEqual(
-            await server.clientPhaseForTesting(clientId),
-            .sending(SocketSendBuffer(pendingBytes: 6))
-        )
+        let sendingPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertEqual(sendingPhase, .sending(SocketSendBuffer(pendingBytes: 6)))
 
-        gate.complete(nil)
+        await gate.complete(nil)
 
-        XCTAssertEqual(await sendTask.value, .delivered)
-        XCTAssertEqual(
-            await server.clientPhaseForTesting(clientId),
-            .connected(SocketSendBuffer())
-        )
+        let outcome = await sendTask.value
+        let connectedPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertEqual(outcome, .delivered)
+        XCTAssertEqual(connectedPhase, .connected(SocketSendBuffer()))
         await server.removeClient(clientId)
     }
 
@@ -71,7 +65,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         let gate = SendCompletionGate()
         await server.setSendContentForTesting { _, _, completion in
             if case .contentProcessed(let handler) = completion {
-                gate.capture(handler)
+                Task { await gate.capture(handler) }
             }
         }
         let clientId = await server.insertClientForTesting(connection: makeConnection())
@@ -80,14 +74,15 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
             await server.send(Data("response".utf8), to: clientId)
         }
         await gate.waitUntilCaptured()
-        gate.complete(.posix(.ECONNRESET))
+        await gate.complete(.posix(.ECONNRESET))
 
         guard case .failed(.transportFailed(let failedClientId, let diagnostic)) = await sendTask.value else {
             return XCTFail("Expected transport failure from send completion")
         }
         XCTAssertEqual(failedClientId, clientId)
         XCTAssertEqual(diagnostic.reason, .posix(code: Int(POSIXErrorCode.ECONNRESET.rawValue)))
-        XCTAssertNil(await server.clientPhaseForTesting(clientId))
+        let clientPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertNil(clientPhase)
     }
 
     func testDisconnectDuringSendReturnsClientNotFound() async {
@@ -95,7 +90,7 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         let gate = SendCompletionGate()
         await server.setSendContentForTesting { _, _, completion in
             if case .contentProcessed(let handler) = completion {
-                gate.capture(handler)
+                Task { await gate.capture(handler) }
             }
         }
         let clientId = await server.insertClientForTesting(connection: makeConnection())
@@ -105,10 +100,12 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         }
         await gate.waitUntilCaptured()
         await server.removeClient(clientId)
-        gate.complete(nil)
+        await gate.complete(nil)
 
-        XCTAssertEqual(await sendTask.value, .failed(.clientNotFound(clientId)))
-        XCTAssertNil(await server.clientPhaseForTesting(clientId))
+        let outcome = await sendTask.value
+        let clientPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertEqual(outcome, .failed(.clientNotFound(clientId)))
+        XCTAssertNil(clientPhase)
     }
 
     private func makeConnection() -> NWConnection {
@@ -120,39 +117,29 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 }
 
-/// `@unchecked Sendable` justification: send completions and test assertions
-/// can arrive from different tasks, and all mutable state is protected by `lock`.
-private final class SendCompletionGate: @unchecked Sendable {
-    private let lock = NSLock()
+private actor SendCompletionGate {
     private var handler: (@Sendable (NWError?) -> Void)?
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     func capture(_ handler: @escaping @Sendable (NWError?) -> Void) {
-        let waiters = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
-            self.handler = handler
-            let waiters = self.waiters
-            self.waiters.removeAll()
-            return waiters
-        }
+        self.handler = handler
+        let waiters = self.waiters
+        self.waiters.removeAll()
         waiters.forEach { $0.resume() }
     }
 
     func waitUntilCaptured() async {
-        let isCaptured = lock.withLock { handler != nil }
-        guard !isCaptured else { return }
+        guard handler == nil else { return }
         await withCheckedContinuation { continuation in
-            lock.withLock {
-                if handler != nil {
-                    continuation.resume()
-                } else {
-                    waiters.append(continuation)
-                }
+            if handler != nil {
+                continuation.resume()
+            } else {
+                waiters.append(continuation)
             }
         }
     }
 
     func complete(_ error: NWError?) {
-        let handler = lock.withLock { self.handler }
         handler?(error)
     }
 }

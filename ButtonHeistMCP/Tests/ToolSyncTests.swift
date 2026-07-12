@@ -52,10 +52,11 @@ struct ToolSyncTests {
                 toolsByName[descriptor.command.rawValue]?.first,
                 "Missing MCP tool for descriptor \(descriptor.command.rawValue)"
             )
+            let expectedInputSchema = try inputSchemaValue(for: descriptor.command)
 
             #expect(tool.name == descriptor.command.rawValue)
             #expect(tool.description == descriptor.description)
-            #expect(tool.inputSchema == try inputSchemaValue(for: descriptor.command))
+            #expect(tool.inputSchema == expectedInputSchema)
         }
     }
 

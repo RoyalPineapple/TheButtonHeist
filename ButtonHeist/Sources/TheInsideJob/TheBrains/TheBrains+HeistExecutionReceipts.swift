@@ -175,7 +175,7 @@ extension TheBrains {
             failure: failure,
             children: childExecution,
             childFailure: { childPath in
-                childFailureDetail(category: .invocation, childPath: childPath)
+                self.childFailureDetail(category: .invocation, childPath: childPath)
             }
         )
     }

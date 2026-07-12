@@ -222,7 +222,7 @@ public extension AccessibilityTrace {
     struct AccumulatedDelta: Sendable, Equatable {
         public let elementCount: Int
         public let captureEdge: CaptureEdge
-        public let change: Change
+        public let change: AccumulatedDeltaChange
         public let interactionDigest: InteractionDigest?
         public let transient: [HeistElement]
 
@@ -271,7 +271,7 @@ public extension AccessibilityTrace {
         public init(
             elementCount: Int,
             captureEdge: CaptureEdge,
-            change: Change,
+            change: AccumulatedDeltaChange,
             interactionDigest: InteractionDigest?,
             transient: [HeistElement]
         ) {

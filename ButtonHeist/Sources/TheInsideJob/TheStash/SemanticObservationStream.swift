@@ -190,7 +190,7 @@ private struct SemanticObservationFulfillmentState {
         pendingAccessibilityNotifications: [PendingAccessibilityNotificationEvent],
         notificationIdentityScreen: Screen? = nil
     ) -> Publication {
-        let startsNewGeneration = pendingAccessibilityNotifications.contains(\.startsObservationGeneration)
+        let startsNewGeneration = pendingAccessibilityNotifications.contains(where: \.startsObservationGeneration)
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
         var currentEvents = startsNewGeneration ? [:] : (currentFulfillment?.eventsByFulfilledScope ?? [:])
         var events: EventsByFulfilledScope = [:]

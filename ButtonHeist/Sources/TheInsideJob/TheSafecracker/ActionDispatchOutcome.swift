@@ -9,7 +9,7 @@ extension TheSafecracker {
     struct ActionDispatchOutcome {
         let method: ActionMethod
         let message: String?
-        let outcome: Outcome
+        let outcome: ActionDispatchState
 
         var success: Bool {
             if case .success = outcome { return true }
@@ -57,7 +57,7 @@ extension TheSafecracker {
         private init(
             method: ActionMethod,
             message: String?,
-            outcome: Outcome
+            outcome: ActionDispatchState
         ) {
             self.method = method
             self.message = message
@@ -74,7 +74,7 @@ extension TheSafecracker {
             ActionDispatchOutcome(
                 method: method,
                 message: message,
-                outcome: .success(Success(
+                outcome: .success(ActionDispatchSuccess(
                     payload: nil,
                     subjectEvidence: subjectEvidence,
                     resolvedElementId: resolvedElementId,
@@ -93,7 +93,7 @@ extension TheSafecracker {
             ActionDispatchOutcome(
                 method: payload.method,
                 message: message,
-                outcome: .success(Success(
+                outcome: .success(ActionDispatchSuccess(
                     payload: payload,
                     subjectEvidence: subjectEvidence,
                     resolvedElementId: resolvedElementId,
@@ -111,7 +111,7 @@ extension TheSafecracker {
             ActionDispatchOutcome(
                 method: method,
                 message: message,
-                outcome: .failure(Failure(
+                outcome: .failure(ActionDispatchFailure(
                     kind: failureKind,
                     activationTrace: activationTrace
                 ))
@@ -125,7 +125,7 @@ extension TheSafecracker {
                 return ActionDispatchOutcome(
                     method: method,
                     message: message,
-                    outcome: .success(Success(
+                    outcome: .success(ActionDispatchSuccess(
                         payload: success.payload,
                         subjectEvidence: evidence,
                         resolvedElementId: success.resolvedElementId,
@@ -145,7 +145,7 @@ extension TheSafecracker {
                 return ActionDispatchOutcome(
                     method: method,
                     message: message,
-                    outcome: .success(Success(
+                    outcome: .success(ActionDispatchSuccess(
                         payload: success.payload,
                         subjectEvidence: success.subjectEvidence,
                         resolvedElementId: success.resolvedElementId,
@@ -157,7 +157,7 @@ extension TheSafecracker {
                 return ActionDispatchOutcome(
                     method: method,
                     message: message,
-                    outcome: .failure(Failure(
+                    outcome: .failure(ActionDispatchFailure(
                         kind: failure.kind,
                         activationTrace: trace,
                         timing: failure.timing
@@ -174,7 +174,7 @@ extension TheSafecracker {
                 return ActionDispatchOutcome(
                     method: method,
                     message: message,
-                    outcome: .success(Success(
+                    outcome: .success(ActionDispatchSuccess(
                         payload: success.payload,
                         subjectEvidence: success.subjectEvidence,
                         resolvedElementId: success.resolvedElementId,
@@ -186,7 +186,7 @@ extension TheSafecracker {
                 return ActionDispatchOutcome(
                     method: method,
                     message: message,
-                    outcome: .failure(Failure(
+                    outcome: .failure(ActionDispatchFailure(
                         kind: failure.kind,
                         activationTrace: failure.activationTrace,
                         timing: mergedTiming
@@ -195,50 +195,51 @@ extension TheSafecracker {
             }
         }
 
-        enum Outcome {
-            case success(Success)
-            case failure(Failure)
+    }
+
+    enum ActionDispatchState {
+        case success(ActionDispatchSuccess)
+        case failure(ActionDispatchFailure)
+    }
+
+    struct ActionDispatchSuccess {
+        let payload: ActionResultPayload?
+        let subjectEvidence: ActionSubjectEvidence?
+        let resolvedElementId: HeistId?
+        let activationTrace: ActivationTrace?
+        let timing: ActionPerformanceTiming?
+
+        init(
+            payload: ActionResultPayload? = nil,
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            resolvedElementId: HeistId? = nil,
+            activationTrace: ActivationTrace? = nil,
+            timing: ActionPerformanceTiming? = nil
+        ) {
+            self.payload = payload
+            self.subjectEvidence = subjectEvidence
+            self.resolvedElementId = resolvedElementId
+            self.activationTrace = activationTrace
+            self.timing = timing
         }
+    }
 
-        struct Success {
-            let payload: ActionResultPayload?
-            let subjectEvidence: ActionSubjectEvidence?
-            let resolvedElementId: HeistId?
-            let activationTrace: ActivationTrace?
-            let timing: ActionPerformanceTiming?
+    struct ActionDispatchFailure {
+        /// Structural reason for failure. Lets dispatch code distinguish
+        /// tree-unavailable from timeout without parsing `message` (which is
+        /// user-facing copy, not a control-flow contract).
+        let kind: FailureKind
+        let activationTrace: ActivationTrace?
+        let timing: ActionPerformanceTiming?
 
-            init(
-                payload: ActionResultPayload? = nil,
-                subjectEvidence: ActionSubjectEvidence? = nil,
-                resolvedElementId: HeistId? = nil,
-                activationTrace: ActivationTrace? = nil,
-                timing: ActionPerformanceTiming? = nil
-            ) {
-                self.payload = payload
-                self.subjectEvidence = subjectEvidence
-                self.resolvedElementId = resolvedElementId
-                self.activationTrace = activationTrace
-                self.timing = timing
-            }
-        }
-
-        struct Failure {
-            /// Structural reason for failure. Lets dispatch code distinguish
-            /// tree-unavailable from timeout without parsing `message` (which is
-            /// user-facing copy, not a control-flow contract).
-            let kind: FailureKind
-            let activationTrace: ActivationTrace?
-            let timing: ActionPerformanceTiming?
-
-            init(
-                kind: FailureKind,
-                activationTrace: ActivationTrace? = nil,
-                timing: ActionPerformanceTiming? = nil
-            ) {
-                self.kind = kind
-                self.activationTrace = activationTrace
-                self.timing = timing
-            }
+        init(
+            kind: FailureKind,
+            activationTrace: ActivationTrace? = nil,
+            timing: ActionPerformanceTiming? = nil
+        ) {
+            self.kind = kind
+            self.activationTrace = activationTrace
+            self.timing = timing
         }
     }
 
