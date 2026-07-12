@@ -214,6 +214,11 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
+    override func visit(_ node: AttributedTypeSyntax) -> SyntaxVisitorContinueKind {
+        recordUncheckedSendableUse(node)
+        return .visitChildren
+    }
+
     override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
         let observed = node.baseName.text
         recordJSONBoundaryUse(node, observed: observed)
@@ -448,6 +453,31 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 evidence: ViolationEvidence(
                     observed: node.trimmedDescription,
                     expectation: "normalize Foundation/ObjC/SPI Any values at named boundary files"
+                )
+            )
+        )
+    }
+
+    private func recordUncheckedSendableUse(_ node: AttributedTypeSyntax) {
+        guard !filePath.hasPrefix(insideJobSourcePrefix),
+              node.baseType.as(IdentifierTypeSyntax.self)?.name.text == "Sendable",
+              node.attributes.contains(where: { element in
+                  guard let attribute = element.as(AttributeSyntax.self),
+                        let name = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name else {
+                      return false
+                  }
+                  return name.tokenKind == .keyword(.unchecked)
+              }) else {
+            return
+        }
+
+        failures.append(
+            file.failure(
+                at: node,
+                message: "@unchecked Sendable outside TheInsideJob platform boundary",
+                evidence: ViolationEvidence(
+                    observed: node.trimmedDescription,
+                    expectation: "@unchecked Sendable is allowed only under \(insideJobSourcePrefix)"
                 )
             )
         )
@@ -769,6 +799,8 @@ private let anyBoundaryAllowedPaths: Set<String> = [
     "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift",
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift",
 ]
+
+private let insideJobSourcePrefix = "ButtonHeist/Sources/TheInsideJob/"
 
 private let jsonBoundarySymbols: Set<String> = [
     "JSONDecoder",
