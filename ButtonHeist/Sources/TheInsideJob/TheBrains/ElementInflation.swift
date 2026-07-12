@@ -23,25 +23,6 @@ internal final class ElementInflation {
     internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?)?
     internal var revealKnownTarget: (@MainActor (HeistId) async -> Navigation.ExploredScreen?)?
 
-    /// Bounded window inflation waits for a target whose reveal failed, or
-    /// whose visible live object was recycled, to become resolvable before
-    /// failing the active recovery path.
-    ///
-    /// Async-loaded destinations can produce an interface tree containing the
-    /// target before its live scroll geometry is wired, so a reveal failure at
-    /// the dispatch instant is not proof of unreachability — the very next
-    /// settled capture can show the target framed and reachable. The wait is
-    /// keyed off the target resolving, not a fixed retry count, because the
-    /// gating operation is typically I/O (an in-flight content load).
-    /// Field-measured arrivals land within ~500ms of dispatch; the standard
-    /// settle timeout covers them with margin.
-    internal var revealPathGraceTimeout: TimeInterval = SemanticObservationTiming.defaultTimeout
-
-    /// Re-parse cadence inside the grace window when the app posts no
-    /// transition-completion notifications. Apps that announce transitions
-    /// wake the window immediately; silent apps fall back to this interval.
-    internal var revealPathSilentReparseInterval: TimeInterval = 0.15
-
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     internal static let stableGeometryQuietFrames: Int = 2
     internal static let stableGeometryTimeout: TimeInterval = 1.0

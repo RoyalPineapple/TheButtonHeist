@@ -18,9 +18,6 @@ final class TheBrainsScrollTests: XCTestCase {
         brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
         brains.startSemanticObservation()
-        // Keep expected noRevealPath failures fast; grace-window tests set
-        // their own budget.
-        brains.navigation.elementInflation.revealPathGraceTimeout = 0.05
     }
 
     override func tearDown() async throws {
@@ -779,13 +776,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, visibleFrame.midY, accuracy: 0.01)
     }
 
-    func testRevealGraceWindowRecoversTargetArrivingFromAsyncLoad() async {
-        // Receipt-proven residual flake: the settled union carries a known
-        // "Coke" entry without scroll membership (captured at a screen
-        // boundary), the async destination list has not landed yet, and the
-        // fresh settled capture with the reachable target arrives a beat
-        // after reveal fails. Inflation must ride the grace window and
-        // resolve the arriving target instead of failing noRevealPath.
+    func testRevealRetryResolvesTargetFromNextSettledObservation() async {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         installScreenWithOffViewportEntry(
@@ -814,25 +805,29 @@ final class TheBrainsScrollTests: XCTestCase {
         ])
         brains.navigation.elementInflation.discoverTarget = { _ in nil }
         brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
-        brains.navigation.elementInflation.revealPathGraceTimeout = 3.0
         defer {
             brains.navigation.elementInflation.discoverTarget = nil
             brains.navigation.elementInflation.revealKnownTarget = nil
         }
-        let asyncLoadArrival = Task { @MainActor in
-            guard await Task.cancellableSleep(for: .milliseconds(200)) else { return }
-            self.brains.stash.nextVisibleRefreshScreenForTesting = arrivedScreen
-        }
-        defer { asyncLoadArrival.cancel() }
 
-        let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "activation dispatch"
-        )
+        let inflation = Task { @MainActor in
+            await self.brains.navigation.elementInflation.inflate(
+                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                method: .activate,
+                deallocatedBoundary: "activation dispatch"
+            )
+        }
+        for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(brains.stash.semanticObservationStream.settledWaiterCount, 1)
+        brains.stash.nextVisibleRefreshScreenForTesting = arrivedScreen
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(arrivedScreen)
+
+        let result = await inflation.value
 
         guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected grace-window recovery of arriving target, got \(result)")
+            return XCTFail("Expected settled-observation recovery of arriving target, got \(result)")
         }
         XCTAssertEqual(inflatedTarget.treeElement.heistId, "current_coke_button")
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, arrivedFrame.midX, accuracy: 0.01)
@@ -840,11 +835,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(inflatedTarget.liveTarget.object === arrivedObject)
     }
 
-    func testRevealGraceWindowWakesOnTransitionCompletionNotification() async throws {
-        try XCTSkipUnless(
-            AccessibilityNotificationObserver.shared.isInstalled,
-            "Accessibility notification callback SPI unavailable in this runtime"
-        )
+    func testRevealRetryAttemptsFreshKnownTargetOnlyOnce() async {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         installScreenWithOffViewportEntry(
@@ -852,56 +843,57 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [InterfaceObservation.OffViewportEntry(staleCoke, heistId: "stale_coke_button")]
         )
 
-        let arrivedFrame = CGRect(
-            x: ElementInflation.interactionComfortZone.midX - 150,
-            y: ElementInflation.interactionComfortZone.midY - 48,
-            width: 300,
-            height: 96
+        let freshKnownScreen = InterfaceObservation.makeForTests(
+            elements: [(overviewVisible, HeistId(rawValue: "combo_overview_header"))],
+            offViewport: [
+                InterfaceObservation.OffViewportEntry(
+                    staleCoke,
+                    heistId: "stale_coke_button",
+                    scrollContainerPath: TreePath([0])
+                )
+            ]
         )
-        let arrivedCoke = AccessibilityElement.make(
-            label: "Coke",
-            traits: .button,
-            frame: arrivedFrame
-        )
-        let arrivedObject = retainLiveObject(makeButton(label: "Coke", frame: arrivedFrame))
-        let arrivedScreen = InterfaceObservation.makeForTests([
-            InterfaceObservation.TestEntry(
-                arrivedCoke,
-                heistId: "current_coke_button",
-                object: arrivedObject
-            )
-        ])
         brains.navigation.elementInflation.discoverTarget = { _ in nil }
-        brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
-        brains.navigation.elementInflation.revealPathGraceTimeout = 3.0
-        // The silent-fallback cadence cannot fire inside the window, so a
-        // pass requires the posted notification to wake the loop.
-        brains.navigation.elementInflation.revealPathSilentReparseInterval = 10.0
+        var revealAttempts = 0
+        brains.navigation.elementInflation.revealKnownTarget = { _ in
+            revealAttempts += 1
+            return nil
+        }
         defer {
             brains.navigation.elementInflation.discoverTarget = nil
             brains.navigation.elementInflation.revealKnownTarget = nil
         }
-        let asyncLoadArrival = Task { @MainActor in
-            guard await Task.cancellableSleep(for: .milliseconds(250)) else { return }
-            self.brains.stash.nextVisibleRefreshScreenForTesting = arrivedScreen
-            UIAccessibility.post(notification: .layoutChanged, argument: nil)
-        }
-        defer { asyncLoadArrival.cancel() }
 
-        let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "activation dispatch"
-        )
-
-        guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected notification-triggered recovery, got \(result)")
+        let inflation = Task { @MainActor in
+            await self.brains.navigation.elementInflation.inflate(
+                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                method: .activate,
+                deallocatedBoundary: "activation dispatch"
+            )
         }
-        XCTAssertEqual(inflatedTarget.treeElement.heistId, "current_coke_button")
-        XCTAssertTrue(inflatedTarget.liveTarget.object === arrivedObject)
+        for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        brains.stash.nextVisibleRefreshScreenForTesting = freshKnownScreen
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(freshKnownScreen)
+        for _ in 0..<50 where revealAttempts == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(revealAttempts, 1)
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(freshKnownScreen)
+        for _ in 0..<50 {
+            await Task.yield()
+        }
+        XCTAssertEqual(revealAttempts, 1)
+        inflation.cancel()
+
+        guard case .failed(let failure) = await inflation.value else {
+            return XCTFail("Expected typed cancellation after reveal retry")
+        }
+        XCTAssertEqual(failure.failedStep, .cancelled)
     }
 
-    func testRevealGraceWindowStillFailsNoRevealPathWhenTargetNeverArrives() async {
+    func testRevealRetryFailsNoRevealPathAtActionDeadline() async {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         installScreenWithOffViewportEntry(
@@ -910,7 +902,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.navigation.elementInflation.discoverTarget = { _ in nil }
         brains.navigation.elementInflation.revealKnownTarget = { _ in nil }
-        brains.navigation.elementInflation.revealPathGraceTimeout = 0.2
         defer {
             brains.navigation.elementInflation.discoverTarget = nil
             brains.navigation.elementInflation.revealKnownTarget = nil
@@ -923,11 +914,12 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected noRevealPath failure after grace window, got \(result)")
+            return XCTFail("Expected noRevealPath failure at the action deadline, got \(result)")
         }
         XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no scroll membership"))
+        XCTAssertTrue(failure.message.contains("before the action deadline"))
         XCTAssertTrue(failure.message.contains("Coke"))
     }
 
@@ -979,7 +971,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(failure.message.contains("target was not found in fresh live geometry"))
     }
 
-    func testStaleLiveObjectGraceRecoversDelayedVisibleLiveTarget() async {
+    func testStaleLiveObjectRefreshResolvesNextSettledObservation() async {
         let targetId = HeistId(rawValue: "recycled_target")
         let staleFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let staleTarget = AccessibilityElement.make(
@@ -1006,23 +998,24 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: recoveredObject
             )
         ])
-        brains.navigation.elementInflation.revealPathGraceTimeout = 0.3
-        brains.navigation.elementInflation.revealPathSilentReparseInterval = 0.01
-
-        let liveObjectArrival = Task { @MainActor in
-            guard await Task.cancellableSleep(for: .milliseconds(40)) else { return }
-            self.brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+        let inflation = Task { @MainActor in
+            await self.brains.navigation.elementInflation.inflate(
+                for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
+                method: .scrollToVisible,
+                deallocatedBoundary: "scroll_to_visible dispatch"
+            )
         }
-        defer { liveObjectArrival.cancel() }
+        for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(brains.stash.semanticObservationStream.settledWaiterCount, 1)
+        brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+        brains.stash.semanticObservationStream.commitSettledVisibleObservation(recoveredScreen)
 
-        let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
-            method: .scrollToVisible,
-            deallocatedBoundary: "scroll_to_visible dispatch"
-        )
+        let result = await inflation.value
 
         guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected stale live-object grace to recover target, got \(result)")
+            return XCTFail("Expected settled-observation refresh to recover target, got \(result)")
         }
         XCTAssertEqual(inflatedTarget.treeElement.heistId, targetId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
