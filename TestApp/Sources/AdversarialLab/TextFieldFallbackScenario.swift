@@ -93,7 +93,7 @@ private final class RefusingActivationTextField: UITextField {
 
     override func accessibilityActivate() -> Bool {
         onActivationAttempt?()
-        false
+        return false
     }
 
     override func becomeFirstResponder() -> Bool {
