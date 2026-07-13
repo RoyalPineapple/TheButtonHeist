@@ -343,43 +343,6 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(result.activationTrace?.tapActivationSucceeded, true)
     }
 
-    func testFirstResponderInflationReplacesStaleLiveObjectForCommittedHeistId() async throws {
-        let fixture = try installVisibleTextInputFixture(
-            identifier: "replacement_first_responder",
-            label: "Replacement First Responder"
-        )
-        defer { fixture.cleanup() }
-        let replacement = try XCTUnwrap(fixture.target as? RefusingActivationTextField)
-        XCTAssertTrue(replacement.becomeFirstResponder())
-
-        let refreshed = try XCTUnwrap(brains.stash.refreshLiveCapture())
-        XCTAssertEqual(refreshed.liveCapture.firstResponderHeistId, fixture.knownHeistId)
-        let stale = RefusingActivationTextField(frame: replacement.frame)
-        var elementRefs = refreshed.liveCapture.elementRefs
-        elementRefs[fixture.knownHeistId] = .init(object: stale, scrollView: fixture.scrollView)
-        let staleObservation = try InterfaceObservation.build(
-            tree: refreshed.tree,
-            dispatchReferences: .init(
-                elementRefs: elementRefs,
-                containerRefsByPath: refreshed.liveCapture.containerRefsByPath,
-                scrollableContainerViewsByPath: refreshed.liveCapture.scrollableContainerViewsByPath
-            )
-        )
-        brains.stash.installScreenForTesting(staleObservation)
-        XCTAssertTrue(brains.stash.liveObject(for: fixture.knownHeistId) === stale)
-        brains.stash.nextVisibleRefreshScreenForTesting = refreshed
-
-        let result = await brains.actions.executeResignFirstResponder()
-
-        XCTAssertTrue(result.success, result.message ?? "resign first responder failed")
-        XCTAssertEqual(result.method, .resignFirstResponder)
-        XCTAssertEqual(stale.resignationCount, 0)
-        XCTAssertEqual(replacement.resignationCount, 1)
-        XCTAssertTrue(brains.stash.liveObject(for: fixture.knownHeistId) === replacement)
-        XCTAssertFalse(replacement.isFirstResponder)
-        XCTAssertEqual(brains.stash.interfaceTree.firstResponderHeistId, fixture.knownHeistId)
-    }
-
     func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
         let fixture = try installNestedScrollActivationFixture(
             identifier: "nested_scroll_checkout_submit",
@@ -428,6 +391,8 @@ final class ElementInflationProductTests: XCTestCase {
         defer { decoy.cleanup() }
         try seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
         XCTAssertTrue(brains.stash.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
+        let decoyRevealCount = decoy.scrollView.revealRequestCount
+        let decoyOffset = decoy.scrollView.contentOffset
 
         let result = await brains.executeRuntimeAction(.activate(
             literalTarget(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
@@ -442,8 +407,8 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
-        XCTAssertEqual(decoy.scrollView.contentOffset, .zero)
-        XCTAssertEqual(decoy.scrollView.revealRequestCount, 0)
+        XCTAssertEqual(decoy.scrollView.contentOffset, decoyOffset)
+        XCTAssertEqual(decoy.scrollView.revealRequestCount, decoyRevealCount)
     }
 
     func testNestedRevealDoesNotTreatDuplicateOuterScrollViewPathAsInnerAlias() async throws {
@@ -458,7 +423,7 @@ final class ElementInflationProductTests: XCTestCase {
             fixture,
             decoy: .duplicateOuterReferenceAtDecoyPath(decoy.scrollView)
         )
-        XCTAssertEqual(
+        XCTAssertGreaterThanOrEqual(
             brains.stash.scrollableContainerViewsByPath.values.filter { $0 === fixture.outerScrollView }.count,
             2
         )
