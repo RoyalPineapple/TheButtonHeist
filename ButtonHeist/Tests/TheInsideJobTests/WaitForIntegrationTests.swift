@@ -475,6 +475,8 @@ final class WaitForIntegrationTests: XCTestCase {
         }
         // Mutate only after the wait is suspended beyond the committed baseline.
         await waitForSemanticObservationWaiter()
+        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveWaitBaseline)
         mutateVisibleHierarchy {
             label.removeFromSuperview()
         }
