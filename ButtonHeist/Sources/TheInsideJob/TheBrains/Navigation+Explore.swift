@@ -20,15 +20,16 @@ extension Navigation {
         baseline: InterfaceObservation? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
-    ) async -> ExploredScreen {
+    ) async -> ExploredScreen? {
         let startTime = CACurrentMediaTime()
+        guard let settledPage = await settledExplorationPage() else { return nil }
         var exploration = SemanticExploration(
             baseline: baseline ?? stash.explorationBaseline(),
             maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
         )
 
-        exploration.absorb(await settledExplorationPage())
+        exploration.absorb(settledPage)
 
         if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen.tree) {
             exploration.manifest.clearPendingContainers()

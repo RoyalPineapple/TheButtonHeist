@@ -206,11 +206,13 @@ final class TheBrains {
             return .failure(.rootViewUnavailable)
         }
 
-        let exploration = await navigation.exploreScreen(
+        guard let exploration = await navigation.exploreScreen(
             baseline: stash.visibleExplorationBaseline(from: visibleEvidence.screen),
             maxScrollsPerContainer: query.maxScrollsPerContainer,
             maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
-        )
+        ) else {
+            return .failure(.rootViewUnavailable)
+        }
         _ = stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploration))
 
         do {

@@ -342,7 +342,6 @@ struct LiveCapture: Equatable {
         let snapshot = tree.viewportCapture
         let indexedElements = snapshot.hierarchy.pathIndexedElements
         let elementPaths = Set(indexedElements.map(\.path))
-        let semanticElementsByPath = Dictionary(grouping: tree.elements.values, by: \.path)
 
         for (heistId, element) in tree.elements.sorted(by: { $0.key < $1.key })
         where element.heistId != heistId {
@@ -371,13 +370,7 @@ struct LiveCapture: Equatable {
         var pathsByHeistId: [HeistId: TreePath] = [:]
         for item in indexedElements {
             guard let heistId = snapshot.heistIdsByPath[item.path] else {
-                let isSemantic = semanticElementsByPath[item.path]?.contains {
-                    $0.element == item.element
-                } == true
-                if isSemantic {
-                    throw ValidationError.missingHeistId(path: item.path)
-                }
-                continue
+                throw ValidationError.missingHeistId(path: item.path)
             }
             if let firstPath = pathsByHeistId[heistId] {
                 throw ValidationError.duplicateHeistId(
@@ -389,8 +382,10 @@ struct LiveCapture: Equatable {
             pathsByHeistId[heistId] = item.path
         }
 
-        let entries = try indexedElements.compactMap { item -> LiveElementEntry? in
-            guard let heistId = snapshot.heistIdsByPath[item.path] else { return nil }
+        let entries = try indexedElements.map { item -> LiveElementEntry in
+            guard let heistId = snapshot.heistIdsByPath[item.path] else {
+                throw ValidationError.missingHeistId(path: item.path)
+            }
             guard let treeElement = tree.elements[heistId] else {
                 throw ValidationError.missingTreeElement(heistId: heistId, path: item.path)
             }
@@ -484,7 +479,9 @@ struct LiveCapture: Equatable {
             throw ValidationError.observedScrollPointWithoutMembership(path: path)
         }
         guard let membership else { return }
-        guard case .container(let container, _) = hierarchy.node(at: membership.containerPath),
+        guard membership.containerPath != path,
+              path.hasPrefix(membership.containerPath),
+              case .container(let container, _) = hierarchy.node(at: membership.containerPath),
               container.isScrollable
         else {
             throw ValidationError.invalidScrollMembership(
@@ -628,8 +625,8 @@ struct LiveCapture: Equatable {
 
             case .invalidScrollMembership(let path, let containerPath):
                 return """
-                Scroll membership at \(path.liveCaptureDiagnosticDescription) points at missing or non-scrollable \
-                container \(containerPath.liveCaptureDiagnosticDescription).
+                Scroll membership at \(path.liveCaptureDiagnosticDescription) points at a missing, non-scrollable, \
+                or non-ancestor container \(containerPath.liveCaptureDiagnosticDescription).
                 """
 
             case .observedScrollPointWithoutMembership(let path):

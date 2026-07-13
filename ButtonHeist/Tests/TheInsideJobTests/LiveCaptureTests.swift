@@ -58,6 +58,23 @@ struct LiveCaptureTests {
         )
     }
 
+    @Test func `rejects viewport elements without HeistIds when absent from semantic tree`() {
+        let path = TreePath([0])
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [
+                .element(
+                    AccessibilityElement.make(label: "Unindexed", traits: .button),
+                    traversalIndex: 0
+                )
+            ]
+        )
+
+        expectValidationError(
+            .missingHeistId(path: path),
+            tree: InterfaceTree(elements: [:], viewportCapture: snapshot)
+        )
+    }
+
     @Test func `rejects container metadata for missing paths`() {
         let path = TreePath([4])
         let snapshot = LiveCapture.Snapshot(
@@ -122,6 +139,61 @@ struct LiveCaptureTests {
         expectValidationError(
             .invalidScrollMembership(path: path, containerPath: missingContainerPath),
             tree: tree
+        )
+    }
+
+    @Test func `rejects visible scroll membership in an unrelated container`() {
+        let element = AccessibilityElement.make(label: "Save", traits: .button)
+        let elementPath = TreePath([1])
+        let containerPath = TreePath([0])
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [
+                .container(
+                    makeTestAccessibilityContainer(
+                        type: .none,
+                        scrollableContentSize: AccessibilitySize(width: 320, height: 1_000)
+                    ),
+                    children: []
+                ),
+                .element(element, traversalIndex: 0),
+            ],
+            heistIdsByPath: [elementPath: "save_button"]
+        )
+
+        expectValidationError(
+            .invalidScrollMembership(path: elementPath, containerPath: containerPath),
+            tree: makeTree(
+                snapshot: snapshot,
+                scrollMembershipsByHeistId: [
+                    "save_button": InterfaceTree.ScrollMembership(
+                        containerPath: containerPath,
+                        index: 0
+                    )
+                ]
+            )
+        )
+    }
+
+    @Test func `rejects self-referential container scroll membership`() {
+        let path = TreePath([0])
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [
+                .container(
+                    makeTestAccessibilityContainer(
+                        type: .none,
+                        scrollableContentSize: AccessibilitySize(width: 320, height: 1_000)
+                    ),
+                    children: []
+                )
+            ],
+            containerScrollMembershipsByPath: [
+                path: InterfaceTree.ScrollMembership(containerPath: path, index: nil)
+            ]
+        )
+
+        expectValidationError(
+            .invalidScrollMembership(path: path, containerPath: path),
+            tree: makeTree(snapshot: snapshot)
         )
     }
 
@@ -378,7 +450,10 @@ struct LiveCaptureTests {
         return makeTree(snapshot: snapshot)
     }
 
-    private func makeTree(snapshot: LiveCapture.Snapshot) -> InterfaceTree {
+    private func makeTree(
+        snapshot: LiveCapture.Snapshot,
+        scrollMembershipsByHeistId: [HeistId: InterfaceTree.ScrollMembership] = [:]
+    ) -> InterfaceTree {
         let elements = snapshot.hierarchy.pathIndexedElements.reduce(
             into: [HeistId: InterfaceTree.Element]()
         ) { result, item in
@@ -386,7 +461,7 @@ struct LiveCaptureTests {
             result[heistId] = InterfaceTree.Element(
                 heistId: heistId,
                 path: item.path,
-                scrollMembership: nil,
+                scrollMembership: scrollMembershipsByHeistId[heistId],
                 element: item.element
             )
         }

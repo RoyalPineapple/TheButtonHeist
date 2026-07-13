@@ -185,6 +185,37 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(retainedSequences, batch.events.map(\.sequence))
     }
 
+    func testClearingPendingEventsReportsGapToOpenActionWindow() throws {
+        let bus = AccessibilityNotificationBus()
+        let action = bus.beginActionWindow()
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+
+        bus.clearPendingEvents()
+
+        let batch = try XCTUnwrap(action.capture())
+        action.cancel()
+        XCTAssertTrue(batch.events.isEmpty)
+        XCTAssertEqual(batch.through.sequence, 2)
+        XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 2))
+    }
+
+    func testEndingHeistScopeReportsDiscardedEventsToOpenActionWindow() throws {
+        let bus = AccessibilityNotificationBus()
+        let heist = bus.beginHeistScope()
+        let action = bus.beginActionWindow()
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+
+        heist.cancel()
+
+        let batch = try XCTUnwrap(action.capture())
+        action.cancel()
+        XCTAssertTrue(batch.events.isEmpty)
+        XCTAssertEqual(batch.through.sequence, 2)
+        XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 2))
+    }
+
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
         let bus = AccessibilityNotificationBus()
 

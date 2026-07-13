@@ -63,6 +63,23 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(TheBrains.actionErrorKind(for: result), .elementNotFound)
     }
 
+    func testExploreScreenReturnsNoProofWhenInitialSettlementIsCancelled() async {
+        let staleBaseline = InterfaceObservation.makeForTests([
+            InterfaceObservation.TestEntry(
+                AccessibilityElement.make(label: "Stale", traits: .staticText),
+                heistId: "stale_staticText"
+            )
+        ])
+        let explorationTask = Task { @MainActor in
+            await brains.navigation.exploreScreen(baseline: staleBaseline) != nil
+        }
+        explorationTask.cancel()
+
+        let returnedProof = await explorationTask.value
+
+        XCTAssertFalse(returnedProof)
+    }
+
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
         let windowScene = try requireForegroundWindowScene()
         let pageViewController = UIPageViewController(
@@ -106,7 +123,9 @@ final class TheBrainsScrollTests: XCTestCase {
             uniqueKeysWithValues: unsafeTargets.map { (ObjectIdentifier($0), $0.contentOffset) }
         )
 
-        let exploration = await brains.navigation.exploreScreen()
+        guard let exploration = await brains.navigation.exploreScreen() else {
+            return XCTFail("Expected UIPageViewController exploration to settle")
+        }
         let manifest = exploration.manifest
 
         XCTAssertEqual(manifest.scrollCount, 0)
@@ -1460,11 +1479,13 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
-        let exploration = await brains.navigation.exploreScreen(
+        guard let exploration = await brains.navigation.exploreScreen(
             baseline: brains.stash.visibleExplorationBaseline(from: visibleScreen),
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
-        )
+        ) else {
+            return XCTFail("Expected word-list exploration to settle")
+        }
         _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(exploration.screen)
 
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)

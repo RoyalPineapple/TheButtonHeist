@@ -154,7 +154,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         defer { lock.unlock() }
 
         if activeHeistScopes == 0 && activeActionWindows == 0 {
-            bufferedEvents.removeAll()
+            discardBufferedEventsLocked()
         }
         activeHeistScopes += 1
         return AccessibilityNotificationHeistScope(bus: self)
@@ -238,6 +238,14 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     func clearPendingEvents() {
         lock.lock()
         defer { lock.unlock() }
+        discardBufferedEventsLocked()
+    }
+
+    private func discardBufferedEventsLocked() {
+        discardedThroughSequenceStorage = max(
+            discardedThroughSequenceStorage,
+            bufferedEvents.last?.sequence ?? 0
+        )
         bufferedEvents.removeAll()
     }
 
@@ -378,11 +386,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
 
-        if activeHeistScopes > 0 {
-            activeHeistScopes -= 1
-        }
-        if activeHeistScopes == 0 && activeActionWindows == 0 {
-            bufferedEvents.removeAll()
+        guard activeHeistScopes > 0 else { return }
+        activeHeistScopes -= 1
+        if activeHeistScopes == 0 {
+            discardBufferedEventsLocked()
         }
     }
 }
