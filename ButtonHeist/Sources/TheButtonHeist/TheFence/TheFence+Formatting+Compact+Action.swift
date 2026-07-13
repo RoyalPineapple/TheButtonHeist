@@ -66,21 +66,32 @@ extension FenceResponse {
         return text
     }
 
-    /// Recovery hint for failed expectations whose actual observation is easy
-    /// to misread without the command semantics.
+    /// Recovery hint for failed expectations whose observed typed facts are
+    /// easy to misread without the action semantics.
     static func expectationFailureHint(
         _ expectation: ExpectationResult,
-        command: TheFence.Command? = nil,
+        command _: TheFence.Command? = nil,
         result: ActionResult? = nil
     ) -> String? {
+        guard case .unmet = expectation,
+              let result,
+              result.outcome.isSuccess,
+              let trace = result.accessibilityTrace,
+              let changeKind = DeltaProjection(
+                  trace: trace,
+                  isComplete: result.settled != false,
+                  profile: .summary
+              )?.kind
+        else { return nil }
+
         if expectation.predicate == .changed(.screen()),
-           expectation.actual == AccessibilityTrace.ChangeFactKind.elementsChanged.rawValue {
+           changeKind == .elementsChanged {
             return ".changed(.screen()) requires a screen-level transition; " +
                 "use .changed(.elements()) for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }
 
-        guard isActivateNoChangeExpectation(expectation, command: command, result: result) else {
+        guard isActivateNoChangeExpectation(expectation, result: result, changeKind: changeKind) else {
             return nil
         }
         return "activate uses accessibilityActivate() and trusts a true return; " +
@@ -90,18 +101,15 @@ extension FenceResponse {
 
     private static func isActivateNoChangeExpectation(
         _ expectation: ExpectationResult,
-        command: TheFence.Command?,
-        result: ActionResult?
+        result: ActionResult,
+        changeKind: DeltaProjectionKind
     ) -> Bool {
-        guard expectation.actual == "noChange",
+        guard changeKind == .noChange,
+              result.method == .activate,
               let predicate = expectation.predicate,
               case .changed = predicate.node
         else { return false }
-
-        if command == .activate {
-            return true
-        }
-        return result?.method == .activate
+        return true
     }
 
     static func compactActivationTrace(_ trace: ActivationTrace) -> String {
