@@ -188,7 +188,7 @@ internal struct PostActionSettleObservation {
 // MARK: - Semantic Observation Projection
 
 internal extension InterfaceObservation {
-    internal func semanticObservationProjection(for scope: SemanticObservationScope) -> InterfaceObservation {
+    func semanticObservationProjection(for scope: SemanticObservationScope) -> InterfaceObservation {
         switch scope {
         case .visible:
             return viewportOnly
