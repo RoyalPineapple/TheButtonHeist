@@ -499,11 +499,9 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordParsedObservedEvidence(observed)
 
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
+        XCTAssertEqual(bagman.latestObservation.orderedElements.first?.element.label, "Observed")
         XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate(label: "Observed"))).resolved)
-        XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Observed"))).resolved?.element.label,
-            "Observed"
-        )
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Observed"))).resolved)
         XCTAssertEqual(bagman.viewportElementIDs, ["observed"])
     }
 
@@ -809,7 +807,10 @@ final class TheStashResolutionTests: XCTestCase {
             secondEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.sequence),
             [1]
         )
-        XCTAssertEqual(secondEvent.trace.changeFacts.map(\.kind), [.screenChanged])
+        XCTAssertEqual(
+            secondEvent.trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
     func testAmbientScreenChangedBetweenHeistScopesDoesNotStartGeneration() {
@@ -1355,7 +1356,7 @@ final class TheStashResolutionTests: XCTestCase {
             ["Visible Discovery"]
         )
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.scope, .discovery)
-        XCTAssertEqual(bagman.interfaceElementIDs, ["known_discovery", "visible_discovery"])
+        XCTAssertEqual(bagman.interfaceElementIDs, ["first", "known_discovery", "visible_discovery"])
         XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 0)
     }
 
@@ -1494,7 +1495,7 @@ final class TheStashResolutionTests: XCTestCase {
                 ),
             ]
         )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(first)
+        let firstEvent = bagman.semanticObservationStream.commitDiscoveryObservationForTesting(first)
 
         let secondVisible = element(label: "Second Visible")
         let secondKnown = element(label: "Second Known")
@@ -1511,6 +1512,7 @@ final class TheStashResolutionTests: XCTestCase {
         let event = bagman.semanticObservationStream.commitDiscoveryObservationForTesting(second)
 
         XCTAssertEqual(event.scope, .discovery)
+        XCTAssertEqual(event.generation, firstEvent.generation)
         XCTAssertEqual(event.trace.captures.count, 2)
         XCTAssertEqual(
             try XCTUnwrap(event.trace.captures.first).interface.projectedElements.compactMap(\.label).sorted(),
@@ -1518,7 +1520,11 @@ final class TheStashResolutionTests: XCTestCase {
         )
         XCTAssertEqual(
             try XCTUnwrap(event.trace.captures.last).interface.projectedElements.compactMap(\.label).sorted(),
-            ["Second Known", "Second Visible"]
+            ["First Known", "First Visible", "Second Known", "Second Visible"]
+        )
+        XCTAssertEqual(
+            bagman.interfaceElementIDs,
+            ["first_known", "first_visible", "second_known", "second_visible"]
         )
     }
 
