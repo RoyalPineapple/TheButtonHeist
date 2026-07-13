@@ -531,7 +531,7 @@ final class WaitForIntegrationTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        let visibleHeistId: HeistId = "wait_change_visible_anchor_staticText"
+        let visibleHeistId: HeistId = "wait_change_visible_anchor"
 
         let offViewportElement = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-OffViewport",
@@ -539,6 +539,12 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
+        XCTAssertEqual(TheStash.IdAssignment.assign([visibleBefore]), [visibleHeistId])
+        XCTAssertEqual(TheStash.IdAssignment.assign([visibleAfter]), [visibleHeistId])
+        XCTAssertNil(
+            offViewportElement.identifier,
+            "The pure-value off-viewport fixture deliberately keeps its synthetic known identity"
+        )
         let baseline = InterfaceObservation.makeForTests(
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
