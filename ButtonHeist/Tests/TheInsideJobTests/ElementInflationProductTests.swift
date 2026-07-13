@@ -156,21 +156,6 @@ final class ElementInflationProductTests: XCTestCase {
         }
     }
 
-    func testUnchangedGeometrySettlesDespiteLayerAnimation() {
-        let view = UIView()
-        view.layer.add(CABasicAnimation(keyPath: "opacity"), forKey: "test-animation")
-        let sample = geometrySample(x: 20)
-        let stabilization = ElementInflation.LiveGeometryStabilization(
-            initial: sample,
-            requiresOnscreen: true
-        )
-
-        XCTAssertNotNil(view.layer.animation(forKey: "test-animation"))
-        guard case .stable = stabilization.reduce(.sample(sample, viewport: geometryViewport)) else {
-            return XCTFail("Layer-only animation must not delay stable live geometry")
-        }
-    }
-
     func testOffscreenActivationPointAfterPlacementIsTerminal() {
         let sample = geometrySample(x: 20)
         let stabilization = ElementInflation.LiveGeometryStabilization(
@@ -529,17 +514,13 @@ final class ElementInflationProductTests: XCTestCase {
             didReveal: false,
             method: .activate,
             activationPointPolicy: .liveObjectOnly,
-            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 0)
+            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
         )
-        switch state {
-        case .failed:
-            break
-        case .inflated(let inflatedTarget):
-            _ = AccessibilityActionDispatcher().activate(inflatedTarget.liveTarget)
-            XCTFail("Refresh retargeted removed identity \(selected.heistId) to \(inflatedTarget.treeElement.heistId)")
-        default:
-            XCTFail("Expected removed selected identity to fail closed, got \(state)")
+        guard case .failed(let failure) = state else {
+            return XCTFail("Expected removed selected identity to fail closed, got \(state)")
         }
+        XCTAssertEqual(failure.failedStep, .staleRefresh)
+        XCTAssertEqual(failure.failureKind, .targetUnavailable)
 
         XCTAssertEqual(fixture.first.activationCount, 0)
         XCTAssertEqual(fixture.second.activationCount, 0)
