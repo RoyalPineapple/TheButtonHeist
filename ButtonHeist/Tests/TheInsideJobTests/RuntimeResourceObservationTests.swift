@@ -136,7 +136,9 @@ final class RuntimeResourceObservationTests: XCTestCase {
         let outcome = SettleSession.Outcome(
             outcome: .timedOut(timeMs: 17),
             events: [],
-            finalScreen: InterfaceObservation.makeForTests(),
+            finalObservation: SettleSessionFinalObservation(
+                screen: InterfaceObservation.makeForTests()
+            ),
             elementsByKey: [:],
             instabilityDescription: "runtime resource diagnostic"
         )

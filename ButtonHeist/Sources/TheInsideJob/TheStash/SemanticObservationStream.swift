@@ -111,8 +111,17 @@ struct InterfaceObservationProof {
         self.screen = screen
     }
 
-    static func settled(_ outcome: SettleSession.Outcome) -> InterfaceObservationProof? {
-        guard outcome.outcome.didSettleCleanly, let screen = outcome.finalScreen else { return nil }
+    static func settled(
+        _ outcome: SettleSession.Outcome,
+        stash: TheStash
+    ) -> InterfaceObservationProof? {
+        guard outcome.outcome.didSettleCleanly,
+              let finalObservation = outcome.finalObservation else { return nil }
+        let screen = stash.latestObservation
+        guard screen.captureToken == finalObservation.captureToken,
+              screen.tree == finalObservation.tree,
+              SettleTimeline.fingerprint(of: screen.liveCapture.hierarchy.sortedElements)
+                == finalObservation.fingerprint else { return nil }
         return InterfaceObservationProof(screen: screen)
     }
 
@@ -129,7 +138,7 @@ struct InterfaceObservationProof {
 struct PostActionSettleObservation {
     enum Result {
         case committed(SettledSemanticObservationEvent)
-        case observedUnsettled(InterfaceObservation)
+        case observedUnsettled(InterfaceTree)
         case unavailable
     }
 
@@ -549,17 +558,20 @@ final class SemanticObservationStream {
         )
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-            recordNonActionFailedSettleDiagnosticEvidence(outcome.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(
+                outcome.finalObservation?.tree,
+                stash: stash
+            )
             return nil
         }
 
-        guard let screen = outcome.finalScreen else {
+        guard outcome.finalObservation != nil else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             recordNonActionFailedSettleDiagnosticEvidence(nil, stash: stash)
             return nil
         }
 
-        if let proof = InterfaceObservationProof.settled(outcome) {
+        if let proof = InterfaceObservationProof.settled(outcome, stash: stash) {
             let event = commitSettledVisibleObservation(proof)
             return VisibleSemanticObservationEvidence(
                 screen: event.observation.screen,
@@ -570,7 +582,10 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
-        recordNonActionFailedSettleDiagnosticEvidence(screen, stash: stash)
+        recordNonActionFailedSettleDiagnosticEvidence(
+            outcome.finalObservation?.tree,
+            stash: stash
+        )
         return nil
     }
 
@@ -670,7 +685,7 @@ final class SemanticObservationStream {
                 settle: SettleSession.Outcome(
                     outcome: .cancelled(timeMs: 0),
                     events: [],
-                    finalScreen: nil,
+                    finalObservation: nil,
                     elementsByKey: [:]
                 ),
                 result: .unavailable
@@ -692,14 +707,14 @@ final class SemanticObservationStream {
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             recordPostActionFailedSettleDiagnosticEvidence(
-                outcome.finalScreen,
+                outcome.finalObservation?.tree,
                 stash: stash,
                 notificationWindow: notificationWindow
             )
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
 
-        guard let finalScreen = outcome.finalScreen else {
+        guard let finalObservation = outcome.finalObservation else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             recordPostActionFailedSettleDiagnosticEvidence(
                 nil,
@@ -708,7 +723,7 @@ final class SemanticObservationStream {
             )
             return PostActionSettleObservation(settle: outcome, result: .unavailable)
         }
-        if let proof = InterfaceObservationProof.settled(outcome) {
+        if let proof = InterfaceObservationProof.settled(outcome, stash: stash) {
             let notificationBatch = notificationWindow?.capture()
                 ?? stash.accessibilityNotifications.checkpoint(after: lastCommittedNotificationCursor)
             defer { notificationWindow?.cancel() }
@@ -718,7 +733,7 @@ final class SemanticObservationStream {
                 event = commitSettledVisibleObservation(
                     proof,
                     notificationBatch: notificationBatch,
-                    notificationIdentityScreen: finalScreen
+                    notificationIdentityScreen: proof.screen
                 )
             case .discovery:
                 event = commitSettledDiscoveryObservation(
@@ -731,13 +746,16 @@ final class SemanticObservationStream {
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         recordPostActionFailedSettleDiagnosticEvidence(
-            finalScreen,
+            finalObservation.tree,
             stash: stash,
             notificationWindow: notificationWindow
         )
+        guard !outcome.outcome.didSettleCleanly else {
+            return PostActionSettleObservation(settle: outcome, result: .unavailable)
+        }
         return PostActionSettleObservation(
             settle: outcome,
-            result: .observedUnsettled(finalScreen)
+            result: .observedUnsettled(finalObservation.tree)
         )
     }
 
@@ -1006,12 +1024,15 @@ final class SemanticObservationStream {
             baselineTripwireSignal: baselineSignal
         )
 
-        guard let proof = InterfaceObservationProof.settled(settle) else {
+        guard let proof = InterfaceObservationProof.settled(settle, stash: stash) else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
-            recordNonActionFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(
+                settle.finalObservation?.tree,
+                stash: stash
+            )
             await Task.yield()
             return true
         }
@@ -1031,9 +1052,12 @@ final class SemanticObservationStream {
             timeoutMs: SemanticObservationSettleCadence.activePassiveSettleTimeoutMs
         )
 
-        guard let proof = InterfaceObservationProof.settled(settle) else {
+        guard let proof = InterfaceObservationProof.settled(settle, stash: stash) else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: settle)
-            recordNonActionFailedSettleDiagnosticEvidence(settle.finalScreen, stash: stash)
+            recordNonActionFailedSettleDiagnosticEvidence(
+                settle.finalObservation?.tree,
+                stash: stash
+            )
             await Task.yield()
             return true
         }
@@ -1044,9 +1068,12 @@ final class SemanticObservationStream {
         return true
     }
 
-    private func recordNonActionFailedSettleDiagnosticEvidence(_ screen: InterfaceObservation?, stash: TheStash) {
+    private func recordNonActionFailedSettleDiagnosticEvidence(
+        _ tree: InterfaceTree?,
+        stash: TheStash
+    ) {
         recordFailedSettleDiagnosticEvidence(
-            screen,
+            tree,
             stash: stash,
             pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
                 ? .preservePendingEvents
@@ -1055,7 +1082,7 @@ final class SemanticObservationStream {
     }
 
     private func recordPostActionFailedSettleDiagnosticEvidence(
-        _ screen: InterfaceObservation?,
+        _ tree: InterfaceTree?,
         stash: TheStash,
         notificationWindow: AccessibilityNotificationActionWindow?
     ) {
@@ -1063,7 +1090,7 @@ final class SemanticObservationStream {
             notificationWindow.cancel()
         }
         recordFailedSettleDiagnosticEvidence(
-            screen,
+            tree,
             stash: stash,
             pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
                 ? .preservePendingEvents
@@ -1072,7 +1099,7 @@ final class SemanticObservationStream {
     }
 
     private func recordFailedSettleDiagnosticEvidence(
-        _ screen: InterfaceObservation?,
+        _ tree: InterfaceTree?,
         stash: TheStash,
         pendingAccessibilityNotificationPolicy: FailedSettleAccessibilityNotificationPolicy
     ) {
@@ -1081,6 +1108,13 @@ final class SemanticObservationStream {
             stash.accessibilityNotifications.clearPendingEvents()
         case .preservePendingEvents:
             break
+        }
+        let screen = tree.map { tree in
+            do {
+                return try InterfaceObservation.build(tree: tree)
+            } catch {
+                preconditionFailure("Failed settle diagnostic observation failed validation: \(error)")
+            }
         }
         stash.recordFailedSettleDiagnosticEvidence(screen)
     }

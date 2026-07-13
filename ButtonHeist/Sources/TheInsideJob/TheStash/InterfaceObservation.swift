@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import Foundation
 import UIKit
 
 import TheScore
@@ -9,6 +10,10 @@ import AccessibilitySnapshotParser
 
 // MARK: - Interface Observation
 
+struct InterfaceCaptureToken: Equatable, Hashable, Sendable {
+    fileprivate let id = UUID()
+}
+
 /// One interface-tree state paired with the live UIKit evidence for its viewport.
 /// Exploration may merge tree facts, but live evidence always comes from the
 /// latest parser read and is never merged.
@@ -16,6 +21,11 @@ struct InterfaceObservation: Equatable {
 
     let tree: InterfaceTree
     let liveCapture: LiveCapture
+    let captureToken: InterfaceCaptureToken
+
+    static func == (lhs: InterfaceObservation, rhs: InterfaceObservation) -> Bool {
+        lhs.tree == rhs.tree && lhs.liveCapture == rhs.liveCapture
+    }
 
     static var empty: InterfaceObservation {
         do {
@@ -35,16 +45,19 @@ struct InterfaceObservation: Equatable {
             liveCapture: try LiveCapture.build(
                 validating: tree,
                 dispatchReferences: dispatchReferences
-            )
+            ),
+            captureToken: InterfaceCaptureToken()
         )
     }
 
     private init(
         validatedTree: InterfaceTree,
-        liveCapture: LiveCapture
+        liveCapture: LiveCapture,
+        captureToken: InterfaceCaptureToken
     ) {
         tree = validatedTree
         self.liveCapture = liveCapture
+        self.captureToken = captureToken
     }
 
     // MARK: - Derived Properties
@@ -87,9 +100,14 @@ struct InterfaceObservation: Equatable {
 
     var viewportOnly: InterfaceObservation {
         do {
-            return try InterfaceObservation.build(
-                tree: tree.viewportOnly,
-                dispatchReferences: liveCapture.dispatchReferences
+            let viewportTree = tree.viewportOnly
+            return InterfaceObservation(
+                validatedTree: viewportTree,
+                liveCapture: try LiveCapture.build(
+                    validating: viewportTree,
+                    dispatchReferences: liveCapture.dispatchReferences
+                ),
+                captureToken: captureToken
             )
         } catch {
             preconditionFailure("Viewport-only interface observation failed validation: \(error)")

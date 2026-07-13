@@ -7,8 +7,8 @@ enum SettleFailureDiagnostic {
         layerGateWasClear: Bool? = nil
     ) -> String {
         var parts = ["settle \(outcome.outcome.outcomeDescription)"]
-        if let finalScreen = outcome.finalScreen {
-            parts.append("last parsed: \(finalScreen.liveCapture.hierarchy.sortedElements.count) elements")
+        if let finalObservation = outcome.finalObservation {
+            parts.append("last parsed: \(finalObservation.tree.viewportCapture.hierarchy.sortedElements.count) elements")
         } else {
             parts.append("last parsed: no accessibility tree")
         }

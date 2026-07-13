@@ -242,7 +242,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 2)
-        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
@@ -264,7 +264,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 30)
-        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineFingerprintChangeResetsStability() {
@@ -291,7 +291,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect after post-change stability, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 4)
-        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
@@ -313,7 +313,7 @@ final class SettleSessionTests: XCTestCase {
         let outcome = send(.timeout(elapsedMs: 10), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 10))
-        XCTAssertNil(outcome?.finalScreen)
+        XCTAssertNil(outcome?.finalObservation)
         XCTAssertEqual(outcome?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
         _ = changedObject
     }
@@ -339,7 +339,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected notification-only signal to allow settle, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 1)
-        XCTAssertEqual(step.outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Stable")
+        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")
         XCTAssertTrue(state.events.isEmpty)
     }
 
@@ -358,7 +358,7 @@ final class SettleSessionTests: XCTestCase {
         let outcome = send(.yieldFailed(.cancellation, elapsedMs: 7), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .cancelled(timeMs: 7))
-        XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineTimeoutTerminalEffectProjectsTimedOutOutcome() {
@@ -376,7 +376,7 @@ final class SettleSessionTests: XCTestCase {
         let outcome = send(.timeout(elapsedMs: 99), machine: machine, ledger: &ledger, state: &state).outcome
 
         XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 99))
-        XCTAssertEqual(outcome?.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineNonCancellationYieldErrorProjectsTimedOutOutcome() {
@@ -452,7 +452,7 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testSemanticQuietSettleTripwireChangeResetsBaseline() async {
@@ -500,7 +500,7 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
         XCTAssertTrue(outcome.events.isEmpty)
     }
 
@@ -533,7 +533,7 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Tick 5")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Tick 5")
         XCTAssertNotNil(outcome.instabilityDescription)
     }
 
@@ -560,7 +560,7 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testSemanticQuietSettleIgnoresNilParsesUntilAStableScreenArrives() async {
@@ -581,7 +581,7 @@ final class SettleSessionTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testFixedCadenceSettleIgnoresNilParsesUntilAStableScreenArrives() async {
@@ -602,7 +602,7 @@ final class SettleSessionTests: XCTestCase {
         guard case .settled = outcome.outcome else {
             return XCTFail("Expected fixed-cadence settle after nil parses, got \(outcome.outcome)")
         }
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testSettlesAfterCyclesRequiredStableCycles() async {
@@ -624,7 +624,7 @@ final class SettleSessionTests: XCTestCase {
             XCTFail("Expected .settled, got \(outcome.outcome)")
         }
         XCTAssertEqual(outcome.elementsByKey.count, 1)
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Hello")
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Hello")
     }
 
     func testNoChangeParsesSettleAndReturnFinalStableScreen() async {
@@ -646,7 +646,7 @@ final class SettleSessionTests: XCTestCase {
             XCTFail("Expected .settled for no-change parses, got \(outcome.outcome)")
         }
         XCTAssertFalse(outcome.events.containsTripwireSignalChange)
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.map(\.label), ["Unchanged"])
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.map(\.label), ["Unchanged"])
     }
 
     func testFingerprintUsesSharedCoarseFrameComparisonForIPadJitter() {
@@ -778,7 +778,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected frame jitter inside the bucket to settle, got \(outcome.outcome)")
         }
         XCTAssertNil(outcome.instabilityDescription)
-        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.shape.frame.origin.y, 428)
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.shape.frame.origin.y, 428)
     }
 
     func testFrameJitterInsideCoarseBucketDoesNotProduceChangeDescription() {

@@ -2578,12 +2578,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         finalScreen: InterfaceObservation?,
         outcome: SettleOutcome = .settled(timeMs: 0)
     ) -> SettleSession.Outcome {
+        if let finalScreen {
+            brains.stash.recordParsedObservedEvidence(finalScreen)
+        }
         let elements = finalScreen?.liveCapture.hierarchy.sortedElements ?? []
         let elementsByKey = Dictionary(uniqueKeysWithValues: elements.map { ($0.timelineKey, $0) })
         return SettleSession.Outcome(
             outcome: outcome,
             events: [],
-            finalScreen: finalScreen,
+            finalObservation: finalScreen.map { SettleSessionFinalObservation(screen: $0) },
             elementsByKey: elementsByKey
         )
     }

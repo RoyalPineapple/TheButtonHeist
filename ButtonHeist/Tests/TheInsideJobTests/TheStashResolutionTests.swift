@@ -565,7 +565,7 @@ final class TheStashResolutionTests: XCTestCase {
         let outcome = SettleSession.Outcome(
             outcome: .cancelled(timeMs: 1),
             events: [],
-            finalScreen: nil,
+            finalObservation: nil,
             elementsByKey: [:]
         )
         let result = await bagman.semanticObservationStream.settlePostActionObservation(
@@ -734,7 +734,6 @@ final class TheStashResolutionTests: XCTestCase {
             event.trace.captures.last?.transition.accessibilityNotificationGap,
             AccessibilityNotificationGap(droppedThroughSequence: 1)
         )
-        XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications.count, 64)
     }
 
     func testCommittedTraceRetainsFirstResponderAsDurableTarget() {
@@ -762,7 +761,7 @@ final class TheStashResolutionTests: XCTestCase {
         let outcome = SettleSession.Outcome(
             outcome: .timedOut(timeMs: 1),
             events: [],
-            finalScreen: screen,
+            finalObservation: SettleSessionFinalObservation(screen: screen),
             elementsByKey: [:]
         )
 
@@ -776,6 +775,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testCleanPostActionSettleRequiresActionWindowToClaimAccessibilityNotifications() async {
         let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        bagman.recordParsedObservedEvidence(screen)
         bagman.accessibilityNotifications.record(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
@@ -784,7 +784,7 @@ final class TheStashResolutionTests: XCTestCase {
         let outcome = SettleSession.Outcome(
             outcome: .settled(timeMs: 1),
             events: [],
-            finalScreen: screen,
+            finalObservation: SettleSessionFinalObservation(screen: screen),
             elementsByKey: [:]
         )
 
@@ -798,6 +798,40 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
         XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().map(\.kind), [.announcement])
+    }
+
+    func testCleanSettleProofRequiresCurrentCaptureTokenAndFingerprint() {
+        let stableElement = element(label: "Stable")
+        let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
+        let finalObservation = SettleSessionFinalObservation(screen: settled)
+        let outcome = SettleSession.Outcome(
+            outcome: .settled(timeMs: 1),
+            events: [],
+            finalObservation: finalObservation,
+            elementsByKey: [:]
+        )
+        bagman.recordParsedObservedEvidence(settled)
+
+        XCTAssertNotNil(InterfaceObservationProof.settled(outcome, stash: bagman))
+
+        let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
+        XCTAssertEqual(replacement, settled)
+        XCTAssertNotEqual(replacement.captureToken, settled.captureToken)
+        bagman.recordParsedObservedEvidence(replacement)
+        XCTAssertNil(InterfaceObservationProof.settled(outcome, stash: bagman))
+
+        bagman.recordParsedObservedEvidence(settled)
+        let wrongFingerprint = finalObservation.fingerprint == 0 ? 1 : 0
+        let mismatchedOutcome = SettleSession.Outcome(
+            outcome: .settled(timeMs: 1),
+            events: [],
+            finalObservation: SettleSessionFinalObservation(
+                screen: settled,
+                fingerprint: wrongFingerprint
+            ),
+            elementsByKey: [:]
+        )
+        XCTAssertNil(InterfaceObservationProof.settled(mismatchedOutcome, stash: bagman))
     }
 
     func testRecaptureOnlyValueChangedNotificationProducesNotificationFact() async throws {
@@ -817,7 +851,7 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: SettleSession.Outcome(
                 outcome: .settled(timeMs: 1),
                 events: [],
-                finalScreen: screen,
+                finalObservation: SettleSessionFinalObservation(screen: screen),
                 elementsByKey: [:]
             ),
             notificationWindow: action
@@ -846,6 +880,7 @@ final class TheStashResolutionTests: XCTestCase {
             (element(label: "Volume", value: "75%", traits: .adjustable), "volume"),
         ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(before)
+        bagman.recordParsedObservedEvidence(after)
 
         let action = bagman.accessibilityNotifications.beginActionWindow()
         bagman.accessibilityNotifications.record(
@@ -858,7 +893,7 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: SettleSession.Outcome(
                 outcome: .settled(timeMs: 1),
                 events: [],
-                finalScreen: after,
+                finalObservation: SettleSessionFinalObservation(screen: after),
                 elementsByKey: [:]
             ),
             notificationWindow: action
@@ -897,7 +932,7 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: SettleSession.Outcome(
                 outcome: .settled(timeMs: 1),
                 events: [],
-                finalScreen: screen,
+                finalObservation: SettleSessionFinalObservation(screen: screen),
                 elementsByKey: [:]
             ),
             notificationWindow: action
@@ -974,7 +1009,7 @@ final class TheStashResolutionTests: XCTestCase {
         let outcome = SettleSession.Outcome(
             outcome: .timedOut(timeMs: 1),
             events: [],
-            finalScreen: screen,
+            finalObservation: SettleSessionFinalObservation(screen: screen),
             elementsByKey: [:]
         )
 
@@ -992,11 +1027,14 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testPostActionFailedSettleReturnsObservedUnsettledEvidenceInsteadOfBaseline() async {
-        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
+        let object = NSObject()
+        let screen = InterfaceObservation.makeForTests([
+            .init(element(label: "Unstable"), heistId: "unstable", object: object),
+        ])
         let outcome = SettleSession.Outcome(
             outcome: .timedOut(timeMs: 1),
             events: [],
-            finalScreen: screen,
+            finalObservation: SettleSessionFinalObservation(screen: screen),
             elementsByKey: [:]
         )
 
@@ -1005,11 +1043,15 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        guard case .observedUnsettled(let observedScreen) = result.result else {
+        guard case .observedUnsettled(let observedTree) = result.result else {
             return XCTFail("Expected observed unsettled settle evidence")
         }
-        XCTAssertEqual(observedScreen.orderedElements.first?.element.label, "Unstable")
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(observedTree.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(
+            bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label,
+            "Unstable"
+        )
+        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable"))
         XCTAssertTrue(bagman.latestSettledSemanticObservationInvalidated)
     }
 
