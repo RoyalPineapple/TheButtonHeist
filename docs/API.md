@@ -20,6 +20,19 @@ commands, JSON-lines stdin, MCP tools, and heist execution all route through
 that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
+The typed `FenceCommandDescriptor` values in `TheFence.Command.descriptors`
+solely own public command names, adapter exposure, descriptions, input schemas,
+and MCP annotations. The committed
+`tests/fixtures/public-cli-mcp-command-contract.json` is generated from those
+descriptors as a release drift sentinel, not a second schema or an authoring
+surface. Do not hand-edit it. After reviewing an intentional descriptor change,
+regenerate it with:
+
+```bash
+BUTTONHEIST_UPDATE_PUBLIC_COMMAND_CONTRACT=1 scripts/swift-test-gate.sh \
+  ButtonHeistMCP --filter ToolSyncTests.publicCommandContractMatchesCommittedDescriptorSnapshot
+```
+
 The raw wire protocol lives one layer lower in TheScore. Wire message
 discriminators such as `requestInterface` and `heistPlan` are transport names,
 not the public CLI/MCP command namespace. Side-effecting public commands lower

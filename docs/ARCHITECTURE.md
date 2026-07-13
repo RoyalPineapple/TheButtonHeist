@@ -28,6 +28,10 @@ ButtonHeistMCP projects one tool per exposed Fence command from the same
 contract. Wire message discriminators live one layer lower in TheScore and are
 documented separately.
 
+Typed `FenceCommandDescriptor` values are the sole owners of public command
+shape. The committed public CLI/MCP command-contract JSON is generated only as
+a drift sentinel; it is not a second schema.
+
 ### Captures and Change Facts Are the Currency
 
 The settled `TheStash.interfaceTree` is the sole current semantic truth.
