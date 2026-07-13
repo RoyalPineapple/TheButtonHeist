@@ -58,7 +58,7 @@ extension ElementInflation {
         if let interruption = semanticRevealInterruption(deadline: deadline) {
             return interruption
         }
-        if stash.liveElementAliasing(treeElement) != nil {
+        if stash.visibleLiveElementAliasing(treeElement) != nil {
             return .alreadyVisible
         }
 
@@ -95,7 +95,7 @@ extension ElementInflation {
             if let interruption = semanticRevealInterruption(deadline: deadline) {
                 return interruption
             }
-            guard stash.liveElementAliasing(treeElement) != nil else {
+            guard stash.visibleLiveElementAliasing(treeElement) != nil else {
                 return .failed(.scanDidNotRevealTarget)
             }
             return .revealed
@@ -145,7 +145,7 @@ extension ElementInflation {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
         guard stash.refreshLiveCapture() != nil else { return false }
         return semanticRevealInterruption(deadline: deadline) == nil
-            && stash.liveElementAliasing(treeElement) != nil
+            && stash.visibleLiveElementAliasing(treeElement) != nil
     }
 
     private func revealScrollAncestors(

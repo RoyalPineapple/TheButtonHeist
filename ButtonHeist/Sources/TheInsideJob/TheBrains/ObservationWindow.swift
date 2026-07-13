@@ -57,13 +57,24 @@ internal enum Completeness: Sendable, Equatable {
 }
 
 internal struct ObservationWindow: Sendable, Equatable {
+    private enum TraceHistory: Sendable, Equatable {
+        case observed
+        case supplied(prefix: AccessibilityTrace, continuation: [AccessibilityTrace.Capture])
+    }
+
     internal let baseline: SettledCapture
     internal let current: SettledCapture
     internal let captures: [SettledCapture]
     internal let completeness: Completeness
+    private let traceHistory: TraceHistory
 
     internal var trace: AccessibilityTrace {
-        AccessibilityTrace(captures: captures.map(\.capture))
+        switch traceHistory {
+        case .observed:
+            AccessibilityTrace(captures: captures.map(\.capture))
+        case .supplied(let prefix, let continuation):
+            AccessibilityTrace(captures: Self.appending(continuation, to: prefix.captures))
+        }
     }
 
     internal init(
@@ -72,10 +83,27 @@ internal struct ObservationWindow: Sendable, Equatable {
         captures: [SettledCapture],
         completeness: Completeness
     ) {
+        self.init(
+            baseline: baseline,
+            current: current,
+            captures: captures,
+            completeness: completeness,
+            traceHistory: .observed
+        )
+    }
+
+    private init(
+        baseline: SettledCapture,
+        current: SettledCapture,
+        captures: [SettledCapture],
+        completeness: Completeness,
+        traceHistory: TraceHistory
+    ) {
         self.baseline = baseline
         self.current = current
         self.captures = captures
         self.completeness = completeness
+        self.traceHistory = traceHistory
     }
 
     internal static func direct(
@@ -141,11 +169,42 @@ internal struct ObservationWindow: Sendable, Equatable {
                 current: candidate.current.cursor
             ))
         }
+        let mergedTraceHistory: TraceHistory = switch traceHistory {
+        case .observed:
+            .observed
+        case .supplied(let prefix, let continuation):
+            .supplied(
+                prefix: prefix,
+                continuation: Self.appending(
+                    additionalCaptures.map(\.capture),
+                    to: continuation
+                )
+            )
+        }
         return ObservationWindow(
             baseline: baseline,
             current: candidate.current,
             captures: captures + additionalCaptures,
-            completeness: mergedCompleteness
+            completeness: mergedCompleteness,
+            traceHistory: mergedTraceHistory
+        )
+    }
+
+    internal func preserving(_ trace: AccessibilityTrace) -> ObservationWindow {
+        let observedCaptures = captures.map(\.capture)
+        let continuation: [AccessibilityTrace.Capture]
+        if let endpointHash = trace.captures.last?.hash,
+           let endpointIndex = observedCaptures.lastIndex(where: { $0.hash == endpointHash }) {
+            continuation = Array(observedCaptures.suffix(from: observedCaptures.index(after: endpointIndex)))
+        } else {
+            continuation = [current.capture]
+        }
+        return ObservationWindow(
+            baseline: baseline,
+            current: current,
+            captures: captures,
+            completeness: completeness,
+            traceHistory: .supplied(prefix: trace, continuation: continuation)
         )
     }
 
@@ -171,6 +230,16 @@ internal struct ObservationWindow: Sendable, Equatable {
             return .noObservationAfterBaseline
         }
         return .historyUnavailable
+    }
+
+    private static func appending(
+        _ captures: [AccessibilityTrace.Capture],
+        to existing: [AccessibilityTrace.Capture]
+    ) -> [AccessibilityTrace.Capture] {
+        captures.reduce(into: existing) { result, capture in
+            guard result.last?.hash != capture.hash else { return }
+            result.append(capture)
+        }
     }
 }
 

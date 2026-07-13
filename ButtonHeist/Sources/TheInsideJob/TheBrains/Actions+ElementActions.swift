@@ -48,8 +48,13 @@ extension Actions {
             ) {
                 result = failure
             } else {
-                result = await action(context)
-                    .withSubjectEvidence(context.subjectEvidence(source: .resolvedSemanticTarget))
+                let dispatchResult = await action(context)
+                let initialEvidence = dispatchResult.success
+                    ? context.subjectEvidence(source: .resolvedSemanticTarget)
+                    : nil
+                let subjectEvidence = dispatchResult.subjectEvidence ?? initialEvidence
+                result = dispatchResult
+                    .withSubjectEvidence(subjectEvidence)
                     .withResolvedElementId(context.treeElement.heistId)
             }
         }
@@ -104,10 +109,7 @@ extension Actions {
                         method: .activate
                     ) {
                     case .inflated(let inflatedTarget):
-                        return .resolved(
-                            treeElement: inflatedTarget.treeElement,
-                            liveTarget: inflatedTarget.liveTarget
-                        )
+                        return .resolved(inflatedTarget)
                     case .failed(let failure):
                         return .failure(failure.actionDispatchOutcome(commandMethod: .activate))
                     }
@@ -206,11 +208,12 @@ extension Actions {
             }
             let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
+            let result: TheSafecracker.ActionDispatchOutcome
             switch self.accessibilityActions.performCustomAction(named: target.actionName, on: liveTarget) {
             case .deallocated:
-                return .failure(.customAction, message: "custom action failed")
+                result = .failure(.customAction, message: "custom action failed")
             case .noSuchAction:
-                return .failure(
+                result = .failure(
                     .customAction,
                     message: ActionCapabilityDiagnostic.missingCustomAction(
                         target.actionName,
@@ -218,7 +221,7 @@ extension Actions {
                     )
                 )
             case .declined:
-                return .failure(
+                result = .failure(
                     .customAction,
                     message: ActionCapabilityDiagnostic.declinedCustomAction(
                         target.actionName,
@@ -226,8 +229,11 @@ extension Actions {
                     )
                 )
             case .succeeded:
-                return .success(method: .customAction)
+                result = .success(method: .customAction)
             }
+            return result.withSubjectEvidence(
+                dispatchContext.subjectEvidence(source: .resolvedSemanticTarget)
+            )
         }
     }
 

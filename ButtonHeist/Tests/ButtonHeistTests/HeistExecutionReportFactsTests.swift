@@ -149,7 +149,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Checkout"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                     )
                 ),
                 actionStep(
@@ -157,7 +157,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Confirm"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(finalTrace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(finalTrace, completeness: .incomplete)))
                     )
                 ),
             ],
@@ -203,13 +203,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         dispatchResult: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(dispatchTrace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
                         ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            evidence: ActionResultFailureEvidence(observation: .trace(expectationTrace))
+                            evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
                         ),
                         expectation: ExpectationResult(
                             met: false,
@@ -295,13 +295,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         command: command,
                         dispatchResult: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(dispatchTrace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
                         ),
                         expectationResult: ActionResult.failure(
                             method: .wait,
                             errorKind: .timeout,
                             message: "timed out waiting for checkout",
-                            evidence: ActionResultFailureEvidence(observation: .trace(expectationTrace))
+                            evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
                         ),
                         expectation: ExpectationResult(
                             met: false,
@@ -490,14 +490,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
                     actionResult: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(actionTrace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(actionTrace, completeness: .incomplete)))
                     )
                 ),
                 waitStep(
                     path: "$.body[1]",
                     actionResult: ActionResult.success(
                         method: .wait,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(waitTrace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(waitTrace, completeness: .incomplete)))
                     )
                 ),
             ],
@@ -1095,6 +1095,94 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         }
     }
 
+    func testPublicHeistCaseSelectionEvidenceAppliesProfileLimitAndOmitsEmptyCases() throws {
+        let selection = HeistCaseSelectionResult(
+            cases: [
+                caseMatch(.exists(.label("First")), met: false),
+                caseMatch(.exists(.label("Second")), met: false),
+                caseMatch(.exists(.label("Third")), met: false),
+            ],
+            outcome: .noMatch,
+            elapsedMs: 4
+        )
+        let step = caseStep(kind: .conditional, selection: selection)
+        let response = FenceResponse.heistExecution(
+            plan: try evidenceProjectionPlan(),
+            result: HeistExecutionResult(steps: [step], durationMs: step.durationMs)
+        )
+
+        for (limit, visibleCount) in [(1, 1), (0, 0)] {
+            let profile = ProjectionProfile(
+                kind: .full,
+                limits: .current(caseResults: limit)
+            )
+            let responseJSON = try JSONProbe(data: FenceResponsePresenter(profile: profile).jsonData(for: response))
+            let report = try responseJSON.object("report")
+            let node = try XCTUnwrap(try report.array("nodes").first)
+            let caseSelection = try node.object("evidence").object("caseSelection")
+
+            XCTAssertEqual(try caseSelection.int("caseCount"), 3)
+            XCTAssertEqual(try caseSelection.int("omittedCaseCount"), 3 - visibleCount)
+            if visibleCount == 0 {
+                try caseSelection.assertMissing("cases")
+            } else {
+                XCTAssertEqual(try caseSelection.array("cases").count, visibleCount)
+            }
+        }
+    }
+
+    func testPublicForEachSummaryEvidenceOmitsIterationFields() throws {
+        let matching = ElementPredicate(label: "Row")
+        let steps: [HeistExecutionStepResult] = [
+            .passed(
+                path: "$.body[0]",
+                receiptKind: .forEachString,
+                durationMs: 1,
+                intent: .forEachString(parameter: "item", count: 2),
+                evidence: HeistForEachStringEvidence(
+                    parameter: "item",
+                    count: 2,
+                    iterationCount: 2
+                )
+            ),
+            .passed(
+                path: "$.body[1]",
+                receiptKind: .forEachElement,
+                durationMs: 1,
+                intent: .forEachElement(parameter: "row", matching: matching, limit: 3),
+                evidence: HeistForEachElementEvidence(
+                    parameter: "row",
+                    matching: matching,
+                    limit: 3,
+                    matchedCount: 2,
+                    iterationCount: 2
+                )
+            ),
+        ]
+        let response = FenceResponse.heistExecution(
+            plan: try evidenceProjectionPlan(),
+            result: HeistExecutionResult(steps: steps, durationMs: 2)
+        )
+        let nodes = try publicHeistReportJSON(response).array("nodes")
+        let forEachString = try nodes[0].object("evidence").object("forEachString")
+        let forEachElement = try nodes[1].object("evidence").object("forEachElement")
+
+        XCTAssertEqual(try evidenceVariantKeys(forEachString), Set([
+            "parameter", "count", "iterationCount",
+        ]))
+        try forEachString.assertMissing("iterationOrdinal")
+        try forEachString.assertMissing("value")
+        try forEachString.assertMissing("failureReason")
+
+        XCTAssertEqual(try evidenceVariantKeys(forEachElement), Set([
+            "parameter", "matching", "limit", "matchedCount", "iterationCount",
+        ]))
+        try forEachElement.assertMissing("iterationOrdinal")
+        try forEachElement.assertMissing("targetOrdinal")
+        try forEachElement.assertMissing("targetSummary")
+        try forEachElement.assertMissing("failureReason")
+    }
+
     // MARK: - Fixtures
 
     private func eventDescription(_ event: HeistExecutionEvidenceEvent) -> String {
@@ -1142,6 +1230,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             forEachElementEvidenceProjectionCase(),
             repeatUntilEvidenceProjectionCase(),
             heistInvocationEvidenceProjectionCase(),
+            invokeResultInvocationEvidenceProjectionCase(),
             invokeInvocationEvidenceProjectionCase(),
             warningEvidenceProjectionCase(),
         ]
@@ -1176,9 +1265,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             assertEvidence: { evidence in
                 let action = try evidence.object("action")
                 XCTAssertEqual(try action.string("commandName"), "activate")
+                try action.assertPresent("target")
                 let result = try action.object("result")
                 let warning = try result.object("warning")
                 XCTAssertEqual(try warning.string("code"), "activation_weak_affordance_evidence")
+                try action.assertMissing("expectationResult")
+                try action.assertMissing("expectation")
                 try action.assertMissing("warning")
                 try evidence.assertMissing("warning")
             }
@@ -1195,8 +1287,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "wait",
             assertEvidence: { evidence in
                 let wait = try evidence.object("wait")
+                XCTAssertEqual(try wait.string("outcome"), "matched")
                 XCTAssertEqual(try wait.object("result").string("method"), "wait")
                 XCTAssertEqual(try wait.object("expectation").bool("met"), true)
+                try wait.assertMissing("baselineSummary")
+                try wait.assertMissing("finalSummary")
                 try wait.assertMissing("warning")
             }
         )
@@ -1217,8 +1312,16 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "caseSelection",
             assertEvidence: { evidence in
                 let caseSelection = try evidence.object("caseSelection")
+                XCTAssertEqual(try caseSelection.object("outcome").string("kind"), "matched_case")
+                XCTAssertEqual(try caseSelection.int("elapsedMs"), 3)
                 XCTAssertEqual(try caseSelection.int("caseCount"), 1)
-                XCTAssertEqual(try caseSelection.array("cases").count, 1)
+                let match = try XCTUnwrap(try caseSelection.array("cases").first)
+                XCTAssertEqual(try match.bool("met"), true)
+                try match.assertPresent("predicate")
+                try match.assertMissing("actual")
+                try caseSelection.assertMissing("timeout")
+                try caseSelection.assertMissing("lastObservedSummary")
+                try caseSelection.assertMissing("omittedCaseCount")
             }
         )
     }
@@ -1242,8 +1345,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "forEachString",
             assertEvidence: { evidence in
                 let forEachString = try evidence.object("forEachString")
+                XCTAssertEqual(try self.evidenceVariantKeys(forEachString), Set([
+                    "parameter", "count", "iterationCount", "iterationOrdinal", "value",
+                ]))
                 XCTAssertEqual(try forEachString.string("parameter"), "item")
+                XCTAssertEqual(try forEachString.int("count"), 2)
+                XCTAssertEqual(try forEachString.int("iterationCount"), 1)
+                XCTAssertEqual(try forEachString.int("iterationOrdinal"), 0)
                 XCTAssertEqual(try forEachString.string("value"), "Milk")
+                try forEachString.assertMissing("failureReason")
             }
         )
     }
@@ -1270,9 +1380,19 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "forEachElement",
             assertEvidence: { evidence in
                 let forEachElement = try evidence.object("forEachElement")
+                XCTAssertEqual(try self.evidenceVariantKeys(forEachElement), Set([
+                    "parameter", "matching", "limit", "matchedCount", "iterationCount",
+                    "iterationOrdinal", "targetOrdinal", "targetSummary",
+                ]))
                 XCTAssertEqual(try forEachElement.string("parameter"), "row")
+                try forEachElement.assertPresent("matching")
+                XCTAssertEqual(try forEachElement.int("limit"), 3)
                 XCTAssertEqual(try forEachElement.int("matchedCount"), 2)
+                XCTAssertEqual(try forEachElement.int("iterationCount"), 2)
+                XCTAssertEqual(try forEachElement.int("iterationOrdinal"), 1)
+                XCTAssertEqual(try forEachElement.int("targetOrdinal"), 1)
                 XCTAssertEqual(try forEachElement.string("targetSummary"), "\"Row\" staticText")
+                try forEachElement.assertMissing("failureReason")
             }
         )
     }
@@ -1298,9 +1418,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "repeatUntil",
             assertEvidence: { evidence in
                 let repeatUntil = try evidence.object("repeatUntil")
+                XCTAssertEqual(try repeatUntil.string("outcome"), "matched")
+                try repeatUntil.assertPresent("predicate")
                 XCTAssertEqual(try repeatUntil.double("timeout"), 2.0)
                 XCTAssertEqual(try repeatUntil.int("iterationCount"), 1)
+                XCTAssertEqual(try repeatUntil.object("expectation").bool("met"), true)
+                XCTAssertEqual(try repeatUntil.object("result").string("method"), "wait")
                 XCTAssertEqual(try repeatUntil.string("lastObservedSummary"), "Ready")
+                try repeatUntil.assertMissing("iterationOrdinal")
+                try repeatUntil.assertMissing("failureReason")
             }
         )
     }
@@ -1319,6 +1445,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             assertEvidence: { evidence in
                 let invocation = try evidence.object("invocation")
                 XCTAssertEqual(try invocation.string("name"), "Nested")
+                try invocation.assertMissing("capability")
+                try invocation.assertMissing("argument")
+                try invocation.assertMissing("childFailedPath")
+                try invocation.assertMissing("expectationResult")
+                try invocation.assertMissing("expectation")
+                try invocation.assertMissing("expectationEvidence")
             }
         )
     }
@@ -1362,11 +1494,54 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 let invocation = try evidence.object("invocation")
                 let expectationEvidence = try invocation.object("expectationEvidence")
                 XCTAssertEqual(try invocation.string("capability"), "LibraryScreen.addToCart")
+                XCTAssertEqual(try invocation.string("name"), "LibraryScreen.addToCart")
                 XCTAssertEqual(try invocation.string("argument"), "Milk")
+                XCTAssertEqual(try invocation.object("expectationResult").string("method"), "wait")
+                XCTAssertEqual(try invocation.object("expectation").bool("met"), true)
                 XCTAssertEqual(try expectationEvidence.string("outcome"), "matched")
                 XCTAssertEqual(try expectationEvidence.object("result").string("method"), "wait")
                 XCTAssertEqual(try expectationEvidence.string("baselineSummary"), "before addToCart")
                 XCTAssertEqual(try expectationEvidence.string("finalSummary"), "Ready")
+                try invocation.assertMissing("childFailedPath")
+            }
+        )
+    }
+
+    private func invokeResultInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
+        let invocation = HeistInvocationStep(
+            path: ["LibraryScreen", "addToCart"],
+            argument: .string(.literal("Milk"))
+        )
+        let predicate = evidenceProjectionPredicate()
+        return (
+            name: "invokeResultInvocation",
+            step: .passed(
+                path: "$.body[0]",
+                receiptKind: .invocation,
+                durationMs: 8,
+                intent: .invoke(
+                    path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"),
+                    argument: .string(.literal("Milk"))
+                ),
+                evidence: .invocation(
+                    invocation: invocation,
+                    name: "LibraryScreen.addToCart",
+                    argument: "Milk",
+                    outcome: .completed(
+                        expectation: .result(
+                            actionResult: ActionResult.success(method: .wait, evidence: .none),
+                            expectation: ExpectationResult(met: true, predicate: predicate, actual: "Ready")
+                        )
+                    )
+                )
+            ),
+            expectedKey: "invocation",
+            assertEvidence: { evidence in
+                let invocation = try evidence.object("invocation")
+                XCTAssertEqual(try invocation.object("expectationResult").string("method"), "wait")
+                XCTAssertEqual(try invocation.object("expectation").bool("met"), true)
+                try invocation.assertMissing("expectationEvidence")
+                try invocation.assertMissing("childFailedPath")
             }
         )
     }
@@ -1378,6 +1553,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             expectedKey: "warning",
             assertEvidence: { evidence in
                 let warning = try evidence.object("warning")
+                XCTAssertEqual(try self.evidenceVariantKeys(warning), Set(["path", "message"]))
                 XCTAssertEqual(try warning.string("path"), "$.body[0]")
                 XCTAssertEqual(try warning.string("message"), "Heads up")
             }

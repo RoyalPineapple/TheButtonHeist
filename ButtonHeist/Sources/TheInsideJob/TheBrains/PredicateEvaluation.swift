@@ -15,9 +15,9 @@ enum PredicateEvaluation {
         _ predicate: AccessibilityPredicate<RootContext>,
         in observation: HeistSemanticObservation
     ) -> ExpectationResult {
-        guard let evidence = PredicateEvaluationEvidence(
+        guard let evidence = AccessibilityTraceEvidence(
             trace: observation.accessibilityTrace,
-            isComplete: false
+            completeness: .incomplete
         ) else {
             return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
         }
@@ -27,9 +27,12 @@ enum PredicateEvaluation {
     static func evaluate(
         _ predicate: AccessibilityPredicate<RootContext>,
         in trace: AccessibilityTrace,
-        isComplete: Bool
+        completeness: AccessibilityTraceEvidence.Completeness
     ) -> ExpectationResult {
-        guard let evidence = PredicateEvaluationEvidence(trace: trace, isComplete: isComplete) else {
+        guard let evidence = AccessibilityTraceEvidence(
+            trace: trace,
+            completeness: completeness
+        ) else {
             return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
         }
         return predicate.evaluate(in: evidence)

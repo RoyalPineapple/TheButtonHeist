@@ -80,7 +80,7 @@ extension AccessibilityElement {
     }
 }
 
-struct SettleRecordedObservation: Equatable {
+struct SettleRecordedObservation {
     let screen: InterfaceObservation
     let fingerprint: Int
     let elementsByKey: [TimelineKey: AccessibilityElement]

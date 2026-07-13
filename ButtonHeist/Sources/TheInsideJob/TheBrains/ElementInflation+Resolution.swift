@@ -9,7 +9,7 @@ extension ElementInflation {
     internal func stateAfterRefresh(
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
-        didReveal: Bool,
+        resolution: ActionSubjectResolution,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy,
         deadline: SemanticObservationDeadline
@@ -18,55 +18,62 @@ extension ElementInflation {
             target: target,
             treeElement: treeElement,
             method: method,
-            deadline: deadline
+            deadline: deadline,
+            resolution: resolution
         ) {
         case .success(let inflatedTarget):
             return await stateAfterResolvedFreshTarget(
                 inflatedTarget,
-                didReveal: didReveal,
                 activationPointPolicy: activationPointPolicy
             )
         case .retry(let reason):
+            let refreshedResolution = resolution.adding(reason.adjustment)
+            let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
             if stash.refreshLiveCapture() != nil {
                 let refreshed = resolveCurrentLiveElementTarget(
                     treeElement: treeElement,
                     target: target,
                     method: method,
-                    deadline: deadline
+                    deadline: deadline,
+                    resolution: refreshedResolution
                 )
                 switch refreshed {
                 case .success(let inflatedTarget):
                     return await stateAfterResolvedFreshTarget(
                         inflatedTarget,
-                        didReveal: didReveal,
                         activationPointPolicy: activationPointPolicy
                     )
                 case .failure(let failure):
                     return .failed(failure)
-                case .retry:
-                    break
+                case .retry(let refreshedReason):
+                    pendingRetry = (
+                        refreshedReason,
+                        refreshedResolution.adding(refreshedReason.adjustment)
+                    )
                 }
+            } else {
+                pendingRetry = (reason, refreshedResolution)
             }
             switch await awaitLiveTargetRefresh(
                 for: target,
                 treeElement: treeElement,
                 method: method,
                 after: stash.latestSettledSemanticObservationEvent?.sequence,
-                deadline: deadline
+                deadline: deadline,
+                resolution: pendingRetry.resolution
             ) {
             case .inflated(let inflatedTarget):
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
-                    didReveal: didReveal,
                     activationPointPolicy: activationPointPolicy
                 )
             case .failure(let failure):
                 return .failed(failure)
             case .treeElement, .timedOut:
-                return .failed(staleRefreshFailure(reason: reason))
+                return .failed(staleRefreshFailure(reason: pendingRetry.reason))
             case .cancelled:
                 return .failed(.cancelled(
-                    "stale live target refresh was cancelled after \(reason.failureDescription)"
+                    "stale live target refresh was cancelled after \(pendingRetry.reason.failureDescription)"
                 ))
             }
         case .failure(let failure):
@@ -79,7 +86,7 @@ extension ElementInflation {
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):
-            return .success(.visible(visible))
+            return .success(.visible(visible, ActionSubjectResolution(origin: .visible)))
         case .failure(let failure):
             return .failure(failure)
         case nil:
@@ -87,7 +94,7 @@ extension ElementInflation {
         }
         switch knownSemanticTarget(target) {
         case .success(let known):
-            return .success(.known(known))
+            return .success(.known(known, ActionSubjectResolution(origin: .known)))
         case .failure(let failure) where failure.failedStep == .ambiguous:
             return .failure(failure)
         case .failure:
@@ -101,7 +108,7 @@ extension ElementInflation {
         }
         switch visibleTargetResolution(target) {
         case .success(let visible):
-            return .success(.visible(visible))
+            return .success(.visible(visible, ActionSubjectResolution(origin: .discovered)))
         case .failure(let failure):
             return .failure(failure)
         case nil:
@@ -109,7 +116,7 @@ extension ElementInflation {
         }
         switch knownSemanticTarget(target) {
         case .success(let treeElement):
-            return .success(.known(treeElement))
+            return .success(.known(treeElement, ActionSubjectResolution(origin: .discovered)))
         case .failure(let failure):
             return .failure(failure)
         }
@@ -145,7 +152,8 @@ extension ElementInflation {
         treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
         method: ActionMethod,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
         guard let committed = stash.interfaceElement(heistId: treeElement.heistId) else {
             return .retry(.staleTarget)
@@ -156,7 +164,8 @@ extension ElementInflation {
                 target: target,
                 treeElement: committed,
                 liveTarget: liveTarget,
-                deadline: deadline
+                deadline: deadline,
+                resolution: resolution
             ))
         case .objectUnavailable:
             return .retry(.objectDeallocated)
@@ -175,13 +184,15 @@ extension ElementInflation {
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
         resolveLiveElementTarget(
             target: target,
             treeElement: treeElement,
             method: method,
-            deadline: deadline
+            deadline: deadline,
+            resolution: resolution
         )
     }
 
@@ -189,13 +200,15 @@ extension ElementInflation {
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
         resolveCurrentLiveElementTarget(
             treeElement: treeElement,
             target: target,
             method: method,
-            deadline: deadline
+            deadline: deadline,
+            resolution: resolution
         )
     }
 }

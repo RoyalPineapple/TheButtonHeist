@@ -459,7 +459,8 @@ private extension AccessibilityElement {
             customContent: customContent,
             customRotors: customRotors.map { $0.translatedBy(x: x, y: y) },
             accessibilityLanguage: accessibilityLanguage,
-            respondsToUserInteraction: respondsToUserInteraction
+            respondsToUserInteraction: respondsToUserInteraction,
+            visibility: visibility
         )
     }
 }

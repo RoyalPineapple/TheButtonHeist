@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 
+import ButtonHeistHostedTestSupport
 import ButtonHeistTesting
 
 private enum MenuScreen {

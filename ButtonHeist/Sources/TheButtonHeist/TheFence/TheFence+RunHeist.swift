@@ -55,9 +55,11 @@ struct HeistRunProjection {
         let actions = result.evidenceRollup.actions
         let actionResults = actions.dispatchedResults
         guard !actionResults.isEmpty,
-              actionResults.allSatisfy({ $0.accessibilityTrace != nil && $0.settled != false })
+              actionResults.allSatisfy({ $0.traceEvidence?.isComplete == true })
         else { return nil }
-        let traces = actions.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
+        let traceResults = actions.traceResultsInExecutionOrder
+        guard traceResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else { return nil }
+        let traces = traceResults.compactMap(\.accessibilityTrace)
         return AccessibilityTrace.combinedTrace(from: traces)
     }
 }

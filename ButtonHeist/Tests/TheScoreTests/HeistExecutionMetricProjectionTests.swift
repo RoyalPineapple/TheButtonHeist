@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Foundation
 import Testing
 import ThePlans
@@ -157,7 +158,10 @@ import TheScore
                     method: .activate,
                     evidence: ActionResultSuccessEvidence(
                         observation: .settledTrace(
-                            .noChangeForTests(elementCount: 0),
+                            makeTestTraceEvidence(
+                                .noChangeForTests(elementCount: 0),
+                                completeness: .incomplete
+                            ),
                             .settled(durationMs: 3)
                         ),
                         timing: actionTiming
@@ -167,7 +171,10 @@ import TheScore
                     method: .wait,
                     evidence: ActionResultSuccessEvidence(
                         observation: .settledTrace(
-                            .noChangeForTests(elementCount: 0),
+                            makeTestTraceEvidence(
+                                .noChangeForTests(elementCount: 0),
+                                completeness: .complete
+                            ),
                             .settled(durationMs: 8)
                         ),
                         timing: expectationTiming
@@ -184,7 +191,10 @@ import TheScore
                 method: .wait,
                 evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
-                        .noChangeForTests(elementCount: 0),
+                        makeTestTraceEvidence(
+                            .noChangeForTests(elementCount: 0),
+                            completeness: .complete
+                        ),
                         .settled(durationMs: 13)
                     ),
                     timing: waitTiming
@@ -216,7 +226,10 @@ import TheScore
                     method: .wait,
                     evidence: ActionResultSuccessEvidence(
                         observation: .settledTrace(
-                            .noChangeForTests(elementCount: 0),
+                            makeTestTraceEvidence(
+                                .noChangeForTests(elementCount: 0),
+                                completeness: .complete
+                            ),
                             .settled(durationMs: 23)
                         ),
                         timing: repeatTiming

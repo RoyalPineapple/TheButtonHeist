@@ -222,7 +222,10 @@ final class WireTypeRoundTripTests: XCTestCase {
             message: "activated",
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    .noChangeForTests(elementCount: 0),
+                    makeTestTraceEvidence(
+                        .noChangeForTests(elementCount: 0),
+                        completeness: .incomplete
+                    ),
                     .settled(durationMs: 74)
                 )
             )
@@ -247,7 +250,10 @@ final class WireTypeRoundTripTests: XCTestCase {
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    .noChangeForTests(elementCount: 0),
+                    makeTestTraceEvidence(
+                        .noChangeForTests(elementCount: 0),
+                        completeness: .incomplete
+                    ),
                     .settled(durationMs: 5)
                 )
             )

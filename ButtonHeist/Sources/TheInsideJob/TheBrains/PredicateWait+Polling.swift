@@ -55,7 +55,7 @@ internal struct PredicatePollingEngine<Evaluation> {
             timeout: timeout,
             pollWhenTimeoutZero: pollWhenTimeoutZero
         )
-        var reduction = reducer.start(
+        var step = reducer.start(
             scope: scope,
             initialObservedSequence: initialObservedSequence,
             initialVisibleFingerprint: initialVisibleFingerprint,
@@ -64,14 +64,51 @@ internal struct PredicatePollingEngine<Evaluation> {
         var tickStart = start
 
         while true {
-            switch reduction.effect {
-            case .observe(let request):
-                if request.kind == .visibleImmediate {
-                    tickStart = CFAbsoluteTimeGetCurrent()
-                }
+            switch step {
+            case .observeImmediateVisible(let immediate):
+                tickStart = CFAbsoluteTimeGetCurrent()
+                let observation = await pollVisibleObservation(
+                    after: immediate.after,
+                    timeout: 0,
+                    cursor: &cursor,
+                    evaluate: evaluate,
+                    isMatched: isMatched
+                )
+                let now = CFAbsoluteTimeGetCurrent()
+                let timing = PredicatePollingTickTiming(
+                    remaining: deadline.remainingSeconds(at: now),
+                    elapsed: max(0, now - tickStart)
+                )
+                step = PredicatePollingReducer.observe(
+                    immediate,
+                    observation: observation,
+                    timing: timing
+                )
 
+            case .observeSettledVisible(let settled):
+                let observation = await pollVisibleObservation(
+                    after: settled.after,
+                    timeout: settled.timeout,
+                    cursor: &cursor,
+                    evaluate: evaluate,
+                    isMatched: isMatched
+                )
+                let now = CFAbsoluteTimeGetCurrent()
+                let timing = PredicatePollingTickTiming(
+                    remaining: deadline.remainingSeconds(at: now),
+                    elapsed: max(0, now - tickStart)
+                )
+                step = PredicatePollingReducer.observe(
+                    settled,
+                    observation: observation,
+                    timing: timing
+                )
+
+            case .observeDiscovery(let discovery):
                 let observed = await pollObservation(
-                    request: request,
+                    scope: .discovery,
+                    after: discovery.after,
+                    timeout: discovery.timeout,
                     cursor: &cursor,
                     evaluate: evaluate
                 )
@@ -80,25 +117,29 @@ internal struct PredicatePollingEngine<Evaluation> {
                     remaining: deadline.remainingSeconds(at: now),
                     elapsed: max(0, now - tickStart)
                 )
-                let event = pollingEvent(
-                    for: request,
-                    observed: observed,
-                    timing: timing,
-                    isMatched: isMatched
+                let observation = observed.map {
+                    PredicatePollingDiscoveryObservation(
+                        sequence: $0.observation.event.sequence,
+                        matched: isMatched($0.evaluation)
+                    )
+                }
+                step = PredicatePollingReducer.observe(
+                    discovery,
+                    observation: observation,
+                    timing: timing
                 )
-                reduction = reducer.reduce(reduction.state, event: event)
 
             case .sleep(let sleep):
-                guard await Self.sleep(sleep) else {
-                    reduction = reducer.reduce(reduction.state, event: .sleepCancelled)
+                guard await Self.sleep(for: sleep.duration) else {
+                    step = PredicatePollingReducer.resume(sleep, remaining: nil)
                     continue
                 }
-                reduction = reducer.reduce(
-                    reduction.state,
-                    event: .sleepCompleted(remaining: deadline.remainingSeconds())
+                step = PredicatePollingReducer.resume(
+                    sleep,
+                    remaining: deadline.remainingSeconds()
                 )
 
-            case .finish:
+            case .finished:
                 return PredicatePollingResult(
                     last: cursor.last,
                     elapsedMs: deadline.elapsedMilliseconds()
@@ -107,49 +148,41 @@ internal struct PredicatePollingEngine<Evaluation> {
         }
     }
 
-    private func pollingEvent(
-        for request: PredicatePollingObservationRequest,
-        observed: PredicatePollingObservationEvaluation<Evaluation>?,
-        timing: PredicatePollingTickTiming,
+    @MainActor
+    private func pollVisibleObservation(
+        after sequence: SettledObservationSequence?,
+        timeout: Double,
+        cursor: inout PredicatePollingCursor<Evaluation>,
+        evaluate: (HeistSemanticObservation) -> Evaluation,
         isMatched: (Evaluation) -> Bool
-    ) -> PredicatePollingEvent {
-        switch request.scope {
-        case .visible:
-            guard let observed else {
-                return .visibleUnavailable(timing: timing)
-            }
-            return .visibleObserved(
-                PredicatePollingVisibleObservation(
-                    sequence: observed.observation.event.sequence,
-                    fingerprint: PredicateVisibleFingerprint(observed.observation.visibleFingerprint),
-                    matched: isMatched(observed.evaluation)
-                ),
-                timing: timing
-            )
-        case .discovery:
-            guard let observed else {
-                return .discoveryUnavailable(timing: timing)
-            }
-            return .discoveryObserved(
-                PredicatePollingDiscoveryObservation(
-                    sequence: observed.observation.event.sequence,
-                    matched: isMatched(observed.evaluation)
-                ),
-                timing: timing
+    ) async -> PredicatePollingVisibleObservation? {
+        await pollObservation(
+            scope: .visible,
+            after: sequence,
+            timeout: timeout,
+            cursor: &cursor,
+            evaluate: evaluate
+        ).map {
+            PredicatePollingVisibleObservation(
+                sequence: $0.observation.event.sequence,
+                fingerprint: PredicateVisibleFingerprint($0.observation.visibleFingerprint),
+                matched: isMatched($0.evaluation)
             )
         }
     }
 
     @MainActor
     private func pollObservation(
-        request: PredicatePollingObservationRequest,
+        scope: SemanticObservationScope,
+        after sequence: SettledObservationSequence?,
+        timeout: Double,
         cursor: inout PredicatePollingCursor<Evaluation>,
         evaluate: (HeistSemanticObservation) -> Evaluation
     ) async -> PredicatePollingObservationEvaluation<Evaluation>? {
         guard let observation = await observeSemanticState(
-            request.scope,
-            request.after,
-            request.timeout
+            scope,
+            sequence,
+            timeout
         ) else {
             return nil
         }
@@ -164,9 +197,9 @@ internal struct PredicatePollingEngine<Evaluation> {
         return observed
     }
 
-    private static func sleep(_ sleep: PredicatePollingSleep) async -> Bool {
-        guard sleep.duration > 0 else { return true }
-        let nanoseconds = UInt64((sleep.duration * 1_000_000_000).rounded(.up))
+    private static func sleep(for duration: Double) async -> Bool {
+        guard duration > 0 else { return true }
+        let nanoseconds = UInt64((duration * 1_000_000_000).rounded(.up))
         return await Task.cancellableSleep(for: .nanoseconds(nanoseconds))
     }
 }

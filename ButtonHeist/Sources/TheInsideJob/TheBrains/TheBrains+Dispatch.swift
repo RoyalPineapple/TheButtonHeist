@@ -185,6 +185,7 @@ extension TheBrains {
         case .failure(let failure):
             postActionOutcome = .failure(.init(
                 errorKind: Self.actionErrorKind(for: failure.kind),
+                subjectEvidence: failure.subjectEvidence,
                 activationTrace: failure.activationTrace
             ))
         }

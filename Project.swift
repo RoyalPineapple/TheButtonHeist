@@ -10,6 +10,52 @@ func frameworkScheme(name: String) -> Scheme {
     )
 }
 
+func hostedTestTarget(
+    name: String,
+    bundleId: String,
+    sources: SourceFilesList
+) -> Target {
+    .target(
+        name: name,
+        destinations: [.iPhone, .iPad],
+        product: .unitTests,
+        bundleId: bundleId,
+        deploymentTargets: .iOS("17.0"),
+        infoPlist: .default,
+        sources: sources,
+        dependencies: [
+            .target(name: "ButtonHeistHostedTestSupport"),
+            .target(name: "ButtonHeistSupport"),
+            .target(name: "ButtonHeistTestSupport"),
+            .target(name: "ButtonHeistTesting"),
+            .target(name: "TheInsideJob"),
+            .target(name: "ThePlans"),
+            .target(name: "TheScore"),
+            .external(name: "AccessibilitySnapshotModel"),
+            .project(target: "BH Demo", path: "TestApp"),
+        ],
+        settings: .settings(base: [
+            "BUNDLE_LOADER": "$(TEST_HOST)",
+            "SWIFT_STRICT_CONCURRENCY": "complete",
+            "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
+            "SWIFT_VERSION": "6",
+            "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/BHDemo.app/BHDemo",
+        ])
+    )
+}
+
+func hostedTestScheme(name: String) -> Scheme {
+    .scheme(
+        name: name,
+        buildAction: .buildAction(targets: [
+            .target(name),
+        ]),
+        testAction: .targets([
+            .testableTarget(target: .target(name)),
+        ])
+    )
+}
+
 let project = Project(
     name: "ButtonHeist",
     options: .options(
@@ -170,6 +216,26 @@ let project = Project(
             ]
         ),
 
+        // MARK: - iOS Hosted Test Support
+        .target(
+            name: "ButtonHeistHostedTestSupport",
+            destinations: [.iPhone, .iPad],
+            product: .framework,
+            bundleId: "com.buttonheist.hostedtestsupport",
+            deploymentTargets: .iOS("17.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/HostedTestSupport/**"],
+            dependencies: [
+                .target(name: "ButtonHeistTesting"),
+                .target(name: "ThePlans"),
+                .target(name: "TheScore"),
+            ],
+            settings: .settings(base: [
+                "ENABLE_TESTING_SEARCH_PATHS": "YES",
+                "SWIFT_STRICT_CONCURRENCY": "complete",
+            ])
+        ),
+
         // MARK: - ButtonHeistSupport Tests
         .target(
             name: "ButtonHeistSupportTests",
@@ -251,29 +317,31 @@ let project = Project(
             ]
         ),
 
-        // MARK: - TheInsideJob Tests (iOS Simulator, hosted in BH Demo)
-        .target(
+        // MARK: - iOS Simulator Tests (hosted in BH Demo)
+        hostedTestTarget(
             name: "TheInsideJobTests",
-            destinations: [.iPhone, .iPad],
-            product: .unitTests,
             bundleId: "com.buttonheist.theinsidejob.tests",
-            deploymentTargets: .iOS("17.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
-            dependencies: [
-                .target(name: "ButtonHeistSupport"),
-                .target(name: "ButtonHeistTestSupport"),
-                .target(name: "ButtonHeistTesting"),
-                .target(name: "TheInsideJob"),
-                .target(name: "ThePlans"),
-                .target(name: "TheScore"),
-                .external(name: "AccessibilitySnapshotModel"),
-                .project(target: "BH Demo", path: "TestApp"),
-            ],
-            settings: .settings(base: [
-                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/BHDemo.app/BHDemo",
-                "BUNDLE_LOADER": "$(TEST_HOST)",
-            ])
+            sources: ["ButtonHeist/Tests/TheInsideJobTests/**"]
+        ),
+        hostedTestTarget(
+            name: "DogfoodFeatureFlowTests",
+            bundleId: "com.buttonheist.dogfood.feature.tests",
+            sources: ["ButtonHeist/Tests/DogfoodFeatureFlowTests/**"]
+        ),
+        hostedTestTarget(
+            name: "DogfoodRuntimeContractTests",
+            bundleId: "com.buttonheist.dogfood.runtime.tests",
+            sources: ["ButtonHeist/Tests/DogfoodRuntimeContractTests/**"]
+        ),
+        hostedTestTarget(
+            name: "AdversarialMutationTests",
+            bundleId: "com.buttonheist.adversarial.mutation.tests",
+            sources: ["ButtonHeist/Tests/AdversarialMutationTests/**"]
+        ),
+        hostedTestTarget(
+            name: "AdversarialNavigationTests",
+            bundleId: "com.buttonheist.adversarial.navigation.tests",
+            sources: ["ButtonHeist/Tests/AdversarialNavigationTests/**"]
         ),
     ],
     schemes: [
@@ -343,6 +411,26 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ButtonHeistTests")),
+            ])
+        ),
+        hostedTestScheme(name: "TheInsideJobTests"),
+        hostedTestScheme(name: "DogfoodFeatureFlowTests"),
+        hostedTestScheme(name: "DogfoodRuntimeContractTests"),
+        hostedTestScheme(name: "AdversarialMutationTests"),
+        hostedTestScheme(name: "AdversarialNavigationTests"),
+        .scheme(
+            name: "HostedBehaviorTests",
+            buildAction: .buildAction(targets: [
+                .target("DogfoodFeatureFlowTests"),
+                .target("DogfoodRuntimeContractTests"),
+                .target("AdversarialMutationTests"),
+                .target("AdversarialNavigationTests"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("DogfoodFeatureFlowTests")),
+                .testableTarget(target: .target("DogfoodRuntimeContractTests")),
+                .testableTarget(target: .target("AdversarialMutationTests")),
+                .testableTarget(target: .target("AdversarialNavigationTests")),
             ])
         ),
     ]

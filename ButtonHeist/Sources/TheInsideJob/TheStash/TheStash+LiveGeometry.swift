@@ -54,7 +54,7 @@ extension TheStash {
     }
 
     func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveActionTargetResolution {
-        guard let liveElement = liveElementAliasing(treeElement),
+        guard let liveElement = visibleLiveElementAliasing(treeElement),
               let object = dispatchObject(for: liveElement) else {
             return .objectUnavailable
         }
@@ -69,7 +69,8 @@ extension TheStash {
         ))
     }
 
-    func liveElementAliasing(_ treeElement: InterfaceTree.Element) -> InterfaceTree.Element? {
+    func visibleLiveElementAliasing(_ treeElement: InterfaceTree.Element) -> InterfaceTree.Element? {
+        guard viewportElementIDs.contains(treeElement.heistId) else { return nil }
         guard let liveElement = liveInterfaceElement(heistId: treeElement.heistId) else { return nil }
         let committedIdentity = AccessibilityPolicy.matcherIdentityFacts(
             for: WireConversion.convert(treeElement.element)

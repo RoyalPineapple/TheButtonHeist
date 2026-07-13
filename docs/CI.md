@@ -99,6 +99,31 @@ scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
 scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
 ```
 
+Button Heist owns five explicit `BH Demo`-hosted schemes. Target membership is
+the shard contract; CI does not partition these suites with test selectors:
+
+| Scheme | Coverage |
+|--------|----------|
+| `TheInsideJobTests` | Core runtime, protocol, and hosted integration tests |
+| `DogfoodFeatureFlowTests` | Forms, list/calculator, controls/presentation, repeat-until, and text/paste/foreach flows |
+| `DogfoodRuntimeContractTests` | Advanced actions, public roots/prebuilt plans, runtime control flow, viewport commands, lifecycle, and failed receipts |
+| `AdversarialMutationTests` | Async reveal, dynamic cells, stale live objects, and text-field fallback |
+| `AdversarialNavigationTests` | Offscreen checkout, duplicate labels, modal obstruction, and nested scrolling |
+
+Run all five schemes for complete hosted coverage:
+
+```bash
+tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+```
+
+The repository CI schedules these as five independent `macos-15` matrix jobs,
+with one simulator, result bundle, diagnostics artifact, and receipt artifact
+per scheme. Integration-test exclusions apply only to the core lane.
+
 ## Topology 2: external driver
 
 A CI step boots a simulator, launches the app with the embedded server

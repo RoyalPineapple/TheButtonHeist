@@ -1,234 +1,146 @@
 #if canImport(UIKit)
 #if DEBUG
-import ButtonHeistSupport
 import TheScore
 
 struct PredicatePollingReducer: Sendable, Equatable {
     let timeout: Double
     let pollWhenTimeoutZero: Bool
 
-    private var lifecycleMachine: PredicatePollingLifecycleMachine {
-        PredicatePollingLifecycleMachine(
-            timeout: timeout,
-            pollWhenTimeoutZero: pollWhenTimeoutZero
-        )
-    }
-
     func start(
         scope: SemanticObservationScope,
         initialObservedSequence: SettledObservationSequence?,
         initialVisibleFingerprint: PredicateVisibleFingerprint = .unknown,
         discoveryBootstrap: PredicateDiscoveryBootstrap = .ifNoObservation
-    ) -> PredicatePollingReduction {
+    ) -> PredicatePollingStep {
         let state = PredicatePollingState(
             observedSequence: initialObservedSequence,
             initialVisibleFingerprint: initialVisibleFingerprint,
             scope: scope,
             needsInitialProbe: discoveryBootstrap.needsInitialProbe(
                 initialObservedSequence: initialObservedSequence
-            )
+            ),
+            timeout: timeout
         )
 
-        return lifecycleMachine.advance(state, with: .begin).reduction
-    }
-
-    func reduce(
-        _ state: PredicatePollingState,
-        event: PredicatePollingEvent
-    ) -> PredicatePollingReduction {
-        lifecycleMachine.advance(state, with: PredicatePollingLifecycleEvent(event)).reduction
-    }
-}
-
-private struct PredicatePollingLifecycleMachine: SimpleStateMachine, Equatable {
-    let timeout: Double
-    let pollWhenTimeoutZero: Bool
-
-    func advance(
-        _ state: PredicatePollingState,
-        with event: PredicatePollingLifecycleEvent
-    ) -> PredicatePollingLifecycleChange {
-        switch event {
-        case .begin:
-            guard timeout > 0 || pollWhenTimeoutZero else {
-                return finish(state, reason: .notPolled)
-            }
-            return beginVisibleTick(state)
-
-        case .visibleObserved(let observation, let timing):
-            return reduceVisibleObserved(observation, timing: timing, state: state)
-        case .visibleUnavailable(let timing):
-            return reduceVisibleUnavailable(timing: timing, state: state)
-        case .discoveryObserved(let observation, let timing):
-            return reduceDiscoveryObserved(observation, timing: timing, state: state)
-        case .discoveryUnavailable(let timing):
-            return reduceDiscoveryUnavailable(timing: timing, state: state)
-        case .sleepCompleted(let remaining):
-            guard timeout > 0, remaining > 0 else {
-                return finish(state, reason: .timedOut)
-            }
-            return beginVisibleTick(state)
-        case .sleepCancelled:
-            return finish(state, reason: .cancelled)
+        guard timeout > 0 || pollWhenTimeoutZero else {
+            return Self.finish(.notPolled)
         }
+        return Self.beginVisibleTick(state)
     }
 
-    private func beginVisibleTick(_ state: PredicatePollingState) -> PredicatePollingLifecycleChange {
-        var nextState = state
-        let context = PredicateVisibleTickContext(
-            allowSettledWait: timeout > 0 && nextState.nextProbe != .discovery
-        )
-        nextState.beginImmediateVisibleTick(context)
-        return change(
-            to: nextState,
-            effect: .observe(.visibleImmediate(after: nextState.observedSequence))
-        )
-    }
+    static func observe(
+        _ step: PredicatePollingImmediateVisibleStep,
+        observation: PredicatePollingVisibleObservation?,
+        timing: PredicatePollingTickTiming
+    ) -> PredicatePollingStep {
+        var state = step.state
+        if let observation {
+            state.recordObservedSequence(observation.sequence)
+        }
 
-    private func reduceVisibleObserved(
-        _ observation: PredicatePollingVisibleObservation,
-        timing: PredicatePollingTickTiming,
-        state: PredicatePollingState
-    ) -> PredicatePollingLifecycleChange {
-        var nextState = state
-        nextState.recordObservedSequence(observation.sequence)
-
-        switch nextState.phase {
-        case .awaitingImmediateVisible(let context):
-            if observation.matched {
-                return finishAfterVisibleTick(
-                    .observed(fingerprint: observation.fingerprint, matched: true),
-                    state: nextState,
-                    timing: timing
-                )
-            }
-            guard context.allowSettledWait, timing.remaining > 0 else {
-                return finishAfterVisibleTick(
-                    .observed(fingerprint: observation.fingerprint, matched: false),
-                    state: nextState,
-                    timing: timing
-                )
-            }
-            nextState.beginSettledVisibleTick(
-                PredicatePendingVisibleTick(
-                    immediateObservation: observation
-                )
-            )
-            return change(
-                to: nextState,
-                effect: .observe(.visibleSettled(
-                    after: nextState.observedSequence,
-                    timeout: visibleSettledTimeout(remaining: timing.remaining)
-                ))
-            )
-
-        case .awaitingSettledVisible:
+        if let observation, observation.matched {
             return finishAfterVisibleTick(
-                .observed(fingerprint: observation.fingerprint, matched: observation.matched),
-                state: nextState,
+                observation.visibleTick,
+                state: state,
                 timing: timing
             )
-
-        case .idle, .awaitingDiscovery, .sleeping, .finished:
-            return change(to: nextState, effect: .finish(.timedOut))
         }
+        guard step.allowSettledWait, timing.remaining > 0 else {
+            return finishAfterVisibleTick(
+                observation.visibleTick,
+                state: state,
+                timing: timing
+            )
+        }
+        return .observeSettledVisible(PredicatePollingSettledVisibleStep(
+            state: state,
+            immediateObservation: observation,
+            timeout: visibleSettledTimeout(remaining: timing.remaining)
+        ))
     }
 
-    private func reduceVisibleUnavailable(
-        timing: PredicatePollingTickTiming,
-        state: PredicatePollingState
-    ) -> PredicatePollingLifecycleChange {
-        var nextState = state
-        switch nextState.phase {
-        case .awaitingImmediateVisible(let context):
-            guard context.allowSettledWait, timing.remaining > 0 else {
-                return finishAfterVisibleTick(.unavailable, state: nextState, timing: timing)
-            }
-            nextState.beginSettledVisibleTick(
-                PredicatePendingVisibleTick(
-                    immediateObservation: nil
-                )
-            )
-            return change(
-                to: nextState,
-                effect: .observe(.visibleSettled(
-                    after: nextState.observedSequence,
-                    timeout: visibleSettledTimeout(remaining: timing.remaining)
-                ))
-            )
-
-        case .awaitingSettledVisible(let pending):
-            if let immediate = pending.immediateObservation {
-                return finishAfterVisibleTick(
-                    .observed(fingerprint: immediate.fingerprint, matched: immediate.matched),
-                    state: nextState,
-                    timing: timing
-                )
-            }
-            return finishAfterVisibleTick(.unavailable, state: nextState, timing: timing)
-
-        case .idle, .awaitingDiscovery, .sleeping, .finished:
-            return change(to: nextState, effect: .finish(.timedOut))
+    static func observe(
+        _ step: PredicatePollingSettledVisibleStep,
+        observation: PredicatePollingVisibleObservation?,
+        timing: PredicatePollingTickTiming
+    ) -> PredicatePollingStep {
+        var state = step.state
+        if let observation {
+            state.recordObservedSequence(observation.sequence)
         }
+        return finishAfterVisibleTick(
+            observation?.visibleTick ?? step.immediateObservation.visibleTick,
+            state: state,
+            timing: timing
+        )
     }
 
-    private func finishAfterVisibleTick(
+    static func observe(
+        _ step: PredicatePollingDiscoveryStep,
+        observation: PredicatePollingDiscoveryObservation?,
+        timing: PredicatePollingTickTiming
+    ) -> PredicatePollingStep {
+        var state = step.state
+        guard let observation else {
+            return continueAfterTick(state, timing: timing)
+        }
+        state.recordObservedSequence(observation.sequence)
+        state.recordDiscoveryProbe()
+
+        guard !observation.matched else {
+            return finish(.matched)
+        }
+        return continueAfterTick(state, timing: timing)
+    }
+
+    static func resume(
+        _ step: PredicatePollingSleepStep,
+        remaining: Double?
+    ) -> PredicatePollingStep {
+        guard let remaining else {
+            return finish(.cancelled)
+        }
+        guard step.state.timeout > 0, remaining > 0 else {
+            return finish(.timedOut)
+        }
+        return beginVisibleTick(step.state)
+    }
+
+    private static func beginVisibleTick(_ state: PredicatePollingState) -> PredicatePollingStep {
+        .observeImmediateVisible(PredicatePollingImmediateVisibleStep(state: state))
+    }
+
+    private static func finishAfterVisibleTick(
         _ tick: PredicateVisibleTick,
         state: PredicatePollingState,
         timing: PredicatePollingTickTiming
-    ) -> PredicatePollingLifecycleChange {
+    ) -> PredicatePollingStep {
         var nextState = state
         nextState.recordVisibleTick(tick)
 
         if case .observed(_, let matched) = tick, matched {
-            return finish(nextState, reason: .matched)
+            return finish(.matched)
         }
 
         guard nextState.nextProbe == .discovery else {
             return continueAfterTick(nextState, timing: timing)
         }
 
-        nextState.beginDiscoveryProbe()
-        return change(
-            to: nextState,
-            effect: .observe(.discovery(
-                after: nextState.observedSequence,
-                timeout: discoveryTimeout(remaining: timing.remaining)
-            ))
-        )
+        return .observeDiscovery(PredicatePollingDiscoveryStep(
+            state: nextState,
+            timeout: discoveryTimeout(remaining: timing.remaining)
+        ))
     }
 
-    private func reduceDiscoveryObserved(
-        _ observation: PredicatePollingDiscoveryObservation,
-        timing: PredicatePollingTickTiming,
-        state: PredicatePollingState
-    ) -> PredicatePollingLifecycleChange {
-        var nextState = state
-        nextState.recordObservedSequence(observation.sequence)
-        nextState.recordDiscoveryProbe()
-
-        if observation.matched {
-            return finish(nextState, reason: .matched)
-        }
-        return continueAfterTick(nextState, timing: timing)
-    }
-
-    private func reduceDiscoveryUnavailable(
-        timing: PredicatePollingTickTiming,
-        state: PredicatePollingState
-    ) -> PredicatePollingLifecycleChange {
-        continueAfterTick(state, timing: timing)
-    }
-
-    private func continueAfterTick(
+    private static func continueAfterTick(
         _ state: PredicatePollingState,
         timing: PredicatePollingTickTiming
-    ) -> PredicatePollingLifecycleChange {
-        guard timeout > 0 else {
-            return finish(state, reason: .timedOut)
+    ) -> PredicatePollingStep {
+        guard state.timeout > 0 else {
+            return finish(.timedOut)
         }
         guard timing.remaining > 0 else {
-            return finish(state, reason: .timedOut)
+            return finish(.timedOut)
         }
 
         let sleepSeconds = min(
@@ -239,100 +151,28 @@ private struct PredicatePollingLifecycleMachine: SimpleStateMachine, Equatable {
             return beginVisibleTick(state)
         }
 
-        var nextState = state
-        nextState.beginSleep()
-        return change(
-            to: nextState,
-            effect: .sleep(PredicatePollingSleep(duration: sleepSeconds))
-        )
+        return .sleep(PredicatePollingSleepStep(state: state, duration: sleepSeconds))
     }
 
-    private func finish(
-        _ state: PredicatePollingState,
-        reason: PredicatePollingFinish
-    ) -> PredicatePollingLifecycleChange {
-        var nextState = state
-        nextState.finish()
-        return change(to: nextState, effect: .finish(reason))
+    private static func finish(_ reason: PredicatePollingFinish) -> PredicatePollingStep {
+        .finished(reason)
     }
 
-    private func change(
-        to state: PredicatePollingState,
-        effect: PredicatePollingEffect
-    ) -> PredicatePollingLifecycleChange {
-        .changed(to: state, effects: [effect])
-    }
-
-    private func visibleSettledTimeout(remaining: Double) -> Double {
+    private static func visibleSettledTimeout(remaining: Double) -> Double {
         min(remaining, SemanticObservationTiming.visibleTickIntervalSeconds)
     }
 
-    private func discoveryTimeout(remaining: Double) -> Double {
+    private static func discoveryTimeout(remaining: Double) -> Double {
         min(max(0, remaining), SemanticObservationTiming.defaultTimeout)
     }
 }
 
-private typealias PredicatePollingLifecycleChange = StateChange<
-    PredicatePollingState,
-    PredicatePollingEffect,
-    PredicatePollingLifecycleRejection
->
-
-private enum PredicatePollingLifecycleEvent: Sendable, Equatable {
-    case begin
-    case visibleObserved(PredicatePollingVisibleObservation, timing: PredicatePollingTickTiming)
-    case visibleUnavailable(timing: PredicatePollingTickTiming)
-    case discoveryObserved(PredicatePollingDiscoveryObservation, timing: PredicatePollingTickTiming)
-    case discoveryUnavailable(timing: PredicatePollingTickTiming)
-    case sleepCompleted(remaining: Double)
-    case sleepCancelled
-
-    init(_ event: PredicatePollingEvent) {
-        switch event {
-        case .visibleObserved(let observation, let timing):
-            self = .visibleObserved(observation, timing: timing)
-        case .visibleUnavailable(let timing):
-            self = .visibleUnavailable(timing: timing)
-        case .discoveryObserved(let observation, let timing):
-            self = .discoveryObserved(observation, timing: timing)
-        case .discoveryUnavailable(let timing):
-            self = .discoveryUnavailable(timing: timing)
-        case .sleepCompleted(let remaining):
-            self = .sleepCompleted(remaining: remaining)
-        case .sleepCancelled:
-            self = .sleepCancelled
-        }
-    }
-}
-
-private enum PredicatePollingLifecycleRejection: Sendable, Equatable {}
-
-private extension StateChange
-where State == PredicatePollingState,
-      Effect == PredicatePollingEffect,
-      Rejection == PredicatePollingLifecycleRejection {
-    var reduction: PredicatePollingReduction {
-        switch self {
-        case .changed(let state, _):
-            guard let effect = singleEffect else {
-                preconditionFailure("Predicate polling lifecycle must emit exactly one effect.")
-            }
-            return PredicatePollingReduction(state: state, effect: effect)
-        case .rejected(let rejection, _):
-            switch rejection {}
-        }
-    }
-}
-
-struct PredicatePollingReduction: Sendable, Equatable {
-    let state: PredicatePollingState
-    let effect: PredicatePollingEffect
-}
-
-enum PredicatePollingEffect: Sendable, Equatable {
-    case observe(PredicatePollingObservationRequest)
-    case sleep(PredicatePollingSleep)
-    case finish(PredicatePollingFinish)
+enum PredicatePollingStep: Sendable, Equatable {
+    case observeImmediateVisible(PredicatePollingImmediateVisibleStep)
+    case observeSettledVisible(PredicatePollingSettledVisibleStep)
+    case observeDiscovery(PredicatePollingDiscoveryStep)
+    case sleep(PredicatePollingSleepStep)
+    case finished(PredicatePollingFinish)
 }
 
 enum PredicatePollingFinish: Sendable, Equatable {
@@ -342,63 +182,64 @@ enum PredicatePollingFinish: Sendable, Equatable {
     case notPolled
 }
 
-struct PredicatePollingObservationRequest: Sendable, Equatable {
-    enum Kind: Sendable, Equatable {
-        case visibleImmediate
-        case visibleSettled
-        case discovery
+struct PredicatePollingImmediateVisibleStep: Sendable, Equatable {
+    fileprivate let state: PredicatePollingState
+
+    var after: SettledObservationSequence? {
+        state.observedSequence
     }
 
-    let kind: Kind
-    let scope: SemanticObservationScope
-    let after: SettledObservationSequence?
-    let timeout: Double?
-
-    static func visibleImmediate(after sequence: SettledObservationSequence?) -> PredicatePollingObservationRequest {
-        PredicatePollingObservationRequest(
-            kind: .visibleImmediate,
-            scope: .visible,
-            after: sequence,
-            timeout: 0
-        )
+    fileprivate var allowSettledWait: Bool {
+        state.timeout > 0 && state.nextProbe != .discovery
     }
 
-    static func visibleSettled(
-        after sequence: SettledObservationSequence?,
-        timeout: Double
-    ) -> PredicatePollingObservationRequest {
-        PredicatePollingObservationRequest(
-            kind: .visibleSettled,
-            scope: .visible,
-            after: sequence,
-            timeout: timeout
-        )
-    }
-
-    static func discovery(
-        after sequence: SettledObservationSequence?,
-        timeout: Double
-    ) -> PredicatePollingObservationRequest {
-        PredicatePollingObservationRequest(
-            kind: .discovery,
-            scope: .discovery,
-            after: sequence,
-            timeout: timeout
-        )
+    fileprivate init(state: PredicatePollingState) {
+        self.state = state
     }
 }
 
-struct PredicatePollingSleep: Sendable, Equatable {
+struct PredicatePollingSettledVisibleStep: Sendable, Equatable {
+    let timeout: Double
+    fileprivate let state: PredicatePollingState
+    fileprivate let immediateObservation: PredicatePollingVisibleObservation?
+
+    var after: SettledObservationSequence? {
+        state.observedSequence
+    }
+
+    fileprivate init(
+        state: PredicatePollingState,
+        immediateObservation: PredicatePollingVisibleObservation?,
+        timeout: Double
+    ) {
+        self.state = state
+        self.immediateObservation = immediateObservation
+        self.timeout = timeout
+    }
+}
+
+struct PredicatePollingDiscoveryStep: Sendable, Equatable {
+    let timeout: Double
+    fileprivate let state: PredicatePollingState
+
+    var after: SettledObservationSequence? {
+        state.observedSequence
+    }
+
+    fileprivate init(state: PredicatePollingState, timeout: Double) {
+        self.state = state
+        self.timeout = timeout
+    }
+}
+
+struct PredicatePollingSleepStep: Sendable, Equatable {
     let duration: Double
-}
+    fileprivate let state: PredicatePollingState
 
-enum PredicatePollingEvent: Sendable, Equatable {
-    case visibleObserved(PredicatePollingVisibleObservation, timing: PredicatePollingTickTiming)
-    case visibleUnavailable(timing: PredicatePollingTickTiming)
-    case discoveryObserved(PredicatePollingDiscoveryObservation, timing: PredicatePollingTickTiming)
-    case discoveryUnavailable(timing: PredicatePollingTickTiming)
-    case sleepCompleted(remaining: Double)
-    case sleepCancelled
+    fileprivate init(state: PredicatePollingState, duration: Double) {
+        self.state = state
+        self.duration = duration
+    }
 }
 
 struct PredicatePollingTickTiming: Sendable, Equatable {
@@ -452,27 +293,34 @@ enum PredicateVisibleTick: Sendable, Equatable {
     case observed(fingerprint: PredicateVisibleFingerprint, matched: Bool)
 }
 
-struct PredicatePollingState: Sendable, Equatable {
+private struct PredicatePollingState: Sendable, Equatable {
     fileprivate var observedSequence: SettledObservationSequence?
     fileprivate var probeState: PredicatePollingProbeState
-    fileprivate var phase: PredicatePollingPhase
+    fileprivate let timeout: Double
 
     init(
         observedSequence: SettledObservationSequence?,
         initialVisibleFingerprint: PredicateVisibleFingerprint,
         scope: SemanticObservationScope,
-        needsInitialProbe: Bool
+        needsInitialProbe: Bool,
+        timeout: Double
     ) {
         self.observedSequence = observedSequence
+        self.timeout = timeout
         switch scope {
         case .visible:
-            self.probeState = .viewportOnly
+            probeState = .viewportOnly
         case .discovery:
-            self.probeState = .discovery(needsInitialProbe
-                ? .probeDue(fingerprint: initialVisibleFingerprint, visibleTicksSinceProbe: .zero)
-                : .coolingDown(fingerprint: initialVisibleFingerprint, visibleTicksSinceProbe: .zero))
+            probeState = .discovery(needsInitialProbe
+                ? .probeDue(PredicateDiscoveryProbeDue(
+                    fingerprint: initialVisibleFingerprint,
+                    visibleTicksSinceProbe: .zero
+                ))
+                : .coolingDown(PredicateDiscoveryCooldown(
+                    fingerprint: initialVisibleFingerprint,
+                    visibleTicksSinceProbe: .zero
+                )))
         }
-        self.phase = .idle
     }
 
     var nextProbe: PredicateNextProbe {
@@ -482,26 +330,6 @@ struct PredicatePollingState: Sendable, Equatable {
         case .discovery(let discovery):
             return discovery.nextProbe
         }
-    }
-
-    fileprivate mutating func beginImmediateVisibleTick(_ context: PredicateVisibleTickContext) {
-        phase = .awaitingImmediateVisible(context)
-    }
-
-    fileprivate mutating func beginSettledVisibleTick(_ pending: PredicatePendingVisibleTick) {
-        phase = .awaitingSettledVisible(pending)
-    }
-
-    fileprivate mutating func beginDiscoveryProbe() {
-        phase = .awaitingDiscovery
-    }
-
-    fileprivate mutating func beginSleep() {
-        phase = .sleeping
-    }
-
-    fileprivate mutating func finish() {
-        phase = .finished
     }
 
     fileprivate mutating func recordObservedSequence(_ sequence: SettledObservationSequence) {
@@ -514,8 +342,10 @@ struct PredicatePollingState: Sendable, Equatable {
     }
 
     fileprivate mutating func recordDiscoveryProbe() {
-        guard case .discovery(let discovery) = probeState else { return }
-        probeState = .discovery(discovery.afterDiscoveryProbe())
+        guard case .discovery(.probeDue(let probe)) = probeState else {
+            preconditionFailure("A discovery result requires a probe-due polling state")
+        }
+        probeState = .discovery(.coolingDown(probe.afterDiscoveryProbe()))
     }
 }
 
@@ -524,26 +354,26 @@ private enum PredicatePollingProbeState: Sendable, Equatable {
     case discovery(PredicateDiscoveryPollingState)
 }
 
-private enum PredicatePollingPhase: Sendable, Equatable {
-    case idle
-    case awaitingImmediateVisible(PredicateVisibleTickContext)
-    case awaitingSettledVisible(PredicatePendingVisibleTick)
-    case awaitingDiscovery
-    case sleeping
-    case finished
+private extension Optional where Wrapped == PredicatePollingVisibleObservation {
+    var visibleTick: PredicateVisibleTick {
+        switch self {
+        case .some(let observation):
+            return observation.visibleTick
+        case .none:
+            return .unavailable
+        }
+    }
 }
 
-private struct PredicateVisibleTickContext: Sendable, Equatable {
-    let allowSettledWait: Bool
+private extension PredicatePollingVisibleObservation {
+    var visibleTick: PredicateVisibleTick {
+        .observed(fingerprint: fingerprint, matched: matched)
+    }
 }
 
-private struct PredicatePendingVisibleTick: Sendable, Equatable {
-    let immediateObservation: PredicatePollingVisibleObservation?
-}
-
-enum PredicateDiscoveryPollingState: Sendable, Equatable {
-    case probeDue(fingerprint: PredicateVisibleFingerprint, visibleTicksSinceProbe: PredicateVisibleTickCount)
-    case coolingDown(fingerprint: PredicateVisibleFingerprint, visibleTicksSinceProbe: PredicateVisibleTickCount)
+private enum PredicateDiscoveryPollingState: Sendable, Equatable {
+    case probeDue(PredicateDiscoveryProbeDue)
+    case coolingDown(PredicateDiscoveryCooldown)
 
     var nextProbe: PredicateNextProbe {
         switch self {
@@ -554,7 +384,7 @@ enum PredicateDiscoveryPollingState: Sendable, Equatable {
         }
     }
 
-    func afterVisibleTick(_ tick: PredicateVisibleTick) -> PredicateDiscoveryPollingState {
+    fileprivate func afterVisibleTick(_ tick: PredicateVisibleTick) -> PredicateDiscoveryPollingState {
         switch tick {
         case .unavailable:
             return afterVisibleUnavailable()
@@ -563,23 +393,21 @@ enum PredicateDiscoveryPollingState: Sendable, Equatable {
         }
     }
 
-    func afterDiscoveryProbe() -> PredicateDiscoveryPollingState {
-        switch self {
-        case .probeDue(let fingerprint, _),
-             .coolingDown(let fingerprint, _):
-            return .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: .zero)
-        }
-    }
-
     private func afterVisibleUnavailable() -> PredicateDiscoveryPollingState {
         switch self {
-        case .probeDue(let fingerprint, let ticks):
-            return .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: ticks.incremented())
-        case .coolingDown(let fingerprint, let ticks):
-            let nextTicks = ticks.incremented()
+        case .probeDue(let probe):
+            return .probeDue(probe.recordingUnavailableVisibleTick())
+        case .coolingDown(let cooldown):
+            let nextTicks = cooldown.visibleTicksSinceProbe.incremented()
             return nextTicks.reachedDiscoveryProbeCadence
-                ? .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
-                : .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+                ? .probeDue(PredicateDiscoveryProbeDue(
+                    fingerprint: cooldown.fingerprint,
+                    visibleTicksSinceProbe: nextTicks
+                ))
+                : .coolingDown(PredicateDiscoveryCooldown(
+                    fingerprint: cooldown.fingerprint,
+                    visibleTicksSinceProbe: nextTicks
+                ))
         }
     }
 
@@ -588,30 +416,72 @@ enum PredicateDiscoveryPollingState: Sendable, Equatable {
         matched: Bool
     ) -> PredicateDiscoveryPollingState {
         switch self {
-        case .probeDue(let previousFingerprint, let ticks):
-            let fingerprint = observedFingerprint.replacingUnknown(with: previousFingerprint)
+        case .probeDue(let probe):
+            let fingerprint = observedFingerprint.replacingUnknown(with: probe.fingerprint)
             return matched
-                ? .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: .zero)
-                : .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: ticks.incremented())
+                ? .coolingDown(PredicateDiscoveryCooldown(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: .zero
+                ))
+                : .probeDue(PredicateDiscoveryProbeDue(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: probe.visibleTicksSinceProbe.incremented()
+                ))
 
-        case .coolingDown(let previousFingerprint, let ticks):
-            let fingerprint = observedFingerprint.replacingUnknown(with: previousFingerprint)
+        case .coolingDown(let cooldown):
+            let fingerprint = observedFingerprint.replacingUnknown(with: cooldown.fingerprint)
             guard !matched else {
-                return .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: .zero)
+                return .coolingDown(PredicateDiscoveryCooldown(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: .zero
+                ))
             }
-            let nextTicks = ticks.incremented()
-            if observedFingerprint != previousFingerprint,
+            let nextTicks = cooldown.visibleTicksSinceProbe.incremented()
+            if observedFingerprint != cooldown.fingerprint,
                case .known = observedFingerprint {
-                return .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+                return .probeDue(PredicateDiscoveryProbeDue(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: nextTicks
+                ))
             }
             return nextTicks.reachedDiscoveryProbeCadence
-                ? .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
-                : .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+                ? .probeDue(PredicateDiscoveryProbeDue(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: nextTicks
+                ))
+                : .coolingDown(PredicateDiscoveryCooldown(
+                    fingerprint: fingerprint,
+                    visibleTicksSinceProbe: nextTicks
+                ))
         }
     }
 }
 
-struct PredicateVisibleTickCount: Sendable, Equatable {
+private struct PredicateDiscoveryProbeDue: Sendable, Equatable {
+    let fingerprint: PredicateVisibleFingerprint
+    let visibleTicksSinceProbe: PredicateVisibleTickCount
+
+    func recordingUnavailableVisibleTick() -> PredicateDiscoveryProbeDue {
+        PredicateDiscoveryProbeDue(
+            fingerprint: fingerprint,
+            visibleTicksSinceProbe: visibleTicksSinceProbe.incremented()
+        )
+    }
+
+    func afterDiscoveryProbe() -> PredicateDiscoveryCooldown {
+        PredicateDiscoveryCooldown(
+            fingerprint: fingerprint,
+            visibleTicksSinceProbe: .zero
+        )
+    }
+}
+
+private struct PredicateDiscoveryCooldown: Sendable, Equatable {
+    let fingerprint: PredicateVisibleFingerprint
+    let visibleTicksSinceProbe: PredicateVisibleTickCount
+}
+
+private struct PredicateVisibleTickCount: Sendable, Equatable {
     static let zero = PredicateVisibleTickCount(rawValue: 0)
 
     private let rawValue: Int

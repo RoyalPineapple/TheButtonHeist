@@ -248,11 +248,15 @@ struct RenderResponseTests {
         trace: AccessibilityTrace
     ) throws -> HeistExecutionResult {
         let encoder = JSONEncoder()
+        let traceEvidence = try #require(AccessibilityTraceEvidence(
+            trace: trace,
+            completeness: .complete
+        ))
         let evidence = HeistStepEvidence.action(.dispatch(
             command: command,
             dispatchResult: .success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
             )
         ))
         let step: [String: Any] = [

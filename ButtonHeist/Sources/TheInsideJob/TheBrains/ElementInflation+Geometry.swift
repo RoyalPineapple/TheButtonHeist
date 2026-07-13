@@ -13,7 +13,6 @@ extension ElementInflation {
 
     internal func stateAfterResolvedFreshTarget(
         _ inflatedTarget: InflatedElementTarget,
-        didReveal: Bool,
         activationPointPolicy: ActivationPointPolicy
     ) async -> State {
         if activationPointPolicy == .liveObjectOnly {
@@ -22,12 +21,11 @@ extension ElementInflation {
                 requireOnscreenActivationPoint: false
             )
         }
-        return .placing(inflatedTarget: inflatedTarget, didReveal: didReveal)
+        return .placing(inflatedTarget)
     }
 
     internal func stateAfterPlacement(
         _ inflatedTarget: InflatedElementTarget,
-        didReveal: Bool,
         method: ActionMethod,
         transaction: RevealTransaction
     ) async -> State {
@@ -38,7 +36,7 @@ extension ElementInflation {
                 requireOnscreenActivationPoint: true
             )
         }
-        if didReveal {
+        if inflatedTarget.resolution.adjustments.contains(.semanticReveal) {
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(liveTarget.treeElement).description) "
                     + "did not become actionable after semantic reveal; "
@@ -74,7 +72,8 @@ extension ElementInflation {
                 treeElement: inflatedTarget.treeElement,
                 method: method,
                 after: settledSequence,
-                deadline: inflatedTarget.deadline
+                deadline: inflatedTarget.deadline,
+                resolution: inflatedTarget.resolution.adding(.activationPointPlacement)
             ) {
             case .inflated(let refreshedTarget):
                 return await stateAfterStableLiveGeometry(
@@ -249,11 +248,21 @@ extension ElementInflation {
                     "selected target \(inflatedTarget.treeElement.heistId.rawValue) left committed semantic truth"
                 ))
             }
-            guard let currentTarget = stableActionTarget(
+            let currentTarget: InflatedElementTarget
+            switch stableActionTarget(
                 target: inflatedTarget.target,
                 treeElement: currentTreeElement,
-                deadline: deadline
-            ) else { continue }
+                deadline: deadline,
+                resolution: stableTarget.resolution
+            ) {
+            case .resolved(let target):
+                currentTarget = target
+            case .retry(let reason):
+                stableTarget = stableTarget.adding(reason.adjustment)
+                continue
+            case .unavailable:
+                continue
+            }
             stableTarget = currentTarget
             guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
                 return stateAfterGeometryReduction(
@@ -313,24 +322,40 @@ extension ElementInflation {
         }
     }
 
+    private enum StableActionTargetResolution {
+        case resolved(InflatedElementTarget)
+        case retry(RetryReason)
+        case unavailable
+    }
+
     private func stableActionTarget(
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
-        deadline: SemanticObservationDeadline
-    ) -> InflatedElementTarget? {
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else { return nil }
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
+    ) -> StableActionTargetResolution {
+        let liveTarget: TheStash.LiveActionTarget
+        switch stash.resolveLiveActionTarget(for: treeElement) {
+        case .resolved(let target):
+            liveTarget = target
+        case .objectUnavailable:
+            return .retry(.objectDeallocated)
+        case .geometryUnavailable:
+            return .unavailable
+        }
         let semanticLiveTarget = TheStash.LiveActionTarget(
             treeElement: treeElement,
             object: liveTarget.object,
             frame: liveTarget.frame,
             activationPoint: liveTarget.activationPoint
         )
-        return InflatedElementTarget(
+        return .resolved(InflatedElementTarget(
             target: target,
             treeElement: treeElement,
             liveTarget: semanticLiveTarget,
-            deadline: deadline
-        )
+            deadline: deadline,
+            resolution: resolution
+        ))
     }
 }
 

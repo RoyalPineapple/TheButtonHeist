@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 @testable import TheScore
 
@@ -13,7 +14,10 @@ final class AutoSettleFieldsTests: XCTestCase {
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    .noChangeForTests(elementCount: 0),
+                    makeTestTraceEvidence(
+                        .noChangeForTests(elementCount: 0),
+                        completeness: .incomplete
+                    ),
                     .settled(durationMs: 1234)
                 )
             )
@@ -31,7 +35,10 @@ final class AutoSettleFieldsTests: XCTestCase {
             message: "timed out",
             evidence: ActionResultFailureEvidence(
                 observation: .settledTrace(
-                    .noChangeForTests(elementCount: 0),
+                    makeTestTraceEvidence(
+                        .noChangeForTests(elementCount: 0),
+                        completeness: .incomplete
+                    ),
                     .timedOut(durationMs: 750)
                 )
             )
@@ -49,7 +56,10 @@ final class AutoSettleFieldsTests: XCTestCase {
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    .noChangeForTests(elementCount: 0),
+                    makeTestTraceEvidence(
+                        .noChangeForTests(elementCount: 0),
+                        completeness: .incomplete
+                    ),
                     .settled(durationMs: 125)
                 ),
                 timing: ActionPerformanceTiming(actionDispatchMs: 4)
@@ -101,7 +111,9 @@ final class AutoSettleFieldsTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -136,7 +148,12 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [first, second])))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(
+                    AccessibilityTrace(captures: [first, second]),
+                    completeness: .incomplete
+                ))
+            )
         )
         let encoded = try JSONEncoder().encode(result)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])

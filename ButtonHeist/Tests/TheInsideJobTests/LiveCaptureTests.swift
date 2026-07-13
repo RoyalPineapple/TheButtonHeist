@@ -361,12 +361,56 @@ struct LiveCaptureTests {
         )
     }
 
+    @Test func `rejects changed captured frame geometry`() {
+        let snapshotElement = AccessibilityElement.make(
+            label: "Save",
+            traits: .button,
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44)),
+            activationPoint: CGPoint(x: 50, y: 22)
+        )
+        let treeElement = AccessibilityElement.make(
+            label: "Save",
+            traits: .button,
+            shape: .frame(AccessibilityRect(x: 1, y: 0, width: 100, height: 44)),
+            activationPoint: CGPoint(x: 50, y: 22)
+        )
+
+        expectElementMismatch(snapshotElement: snapshotElement, treeElement: treeElement)
+    }
+
+    @Test func `rejects changed captured activation point`() {
+        let shape = AccessibilityShape.frame(
+            AccessibilityRect(x: 0, y: 0, width: 100, height: 44)
+        )
+        let snapshotElement = AccessibilityElement.make(
+            label: "Save",
+            traits: .button,
+            shape: shape,
+            activationPoint: CGPoint(x: 50, y: 22)
+        )
+        let treeElement = AccessibilityElement.make(
+            label: "Save",
+            traits: .button,
+            shape: shape,
+            activationPoint: CGPoint(x: 51, y: 22)
+        )
+
+        expectElementMismatch(snapshotElement: snapshotElement, treeElement: treeElement)
+    }
+
     @Test func `accepts identical nonfinite viewport geometry`() throws {
         let element = AccessibilityElement.make(
             label: "Loading",
             traits: .button,
-            shape: .frame(AccessibilityRect(x: Double.nan, y: 0, width: 10, height: 10)),
-            activationPoint: CGPoint(x: CGFloat.nan, y: 5)
+            shape: .frame(
+                AccessibilityRect(
+                    x: Double.nan,
+                    y: Double.infinity,
+                    width: -Double.infinity,
+                    height: 10
+                )
+            ),
+            activationPoint: CGPoint(x: CGFloat.nan, y: CGFloat.infinity)
         )
         let path = TreePath([0])
         let snapshot = LiveCapture.Snapshot(
@@ -458,6 +502,34 @@ struct LiveCaptureTests {
         } catch {
             Issue.record("Expected LiveCapture.ValidationError, got \(error)")
         }
+    }
+
+    private func expectElementMismatch(
+        snapshotElement: AccessibilityElement,
+        treeElement: AccessibilityElement
+    ) {
+        let path = TreePath([0])
+        let heistId: HeistId = "save_button"
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: [.element(snapshotElement, traversalIndex: 0)],
+            heistIdsByPath: [path: heistId]
+        )
+        let tree = InterfaceTree(
+            elements: [
+                heistId: InterfaceTree.Element(
+                    heistId: heistId,
+                    path: path,
+                    scrollMembership: nil,
+                    element: treeElement
+                )
+            ],
+            viewportCapture: snapshot
+        )
+
+        expectValidationError(
+            .treeElementMismatch(heistId: heistId, path: path),
+            tree: tree
+        )
     }
 
     private func makeSingleElementTree() -> InterfaceTree {

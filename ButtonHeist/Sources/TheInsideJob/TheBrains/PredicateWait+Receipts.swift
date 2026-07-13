@@ -130,7 +130,7 @@ extension PredicateWait {
             )
             return .timedOut(
                 message: message,
-                accessibilityTrace: nil,
+                traceEvidence: nil,
                 expectation: expectation
             )
         }
@@ -142,7 +142,7 @@ extension PredicateWait {
         )
         return .matched(
             message: Self.announcementMatchedMessage(announcement, elapsed: elapsed),
-            accessibilityTrace: nil,
+            traceEvidence: nil,
             expectation: expectation,
             announcement: announcement.text
         )
@@ -158,7 +158,7 @@ extension PredicateWait {
             let message = Self.missingActionAnnouncementMessage(predicate)
             return .timedOut(
                 message: message,
-                accessibilityTrace: trace,
+                traceEvidence: Self.incompleteTraceEvidence(trace),
                 expectation: ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: message
@@ -174,7 +174,7 @@ extension PredicateWait {
             return .failed(
                 errorKind: .actionFailed,
                 message: message,
-                accessibilityTrace: trace,
+                traceEvidence: Self.incompleteTraceEvidence(trace),
                 expectation: ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: message
@@ -188,7 +188,7 @@ extension PredicateWait {
                 announcement,
                 elapsed: Self.elapsedSeconds(since: start)
             ),
-            accessibilityTrace: trace,
+            traceEvidence: Self.incompleteTraceEvidence(trace),
             expectation: ExpectationResult.Met(
                 predicate: step.predicate,
                 actual: announcement.text
@@ -213,6 +213,9 @@ extension PredicateWait {
             ? nil
             : presenceTimeoutMessage(step.predicate, elapsed)
         let latest = latestEvent()
+        let traceEvidence = window?.traceEvidence ?? trace.flatMap {
+            AccessibilityTraceEvidence(trace: $0, completeness: .incomplete)
+        }
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
             baseline: baseline,
             window: window,
@@ -222,7 +225,7 @@ extension PredicateWait {
         )
         return Self.waitReceipt(
             for: step,
-            trace: trace,
+            traceEvidence: traceEvidence,
             observationSummary: observationSummary,
             expectation: expectation,
             elapsed: elapsed,
@@ -269,7 +272,7 @@ extension PredicateWait {
 
     private static func waitReceipt(
         for step: ResolvedWaitStep,
-        trace: AccessibilityTrace?,
+        traceEvidence: AccessibilityTraceEvidence?,
         observationSummary: String?,
         expectation: ExpectationResult,
         elapsed: String,
@@ -292,7 +295,7 @@ extension PredicateWait {
         case (true, .met(let expectation)):
             return .matched(
                 message: message,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary
@@ -300,7 +303,7 @@ extension PredicateWait {
         case (false, .unmet(let expectation)):
             return .timedOut(
                 message: message,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: observedSequence,
                 observationSummary: observationSummary
@@ -324,6 +327,16 @@ extension PredicateWait {
         default:
             return "predicate met after \(elapsed)s"
         }
+    }
+
+    private static func incompleteTraceEvidence(_ trace: AccessibilityTrace) -> AccessibilityTraceEvidence {
+        guard let evidence = AccessibilityTraceEvidence(
+            trace: trace,
+            completeness: .incomplete
+        ) else {
+            preconditionFailure("predicate wait trace evidence requires a current capture")
+        }
+        return evidence
     }
 
     private static func announcementMatchedMessage(

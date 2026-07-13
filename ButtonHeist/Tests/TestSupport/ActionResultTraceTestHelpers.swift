@@ -56,12 +56,12 @@ package func makeTestActionResult(
     message: String? = nil,
     errorKind: ErrorKind? = nil,
     payload: ActionResultPayload? = nil,
-    accessibilityTrace: AccessibilityTrace? = nil,
+    traceEvidence: AccessibilityTraceEvidence? = nil,
     subjectEvidence: ActionSubjectEvidence? = nil,
     activationTrace: ActivationTrace? = nil,
     timing: ActionPerformanceTiming? = nil
 ) -> ActionResult {
-    let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
+    let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
     if succeeded {
         let evidence = ActionResultSuccessEvidence(
             observation: observation,
@@ -106,6 +106,19 @@ package func makeTestActionResult(
         message: message,
         evidence: evidence
     )
+}
+
+package func makeTestTraceEvidence(
+    _ trace: AccessibilityTrace,
+    completeness: AccessibilityTraceEvidence.Completeness
+) -> AccessibilityTraceEvidence {
+    guard let evidence = AccessibilityTraceEvidence(
+        trace: trace,
+        completeness: completeness
+    ) else {
+        preconditionFailure("test trace evidence requires a current capture")
+    }
+    return evidence
 }
 
 package func makeTestHeistActionStep(

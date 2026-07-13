@@ -301,6 +301,10 @@ final class ServerMessageTests: XCTestCase {
             source: .resolvedSemanticTarget,
             target: target,
             element: element,
+            resolution: ActionSubjectResolution(
+                origin: .known,
+                adjustments: [.semanticReveal, .objectDeallocationRefresh]
+            ),
             settledObservationSequence: 12
         )
         let result = ActionResult.success(
@@ -317,6 +321,12 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(try subjectEvidence.string("source"), "resolvedSemanticTarget")
         XCTAssertEqual(try subjectEvidence.string("phase"), "resolvedBeforeDispatch")
         XCTAssertEqual(try subjectEvidence.int("settledObservationSequence"), 12)
+        let resolution = try subjectEvidence.object("resolution")
+        XCTAssertEqual(try resolution.string("origin"), "known")
+        XCTAssertEqual(
+            try resolution.strings("adjustments"),
+            ["semanticReveal", "objectDeallocationRefresh"]
+        )
         let encodedTarget = try subjectEvidence.object("target")
         let checks = try encodedTarget.array("checks")
         XCTAssertEqual(checks.count, 2)
@@ -332,6 +342,72 @@ final class ServerMessageTests: XCTestCase {
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertEqual(decoded.subjectEvidence, evidence)
+    }
+
+    func testActionSubjectResolutionRoundTripsWithDeterministicAdjustmentOrdering() throws {
+        let resolution = ActionSubjectResolution(
+            origin: .discovered,
+            adjustments: [
+                .staleTargetRefresh,
+                .activationPointPlacement,
+                .semanticReveal,
+                .objectDeallocationRefresh,
+            ]
+        )
+
+        let data = try JSONEncoder().encode(resolution)
+        let json = try JSONProbe(data: data)
+        XCTAssertEqual(try json.string("origin"), "discovered")
+        XCTAssertEqual(
+            try json.strings("adjustments"),
+            [
+                "semanticReveal",
+                "activationPointPlacement",
+                "objectDeallocationRefresh",
+                "staleTargetRefresh",
+            ]
+        )
+        XCTAssertEqual(try JSONDecoder().decode(ActionSubjectResolution.self, from: data), resolution)
+    }
+
+    func testActionSubjectEvidenceRejectsMissingResolution() throws {
+        let json = Data("""
+        {
+          "source": "resolvedSemanticTarget",
+          "phase": "resolvedBeforeDispatch",
+          "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
+          "element": {
+            "description": "Delete",
+            "label": "Delete",
+            "traits": ["button"],
+            "frameX": 0,
+            "frameY": 0,
+            "frameWidth": 100,
+            "frameHeight": 44,
+            "activationPointEvidence": {"source": "unavailable"},
+            "respondsToUserInteraction": true,
+            "actions": ["activate"]
+          }
+        }
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionSubjectEvidence.self, from: json)) { error in
+            guard case DecodingError.keyNotFound(let key, _) = error else {
+                return XCTFail("Expected missing resolution key, got \(error)")
+            }
+            XCTAssertEqual(key.stringValue, "resolution")
+        }
+    }
+
+    func testActionSubjectResolutionRejectsUnknownAdjustment() throws {
+        let json = Data("""
+        {
+          "origin": "visible",
+          "adjustments": ["semanticReveal", "legacyRefresh"]
+        }
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionSubjectResolution.self, from: json))
     }
 
     func testActionSubjectEvidenceRejectsUnknownFields() throws {
@@ -352,6 +428,7 @@ final class ServerMessageTests: XCTestCase {
             "respondsToUserInteraction": true,
             "actions": ["activate"]
           },
+          "resolution": {"origin": "visible", "adjustments": []},
           "heistId": "old-runtime-id"
         }
         """.utf8)
@@ -417,13 +494,17 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
+        let traceEvidence = try json.object("evidence").object("observation").object("traceEvidence")
 
-        _ = try json.object("evidence").object("observation").object("accessibilityTrace")
+        XCTAssertEqual(try traceEvidence.string("completeness"), "incomplete")
+        _ = try traceEvidence.object("accessibilityTrace")
     }
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
@@ -448,7 +529,9 @@ final class ServerMessageTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
@@ -464,7 +547,9 @@ final class ServerMessageTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         let data = try JSONEncoder().encode(result)
@@ -482,7 +567,9 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         XCTAssertNil(result.accessibilityTrace?.endpointScreenName)
@@ -732,7 +819,9 @@ final class ServerMessageTests: XCTestCase {
         let evidence: ActionResultSuccessEvidence
 
         init(accessibilityTrace: AccessibilityTrace) {
-            evidence = ActionResultSuccessEvidence(observation: .trace(accessibilityTrace))
+            evidence = ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(accessibilityTrace, completeness: .incomplete))
+            )
         }
     }
 

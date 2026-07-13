@@ -875,13 +875,13 @@ private let expectedRepairJSONReportJSON = """
                 command: .activate(target),
                 dispatchResult: ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(dispatchTrace))
+                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
                 ),
                 expectationResult: ActionResult.failure(
                     method: .wait,
                     errorKind: .timeout,
                     message: "wait timed out",
-                    evidence: ActionResultFailureEvidence(observation: .trace(expectationTrace))
+                    evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
                 ),
                 expectation: ExpectationResult(
                     met: false,
@@ -1219,14 +1219,14 @@ private let expectedRepairJSONReportJSON = """
         let actionResult = if actionSucceeded {
             ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         } else {
             ActionResult.failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
-                evidence: ActionResultFailureEvidence(observation: .trace(trace))
+                evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         }
         let evidence = HeistActionEvidence.dispatch(

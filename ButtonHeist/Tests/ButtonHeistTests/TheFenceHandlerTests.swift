@@ -3191,9 +3191,12 @@ final class TheFenceHandlerTests: XCTestCase {
             return .actionResult(ActionResult.success(
                 method: .wait,
                 evidence: ActionResultSuccessEvidence(
-                    observation: .trace(AccessibilityTrace.elementsChangedForTests(
-                        elementCount: 1,
-                        edits: ElementEdits()
+                    observation: .trace(makeTestTraceEvidence(
+                        AccessibilityTrace.elementsChangedForTests(
+                            elementCount: 1,
+                            edits: ElementEdits()
+                        ),
+                        completeness: .incomplete
                     ))
                 )
             ))
@@ -3223,7 +3226,12 @@ final class TheFenceHandlerTests: XCTestCase {
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace.noChangeForTests(elementCount: 1)))
+                evidence: ActionResultSuccessEvidence(
+                    observation: .trace(makeTestTraceEvidence(
+                        AccessibilityTrace.noChangeForTests(elementCount: 1),
+                        completeness: .complete
+                    ))
+                )
             ))
         }
 
@@ -3254,7 +3262,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .wait,
                 errorKind: .timeout,
                 message: "timed out after 0.2s — expectation not met",
-                evidence: ActionResultFailureEvidence(observation: .trace(AccessibilityTrace.noChangeForTests(elementCount: 1)))
+                evidence: ActionResultFailureEvidence(
+                    observation: .trace(makeTestTraceEvidence(
+                        AccessibilityTrace.noChangeForTests(elementCount: 1),
+                        completeness: .incomplete
+                    ))
+                )
             ))
         }
 
@@ -3306,13 +3319,13 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                 ))
             case .wait:
                 return .actionResult(ActionResult.success(
                     method: .wait,
                     message: "expectation met after observed change",
-                    evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                 ))
             default:
                 return .actionResult(ActionResult.success(method: .activate, evidence: .none))

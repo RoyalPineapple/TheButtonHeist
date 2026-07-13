@@ -72,7 +72,7 @@ struct InterfaceTree: Sendable, Equatable {
     }
 
     var summaryElement: AccessibilityElement? {
-        let viewportElements = viewportCapture.hierarchy.sortedElements
+        let viewportElements = viewportCapture.hierarchy.sortedElements.filter { $0.visibility == .onscreen }
         if let explicit = viewportElements.first(where: { $0.traits.contains(.summaryElement) }) {
             return explicit
         }
@@ -110,6 +110,7 @@ struct InterfaceTree: Sendable, Equatable {
         var seen = Set<HeistId>()
         let visible = viewportCapture.hierarchy.pathIndexedElements.compactMap { indexed -> Element? in
             guard let heistID = viewportCapture.heistIdsByPath[indexed.path],
+                  viewportElementIDs.contains(heistID),
                   let element = elements[heistID],
                   seen.insert(heistID).inserted
             else { return nil }
@@ -152,7 +153,7 @@ struct InterfaceTree: Sendable, Equatable {
             return observed
         }
 
-        let disappearedIDs = viewportElementIDs.subtracting(observed.viewportElementIDs)
+        let disappearedIDs = viewportElementIDs.subtracting(observed.elementIDs)
         return InterfaceTree(
             elements: elements
                 .merging(observed.elements) { _, new in new }

@@ -17,26 +17,62 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
     }
 }
 
-/// Predicate evidence derived from one canonical observed trace.
-public struct PredicateEvaluationEvidence: Sendable, Equatable {
-    public let trace: AccessibilityTrace
-    public let isComplete: Bool
+/// One observed accessibility trace paired with proof of whether its
+/// observation history is complete.
+public struct AccessibilityTraceEvidence: Codable, Sendable, Equatable {
+    public enum Completeness: String, Codable, Sendable {
+        case complete
+        case incomplete
+    }
 
-    public init?(trace: AccessibilityTrace, isComplete: Bool) {
+    public let trace: AccessibilityTrace
+    public let completeness: Completeness
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case accessibilityTrace
+        case completeness
+    }
+
+    public init?(trace: AccessibilityTrace, completeness: Completeness) {
         guard trace.captures.last != nil else { return nil }
         self.trace = trace
-        self.isComplete = isComplete
+        self.completeness = completeness
+    }
+
+    public var isComplete: Bool {
+        completeness == .complete
     }
 
     package var currentInterface: Interface {
         guard let current = trace.captures.last?.interface else {
-            preconditionFailure("PredicateEvaluationEvidence requires a current capture")
+            preconditionFailure("AccessibilityTraceEvidence requires a current capture")
         }
         return current
     }
 
     package var changeFacts: [AccessibilityTrace.ChangeFact] {
         trace.changeFacts
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "AccessibilityTraceEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let trace = try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace)
+        let completeness = try container.decode(Completeness.self, forKey: .completeness)
+        guard let evidence = Self(trace: trace, completeness: completeness) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .accessibilityTrace,
+                in: container,
+                debugDescription: "accessibility trace evidence requires a current capture"
+            )
+        }
+        self = evidence
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(trace, forKey: .accessibilityTrace)
+        try container.encode(completeness, forKey: .completeness)
     }
 }
 

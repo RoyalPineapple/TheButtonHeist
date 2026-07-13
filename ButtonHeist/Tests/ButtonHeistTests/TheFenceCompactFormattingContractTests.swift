@@ -151,14 +151,30 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
     }
 
-    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() throws {
+    func testScreenExpectationFailureHintUsesTypedElementChangesRegardlessOfActualText() throws {
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2)
+        )
+        let result = makeTestActionResult(
+            traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+        )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(),
+            result: result,
             expectation: ExpectationResult(
                 met: false,
                 predicate: .changed(.screen()),
                 actual: "elementsChanged"
+            )
+        )
+        let arbitraryActualResponse = FenceResponse.action(
+            command: .activate,
+            result: result,
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.screen()),
+                actual: "arbitrary diagnostic"
             )
         )
 
@@ -172,17 +188,59 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
         XCTAssertTrue(compact.contains(".changed(.screen()) requires a screen-level transition"), compact)
+        XCTAssertTrue(
+            arbitraryActualResponse.compactFormatted()
+                .contains(".changed(.screen()) requires a screen-level transition")
+        )
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() throws {
+    func testScreenExpectationFailureHintDoesNotTrustElementsChangedActualText() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(),
             expectation: ExpectationResult(
                 met: false,
+                predicate: .changed(.screen()),
+                actual: "elementsChanged"
+            )
+        )
+
+        let expectation = try publicJSONProbe(response).object("expectation")
+        let compact = response.compactFormatted()
+
+        try expectation.assertMissing("hint")
+        XCTAssertFalse(compact.contains(".changed(.screen()) requires a screen-level transition"), compact)
+    }
+
+    func testActivateNoChangeExpectationFailureUsesTypedSettledTraceRegardlessOfActualText() throws {
+        let unchanged = makeReceiptTestInterface(elementCount: 1)
+        let trace = makeReceiptTestTrace(before: unchanged, after: unchanged)
+        let result = ActionResult.success(
+            method: .activate,
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    makeTestTraceEvidence(trace, completeness: .complete),
+                    .settled(durationMs: 1)
+                )
+            )
+        )
+        let response = FenceResponse.action(
+            command: .activate,
+            result: result,
+            expectation: ExpectationResult(
+                met: false,
                 predicate: .changed(.elements()),
                 actual: "noChange"
+            )
+        )
+        let arbitraryActualResponse = FenceResponse.action(
+            command: .activate,
+            result: result,
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.elements()),
+                actual: "arbitrary diagnostic"
             )
         )
 
@@ -202,7 +260,70 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
         XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements(*)), got noChange]"), human)
         XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
+        XCTAssertTrue(
+            arbitraryActualResponse.compactFormatted()
+                .contains("does not send activation-point tap dispatch")
+        )
         XCTAssertTrue(response.isFailure)
+    }
+
+    func testActivateNoChangeExpectationHintDoesNotTrustNoChangeActualText() throws {
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 1),
+            after: makeReceiptTestInterface(elementCount: 2)
+        )
+        let response = FenceResponse.action(
+            command: .activate,
+            result: makeTestActionResult(
+                method: .activate,
+                traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+            ),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.elements()),
+                actual: "noChange"
+            )
+        )
+
+        let expectation = try publicJSONProbe(response).object("expectation")
+        let compact = response.compactFormatted()
+
+        try expectation.assertMissing("hint")
+        XCTAssertFalse(compact.contains("accessibilityActivate()"), compact)
+    }
+
+    func testActivateNoChangeExpectationHintRequiresSuccessfulActivateMethod() {
+        let unchanged = makeReceiptTestInterface(elementCount: 1)
+        let trace = makeReceiptTestTrace(before: unchanged, after: unchanged)
+        let observation = ActionResultObservationEvidence.settledTrace(
+            makeTestTraceEvidence(trace, completeness: .incomplete),
+            .settled(durationMs: 1)
+        )
+        let expectation = ExpectationResult(
+            met: false,
+            predicate: .changed(.elements()),
+            actual: "noChange"
+        )
+        let customActionResult = ActionResult.success(
+            method: .customAction,
+            evidence: ActionResultSuccessEvidence(observation: observation)
+        )
+        let failedActivateResult = ActionResult.failure(
+            method: .activate,
+            errorKind: .actionFailed,
+            evidence: ActionResultFailureEvidence(observation: observation)
+        )
+
+        XCTAssertNil(FenceResponse.expectationFailureHint(
+            expectation,
+            command: .activate,
+            result: customActionResult
+        ))
+        XCTAssertNil(FenceResponse.expectationFailureHint(
+            expectation,
+            command: .activate,
+            result: failedActivateResult
+        ))
     }
 
     func testActivateNoChangeWithoutExpectationRemainsSuccessful() throws {
@@ -225,9 +346,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: makeTestActionResult(
                 method: .activate,
-                accessibilityTrace: makeReceiptTestTrace(
-                    before: makeReceiptTestInterface(elementCount: 3),
-                    after: makeReceiptTestInterface(elementCount: 3)
+                traceEvidence: makeTestTraceEvidence(
+                    makeReceiptTestTrace(
+                        before: makeReceiptTestInterface(elementCount: 3),
+                        after: makeReceiptTestInterface(elementCount: 3)
+                    ),
+                    completeness: .complete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,
@@ -267,7 +391,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(accessibilityTrace: trace)
+            result: makeTestActionResult(
+                traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -300,7 +426,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -347,7 +473,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -381,7 +507,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -431,7 +557,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -465,7 +591,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                     )
                 ),
             ],
@@ -547,7 +673,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                         )
                     ),
                 ],
@@ -626,7 +752,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                         )
                     ),
                 ],
@@ -699,7 +825,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .activate,
                         errorKind: .actionFailed,
                         message: "target stopped responding",
-                        evidence: ActionResultFailureEvidence(observation: .trace(trace))
+                        evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                     ),
                     failure: HeistFailureDetail(
                         category: .action,
@@ -903,7 +1029,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .wait,
                         evidence: ActionResultSuccessEvidence(
                             observation: .settledTrace(
-                                .noChangeForTests(elementCount: 0),
+                                makeTestTraceEvidence(
+                                    .noChangeForTests(elementCount: 0),
+                                    completeness: .complete
+                                ),
                                 .settled(durationMs: 7)
                             ),
                             timing: ActionPerformanceTiming(totalMs: 9)

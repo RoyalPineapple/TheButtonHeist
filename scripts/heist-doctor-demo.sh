@@ -169,16 +169,19 @@ struct DoctorDemoFixture {
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
             ?? AccessibilityTrace(first: before)
+        guard let traceEvidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
+            throw FixtureError.message("failed to build trace evidence")
+        }
         let actionResult = actionSucceeded
             ? ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
             )
             : ActionResult.failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
-                evidence: ActionResultFailureEvidence(observation: .trace(trace))
+                evidence: ActionResultFailureEvidence(observation: .trace(traceEvidence))
             )
         let command = HeistActionCommand.activate(target)
         let evidence = HeistActionEvidence.dispatch(

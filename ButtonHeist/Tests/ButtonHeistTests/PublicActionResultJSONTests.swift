@@ -169,7 +169,10 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testNestedHeistActionResultEncodesStructuredFailureAndOmissions() throws {
         let actionResult = treeUnavailableActionResult(
-            accessibilityTrace: makeBackgroundElementsChangedTrace(elementCount: 2)
+            traceEvidence: makeTestTraceEvidence(
+                makeBackgroundElementsChangedTrace(elementCount: 2),
+                completeness: .incomplete
+            )
         )
         let result = try nestedHeistActionResultJSON(
             result: actionResult,
@@ -244,7 +247,9 @@ final class PublicActionResultJSONTests: XCTestCase {
             method: .activate,
             errorKind: .elementNotFound,
             message: "Pay not found",
-            evidence: ActionResultFailureEvidence(observation: .trace(trace))
+            evidence: ActionResultFailureEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
@@ -292,7 +297,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(ElementPredicateTemplate(label: "Pay")),
-                    element: subject
+                    element: subject,
+                    resolution: ActionSubjectResolution(origin: .visible)
                 )
             )
         )
@@ -316,7 +322,10 @@ final class PublicActionResultJSONTests: XCTestCase {
                 method: .activate,
                 evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
-                        makeReceiptTestTrace(before: interface, after: interface),
+                        makeTestTraceEvidence(
+                            makeReceiptTestTrace(before: interface, after: interface),
+                            completeness: .incomplete
+                        ),
                         .timedOut(durationMs: 0)
                     )
                 )
@@ -334,9 +343,12 @@ final class PublicActionResultJSONTests: XCTestCase {
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(makeReceiptTestTrace(
-                    before: makeReceiptTestInterface([]),
-                    after: makeReceiptTestInterface(addedRows)
+                observation: .trace(makeTestTraceEvidence(
+                    makeReceiptTestTrace(
+                        before: makeReceiptTestInterface([]),
+                        after: makeReceiptTestInterface(addedRows)
+                    ),
+                    completeness: .incomplete
                 ))
             )
         )
@@ -363,9 +375,12 @@ final class PublicActionResultJSONTests: XCTestCase {
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(makeReceiptTestTrace(
-                    before: makeReceiptTestInterface([]),
-                    after: makeReceiptTestInterface(addedRows)
+                observation: .trace(makeTestTraceEvidence(
+                    makeReceiptTestTrace(
+                        before: makeReceiptTestInterface([]),
+                        after: makeReceiptTestInterface(addedRows)
+                    ),
+                    completeness: .incomplete
                 ))
             )
         )
@@ -402,7 +417,12 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [before, after])))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(
+                    AccessibilityTrace(captures: [before, after]),
+                    completeness: .incomplete
+                ))
+            )
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -440,7 +460,12 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [before, after])))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(
+                    AccessibilityTrace(captures: [before, after]),
+                    completeness: .incomplete
+                ))
+            )
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -471,8 +496,8 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
     }
 
-    private func treeUnavailableActionResult(accessibilityTrace: AccessibilityTrace? = nil) -> ActionResult {
-        let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
+    private func treeUnavailableActionResult(traceEvidence: AccessibilityTraceEvidence? = nil) -> ActionResult {
+        let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
         return ActionResult.failure(
             method: .activate,
             errorKind: .accessibilityTreeUnavailable,

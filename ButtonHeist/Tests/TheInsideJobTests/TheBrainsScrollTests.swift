@@ -156,12 +156,12 @@ final class TheBrainsScrollTests: XCTestCase {
             target: literalTarget(ElementPredicate(label: "Deadline Target")),
             treeElement: treeElement,
             liveTarget: liveTarget,
-            deadline: SemanticObservationDeadline(start: 100, timeoutSeconds: 1)
+            deadline: SemanticObservationDeadline(start: 100, timeoutSeconds: 1),
+            resolution: ActionSubjectResolution(origin: .visible)
         )
 
         let state = await inflation.stateAfterResolvedFreshTarget(
             inflatedTarget,
-            didReveal: false,
             activationPointPolicy: .liveObjectOnly
         )
 
@@ -1177,6 +1177,7 @@ final class TheBrainsScrollTests: XCTestCase {
             entry,
             target: literalTarget(ElementPredicate(label: "Settings")),
             deadline: deadline,
+            resolution: ActionSubjectResolution(origin: .known),
             transaction: .init()
         )
 
@@ -1212,6 +1213,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 entry,
                 target: literalTarget(ElementPredicate(label: "Settings")),
                 deadline: self.semanticRevealDeadline(),
+                resolution: ActionSubjectResolution(origin: .known),
                 transaction: .init()
             )
             guard case .failed(let failure) = state else { return false }
@@ -1267,6 +1269,54 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no scroll membership"))
+    }
+
+    func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async {
+        let baselineObject = retainedLiveObject()
+        brains.stash.installScreenForTesting(.makeForTests([
+            .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
+        ]))
+        let discoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
+        let discoveredElement = makeElement(
+            label: "Discovered",
+            traits: .button,
+            shape: .frame(AccessibilityRect(discoveredFrame))
+        )
+        let discoveredObject = retainLiveObject(makeButton(label: "Discovered", frame: discoveredFrame))
+        let discoveredScreen = InterfaceObservation.makeForTests([
+            .init(
+                discoveredElement,
+                heistId: "discovered_button",
+                object: discoveredObject
+            ),
+        ])
+        brains.stash.nextVisibleRefreshScreenForTesting = discoveredScreen
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
+            self.brains.stash.recordParsedObservedEvidence(discoveredScreen)
+            return Navigation.ExploredScreen(
+                screen: discoveredScreen,
+                manifest: .init(),
+                generationDisposition: .preservesGeneration,
+                discoveryCommitPolicy: .replaceInterface
+            )
+        }
+        defer {
+            brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: literalTarget(ElementPredicate(label: "Discovered", traits: [.button])),
+            method: .activate
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected discovered target inflation, got \(result)")
+        }
+        XCTAssertTrue(inflatedTarget.liveTarget.object === discoveredObject)
+        XCTAssertEqual(
+            inflatedTarget.resolution,
+            ActionSubjectResolution(origin: .discovered)
+        )
     }
 
     func testInflationUsesNextSettledVisibleEvidenceForCommittedTarget() async {
@@ -1505,7 +1555,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.element.label, "Raw Replacement")
         XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Gone Target")
         if let committed = brains.stash.interfaceElement(heistId: targetId) {
-            XCTAssertNil(brains.stash.liveElementAliasing(committed))
+            XCTAssertNil(brains.stash.visibleLiveElementAliasing(committed))
         } else {
             XCTFail("Expected committed semantic target to remain available")
         }
@@ -1568,6 +1618,167 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
         XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
+        XCTAssertEqual(
+            inflatedTarget.resolution,
+            ActionSubjectResolution(
+                origin: .visible,
+                adjustments: [.objectDeallocationRefresh]
+            )
+        )
+    }
+
+    func testStaleSemanticTargetRefreshPreservesTypedWitness() async throws {
+        brains.stopSemanticObservation()
+        let targetId: HeistId = "restored_target"
+        let target = literalTarget(ElementPredicate(label: "Restored Target", traits: [.button]))
+        let originalScreen = InterfaceObservation.makeForTests([
+            .init(
+                makeElement(label: "Restored Target", traits: .button),
+                heistId: targetId,
+                object: retainedLiveObject()
+            ),
+        ])
+        brains.stash.installScreenForTesting(originalScreen)
+        let selected = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
+
+        let emptyScreen = InterfaceObservation.makeForTests()
+        brains.stash.installScreenForTesting(emptyScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = emptyScreen
+
+        let recoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
+        let recoveredElement = makeElement(
+            label: "Restored Target",
+            traits: .button,
+            shape: .frame(AccessibilityRect(recoveredFrame))
+        )
+        let recoveredObject = retainLiveObject(makeButton(label: "Restored Target", frame: recoveredFrame))
+        let recoveredScreen = InterfaceObservation.makeForTests([
+            .init(
+                recoveredElement,
+                heistId: targetId,
+                object: recoveredObject
+            ),
+        ])
+        let resolutionTask = Task { @MainActor in
+            let state = await self.brains.navigation.elementInflation.stateAfterRefresh(
+                target: target,
+                treeElement: selected,
+                resolution: ActionSubjectResolution(origin: .visible),
+                method: .activate,
+                activationPointPolicy: .liveObjectOnly,
+                deadline: SemanticObservationDeadline(
+                    start: CFAbsoluteTimeGetCurrent(),
+                    timeoutSeconds: 3
+                )
+            )
+            guard case .inflated(let inflatedTarget) = state else {
+                XCTFail("Expected stale target refresh to recover, got \(state)")
+                return nil as ActionSubjectResolution?
+            }
+            XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
+            return inflatedTarget.resolution
+        }
+        await waitForSettledSemanticWaiter()
+        brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+
+        let resolution = await resolutionTask.value
+        XCTAssertEqual(
+            resolution,
+            ActionSubjectResolution(origin: .visible, adjustments: [.staleTargetRefresh])
+        )
+    }
+
+    func testActivationPointPlacementAddsTypedAdjustment() async {
+        brains.stopSemanticObservation()
+        let targetId: HeistId = "placed_target"
+        let scrollView = RecordingScrollView(frame: ScreenMetrics.current.bounds)
+        scrollView.contentSize = CGSize(
+            width: ScreenMetrics.current.bounds.width,
+            height: ScreenMetrics.current.bounds.height * 3
+        )
+        let object = retainLiveObject(UIButton(type: .system))
+        let initialFrame = CGRect(
+            x: 40,
+            y: ScreenMetrics.current.bounds.maxY + 120,
+            width: 200,
+            height: 44
+        )
+        object.accessibilityLabel = "Placed Target"
+        object.accessibilityFrame = initialFrame
+        let initialActivationPoint = CGPoint(x: initialFrame.midX, y: initialFrame.midY)
+        object.accessibilityActivationPoint = initialActivationPoint
+        let initialElement = AccessibilityElement.make(
+            label: "Placed Target",
+            traits: .button,
+            shape: .frame(AccessibilityRect(initialFrame)),
+            activationPoint: initialActivationPoint
+        )
+        let initialScreen = makePlacementScreen(
+            targetId: targetId,
+            element: initialElement,
+            object: object,
+            scrollView: scrollView
+        )
+        brains.stash.installScreenForTesting(initialScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = initialScreen
+        guard let committed = brains.stash.interfaceElement(heistId: targetId) else {
+            return XCTFail("Expected placement target in committed semantic state")
+        }
+        switch brains.stash.resolveLiveActionTarget(for: committed) {
+        case .resolved:
+            break
+        case .objectUnavailable:
+            return XCTFail("Expected placement target to have a live object")
+        case .geometryUnavailable:
+            return XCTFail(
+                "Expected placement target to have fresh live geometry: "
+                    + String(describing: brains.stash.liveInterfaceElement(heistId: targetId)?.element.shape)
+            )
+        }
+        XCTAssertTrue(brains.stash.liveScrollView(for: committed) === scrollView)
+
+        let resultBox = InflationResultBox()
+        let inflation = Task { @MainActor in
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
+                for: literalTarget(ElementPredicate(label: "Placed Target", traits: [.button])),
+                method: .activate
+            )
+        }
+        await waitForSettledSemanticWaiter()
+
+        let placedFrame = CGRect(
+            x: ElementInflation.interactionComfortZone.midX - 100,
+            y: ElementInflation.interactionComfortZone.midY - 22,
+            width: 200,
+            height: 44
+        )
+        object.accessibilityFrame = placedFrame
+        let placedActivationPoint = CGPoint(x: placedFrame.midX, y: placedFrame.midY)
+        object.accessibilityActivationPoint = placedActivationPoint
+        let placedElement = AccessibilityElement.make(
+            label: "Placed Target",
+            traits: .button,
+            shape: .frame(AccessibilityRect(placedFrame)),
+            activationPoint: placedActivationPoint
+        )
+        let placedScreen = makePlacementScreen(
+            targetId: targetId,
+            element: placedElement,
+            object: object,
+            scrollView: scrollView
+        )
+        brains.stash.nextVisibleRefreshScreenForTesting = placedScreen
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(placedScreen)
+        await inflation.value
+
+        guard case .inflated(let inflatedTarget)? = resultBox.value else {
+            return XCTFail("Expected activation-point placement inflation, got \(String(describing: resultBox.value))")
+        }
+        XCTAssertEqual(
+            inflatedTarget.resolution,
+            ActionSubjectResolution(origin: .visible, adjustments: [.activationPointPlacement])
+        )
     }
 
     func testOffViewportTargetWithoutLiveScrollParentFailsNoRevealPath() async {
@@ -1704,6 +1915,45 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, ActionMethod.activate)
         XCTAssertTrue(result.message?.contains("element inflation failed [noRevealPath]") == true)
+    }
+
+    func testElementActionPreservesFinalDispatchSubjectResolution() async {
+        let frame = CGRect(x: 40, y: 120, width: 240, height: 44)
+        let element = makeElement(
+            label: "Refreshable",
+            traits: .button,
+            shape: .frame(AccessibilityRect(frame))
+        )
+        let object = retainLiveObject(makeButton(label: "Refreshable", frame: frame))
+        let screen = InterfaceObservation.makeForTests([
+            .init(element, heistId: "refreshable_button", object: object),
+        ])
+        brains.stash.installScreenForTesting(screen)
+        brains.stash.nextVisibleRefreshScreenForTesting = screen
+        let target = literalTarget(ElementPredicate(label: "Refreshable", traits: [.button]))
+        let finalResolution = ActionSubjectResolution(
+            origin: .known,
+            adjustments: [.staleTargetRefresh]
+        )
+
+        let result = await brains.actions.performElementAction(
+            target: target,
+            method: .activate,
+            requireInteractive: false
+        ) { context in
+            .success(
+                method: .activate,
+                subjectEvidence: ActionSubjectEvidence(
+                    source: .resolvedSemanticTarget,
+                    target: target,
+                    element: TheStash.WireConversion.convert(context.treeElement.element),
+                    resolution: finalResolution
+                )
+            )
+        }
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.subjectEvidence?.resolution, finalResolution)
     }
 
     func testTargetedActionDoesNotRecoverFromStaleOffscreenSnapshotAfterFreshScreenChange() async throws {
@@ -2931,6 +3181,37 @@ final class TheBrainsScrollTests: XCTestCase {
         shape: AccessibilityElement.Shape = .frame(AccessibilityRect.zero)
     ) -> AccessibilityElement {
         .make(label: label, traits: traits, shape: shape, respondsToUserInteraction: false)
+    }
+
+    private func makePlacementScreen(
+        targetId: HeistId,
+        element: AccessibilityElement,
+        object: NSObject,
+        scrollView: UIScrollView
+    ) -> InterfaceObservation {
+        let containerPath = TreePath([0])
+        let scrollMembership = InterfaceTree.ScrollMembership(containerPath: containerPath, index: nil)
+        let treeElement = InterfaceTree.Element(
+            heistId: targetId,
+            scrollMembership: scrollMembership,
+            element: element
+        )
+        let container = makeScrollableContainer(
+            contentSize: scrollView.contentSize,
+            frame: scrollView.frame
+        )
+        return InterfaceObservation.makeForTests(
+            elements: [targetId: treeElement],
+            hierarchy: [
+                .container(container, children: [
+                    .element(element, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [containerPath.appending(0): targetId],
+            elementRefs: [targetId: .init(object: object, scrollView: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [containerPath: .init(view: scrollView)]
+        )
     }
 
     private func makeScrollableContainer(

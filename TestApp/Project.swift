@@ -31,6 +31,10 @@ let project = Project(
                 "CFBundleDisplayName": "BH Demo",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
+                "CFBundleURLTypes": [[
+                    "CFBundleURLName": "com.buttonheist.testapp.adversarial",
+                    "CFBundleURLSchemes": ["buttonheist-demo"],
+                ]],
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],

@@ -114,10 +114,10 @@ extension TheStash {
 
     /// Convert a InterfaceObservation into the public discovery interface.
     ///
-    /// The latest live capture is still the tree authority. Known off-viewport
-    /// elements and containers discovered by scroll exploration are grafted
-    /// under their owning semantic scroll container so public `get_interface`
-    /// does not discard the command's exploration work.
+    /// The latest parser hierarchy is still the tree authority. Known elements
+    /// and containers absent from that capture are grafted under their owning
+    /// semantic scroll container so public `get_interface` does not discard
+    /// the command's exploration work.
     static func toDiscoveryInterface(from tree: InterfaceTree, timestamp: Date = Date()) -> Interface {
         var elementAnnotations = elementAnnotations(from: tree)
         var containerAnnotations = containerAnnotations(from: tree)
@@ -126,16 +126,16 @@ extension TheStash {
             containerAnnotations.map { ($0.path, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
-        let liveIds = tree.viewportElementIDs
-        let liveContainerPaths = Set(containerAnnotations.map(\.path))
-        var emittedHeistIds = liveIds
-        var emittedContainerPaths = liveContainerPaths
+        let capturedElementIds = Set(tree.viewportCapture.heistIdsByPath.values)
+        let capturedContainerPaths = Set(containerAnnotations.map(\.path))
+        var emittedHeistIds = capturedElementIds
+        var emittedContainerPaths = capturedContainerPaths
         var nextTraversalIndex = (tree.viewportCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
 
         var childrenByContainerPath = DiscoveryChildren(
             tree: tree,
-            liveIds: liveIds,
-            liveContainerPaths: liveContainerPaths
+            capturedElementIds: capturedElementIds,
+            capturedContainerPaths: capturedContainerPaths
         )
 
         func appendDiscoveryChildren(
@@ -585,12 +585,12 @@ private struct DiscoveryChildren {
 
     init(
         tree: InterfaceTree,
-        liveIds: Set<HeistId>,
-        liveContainerPaths: Set<TreePath>
+        capturedElementIds: Set<HeistId>,
+        capturedContainerPaths: Set<TreePath>
     ) {
         var childrenByParent: [TreePath: [Child]] = [:]
         for entry in tree.elements.values {
-            guard !liveIds.contains(entry.heistId),
+            guard !capturedElementIds.contains(entry.heistId),
                   let membership = entry.scrollMembership
             else { continue }
             childrenByParent[membership.containerPath, default: []].append(Child(
@@ -602,7 +602,7 @@ private struct DiscoveryChildren {
             ))
         }
         for entry in tree.containers.values {
-            guard !liveContainerPaths.contains(entry.path),
+            guard !capturedContainerPaths.contains(entry.path),
                   let membership = entry.scrollMembership
             else { continue }
             let stableName = entry.containerName?.rawValue ?? entry.path.indices.map(String.init).joined(separator: ".")

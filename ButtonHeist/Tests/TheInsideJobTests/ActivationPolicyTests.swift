@@ -68,7 +68,11 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testRefreshReresolveActivateSuccessStopsPolicy() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            label: "Refreshed Target",
+            activationPoint: CGPoint(x: 30, y: 40)
+        )
         var events: [String] = []
         var dispatchedPoints: [CGPoint] = []
         var fingerprintPoints: [CGPoint] = []
@@ -80,7 +84,13 @@ final class ActivationPolicyTests: XCTestCase {
             },
             refreshAndResolve: {
                 events.append("refresh")
-                return .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
+                return .resolved(self.makeInflatedTarget(
+                    refreshedTarget,
+                    resolution: ActionSubjectResolution(
+                        origin: .known,
+                        adjustments: [.semanticReveal, .staleTargetRefresh]
+                    )
+                ))
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -97,6 +107,14 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(.accessibilityActivate))
+        XCTAssertEqual(
+            result.subjectEvidence?.resolution,
+            ActionSubjectResolution(
+                origin: .known,
+                adjustments: [.semanticReveal, .staleTargetRefresh]
+            )
+        )
+        XCTAssertEqual(result.subjectEvidence?.element.label, "Refreshed Target")
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
@@ -124,6 +142,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(activateCount, 0)
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(result.activationTrace, ActivationTrace(.refreshFailed))
+        XCTAssertNil(result.subjectEvidence)
     }
 
     func testActivationPointDispatchCanCompleteActivate() async {
@@ -138,7 +157,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
+                .resolved(self.makeInflatedTarget(refreshedTarget))
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -169,7 +188,7 @@ final class ActivationPolicyTests: XCTestCase {
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
+                .resolved(self.makeInflatedTarget(refreshedTarget))
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, trace in
@@ -201,7 +220,7 @@ final class ActivationPolicyTests: XCTestCase {
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
+                .resolved(self.makeInflatedTarget(refreshedTarget))
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, _ in
@@ -232,7 +251,13 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(treeElement: refreshedTarget.treeElement, liveTarget: refreshedTarget)
+                .resolved(self.makeInflatedTarget(
+                    refreshedTarget,
+                    resolution: ActionSubjectResolution(
+                        origin: .discovered,
+                        adjustments: [.objectDeallocationRefresh]
+                    )
+                ))
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -242,6 +267,14 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(
+            result.subjectEvidence?.resolution,
+            ActionSubjectResolution(
+                origin: .discovered,
+                adjustments: [.objectDeallocationRefresh]
+            )
+        )
+        XCTAssertEqual(result.subjectEvidence?.element.label, "Refreshed Button")
         XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
@@ -312,6 +345,26 @@ final class ActivationPolicyTests: XCTestCase {
             object: object,
             frame: frame,
             activationPoint: activationPoint
+        )
+    }
+
+    private func makeInflatedTarget(
+        _ liveTarget: TheStash.LiveActionTarget,
+        resolution: ActionSubjectResolution = ActionSubjectResolution(origin: .visible)
+    ) -> ElementInflation.InflatedElementTarget {
+        ElementInflation.InflatedElementTarget(
+            target: literalTarget(
+                ElementPredicate(
+                    label: liveTarget.treeElement.element.label.map(StringMatch.exact)
+                )
+            ),
+            treeElement: liveTarget.treeElement,
+            liveTarget: liveTarget,
+            deadline: SemanticObservationDeadline(
+                start: CFAbsoluteTimeGetCurrent(),
+                timeoutSeconds: 1
+            ),
+            resolution: resolution
         )
     }
 

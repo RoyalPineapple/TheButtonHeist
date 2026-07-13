@@ -36,7 +36,8 @@ internal struct PredicateObservationStreamState {
         _ observation: HeistSemanticObservation,
         predicate: AccessibilityPredicate<RootContext>,
         baselineSeed: PredicateObservationBaselineSeed = .preserve,
-        observationWindow suppliedWindow: ObservationWindow? = nil
+        observationWindow suppliedWindow: ObservationWindow? = nil,
+        preserving suppliedTrace: AccessibilityTrace? = nil
     ) -> PredicateObservationStreamReduction {
         guard predicate.requiresChangeBaseline else {
             let evidence = PredicateObservationEvidence(
@@ -59,6 +60,8 @@ internal struct PredicateObservationStreamState {
                 from: baseline,
                 through: observation.event
             )
+        }.map { window in
+            suppliedTrace.map(window.preserving) ?? window
         }
         let window: ObservationWindow? = switch (window, candidateWindow) {
         case (.some(let existing), .some(let candidate)):

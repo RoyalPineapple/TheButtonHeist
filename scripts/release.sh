@@ -328,7 +328,7 @@ if [[ "$DRY_RUN" == true ]]; then
     fi
     echo "  2. Build CLI + MCP (parallel)"
     if [[ "$RUN_TESTS" == true ]]; then
-        echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
+        echo "  3. Run TheScoreTests, ButtonHeistTests, and all five hosted iOS schemes"
     else
         echo "  3. (local tests skipped — main CI gates the exact release commit. Use --full for local preflight)"
     fi
@@ -461,9 +461,18 @@ if [[ "$RUN_TESTS" == true ]]; then
         echo "  Reusing booted $SIM_NAME"
     fi
 
-    echo "  Running TheInsideJobTests on $SIM_NAME..."
-    run_tuist_test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
-    echo "  ✓ TheInsideJobTests"
+    run_hosted_release_suite() {
+        local suite="$1"
+        echo "  Running $suite on $SIM_NAME..."
+        run_tuist_test "$suite" --platform ios --device "$SIM_NAME" --no-selective-testing
+        echo "  ✓ $suite"
+    }
+
+    run_hosted_release_suite TheInsideJobTests
+    run_hosted_release_suite DogfoodFeatureFlowTests
+    run_hosted_release_suite DogfoodRuntimeContractTests
+    run_hosted_release_suite AdversarialMutationTests
+    run_hosted_release_suite AdversarialNavigationTests
     echo ""
 fi
 

@@ -97,6 +97,10 @@ Recommended commands:
 tuist test TheScoreTests --no-selective-testing
 tuist test ButtonHeistTests --no-selective-testing
 tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 
 If Tuist reports missing external dependencies, run:
@@ -257,6 +261,10 @@ Before pushing any commit, verify the following:
   tuist test TheScoreTests --no-selective-testing
   tuist test ButtonHeistTests --no-selective-testing
   tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -286,7 +294,8 @@ Before pushing any commit, verify the following:
 `tuist test` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
-- `TheInsideJobTests` must run as a hosted iOS test bundle via the `BH Demo` test host, so always use the `TheInsideJobTests` scheme with an explicit simulator destination.
+- The hosted iOS suite is five explicit schemes: core `TheInsideJobTests`, `DogfoodFeatureFlowTests`, `DogfoodRuntimeContractTests`, `AdversarialMutationTests`, and `AdversarialNavigationTests`.
+- All five hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` does not run the dogfood or adversarial shards.
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
@@ -494,18 +503,22 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 `synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
-The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run `tuist test TheInsideJobTests` first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
+The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
 ## Versioning and Releases
 
-There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Messages.swift`. It is [CalVer](https://calver.org/) (`YYYY.MM.DD`, with same-day patches as `.N`), and CLI, MCP, and the iOS server all read it via TheScore. There is no separate "wire protocol version" — the handshake compares the server's and the client's `buttonHeistVersion` for exact equality and rejects on any mismatch. Inside (iOS server) and outside (CLI/MCP) must always be the same release; wire-format changes do not get their own version bump.
+There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Wire/Messages.swift`. It uses SemVer (`MAJOR.MINOR.PATCH`), and CLI, MCP, and the iOS server all read it via TheScore. There is no separate "wire protocol version" — the handshake compares the server's and the client's `buttonHeistVersion` for exact equality and rejects on any mismatch. Inside (iOS server) and outside (CLI/MCP) must always be the same release; wire-format changes do not get their own version bump.
 
-`buttonHeistVersion` is bumped only by `scripts/release.sh`. Commits between releases are not releases — the version constant stays put. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it. The script runs the full pipeline from a clean `main`: validate → bump → build all targets → run all tests → commit/tag/push. Pushing the tag triggers `.github/workflows/release.yml`, which builds the universal binaries, creates the GitHub release, and updates the Homebrew tap.
+`buttonHeistVersion` is bumped only by `scripts/release.sh`. Commits between releases are not releases — the version constant stays put. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it. From a clean `main`, the script validates and bumps the source version, builds CLI and MCP, commits and pushes the release source, waits for CI on that exact commit, then tags it. Pushing the tag triggers `.github/workflows/release.yml`, which builds the release artifacts, creates the GitHub release, and updates the Homebrew tap. Local tests are optional through `--full`; exact-commit main CI is the release gate.
 
 ```bash
-./scripts/release.sh              # Uses today's date
-./scripts/release.sh 2026.04.03   # Explicit date
-./scripts/release.sh --dry-run    # Preview only
+./scripts/release.sh               # Patch bump: 0.6.28 -> 0.6.29
+./scripts/release.sh --minor       # Minor bump: 0.6.29 -> 0.7.0
+./scripts/release.sh --major       # Major bump: 0.7.0 -> 1.0.0
+./scripts/release.sh 0.7.1         # Explicit version
+./scripts/release.sh --tag-current # Publish an already-bumped source version
+./scripts/release.sh --dry-run     # Preview only
+./scripts/release.sh --full        # Include optional local tests
 ```
 
 ## Callback Isolation Discipline
