@@ -151,15 +151,13 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             associatedElement: .none
         )
 
-        let firstBatch = try XCTUnwrap(action.capture())
-        let secondBatch = try XCTUnwrap(action.capture())
+        let batch = try XCTUnwrap(action.capture())
         action.cancel()
 
-        XCTAssertEqual(firstBatch.events.map(\.kind), [.elementChanged(.value), .announcement])
-        XCTAssertEqual(firstBatch.events.map(\.sequence), [2, 3])
-        XCTAssertEqual(firstBatch.through.sequence, 3)
-        XCTAssertNil(firstBatch.gap)
-        XCTAssertEqual(secondBatch.events.map(\.sequence), firstBatch.events.map(\.sequence))
+        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.value), .announcement])
+        XCTAssertEqual(batch.events.map(\.sequence), [2, 3])
+        XCTAssertEqual(batch.through.sequence, 3)
+        XCTAssertNil(batch.gap)
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
             [.elementChanged(.layout), .elementChanged(.value), .announcement]

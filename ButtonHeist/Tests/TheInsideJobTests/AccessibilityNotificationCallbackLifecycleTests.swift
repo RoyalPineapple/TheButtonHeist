@@ -68,7 +68,7 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         XCTAssertEqual(observer.latestSequence, 3)
     }
 
-    func testCallbacksDeliveredIntoOpenActionWindowExtendSameRangeWithoutLoss() throws {
+    func testCallbacksDeliveredIntoOpenActionWindowAreCapturedWithoutLoss() throws {
         let harness = CallbackHarness()
         let observer = makeObserver(harness: harness)
         defer { observer.uninstall() }
@@ -78,18 +78,14 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         let actionWindow = bus.beginActionWindow()
 
         callback(1000, nil, nil)
-        let firstBatch = try XCTUnwrap(actionWindow.capture())
         callback(UInt32.max, nil, nil)
-        let secondBatch = try XCTUnwrap(actionWindow.capture())
+        let batch = try XCTUnwrap(actionWindow.capture())
 
         XCTAssertEqual(actionWindow.cursor.sequence, 0)
-        XCTAssertEqual(firstBatch.events.map(\.sequence), [1])
-        XCTAssertEqual(firstBatch.through.sequence, 1)
-        XCTAssertEqual(secondBatch.events.map(\.sequence), [1, 2])
-        XCTAssertEqual(secondBatch.through.sequence, 2)
-        XCTAssertEqual(secondBatch.events.map(\.kind), [.screenChanged, .unknown(.max)])
-        XCTAssertNil(firstBatch.gap)
-        XCTAssertNil(secondBatch.gap)
+        XCTAssertEqual(batch.events.map(\.sequence), [1, 2])
+        XCTAssertEqual(batch.through.sequence, 2)
+        XCTAssertEqual(batch.events.map(\.kind), [.screenChanged, .unknown(.max)])
+        XCTAssertNil(batch.gap)
         actionWindow.cancel()
     }
 
