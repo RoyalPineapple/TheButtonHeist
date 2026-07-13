@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 @_spi(ButtonHeistTooling) import ButtonHeist
 
 enum PublicCommandContractFixture {
@@ -42,11 +43,11 @@ enum PublicCommandContractFixture {
     }
 
     static func renderedData() throws -> Data {
-        let commands = TheFence.Command.descriptors
+        let commands = try TheFence.Command.descriptors
             .lazy
             .filter(\.isPublicRequestContract)
             .sorted { $0.command.rawValue < $1.command.rawValue }
-            .map(Command.init)
+            .map { try Command($0) }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
 
@@ -96,15 +97,19 @@ private extension PublicCommandContractFixture {
         let exposedByCLI: Bool
         let exposedByMCP: Bool
         let description: String
-        let inputSchema: HeistValue
+        let inputSchemaSHA256: String
         let mcpAnnotations: MCPAnnotations?
 
-        init(_ descriptor: FenceCommandDescriptor) {
+        init(_ descriptor: FenceCommandDescriptor) throws {
             name = descriptor.command.rawValue
             exposedByCLI = descriptor.cliExposure == .directCommand
             exposedByMCP = descriptor.mcpExposure == .directTool
             description = descriptor.description
-            inputSchema = descriptor.inputJSONSchema
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            inputSchemaSHA256 = SHA256.hash(data: try encoder.encode(descriptor.inputJSONSchema))
+                .map { String(format: "%02x", $0) }
+                .joined()
             mcpAnnotations = descriptor.mcpAnnotations.map(MCPAnnotations.init)
         }
     }
