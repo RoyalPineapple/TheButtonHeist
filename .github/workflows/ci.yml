@@ -46,6 +46,11 @@ jobs:
       - name: Run Bumper Bowling
         run: scripts/check-source-shape.sh
 
+      - name: Test source-shape guardrails
+        env:
+          BUMPER_BOWLING_PACKAGE_PATH: ${{ github.workspace }}/.build/bumper-bowling
+        run: scripts/tests/check-source-shape-test.sh
+
   release-contract:
     # Release/install validation belongs in CI. Version bumps belong in the
     # release script, not in every implementation PR that touches shared types.
@@ -61,6 +66,9 @@ jobs:
 
       - name: Validate release/install contract
         run: scripts/validate-release-contract.sh
+
+      - name: Test Swift API breakage exemptions
+        run: scripts/tests/check-swift-api-breaking-changes-test.sh
 
       - name: Validate adversarial receipt timing parser
         run: python3 scripts/check-e2e-adversarial-lab-timing.py
