@@ -178,6 +178,10 @@ private struct SemanticObservationFulfillmentState {
         currentFulfillment?.sourceEvent
     }
 
+    func previousEvent(for scope: SemanticObservationScope) -> SettledSemanticObservationEvent? {
+        currentFulfillment?.eventsByFulfilledScope[scope] ?? currentFulfillment?.sourceEvent
+    }
+
     var latestSettledObservationInvalidated: Bool {
         switch state {
         case .empty, .invalidated:
@@ -211,6 +215,7 @@ private struct SemanticObservationFulfillmentState {
     @MainActor
     mutating func publish(
         sourceScope: SemanticObservationScope,
+        sourceClassification: ScreenClassifier.Classification,
         sequence: SettledObservationSequence,
         generation: ObservationGeneration,
         notificationBatch: AccessibilityNotificationBatch,
@@ -222,19 +227,12 @@ private struct SemanticObservationFulfillmentState {
         let pendingAccessibilityNotifications = notificationBatch.events
         let notificationKinds = pendingAccessibilityNotifications.map(\.kind)
         let previousEvents = currentFulfillment?.eventsByFulfilledScope ?? [:]
-        let sourcePreviousEvent = previousEvents[sourceScope] ?? currentFulfillment?.sourceEvent
+        let sourcePreviousEvent = previousEvent(for: sourceScope)
         let sourceObservation = SettledSemanticObservation(
             sequence: sequence,
             scope: sourceScope,
             screen: screen.semanticObservationProjection(for: sourceScope),
             tripwireSignal: tripwireSignal
-        )
-        let sourceClassification = ScreenClassifier.classify(
-            before: sourcePreviousEvent.map {
-                ScreenClassifier.snapshot(of: $0.observation.screen.tree)
-            },
-            after: ScreenClassifier.snapshot(of: sourceObservation.screen.tree),
-            notifications: notificationKinds
         )
         let startsNewGeneration = sourceClassification.isScreenReplacement
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
@@ -258,7 +256,8 @@ private struct SemanticObservationFulfillmentState {
                         ScreenClassifier.snapshot(of: $0.observation.screen.tree)
                     },
                     after: ScreenClassifier.snapshot(of: observation.screen.tree),
-                    notifications: notificationKinds
+                    notifications: notificationKinds,
+                    notificationGap: notificationBatch.gap
                 )
             let fallbackReason = classification.fallbackReason
             if let fallbackReason {
@@ -641,16 +640,29 @@ final class SemanticObservationStream {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
+        let resolvedNotificationBatch = notificationBatch ?? stash.accessibilityNotifications.checkpoint()
+        let candidateScreen = proof.screen.semanticObservationProjection(for: scope)
+        let sourceClassification = ScreenClassifier.classify(
+            before: fulfillmentState.previousEvent(for: scope).map {
+                ScreenClassifier.snapshot(
+                    of: $0.observation.screen.semanticObservationProjection(for: scope).tree
+                )
+            },
+            after: ScreenClassifier.snapshot(of: candidateScreen.tree),
+            notifications: resolvedNotificationBatch.events.map(\.kind),
+            notificationGap: resolvedNotificationBatch.gap
+        )
         switch scope {
         case .visible:
-            stash.commitVisibleInterface(proof.screen)
+            stash.commitVisibleInterface(proof.screen, classification: sourceClassification)
         case .discovery:
             stash.commitDiscoveryInterface(proof.screen)
         }
         return publishCurrentSettledObservation(
             scope: scope,
             stash: stash,
-            notificationBatch: notificationBatch ?? stash.accessibilityNotifications.checkpoint(),
+            notificationBatch: resolvedNotificationBatch,
+            sourceClassification: sourceClassification,
             notificationIdentityScreen: notificationIdentityScreen
         )
     }
@@ -774,6 +786,7 @@ final class SemanticObservationStream {
         scope: SemanticObservationScope = .visible,
         stash: TheStash,
         notificationBatch: AccessibilityNotificationBatch,
+        sourceClassification: ScreenClassifier.Classification,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
@@ -785,6 +798,7 @@ final class SemanticObservationStream {
         }
         let publication = fulfillmentState.publish(
             sourceScope: scope,
+            sourceClassification: sourceClassification,
             sequence: settledSequence,
             generation: observationGeneration,
             notificationBatch: notificationBatch,

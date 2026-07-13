@@ -1644,10 +1644,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard case .incomplete = window.completeness else {
             return XCTFail("Expected generation reset to make the window incomplete")
         }
-        XCTAssertTrue(window.trace.changeFacts.contains {
-            if case .screenChanged = $0 { return true }
-            return false
-        })
+        XCTAssertTrue(window.trace.changeFacts.isEmpty)
 
         let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
         let predicateResult = PredicateObservationEvidence(
@@ -1757,6 +1754,42 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(after.generation, before.generation)
         XCTAssertNil(after.trace.captures.last?.transition.fallbackReason)
         XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged])
+    }
+
+    func testNotificationGapFallsBackToSnapshotClassification() throws {
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Menu", .header, "menu_header")])
+        )
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(
+                kind: .elementChanged(.layout),
+                gap: AccessibilityNotificationGap(droppedThroughSequence: 1)
+            )
+        )
+
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+    }
+
+    func testScreenChangedReplacesDiscoveryOnlyTargetableTruthBeforePublication() {
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("Old offscreen row", .staticText, "old_offscreen_row"),
+            ])
+        )
+
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("New visible row", .staticText, "new_visible_row"),
+            ]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
+
+        XCTAssertNil(brains.stash.interfaceTree.elements["old_offscreen_row"])
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["new_visible_row"])
     }
 
     func testUnknownNotificationRequiresExplicitSnapshotFallbackForScreenChange() throws {
@@ -2355,7 +2388,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.installScreenForTesting(makeScreen(elements: elements))
     }
 
-    private func notificationBatch(kind: AccessibilityNotificationKind) -> AccessibilityNotificationBatch {
+    private func notificationBatch(
+        kind: AccessibilityNotificationKind,
+        gap: AccessibilityNotificationGap? = nil
+    ) -> AccessibilityNotificationBatch {
         AccessibilityNotificationBatch(
             events: [PendingAccessibilityNotificationEvent(
                 sequence: 1,
@@ -2366,7 +2402,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             )],
             through: AccessibilityNotificationCursor(sequence: 1),
             scopedScreenChangedThrough: kind == .screenChanged ? 1 : 0,
-            gap: nil
+            gap: gap
         )
     }
 

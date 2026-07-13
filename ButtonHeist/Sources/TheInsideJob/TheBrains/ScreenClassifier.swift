@@ -103,7 +103,8 @@ import AccessibilitySnapshotParser
     static func classify(
         before: Snapshot?,
         after: Snapshot,
-        notifications: [AccessibilityNotificationKind]
+        notifications: [AccessibilityNotificationKind],
+        notificationGap: AccessibilityNotificationGap? = nil
     ) -> Classification {
         if notifications.contains(where: {
             if case .screenChanged = $0 { return true }
@@ -111,7 +112,7 @@ import AccessibilitySnapshotParser
         }) {
             return .screenChangedNotification
         }
-        if notifications.contains(where: {
+        if notificationGap == nil, notifications.contains(where: {
             switch $0 {
             case .elementChanged, .announcement:
                 true

@@ -33,6 +33,21 @@ final class ScreenClassifierTests: XCTestCase {
         }
     }
 
+    func testNotificationGapDisablesSameScreenSuppression() {
+        let before = screen(elements: [element(label: "Home", traits: .header)])
+        let after = screen(elements: [element(label: "Settings", traits: .header)])
+
+        XCTAssertEqual(
+            ScreenClassifier.classify(
+                before: ScreenClassifier.snapshot(of: before.tree),
+                after: ScreenClassifier.snapshot(of: after.tree),
+                notifications: [.elementChanged(.layout)],
+                notificationGap: AccessibilityNotificationGap(droppedThroughSequence: 1)
+            ),
+            .inferredScreenChange(reason: .primaryHeaderChanged)
+        )
+    }
+
     func testUnknownNotificationAllowsLabeledSnapshotFallback() {
         let before = screen(elements: [element(label: "Home", traits: .header)])
         let after = screen(elements: [element(label: "Settings", traits: .header)])

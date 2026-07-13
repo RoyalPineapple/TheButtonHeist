@@ -75,13 +75,22 @@ extension TheStash {
     }
 
     @discardableResult
-    func commitVisibleInterface(_ screen: InterfaceObservation) -> InterfaceObservation {
+    func commitVisibleInterface(
+        _ screen: InterfaceObservation,
+        classification: ScreenClassifier.Classification
+    ) -> InterfaceObservation {
+        let committedScreen = replacementObservation(
+            from: screen,
+            classification: classification
+        )
         if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
-           queuedVisibleRefresh.interfaceHash != screen.interfaceHash {
+           queuedVisibleRefresh.interfaceHash != committedScreen.interfaceHash {
             nextVisibleRefreshScreenForTesting = nil
         }
-        interfaceTree = interfaceTree.updatingViewport(with: screen)
-        return finishCommit(observation: screen)
+        interfaceTree = classification.isScreenReplacement
+            ? committedScreen.tree
+            : interfaceTree.updatingViewport(with: committedScreen)
+        return finishCommit(observation: committedScreen)
     }
 
     @discardableResult
@@ -212,6 +221,23 @@ extension TheStash {
 
     private func recordParsedObservedEvidence(from screen: InterfaceObservation) {
         latestObservation = screen
+    }
+
+    private func replacementObservation(
+        from screen: InterfaceObservation,
+        classification: ScreenClassifier.Classification
+    ) -> InterfaceObservation {
+        switch classification {
+        case .inferredScreenChange(.navigationMarkerChanged),
+             .inferredScreenChange(.modalBoundaryChanged):
+            return screen.removingElements(withIds: interfaceTree.viewportElementIDs)
+        case .sameGeneration,
+             .screenChangedNotification,
+             .inferredScreenChange(.selectedTabChanged),
+             .inferredScreenChange(.primaryHeaderChanged),
+             .inferredScreenChange(.rootShapeChanged):
+            return screen
+        }
     }
 
     private var currentInterfaceObservation: InterfaceObservation {
