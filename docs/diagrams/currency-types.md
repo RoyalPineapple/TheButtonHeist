@@ -13,13 +13,15 @@ flowchart TD
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
         TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>value-only viewport capture"]
         STASH["TheStash<br/>interfaceTree (targetable truth)<br/>latestObservation (live evidence)<br/>diagnosticObservation (optional)"]
+        PIN["CommittedElementTarget<br/>source target + exact HeistId<br/>+ graph-derived deadline"]
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
         WALK --> AXE
         AXE --> OBS
         OBS -- "proof-backed commit / merge" --> TREE
         OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
         TREE --> STASH
-        STASH --> LIVET
+        STASH --> PIN
+        PIN --> LIVET
     end
 
     subgraph wireTypes["Wire types (Codable)"]
@@ -44,8 +46,16 @@ Notes:
 - The settled `InterfaceTree` is the sole current semantic truth. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
 - `InterfaceObservation` pairs an interface tree with one viewport's disposable `LiveCapture`. Live references are replaced on every parse and never unioned across exploration pages.
 - `TheStash` owns one `interfaceTree`, one `latestObservation`, and optional failed-settle diagnostic evidence. There is no parallel world store or live lookup.
+- Element inflation resolves an `AccessibilityTarget` once, then carries a
+  `CommittedElementTarget` with the exact capture-local `HeistId` and one
+  graph-derived deadline. Refresh and dispatch use that id; they do not choose a
+  new element by rerunning the public selector.
 - Targets flow the other way: `AccessibilityTarget` (ThePlans, Codable) refers
   to an element, container, scoped descendant, or target reference. Actions,
   predicates, and subtree queries pass the same value. Container identifiers
   match every delivered parser container type that carries them.
 - Capture-local `HeistId` values are assigned by `TheStash.IdAssignment`: a stable developer `identifier` wins when present; otherwise `synthesizeBaseId` derives an id from the element's label and highest-priority trait (`AccessibilityPolicy.synthesisPriority`), with `_1`, `_2` suffixes for duplicates in traversal order. They correlate committed nodes with live evidence inside TheInsideJob and do not cross the public transport as selectors.
+- First-responder identity uses the same currency: the capture stores one
+  `HeistId`, trace context may project it to an `AccessibilityTarget`, and a
+  first-responder action verifies that the current and inflated ids still equal
+  the captured id.

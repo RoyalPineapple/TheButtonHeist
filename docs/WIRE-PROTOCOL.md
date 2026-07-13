@@ -42,7 +42,9 @@ Side-effecting app interactions are not raw command dictionaries on the wire.
 Durable mutations such as `activate`, `type_text`, `wait`, and `set_pasteboard`
 cross as one-step or composed `heistPlan` messages. Non-durable viewport/debug
 commands cross as typed `runtimeAction` messages. In both cases, Fence admission
-has already converted the public command envelope into typed runtime values.
+has already parsed the canonical name into `TheFence.Command`, validated the
+descriptor-owned parameter schema, and converted `FenceCommandInput` into the
+typed `FenceOperationRequest` consumed by execution.
 
 ## Transport
 
@@ -167,7 +169,7 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
-### Unsupported Legacy Auth Messages
+### Rejected Auth Tags
 
 `authApprovalPending` and `authApproved` are not valid current server messages.
 Current clients reject either tag as an unsupported auth response and instruct the
@@ -308,9 +310,12 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
 ```
 
 Semantic action steps identify elements semantically. The host resolves the
-target against current state, moves the viewport if needed, refreshes, acquires
-fresh live geometry, and then dispatches through the heist runtime. Cached
-coordinates from a prior capture are not the authority.
+target against settled state once, pins the resolved capture-local `HeistId`,
+and derives one deadline from its scroll-membership ancestor graph. Nested
+ancestors reveal outermost-first. Refresh, geometry stabilization, and dispatch
+must continue to resolve that exact id; a different element that matches the
+original selector cannot take over the action. Cached coordinates from a prior
+capture are not the authority.
 
 Explicit viewport commands such as `scroll`, `scroll_to_edge`, and
 `scroll_to_visible` remain public Fence commands because moving the viewport is
@@ -336,9 +341,8 @@ media only through explicit, size-bounded opt-ins.
 The host evaluates current-tree predicates against the current delivered
 interface first, then extends one observation window until the predicate is met
 or the timeout expires. `exists` and `missing` read current state. Lifecycle
-assertions require observed facts; they never pass from an implied final state
-or a warning fallback. The response is a heist execution receipt, even for a
-single wait.
+assertions require observed facts and never pass from an implied final state.
+The response is a heist execution receipt, even for a single wait.
 
 To assert current settled container presence without requiring a transition,
 put the container in the canonical target slot:
@@ -355,7 +359,7 @@ The strict predicate wire grammar is:
 
 `screen` assertions accept `exists` and `missing`; `elements` assertions also
 accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
-`screenChanged`, alternate spellings, and flat target wrappers are invalid.
+`screenChanged`, and flat target wrappers are invalid.
 
 Raw heist receipt steps use one tagged `outcome`; status-specific evidence,
 failure, abort path, and children live inside that case:
@@ -364,8 +368,10 @@ failure, abort path, and children live inside that case:
 {"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}},"children":[]}}
 ```
 
-The former top-level `status` / `evidence` / `failure` / `children` step bag is
-invalid input, not a compatibility shape.
+`status`, `evidence`, `failure`, and `children` are outcome-owned and are invalid
+as top-level step fields. Swift constructors pair each
+`HeistStepReceiptKind<Evidence>` with its matching evidence type before creating
+the tagged outcome.
 
 ## Action Results
 
@@ -379,8 +385,9 @@ Action evidence is required and bound to the result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
 `{"kind":"settled|timedOut","durationMs":...}`.
-The former `trace` plus `settlement` shape is invalid rather than decoded as an
-alias.
+The `trace` case cannot include `settlement`.
+`settledTrace` with `timedOut` may carry receipt-local diagnostic captures, but
+those captures are not admitted to settled semantic state.
 Captured announcements derive from the trace; standalone announcements use the
 `announcement` case. Settlement duration does not also appear in stored timing.
 Warnings are valid only in successful evidence and are not duplicated on a
@@ -407,9 +414,12 @@ an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md)
 
 ## Traces, Facts, and Public Deltas
 
-`AccessibilityTrace` stores ordered settled captures. The runtime derives one
-ordered `ChangeFact` stream from adjacent capture edges. Predicate evaluation,
-diagnostics, and repair analysis consume that stream directly; no separate
+`AccessibilityTrace` stores ordered capture evidence. Proof-backed captures in
+the semantic stream are settled temporal truth, and the runtime derives one
+ordered `ChangeFact` stream from their adjacent edges. A timed-out action may
+return a diagnostic trace in its receipt, but that trace is not committed or
+usable as a settled observation baseline. Predicate evaluation, diagnostics,
+and repair analysis consume the applicable fact stream directly; no separate
 stored or endpoint temporal model exists.
 
 Only proof-backed observations become committed captures in the settled
@@ -434,11 +444,12 @@ UIKit does not guarantee delivery of a useful notification for every change;
 absence permits explicit snapshot classification but is not itself evidence of
 either replacement or stability.
 
-One action contributes one captured notification batch. Its retained events
-are strictly after the action window's opening cursor and no later than the
-batch's exact through-cursor. That through-cursor becomes the observation's
-notification cursor. If the bounded notification stream discarded relevant
-events, the destination capture carries
+A clean post-action commit contributes one captured notification batch. Its
+retained events are strictly after the action window's opening cursor and no
+later than the batch's exact through-cursor. That through-cursor becomes the
+observation's notification cursor. A failed settle cancels the window and does
+not attach its events to settled trace evidence. If the bounded notification
+stream discarded relevant events, the destination capture carries
 `transition.accessibilityNotificationGap.droppedThroughSequence`; a gapped edge
 does not claim complete notification evidence. A scoped `screenChanged` after
 batch capture is outside that cursor and still invalidates the committed
@@ -454,7 +465,9 @@ payload.
 First-responder state is captured internally as a capture-local `HeistId` and
 retained in the value-only capture snapshot, never as a UIKit object identity.
 When trace context exposes `firstResponder`, the host projects that captured id
-once to an `AccessibilityTarget`; internal ids do not cross the wire.
+once to an `AccessibilityTarget`; internal ids do not cross the wire. A
+first-responder action pins the captured id and fails if inflation finishes on a
+different id or the current first responder changed during inflation.
 
 Observed notification evidence and inferred screen classification occupy
 different transition fields. `transition.accessibilityNotifications` retains
@@ -462,10 +475,12 @@ the notification records. `transition.fallbackReason` separately retains the
 typed reason inferred by `ScreenClassifier` from settled snapshots.
 `ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative;
 `elementChanged` and `announcement` suppress replacement inference; and only an
-empty or unknown batch permits snapshot fallback. Every inferred replacement
-records its typed fallback reason. Parsed screen IDs, first-responder state,
-geometry, and observation-generation counters never classify a screen boundary
-on their own.
+empty or unknown batch permits snapshot inference. Every inferred replacement
+records one of `modalBoundaryChanged`, `selectedTabChanged`,
+`navigationMarkerChanged`, `primaryHeaderChanged`, or `rootShapeChanged` in
+`transition.fallbackReason`. Parsed screen IDs, first-responder state, geometry,
+and observation-generation counters never classify a screen boundary on their
+own.
 
 For UIKit value controls, both `elementChanged` subtypes and `announcement` are
 recapture triggers. The notification kind does not assert the new value;
