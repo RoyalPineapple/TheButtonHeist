@@ -18,12 +18,26 @@ extension TheFence {
     ) -> HeistJUnitReport {
         let projection = HeistReportProjection(result: result, accessibilityTrace: nil, profile: .junit)
         let steps = junitSteps(projection: projection)
-        return HeistJUnitReport(
+        let app = handoff.serverInfo?.bundleIdentifier ?? "unknown"
+        guard let failedStepPath = projection.failedStepPath else {
+            return .passed(
+                heistName: heistName,
+                app: app,
+                receiptNodeCount: steps.count,
+                totalTimeSeconds: totalTimeSeconds,
+                steps: steps
+            )
+        }
+        guard let failedStepIndex = projection.outputNodes.firstIndex(where: { $0.path == failedStepPath }) else {
+            preconditionFailure("Canonical failed JUnit step path was absent from report projection")
+        }
+        return .failed(
             heistName: heistName,
-            app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
+            app: app,
             receiptNodeCount: steps.count,
             totalTimeSeconds: totalTimeSeconds,
-            steps: steps
+            steps: steps,
+            failedStepIndex: failedStepIndex
         )
     }
 
