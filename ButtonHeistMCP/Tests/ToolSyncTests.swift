@@ -5,6 +5,25 @@ import Foundation
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {
+    @Test("Public CLI/MCP command contract matches the committed descriptor snapshot")
+    func publicCommandContractMatchesCommittedDescriptorSnapshot() throws {
+        let actual = try PublicCommandContractFixture.renderedData()
+        try PublicCommandContractFixture.updateIfRequested(with: actual)
+        let fixtureURL = PublicCommandContractFixture.fileURL
+        let expected = try #require(
+            try? Data(contentsOf: fixtureURL),
+            "Missing generated contract fixture. Run: \(PublicCommandContractFixture.updateCommand)"
+        )
+
+        #expect(
+            actual == expected,
+            """
+            Public CLI/MCP command contract drifted from \(fixtureURL.path).
+            Review the typed descriptor change, then run: \(PublicCommandContractFixture.updateCommand)
+            """
+        )
+    }
+
     @Test("Tool input schemas satisfy canonical schema lint in memory")
     func toolInputSchemasSatisfyCanonicalSchemaLintInMemory() {
         let violations = ToolSchemaLint.violations(in: ToolDefinitions.all)
