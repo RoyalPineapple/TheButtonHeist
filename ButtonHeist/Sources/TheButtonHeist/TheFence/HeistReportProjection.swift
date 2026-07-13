@@ -127,6 +127,7 @@ struct HeistReportNodeProjection: Sendable {
     var abortedAtChildPath: String? { step.abortedAtChildPath }
     var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
     var actionErrorKind: ErrorKind? { results.actionErrorKind }
+    var activationTrace: ActivationTrace? { results.actionResult?.activationTrace }
     var traceDelta: DeltaProjection? {
         evidence?.traceDelta
     }

@@ -547,8 +547,7 @@ extension TheBrains {
             category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
-            expected: command.reportTarget.map(String.init(describing:)),
-            activationTrace: command.wireType == .activate ? result.activationTrace : nil
+            expected: command.reportTarget.map(String.init(describing:))
         )
     }
 

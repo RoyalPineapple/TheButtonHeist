@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 /// One warning emitted by a `Warn(...)` heist step.
 public struct HeistExecutionWarning: Codable, Sendable, Equatable {
@@ -19,7 +20,6 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
     public let contract: String
     public let observed: String
     public let expected: String?
-    public let activationTrace: ActivationTrace?
 
     public init(
         category: HeistFailureCategory,
@@ -27,27 +27,34 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
         observed: String,
         expected: String? = nil
     ) {
-        self.init(
-            category: category,
-            contract: contract,
-            observed: observed,
-            expected: expected,
-            activationTrace: nil
-        )
-    }
-
-    public init(
-        category: HeistFailureCategory,
-        contract: String,
-        observed: String,
-        expected: String? = nil,
-        activationTrace: ActivationTrace?
-    ) {
         self.category = category
         self.contract = contract
         self.observed = observed
         self.expected = expected
-        self.activationTrace = activationTrace
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case category
+        case contract
+        case observed
+        case expected
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist failure detail")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        category = try container.decode(HeistFailureCategory.self, forKey: .category)
+        contract = try container.decode(String.self, forKey: .contract)
+        observed = try container.decode(String.self, forKey: .observed)
+        expected = try container.decodeIfPresent(String.self, forKey: .expected)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(category, forKey: .category)
+        try container.encode(contract, forKey: .contract)
+        try container.encode(observed, forKey: .observed)
+        try container.encodeIfPresent(expected, forKey: .expected)
     }
 }
 

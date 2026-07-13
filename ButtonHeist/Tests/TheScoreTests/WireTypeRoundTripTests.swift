@@ -950,7 +950,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
-    func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
+    func testHeistExecutionResultRoundTripKeepsActivationTraceOnlyInActionEvidence() throws {
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Save")))
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -961,8 +961,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             category: .targetResolution,
             contract: "action dispatch succeeds",
             observed: "No element matching label \"Save\"",
-            expected: "predicate(label=\"Save\")",
-            activationTrace: activationTrace
+            expected: "predicate(label=\"Save\")"
         )
         let result = HeistExecutionResult.failed(
             steps: [
@@ -1007,19 +1006,36 @@ final class WireTypeRoundTripTests: XCTestCase {
             decoded.steps[0].actionEvidence?.dispatchResult?.message,
             "No element matching label \"Save\""
         )
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
         XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
-        XCTAssertEqual(decoded.steps[0].failure?.activationTrace, activationTrace)
 
         let payload = try JSONProbe(data: data)
         let step = try payload.array("steps")[0]
         let intent = try step.object("intent")
-        let failureTrace = try step.object("outcome").object("failure").object("activationTrace")
+        let failure = try step.object("outcome").object("failure")
         XCTAssertEqual(try intent.string("type"), "action")
         XCTAssertEqual(try intent.object("command").string("type"), "activate")
         try intent.assertMissing("target")
-        XCTAssertEqual(try failureTrace.bool("axActivateReturned"), false)
-        XCTAssertEqual(try failureTrace.bool("tapActivationDispatched"), true)
-        XCTAssertEqual(try failureTrace.bool("tapActivationSucceeded"), true)
+        try failure.assertMissing("activationTrace")
+    }
+
+    func testHeistFailureDetailRejectsRetiredActivationTraceField() throws {
+        let json = #"""
+        {
+            "category":"action",
+            "contract":"action dispatch succeeds",
+            "observed":"activation failed",
+            "activationTrace":{
+                "axActivateReturned":true,
+                "tapActivationDispatched":false,
+                "tapActivationSucceeded":false
+            }
+        }
+        """#
+
+        XCTAssertThrowsError(try decoder.decode(HeistFailureDetail.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: [#"Unknown heist failure detail field "activationTrace""#])
+        }
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {

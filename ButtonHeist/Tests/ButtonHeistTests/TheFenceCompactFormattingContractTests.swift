@@ -716,7 +716,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
     }
 
-    func testFailedHeistActionFailureDetailReportsActivationTrace() throws {
+    func testFailedHeistActionReportsCanonicalActionResultActivationTrace() throws {
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
@@ -742,8 +742,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         failure: HeistFailureDetail(
                             category: .action,
                             contract: "action dispatch succeeds",
-                            observed: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
-                            activationTrace: activationTrace
+                            observed: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false"
                         )
                     ),
                 ],

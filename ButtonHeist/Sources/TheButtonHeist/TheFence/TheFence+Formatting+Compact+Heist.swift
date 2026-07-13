@@ -25,7 +25,7 @@ extension FenceResponse {
             if let failureMessage = step.failureMessage {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta, step: step)
-                if let activationTrace = step.failure?.detail.activationTrace {
+                if let activationTrace = step.activationTrace {
                     detailLines.append("    activation: \(Self.compactActivationTrace(activationTrace))")
                 }
             } else if step.status == .skipped {

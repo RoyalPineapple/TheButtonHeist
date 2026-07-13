@@ -432,7 +432,9 @@ struct PublicHeistReportNode: Encodable {
         self.durationMs = projection.durationMs
         self.intent = projection.intent
         self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
-        self.failure = projection.failure.map { PublicHeistFailureDetail(projection: $0) }
+        self.failure = projection.failure.map {
+            PublicHeistFailureDetail(projection: $0, activationTrace: projection.activationTrace)
+        }
         self.abortedAtChildPath = projection.abortedAtChildPath
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
         self.children = projection.children.map { PublicHeistReportNode(projection: $0) }
@@ -451,12 +453,12 @@ struct PublicHeistFailureDetail: Encodable {
     let retryable: Bool
     let hint: String?
 
-    init(projection: HeistReportFailureProjection) {
+    init(projection: HeistReportFailureProjection, activationTrace: ActivationTrace?) {
         category = projection.detail.category
         contract = projection.detail.contract
         observed = projection.detail.observed
         expected = projection.detail.expected
-        activationTrace = projection.detail.activationTrace
+        self.activationTrace = activationTrace
         code = projection.diagnosticFailure.code
         kind = projection.diagnosticFailure.kind.rawValue
         phase = projection.diagnosticFailure.phase.rawValue

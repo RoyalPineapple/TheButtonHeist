@@ -735,7 +735,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
     }
 
-    func testFailedActivateHeistActionCopiesActivationTraceToFailureDetail() async throws {
+    func testFailedActivateHeistActionKeepsActivationTraceInActionEvidence() async throws {
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
@@ -764,7 +764,6 @@ final class TheBrainsActionTests: XCTestCase {
         }
         let step = try XCTUnwrap(heist.steps.first)
         XCTAssertEqual(step.actionEvidence?.dispatchResult?.activationTrace, activationTrace)
-        XCTAssertEqual(step.failure?.activationTrace, activationTrace)
     }
 
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
