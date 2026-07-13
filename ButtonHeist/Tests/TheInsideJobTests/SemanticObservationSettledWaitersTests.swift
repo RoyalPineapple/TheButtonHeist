@@ -20,8 +20,9 @@ final class SemanticObservationSettledWaitersTests: XCTestCase {
 
     func testCancelAllCannotDeliverObservation() async {
         let waiters = SemanticObservationSettledWaiters()
-        let waiter = waitingTask(in: waiters, scope: .visible)
-        await waitForRegistration(in: waiters)
+        let registered = expectation(description: "Waiter registered")
+        let waiter = waitingTask(in: waiters, scope: .visible, registered: registered)
+        await fulfillment(of: [registered], timeout: 1.0)
 
         waiters.cancelAll()
 
@@ -30,41 +31,43 @@ final class SemanticObservationSettledWaitersTests: XCTestCase {
         XCTAssertEqual(waiters.count, 0)
     }
 
-    func testPublicationRejectsEventWhoseScopeDoesNotMatchDictionaryKey() async {
+    func testPublicationCompletesOnlyWaitersForEventScope() async {
         let visibleEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Visible", heistId: "visible")
         )
         let waiters = SemanticObservationSettledWaiters()
-        let waiter = waitingTask(in: waiters, scope: .discovery)
-        await waitForRegistration(in: waiters)
+        let visibleRegistered = expectation(description: "Visible waiter registered")
+        let discoveryRegistered = expectation(description: "Discovery waiter registered")
+        let visibleWaiter = waitingTask(in: waiters, scope: .visible, registered: visibleRegistered)
+        let discoveryWaiter = waitingTask(in: waiters, scope: .discovery, registered: discoveryRegistered)
+        await fulfillment(of: [visibleRegistered, discoveryRegistered], timeout: 1.0)
 
-        waiters.completeWaiters(with: [.discovery: visibleEvent])
+        waiters.completeWaiters(with: [visibleEvent])
 
+        let visibleResult = await visibleWaiter.value
+        XCTAssertEqual(visibleResult?.scope, .visible)
         XCTAssertEqual(waiters.count, 1)
         waiters.cancelAll()
-        let result = await waiter.value
-        XCTAssertNil(result)
+        let discoveryResult = await discoveryWaiter.value
+        XCTAssertNil(discoveryResult)
     }
 
     private func waitingTask(
         in waiters: SemanticObservationSettledWaiters,
-        scope: SemanticObservationScope
+        scope: SemanticObservationScope,
+        registered: XCTestExpectation
     ) -> Task<SettledSemanticObservationEvent?, Never> {
         Task { @MainActor in
             await waiters.wait(
                 scope: scope,
                 afterSequence: nil,
                 timeout: nil,
+                onRegistered: {
+                    registered.fulfill()
+                },
                 currentEvent: { nil }
             )
         }
-    }
-
-    private func waitForRegistration(in waiters: SemanticObservationSettledWaiters) async {
-        for _ in 0..<20 where waiters.count == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(waiters.count, 1)
     }
 
     private func observation(label: String, heistId: HeistId) -> InterfaceObservation {

@@ -24,6 +24,7 @@ final class SemanticObservationSettledWaiters {
         scope: SemanticObservationScope,
         afterSequence: SettledObservationSequence?,
         timeout: Double?,
+        onRegistered: @MainActor () -> Void = {},
         currentEvent: @MainActor () -> SettledSemanticObservationEvent?
     ) async -> SettledSemanticObservationEvent? {
         let key = reserveWaiterKey(scope: scope, afterSequence: afterSequence)
@@ -33,6 +34,7 @@ final class SemanticObservationSettledWaiters {
             cancellationValue: nil,
             onRegistered: { oneShot in
                 waiters.insert(oneShot, for: key)
+                onRegistered()
                 if let event = currentEvent(), canFulfill(key, with: event) {
                     complete(key, returning: event)
                 }
@@ -54,13 +56,14 @@ final class SemanticObservationSettledWaiters {
         }
     }
 
-    func completeWaiters(with eventsByFulfilledScope: [SemanticObservationScope: SettledSemanticObservationEvent]) {
-        let completed = waiters.removeAll { key in
-            guard let event = eventsByFulfilledScope[key.scope] else { return false }
-            return canFulfill(key, with: event)
-        }
-        for removal in completed {
-            removal.waiter.resolve(returning: eventsByFulfilledScope[removal.key.scope])
+    func completeWaiters(with events: [SettledSemanticObservationEvent]) {
+        for event in events {
+            let completed = waiters.removeAll { key in
+                canFulfill(key, with: event)
+            }
+            for removal in completed {
+                removal.waiter.resolve(returning: event)
+            }
         }
     }
 

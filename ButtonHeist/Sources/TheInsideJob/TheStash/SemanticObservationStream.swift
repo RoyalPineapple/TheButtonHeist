@@ -814,7 +814,7 @@ final class SemanticObservationStream {
         lastCommittedNotificationCursor = notificationBatch.through
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
-        settledWaiters.completeWaiters(with: publication.events)
+        settledWaiters.completeWaiters(with: Array(publication.events.values))
         return sourceEvent
     }
 
