@@ -77,27 +77,58 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
-    @Test func `summary excludes only exact flattened failure hook paths from top level count`() {
-        let result = HeistExecutionResult.passed(
+    @Test func `summary treats paths as opaque when excluding trailing failure evidence`() {
+        let ordinaryResult = HeistExecutionResult.passed(
             steps: [
-                .passed(path: "$.body[0]", kind: .wait, durationMs: 1),
-                .passed(path: "$.body[0].failure.actions[0]", kind: .action, durationMs: 1),
-                .passed(path: "$.body[0].failure.actions[1]", kind: .action, durationMs: 1),
-                .passed(path: "$.body[1].failure.actions[x]", kind: .action, durationMs: 1),
-                .passed(path: "$.body[2].failure.actions[1].body[0]", kind: .action, durationMs: 1),
-                .passed(path: "root.failure.actions[0]", kind: .action, durationMs: 1),
-                .passed(path: "$.body[3].failure.actions[0]", kind: .wait, durationMs: 1),
                 .passed(
-                    path: "$.body[4].conditional.cases[0].body[0].failure.actions[0]",
-                    kind: .action,
-                    durationMs: 1
+                    path: "$.body[0].failure.actions[0]",
+                    receiptKind: .action,
+                    durationMs: 1,
+                    intent: .action(command: .takeScreenshot),
+                    evidence: .dispatch(
+                        command: .takeScreenshot,
+                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
+                    )
                 ),
-                .skipped(path: "$.body[3]", kind: .action),
             ],
-            durationMs: 5
+            durationMs: 1
+        )
+        let failedResult = HeistExecutionResult.failed(
+            steps: [
+                .failed(
+                    path: "opaque-failure",
+                    kind: .fail,
+                    durationMs: 1,
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "Fail aborts execution",
+                        observed: "stop"
+                    )
+                ),
+                .passed(
+                    path: "opaque-supplemental-evidence",
+                    receiptKind: .action,
+                    durationMs: 1,
+                    intent: .action(command: .takeScreenshot),
+                    evidence: .dispatch(
+                        command: .takeScreenshot,
+                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
+                    )
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "opaque-failure"
         )
 
-        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 6)
+        #expect(ordinaryResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(ordinaryResult.evidenceRollup.failureScreenshotStep == nil)
+        #expect(failedResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(failedResult.evidenceRollup.summary.outputReceiptNodeCount == 2)
+        #expect(failedResult.evidenceRollup.failureScreenshotStep?.path == "opaque-supplemental-evidence")
+        #expect(
+            failedResult.failureScreenshotSummary
+                == "failure screenshot: unavailable receipt=opaque-supplemental-evidence"
+        )
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {

@@ -71,8 +71,8 @@ struct HeistReportProjection: Sendable {
         summary = HeistReportSummaryProjection(summary: reportSummary)
         metrics = HeistExecutionMetricProjection(rollup: rollup)
         failedStepPath = reportSummary.abortedAtPath
-        failureScreenshotSummary = result.failureScreenshotSummary
-        failureInterfaceDump = result.failureInterfaceDump(
+        failureScreenshotSummary = rollup.failureScreenshotSummary
+        failureInterfaceDump = rollup.failureInterfaceDump(
             elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = accessibilityTrace.flatMap {

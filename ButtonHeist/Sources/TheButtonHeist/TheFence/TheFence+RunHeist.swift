@@ -52,11 +52,12 @@ struct HeistRunProjection {
         // trace — a partial action trace would be misleading. Wait steps then
         // contribute their settled-state trace when available; `combinedTrace`
         // returns nil unless at least two distinct captures survive.
-        let actionResults = result.dispatchedActionResults
+        let actions = result.evidenceRollup.actions
+        let actionResults = actions.dispatchedResults
         guard !actionResults.isEmpty,
               actionResults.allSatisfy({ $0.accessibilityTrace != nil && $0.settled != false })
         else { return nil }
-        let traces = result.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
+        let traces = actions.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
         return AccessibilityTrace.combinedTrace(from: traces)
     }
 }

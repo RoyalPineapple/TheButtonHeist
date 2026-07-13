@@ -16,20 +16,34 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let warnings: [HeistExecutionWarning]
     package let metrics: HeistExecutionMetricProjection
     package let firstFailedStep: HeistExecutionStepResult?
+    package let failureScreenshotStep: HeistExecutionStepResult?
 
     package var outputReceiptNodes: [HeistExecutionStepResult] {
         nodes.map(\.step)
     }
 
     package init(result: HeistExecutionResult) {
-        self.init(steps: result.steps, durationMs: result.durationMs)
+        self.init(
+            steps: result.steps,
+            durationMs: result.durationMs,
+            failureScreenshotStep: result.trailingFailureScreenshotStep
+        )
     }
 
     package init(
         steps: [HeistExecutionStepResult],
         durationMs: Int = 0
     ) {
+        self.init(steps: steps, durationMs: durationMs, failureScreenshotStep: nil)
+    }
+
+    private init(
+        steps: [HeistExecutionStepResult],
+        durationMs: Int,
+        failureScreenshotStep: HeistExecutionStepResult?
+    ) {
         let rootNodes = steps.map(Self.node(from:))
+        let reportRootNodes = rootNodes.dropLast(failureScreenshotStep == nil ? 0 : 1)
         var accumulator = HeistExecutionEvidenceAccumulator(durationMs: durationMs)
         for node in rootNodes {
             accumulator.visit(node)
@@ -39,9 +53,7 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         nodes = accumulator.nodes
         events = accumulator.events
         summary = HeistExecutionEvidenceSummary(
-            executedTopLevelStepCount: rootNodes.count {
-                $0.isExecuted && HeistExecutionReceiptPlacement(step: $0.step) != .failureHookAction
-            },
+            executedTopLevelStepCount: reportRootNodes.count(where: \.isExecuted),
             executedNodeCount: accumulator.executedNodeCount,
             outputReceiptNodeCount: accumulator.nodes.count,
             abortedAtPath: accumulator.firstFailedStep?.path,
@@ -61,6 +73,7 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             ceilings: accumulator.metricBuilder.ceilings
         )
         firstFailedStep = accumulator.firstFailedStep
+        self.failureScreenshotStep = failureScreenshotStep
     }
 
     private static func node(from step: HeistExecutionStepResult) -> HeistExecutionEvidenceNode {
@@ -71,27 +84,15 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     }
 }
 
-private enum HeistExecutionReceiptPlacement: Equatable {
-    case ordinary
-    case failureHookAction
-
-    init(step: HeistExecutionStepResult) {
-        let bodyPrefix = "$.body["
-        let failureHookSuffix = ".failure.actions[0]"
-        guard step.kind == .action,
-              step.path.hasPrefix(bodyPrefix),
-              step.path.hasSuffix(failureHookSuffix),
-              let bodyClose = step.path.dropFirst(bodyPrefix.count).firstIndex(of: "]")
-        else {
-            self = .ordinary
-            return
-        }
-        let bodyOrdinal = step.path[
-            step.path.index(step.path.startIndex, offsetBy: bodyPrefix.count)..<bodyClose
-        ]
-        self = !bodyOrdinal.isEmpty && bodyOrdinal.utf8.allSatisfy { (48...57).contains($0) }
-            ? .failureHookAction
-            : .ordinary
+private extension HeistExecutionResult {
+    var trailingFailureScreenshotStep: HeistExecutionStepResult? {
+        guard case .failed(let outcome) = outcome,
+              let candidate = outcome.steps.last,
+              candidate.path != outcome.abortedAtPath,
+              case .action(let evidence)? = candidate.evidence,
+              case .dispatch(let command, let result) = evidence
+        else { return nil }
+        return command == .takeScreenshot && result.method == .takeScreenshot ? candidate : nil
     }
 }
 
