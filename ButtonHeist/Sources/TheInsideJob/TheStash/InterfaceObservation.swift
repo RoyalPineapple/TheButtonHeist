@@ -17,15 +17,11 @@ struct InterfaceCaptureToken: Equatable, Hashable, Sendable {
 /// One interface-tree state paired with the live UIKit evidence for its viewport.
 /// Exploration may merge tree facts, but live evidence always comes from the
 /// latest parser read and is never merged.
-struct InterfaceObservation: Equatable {
+struct InterfaceObservation {
 
     let tree: InterfaceTree
     let liveCapture: LiveCapture
     let captureToken: InterfaceCaptureToken
-
-    static func == (lhs: InterfaceObservation, rhs: InterfaceObservation) -> Bool {
-        lhs.tree == rhs.tree && lhs.liveCapture == rhs.liveCapture
-    }
 
     static var empty: InterfaceObservation {
         do {

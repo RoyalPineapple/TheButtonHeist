@@ -18,7 +18,7 @@ import AccessibilitySnapshotParser
 /// It carries weak UIKit refs, live geometry, and per-path lookups but is
 /// **never** unioned across exploration pages and must never be treated as
 /// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
-struct LiveCapture: Equatable {
+struct LiveCapture {
     let snapshot: Snapshot
     let dispatchReferences: DispatchReferences
     private let elementIndex: LiveElementIndex
@@ -64,7 +64,7 @@ struct LiveCapture: Equatable {
             guard let reference = dispatchReferences.elementRefs[heistId] else {
                 return heistId
             }
-            return reference.isCapturedObjectAvailable ? heistId : nil
+            return reference.object == nil ? nil : heistId
         }
     }
 
@@ -263,7 +263,7 @@ struct LiveCapture: Equatable {
     /// These are viewport-local weak refs. They are only accessed through the
     /// existing main-actor stash/live-lookup path and are intentionally absent
     /// from settled semantic storage.
-    struct DispatchReferences: Equatable {
+    struct DispatchReferences {
         let elementRefs: [HeistId: ElementRef]
         let containerRefsByPath: [TreePath: ContainerRef]
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
@@ -283,63 +283,22 @@ struct LiveCapture: Equatable {
         }
     }
 
-    struct ScrollableViewRef: Equatable {
+    struct ScrollableViewRef {
         weak var view: UIScrollView?
-        /// Viewport-local comparison evidence; never used as semantic identity.
-        private let capturedViewIdentifier: ObjectIdentifier?
-
-        init(view: UIScrollView?) {
-            self.view = view
-            capturedViewIdentifier = view.map(ObjectIdentifier.init)
-        }
-
-        static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
-            lhs.capturedViewIdentifier == rhs.capturedViewIdentifier
-        }
     }
 
-    struct ElementRef: Equatable {
+    struct ElementRef {
         /// Live UIKit object for action dispatch. Weak — nils on reuse.
         weak var object: NSObject?
         /// Nearest live scroll view for coordinate conversion.
         weak var scrollView: UIScrollView?
-        /// Viewport-local comparison evidence; never used for semantic lookup.
-        private let capturedObjectIdentifier: ObjectIdentifier?
-        private let capturedScrollViewIdentifier: ObjectIdentifier?
-
-        fileprivate var isCapturedObjectAvailable: Bool {
-            capturedObjectIdentifier == object.map(ObjectIdentifier.init)
-        }
-
-        init(object: NSObject?, scrollView: UIScrollView?) {
-            self.object = object
-            self.scrollView = scrollView
-            capturedObjectIdentifier = object.map(ObjectIdentifier.init)
-            capturedScrollViewIdentifier = scrollView.map(ObjectIdentifier.init)
-        }
-
-        static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
-            lhs.capturedObjectIdentifier == rhs.capturedObjectIdentifier
-                && lhs.capturedScrollViewIdentifier == rhs.capturedScrollViewIdentifier
-        }
     }
 
-    struct ContainerRef: Equatable {
+    struct ContainerRef {
         weak var object: NSObject?
-        /// Viewport-local comparison evidence; never used as semantic identity.
-        private let capturedObjectIdentifier: ObjectIdentifier?
-
-        init(object: NSObject?) {
-            self.object = object
-            capturedObjectIdentifier = object.map(ObjectIdentifier.init)
-        }
-
-        static func == (lhs: ContainerRef, rhs: ContainerRef) -> Bool {
-            lhs.capturedObjectIdentifier == rhs.capturedObjectIdentifier
-        }
     }
 
-    struct LiveElementEntry: Equatable {
+    struct LiveElementEntry {
         let path: TreePath
         let treeElement: InterfaceTree.Element
         let ref: ElementRef?
@@ -721,7 +680,7 @@ struct LiveCapture: Equatable {
 
     // MARK: - Live Element Index
 
-    struct LiveElementIndex: Equatable {
+    struct LiveElementIndex {
         private let entriesByPath: [TreePath: LiveElementEntry]
         private let pathsByHeistId: [HeistId: TreePath]
         private let orderedPaths: [TreePath]
