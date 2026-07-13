@@ -11,7 +11,6 @@ extension ElementInflation {
         treeElement: InterfaceTree.Element,
         didReveal: Bool,
         method: ActionMethod,
-        deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy,
         deadline: SemanticObservationDeadline
     ) async -> State {
@@ -19,29 +18,28 @@ extension ElementInflation {
             target: target,
             treeElement: treeElement,
             method: method,
-            deallocatedBoundary: deallocatedBoundary
+            deadline: deadline
         ) {
         case .success(let inflatedTarget):
             return await stateAfterResolvedFreshTarget(
                 inflatedTarget,
                 didReveal: didReveal,
-                activationPointPolicy: activationPointPolicy,
-                deadline: deadline
+                activationPointPolicy: activationPointPolicy
             )
         case .retry(let reason):
             if stash.refreshLiveCapture() != nil {
                 let refreshed = resolveCurrentLiveElementTarget(
                     treeElement: treeElement,
                     target: target,
-                    method: method
+                    method: method,
+                    deadline: deadline
                 )
                 switch refreshed {
                 case .success(let inflatedTarget):
                     return await stateAfterResolvedFreshTarget(
                         inflatedTarget,
                         didReveal: didReveal,
-                        activationPointPolicy: activationPointPolicy,
-                        deadline: deadline
+                        activationPointPolicy: activationPointPolicy
                     )
                 case .failure(let failure):
                     return .failed(failure)
@@ -60,8 +58,7 @@ extension ElementInflation {
                 return await stateAfterResolvedFreshTarget(
                     inflatedTarget,
                     didReveal: didReveal,
-                    activationPointPolicy: activationPointPolicy,
-                    deadline: deadline
+                    activationPointPolicy: activationPointPolicy
                 )
             case .failure(let failure):
                 return .failed(failure)
@@ -140,11 +137,10 @@ extension ElementInflation {
     internal func resolveCurrentLiveElementTarget(
         treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
-        method: ActionMethod
+        method: ActionMethod,
+        deadline: SemanticObservationDeadline
     ) -> FreshElementTargetResolution {
-        guard let committed = stash.interfaceElement(heistId: treeElement.heistId),
-              retainedInterfaceElement(committed, matches: target)
-        else {
+        guard let committed = stash.interfaceElement(heistId: treeElement.heistId) else {
             return .retry(.staleTarget)
         }
         switch stash.resolveLiveActionTarget(for: committed) {
@@ -152,7 +148,8 @@ extension ElementInflation {
             return .success(InflatedElementTarget(
                 target: target,
                 treeElement: committed,
-                liveTarget: liveTarget
+                liveTarget: liveTarget,
+                deadline: deadline
             ))
         case .objectUnavailable:
             return .retry(.objectDeallocated)
@@ -167,39 +164,17 @@ extension ElementInflation {
         }
     }
 
-    internal func retainedInterfaceElement(
-        _ treeElement: InterfaceTree.Element,
-        matches target: AccessibilityTarget
-    ) -> Bool {
-        switch target {
-        case .predicate(let template, _):
-            guard let predicate = try? template.resolve(in: .empty) else { return false }
-            return !ElementPredicateGraph<HeistId, InterfaceTree.Element>(
-                subjects: [treeElement],
-                identity: \.heistId
-            )
-            .resolve(predicate)
-            .isEmpty
-        case .within:
-            guard let resolved = stash.resolveVisibleTarget(target).resolved else { return false }
-            return resolved.heistId == treeElement.heistId
-                && resolved.path == treeElement.path
-        case .container, .ref:
-            return false
-        }
-    }
-
     private func resolveFreshElementTarget(
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        deallocatedBoundary: String
+        deadline: SemanticObservationDeadline
     ) -> FreshElementTargetResolution {
         resolveLiveElementTarget(
             target: target,
             treeElement: treeElement,
             method: method,
-            deallocatedBoundary: deallocatedBoundary
+            deadline: deadline
         )
     }
 
@@ -207,12 +182,13 @@ extension ElementInflation {
         target: AccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        deallocatedBoundary: String
+        deadline: SemanticObservationDeadline
     ) -> FreshElementTargetResolution {
         resolveCurrentLiveElementTarget(
             treeElement: treeElement,
             target: target,
-            method: method
+            method: method,
+            deadline: deadline
         )
     }
 }

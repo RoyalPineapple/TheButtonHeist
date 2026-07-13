@@ -32,6 +32,7 @@ extension ElementInflation {
             return .refreshing(
                 target: target,
                 treeElement: committed,
+                deadline: deadline,
                 didReveal: false
             )
         }
@@ -48,6 +49,7 @@ extension ElementInflation {
                 return .refreshing(
                     target: target,
                     treeElement: resolved,
+                    deadline: deadline,
                     didReveal: didReveal
                 )
             case .failure(let refreshFailure):
@@ -56,6 +58,7 @@ extension ElementInflation {
                 return .refreshing(
                     target: target,
                     treeElement: inflatedTarget.treeElement,
+                    deadline: deadline,
                     didReveal: false
                 )
             case .timedOut:
@@ -73,6 +76,7 @@ extension ElementInflation {
         return .refreshing(
             target: target,
             treeElement: treeElement,
+            deadline: deadline,
             didReveal: reveal.didReveal
         )
     }
@@ -112,7 +116,7 @@ extension ElementInflation {
             }
             sequence = event.sequence
 
-            switch targetRefreshResolution(mode: mode) {
+            switch targetRefreshResolution(mode: mode, deadline: deadline) {
             case .treeElement(let visible, let didReveal):
                 return .treeElement(visible, didReveal: didReveal)
             case .liveTarget(let inflatedTarget):
@@ -139,7 +143,8 @@ extension ElementInflation {
     }
 
     private func targetRefreshResolution(
-        mode: TargetRefreshMode
+        mode: TargetRefreshMode,
+        deadline: SemanticObservationDeadline
     ) -> TargetRefreshResolution {
         switch mode {
         case .revealPath(let treeElement):
@@ -152,7 +157,8 @@ extension ElementInflation {
             switch resolveCurrentLiveElementTarget(
                 treeElement: treeElement,
                 target: target,
-                method: method
+                method: method,
+                deadline: deadline
             ) {
             case .success(let inflatedTarget):
                 return .liveTarget(inflatedTarget)

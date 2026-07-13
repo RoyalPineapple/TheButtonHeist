@@ -104,8 +104,7 @@ extension Actions {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: target,
-            method: .syntheticSwipe,
-            deallocatedBoundary: "gesture action"
+            method: .syntheticSwipe
         ) {
         case .inflated(let target):
             inflatedTarget = target

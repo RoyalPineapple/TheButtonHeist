@@ -18,7 +18,6 @@ extension Actions {
         method: ActionMethod,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
-        deallocatedBoundary: String = "element action",
         preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.ActionDispatchOutcome
     ) async -> TheSafecracker.ActionDispatchOutcome {
@@ -30,7 +29,6 @@ extension Actions {
         let inflation = await navigation.elementInflation.inflate(
             for: target,
             method: method,
-            deallocatedBoundary: deallocatedBoundary,
             activationPointPolicy: activationPointPolicy
         )
         let targetResolutionMs = elapsedMilliseconds(since: resolutionStart)
@@ -101,8 +99,9 @@ extension Actions {
             await ActivationPolicy(
                 accessibilityActivate: accessibilityActions.activate,
                 refreshAndResolve: {
-                    switch await self.navigation.elementInflation.inflateAfterActivationRefresh(
-                        for: context.committedTarget
+                    switch await self.navigation.elementInflation.refreshCommittedTarget(
+                        context.committedTarget,
+                        method: .activate
                     ) {
                     case .inflated(let inflatedTarget):
                         return .resolved(
@@ -144,7 +143,6 @@ extension Actions {
         return await performElementAction(
             target: target,
             method: .increment,
-            deallocatedBoundary: "adjustable action",
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
@@ -169,7 +167,6 @@ extension Actions {
         return await performElementAction(
             target: target,
             method: .decrement,
-            deallocatedBoundary: "adjustable action",
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
@@ -195,8 +192,7 @@ extension Actions {
     ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
             target: target.target,
-            method: .customAction,
-            deallocatedBoundary: "custom action"
+            method: .customAction
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(
@@ -250,10 +246,9 @@ extension Actions {
 
         // SwiftUI can update an AccessibilityNode's label/value before its block-backed custom actions.
         await tripwire.yieldFrames(1)
-        switch await navigation.elementInflation.inflate(
-            for: context.target,
-            method: .customAction,
-            deallocatedBoundary: "custom action dispatch refresh"
+        switch await navigation.elementInflation.refreshCommittedTarget(
+            context.committedTarget,
+            method: .customAction
         ) {
         case .inflated(let refreshedContext):
             return .resolved(refreshedContext)

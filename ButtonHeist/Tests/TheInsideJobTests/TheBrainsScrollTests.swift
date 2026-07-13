@@ -832,8 +832,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Offscreen")),
-            method: .activate,
-            deallocatedBoundary: "test inflation"
+            method: .activate
         )
 
         guard case .failed(let failure) = result else {
@@ -887,8 +886,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "test inflation"
+            method: .activate
         )
 
         guard case .inflated(let inflatedTarget) = result else {
@@ -939,8 +937,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-                method: .activate,
-                deallocatedBoundary: "activation dispatch"
+                method: .activate
             )
         }
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
@@ -996,8 +993,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-                method: .activate,
-                deallocatedBoundary: "activation dispatch"
+                method: .activate
             )
         }
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
@@ -1039,8 +1035,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "activation dispatch"
+            method: .activate
         )
 
         guard case .failed(let failure) = result else {
@@ -1083,8 +1078,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Gone Target", traits: [.button])),
-                method: .activate,
-                deallocatedBoundary: "test inflation"
+                method: .activate
             )
         }
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
@@ -1134,8 +1128,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
-                method: .scrollToVisible,
-                deallocatedBoundary: "scroll_to_visible dispatch"
+                method: .scrollToVisible
             )
         }
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
@@ -1176,8 +1169,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Offscreen")),
-            method: .scrollToVisible,
-            deallocatedBoundary: "scroll_to_visible dispatch"
+            method: .scrollToVisible
         )
 
         guard case .failed(let failure) = result else {
@@ -1225,8 +1217,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Escaped")),
-            method: .scrollToVisible,
-            deallocatedBoundary: "test inflation"
+            method: .scrollToVisible
         )
 
         guard case .failed(let failure) = result else {
@@ -1263,8 +1254,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Escaped")),
-            method: .scrollToVisible,
-            deallocatedBoundary: "test inflation"
+            method: .scrollToVisible
         )
 
         guard case .failed(let failure) = result else {
@@ -1366,8 +1356,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "test inflation"
+            method: .activate
         )
 
         guard case .failed(let failure) = result else {
@@ -1603,8 +1592,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
                 for: literalTarget(ElementPredicate(label: "Target")),
-                method: .scrollToVisible,
-                deallocatedBoundary: "scroll_to_visible dispatch"
+                method: .scrollToVisible
             )
         }
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
@@ -1686,8 +1674,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate,
-            deallocatedBoundary: "activation dispatch"
+            method: .activate
         )
 
         guard case .inflated(let inflatedTarget) = result else {
@@ -2073,8 +2060,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Jump Target")),
-            method: .scrollToVisible,
-            deallocatedBoundary: "scroll_to_visible dispatch"
+            method: .scrollToVisible
         )
 
         guard case .failed(let failure) = result else {

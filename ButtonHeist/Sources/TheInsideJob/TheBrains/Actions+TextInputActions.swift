@@ -172,8 +172,7 @@ extension Actions {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: target,
-            method: .typeText,
-            deallocatedBoundary: "text input focus"
+            method: .typeText
         ) {
         case .inflated(let target):
             inflatedTarget = target
@@ -192,7 +191,7 @@ extension Actions {
         _ target: ElementInflation.CommittedElementTarget
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
-        switch await navigation.elementInflation.inflateAfterActivationRefresh(for: target) {
+        switch await navigation.elementInflation.refreshCommittedTarget(target, method: .activate) {
         case .inflated(let target):
             refreshedTarget = target
         case .failed(let failure):

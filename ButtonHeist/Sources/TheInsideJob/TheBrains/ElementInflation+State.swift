@@ -11,15 +11,18 @@ extension ElementInflation {
         internal let target: AccessibilityTarget
         internal let treeElement: InterfaceTree.Element
         internal let liveTarget: TheStash.LiveActionTarget
+        internal let deadline: SemanticObservationDeadline
 
         internal init(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
-            liveTarget: TheStash.LiveActionTarget
+            liveTarget: TheStash.LiveActionTarget,
+            deadline: SemanticObservationDeadline
         ) {
             self.target = target
             self.treeElement = treeElement
             self.liveTarget = liveTarget
+            self.deadline = deadline
         }
     }
 
@@ -58,10 +61,15 @@ extension ElementInflation {
 
     internal enum State: CustomStringConvertible {
         case resolving
-        case revealing(treeElement: InterfaceTree.Element)
+        case revealing(
+            target: AccessibilityTarget,
+            treeElement: InterfaceTree.Element,
+            deadline: SemanticObservationDeadline
+        )
         case refreshing(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
+            deadline: SemanticObservationDeadline,
             didReveal: Bool
         )
         case placing(inflatedTarget: InflatedElementTarget, didReveal: Bool)
@@ -96,9 +104,9 @@ extension ElementInflation {
             switch self {
             case .resolving:
                 return "resolving"
-            case .revealing(let treeElement):
+            case .revealing(_, let treeElement, _):
                 return "revealing(element: \(treeElement.heistId))"
-            case .refreshing(_, let treeElement, let didReveal):
+            case .refreshing(_, let treeElement, _, let didReveal):
                 return "refreshing(element: \(treeElement.heistId), didReveal: \(didReveal))"
             case .placing(let inflatedTarget, let didReveal):
                 return "placing(element: \(inflatedTarget.treeElement.heistId), didReveal: \(didReveal))"

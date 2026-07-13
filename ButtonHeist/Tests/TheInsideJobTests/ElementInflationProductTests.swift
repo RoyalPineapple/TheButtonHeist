@@ -88,6 +88,56 @@ final class ElementInflationProductTests: XCTestCase {
         }
     }
 
+    func testHandoffTickCountFollowsNestedScrollMembershipGraph() {
+        let outerPath = TreePath([0])
+        let innerPath = TreePath([0, 0])
+        let element = InterfaceTree.Element(
+            heistId: "nested_target",
+            scrollMembership: .init(containerPath: innerPath, index: nil),
+            element: AccessibilityElement.make(label: "Nested Target", traits: .button)
+        )
+        let container = AccessibilityContainer(
+            type: .none,
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 640))
+        )
+        let tree = InterfaceTree(
+            elements: [element.heistId: element],
+            containers: [
+                outerPath: .init(
+                    container: container,
+                    path: outerPath,
+                    containerName: nil,
+                    contentFrame: nil
+                ),
+                innerPath: .init(
+                    container: container,
+                    path: innerPath,
+                    containerName: nil,
+                    contentFrame: nil,
+                    scrollMembership: .init(containerPath: outerPath, index: nil)
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            ElementInflation.handoffTickCount(
+                for: InterfaceTree.Element(
+                    heistId: "visible_target",
+                    scrollMembership: nil,
+                    element: AccessibilityElement.make(label: "Visible Target", traits: .button)
+                ),
+                in: .empty
+            ),
+            2,
+            "A direct target keeps the existing two-tick minimum"
+        )
+        XCTAssertEqual(
+            ElementInflation.handoffTickCount(for: element, in: tree),
+            3,
+            "Two scroll memberships plus one geometry confirmation require three ticks"
+        )
+    }
+
     func testMovingGeometryRequiresOneMatchingQuietSample() {
         let initial = geometrySample(x: 20)
         let moved = geometrySample(x: 44)
@@ -158,8 +208,7 @@ final class ElementInflationProductTests: XCTestCase {
     func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async {
         let result = await brains.navigation.elementInflation.inflate(
             for: .container(.identifier("content")),
-            method: .activate,
-            deallocatedBoundary: "test"
+            method: .activate
         )
 
         guard case .failed(let failure) = result else {
@@ -183,8 +232,7 @@ final class ElementInflationProductTests: XCTestCase {
     func testElementInflationRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {
         let result = await brains.navigation.elementInflation.inflate(
             for: .ref("row"),
-            method: .activate,
-            deallocatedBoundary: "test"
+            method: .activate
         )
 
         guard case .failed(let failure) = result else {
@@ -386,7 +434,6 @@ final class ElementInflationProductTests: XCTestCase {
             treeElement: selected,
             didReveal: false,
             method: .activate,
-            deallocatedBoundary: "predicate retarget test",
             activationPointPolicy: .liveObjectOnly,
             deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
         )
@@ -426,7 +473,6 @@ final class ElementInflationProductTests: XCTestCase {
             treeElement: selected,
             didReveal: false,
             method: .activate,
-            deallocatedBoundary: "predicate identity removal test",
             activationPointPolicy: .liveObjectOnly,
             deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 0)
         )

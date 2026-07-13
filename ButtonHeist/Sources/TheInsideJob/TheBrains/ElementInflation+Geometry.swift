@@ -14,14 +14,12 @@ extension ElementInflation {
     internal func stateAfterResolvedFreshTarget(
         _ inflatedTarget: InflatedElementTarget,
         didReveal: Bool,
-        activationPointPolicy: ActivationPointPolicy,
-        deadline: SemanticObservationDeadline
+        activationPointPolicy: ActivationPointPolicy
     ) async -> State {
         if activationPointPolicy == .liveObjectOnly {
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: false,
-                deadline: deadline
+                requireOnscreenActivationPoint: false
             )
         }
         return .placing(inflatedTarget: inflatedTarget, didReveal: didReveal)
@@ -30,15 +28,13 @@ extension ElementInflation {
     internal func stateAfterPlacement(
         _ inflatedTarget: InflatedElementTarget,
         didReveal: Bool,
-        method: ActionMethod,
-        deadline: SemanticObservationDeadline
+        method: ActionMethod
     ) async -> State {
         let liveTarget = inflatedTarget.liveTarget
         if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: true,
-                deadline: deadline
+                requireOnscreenActivationPoint: true
             )
         }
         if didReveal {
@@ -68,8 +64,7 @@ extension ElementInflation {
         case .success(.alreadyInPosition):
             return await stateAfterStableLiveGeometry(
                 inflatedTarget,
-                requireOnscreenActivationPoint: true,
-                deadline: deadline
+                requireOnscreenActivationPoint: true
             )
         case .success(.moved):
             switch await awaitLiveTargetRefresh(
@@ -77,13 +72,12 @@ extension ElementInflation {
                 treeElement: inflatedTarget.treeElement,
                 method: method,
                 after: settledSequence,
-                deadline: deadline
+                deadline: inflatedTarget.deadline
             ) {
             case .inflated(let refreshedTarget):
                 return await stateAfterStableLiveGeometry(
                     refreshedTarget,
-                    requireOnscreenActivationPoint: true,
-                    deadline: deadline
+                    requireOnscreenActivationPoint: true
                 )
             case .failure(let failure):
                 return .failed(failure)
@@ -214,9 +208,9 @@ extension ElementInflation {
 
     private func stateAfterStableLiveGeometry(
         _ inflatedTarget: InflatedElementTarget,
-        requireOnscreenActivationPoint: Bool,
-        deadline: SemanticObservationDeadline
+        requireOnscreenActivationPoint: Bool
     ) async -> State {
+        let deadline = inflatedTarget.deadline
         var stableTarget = inflatedTarget
         var stabilization = LiveGeometryStabilization(
             initial: LiveGeometrySample(inflatedTarget.liveTarget),
@@ -240,14 +234,15 @@ extension ElementInflation {
             guard stash.refreshLiveCapture() != nil else { continue }
             guard let currentTreeElement = stash.interfaceElement(
                 heistId: inflatedTarget.treeElement.heistId
-            ), retainedInterfaceElement(currentTreeElement, matches: inflatedTarget.target) else {
+            ) else {
                 return .failed(.staleRefresh(
                     "selected target \(inflatedTarget.treeElement.heistId.rawValue) left committed semantic truth"
                 ))
             }
             guard let currentTarget = stableActionTarget(
                 target: inflatedTarget.target,
-                treeElement: currentTreeElement
+                treeElement: currentTreeElement,
+                deadline: deadline
             ) else { continue }
             stableTarget = currentTarget
             switch stabilization.reduce(.sample(
@@ -298,11 +293,10 @@ extension ElementInflation {
 
     private func stableActionTarget(
         target: AccessibilityTarget,
-        treeElement: InterfaceTree.Element
+        treeElement: InterfaceTree.Element,
+        deadline: SemanticObservationDeadline
     ) -> InflatedElementTarget? {
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement),
-              retainedInterfaceElement(treeElement, matches: target)
-        else { return nil }
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else { return nil }
         let semanticLiveTarget = TheStash.LiveActionTarget(
             treeElement: treeElement,
             object: liveTarget.object,
@@ -312,7 +306,8 @@ extension ElementInflation {
         return InflatedElementTarget(
             target: target,
             treeElement: treeElement,
-            liveTarget: semanticLiveTarget
+            liveTarget: semanticLiveTarget,
+            deadline: deadline
         )
     }
 }

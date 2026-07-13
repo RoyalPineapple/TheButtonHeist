@@ -11,8 +11,7 @@ extension ElementInflation {
               let target = stash.minimumUniqueTarget(for: treeElement) else { return nil }
         switch await inflate(
             for: target,
-            method: method,
-            deallocatedBoundary: "first responder inflation"
+            method: method
         ) {
         case .inflated:
             return nil

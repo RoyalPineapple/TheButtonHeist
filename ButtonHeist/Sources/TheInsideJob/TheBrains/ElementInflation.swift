@@ -25,14 +25,17 @@ internal final class ElementInflation {
     internal struct CommittedElementTarget {
         private let sourceTarget: AccessibilityTarget
         private let resolvedHeistId: HeistId
+        private let deadline: SemanticObservationDeadline
 
         internal init(_ inflatedTarget: InflatedElementTarget) {
             sourceTarget = inflatedTarget.target
             resolvedHeistId = inflatedTarget.treeElement.heistId
+            deadline = inflatedTarget.deadline
         }
 
         internal var target: AccessibilityTarget { sourceTarget }
         internal var heistId: HeistId { resolvedHeistId }
+        internal var handoffDeadline: SemanticObservationDeadline { deadline }
     }
 
     internal let stash: TheStash
@@ -41,7 +44,6 @@ internal final class ElementInflation {
     internal var exploration: Exploration
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    internal static let operationTimeout = SemanticObservationTiming.defaultTimeout * 2
     internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     internal init(
@@ -59,77 +61,73 @@ internal final class ElementInflation {
     internal func inflate(
         for target: AccessibilityTarget,
         method: ActionMethod,
-        deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before resolution"))
         }
-        let deadline = SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent(),
-            timeoutSeconds: Self.operationTimeout
-        )
-        return await inflateBeforeDeadline(
-            for: target,
-            method: method,
-            deallocatedBoundary: deallocatedBoundary,
-            activationPointPolicy: activationPointPolicy,
-            deadline: deadline
-        )
-    }
-
-    private func inflateBeforeDeadline(
-        for target: AccessibilityTarget,
-        method: ActionMethod,
-        deallocatedBoundary: String,
-        activationPointPolicy: ActivationPointPolicy,
-        deadline: SemanticObservationDeadline,
-        initialState: State = .resolving
-    ) async -> ElementInflationResult {
         let resolvedTarget: AccessibilityTarget
         do {
             resolvedTarget = try target.validatedForElementAction()
         } catch {
             return .failed(.targetResolution(error))
         }
+        return await runInflation(
+            for: resolvedTarget,
+            method: method,
+            activationPointPolicy: activationPointPolicy
+        )
+    }
+
+    private func runInflation(
+        for target: AccessibilityTarget,
+        method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy,
+        initialState: State = .resolving
+    ) async -> ElementInflationResult {
         var state = initialState
 
         while true {
             switch state {
             case .resolving:
-                let nextState: State = switch await findTargetInTree(resolvedTarget) {
+                let nextState: State
+                switch await findTargetInTree(target) {
                 case .success(.visible(let treeElement)):
-                    .refreshing(
-                        target: resolvedTarget,
+                    nextState = .refreshing(
+                        target: target,
                         treeElement: treeElement,
+                        deadline: handoffDeadline(for: treeElement),
                         didReveal: false
                     )
                 case .success(.known(let treeElement)):
-                    .revealing(treeElement: treeElement)
+                    nextState = .revealing(
+                        target: target,
+                        treeElement: treeElement,
+                        deadline: handoffDeadline(for: treeElement)
+                    )
                 case .failure(let failure):
-                    .failed(failure)
+                    nextState = .failed(failure)
                 }
                 if let failure = transition(&state, to: nextState) {
                     return .failed(failure)
                 }
 
-            case .revealing(let treeElement):
+            case .revealing(let target, let treeElement, let deadline):
                 let nextState = await stateAfterReveal(
                     treeElement,
-                    target: resolvedTarget,
+                    target: target,
                     deadline: deadline
                 )
                 if let failure = transition(&state, to: nextState) {
                     return .failed(failure)
                 }
 
-            case .refreshing(let target, let treeElement, let didReveal):
+            case .refreshing(let target, let treeElement, let deadline, let didReveal):
                 let nextState = await stateAfterRefresh(
                     target: target,
                     treeElement: treeElement,
                     didReveal: didReveal,
                     method: method,
-                    deallocatedBoundary: deallocatedBoundary,
                     activationPointPolicy: activationPointPolicy,
                     deadline: deadline
                 )
@@ -141,8 +139,7 @@ internal final class ElementInflation {
                 let nextState = await stateAfterPlacement(
                     inflatedTarget,
                     didReveal: didReveal,
-                    method: method,
-                    deadline: deadline
+                    method: method
                 )
                 if let failure = transition(&state, to: nextState) {
                     return .failed(failure)
@@ -157,32 +154,65 @@ internal final class ElementInflation {
         }
     }
 
-    internal func inflateAfterActivationRefresh(
-        for target: CommittedElementTarget
+    internal func refreshCommittedTarget(
+        _ target: CommittedElementTarget,
+        method: ActionMethod
     ) async -> ElementInflationResult {
-        refreshLiveCaptureForActivation()
         guard !Task.isCancelled else {
-            return .failed(.cancelled("element inflation was cancelled before activation refresh"))
+            return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
         }
+        guard target.handoffDeadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else {
+            return .failed(.staleRefresh(
+                "committed target \(target.heistId) reached the action deadline before refresh",
+                failureKind: .targetUnavailable
+            ))
+        }
+        stash.refreshLiveCapture()
         guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
             return .failed(.staleRefresh(
-                "committed target \(target.heistId) disappeared before activation refresh",
+                "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",
                 failureKind: .targetUnavailable
             ))
         }
         let initialState: State = stash.liveContains(heistId: target.heistId)
-            ? .refreshing(target: target.target, treeElement: treeElement, didReveal: false)
-            : .revealing(treeElement: treeElement)
-        return await inflateBeforeDeadline(
+            ? .refreshing(
+                target: target.target,
+                treeElement: treeElement,
+                deadline: target.handoffDeadline,
+                didReveal: false
+            )
+            : .revealing(
+                target: target.target,
+                treeElement: treeElement,
+                deadline: target.handoffDeadline
+            )
+        return await runInflation(
             for: target.target,
-            method: .activate,
-            deallocatedBoundary: "activation refresh",
+            method: method,
             activationPointPolicy: .requireOnscreen,
-            deadline: SemanticObservationDeadline(
-                start: CFAbsoluteTimeGetCurrent(),
-                timeoutSeconds: Self.operationTimeout
-            ),
             initialState: initialState
+        )
+    }
+
+    internal static func handoffTickCount(
+        for treeElement: InterfaceTree.Element,
+        in tree: InterfaceTree
+    ) -> Int {
+        var visited = Set<TreePath>()
+        var containerPath = treeElement.scrollMembership?.containerPath
+        while let path = containerPath, visited.insert(path).inserted {
+            containerPath = tree.containers[path]?.scrollMembership?.containerPath
+        }
+        return max(2, visited.count + 1)
+    }
+
+    private func handoffDeadline(
+        for treeElement: InterfaceTree.Element
+    ) -> SemanticObservationDeadline {
+        let tickCount = Self.handoffTickCount(for: treeElement, in: stash.interfaceTree)
+        return SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent(),
+            timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout
         )
     }
 
@@ -221,10 +251,6 @@ internal final class ElementInflation {
             state = nextState
             return nil
         }
-    }
-
-    private func refreshLiveCaptureForActivation() {
-        stash.refreshLiveCapture()
     }
 }
 
