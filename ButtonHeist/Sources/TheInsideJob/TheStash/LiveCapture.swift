@@ -189,6 +189,7 @@ struct LiveCapture: Equatable {
         let containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
         let scrollInventoriesByPath: [TreePath: ScrollInventory]
+        /// Durable first-responder identity. Live UIKit evidence remains in weak dispatch references.
         let firstResponderHeistId: HeistId?
 
         init(

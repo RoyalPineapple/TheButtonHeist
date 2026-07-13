@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 import ThePlans
@@ -29,6 +30,75 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertEqual(parsed.tree.viewportCapture.firstResponderHeistId, firstResponderHeistId)
         XCTAssertEqual(valueOnly.liveCapture.firstResponderHeistId, firstResponderHeistId)
         XCTAssertTrue(valueOnly.liveCapture.elementRefs.isEmpty)
+    }
+
+    func testFirstResponderSnapshotDoesNotRetainUIKitObject() {
+        let heistId: HeistId = "email_field"
+        var responder: UITextField? = UITextField()
+        let capture = InterfaceObservation.makeForTests(
+            [
+                InterfaceObservation.TestEntry(
+                    label: "Email",
+                    heistId: heistId,
+                    traits: .textEntry,
+                    object: responder
+                ),
+            ],
+            firstResponderHeistId: heistId
+        ).liveCapture
+
+        XCTAssertTrue(capture.object(for: heistId) === responder)
+        responder = nil
+
+        XCTAssertNil(capture.object(for: heistId))
+        XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
+    }
+
+    func testFirstResponderInflationAcceptsReplacementObjectUnderSameHeistId() throws {
+        let heistId: HeistId = "email_field"
+        let original = UITextField()
+        let replacement = UITextField()
+        let before = responderObservation(heistId: heistId, object: original)
+        let after = responderObservation(heistId: heistId, object: replacement)
+        let expected = try XCTUnwrap(before.liveCapture.firstResponderHeistId)
+
+        XCTAssertFalse(before.liveCapture.object(for: heistId) === after.liveCapture.object(for: heistId))
+        XCTAssertNil(ElementInflation.firstResponderIdentityFailure(
+            expected: expected,
+            current: after.liveCapture.firstResponderHeistId,
+            inflated: heistId
+        ))
+    }
+
+    func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() throws {
+        let expected: HeistId = "email_field"
+        let replacement: HeistId = "password_field"
+        let before = responderObservation(heistId: expected, object: UITextField())
+        let after = responderObservation(heistId: replacement, object: UITextField())
+        let captured = try XCTUnwrap(before.liveCapture.firstResponderHeistId)
+
+        let failure = try XCTUnwrap(ElementInflation.firstResponderIdentityFailure(
+            expected: captured,
+            current: after.liveCapture.firstResponderHeistId,
+            inflated: expected
+        ))
+
+        XCTAssertEqual(failure.failedStep, .staleRefresh)
+        XCTAssertEqual(failure.failureKind, .targetUnavailable)
+    }
+
+    func testFirstResponderInflationRejectsInflatedTargetUnderWrongHeistId() throws {
+        let expected: HeistId = "email_field"
+        let replacement: HeistId = "password_field"
+
+        let failure = try XCTUnwrap(ElementInflation.firstResponderIdentityFailure(
+            expected: expected,
+            current: expected,
+            inflated: replacement
+        ))
+
+        XCTAssertEqual(failure.failedStep, .staleRefresh)
+        XCTAssertEqual(failure.failureKind, .targetUnavailable)
     }
 
     func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() {
@@ -94,6 +164,23 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertNil(removed.tree.viewportCapture.firstResponderHeistId)
         XCTAssertNil(ScreenClassifier.snapshot(of: removed.tree).firstResponderHeistId)
         XCTAssertNil(brains.stash.firstResponderTarget(in: removed.tree))
+    }
+
+    private func responderObservation(
+        heistId: HeistId,
+        object: NSObject
+    ) -> InterfaceObservation {
+        InterfaceObservation.makeForTests(
+            [
+                InterfaceObservation.TestEntry(
+                    label: "Text field",
+                    heistId: heistId,
+                    traits: .textEntry,
+                    object: object
+                ),
+            ],
+            firstResponderHeistId: heistId
+        )
     }
 }
 
