@@ -45,7 +45,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return latestScopedScreenChangedSequenceStorage
     }
 
-    func announcementCursor() -> AccessibilityNotificationCursor {
+    func cursor() -> AccessibilityNotificationCursor {
         lock.lock()
         defer { lock.unlock() }
         return AccessibilityNotificationCursor(sequence: latestSequenceStorage)
@@ -356,10 +356,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return batchLocked(after: cursor)
     }
 
-    func checkpoint() -> AccessibilityNotificationBatch {
+    func checkpoint(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
         lock.lock()
         defer { lock.unlock() }
-        return batchLocked(after: AccessibilityNotificationCursor(sequence: latestSequenceStorage))
+        return batchLocked(after: cursor)
     }
 
     private func batchLocked(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {

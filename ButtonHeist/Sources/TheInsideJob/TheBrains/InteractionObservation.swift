@@ -56,7 +56,7 @@ final class InteractionObservation {
             announcementCursor: { [weak self] strategy in
                 switch strategy {
                 case .futureOnly:
-                    return stash.accessibilityNotifications.announcementCursor()
+                    return stash.accessibilityNotifications.cursor()
                 case .heistScoped:
                     return self?.heistAnnouncementCursor ?? .origin
                 }

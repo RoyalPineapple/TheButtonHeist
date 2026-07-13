@@ -213,7 +213,7 @@ final class PostActionObservation {
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
-                accessibilityNotifications: event.trace.captures.last?.transition.accessibilityNotifications ?? []
+                transitionEvidence: event.trace.captures.last?.transition
             )
             return .committed(
                 settle: observation.settle,
@@ -234,7 +234,7 @@ final class PostActionObservation {
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
-                accessibilityNotifications: []
+                transitionEvidence: nil
             )
             return .diagnostic(settle: observation.settle, trace: trace)
 
@@ -262,10 +262,10 @@ final class PostActionObservation {
         before: BeforeState,
         finalState: BeforeState,
         settle: SettleSession.Outcome,
-        accessibilityNotifications: [AccessibilityNotificationEvidence]
+        transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
-            accessibilityNotifications,
+            transitionEvidence?.accessibilityNotifications ?? [],
             from: finalState,
             to: finalState
         )
@@ -273,7 +273,8 @@ final class PostActionObservation {
             before: before,
             final: finalState,
             settleOutcome: settle,
-            accessibilityNotifications: accessibilityNotifications
+            accessibilityNotifications: accessibilityNotifications,
+            transitionEvidence: transitionEvidence
         )
     }
 
@@ -366,14 +367,16 @@ final class PostActionObservation {
         parentCapture: AccessibilityTrace.Capture,
         classification: ScreenClassifier.Classification,
         transient: [HeistElement] = [],
-        accessibilityNotifications: [AccessibilityNotificationEvidence] = []
+        accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
+        accessibilityNotificationGap: AccessibilityNotificationGap? = nil
     ) -> AccessibilityTrace {
         let transition: AccessibilityTrace.Transition
         switch classification {
         case .sameGeneration, .screenChangedNotification:
             transition = AccessibilityTrace.Transition(
                 transient: transient,
-                accessibilityNotifications: accessibilityNotifications
+                accessibilityNotifications: accessibilityNotifications,
+                accessibilityNotificationGap: accessibilityNotificationGap
             )
         case .inferredScreenChange(let reason):
             AccessibilityObservationFallbackLog.record(
@@ -383,7 +386,8 @@ final class PostActionObservation {
             transition = AccessibilityTrace.Transition(
                 fallbackReason: reason,
                 transient: transient,
-                accessibilityNotifications: accessibilityNotifications
+                accessibilityNotifications: accessibilityNotifications,
+                accessibilityNotificationGap: accessibilityNotificationGap
             )
         }
         return makeAccessibilityTrace(
@@ -409,9 +413,10 @@ final class PostActionObservation {
         before: BeforeState,
         final: BeforeState,
         settleOutcome: SettleSession.Outcome,
-        accessibilityNotifications: [AccessibilityNotificationEvidence]
+        accessibilityNotifications: [AccessibilityNotificationEvidence],
+        transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
-        let classification = ScreenClassifier.classify(
+        let classification = transitionEvidence?.screenClassification ?? ScreenClassifier.classify(
             before: before.screenSnapshot,
             after: final.screenSnapshot,
             notifications: accessibilityNotifications.map(\.kind)
@@ -426,7 +431,8 @@ final class PostActionObservation {
                 final: final,
                 classification: classification
             ),
-            accessibilityNotifications: accessibilityNotifications
+            accessibilityNotifications: accessibilityNotifications,
+            accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
         )
     }
 
@@ -606,6 +612,20 @@ private extension SemanticObservationScope {
         case .discovery:
             return .discovery
         }
+    }
+}
+
+private extension AccessibilityTrace.Transition {
+    @MainActor var screenClassification: ScreenClassifier.Classification {
+        if accessibilityNotifications.contains(where: {
+            if case .screenChanged = $0.kind { true } else { false }
+        }) {
+            return .screenChangedNotification
+        }
+        if let fallbackReason {
+            return .inferredScreenChange(reason: fallbackReason)
+        }
+        return .sameGeneration
     }
 }
 

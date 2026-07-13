@@ -76,13 +76,10 @@ extension TheStash {
 
     @discardableResult
     func commitVisibleInterface(
-        _ screen: InterfaceObservation,
+        _ proof: InterfaceObservationProof,
         classification: ScreenClassifier.Classification
     ) -> InterfaceObservation {
-        let committedScreen = replacementObservation(
-            from: screen,
-            classification: classification
-        )
+        let committedScreen = proof.screen
         if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
            queuedVisibleRefresh.interfaceHash != committedScreen.interfaceHash {
             nextVisibleRefreshScreenForTesting = nil
@@ -94,8 +91,14 @@ extension TheStash {
     }
 
     @discardableResult
-    func commitDiscoveryInterface(_ screen: InterfaceObservation) -> InterfaceObservation {
-        interfaceTree = screen.tree
+    func commitDiscoveryInterface(
+        _ proof: InterfaceObservationProof,
+        classification: ScreenClassifier.Classification
+    ) -> InterfaceObservation {
+        let screen = proof.screen
+        interfaceTree = classification.isScreenReplacement
+            ? screen.tree
+            : interfaceTree.merging(screen.tree)
         return finishCommit(observation: screen)
     }
 
@@ -221,23 +224,6 @@ extension TheStash {
 
     private func recordParsedObservedEvidence(from screen: InterfaceObservation) {
         latestObservation = screen
-    }
-
-    private func replacementObservation(
-        from screen: InterfaceObservation,
-        classification: ScreenClassifier.Classification
-    ) -> InterfaceObservation {
-        switch classification {
-        case .inferredScreenChange(.navigationMarkerChanged),
-             .inferredScreenChange(.modalBoundaryChanged):
-            return screen.removingElements(withIds: interfaceTree.viewportElementIDs)
-        case .sameGeneration,
-             .screenChangedNotification,
-             .inferredScreenChange(.selectedTabChanged),
-             .inferredScreenChange(.primaryHeaderChanged),
-             .inferredScreenChange(.rootShapeChanged):
-            return screen
-        }
     }
 
     private var currentInterfaceObservation: InterfaceObservation {

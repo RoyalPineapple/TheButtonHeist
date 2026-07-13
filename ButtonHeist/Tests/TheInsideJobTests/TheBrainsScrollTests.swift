@@ -80,6 +80,23 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(returnedProof)
     }
 
+    func testScanForHeistIdReturnsNoProofWhenInitialSettlementIsCancelled() async {
+        let staleId: HeistId = "stale_action_target"
+        brains.stash.installScreenForTesting(.makeForTests([
+            .init(
+                AccessibilityElement.make(label: "Stale action target", traits: .button),
+                heistId: staleId
+            ),
+        ]))
+        let scanTask = Task { @MainActor in
+            await brains.navigation.scanForHeistId(staleId) == nil
+        }
+        scanTask.cancel()
+
+        let returnedNoProof = await scanTask.value
+        XCTAssertTrue(returnedNoProof)
+    }
+
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
         let windowScene = try requireForegroundWindowScene()
         let pageViewController = UIPageViewController(

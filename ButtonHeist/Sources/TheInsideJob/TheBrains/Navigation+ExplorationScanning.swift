@@ -15,7 +15,8 @@ extension Navigation {
         var exploration = SemanticExploration(
             baseline: stash.actionDiscoveryBaseline()
         )
-        exploration.absorb(await settledExplorationPage())
+        guard let settledPage = await settledExplorationPage() else { return nil }
+        exploration.absorb(settledPage)
         if stash.liveContains(heistId: heistId) {
             return exploration.finish(startTime: startTime)
         }

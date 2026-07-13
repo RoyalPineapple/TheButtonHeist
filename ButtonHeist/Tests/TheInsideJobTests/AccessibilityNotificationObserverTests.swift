@@ -240,7 +240,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
     func testAnnouncementWaiterMatchesLayoutChangedStringPayload() async {
         let bus = AccessibilityNotificationBus()
-        let cursor = bus.announcementCursor()
+        let cursor = bus.cursor()
 
         async let result = bus.waitForAnnouncement(
             after: cursor,

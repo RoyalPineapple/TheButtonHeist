@@ -124,16 +124,6 @@ struct InterfaceObservationProof {
         InterfaceObservationProof(screen: screen)
     }
 
-    func mergingSemanticTree(_ tree: InterfaceTree) -> InterfaceObservationProof {
-        do {
-            return InterfaceObservationProof(screen: try InterfaceObservation.build(
-                tree: tree.merging(screen.tree),
-                dispatchReferences: screen.liveCapture.dispatchReferences
-            ))
-        } catch {
-            preconditionFailure("Settled discovery merge failed validation: \(error)")
-        }
-    }
 }
 
 struct PostActionSettleObservation {
@@ -393,6 +383,7 @@ final class SemanticObservationStream {
     private var eventHistory: [SemanticObservationScope: [SettledSemanticObservationEvent]] = [:]
     private static let eventHistoryLimit = 256
     private var fulfillmentState = SemanticObservationFulfillmentState()
+    private var lastCommittedNotificationCursor = AccessibilityNotificationCursor.origin
     /// Bus sequence of the most recent scoped `screenChanged` at the latest
     /// settled commit; a later scoped `screenChanged` marks that commit as
     /// replaced.
@@ -640,7 +631,8 @@ final class SemanticObservationStream {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
-        let resolvedNotificationBatch = notificationBatch ?? stash.accessibilityNotifications.checkpoint()
+        let resolvedNotificationBatch = notificationBatch
+            ?? stash.accessibilityNotifications.checkpoint(after: lastCommittedNotificationCursor)
         let candidateScreen = proof.screen.semanticObservationProjection(for: scope)
         let sourceClassification = ScreenClassifier.classify(
             before: fulfillmentState.previousEvent(for: scope).map {
@@ -654,9 +646,9 @@ final class SemanticObservationStream {
         )
         switch scope {
         case .visible:
-            stash.commitVisibleInterface(proof.screen, classification: sourceClassification)
+            stash.commitVisibleInterface(proof, classification: sourceClassification)
         case .discovery:
-            stash.commitDiscoveryInterface(proof.screen)
+            stash.commitDiscoveryInterface(proof, classification: sourceClassification)
         }
         return publishCurrentSettledObservation(
             scope: scope,
@@ -718,7 +710,7 @@ final class SemanticObservationStream {
         }
         if let proof = InterfaceObservationProof.settled(outcome) {
             let notificationBatch = notificationWindow?.capture()
-                ?? stash.accessibilityNotifications.checkpoint()
+                ?? stash.accessibilityNotifications.checkpoint(after: lastCommittedNotificationCursor)
             defer { notificationWindow?.cancel() }
             let event: SettledSemanticObservationEvent
             switch commitScope {
@@ -730,7 +722,7 @@ final class SemanticObservationStream {
                 )
             case .discovery:
                 event = commitSettledDiscoveryObservation(
-                    proof.mergingSemanticTree(stash.interfaceTree),
+                    proof,
                     notificationBatch: notificationBatch
                 )
             }
@@ -755,6 +747,9 @@ final class SemanticObservationStream {
         eventHistory.removeAll()
         passiveObservationState.updateSettledReading(nil)
         latestSettleFailureDiagnostic = nil
+        if let stash {
+            lastCommittedNotificationCursor = stash.accessibilityNotifications.cursor()
+        }
     }
 
     func invalidateLatestSettledObservation() {
@@ -816,6 +811,7 @@ final class SemanticObservationStream {
         }
         recordHistory(publication.events.values)
         lastCommittedScopedScreenChangedSequence = notificationBatch.scopedScreenChangedThrough
+        lastCommittedNotificationCursor = notificationBatch.through
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
         settledWaiters.completeWaiters(with: publication.events)
