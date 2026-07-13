@@ -1072,21 +1072,27 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
               rawObservationCommitTypes.contains(firstTypeName) else {
             return
         }
+        let signature = "\(name)(\(firstType.trimmedDescription))"
         recordFailure(
             at: firstType,
-            observed: "\(name)(\(firstType.trimmedDescription))",
-            expectation: "interface observation commits require settled or explored InterfaceObservationProof"
+            observed: signature,
+            expectation: "interface observation commits require settled or explored InterfaceObservationProof",
+            message: """
+            forbidden InsideJob architectural source shape: \(signature); \
+            interface observation commits require settled or explored InterfaceObservationProof
+            """
         )
     }
 
     private func recordFailure(
         at node: some SyntaxProtocol,
         observed: String,
-        expectation: String
+        expectation: String,
+        message: String = "forbidden InsideJob architectural source shape"
     ) {
         failures.append(file.failure(
             at: node,
-            message: "forbidden InsideJob architectural source shape",
+            message: message,
             evidence: ViolationEvidence(observed: observed, expectation: expectation)
         ))
     }
