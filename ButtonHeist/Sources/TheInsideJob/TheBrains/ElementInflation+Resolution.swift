@@ -29,6 +29,22 @@ extension ElementInflation {
                 deadline: deadline
             )
         case .retry(let reason):
+            if stash.refreshLiveCapture() != nil,
+               let refreshed = resolveCurrentVisibleLiveElementTarget(target: target, method: method) {
+                switch refreshed {
+                case .success(let inflatedTarget):
+                    return await stateAfterResolvedFreshTarget(
+                        inflatedTarget,
+                        didReveal: didReveal,
+                        activationPointPolicy: activationPointPolicy,
+                        deadline: deadline
+                    )
+                case .failure(let failure):
+                    return .failed(failure)
+                case .retry:
+                    break
+                }
+            }
             switch await awaitLiveTargetRefresh(
                 for: target,
                 method: method,
