@@ -145,7 +145,7 @@ struct ToolRoutingTests {
         let nested = Self.nestedMCPValueOverLimit()
 
         do {
-            _ = try MCPToolArguments(["argument": nested])
+            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["argument": nested])
             Issue.record("Expected MCP argument depth limit error")
         } catch {
             #expect(
@@ -160,7 +160,7 @@ struct ToolRoutingTests {
         let oversizedText = String(repeating: "x", count: PublicJSONInputLimits.maxRequestBytes + 1)
 
         do {
-            _ = try MCPToolArguments(["text": .string(oversizedText)])
+            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["text": .string(oversizedText)])
             Issue.record("Expected MCP argument byte limit error")
         } catch {
             #expect(
@@ -175,7 +175,7 @@ struct ToolRoutingTests {
         let excessiveKeys = Self.mcpObjectWithEnoughKeysToExceedLimitFromRoot()
 
         do {
-            _ = try MCPToolArguments(["argument": .object(excessiveKeys)])
+            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["argument": .object(excessiveKeys)])
             Issue.record("Expected MCP argument object key limit error")
         } catch {
             #expect(
@@ -214,7 +214,10 @@ struct ToolRoutingTests {
 
     @Test func `MCP tool arguments reject binary data before command envelopes`() {
         do {
-            _ = try MCPToolArguments(["attachment": .data(mimeType: "application/octet-stream", Data([0]))])
+            _ = try MCPToolRequest(
+                name: "not_a_tool",
+                arguments: ["attachment": .data(mimeType: "application/octet-stream", Data([0]))]
+            )
             Issue.record("Expected MCP argument binary data rejection")
         } catch {
             #expect(String(describing: error).contains("MCP arguments contains binary data"))

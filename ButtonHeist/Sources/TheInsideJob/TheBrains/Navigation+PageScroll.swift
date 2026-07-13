@@ -138,9 +138,7 @@ extension Navigation {
 
     @discardableResult
     func observeViewportAfterScroll(commitViewportMoves: Bool) -> InterfaceObservation? {
-        commitViewportMoves
-            ? stash.refreshTreeAfterViewportMove()
-            : stash.semanticPageForExploration()
+        stash.semanticPageForExploration()
     }
 }
 

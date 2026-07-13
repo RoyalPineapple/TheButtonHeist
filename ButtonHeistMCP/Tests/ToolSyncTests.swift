@@ -5,6 +5,128 @@ import Foundation
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {
+    @Test("Public CLI/MCP command contract matches the committed descriptor snapshot")
+    func publicCommandContractMatchesCommittedDescriptorSnapshot() throws {
+        let actual = try PublicCommandContractFixture.renderedData()
+        let fixtureURL = PublicCommandContractFixture.fileURL
+        let expected = try PublicCommandContractFixture.committedData(for: actual)
+
+        #expect(
+            actual == expected,
+            """
+            Public CLI/MCP command contract drifted from \(fixtureURL.path).
+            Review the typed descriptor change, then run: \(PublicCommandContractFixture.updateCommand)
+            """
+        )
+    }
+
+    @Test("Committed public command contract stays digest-based and below 100 KB")
+    func committedPublicCommandContractStaysDigestBasedAndBounded() throws {
+        let data = try Data(contentsOf: PublicCommandContractFixture.fileURL)
+        let contract = try JSONDecoder().decode(Value.self, from: data)
+        let commands = try #require(contract.objectValue?["commands"]?.arrayValue)
+        let lowercaseHex = CharacterSet(charactersIn: "0123456789abcdef")
+
+        #expect(data.count < PublicCommandContractFixture.maximumCommittedByteCount)
+        #expect(!commands.isEmpty)
+        for command in commands {
+            let fields = try #require(command.objectValue)
+            let digest = try #require(fields["inputSchemaSHA256"]?.stringValue)
+            let timeout = try #require(fields["timeout"]?.objectValue)
+
+            #expect(fields["inputSchema"] == nil)
+            #expect(fields["exposedByCLI"] == nil)
+            #expect(fields["exposedByMCP"] == nil)
+            #expect(fields["family"]?.stringValue != nil)
+            #expect(fields["requiresConnectionBeforeDispatch"] != nil)
+            #expect(fields["cliExposure"]?.stringValue != nil)
+            #expect(fields["mcpExposure"]?.stringValue != nil)
+            #expect(fields["responseProjection"]?.stringValue != nil)
+            #expect(fields["failureProjection"]?.stringValue != nil)
+            let timeoutKind = try #require(timeout["kind"]?.stringValue)
+            let hasFixedBase = timeoutKind == "fixed" || timeoutKind == "singleStepAction"
+            #expect((timeout["base"] != nil) == hasFixedBase)
+            #expect((timeout["seconds"] != nil) == hasFixedBase)
+            #expect(digest.utf8.count == 64)
+            #expect(digest.unicodeScalars.allSatisfy(lowercaseHex.contains))
+        }
+    }
+
+    @Test("Public command input schema digest is canonical across dictionary order")
+    func publicCommandInputSchemaDigestIsCanonicalAcrossDictionaryOrder() throws {
+        let first = HeistValue.object([
+            "type": .string("object"),
+            "properties": .object([
+                "alpha": .object(["type": .string("string")]),
+                "beta": .object(["type": .string("integer")]),
+            ]),
+        ])
+        let reordered = HeistValue.object([
+            "properties": .object([
+                "beta": .object(["type": .string("integer")]),
+                "alpha": .object(["type": .string("string")]),
+            ]),
+            "type": .string("object"),
+        ])
+
+        #expect(
+            try PublicCommandContractFixture.inputSchemaSHA256(first)
+                == PublicCommandContractFixture.inputSchemaSHA256(reordered)
+        )
+    }
+
+    @Test("Public command contract update requires exact local opt-in")
+    func publicCommandContractUpdateRequiresExactLocalOptIn() {
+        let key = PublicCommandContractFixture.updateEnvironmentKey
+
+        #expect(PublicCommandContractFixture.mode(environment: [:]) == .comparison)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "true"]) == .comparison)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "1"]) == .update)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "1", "CI": "1"]) == .comparison)
+    }
+
+    @Test("Public command contract comparison never rewrites the fixture")
+    func publicCommandContractComparisonNeverRewritesFixture() throws {
+        let fixtureURL = temporaryContractFixtureURL()
+        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let committed = Data("committed\n".utf8)
+        let rendered = Data("rendered\n".utf8)
+        try committed.write(to: fixtureURL)
+
+        let expected = try PublicCommandContractFixture.committedData(
+            for: rendered,
+            environment: [:],
+            fixtureURL: fixtureURL
+        )
+
+        #expect(expected == committed)
+        #expect(try Data(contentsOf: fixtureURL) == committed)
+    }
+
+    @Test("Public command contract comparison rejects missing and empty fixtures")
+    func publicCommandContractComparisonRejectsMissingAndEmptyFixtures() throws {
+        let fixtureURL = temporaryContractFixtureURL()
+        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let rendered = Data("rendered\n".utf8)
+
+        #expect(throws: PublicCommandContractFixture.FixtureError.self) {
+            try PublicCommandContractFixture.committedData(
+                for: rendered,
+                environment: [:],
+                fixtureURL: fixtureURL
+            )
+        }
+
+        try Data().write(to: fixtureURL)
+        #expect(throws: PublicCommandContractFixture.FixtureError.self) {
+            try PublicCommandContractFixture.committedData(
+                for: rendered,
+                environment: [:],
+                fixtureURL: fixtureURL
+            )
+        }
+    }
+
     @Test("Tool input schemas satisfy canonical schema lint in memory")
     func toolInputSchemasSatisfyCanonicalSchemaLintInMemory() {
         let violations = ToolSchemaLint.violations(in: ToolDefinitions.all)
@@ -165,8 +287,13 @@ struct ToolSyncTests {
         #expect(properties["containerName"] == nil)
         #expect(properties["checks"] != nil)
         #expect(
+            schemaValue(at: containerPath + ["properties", "checks", "minItems"], in: tool.inputSchema)
+                == .int(1)
+        )
+        #expect(
             schemaValue(at: containerPath + ["properties", "checks", "items", "properties", "kind", "enum"], in: tool.inputSchema) == .array([
                 .string("type"),
+                .string("identifier"),
                 .string("semantic"),
                 .string("rowCount"),
                 .string("columnCount"),
@@ -174,6 +301,30 @@ struct ToolSyncTests {
                 .string("scrollable"),
                 .string("actions"),
             ])
+        )
+        let checkPropertiesPath = containerPath + ["properties", "checks", "items", "properties"]
+        let checkProperties = try #require(
+            schemaValue(at: checkPropertiesPath, in: tool.inputSchema)?.objectValue
+        )
+        #expect(Set(checkProperties.keys) == ["kind", "type", "match", "semantic", "values", "value"])
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["type", "enum"], in: tool.inputSchema) == .array([
+                .string("none"),
+                .string("semanticGroup"),
+                .string("list"),
+                .string("landmark"),
+                .string("dataTable"),
+                .string("tabBar"),
+                .string("series"),
+            ])
+        )
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["semantic", "properties", "kind", "enum"], in: tool.inputSchema)
+                == .array([.string("label"), .string("value")])
+        )
+        #expect(
+            schemaValue(at: checkPropertiesPath + ["values", "minItems"], in: tool.inputSchema)
+                == .int(1)
         )
 
         // No schema combinator anywhere under the container subschema.
@@ -316,6 +467,11 @@ struct ToolSyncTests {
     }
 }
 
+private func temporaryContractFixtureURL() -> URL {
+    FileManager.default.temporaryDirectory
+        .appending(path: "public-command-contract-\(UUID().uuidString).json")
+}
+
 private func schemaValue(at path: [String], in root: Value) -> Value? {
     path.reduce(Optional(root)) { value, key in
         value?.objectValue?[key]
@@ -361,6 +517,11 @@ private func assertStringMatchSchema(_ schema: Value, path: String) {
 }
 
 private extension Value {
+    var arrayValue: [Value]? {
+        guard case .array(let array) = self else { return nil }
+        return array
+    }
+
     var objectValue: [String: Value]? {
         guard case .object(let object) = self else { return nil }
         return object

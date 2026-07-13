@@ -81,10 +81,35 @@ public enum HeistFailureDiagnostics {
 }
 
 public extension HeistExecutionResult {
-    var failureScreenshotStep: HeistExecutionStepResult? {
-        steps.firstFailureScreenshotStep
+    package var failureScreenshotStep: HeistExecutionStepResult? {
+        evidenceRollup.failureScreenshotStep
     }
 
+    package var failureScreenshotPayload: ScreenPayload? {
+        evidenceRollup.failureScreenshotPayload
+    }
+
+    package var settledInterfaceAtFailure: Interface? {
+        evidenceRollup.settledInterfaceAtFailure
+    }
+
+    /// Failure evidence for diagnostic rendering, not current semantic interface state.
+    package var failureDiagnosticInterface: Interface? {
+        evidenceRollup.failureDiagnosticInterface
+    }
+
+    var failureScreenshotSummary: String? {
+        evidenceRollup.failureScreenshotSummary
+    }
+
+    func failureInterfaceDump(
+        elementLimit: Int = HeistFailureDiagnostics.defaultElementLimit
+    ) -> String? {
+        evidenceRollup.failureInterfaceDump(elementLimit: elementLimit)
+    }
+}
+
+package extension HeistExecutionEvidenceRollup {
     var failureScreenshotPayload: ScreenPayload? {
         failureScreenshotStep?.screenshotPayload
     }
@@ -118,38 +143,14 @@ public extension HeistExecutionResult {
 }
 
 public extension HeistExecutionStepResult {
-    var settledInterfaceAtStep: Interface? {
+    package var settledInterfaceAtStep: Interface? {
         reportFacts.results.traceEvidenceResult?.accessibilityTrace?.captures.last?.interface
     }
 
-    var screenshotPayload: ScreenPayload? {
+    package var screenshotPayload: ScreenPayload? {
         guard case .screenshot(let screenshot) = actionEvidence?.dispatchResult?.payload else {
             return nil
         }
         return screenshot
-    }
-}
-
-private extension Array where Element == HeistExecutionStepResult {
-    var firstFailureScreenshotStep: HeistExecutionStepResult? {
-        for step in self {
-            if let screenshotStep = step.firstFailureScreenshotStep {
-                return screenshotStep
-            }
-        }
-        return nil
-    }
-}
-
-private extension HeistExecutionStepResult {
-    var firstFailureScreenshotStep: HeistExecutionStepResult? {
-        if isFailureScreenshotAction {
-            return self
-        }
-        return children.firstFailureScreenshotStep
-    }
-
-    var isFailureScreenshotAction: Bool {
-        path.contains(".failure.actions[") && actionEvidence?.command?.wireType == .takeScreenshot
     }
 }

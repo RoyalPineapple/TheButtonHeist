@@ -120,11 +120,11 @@ public struct Heist: Sendable {
         @HeistBuilder _ content: () throws -> Content
     ) throws -> HeistPlan {
         let content = try content()
-        return try HeistPlan(
+        return try HeistPlanAdmissionCandidate(
             parameter: parameter,
             definitions: content.heistDefinitions,
-            body: content.heistSteps
-        )
+            body: content.heistSteps.map(HeistStepAdmissionCandidate.init)
+        ).validatedSemantics()
     }
 
     @MainActor

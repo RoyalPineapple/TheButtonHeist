@@ -144,7 +144,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     public let responseProjection: FenceCommandResponseProjection
     public let failureProjection: FenceCommandFailureProjection
     let execution: FenceCommandExecution
-    let requestDecoder: TheFence.RequestDecoder
 
     public var cliExposure: CLIExposure { projection.cliExposure }
     public var mcpExposure: MCPExposure { projection.mcpExposure }
@@ -196,7 +195,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     init(
         command: TheFence.Command,
         family: FenceCommandFamily,
-        requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
         timeout: FenceCommandTimeoutSemantics = .none,
@@ -207,7 +205,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     ) {
         self.command = command
         self.family = family
-        self.requestDecoder = requestDecoder
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
         self.timeout = timeout
@@ -226,7 +223,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        // Decoder closures are intentionally excluded: command identity owns the routing entrypoint.
         lhs.command == rhs.command &&
             lhs.family == rhs.family &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
@@ -345,7 +341,6 @@ extension TheFence.Command {
 
     func makeDescriptor(
         family: FenceCommandFamily,
-        requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
         timeout: FenceCommandTimeoutSemantics = .none,
@@ -357,7 +352,6 @@ extension TheFence.Command {
         FenceCommandDescriptor(
             command: self,
             family: family,
-            requestDecoder: requestDecoder,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             timeout: timeout,

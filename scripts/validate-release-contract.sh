@@ -76,6 +76,11 @@ if grep -Eq "\"$SEMVER_GREP\"" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
     fail "$BUTTONHEIST_DEMO_VERSION_FILE must use buttonHeistVersion instead of a hardcoded release version"
 fi
 
+[[ -s "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE" ]] \
+    || fail "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE must contain the generated public CLI/MCP command contract"
+git ls-files --error-unmatch "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE" >/dev/null 2>&1 \
+    || fail "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE must be committed"
+
 if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_FILE"; then
     grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
         || fail "$BUTTONHEIST_DEMO_VERSION_FILE must source Version from TheScore.buttonHeistVersion or remove the Version row"

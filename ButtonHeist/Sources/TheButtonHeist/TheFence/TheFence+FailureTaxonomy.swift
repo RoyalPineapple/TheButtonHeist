@@ -6,7 +6,6 @@ import TheScore
 struct FenceFailureDescriptor: Sendable {
     let details: FailureDetails
     let coreMessage: String
-    let displayMessage: String
 
     var errorCode: String { details.errorCode }
     var phase: FailurePhase { details.phase }
@@ -20,116 +19,83 @@ public extension FenceError {
         case .invalidRequest(let message):
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .requestInvalid),
-                coreMessage: message,
-                displayMessage: message
+                coreMessage: message
             )
         case .heistBuildDiagnostics(let diagnostics):
             let message = diagnostics.renderedBuildDiagnosticMessage
             return FenceFailureDescriptor(
                 details: diagnostics.heistBuildFailureDetails,
-                coreMessage: message,
-                displayMessage: message
+                coreMessage: message
             )
         case .noDeviceFound:
             let message = "No devices found within timeout. Is the app running?"
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .discoveryNoDeviceFound),
-                coreMessage: message,
-                displayMessage: message
+                coreMessage: message
             )
         case .noMatchingDevice(let filter, let available):
             let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
             let message = "No device matching '\(filter)'. Available: \(list)"
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .discoveryNoMatchingDevice),
-                coreMessage: message,
-                displayMessage: message
+                coreMessage: message
             )
         case .ambiguousDeviceTarget(let filter, let matches):
             let list = matches.joined(separator: ", ")
             let message = "Ambiguous device target '\(filter)' (matches: \(list))"
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .discoveryAmbiguousDeviceTarget),
-                coreMessage: message,
-                displayMessage: message
+                coreMessage: message
             )
         case .connectionTimeout:
             let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .setupTimeout, hint: hint),
-                coreMessage: "Connection timed out",
-                displayMessage: """
-                    Connection timed out
-                      Hint: \(hint)
-                    """
+                coreMessage: "Connection timed out"
             )
         case .connectionFailed(let message):
             let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .connectionFailed, hint: hint),
-                coreMessage: "Connection failed: \(message)",
-                displayMessage: """
-                    Connection failed: \(message)
-                      Hint: \(hint)
-                    """
+                coreMessage: "Connection failed: \(message)"
             )
         case .connectionFailure(let failure):
             return FenceFailureDescriptor(
                 details: FailureDetails(code: failure.failureCode, hint: failure.hint),
-                coreMessage: failure.message,
-                displayMessage: failure.message
+                coreMessage: failure.message
             )
         case .sessionLocked(let message):
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .sessionLocked),
-                coreMessage: "Session locked: \(message)",
-                displayMessage: """
-                    Session locked: \(message)
-                      Another driver is currently connected. Wait for it to disconnect
-                      or for the session to time out.
-                      If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID
-                      or restart the app to release it.
-                    """
+                coreMessage: "Session locked: \(message)"
             )
         case .authFailed(let message):
             let base = "Auth failed: \(message)"
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .authFailed),
-                coreMessage: base,
-                displayMessage: base
+                coreMessage: base
             )
         case .notConnected:
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .connectionNotConnected),
-                coreMessage: "Not connected to device.",
-                displayMessage: """
-                    Not connected to device.
-                      The previous connection may have closed or timed out.
-                      Hint: Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices.
-                    """
+                coreMessage: "Not connected to device."
             )
         case .actionTimeout:
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .requestTimeout),
-                coreMessage: "Command timed out waiting for a response from the app.",
-                displayMessage: """
-                    Command timed out waiting for a response from the app.
-                      \(Self.actionTimeoutRecoveryHint)
-                    """
+                coreMessage: "Command timed out waiting for a response from the app."
             )
         case .actionFailed(let message):
             let displayMessage = "Action failed: \(message)"
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .requestActionFailed),
-                coreMessage: displayMessage,
-                displayMessage: displayMessage
+                coreMessage: displayMessage
             )
         case .serverError(let serverError):
             let displayMessage = "Action failed: \(serverError.message)"
             return FenceFailureDescriptor(
                 details: serverError.failureDetails,
-                coreMessage: displayMessage,
-                displayMessage: displayMessage
+                coreMessage: displayMessage
             )
         }
     }

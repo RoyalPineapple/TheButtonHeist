@@ -122,7 +122,7 @@ private struct PhotoCell: View {
     let photo: Photo
     let isSelecting: Bool
     let isSelected: Bool
-    let onTap: () -> Void
+    let onTap: @MainActor () -> Void
 
     var body: some View {
         Button(action: onTap) {

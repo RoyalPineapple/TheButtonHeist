@@ -54,20 +54,6 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         ).validatedSemantics()
     }
 
-    init(
-        runtimeValidatedVersion version: Int,
-        name: String? = nil,
-        parameter: HeistParameter = .none,
-        definitions: [HeistPlan] = [],
-        body: [HeistStep]
-    ) {
-        self.version = version
-        self.name = name
-        self.parameter = parameter
-        self.definitions = definitions
-        self.body = body
-    }
-
     public init(from decoder: Decoder) throws {
         self = try HeistPlanAdmissionCandidate(from: decoder).validatedSemantics()
     }

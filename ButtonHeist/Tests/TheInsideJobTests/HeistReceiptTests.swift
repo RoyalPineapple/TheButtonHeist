@@ -146,13 +146,13 @@ final class HeistReceiptTests: XCTestCase {
     private func receiptActionEvidence(success: Bool = true) -> HeistActionEvidence {
         let result: ActionResult
         if success {
-            result = ActionResult.success(method: .activate, evidence: ActionResultEvidence())
+            result = ActionResult.success(method: .activate, evidence: .none)
         } else {
             result = ActionResult.failure(
                 method: .activate,
                 errorKind: .actionFailed,
                 message: "failed",
-                evidence: ActionResultEvidence()
+                evidence: .none
             )
         }
         return .commandlessDispatch(dispatchResult: result)
@@ -195,11 +195,50 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
-        XCTExpectFailure("runHeistSync reports failed heists through XCTest at the call site") {
-            let heist = runHeistSync("syncFailure") {
+        let expectedFile = String(describing: #filePath)
+        let expectedLine: UInt = 4_241
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.type == .assertionFailure
+                && issue.compactDescription.contains("Heist failed path=$.body[0] kind=fail message=stop")
+                && issue.sourceCodeContext.location?.fileURL.path == expectedFile
+                && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
+        }
+        var heist: Heist?
+
+        XCTExpectFailure(
+            "runHeistSync reports failed heists through XCTest at the call site",
+            options: options
+        ) {
+            heist = runHeistSync("syncFailure", file: #filePath, line: expectedLine) {
                 Fail("stop")
             }
-            XCTAssertNil(heist)
+        }
+
+        XCTAssertNil(heist)
+    }
+
+    func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() {
+        let expectedMessage = "runHeistSyncOperation must be called on the main thread"
+        let expectedFile = String(describing: #filePath)
+        let expectedLine: UInt = 4_242
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.type == .assertionFailure
+                && issue.compactDescription.contains(expectedMessage)
+                && issue.sourceCodeContext.location?.fileURL.path == expectedFile
+                && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
+        }
+
+        XCTExpectFailure(
+            "Button Heist assertion failures must be recorded by XCTest",
+            options: options
+        ) {
+            recordHeistXCTestIssue(
+                .synchronousOperationRequiresMainThread,
+                file: #filePath,
+                line: expectedLine
+            )
         }
     }
 
@@ -276,7 +315,7 @@ final class HeistReceiptTests: XCTestCase {
             elements: [(staleHeader, "controls_demo")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
         )
-        job.brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleDiscovery)
+        job.brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
 
         let currentHeader = AccessibilityElement.make(
             label: "ButtonHeist Demo",
@@ -392,7 +431,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
+            return ActionResult.success(method: .increment, evidence: .none)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -429,7 +468,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: ActionResultEvidence())
+            return ActionResult.success(method: .increment, evidence: .none)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -541,9 +580,8 @@ final class HeistReceiptTests: XCTestCase {
                         command: .takeScreenshot,
                         dispatchResult: ActionResult.success(
                             payload: .screenshot(screenshot),
-                            evidence: ActionResultEvidence()
-                        ),
-                        warning: nil
+                            evidence: .none
+                        )
                     )
                 ),
             ],
@@ -645,8 +683,7 @@ private final class ReceiptWaitScript {
 
     func receipt(for step: ResolvedWaitStep) -> HeistWaitReceipt {
         guard !states.isEmpty else {
-            let expectation = ExpectationResult(
-                met: false,
+            let expectation = ExpectationResult.Unmet(
                 predicate: step.predicate,
                 actual: "no settled semantic observation available"
             )
@@ -664,7 +701,8 @@ private final class ReceiptWaitScript {
         previousCapture = state.capture
 
         let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace, isComplete: true)
-        if expectation.met {
+        switch expectation {
+        case .met(let expectation):
             return .matched(
                 message: expectation.actual,
                 accessibilityTrace: trace,
@@ -672,14 +710,15 @@ private final class ReceiptWaitScript {
                 observedSequence: nextSequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
+        case .unmet(let expectation):
+            return .timedOut(
+                message: expectation.actual,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: nextSequence,
+                observationSummary: "interface: \(state.interface.projectedElements.count) elements"
+            )
         }
-        return .timedOut(
-            message: expectation.actual,
-            accessibilityTrace: trace,
-            expectation: expectation,
-            observedSequence: nextSequence,
-            observationSummary: "interface: \(state.interface.projectedElements.count) elements"
-        )
     }
 }
 

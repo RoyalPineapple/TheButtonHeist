@@ -44,14 +44,7 @@ enum HeistReportEvidenceProjection: Sendable {
     var traceDelta: DeltaProjection? {
         switch self {
         case .action(let projection):
-            switch projection.evidence {
-            case .commandResolutionFailure:
-                return nil
-            case .dispatch(let result, _):
-                return result.delta
-            case .expectation(_, let expectationResult, _, _):
-                return expectationResult.delta
-            }
+            return projection.traceDelta
         case .wait(let projection):
             return projection.result.delta
         case .repeatUntil(let projection):
@@ -64,70 +57,43 @@ enum HeistReportEvidenceProjection: Sendable {
     }
 }
 
-struct HeistActionEvidenceProjection: Sendable {
-    private let actionEvidence: HeistActionEvidence
-    private let profile: ProjectionProfile
-
-    init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
-        actionEvidence = evidence
-        self.profile = profile
-    }
-
-    var command: HeistActionCommandType? {
-        actionEvidence.command?.wireType
-    }
-
-    var target: AccessibilityTarget? {
-        actionEvidence.command?.reportTarget
-    }
-
-    var evidence: HeistActionResultEvidenceProjection {
-        HeistActionResultEvidenceProjection(
-            evidence: actionEvidence,
-            profile: profile
-        )
-    }
-}
-
-enum HeistActionResultEvidenceProjection: Sendable {
-    case commandResolutionFailure(warning: HeistActionWarning?)
-    case dispatch(result: ActionProjection, warning: HeistActionWarning?)
+enum HeistActionEvidenceProjection: Sendable {
+    case commandResolutionFailure(command: HeistActionCommand)
+    case dispatch(command: HeistActionCommand, result: ActionProjection)
+    case commandlessDispatch(result: ActionProjection)
     case expectation(
+        command: HeistActionCommand,
         dispatchResult: ActionProjection,
         expectationResult: ActionProjection,
-        expectation: ExpectationProjection,
-        warning: HeistActionWarning?
+        expectation: ExpectationProjection
     )
 
-    init(
-        evidence: HeistActionEvidence,
-        profile: ProjectionProfile
-    ) {
+    init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
         switch evidence {
-        case .commandResolutionFailure:
-            self = .commandResolutionFailure(warning: nil)
-        case .dispatch(let command, let dispatchResult, let warning):
+        case .commandResolutionFailure(let command):
+            self = .commandResolutionFailure(command: command)
+        case .dispatch(let command, let dispatchResult):
             self = .dispatch(
+                command: command,
                 result: ActionProjection(
                     actionMethod: .heist(command),
                     result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
-                ),
-                warning: warning
+                )
             )
         case .commandlessDispatch(let dispatchResult):
-            self = .dispatch(
+            self = .commandlessDispatch(
                 result: ActionProjection(
                     actionMethod: .result(dispatchResult.method),
                     result: dispatchResult,
                     profile: profile,
                     includeOmissions: true
-                ),
-                warning: nil
+                )
             )
-        case .expectation(let command, let dispatchResult, let expectationResult, let expectation, let warning):
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
             self = .expectation(
+                command: command,
                 dispatchResult: ActionProjection(
                     actionMethod: .heist(command),
                     result: dispatchResult,
@@ -140,9 +106,41 @@ enum HeistActionResultEvidenceProjection: Sendable {
                     profile: profile,
                     includeOmissions: true
                 ),
-                expectation: ExpectationProjection(result: expectation),
-                warning: warning
+                expectation: ExpectationProjection(result: expectation)
             )
+        }
+    }
+
+    var command: HeistActionCommandType? {
+        switch self {
+        case .commandResolutionFailure(let command),
+             .dispatch(let command, _),
+             .expectation(let command, _, _, _):
+            return command.wireType
+        case .commandlessDispatch:
+            return nil
+        }
+    }
+
+    var target: AccessibilityTarget? {
+        switch self {
+        case .commandResolutionFailure(let command),
+             .dispatch(let command, _),
+             .expectation(let command, _, _, _):
+            return command.reportTarget
+        case .commandlessDispatch:
+            return nil
+        }
+    }
+
+    var traceDelta: DeltaProjection? {
+        switch self {
+        case .commandResolutionFailure:
+            return nil
+        case .dispatch(_, let result), .commandlessDispatch(let result):
+            return result.delta
+        case .expectation(_, _, let expectationResult, _):
+            return expectationResult.delta
         }
     }
 }

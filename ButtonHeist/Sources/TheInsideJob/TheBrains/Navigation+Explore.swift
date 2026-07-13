@@ -11,25 +11,27 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    fileprivate func observeSemanticDiscovery() async -> InterfaceObservation? {
-        let exploration = await exploreScreen()
-        return exploration.screen
+    fileprivate func observeSemanticDiscovery() async -> ExploredScreen? {
+        await exploreScreen()
     }
 
     func exploreScreen(
         target: AccessibilityTarget? = nil,
-        baseline: InterfaceObservation? = nil,
+        baseline: ExplorationBaseline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
-    ) async -> ExploredScreen {
+    ) async -> ExploredScreen? {
+        guard !Task.isCancelled else { return nil }
         let startTime = CACurrentMediaTime()
+        guard let settledPage = await settledExplorationPage(),
+              !Task.isCancelled else { return nil }
         var exploration = SemanticExploration(
-            baseline: baseline ?? stash.explorationBaseline(),
+            baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
             maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
         )
 
-        exploration.absorb(stash.refreshLiveCapture())
+        exploration.absorb(settledPage)
 
         if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen.tree) {
             exploration.manifest.clearPendingContainers()
@@ -37,7 +39,10 @@ extension Navigation {
         }
 
         exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        if await scanPendingContainers(target: target, exploration: &exploration) != nil {
+        guard !Task.isCancelled else { return nil }
+        let terminal = await scanPendingContainers(target: target, exploration: &exploration)
+        guard !Task.isCancelled else { return nil }
+        if terminal != nil {
             return exploration.finish(startTime: startTime)
         }
 
@@ -59,6 +64,20 @@ extension Navigation {
 
     func hasVisibleTerminalExplorationResolution(_ target: AccessibilityTarget, in tree: InterfaceTree) -> Bool {
         hasTerminalExplorationResolution(target, in: tree.viewportOnly)
+    }
+}
+
+extension Navigation {
+    func settledExplorationPage() async -> InterfaceObservation? {
+        let settle = await SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: SettleSession.defaultTimeoutMs
+        ).run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: tripwire.tripwireSignal()
+        )
+        return InterfaceObservationProof.settled(settle, stash: stash)?.screen
     }
 }
 

@@ -27,8 +27,7 @@ extension Navigation {
 
         switch await elementInflation.inflate(
             for: target,
-            method: .scrollToVisible,
-            deallocatedBoundary: "scroll_to_visible dispatch"
+            method: .scrollToVisible
         ) {
         case .inflated:
             return .success(method: .scrollToVisible)

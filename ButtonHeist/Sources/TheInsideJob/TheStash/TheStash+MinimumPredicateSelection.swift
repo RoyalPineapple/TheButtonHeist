@@ -5,12 +5,21 @@ import TheScore
 import ThePlans
 
 extension TheStash {
+    func firstResponderTarget(in tree: InterfaceTree) -> AccessibilityTarget? {
+        guard let firstResponderHeistId = tree.firstResponderHeistId else { return nil }
+        return minimumUniqueTarget(for: firstResponderHeistId, in: tree)
+    }
+
     func minimumUniqueTarget(for treeElement: InterfaceTree.Element) -> AccessibilityTarget? {
-        let elements = orderedInterfaceElements.map {
+        minimumUniqueTarget(for: treeElement.heistId, in: interfaceTree)
+    }
+
+    func minimumUniqueTarget(for heistId: HeistId, in tree: InterfaceTree) -> AccessibilityTarget? {
+        let elements = tree.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return MinimumPredicateSelector.minimumUniquePredicate(
-            for: treeElement.heistId.predicateSelectionElementId,
+            for: heistId.predicateSelectionElementId,
             in: elements
         )?.target
     }

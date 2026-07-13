@@ -8,26 +8,15 @@ public enum AccessibilityObservationFallbackReason: String, Codable, Sendable, E
     case navigationMarkerChanged
     case primaryHeaderChanged
     case rootShapeChanged
-    case screenIdentifierChanged
-}
-
-enum AccessibilityObservationChangeSource: Equatable, Sendable {
-    case screenChangedNotification
-    case observationGeneration
-    case settledSnapshot
-    case fallback(AccessibilityObservationFallbackReason)
 }
 
 enum AccessibilityObservationChange: Equatable, Sendable {
-    case elementChanged(source: AccessibilityObservationChangeSource)
-    case screenChanged(source: AccessibilityObservationChangeSource)
+    case elementChanged
+    case screenChanged
 }
 
 enum AccessibilityObservationChangeReducer {
-    static func reduce(
-        before: AccessibilityTrace.Capture,
-        after: AccessibilityTrace.Capture
-    ) -> AccessibilityObservationChange {
+    static func reduce(after: AccessibilityTrace.Capture) -> AccessibilityObservationChange {
         let hasScreenChangedNotification = after.transition.accessibilityNotifications.contains { notification in
             switch notification.kind {
             case .screenChanged:
@@ -37,19 +26,22 @@ enum AccessibilityObservationChangeReducer {
             }
         }
         if hasScreenChangedNotification {
-            return .screenChanged(source: .screenChangedNotification)
+            return .screenChanged
         }
-        if let beforeGeneration = before.context.observationGeneration,
-           let afterGeneration = after.context.observationGeneration,
-           beforeGeneration != afterGeneration {
-            return .screenChanged(source: .observationGeneration)
+        if after.transition.fallbackReason != nil {
+            return .screenChanged
         }
-        if let fallbackReason = after.transition.fallbackReason {
-            return .screenChanged(source: .fallback(fallbackReason))
+        let hasUsableSameScreenNotification = after.transition.accessibilityNotifications.contains { notification in
+            switch notification.kind {
+            case .elementChanged, .announcement:
+                true
+            case .screenChanged, .unknown:
+                false
+            }
         }
-        if before.context.screenId != after.context.screenId {
-            return .screenChanged(source: .fallback(.screenIdentifierChanged))
+        if hasUsableSameScreenNotification {
+            return .elementChanged
         }
-        return .elementChanged(source: .settledSnapshot)
+        return .elementChanged
     }
 }

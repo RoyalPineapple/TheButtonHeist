@@ -220,33 +220,38 @@ final class WireTypeRoundTripTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             message: "activated",
-            evidence: ActionResultEvidence(
-                settlement: .settled(durationMs: 74),
-                timing: timing
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 74)
+                )
             )
-        )
+        ).withTiming(timing)
 
         let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
         XCTAssertEqual(decoded.timing, timing)
     }
 
     func testActionResultWithTimingMergesWithoutErasingExistingFields() {
+        let initialTiming = ActionPerformanceTiming(
+            beforeObservationMs: 1,
+            targetResolutionMs: 2,
+            actionDispatchMs: 3,
+            interactionMs: 4,
+            settleMs: 5,
+            finalSemanticEvidenceMs: 6,
+            receiptGenerationMs: 7,
+            totalMs: 8
+        )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                settlement: .settled(durationMs: 5),
-                timing: ActionPerformanceTiming(
-                    beforeObservationMs: 1,
-                    targetResolutionMs: 2,
-                    actionDispatchMs: 3,
-                    interactionMs: 4,
-                    settleMs: 5,
-                    finalSemanticEvidenceMs: 6,
-                    receiptGenerationMs: 7,
-                    totalMs: 8
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 5)
                 )
             )
-        )
+        ).withTiming(initialTiming)
         let overlay = ActionPerformanceTiming(
             beforeObservationMs: 10,
             actionDispatchMs: 30,
@@ -490,7 +495,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollTargetRoundTripsScopedAccessibilityTarget() throws {
-        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable(true), .label("Pay"))
         let request = ScrollTarget(selection: .element(accessibilityTarget), direction: .down)
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
@@ -563,7 +568,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollToEdgeTargetRoundTripsScopedAccessibilityTarget() throws {
-        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable, .label("Pay"))
+        let accessibilityTarget = AccessibilityTarget.within(container: .scrollable(true), .label("Pay"))
         let request = ScrollToEdgeTarget(selection: .element(accessibilityTarget), edge: .bottom)
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
@@ -782,7 +787,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = Data(#"{"subtree":{"container":{"checks":[{"kind":"scrollable","value":true}]}}}"#.utf8)
         let decoded = try decoder.decode(InterfaceQuery.self, from: data)
 
-        XCTAssertEqual(decoded.subtree, .container(.scrollable))
+        XCTAssertEqual(decoded.subtree, .container(.scrollable(true)))
     }
 
     func testInterfaceQueryElementSubtreeRejectsHeistIdField() {
@@ -945,7 +950,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
-    func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
+    func testHeistExecutionResultRoundTripKeepsActivationTraceOnlyInActionEvidence() throws {
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Save")))
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -956,8 +961,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             category: .targetResolution,
             contract: "action dispatch succeeds",
             observed: "No element matching label \"Save\"",
-            expected: "predicate(label=\"Save\")",
-            activationTrace: activationTrace
+            expected: "predicate(label=\"Save\")"
         )
         let result = HeistExecutionResult.failed(
             steps: [
@@ -972,9 +976,11 @@ final class WireTypeRoundTripTests: XCTestCase {
                             method: .activate,
                             errorKind: .elementNotFound,
                             message: "No element matching label \"Save\"",
-                            evidence: ActionResultEvidence(activationTrace: activationTrace)
-                        ),
-                        warning: nil
+                            evidence: ActionResultFailureEvidence(
+                                observation: .none,
+                                activationTrace: activationTrace
+                            )
+                        )
                     ),
                     failure: failure
                 ),
@@ -1000,19 +1006,36 @@ final class WireTypeRoundTripTests: XCTestCase {
             decoded.steps[0].actionEvidence?.dispatchResult?.message,
             "No element matching label \"Save\""
         )
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
         XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
-        XCTAssertEqual(decoded.steps[0].failure?.activationTrace, activationTrace)
 
         let payload = try JSONProbe(data: data)
         let step = try payload.array("steps")[0]
         let intent = try step.object("intent")
-        let failureTrace = try step.object("outcome").object("failure").object("activationTrace")
+        let encodedFailure = try step.object("outcome").object("failure")
         XCTAssertEqual(try intent.string("type"), "action")
         XCTAssertEqual(try intent.object("command").string("type"), "activate")
         try intent.assertMissing("target")
-        XCTAssertEqual(try failureTrace.bool("axActivateReturned"), false)
-        XCTAssertEqual(try failureTrace.bool("tapActivationDispatched"), true)
-        XCTAssertEqual(try failureTrace.bool("tapActivationSucceeded"), true)
+        try encodedFailure.assertMissing("activationTrace")
+    }
+
+    func testHeistFailureDetailRejectsRetiredActivationTraceField() throws {
+        let json = #"""
+        {
+            "category":"action",
+            "contract":"action dispatch succeeds",
+            "observed":"activation failed",
+            "activationTrace":{
+                "axActivateReturned":true,
+                "tapActivationDispatched":false,
+                "tapActivationSucceeded":false
+            }
+        }
+        """#
+
+        XCTAssertThrowsError(try decoder.decode(HeistFailureDetail.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: [#"Unknown heist failure detail field "activationTrace""#])
+        }
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
@@ -1114,6 +1137,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                     method: .activate,
                     errorKind: .actionFailed,
                     message: "button disabled",
+                    evidence: .none
                 )
             ),
             failure: HeistFailureDetail(
@@ -1201,7 +1225,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let actionResult = ActionResult.success(method: .wait)
+        let actionResult = ActionResult.success(method: .wait, evidence: .none)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
@@ -1217,7 +1241,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
         let evidence = HeistActionEvidence.commandlessDispatch(
-            dispatchResult: ActionResult.success(method: .activate)
+            dispatchResult: ActionResult.success(method: .activate, evidence: .none)
         )
         XCTAssertNil(evidence.command)
         XCTAssertNil(evidence.warning)
@@ -1234,7 +1258,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try decoder.decode(HeistActionEvidence.self, from: Data(invalid.utf8))) { error in
-            assertDecodingError(error, contains: ["commandless_dispatch heist action evidence cannot include warning"])
+            assertDecodingError(error, contains: ["Unknown heist action evidence field \"warning\""])
         }
     }
 
@@ -1425,7 +1449,11 @@ final class WireTypeRoundTripTests: XCTestCase {
                     receiptKind: .action,
                     durationMs: durationMs,
                     evidence: .commandlessDispatch(
-                        dispatchResult: .success(method: .activate, message: "activated")
+                        dispatchResult: .success(
+                            method: .activate,
+                            message: "activated",
+                            evidence: .none
+                        )
                     )
                 ),
             ]

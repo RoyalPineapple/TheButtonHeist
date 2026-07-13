@@ -6,7 +6,7 @@ enum MCPValueBridge {
     static func commandEnvelope(from arguments: MCPRawArgumentObject?) throws -> TheFence.CommandArgumentEnvelope {
         try validateArgumentObject(arguments)
         return TheFence.CommandArgumentEnvelope(
-            values: try heistValues(from: arguments ?? [:])
+            values: try (arguments ?? [:]).mapValues { try heistValue(from: $0) }
         )
     }
 
@@ -28,10 +28,6 @@ enum MCPValueBridge {
             context: context,
             node: jsonValueNode
         )
-    }
-
-    static func heistValues(from arguments: MCPRawArgumentObject) throws -> [String: HeistValue] {
-        try arguments.mapValues { try heistValue(from: $0) }
     }
 
     static func value(from heistValue: HeistValue) -> Value {

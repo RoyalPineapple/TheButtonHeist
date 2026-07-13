@@ -286,10 +286,11 @@ appearance, disappearance, or update from final state.
 
 Container presence is a current-tree predicate, not a transition predicate. Use
 `.exists(.container(.identifier("Checkout")))` when a heist needs to assert that the
-current settled hierarchy contains a matching semantic container without
+current settled hierarchy contains a matching container without
 requiring a preceding screen-change fact. Container predicates can match
 semantic-group label and value, identifier on any container, role shorthands
-such as `.list` or `.dataTable(rowCount:columnCount:)`, scrollability, custom
+such as `.list` or `.dataTable(rowCount: .init(...), columnCount: .init(...))`,
+scrollability through `.scrollable(true)`, custom
 actions, modal boundary, or `.matching(...)` combinations. Use
 `.within(container: .label("Checkout"), .label("Pay"))` when an element target
 must resolve inside that container. Use `.changed(.screen())` when the action

@@ -4,7 +4,6 @@ extension TheFence.Command {
         case .ping:
             return makeDescriptor(
                 family: .session,
-                requestDecoder: TheFence.decodePingRequest,
                 requiresConnectionBeforeDispatch: false,
                 timeout: .fixed(.health),
                 responseProjection: .pong,
@@ -16,7 +15,6 @@ extension TheFence.Command {
         case .listDevices:
             return makeDescriptor(
                 family: .session,
-                requestDecoder: TheFence.decodeListDevicesRequest,
                 requiresConnectionBeforeDispatch: false,
                 responseProjection: .devices,
                 projection: .cliOnly(
@@ -27,7 +25,6 @@ extension TheFence.Command {
         case .getSessionState:
             return makeDescriptor(
                 family: .session,
-                requestDecoder: TheFence.decodeGetSessionStateRequest,
                 requiresConnectionBeforeDispatch: false,
                 responseProjection: .sessionState,
                 projection: .cliAndMCP(
@@ -38,7 +35,6 @@ extension TheFence.Command {
         case .connect:
             return makeDescriptor(
                 family: .session,
-                requestDecoder: TheFence.decodeConnectCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
                     FenceParameters.connectionTarget.spec,
@@ -51,7 +47,6 @@ extension TheFence.Command {
         case .listTargets:
             return makeDescriptor(
                 family: .session,
-                requestDecoder: TheFence.decodeListTargetsRequest,
                 requiresConnectionBeforeDispatch: false,
                 responseProjection: .targets,
                 projection: .cliOnly(

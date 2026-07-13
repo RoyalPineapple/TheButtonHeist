@@ -34,6 +34,7 @@ import TheScore
         let projection = HeistExecutionMetricProjection(rollup: rollup)
 
         #expect(projection == rollup.metrics)
+        #expect(HeistExecutionMetricProjection(result: result) == rollup.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])
@@ -76,23 +77,58 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
-    @Test func `summary excludes flattened failure actions from top level count`() {
-        let bodyStep = HeistExecutionStepResult.passed(
-            path: "$.body[0]",
-            kind: .wait,
+    @Test func `summary treats paths as opaque when excluding trailing failure evidence`() {
+        let ordinaryResult = HeistExecutionResult.passed(
+            steps: [
+                .passed(
+                    path: "$.body[0].failure.actions[0]",
+                    receiptKind: .action,
+                    durationMs: 1,
+                    intent: .action(command: .takeScreenshot),
+                    evidence: .dispatch(
+                        command: .takeScreenshot,
+                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
+                    )
+                ),
+            ],
             durationMs: 1
         )
-        let failureScreenshot = HeistExecutionStepResult.passed(
-            path: "$.body[0].failure.actions[0]",
-            kind: .action,
-            durationMs: 1
-        )
-        let result = HeistExecutionResult.passed(
-            steps: [bodyStep, failureScreenshot],
-            durationMs: 2
+        let failedResult = HeistExecutionResult.failed(
+            steps: [
+                .failed(
+                    path: "opaque-failure",
+                    kind: .fail,
+                    durationMs: 1,
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "Fail aborts execution",
+                        observed: "stop"
+                    )
+                ),
+                .passed(
+                    path: "opaque-supplemental-evidence",
+                    receiptKind: .action,
+                    durationMs: 1,
+                    intent: .action(command: .takeScreenshot),
+                    evidence: .dispatch(
+                        command: .takeScreenshot,
+                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
+                    )
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "opaque-failure"
         )
 
-        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(ordinaryResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(ordinaryResult.evidenceRollup.failureScreenshotStep == nil)
+        #expect(failedResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(failedResult.evidenceRollup.summary.outputReceiptNodeCount == 2)
+        #expect(failedResult.evidenceRollup.failureScreenshotStep?.path == "opaque-supplemental-evidence")
+        #expect(
+            failedResult.failureScreenshotSummary
+                == "failure screenshot: unavailable receipt=opaque-supplemental-evidence"
+        )
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {
@@ -119,20 +155,25 @@ import TheScore
                 command: command,
                 dispatchResult: .success(
                     method: .activate,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 3),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 3)
+                        ),
                         timing: actionTiming
                     )
                 ),
                 expectationResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 8),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 8)
+                        ),
                         timing: expectationTiming
                     )
                 ),
-                expectation: ExpectationResult(met: true, predicate: predicate),
-                warning: nil
+                expectation: ExpectationResult(met: true, predicate: predicate)
             )
         )
     }
@@ -141,8 +182,11 @@ import TheScore
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(
                 method: .wait,
-                evidence: ActionResultEvidence(
-                    settlement: .settled(durationMs: 13),
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        .noChangeForTests(elementCount: 0),
+                        .settled(durationMs: 13)
+                    ),
                     timing: waitTiming
                 )
             ),
@@ -170,8 +214,11 @@ import TheScore
                 expectation: ExpectationResult.Met(predicate: predicate),
                 actionResult: .success(
                     method: .wait,
-                    evidence: ActionResultEvidence(
-                        settlement: .settled(durationMs: 23),
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .settledTrace(
+                            .noChangeForTests(elementCount: 0),
+                            .settled(durationMs: 23)
+                        ),
                         timing: repeatTiming
                     )
                 )
@@ -199,7 +246,6 @@ import TheScore
             beforeObservationMs: 4,
             targetResolutionMs: 1,
             actionDispatchMs: 2,
-            settleMs: 3,
             finalSemanticEvidenceMs: 5,
             totalMs: 15
         )
@@ -210,7 +256,6 @@ import TheScore
             beforeObservationMs: 9,
             targetResolutionMs: 6,
             actionDispatchMs: 7,
-            settleMs: 8,
             finalSemanticEvidenceMs: 10,
             totalMs: 40
         )
@@ -221,7 +266,6 @@ import TheScore
             beforeObservationMs: 14,
             targetResolutionMs: 11,
             actionDispatchMs: 12,
-            settleMs: 13,
             finalSemanticEvidenceMs: 15,
             totalMs: 95
         )
@@ -232,7 +276,6 @@ import TheScore
             beforeObservationMs: 24,
             targetResolutionMs: 21,
             actionDispatchMs: 22,
-            settleMs: 23,
             finalSemanticEvidenceMs: 25,
             totalMs: 60
         )

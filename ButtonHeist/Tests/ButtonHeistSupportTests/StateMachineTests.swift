@@ -30,9 +30,25 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(change.state, .locked)
         XCTAssertEqual(change.effects, [])
     }
+
+    func testDriverSupportsNonSendableState() {
+        let initial = LocalState(value: 1)
+        let replacement = LocalState(value: 2)
+        var driver = StateDriver(initial: initial, machine: LocalMachine())
+
+        let change = driver.send(.replace(with: replacement))
+
+        XCTAssertEqual(change, .changed(to: replacement, effects: [replacement]))
+        XCTAssertEqual(driver.state, replacement)
+    }
+
+    func testPureMachineValuesRemainSendable() {
+        assertSendable(StateChange<GateState, GateEffect, GateRejection>.self)
+        assertSendable(StateDriver<GateMachine>.self)
+    }
 }
 
-private struct GateMachine: SimpleStateMachine {
+private struct GateMachine: SimpleStateMachine, Sendable {
     func advance(_ state: GateState, with event: GateEvent) -> StateChange<GateState, GateEffect, GateRejection> {
         switch (state, event) {
         case (.locked, .insertCoin):
@@ -65,3 +81,35 @@ private enum GateEffect: Equatable, Sendable {
 private enum GateRejection: Equatable, Sendable {
     case coinRequired
 }
+
+private struct LocalMachine: SimpleStateMachine {
+    enum Event: Equatable {
+        case replace(with: LocalState)
+    }
+
+    enum Rejection: Equatable {}
+
+    func advance(
+        _ state: LocalState,
+        with event: Event
+    ) -> StateChange<LocalState, LocalState, Rejection> {
+        switch event {
+        case .replace(let replacement):
+            return .changed(to: replacement, effects: [replacement])
+        }
+    }
+}
+
+private final class LocalState: Equatable {
+    let value: Int
+
+    init(value: Int) {
+        self.value = value
+    }
+
+    static func == (lhs: LocalState, rhs: LocalState) -> Bool {
+        lhs.value == rhs.value
+    }
+}
+
+private func assertSendable<Value: Sendable>(_: Value.Type) {}

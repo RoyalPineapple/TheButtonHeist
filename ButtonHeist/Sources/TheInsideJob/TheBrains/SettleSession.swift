@@ -308,6 +308,21 @@ where State == SettleLoopMachine.State,
     }
 }
 
+struct SettleSessionFinalObservation: Equatable, Sendable {
+    let tree: InterfaceTree
+    let fingerprint: Int
+    let captureToken: InterfaceCaptureToken
+
+    @MainActor
+    init(screen: InterfaceObservation, fingerprint: Int? = nil) {
+        tree = screen.tree
+        self.fingerprint = fingerprint ?? SettleTimeline.fingerprint(
+            of: screen.liveCapture.hierarchy.sortedElements
+        )
+        captureToken = screen.captureToken
+    }
+}
+
 // MARK: - SettleSession
 
 /// Multi-cycle accessibility-tree settle loop with inline transient capture.
@@ -474,9 +489,9 @@ where State == SettleLoopMachine.State,
         /// the settle baseline was reset, but the final `outcome` still owns
         /// whether the AX tree became stable.
         let events: [SettleEvent]
-        /// Last parsed screen observed by the settle loop. On `.settled`, this
-        /// is the AX tree whose fingerprint completed the stability proof.
-        let finalScreen: InterfaceObservation?
+        /// Last semantic observation from the settle loop, paired with the
+        /// token and fingerprint needed to reacquire its live capture from TheStash.
+        let finalObservation: SettleSessionFinalObservation?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
@@ -487,17 +502,17 @@ where State == SettleLoopMachine.State,
         init(
             outcome: SettleOutcome,
             events: [SettleEvent],
-            finalScreen: InterfaceObservation?,
+            finalObservation: SettleSessionFinalObservation?,
             elementsByKey: [TimelineKey: AccessibilityElement],
             instabilityDescription: String? = nil
         ) {
             precondition(
-                !outcome.didSettleCleanly || finalScreen != nil,
-                "settled settle outcome requires a final screen"
+                !outcome.didSettleCleanly || finalObservation != nil,
+                "settled settle outcome requires a final observation"
             )
             self.outcome = outcome
             self.events = events
-            self.finalScreen = finalScreen
+            self.finalObservation = finalObservation
             self.elementsByKey = elementsByKey
             self.instabilityDescription = instabilityDescription
         }
@@ -545,14 +560,18 @@ where State == SettleLoopMachine.State,
             return Outcome(
                 outcome: .settled(timeMs: timeMs),
                 events: state.events,
-                finalScreen: observations.currentGenerationLastObservation?.screen,
+                finalObservation: observations.currentGenerationLastObservation.map {
+                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                },
                 elementsByKey: observations.elementsByKey
             )
         case .timedOut(let timeMs), .yieldFailed(let timeMs):
             return Outcome(
                 outcome: .timedOut(timeMs: timeMs),
                 events: state.events,
-                finalScreen: observations.currentGenerationLastObservation?.screen,
+                finalObservation: observations.currentGenerationLastObservation.map {
+                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                },
                 elementsByKey: observations.elementsByKey,
                 instabilityDescription: observations.latestChangeDescription
             )
@@ -560,7 +579,9 @@ where State == SettleLoopMachine.State,
             return Outcome(
                 outcome: .cancelled(timeMs: timeMs),
                 events: state.events,
-                finalScreen: observations.currentGenerationLastObservation?.screen,
+                finalObservation: observations.currentGenerationLastObservation.map {
+                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                },
                 elementsByKey: observations.elementsByKey,
                 instabilityDescription: observations.latestChangeDescription
             )

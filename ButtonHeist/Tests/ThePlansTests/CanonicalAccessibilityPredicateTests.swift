@@ -81,8 +81,8 @@ struct CanonicalAccessibilityPredicateTests {
         let target = try #require(object["target"] as? [String: Any])
 
         let expectedJSON = #"{"target":{"container":{"checks":["# +
-            #"{"kind":"semantic","semantic":{"kind":"identifier","# +
-            #""match":{"mode":"exact","value":"Checkout"}}}]},"ordinal":1},"type":"exists"}"#
+            #"{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]},"# +
+            #""ordinal":1},"type":"exists"}"#
         #expect(try json(predicate) == expectedJSON)
         #expect(object["type"] as? String == "exists")
         #expect(target["container"] != nil)

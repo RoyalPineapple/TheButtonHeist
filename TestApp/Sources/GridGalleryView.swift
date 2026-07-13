@@ -73,7 +73,7 @@ struct GridGalleryView: View {
 private struct GridCell: View {
     let item: GalleryItem
     let isSelected: Bool
-    let onTap: () -> Void
+    let onTap: @MainActor () -> Void
 
     var body: some View {
         Button(action: onTap) {

@@ -6,11 +6,24 @@ import ButtonHeistSupport
 
 @MainActor
 final class SemanticObservationCycles {
+    struct Cursor: Equatable, Hashable, Sendable, Comparable {
+        fileprivate let rawValue: UInt64
+
+        static let initial = Cursor(rawValue: 0)
+
+        static func < (lhs: Cursor, rhs: Cursor) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+
+        func advanced() -> Cursor {
+            precondition(rawValue < UInt64.max, "Semantic observation cycle cursor exhausted")
+            return Cursor(rawValue: rawValue + 1)
+        }
+    }
+
     struct Cycle: Equatable, Sendable {
-        let id: UInt64
+        let cursor: Cursor
         let scope: SemanticObservationScope
-        let baseline: UInt64
-        fileprivate let generation: UInt64
     }
 
     enum CycleAdmission: Equatable, Sendable {
@@ -23,16 +36,31 @@ final class SemanticObservationCycles {
         case ignoredStaleToken
     }
 
-    private enum CyclePhase: Equatable, Sendable {
-        case idle(completed: UInt64, generation: UInt64)
-        case running(Cycle)
+    private struct CycleProgress: Equatable, Sendable {
+        var latestStarted: Cursor = .initial
+        var fulfilledThrough: [SemanticObservationScope: Cursor] = [:]
 
-        var baseline: UInt64 {
+        func fulfills(scope: SemanticObservationScope, after cursor: Cursor) -> Bool {
+            (fulfilledThrough[scope] ?? .initial) > cursor
+        }
+
+        func recordingCompletion(of cycle: Cycle) -> CycleProgress {
+            var progress = self
+            for scope in cycle.scope.fulfilledScopes {
+                progress.fulfilledThrough[scope] = cycle.cursor
+            }
+            return progress
+        }
+    }
+
+    private enum CyclePhase: Equatable, Sendable {
+        case idle(CycleProgress)
+        case running(Cycle, progress: CycleProgress)
+
+        var progress: CycleProgress {
             switch self {
-            case .idle(let completed, _):
-                completed
-            case .running(let cycle):
-                cycle.id
+            case .idle(let progress), .running(_, let progress):
+                progress
             }
         }
     }
@@ -46,7 +74,7 @@ final class SemanticObservationCycles {
     private enum CycleEffect: Equatable, Sendable {
         case admission(CycleAdmission)
         case completion(CycleCompletion)
-        case completeWaiters(scope: SemanticObservationScope)
+        case completeWaiters
     }
 
     private enum CycleRejection: Equatable, Sendable {}
@@ -54,33 +82,32 @@ final class SemanticObservationCycles {
     private struct CycleMachine: SimpleStateMachine {
         func advance(_ state: CyclePhase, with event: CycleEvent) -> StateChange<CyclePhase, CycleEffect, CycleRejection> {
             switch (state, event) {
-            case (.idle(let completed, let generation), .begin(let scope)):
-                let cycle = Cycle(
-                    id: completed + 1,
-                    scope: scope,
-                    baseline: completed,
-                    generation: generation
+            case (.idle(var progress), .begin(let scope)):
+                progress.latestStarted = progress.latestStarted.advanced()
+                let cycle = Cycle(cursor: progress.latestStarted, scope: scope)
+                return .changed(
+                    to: .running(cycle, progress: progress),
+                    effects: [.admission(.started(cycle))]
                 )
-                return .changed(to: .running(cycle), effects: [.admission(.started(cycle))])
 
-            case (.running(let cycle), .begin):
+            case (.running(let cycle, _), .begin):
                 return .changed(to: state, effects: [.admission(.alreadyRunning(cycle))])
 
-            case (.running(let running), .finish(let cycle, let didObserve)) where running == cycle:
-                let completedCycle = didObserve ? cycle.id : cycle.baseline
+            case (.running(let running, let progress), .finish(let cycle, let didObserve)) where running == cycle:
+                let completedProgress = didObserve ? progress.recordingCompletion(of: cycle) : progress
                 let effects: [CycleEffect] = didObserve
-                    ? [.completion(.completed), .completeWaiters(scope: cycle.scope)]
+                    ? [.completion(.completed), .completeWaiters]
                     : [.completion(.completed)]
                 return .changed(
-                    to: .idle(completed: completedCycle, generation: cycle.generation),
+                    to: .idle(completedProgress),
                     effects: effects
                 )
 
             case (_, .finish):
                 return .changed(to: state, effects: [.completion(.ignoredStaleToken)])
 
-            case (.running(let cycle), .cancel):
-                return .changed(to: .idle(completed: cycle.baseline, generation: cycle.generation + 1))
+            case (.running(_, let progress), .cancel):
+                return .changed(to: .idle(progress))
 
             case (.idle, .cancel):
                 return .changed(to: state)
@@ -91,10 +118,10 @@ final class SemanticObservationCycles {
     private struct WaiterKey: Hashable, Sendable {
         let id: UInt64
         let scope: SemanticObservationScope
-        let afterCycle: UInt64
+        let afterCursor: Cursor
     }
 
-    private var driver = StateDriver(initial: CyclePhase.idle(completed: 0, generation: 0), machine: CycleMachine())
+    private var driver = StateDriver(initial: CyclePhase.idle(CycleProgress()), machine: CycleMachine())
     private var nextWaiterID: UInt64 = 0
     private var waiters = WaiterStore<WaiterKey, TimedOneShot<Void>>()
 
@@ -106,8 +133,8 @@ final class SemanticObservationCycles {
         waiters.count
     }
 
-    func baselineCycle() -> UInt64 {
-        phase.baseline
+    func cursor() -> Cursor {
+        phase.progress.latestStarted
     }
 
     func beginCycle(scope: SemanticObservationScope) -> CycleAdmission {
@@ -128,8 +155,8 @@ final class SemanticObservationCycles {
                 preconditionFailure("Semantic observation cycle finish emitted admission")
             case .completion(let nextCompletion):
                 completion = nextCompletion
-            case .completeWaiters(let scope):
-                completeWaiters(scope: scope)
+            case .completeWaiters:
+                completeWaiters()
             }
         }
         guard let completion else {
@@ -142,27 +169,22 @@ final class SemanticObservationCycles {
         driver.send(.cancel)
     }
 
-    func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {
-        let key = reserveWaiterKey(scope: scope, afterCycle: cycle)
+    func waitForNextCycle(scope: SemanticObservationScope, after cursor: Cursor) async {
+        guard !phase.progress.fulfills(scope: scope, after: cursor) else { return }
+
+        let key = reserveWaiterKey(scope: scope, afterCursor: cursor)
         let oneShot = TimedOneShot<Void>()
 
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                if Task.isCancelled {
-                    continuation.resume()
-                    return
-                }
-                guard oneShot.register(continuation) else {
-                    continuation.resume()
-                    return
-                }
-
+        await oneShot.wait(
+            cancellationValue: (),
+            onRegistered: { oneShot in
                 waiters.insert(oneShot, for: key)
+                completeWaiterIfFulfilled(key)
+            },
+            onFinished: {
+                waiters.resolve(key, returning: ())
             }
-        } onCancel: {
-            oneShot.resolve(returning: ())
-        }
-        completeWaiter(key)
+        )
     }
 
     func completeAllWaiters() {
@@ -171,22 +193,28 @@ final class SemanticObservationCycles {
         }
     }
 
-    private func completeWaiters(scope: SemanticObservationScope) {
+    private func completeWaiters() {
+        let progress = phase.progress
         let completed = waiters.removeAll { key in
-            scope.canFulfill(key.scope) && phase.baseline > key.afterCycle
+            progress.fulfills(scope: key.scope, after: key.afterCursor)
         }
         for removal in completed {
             removal.waiter.resolve(returning: ())
         }
     }
 
-    private func completeWaiter(_ key: WaiterKey) {
+    private func completeWaiterIfFulfilled(_ key: WaiterKey) {
+        guard waiterIsFulfilled(key) else { return }
         waiters.resolve(key, returning: ())
     }
 
-    private func reserveWaiterKey(scope: SemanticObservationScope, afterCycle: UInt64) -> WaiterKey {
+    private func waiterIsFulfilled(_ key: WaiterKey) -> Bool {
+        phase.progress.fulfills(scope: key.scope, after: key.afterCursor)
+    }
+
+    private func reserveWaiterKey(scope: SemanticObservationScope, afterCursor: Cursor) -> WaiterKey {
         defer { nextWaiterID &+= 1 }
-        return WaiterKey(id: nextWaiterID, scope: scope, afterCycle: afterCycle)
+        return WaiterKey(id: nextWaiterID, scope: scope, afterCursor: afterCursor)
     }
 }
 

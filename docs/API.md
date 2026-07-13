@@ -20,6 +20,21 @@ commands, JSON-lines stdin, MCP tools, and heist execution all route through
 that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
+The typed `FenceCommandDescriptor` values in `TheFence.Command.descriptors`
+solely own public command names, families, connection admission, adapter
+exposure, descriptions, timeout semantics, response and failure projections,
+input schemas, and MCP annotations. The committed
+`tests/fixtures/public-cli-mcp-command-contract.json` is generated from those
+descriptors as a release drift sentinel, not a second schema or an authoring
+surface. It stores those typed facts and a deterministic schema digest, not a
+duplicate schema. Do not hand-edit it. After reviewing an intentional descriptor
+change, regenerate it with:
+
+```bash
+BUTTONHEIST_UPDATE_PUBLIC_COMMAND_CONTRACT=1 scripts/swift-test-gate.sh \
+  ButtonHeistMCP --filter ToolSyncTests.publicCommandContractMatchesCommittedDescriptorSnapshot
+```
+
 The raw wire protocol lives one layer lower in TheScore. Wire message
 discriminators such as `requestInterface` and `heistPlan` are transport names,
 not the public CLI/MCP command namespace. Side-effecting public commands lower
@@ -152,21 +167,22 @@ dispatch as public side-effecting commands.
 
 ## Accessibility Node Identity
 
-`heistId` is a current-capture annotation. It can appear in interface captures
-and diagnostics to correlate current tree entries. Public actions, predicates,
-and subtree queries use `AccessibilityTarget`. An element target carries
+`HeistId` is capture-local runtime identity inside TheInsideJob. It correlates a
+committed semantic node with disposable live evidence but does not cross the
+public transport as a selector. Public actions, predicates, and subtree queries
+use `AccessibilityTarget`. An element target carries
 ordered checks for label, identifier, value, hint, traits, actions, custom
 content, rotors, recursive exclusion, and optional ordinal. A container target
 carries `ContainerPredicateExpr`, and `.within(container:target:)` scopes any
 target to descendants of a matching container. Public target nesting is
 bounded by the shared public JSON input depth limit.
 
-Container identifiers are semantic data on every delivered parser container,
+Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
 delivered `Interface` tree is the authority for both element and container
 matches; a flattened element list is not a second query model.
-`heistId` is not a replay selector and it is not geometry authority.
+A capture-local `HeistId` is not a replay selector or geometry authority.
 The string fields may be a single StringMatch or an array of StringMatch values
 when one property needs multiple checks; every entry for that property must
 match. Prefer ordered `checks` when string checks and trait checks belong in one
@@ -203,9 +219,13 @@ that stream directly; there is no endpoint delta or alternate temporal model.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
-between captures in the same screen generation. Screen, layout, value, and
-announcement notifications are edge evidence and prevent a complete window
-from being considered fact-free.
+between captures in the same screen generation. A scoped `screenChanged`
+notification is authoritative replacement evidence. `elementChanged` and
+announcement notifications stay in the same generation; when no usable
+notification exists, a typed snapshot fallback may emit the screen boundary
+and records its reason in the trace.
+Notifications are best-effort UIKit evidence, not a delivery guarantee; their
+absence does not by itself prove replacement or stability.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
@@ -285,6 +305,11 @@ TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP, and
 heist execution. It owns command parsing, schema validation, connection
 coordination through TheHandoff, typed responses, heist planning, expectations,
 receipts, and replay integration.
+
+Raw command key/value envelopes exist only at routing and Fence admission.
+Admission produces a `FenceOperationRequest`; execution and transport lowering
+consume typed commands, targets, predicates, and action values rather than
+re-reading the raw dictionary.
 
 Use `buttonheist --help`, `buttonheist <command> --help`, and MCP
 `tools/list` for command names, parameters, and MCP input schemas. Those
@@ -388,6 +413,12 @@ Flags take precedence over environment variables.
 
 ## Data Model Notes
 
+### ButtonHeistTesting and XCTest Failures
+
+Async `runHeist` APIs throw. XCTest-facing synchronous helpers preserve the
+caller's file and line and route every reported failure through the single
+`recordHeistXCTestIssue` path, whose only XCTest emission is `XCTFail`.
+
 ### Interface
 
 `Interface` is the accessibility capture returned to clients. Its public JSON
@@ -396,9 +427,9 @@ lists are projections for formatting and matching, not a second wire truth.
 
 ### HeistElement
 
-`HeistElement.heistId` is scoped to the current capture and may be reported for
-correlation or diagnostics. Use semantic matcher fields for actions, durable
-heist fixtures, scripts, and replay.
+`HeistElement` is a public value projection of parser content. Use its semantic
+fields to construct `AccessibilityTarget` values for actions, durable heist
+fixtures, scripts, and replay; internal capture identity is not a public target.
 
 ### ActionResult
 
@@ -407,9 +438,10 @@ command payload, accessibility trace, trace-folded public delta, and expectation
 result when one was requested. Failures carry their typed action error inside
 `outcome.errorKind`.
 
-`ActionResultEvidence` is the internal/source grouping for the action's
-observation evidence. It is not an additional public JSON envelope: `ActionResult`
-continues to flatten those fields at their existing top-level keys.
+Source construction uses `ActionResultSuccessEvidence` or
+`ActionResultFailureEvidence`, each with one explicit observation case. The
+action-result wire contract nests that evidence under `evidence`; output
+adapters derive their public projections from the same owner.
 
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
@@ -437,7 +469,7 @@ Current-tree predicates use the same `AccessibilityTarget` object as actions and
 subtree queries. Container presence uses a container target:
 
 ```json
-{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}
+{"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}
 ```
 
 Scoped targets use `{"container":{"checks":[...]},"target":{...}}`. Element

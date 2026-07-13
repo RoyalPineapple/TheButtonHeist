@@ -57,26 +57,18 @@ package func makeTestActionResult(
     errorKind: ErrorKind? = nil,
     payload: ActionResultPayload? = nil,
     accessibilityTrace: AccessibilityTrace? = nil,
-    settled: Bool? = nil,
-    settleTimeMs: Int? = nil,
     subjectEvidence: ActionSubjectEvidence? = nil,
     activationTrace: ActivationTrace? = nil,
     timing: ActionPerformanceTiming? = nil
 ) -> ActionResult {
-    let settlement = settled.map {
-        let durationMs = settleTimeMs ?? timing?.settleMs ?? 0
-        return $0
-            ? ActionSettlementEvidence.settled(durationMs: durationMs)
-            : ActionSettlementEvidence.timedOut(durationMs: durationMs)
-    }
-    let evidence = ActionResultEvidence(
-        accessibilityTrace: accessibilityTrace,
-        settlement: settlement,
-        subjectEvidence: subjectEvidence,
-        activationTrace: activationTrace,
-        timing: timing
-    )
+    let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
     if succeeded {
+        let evidence = ActionResultSuccessEvidence(
+            observation: observation,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
         if let payload {
             return ActionResult.success(
                 payload: payload,
@@ -94,6 +86,12 @@ package func makeTestActionResult(
     guard let errorKind else {
         preconditionFailure("failed test ActionResult requires errorKind")
     }
+    let evidence = ActionResultFailureEvidence(
+        observation: observation,
+        subjectEvidence: subjectEvidence,
+        activationTrace: activationTrace,
+        timing: timing
+    )
     if let payload {
         return ActionResult.failure(
             payload: payload,
@@ -117,7 +115,7 @@ package func makeTestHeistActionStep(
     durationMs: Int = 1
 ) -> HeistExecutionStepResult {
     let actionEvidence = command.map {
-        HeistActionEvidence.dispatch(command: $0, dispatchResult: result, warning: nil)
+        HeistActionEvidence.dispatch(command: $0, dispatchResult: result)
     } ?? HeistActionEvidence.commandlessDispatch(dispatchResult: result)
     guard !result.outcome.isSuccess else {
         return .passed(
@@ -203,7 +201,16 @@ private enum TestActionResultTrace {
             capture(
                 sequence: 2,
                 interface: replacementInterface,
-                context: AccessibilityTrace.Context(screenId: "after")
+                context: AccessibilityTrace.Context(screenId: "after"),
+                transition: AccessibilityTrace.Transition(accessibilityNotifications: [
+                    AccessibilityNotificationEvidence(
+                        sequence: 1,
+                        kind: .screenChanged,
+                        timestamp: Date(timeIntervalSince1970: 1),
+                        notificationData: .none,
+                        associatedElement: .none
+                    ),
+                ])
             ),
         ])
     }
@@ -211,9 +218,15 @@ private enum TestActionResultTrace {
     private static func capture(
         sequence: Int,
         interface: Interface,
-        context: AccessibilityTrace.Context = .empty
+        context: AccessibilityTrace.Context = .empty,
+        transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.Capture {
-        AccessibilityTrace.Capture(sequence: sequence, interface: interface, context: context)
+        AccessibilityTrace.Capture(
+            sequence: sequence,
+            interface: interface,
+            context: context,
+            transition: transition
+        )
     }
 
     private static func interface(elements: [HeistElement]) -> Interface {

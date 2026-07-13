@@ -254,8 +254,7 @@ extension TheBrains {
                 command: command,
                 dispatchResult: actionResult,
                 expectationResult: evaluation.receipt.actionResult,
-                expectation: evaluation.receipt.expectation,
-                warning: actionWarning(command: command, actionResult: actionResult)
+                expectation: evaluation.receipt.expectation
             )
             return heistActionReceipt(
                 path: path,
@@ -497,7 +496,11 @@ extension TheBrains {
         start: CFAbsoluteTime,
         failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
-        let expectationActionResult = ActionResult.failure(method: .wait, errorKind: .actionFailed)
+        let expectationActionResult = ActionResult.failure(
+            method: .wait,
+            errorKind: .actionFailed,
+            evidence: .none
+        )
         let expectation = ExpectationResult(
             met: false,
             predicate: nil,
@@ -511,8 +514,7 @@ extension TheBrains {
                 command: command,
                 dispatchResult: actionResult,
                 expectationResult: expectationActionResult,
-                expectation: expectation,
-                warning: actionWarning(command: command, actionResult: actionResult)
+                expectation: expectation
             )),
             failure: failure.detail
         )
@@ -524,40 +526,8 @@ extension TheBrains {
     ) -> HeistActionEvidence {
         .dispatch(
             command: command,
-            dispatchResult: actionResult,
-            warning: actionWarning(command: command, actionResult: actionResult)
+            dispatchResult: actionResult
         )
-    }
-
-    private func actionWarning(
-        command: HeistActionCommand,
-        actionResult: ActionResult
-    ) -> HeistActionWarning? {
-        guard actionResult.outcome.isSuccess,
-              let subject = actionResult.subjectEvidence
-        else { return nil }
-
-        switch command {
-        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(subject.element.traits):
-            return .activationWeakAffordance(
-                evidence: actionAffordanceEvidenceDescription(for: subject.element)
-            )
-        case .typeText where !AccessibilityPolicy.supportsTextEntry(subject.element.traits):
-            return .textEntryWeakAffordance(
-                evidence: actionAffordanceEvidenceDescription(for: subject.element)
-            )
-        default:
-            return nil
-        }
-    }
-
-    private func actionAffordanceEvidenceDescription(for element: HeistElement) -> String {
-        ElementDiagnosticSummary(
-            label: element.label,
-            identifier: element.identifier,
-            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
-            actions: element.actions.sorted { $0.description < $1.description }
-        ).rendered(using: .activationAffordanceEvidence)
     }
 
     private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
@@ -577,8 +547,7 @@ extension TheBrains {
             category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
-            expected: command.reportTarget.map(String.init(describing:)),
-            activationTrace: command.wireType == .activate ? result.activationTrace : nil
+            expected: command.reportTarget.map(String.init(describing:))
         )
     }
 

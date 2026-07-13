@@ -107,7 +107,8 @@ For `.missing(...)`, the predicate means the element is absent from the current 
 Use `.exists(.container(...))` when you need to assert that the current settled
 hierarchy contains a matching container without proving that navigation just
 happened. Container predicates can match `.label(...)`, `.value(...)`,
-`.identifier(...)`, `.scrollable`, `.dataTable(rowCount:columnCount:)`, or
+`.identifier(...)`, `.scrollable(true)`,
+`.dataTable(rowCount: .init(...), columnCount: .init(...))`, or
 `.matching(...)` combinations. Use `.within(container: .label("Checkout"), ...)`
 when an element target must resolve inside that container. Use
 `.changed(.screen([...]))` when the preceding action itself must prove a screen

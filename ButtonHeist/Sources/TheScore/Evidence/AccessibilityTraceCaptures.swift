@@ -1,6 +1,8 @@
-import ThePlans
 import CryptoKit
 import Foundation
+
+import ThePlans
+
 import AccessibilitySnapshotModel
 
 private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
@@ -16,6 +18,7 @@ private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIter
     case fallbackReason
     case transient
     case accessibilityNotifications
+    case accessibilityNotificationGap
 }
 
 public extension AccessibilityTrace {
@@ -126,19 +129,27 @@ public extension AccessibilityTrace {
         /// AX notification traffic observed while moving into this capture.
         /// Element payloads reference nodes in this capture's interface tree.
         public let accessibilityNotifications: [AccessibilityNotificationEvidence]
+        /// Present when the bounded notification stream dropped events before
+        /// this edge was captured. Absence means the edge is complete.
+        public let accessibilityNotificationGap: AccessibilityNotificationGap?
 
         public init(
             fallbackReason: AccessibilityObservationFallbackReason? = nil,
             transient: [HeistElement] = [],
-            accessibilityNotifications: [AccessibilityNotificationEvidence] = []
+            accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
+            accessibilityNotificationGap: AccessibilityNotificationGap? = nil
         ) {
             self.fallbackReason = fallbackReason
             self.transient = transient
             self.accessibilityNotifications = accessibilityNotifications
+            self.accessibilityNotificationGap = accessibilityNotificationGap
         }
 
         public var isEmpty: Bool {
-            fallbackReason == nil && transient.isEmpty && accessibilityNotifications.isEmpty
+            fallbackReason == nil
+                && transient.isEmpty
+                && accessibilityNotifications.isEmpty
+                && accessibilityNotificationGap == nil
         }
 
         public init(from decoder: Decoder) throws {
@@ -156,7 +167,11 @@ public extension AccessibilityTrace {
                 accessibilityNotifications: try container.decodeIfPresent(
                     [AccessibilityNotificationEvidence].self,
                     forKey: .accessibilityNotifications
-                ) ?? []
+                ) ?? [],
+                accessibilityNotificationGap: try container.decodeIfPresent(
+                    AccessibilityNotificationGap.self,
+                    forKey: .accessibilityNotificationGap
+                )
             )
         }
 
@@ -169,6 +184,7 @@ public extension AccessibilityTrace {
             if !accessibilityNotifications.isEmpty {
                 try container.encode(accessibilityNotifications, forKey: .accessibilityNotifications)
             }
+            try container.encodeIfPresent(accessibilityNotificationGap, forKey: .accessibilityNotificationGap)
         }
     }
 
@@ -316,50 +332,22 @@ private struct StableCaptureCustomContent: Codable {
 }
 
 private struct StableCaptureContainer: Codable {
-    let type: StableCaptureContainerType
+    let type: ContainerPredicateRoleFacts
     let identifier: String?
     let scrollableContentSize: AccessibilitySize?
     let isModalBoundary: Bool
     let customActions: [String]
 
     init(_ container: AccessibilityContainer) {
-        type = StableCaptureContainerType(container.type)
-        identifier = container.identifier
+        let facts = container.containerPredicateFacts
+        type = facts.role
+        identifier = facts.identifier
         scrollableContentSize = container.scrollableContentSize
-        isModalBoundary = container.isModalBoundary
-        customActions = container.customActions.map(\.name).filter { !$0.isEmpty }.sorted()
-    }
-}
-
-private enum StableCaptureContainerType: Codable {
-    case none
-    case semanticGroup(label: String?, value: String?)
-    case list
-    case landmark
-    case dataTable(rowCount: Int, columnCount: Int)
-    case tabBar
-    case series
-    case scrollable
-
-    init(_ type: AccessibilityContainer.ContainerType) {
-        switch type {
-        case .none:
-            self = .none
-        case .semanticGroup(let label, let value):
-            self = .semanticGroup(label: label, value: value)
-        case .list:
-            self = .list
-        case .landmark:
-            self = .landmark
-        case .dataTable(let rowCount, let columnCount, _):
-            self = .dataTable(rowCount: rowCount, columnCount: columnCount)
-        case .tabBar:
-            self = .tabBar
-        case .series:
-            self = .series
-        case .scrollable:
-            self = .scrollable
-        }
+        isModalBoundary = facts.isModalBoundary
+        customActions = facts.actions.compactMap { action in
+            guard case .custom(let name) = action else { return nil }
+            return name
+        }.sorted()
     }
 }
 

@@ -111,25 +111,6 @@ final class ElementActionRequestContractTests: XCTestCase {
         XCTAssertNotNil(object["target"])
     }
 
-    func testNormalParametersNamedLikeCustomPayloadsStillUseSchemaValidation() throws {
-        for key in [FenceParameterKey.target, .predicate, .expect, .argument] {
-            let descriptor = schemaValidationDescriptor(parameter: param(key, .string, required: true))
-            XCTAssertThrowsError(
-                try descriptor.validatePublicRequestArguments(TheFence.CommandArgumentEnvelope(values: [
-                    key.rawValue: .object([:]),
-                ])),
-                key.rawValue
-            ) { error in
-                guard let error = error as? SchemaValidationError else {
-                    return XCTFail("Expected SchemaValidationError, got \(error)")
-                }
-                XCTAssertEqual(error.field, key.rawValue)
-                XCTAssertEqual(error.observed, "object")
-                XCTAssertEqual(error.expected, "string")
-            }
-        }
-    }
-
     @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
@@ -238,17 +219,6 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 }
 
-private func schemaValidationDescriptor(parameter: FenceParameterSpec) -> FenceCommandDescriptor {
-    TheFence.Command.ping.makeDescriptor(
-        family: .session,
-        requestDecoder: { _, _, _, _ in fatalError("unused") },
-        requiresConnectionBeforeDispatch: false,
-        parameters: [parameter],
-        responseProjection: .pong,
-        projection: .cliOnly("test")
-    )
-}
-
 private func projectedJSONSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
     guard case .object(let schema) = spec.schema.heistValue else { return nil }
     return schema[key]
@@ -348,6 +318,9 @@ private func assertContainerPredicateSchema(
         "type": .string("string"),
         "enum": .array(AccessibilityContainerKind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
+    guard case .object? = checkProperties["match"] else {
+        return XCTFail("Expected container identifier StringMatch schema", file: file, line: line)
+    }
     guard case .object(let semantic)? = checkProperties["semantic"],
           case .object(let semanticProperties)? = semantic["properties"] else {
         return XCTFail("Expected semantic container predicate schema", file: file, line: line)
@@ -363,6 +336,11 @@ private func assertContainerPredicateSchema(
     guard case .object? = checkProperties["values"] else {
         return XCTFail("Expected container check values array schema", file: file, line: line)
     }
+    XCTAssertEqual(checkProperties["values"], .object([
+        "type": .string("array"),
+        "items": .object([:]),
+        "minItems": .int(1),
+    ]), file: file, line: line)
     XCTAssertNotNil(checkProperties["value"], file: file, line: line)
 }
 
@@ -384,8 +362,7 @@ private func canonicalSemanticContainerPredicateKindValues() -> [String] {
     [
         SemanticContainerPredicate<String>.label("sample"),
         SemanticContainerPredicate<String>.value("sample"),
-        SemanticContainerPredicate<String>.identifier("sample"),
-    ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.kind.rawValue) }
+    ].map(\.wireKindValue)
 }
 
 private func assertArraySchema(

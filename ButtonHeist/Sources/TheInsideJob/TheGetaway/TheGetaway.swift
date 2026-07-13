@@ -112,7 +112,8 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
+                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan",
+                evidence: .none
             )
         }
         guard brains.semanticObservationIsActive else {
@@ -124,7 +125,8 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Could not resolve direct runtime action: \(error)"
+                message: "Could not resolve direct runtime action: \(error)",
+                evidence: .none
             )
         }
     }
@@ -202,7 +204,7 @@ final class TheGetaway {
             await brains.recordSentState()
         case .failure(let error):
             await sendMessage(
-                .error(ServerError(kind: .general, message: error.message)),
+                .error(ServerError(kind: error.errorKind, message: error.message)),
                 requestId: requestId,
                 respond: respond
             )
@@ -224,7 +226,7 @@ final class TheGetaway {
             insideJobLogger.debug("InterfaceObservation sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
             await sendMessage(
-                .error(ServerError(kind: .general, message: failure.message)),
+                .error(ServerError(kind: failure.errorKind, message: failure.message)),
                 requestId: requestId,
                 respond: respond
             )

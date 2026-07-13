@@ -49,25 +49,7 @@ struct RenderResponseTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: HeistExecutionResult.passed(
-                steps: [
-                    HeistExecutionStepResult.passed(
-                        path: "$.body[0]",
-                        receiptKind: .action,
-                        durationMs: 1,
-                        intent: .action(command: command),
-                        evidence: .dispatch(
-                            command: command,
-                            dispatchResult: .success(
-                                method: .activate,
-                                evidence: ActionResultEvidence(accessibilityTrace: trace)
-                            ),
-                            warning: nil
-                        )
-                    ),
-                ],
-                durationMs: 3
-            )
+            result: try Self.passedExecutionResult(command: command, trace: trace)
         )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
@@ -188,12 +170,12 @@ struct RenderResponseTests {
         #expect(root["status"]?.stringValue == "error")
         #expect(root["message"]?.stringValue == expected.message)
         #expect(root["code"]?.stringValue == expected.code)
-        #expect(root["kind"]?.stringValue == expected.kind.rawValue)
         #expect(root["errorCode"] == nil)
-        #expect(root["phase"]?.stringValue == expected.details.phase.rawValue)
-        #expect(root["retryable"] == Value.bool(expected.details.retryable))
-        #expect(root["hint"]?.stringValue == expected.details.hint)
-        #expect(details["code"]?.stringValue == expected.code)
+        #expect(root["kind"] == nil)
+        #expect(root["phase"] == nil)
+        #expect(root["retryable"] == nil)
+        #expect(root["hint"] == nil)
+        #expect(details["code"] == nil)
         #expect(details["kind"]?.stringValue == expected.kind.rawValue)
         #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
         #expect(details["retryable"] == Value.bool(expected.details.retryable))
@@ -209,11 +191,11 @@ struct RenderResponseTests {
 
         #expect(root["status"]?.stringValue == "error")
         #expect(root["code"]?.stringValue == "formatting.json_encoding_failed")
-        #expect(root["kind"]?.stringValue == "client")
         #expect(root["errorCode"] == nil)
-        #expect(root["phase"]?.stringValue == "client")
-        #expect(root["retryable"] == Value.bool(false))
-        #expect(details["code"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["kind"] == nil)
+        #expect(root["phase"] == nil)
+        #expect(root["retryable"] == nil)
+        #expect(details["code"] == nil)
         #expect(details["kind"]?.stringValue == "client")
         #expect(details["phase"]?.stringValue == "client")
         #expect(details["retryable"] == Value.bool(false))
@@ -259,6 +241,44 @@ struct RenderResponseTests {
                 ]
             )
         )
+    }
+
+    private static func passedExecutionResult(
+        command: HeistActionCommand,
+        trace: AccessibilityTrace
+    ) throws -> HeistExecutionResult {
+        let encoder = JSONEncoder()
+        let evidence = HeistStepEvidence.action(.dispatch(
+            command: command,
+            dispatchResult: .success(
+                method: .activate,
+                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            )
+        ))
+        let step: [String: Any] = [
+            "path": "$.body[0]",
+            "kind": HeistExecutionStepKind.action.rawValue,
+            "durationMs": 1,
+            "intent": try jsonObject(HeistStepIntent.action(command: command), encoder: encoder),
+            "outcome": [
+                "type": "passed",
+                "evidence": try jsonObject(evidence, encoder: encoder),
+                "children": [],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: [
+            "steps": [step],
+            "durationMs": 3,
+        ])
+        return try JSONDecoder().decode(HeistExecutionResult.self, from: data)
+    }
+
+    private static func jsonObject<Value: Encodable>(
+        _ value: Value,
+        encoder: JSONEncoder
+    ) throws -> [String: Any] {
+        let object = try JSONSerialization.jsonObject(with: encoder.encode(value))
+        return try #require(object as? [String: Any])
     }
 
     private static func interface(_ elements: [AccessibilityElement]) -> Interface {

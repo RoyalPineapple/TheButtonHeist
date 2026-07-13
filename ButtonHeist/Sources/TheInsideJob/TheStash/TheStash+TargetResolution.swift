@@ -62,26 +62,6 @@ extension TheStash {
         let resolutionScope: ResolutionScope
     }
 
-    struct ContainerCandidateFacts {
-        let containerName: ContainerName?
-        let type: AccessibilityContainerKind
-        let label: String?
-        let value: String?
-        let identifier: String?
-        let isModalBoundary: Bool
-
-        init(container: InterfaceTree.Container) {
-            let accessibilityContainer = container.container
-            containerName = container.containerName
-            let facts = accessibilityContainer.containerPredicateFacts
-            type = facts.type
-            label = facts.label
-            value = facts.value
-            identifier = facts.identifier
-            isModalBoundary = accessibilityContainer.isModalBoundary
-        }
-    }
-
     enum ContainerNotFoundReason: Equatable {
         case emptyPredicate
         case ordinalOutOfRange(requested: Int, matchCount: Int)
@@ -97,7 +77,7 @@ extension TheStash {
 
     struct ContainerAmbiguityFacts {
         let predicate: ContainerPredicate
-        let candidates: [ContainerCandidateFacts]
+        let candidates: [InterfaceTree.Container]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
     }
@@ -154,11 +134,13 @@ extension TheStash {
         resolveTarget(target, in: tree, resolutionScope: .provided)
     }
 
-    /// Resolve a target only against the latest live hierarchy. This preserves
-    /// full target semantics (ambiguity and explicit ordinal) while excluding
-    /// off-viewport entries retained from exploration.
+    /// Resolve a target only against the committed interface viewport.
+    ///
+    /// A fresh parser read may supply UIKit evidence for an already-settled
+    /// identity, but it cannot make new semantic state actionable before the
+    /// observation stream commits it.
     func resolveVisibleTarget(_ target: AccessibilityTarget) -> TargetResolution {
-        resolveTarget(target, in: latestObservation.tree.viewportOnly, resolutionScope: .viewport)
+        resolveTarget(target, in: interfaceTree.viewportOnly, resolutionScope: .viewport)
     }
 
     func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
@@ -209,7 +191,7 @@ extension TheStash {
         default:
             return .ambiguous(ContainerAmbiguityFacts(
                 predicate: predicate,
-                candidates: matches.map(ContainerCandidateFacts.init),
+                candidates: matches,
                 matchedCount: matches.count,
                 resolutionScope: resolutionScope
             ))
@@ -240,7 +222,7 @@ extension TheStash {
         }
     }
 
-    /// Resolve a target using first-match semantics against only the live hierarchy.
+    /// Resolve a target using first-match semantics against the committed viewport.
     func resolveFirstVisibleMatch(_ target: AccessibilityTarget) -> InterfaceTree.Element? {
         resolveVisibleTarget(target.firstMatchTarget).resolved
     }

@@ -20,15 +20,40 @@ JSON, session JSON, and heist files accept canonical command strings such as
 `activate`, `type_text`, and `scroll_to_visible`; those strings are parsed once
 at the boundary and routed as typed values inside the stack.
 
+Raw command dictionaries end at Fence admission. `FenceCommandInput` is the
+unadmitted edge value; `FenceOperationRequest` contains the typed operation that
+execution consumes.
+
 ButtonHeistMCP projects one tool per exposed Fence command from the same
 contract. Wire message discriminators live one layer lower in TheScore and are
 documented separately.
 
+Typed `FenceCommandDescriptor` values are the sole owners of public command
+shape. The committed public CLI/MCP command-contract JSON is generated only as
+a drift sentinel; it is not a second schema.
+
 ### Captures and Change Facts Are the Currency
 
-The durable observation truth is an `AccessibilityTrace` of settled captures.
-Each capture contains the delivered `Interface` tree and its content hash.
-There is no independently stored delta or alternate flat screen model.
+The settled `TheStash.interfaceTree` is the sole current semantic truth.
+Proof-backed `AccessibilityTrace` captures in the semantic stream are durable
+temporal observation truth: each contains the delivered `Interface` tree and
+its content hash. A timed-out action may return a receipt-local diagnostic trace,
+but that trace is not committed, targetable, or an observation baseline. There
+is no independently stored delta or alternate flat screen model.
+
+`InterfaceObservation` is live capture evidence, not authority to publish
+semantic truth. It pairs an `InterfaceTree` with the viewport-local
+`LiveCapture` from the latest parser read. `SemanticObservationStream` is the
+only publication owner, and its production commit entry points require an
+`InterfaceObservationProof` produced by a clean settle or a finished
+exploration.
+
+A raw parser read may replace live object and geometry evidence, but only a
+`HeistId` resolved from the committed `InterfaceTree` can select that evidence
+for action. Parsed nodes do not become targetable until a proven commit. Once
+an action resolves a semantic target, element inflation pins that exact
+`HeistId`; reveal, refresh, geometry stabilization, and dispatch cannot switch
+to a newly matching element.
 
 The trace derives one ordered `ChangeFact` stream for every temporal consumer.
 Predicates, receipts, diagnostics, and repair analysis all use those facts. A
@@ -51,24 +76,28 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
-for a clean settled snapshot. One pure observation reducer combines the
-settled capture edge with scoped `screenChanged`, typed `elementChanged`, and
-`announcement` notifications. Notifications are edge evidence, not a second
-state model. Screen and element notifications classify interface change;
-announcements remain separate transition evidence and never synthesize an
-interface mutation.
+for a clean settled snapshot. One pure `ScreenClassifier` combines typed
+snapshots with scoped `screenChanged`, `elementChanged`, and `announcement`
+notifications. Notifications are edge evidence, not a second state model. A
+scoped screen notification is authoritative replacement evidence. Element and
+announcement notifications keep the edge in the same generation; only an
+empty or unknown notification batch permits snapshot inference. An inferred
+replacement carries its `AccessibilityObservationFallbackReason` in
+`transition.fallbackReason`.
+Notification delivery is best effort; absence is not evidence of replacement
+or stability.
 
 Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
 `SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
 cadence for that pair; it does not create another settle pipeline. UIKit and
 ObjC signals may trigger or reset sampling, but they never classify the AX tree.
 
-A screen notification starts a new observation generation. The screen boundary
-is normalized as old-tree departures, a `screenChanged` marker, then new-tree
-arrivals. Layout, value, and announcement notifications trigger same-generation
-element facts when there is no screen boundary. The settle loop can also report
-unhealthy snapshots rather than pretending an empty post-navigation parse is
-stable.
+A scoped screen notification or snapshot-inferred replacement with typed
+`fallbackReason` evidence starts a new observation generation. The screen
+boundary is normalized as old-tree departures, a `screenChanged` marker, then
+new-tree arrivals. Layout, value, and announcement notifications stay in the
+same generation. The settle loop can also report unhealthy snapshots rather
+than pretending an empty post-navigation parse is stable.
 
 UIKit value changes are not identified by an `elementChanged(.value)` signal
 alone. UIKit controls may signal through either element-change subtype or an
@@ -86,6 +115,14 @@ including semantic content The Button Heist can discover in scrollable container
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
+Visible observation reduces parser reads through `SettleSession`; only a clean
+settle can construct the proof consumed by the visible commit path. Discovery
+has the same publication boundary. `Navigation.SemanticExploration` absorbs
+cleanly settled pages into one last-read-wins semantic graph while retaining
+only the latest page's live capture. Intermediate pages are local reducer state.
+`Navigation.ExploredScreen` represents the finished graph, and only that
+finished value can construct the proof consumed by the discovery commit path.
+
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
 
@@ -100,11 +137,15 @@ The pipeline is:
 
 1. Resolve the semantic target against settled accessibility state.
 2. Reject missing or ambiguous targets with diagnostics.
-3. Reveal the resolved target when viewport movement is required.
-4. Refresh semantic and live state after reveal or stale-object detection.
-5. Acquire fresh live geometry and activation/action points.
-6. Execute the accessibility operation or explicit mechanical gesture.
-7. Return settled semantic evidence through `InteractionObservation`.
+3. Pin the resolved `HeistId` and one deadline derived from its scroll-membership
+   ancestor graph.
+4. Reveal nested scroll ancestors outermost-first when viewport movement is
+   required, proving each graph path against current live containment.
+5. Refresh by the pinned `HeistId`; never rerun the semantic selector to choose
+   a replacement element.
+6. Acquire and stabilize fresh live geometry under the same deadline.
+7. Execute the accessibility operation or explicit mechanical gesture.
+8. Return settled semantic evidence through `InteractionObservation`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit mechanical or viewport commands; it
@@ -121,7 +162,7 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheStash`: settled `Screen`, latest disposable `LiveCapture`, and non-clean
+- `TheStash`: settled `InterfaceTree`, latest disposable `LiveCapture`, and non-clean
   settle diagnostics.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
@@ -143,9 +184,55 @@ facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
 consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
-`ActionResult` owns one `ActionResultEvidence` envelope for post-action
-evidence. `PostActionObservation` coordinates capture and settle proof, then
-supplies that envelope; it does not publish a second post-action evidence shape.
+`HeistExecutionStepOutcome` owns each step's status-specific evidence, failure,
+abort path, and children. Constructors pair a `HeistStepReceiptKind<Evidence>`
+with its matching typed evidence before it can enter that outcome. The wire
+decoder accepts exactly one tagged outcome case and one tagged evidence case;
+flat receipt bags and mismatched step-kind/evidence combinations are invalid.
+
+`ActionResult` owns outcome-bound `ActionResultSuccessEvidence` or
+`ActionResultFailureEvidence`. `PostActionObservation` coordinates capture and
+settle proof, then supplies exactly one observation case: `none`, `announcement`,
+`trace`, or `settledTrace`. Only `settledTrace` carries settlement evidence.
+Action warnings live only on successful action-result evidence; heist receipts
+and report projections derive them from their dispatch result instead of storing
+a sibling warning.
+
+`AccessibilityNotificationBus` owns notification collection. Each action opens
+one cursor-bounded window. A clean post-action settle captures that window once
+as one `AccessibilityNotificationBatch`; a failed settle cancels it without
+admitting notification evidence. The batch contains every retained event after
+the opening cursor, the exact through-cursor observed under the same lock, and an
+explicit `AccessibilityNotificationGap` when bounded history overflowed. Its
+through-cursor is the observation notification cursor; its scoped-screen
+watermark is the only committed invalidation watermark. There is no independent
+transition cursor or second notification read for that action.
+
+`AccessibilityNotificationObserver` owns callback registration generations.
+Each installed callback captures its generation, and publication accepts only
+the active installing or installed generation. A callback retained past
+uninstall or replacement is rejected before it can advance notification
+sequence or publish into a later action window.
+
+`SemanticObservationStream` owns notification invalidation. It records the
+scoped `screenChanged` sequence covered by the committed batch. A scoped
+`screenChanged` recorded after that capture remains beyond the committed
+through-cursor and invalidates the fulfilled observation before it can be
+served as current.
+
+TheBurglar owns first-responder capture. A parser read converts responder state
+to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
+the capture. Settled storage never retains a UIKit object as responder identity;
+TheStash alone projects the captured id once to a semantic `AccessibilityTarget`
+through the shared minimum-predicate selector used by semantic and post-action
+trace context. First-responder actions pin the captured id before inflation and
+fail if either the current responder id or inflated element id differs afterward.
+
+TheStash owns notification-element correlation. While live evidence exists, it
+correlates a notification object to a capture node, then
+`SemanticInterfaceProjection` emits the reference from that node's canonical
+semantic graph record. The reference is the record's `TreePath` and traversal
+index, never a UIKit object identity or a parallel element index.
 
 UIKit/ObjC `@unchecked Sendable` is a platform-boundary escape hatch only. Such
 uses stay in TheInsideJob, require an exact source-shape allowlist entry and a
@@ -166,12 +253,17 @@ Runtime subscriptions are not a public driver surface.
 
 Screen changes are not guessed from text, timers, or window events. The parser
 builds settled captures, `AccessibilityNotificationBus` records scoped screen,
-layout, value, and announcement evidence, and
-`AccessibilityObservationChangeReducer` determines the capture-edge kind used
-to derive facts. A screen notification is authoritative and starts a new
-generation. Notification absence is not proof of no change: silent flows still
-derive facts from settled capture differences and typed screen-appearance
-evidence.
+layout, value, and announcement evidence, and `ScreenClassifier` determines
+replacement before traces are built. A scoped screen notification is
+authoritative and starts a new generation. Element and announcement
+notifications never classify a replacement. When the batch has no usable kind,
+the classifier may infer replacement from typed settled snapshots and records
+the reason in both logs and `fallbackReason`. Notification records remain in
+`accessibilityNotifications`; parsed screen IDs, first-responder state,
+geometry, and generation counters are not independent screen evidence. The
+fact reducer consumes only the notification records or typed
+`transition.fallbackReason`, so consumers can distinguish an observed
+`screenChanged` notification from an inferred screen boundary.
 
 ## Component Map
 
@@ -192,9 +284,10 @@ sequence, see the [action pipeline diagram](diagrams/action-pipeline.md).
 
 ```mermaid
 flowchart TD
-    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
-    Compile --> Validate["Runtime validation<br/>finite steps, valid predicates, valid targets"]
-    Validate --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
+    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Parse / build<br/>HeistPlanAdmissionCandidate"]
+    Compile --> Validate["Admit once<br/>semantic validation + runtime bounds"]
+    Validate --> Plan["Validated HeistPlan"]
+    Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains executor"]
 
@@ -225,9 +318,9 @@ flowchart TD
     Append --> Accumulate["Derive ordered ChangeFact stream<br/>over the complete window"]
     Accumulate --> Evaluate["Evaluate predicate<br/>current tree + ordered facts"]
     Evaluate --> Matched{"matched?"}
-    Matched -->|yes| Success["ActionResult success<br/>trace + expectation"]
+    Matched -->|yes| Success["ActionResult success<br/>outcome-bound observation + expectation"]
     Matched -->|no, timeout not elapsed| Observe
-    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>trace + unmet evidence"]
+    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>outcome-bound observation + unmet evidence"]
 ```
 
 The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
@@ -249,8 +342,10 @@ retains bounded per-scope history and builds one `ObservationWindow` from that
 baseline through the latest settled capture. Polling extends this window; it
 does not maintain a second baseline or notification claim.
 
-A screen notification ends the current observation generation and starts the
-next. The boundary is retained in the same ordered fact stream as three facts:
+A scoped screen notification or snapshot-inferred replacement carrying typed
+`fallbackReason` evidence ends the current observation generation and starts
+the next. The boundary is retained in the same ordered fact stream as three
+facts:
 
 1. `elementsChanged` with every node in the old delivered tree disappeared.
 2. `screenChanged` as the generation boundary marker.
@@ -263,9 +358,8 @@ still disappears and appears because its generation changed.
 
 An observation window contains raw settled captures and completeness. Its
 ordered `ChangeFact` stream is derived from those captures plus scoped
-notification evidence. There is no standalone transition-warning fallback and
-no endpoint delta used by the evaluator. Only a complete, fact-free window can
-satisfy `.noChange`.
+notification evidence. The evaluator reads neither warning text nor an endpoint
+delta. Only a complete, fact-free window can satisfy `.noChange`.
 
 The public predicate layer is one context-typed tree language:
 
@@ -292,11 +386,12 @@ element facts. Swift's generic contexts make invalid combinations such as an
 ### Act
 
 1. TheFence parses a boundary request into `TheFence.Command`.
-2. TheFence lowers the request into a one-step or composed `HeistPlan` and sends
+2. Fence admission converts `FenceCommandInput` into `FenceOperationRequest`,
+   then lowers it into a one-step or composed `HeistPlan` and sends
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to TheBrains' heist runtime.
-4. TheBrains captures before-state, performs the action, waits for stable UI, and
-   parses after-state.
+4. TheBrains captures before-state, resolves and pins the target `HeistId`,
+   performs the action, waits for stable UI, and parses after-state.
 5. The trace derives ordered `ChangeFact` values from settled capture edges and
    scoped notification evidence.
 6. Predicates evaluate directly from the current tree and those facts.
@@ -309,8 +404,8 @@ element facts. Swift's generic contexts make invalid combinations such as an
 then extends one observation window until the requested predicate matches or
 the timeout expires. `.exists(target)` and `.missing(target)` are current-tree
 checks. `.changed(.elements(...))` and `.changed(.screen(...))` require their
-declared fact evidence. A lifecycle assertion never passes from final state
-alone and there is no warning-based fallback.
+declared fact evidence; a lifecycle assertion never passes from final state
+alone.
 
 ### Replay
 

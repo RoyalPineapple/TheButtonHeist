@@ -60,98 +60,40 @@ struct LiveCapture: Equatable {
     }
 
     var firstResponderHeistId: HeistId? {
-        dispatchReferences.firstResponderHeistId
+        snapshot.firstResponderHeistId
     }
 
     var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
         dispatchReferences.scrollableContainerViewsByPath
     }
 
-    init(
-        hierarchy: [AccessibilityHierarchy],
-        containerNamesByPath: [TreePath: ContainerName] = [:],
-        heistIdsByPath: [TreePath: HeistId] = [:],
-        elementRefs: [HeistId: ElementRef],
-        containerRefsByPath: [TreePath: ContainerRef] = [:],
-        containerContentFramesByPath: [TreePath: ContentRect] = [:],
-        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
-        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
-        firstResponderHeistId: HeistId?,
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
-    ) {
-        let snapshot = Snapshot(
-            hierarchy: hierarchy,
-            containerNamesByPath: containerNamesByPath,
-            heistIdsByPath: heistIdsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath
-        )
-        let dispatchReferences = DispatchReferences(
-            elementRefs: elementRefs,
-            containerRefsByPath: containerRefsByPath,
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        )
-        self.init(
-            snapshot: snapshot,
-            dispatchReferences: dispatchReferences
-        )
-    }
-
-    init(
+    private init(
         snapshot: Snapshot,
-        dispatchReferences: DispatchReferences = .empty
+        validatedEntries: [LiveElementEntry],
+        dispatchReferences: DispatchReferences
     ) {
-        do {
-            let table = try LiveElementTable(
-                indexing: snapshot,
-                dispatchReferences: dispatchReferences
-            )
-            self.snapshot = snapshot
-            self.dispatchReferences = DispatchReferences(
-                elementRefs: table.elementRefsByHeistId,
-                containerRefsByPath: dispatchReferences.containerRefsByPath,
-                firstResponderHeistId: dispatchReferences.firstResponderHeistId,
-                scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
-            )
-            elementIndex = LiveElementIndex(
-                validatedTable: table,
-                containerRefsByPath: dispatchReferences.containerRefsByPath,
-                scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
-            )
-        } catch let error as LiveElementTableValidationError {
-            preconditionFailure(error.description)
-        } catch {
-            preconditionFailure("LiveCapture failed to validate live element table: \(error)")
-        }
-    }
-
-    init(
-        snapshot: Snapshot,
-        liveElementTable: LiveElementTable,
-        containerRefsByPath: [TreePath: ContainerRef] = [:],
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
-    ) {
-        let dispatchReferences = DispatchReferences(
-            elementRefs: liveElementTable.elementRefsByHeistId,
-            containerRefsByPath: containerRefsByPath,
-            firstResponderHeistId: liveElementTable.firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        )
         self.snapshot = snapshot
         self.dispatchReferences = dispatchReferences
         elementIndex = LiveElementIndex(
-            validatedTable: liveElementTable,
-            containerRefsByPath: containerRefsByPath,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+            validatedEntries: validatedEntries,
+            containerRefsByPath: dispatchReferences.containerRefsByPath,
+            scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
         )
     }
 
-    static var empty: LiveCapture {
-        LiveCapture(snapshot: .empty)
+    static func build(
+        validating tree: InterfaceTree,
+        dispatchReferences: DispatchReferences = .empty
+    ) throws -> LiveCapture {
+        let entries = try validatedEntries(
+            validating: tree,
+            dispatchReferences: dispatchReferences
+        )
+        return LiveCapture(
+            snapshot: tree.viewportCapture,
+            validatedEntries: entries,
+            dispatchReferences: dispatchReferences
+        )
     }
 
     var heistIds: Set<HeistId> {
@@ -236,9 +178,9 @@ struct LiveCapture: Equatable {
 
     /// Value-only capture metadata retained by settled semantic storage.
     ///
-    /// This preserves parser hierarchy, ids, container names, and
-    /// scroll membership evidence without carrying weak UIKit refs or live dispatch
-    /// lookup tables.
+    /// This preserves parser hierarchy, ids, first-responder identity, container
+    /// names, and scroll membership evidence without carrying weak UIKit refs or
+    /// live dispatch lookup tables.
     struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerNamesByPath: [TreePath: ContainerName]
@@ -247,6 +189,8 @@ struct LiveCapture: Equatable {
         let containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
         let scrollInventoriesByPath: [TreePath: ScrollInventory]
+        /// Durable first-responder identity. Live UIKit evidence remains in weak dispatch references.
+        let firstResponderHeistId: HeistId?
 
         init(
             hierarchy: [AccessibilityHierarchy],
@@ -255,7 +199,8 @@ struct LiveCapture: Equatable {
             containerContentFramesByPath: [TreePath: ContentRect] = [:],
             containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
             containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
-            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:]
+            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+            firstResponderHeistId: HeistId? = nil
         ) {
             self.hierarchy = hierarchy
             self.containerNamesByPath = containerNamesByPath
@@ -264,6 +209,7 @@ struct LiveCapture: Equatable {
             self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
             self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
             self.scrollInventoriesByPath = scrollInventoriesByPath
+            self.firstResponderHeistId = firstResponderHeistId
         }
 
         static let empty = Snapshot(
@@ -314,18 +260,15 @@ struct LiveCapture: Equatable {
     struct DispatchReferences: Equatable {
         let elementRefs: [HeistId: ElementRef]
         let containerRefsByPath: [TreePath: ContainerRef]
-        let firstResponderHeistId: HeistId?
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
 
         init(
             elementRefs: [HeistId: ElementRef] = [:],
             containerRefsByPath: [TreePath: ContainerRef] = [:],
-            firstResponderHeistId: HeistId? = nil,
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
         ) {
             self.elementRefs = elementRefs
             self.containerRefsByPath = containerRefsByPath
-            self.firstResponderHeistId = firstResponderHeistId
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
         }
 
@@ -372,18 +315,15 @@ struct LiveCapture: Equatable {
         let path: TreePath
         let treeElement: InterfaceTree.Element
         let ref: ElementRef?
-        let isFirstResponder: Bool
 
-        init(
+        fileprivate init(
             path: TreePath,
             treeElement: InterfaceTree.Element,
-            ref: ElementRef? = nil,
-            isFirstResponder: Bool = false
+            ref: ElementRef? = nil
         ) {
             self.path = path
             self.treeElement = treeElement
             self.ref = ref
-            self.isFirstResponder = isFirstResponder
         }
 
         var heistId: HeistId {
@@ -395,170 +335,225 @@ struct LiveCapture: Equatable {
         }
     }
 
-    struct LiveElementTable: Equatable {
-        let entries: [LiveElementEntry]
+    private static func validatedEntries(
+        validating tree: InterfaceTree,
+        dispatchReferences: DispatchReferences
+    ) throws -> [LiveElementEntry] {
+        let snapshot = tree.viewportCapture
+        let indexedElements = snapshot.hierarchy.pathIndexedElements
+        let elementPaths = Set(indexedElements.map(\.path))
 
-        init(entries: [LiveElementEntry]) throws {
-            try Self.validate(entries: entries)
-            self.entries = entries
+        for (heistId, element) in tree.elements.sorted(by: { $0.key < $1.key })
+        where element.heistId != heistId {
+            throw ValidationError.treeElementKeyMismatch(
+                dictionaryHeistId: heistId,
+                elementHeistId: element.heistId
+            )
         }
-
-        init(
-            validating snapshot: Snapshot,
-            dispatchReferences: DispatchReferences
-        ) throws {
-            try self.init(
-                snapshot: snapshot,
-                dispatchReferences: dispatchReferences,
-                validatesBoundaryReferences: true
+        for (path, container) in tree.containers.sorted(by: { $0.key < $1.key })
+        where container.path != path {
+            throw ValidationError.treeContainerPathMismatch(
+                dictionaryPath: path,
+                containerPath: container.path
             )
         }
 
-        fileprivate init(
-            indexing snapshot: Snapshot,
-            dispatchReferences: DispatchReferences
-        ) throws {
-            try self.init(
-                snapshot: snapshot,
-                dispatchReferences: dispatchReferences,
-                validatesBoundaryReferences: false
-            )
-        }
-
-        private init(
-            snapshot: Snapshot,
-            dispatchReferences: DispatchReferences,
-            validatesBoundaryReferences: Bool
-        ) throws {
-            var entries: [LiveElementEntry] = []
-            let indexedElements = Dictionary(
-                uniqueKeysWithValues: snapshot.hierarchy.pathIndexedElements.map { ($0.path, $0) }
-            )
-
-            for (path, heistId) in snapshot.heistIdsByPath {
-                guard snapshot.hierarchy.node(at: path) != nil else {
-                    throw LiveElementTableValidationError.heistIdForMissingPath(
-                        heistId: heistId,
-                        path: path
-                    )
-                }
-                guard indexedElements[path] != nil else {
-                    throw LiveElementTableValidationError.heistIdForNonElementPath(
-                        heistId: heistId,
-                        path: path
-                    )
-                }
+        for (path, heistId) in snapshot.heistIdsByPath.sorted(by: { $0.key < $1.key }) {
+            guard snapshot.hierarchy.node(at: path) != nil else {
+                throw ValidationError.heistIdForMissingPath(heistId: heistId, path: path)
             }
-
-            for item in snapshot.hierarchy.pathIndexedElements {
-                guard let heistId = snapshot.heistIdsByPath[item.path] else { continue }
-                entries.append(LiveElementEntry(
-                    path: item.path,
-                    treeElement: InterfaceTree.Element(
-                        heistId: heistId,
-                        path: item.path,
-                        scrollMembership: nil,
-                        element: item.element
-                    ),
-                    ref: dispatchReferences.elementRefs[heistId],
-                    isFirstResponder: dispatchReferences.firstResponderHeistId == heistId
-                ))
+            guard elementPaths.contains(path) else {
+                throw ValidationError.heistIdForNonElementPath(heistId: heistId, path: path)
             }
+        }
 
-            try Self.validate(entries: entries)
-            if validatesBoundaryReferences {
-                try Self.validate(
-                    dispatchReferences: dispatchReferences,
-                    snapshot: snapshot,
-                    liveHeistIds: Set(entries.map(\.heistId))
+        var pathsByHeistId: [HeistId: TreePath] = [:]
+        for item in indexedElements {
+            guard let heistId = snapshot.heistIdsByPath[item.path] else {
+                throw ValidationError.missingHeistId(path: item.path)
+            }
+            if let firstPath = pathsByHeistId[heistId] {
+                throw ValidationError.duplicateHeistId(
+                    heistId: heistId,
+                    firstPath: firstPath,
+                    duplicatePath: item.path
                 )
             }
-            self.entries = entries
+            pathsByHeistId[heistId] = item.path
         }
 
-        var firstResponderHeistId: HeistId? {
-            entries.first(where: \.isFirstResponder)?.heistId
-        }
-
-        var elementRefsByHeistId: [HeistId: ElementRef] {
-            Dictionary(
-                uniqueKeysWithValues: entries.compactMap { entry in
-                    entry.ref.map { (entry.heistId, $0) }
-                }
+        let entries = try indexedElements.map { item -> LiveElementEntry in
+            guard let heistId = snapshot.heistIdsByPath[item.path] else {
+                throw ValidationError.missingHeistId(path: item.path)
+            }
+            guard let treeElement = tree.elements[heistId] else {
+                throw ValidationError.missingTreeElement(heistId: heistId, path: item.path)
+            }
+            guard treeElement.path == item.path else {
+                throw ValidationError.treeElementPathMismatch(
+                    heistId: heistId,
+                    snapshotPath: item.path,
+                    treePath: treeElement.path
+                )
+            }
+            guard capturedElementsMatch(treeElement.element, item.element) else {
+                throw ValidationError.treeElementMismatch(heistId: heistId, path: item.path)
+            }
+            try validateScrollEvidence(
+                at: item.path,
+                membership: treeElement.scrollMembership,
+                observedPoint: treeElement.observedScrollContentActivationPoint,
+                hierarchy: snapshot.hierarchy
+            )
+            return LiveElementEntry(
+                path: item.path,
+                treeElement: treeElement,
+                ref: dispatchReferences.elementRefs[heistId]
             )
         }
 
-        private static func validate(entries: [LiveElementEntry]) throws {
-            var pathsByHeistId: [HeistId: TreePath] = [:]
-            var heistIdsByPath: [TreePath: HeistId] = [:]
+        try validateContainers(in: tree)
+        try validate(
+            dispatchReferences: dispatchReferences,
+            snapshot: snapshot,
+            liveHeistIds: Set(entries.map(\.heistId))
+        )
+        return entries
+    }
 
-            for entry in entries {
-                if let firstPath = pathsByHeistId[entry.heistId] {
-                    throw LiveElementTableValidationError.duplicateHeistId(
-                        heistId: entry.heistId,
-                        firstPath: firstPath,
-                        duplicatePath: entry.path
-                    )
-                }
-                if let firstHeistId = heistIdsByPath[entry.path] {
-                    throw LiveElementTableValidationError.duplicateElementPath(
-                        path: entry.path,
-                        firstHeistId: firstHeistId,
-                        duplicateHeistId: entry.heistId
-                    )
-                }
-                pathsByHeistId[entry.heistId] = entry.path
-                heistIdsByPath[entry.path] = entry.heistId
+    private static func capturedElementsMatch(
+        _ lhs: AccessibilityElement,
+        _ rhs: AccessibilityElement
+    ) -> Bool {
+        lhs.matchesCapturedFacts(of: rhs)
+    }
+
+    private static func validateContainers(in tree: InterfaceTree) throws {
+        let snapshot = tree.viewportCapture
+        let metadataPaths = Set(snapshot.containerNamesByPath.keys)
+            .union(snapshot.containerContentFramesByPath.keys)
+            .union(snapshot.containerScrollMembershipsByPath.keys)
+            .union(snapshot.containerObservedScrollContentActivationPointsByPath.keys)
+            .union(snapshot.scrollInventoriesByPath.keys)
+
+        for path in metadataPaths.sorted() {
+            switch snapshot.hierarchy.node(at: path) {
+            case nil:
+                throw ValidationError.containerMetadataForMissingPath(path: path)
+            case .element:
+                throw ValidationError.containerMetadataForElementPath(path: path)
+            case .container:
+                break
             }
         }
 
-        private static func validate(
-            dispatchReferences: DispatchReferences,
-            snapshot: Snapshot,
-            liveHeistIds: Set<HeistId>
-        ) throws {
-            for heistId in dispatchReferences.elementRefs.keys.sorted() where !liveHeistIds.contains(heistId) {
-                throw LiveElementTableValidationError.strayElementRef(heistId: heistId)
+        for item in snapshot.hierarchy.pathIndexedContainers {
+            guard let treeContainer = tree.containers[item.path] else {
+                throw ValidationError.missingTreeContainer(path: item.path)
             }
-
-            if let firstResponderHeistId = dispatchReferences.firstResponderHeistId,
-               !liveHeistIds.contains(firstResponderHeistId) {
-                throw LiveElementTableValidationError.invalidFirstResponderHeistId(
-                    heistId: firstResponderHeistId
-                )
+            let expected = InterfaceTree.Container(
+                container: item.container,
+                path: item.path,
+                containerName: snapshot.containerNamesByPath[item.path],
+                contentRect: snapshot.containerContentFramesByPath[item.path],
+                scrollMembership: snapshot.containerScrollMembershipsByPath[item.path],
+                observedScrollContentActivationPoint: snapshot
+                    .containerObservedScrollContentActivationPointsByPath[item.path],
+                scrollInventory: snapshot.scrollInventoriesByPath[item.path]
+            )
+            guard treeContainer == expected else {
+                throw ValidationError.treeContainerMismatch(path: item.path)
             }
-
-            for path in dispatchReferences.containerRefsByPath.keys.sorted() {
-                switch snapshot.hierarchy.node(at: path) {
-                case nil:
-                    throw LiveElementTableValidationError.containerRefForMissingPath(path: path)
-                case .element:
-                    throw LiveElementTableValidationError.containerRefForElementPath(path: path)
-                case .container:
-                    break
-                }
+            try validateScrollEvidence(
+                at: item.path,
+                membership: treeContainer.scrollMembership,
+                observedPoint: treeContainer.observedScrollContentActivationPoint,
+                hierarchy: snapshot.hierarchy
+            )
+            if treeContainer.scrollInventory != nil, !item.container.isScrollable {
+                throw ValidationError.scrollInventoryForNonScrollablePath(path: item.path)
             }
+        }
+    }
 
-            for path in dispatchReferences.scrollableContainerViewsByPath.keys.sorted() {
-                switch snapshot.hierarchy.node(at: path) {
-                case nil:
-                    throw LiveElementTableValidationError.scrollableViewForMissingPath(path: path)
-                case .element:
-                    throw LiveElementTableValidationError.scrollableViewForElementPath(path: path)
-                case .container(let container, _):
-                    guard container.isScrollable else {
-                        throw LiveElementTableValidationError.scrollableViewForNonScrollablePath(path: path)
-                    }
+    private static func validateScrollEvidence(
+        at path: TreePath,
+        membership: InterfaceTree.ScrollMembership?,
+        observedPoint: InterfaceTree.ObservedScrollContentActivationPoint?,
+        hierarchy: [AccessibilityHierarchy]
+    ) throws {
+        if observedPoint != nil, membership == nil {
+            throw ValidationError.observedScrollPointWithoutMembership(path: path)
+        }
+        guard let membership else { return }
+        guard membership.containerPath != path,
+              path.hasPrefix(membership.containerPath),
+              case .container(let container, _) = hierarchy.node(at: membership.containerPath),
+              container.isScrollable
+        else {
+            throw ValidationError.invalidScrollMembership(
+                path: path,
+                containerPath: membership.containerPath
+            )
+        }
+    }
+
+    private static func validate(
+        dispatchReferences: DispatchReferences,
+        snapshot: Snapshot,
+        liveHeistIds: Set<HeistId>
+    ) throws {
+        for heistId in dispatchReferences.elementRefs.keys.sorted() where !liveHeistIds.contains(heistId) {
+            throw ValidationError.strayElementRef(heistId: heistId)
+        }
+
+        if let firstResponderHeistId = snapshot.firstResponderHeistId,
+           !liveHeistIds.contains(firstResponderHeistId) {
+            throw ValidationError.invalidFirstResponderHeistId(heistId: firstResponderHeistId)
+        }
+
+        for path in dispatchReferences.containerRefsByPath.keys.sorted() {
+            switch snapshot.hierarchy.node(at: path) {
+            case nil:
+                throw ValidationError.containerRefForMissingPath(path: path)
+            case .element:
+                throw ValidationError.containerRefForElementPath(path: path)
+            case .container:
+                break
+            }
+        }
+
+        for path in dispatchReferences.scrollableContainerViewsByPath.keys.sorted() {
+            switch snapshot.hierarchy.node(at: path) {
+            case nil:
+                throw ValidationError.scrollableViewForMissingPath(path: path)
+            case .element:
+                throw ValidationError.scrollableViewForElementPath(path: path)
+            case .container(let container, _):
+                guard container.isScrollable else {
+                    throw ValidationError.scrollableViewForNonScrollablePath(path: path)
                 }
             }
         }
     }
 
-    enum LiveElementTableValidationError: Error, Equatable, CustomStringConvertible, LocalizedError {
+    enum ValidationError: Error, Equatable, CustomStringConvertible, LocalizedError {
         case duplicateHeistId(heistId: HeistId, firstPath: TreePath, duplicatePath: TreePath)
-        case duplicateElementPath(path: TreePath, firstHeistId: HeistId, duplicateHeistId: HeistId)
+        case missingHeistId(path: TreePath)
         case heistIdForMissingPath(heistId: HeistId, path: TreePath)
         case heistIdForNonElementPath(heistId: HeistId, path: TreePath)
+        case treeElementKeyMismatch(dictionaryHeistId: HeistId, elementHeistId: HeistId)
+        case missingTreeElement(heistId: HeistId, path: TreePath)
+        case treeElementPathMismatch(heistId: HeistId, snapshotPath: TreePath, treePath: TreePath)
+        case treeElementMismatch(heistId: HeistId, path: TreePath)
+        case treeContainerPathMismatch(dictionaryPath: TreePath, containerPath: TreePath)
+        case containerMetadataForMissingPath(path: TreePath)
+        case containerMetadataForElementPath(path: TreePath)
+        case missingTreeContainer(path: TreePath)
+        case treeContainerMismatch(path: TreePath)
+        case invalidScrollMembership(path: TreePath, containerPath: TreePath)
+        case observedScrollPointWithoutMembership(path: TreePath)
+        case scrollInventoryForNonScrollablePath(path: TreePath)
         case strayElementRef(heistId: HeistId)
         case invalidFirstResponderHeistId(heistId: HeistId)
         case containerRefForMissingPath(path: TreePath)
@@ -577,12 +572,8 @@ struct LiveCapture: Equatable {
                 unique before building lookup indexes.
                 """
 
-            case .duplicateElementPath(let path, let firstHeistId, let duplicateHeistId):
-                return """
-                LiveElementIndex cannot index duplicate live path \
-                \(path.liveCaptureDiagnosticDescription) for HeistIds \
-                "\(firstHeistId.rawValue)" and "\(duplicateHeistId.rawValue)".
-                """
+            case .missingHeistId(let path):
+                return "Viewport element at \(path.liveCaptureDiagnosticDescription) has no HeistId."
 
             case .heistIdForMissingPath(let heistId, let path):
                 return """
@@ -595,6 +586,61 @@ struct LiveCapture: Equatable {
                 LiveElementIndex cannot attach HeistId "\(heistId.rawValue)" to non-element \
                 path \(path.liveCaptureDiagnosticDescription).
                 """
+
+            case .treeElementKeyMismatch(let dictionaryHeistId, let elementHeistId):
+                return """
+                InterfaceTree element key "\(dictionaryHeistId.rawValue)" does not match stored \
+                HeistId "\(elementHeistId.rawValue)".
+                """
+
+            case .missingTreeElement(let heistId, let path):
+                return """
+                LiveElementIndex cannot find tree element "\(heistId.rawValue)" for viewport \
+                path \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .treeElementPathMismatch(let heistId, let snapshotPath, let treePath):
+                return """
+                LiveElementIndex cannot pair tree element "\(heistId.rawValue)" at \
+                \(treePath.liveCaptureDiagnosticDescription) with viewport path \
+                \(snapshotPath.liveCaptureDiagnosticDescription).
+                """
+
+            case .treeElementMismatch(let heistId, let path):
+                return """
+                LiveElementIndex cannot pair tree element "\(heistId.rawValue)" with different \
+                viewport element content at path \(path.liveCaptureDiagnosticDescription).
+                """
+
+            case .treeContainerPathMismatch(let dictionaryPath, let containerPath):
+                return """
+                InterfaceTree container key \(dictionaryPath.liveCaptureDiagnosticDescription) does not match stored \
+                path \(containerPath.liveCaptureDiagnosticDescription).
+                """
+
+            case .containerMetadataForMissingPath(let path):
+                return "Container metadata points at missing path \(path.liveCaptureDiagnosticDescription)."
+
+            case .containerMetadataForElementPath(let path):
+                return "Container metadata points at element path \(path.liveCaptureDiagnosticDescription)."
+
+            case .missingTreeContainer(let path):
+                return "InterfaceTree has no semantic container for viewport path \(path.liveCaptureDiagnosticDescription)."
+
+            case .treeContainerMismatch(let path):
+                return "InterfaceTree container does not match viewport capture at \(path.liveCaptureDiagnosticDescription)."
+
+            case .invalidScrollMembership(let path, let containerPath):
+                return """
+                Scroll membership at \(path.liveCaptureDiagnosticDescription) points at a missing, non-scrollable, \
+                or non-ancestor container \(containerPath.liveCaptureDiagnosticDescription).
+                """
+
+            case .observedScrollPointWithoutMembership(let path):
+                return "Observed scroll point at \(path.liveCaptureDiagnosticDescription) has no scroll membership."
+
+            case .scrollInventoryForNonScrollablePath(let path):
+                return "Scroll inventory points at non-scrollable container \(path.liveCaptureDiagnosticDescription)."
 
             case .strayElementRef(let heistId):
                 return """
@@ -655,11 +701,10 @@ struct LiveCapture: Equatable {
         private let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
 
         fileprivate init(
-            validatedTable table: LiveElementTable,
+            validatedEntries entries: [LiveElementEntry],
             containerRefsByPath: [TreePath: ContainerRef],
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
         ) {
-            let entries = table.entries
             entriesByPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
             pathsByHeistId = Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.path) })
             orderedPaths = entries.map(\.path)
@@ -725,6 +770,124 @@ struct LiveCapture: Equatable {
 private extension TreePath {
     var liveCaptureDiagnosticDescription: String {
         "[\(indices.map(String.init).joined(separator: ", "))]"
+    }
+}
+
+private extension AccessibilityElement {
+    func matchesCapturedFacts(of other: AccessibilityElement) -> Bool {
+        description == other.description
+            && label == other.label
+            && value == other.value
+            && traits == other.traits
+            && identifier == other.identifier
+            && hint == other.hint
+            && userInputLabels == other.userInputLabels
+            && shape.matchesCapturedGeometry(of: other.shape)
+            && activationPoint.matchesCapturedGeometry(of: other.activationPoint)
+            && usesDefaultActivationPoint == other.usesDefaultActivationPoint
+            && customActions == other.customActions
+            && customContent == other.customContent
+            && customRotors.matchesCapturedFacts(of: other.customRotors)
+            && accessibilityLanguage == other.accessibilityLanguage
+            && respondsToUserInteraction == other.respondsToUserInteraction
+            && visibility == other.visibility
+    }
+}
+
+private extension Array where Element == AccessibilityElement.CustomRotor {
+    func matchesCapturedFacts(of other: Self) -> Bool {
+        count == other.count && zip(self, other).allSatisfy { lhs, rhs in
+            lhs.matchesCapturedFacts(of: rhs)
+        }
+    }
+}
+
+private extension AccessibilityElement.CustomRotor {
+    func matchesCapturedFacts(of other: Self) -> Bool {
+        name == other.name
+            && limit == other.limit
+            && resultMarkers.count == other.resultMarkers.count
+            && zip(resultMarkers, other.resultMarkers).allSatisfy { lhs, rhs in
+                lhs.matchesCapturedFacts(of: rhs)
+            }
+    }
+}
+
+private extension AccessibilityElement.CustomRotor.ResultMarker {
+    func matchesCapturedFacts(of other: Self) -> Bool {
+        guard elementDescription == other.elementDescription,
+              rangeDescription == other.rangeDescription else { return false }
+        switch (shape, other.shape) {
+        case (nil, nil):
+            return true
+        case let (.some(lhs), .some(rhs)):
+            return lhs.matchesCapturedGeometry(of: rhs)
+        case (.some, nil), (nil, .some):
+            return false
+        }
+    }
+}
+
+private extension AccessibilityShape {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        switch (self, other) {
+        case let (.frame(lhs), .frame(rhs)):
+            return lhs.matchesCapturedGeometry(of: rhs)
+        case let (.path(lhs), .path(rhs)):
+            return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { lhs, rhs in
+                lhs.matchesCapturedGeometry(of: rhs)
+            }
+        case (.frame, .path), (.path, .frame):
+            return false
+        }
+    }
+}
+
+private extension AccessibilityPathElement {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        switch (self, other) {
+        case let (.move(lhs), .move(rhs)),
+             let (.line(lhs), .line(rhs)):
+            return lhs.matchesCapturedGeometry(of: rhs)
+        case let (.quadCurve(lhs, lhsControl), .quadCurve(rhs, rhsControl)):
+            return lhs.matchesCapturedGeometry(of: rhs)
+                && lhsControl.matchesCapturedGeometry(of: rhsControl)
+        case let (.curve(lhs, lhsControl1, lhsControl2), .curve(rhs, rhsControl1, rhsControl2)):
+            return lhs.matchesCapturedGeometry(of: rhs)
+                && lhsControl1.matchesCapturedGeometry(of: rhsControl1)
+                && lhsControl2.matchesCapturedGeometry(of: rhsControl2)
+        case (.closeSubpath, .closeSubpath):
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+private extension AccessibilityRect {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        origin.matchesCapturedGeometry(of: other.origin)
+            && size.matchesCapturedGeometry(of: other.size)
+    }
+}
+
+private extension AccessibilityPoint {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        x.matchesCapturedGeometry(of: other.x)
+            && y.matchesCapturedGeometry(of: other.y)
+    }
+}
+
+private extension AccessibilitySize {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        width.matchesCapturedGeometry(of: other.width)
+            && height.matchesCapturedGeometry(of: other.height)
+    }
+}
+
+private extension Double {
+    func matchesCapturedGeometry(of other: Self) -> Bool {
+        self == other || (isNaN && other.isNaN)
     }
 }
 

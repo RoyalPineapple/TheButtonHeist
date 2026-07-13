@@ -142,8 +142,8 @@ extension TheHandoff {
             connectionLifecycle.recordServerInfo(info)
         case .forward(let message, let requestId):
             onServerMessage?(message, requestId)
-        case .connectionFailure(let message):
-            failActiveConnection(.connectionFailed(message))
+        case .serverFailure(let serverError):
+            failActiveConnection(.serverFailure(serverError))
         case .pong(let payload, let requestId):
             connectionLifecycle.markPongReceived()
             if let requestId {

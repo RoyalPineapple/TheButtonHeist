@@ -19,10 +19,7 @@ enum AccessibilityTraceDiff {
             transient: after.transition.transient,
             accessibilityNotifications: after.transition.accessibilityNotifications
         )
-        let change = AccessibilityObservationChangeReducer.reduce(
-            before: before,
-            after: after
-        )
+        let change = AccessibilityObservationChangeReducer.reduce(after: after)
 
         switch change {
         case .screenChanged:

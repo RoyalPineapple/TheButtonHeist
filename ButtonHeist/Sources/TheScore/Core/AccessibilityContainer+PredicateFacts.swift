@@ -2,86 +2,30 @@ import AccessibilitySnapshotModel
 import ThePlans
 
 public extension AccessibilityContainer {
-    var accessibilityContainerKind: AccessibilityContainerKind {
-        containerPredicateFacts.type
-    }
-
-    var containerPredicateLabel: String? {
-        containerPredicateFacts.label
-    }
-
-    var containerPredicateValue: String? {
-        containerPredicateFacts.value
-    }
-
-    var containerPredicateIdentifier: String? {
-        containerPredicateFacts.identifier
-    }
-
     var containerPredicateFacts: ContainerPredicateFacts {
         let actions = Set(customActions.lazy.map(\.name).filter { !$0.isEmpty }.map(ElementAction.custom))
-        let kind: AccessibilityContainerKind
-        let label: String?
-        let value: String?
-        let rowCount: Int?
-        let columnCount: Int?
+        let role: ContainerPredicateRoleFacts
         switch type {
         case .none:
-            kind = .none
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .none
         case .scrollable:
-            kind = .scrollable
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .none
         case .semanticGroup(let semanticLabel, let semanticValue):
-            kind = .semanticGroup
-            label = semanticLabel
-            value = semanticValue
-            rowCount = nil
-            columnCount = nil
+            role = .semanticGroup(label: semanticLabel, value: semanticValue)
         case .list:
-            kind = .list
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .list
         case .landmark:
-            kind = .landmark
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .landmark
         case .dataTable(let tableRowCount, let tableColumnCount, _):
-            kind = .dataTable
-            label = nil
-            value = nil
-            rowCount = tableRowCount
-            columnCount = tableColumnCount
+            role = .dataTable(rowCount: tableRowCount, columnCount: tableColumnCount)
         case .tabBar:
-            kind = .tabBar
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .tabBar
         case .series:
-            kind = .series
-            label = nil
-            value = nil
-            rowCount = nil
-            columnCount = nil
+            role = .series
         }
         return ContainerPredicateFacts(
-            type: kind,
-            label: label,
-            value: value,
+            role: role,
             identifier: identifier,
-            rowCount: rowCount,
-            columnCount: columnCount,
             isModalBoundary: isModalBoundary,
             isScrollable: isScrollable,
             actions: actions

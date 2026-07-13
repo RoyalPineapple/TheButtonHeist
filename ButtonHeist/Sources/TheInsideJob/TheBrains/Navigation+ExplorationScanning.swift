@@ -10,18 +10,30 @@ import ThePlans
 
 extension Navigation {
 
-    func scanForHeistId(_ heistId: HeistId) async -> ExploredScreen? {
+    func scanForHeistId(
+        _ heistId: HeistId,
+        deadline: SemanticObservationDeadline
+    ) async -> ExploredScreen? {
+        guard !Task.isCancelled,
+              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
         let startTime = CACurrentMediaTime()
         var exploration = SemanticExploration(
-            baseline: stash.actionDiscoveryBaseline()
+            baseline: stash.actionDiscoveryBaseline(),
+            knownTargetDeadline: deadline
         )
-        exploration.absorb(stash.refreshLiveCapture())
+        guard let settledPage = await settledKnownTargetPage(deadline: deadline),
+              !Task.isCancelled,
+              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        exploration.absorb(settledPage)
         if stash.liveContains(heistId: heistId) {
             return exploration.finish(startTime: startTime)
         }
 
         exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        if await scanPendingContainers(target: nil, targetHeistId: heistId, exploration: &exploration) != nil {
+        let terminal = await scanPendingContainers(target: nil, targetHeistId: heistId, exploration: &exploration)
+        guard !Task.isCancelled,
+              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        if terminal != nil {
             return exploration.finish(startTime: startTime)
         }
         return nil
@@ -33,6 +45,7 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> ScrollTraversalTerminal? {
         while !exploration.manifest.pendingScrollPaths.isEmpty {
+            guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
             guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                 exploration.manifest.markDiscoveryLimitHit()
                 return nil
@@ -44,7 +57,8 @@ extension Navigation {
                 return nil
             }
 
-            for container in batch {
+            containerBatch: for container in batch {
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
                 guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                     exploration.manifest.markDiscoveryLimitHit()
                     return nil
@@ -66,6 +80,14 @@ extension Navigation {
                     return terminal
                 case .completed:
                     exploration.markExplored(containerExploration.semanticContainer)
+                case .screenReplaced:
+                    if let terminal = scanGoalTerminal(
+                        scanGoal(target: target, targetHeistId: targetHeistId),
+                        in: exploration.screen
+                    ) {
+                        return terminal
+                    }
+                    break containerBatch
                 case .omitted(let reason):
                     exploration.manifest.markOmitted(containerExploration.path, reason: reason)
                 }
@@ -126,6 +148,14 @@ extension Navigation {
         )
         var effect = driver.send(.begin).scrollContainerScanEffect
         while true {
+            guard !Task.isCancelled, exploration.hasTimeRemaining else {
+                restoreKnownTargetOriginIfNeeded(
+                    savedVisualOrigin,
+                    containerExploration: containerExploration,
+                    exploration: exploration
+                )
+                return .completed
+            }
             switch effect {
             case .run(let direction):
                 let outcome = await runScrollScan(
@@ -135,17 +165,29 @@ extension Navigation {
                 effect = driver.send(.scanCompleted(outcome)).scrollContainerScanEffect
 
             case .restore:
-                await restoreContainerPosition(
+                let classification = await restoreContainerPosition(
                     containerExploration,
                     savedVisualOrigin: savedVisualOrigin,
                     exploration: &exploration
                 )
+                if classification?.isScreenReplacement == true {
+                    return .screenReplaced
+                }
                 effect = driver.send(.restoreCompleted).scrollContainerScanEffect
 
             case .finish(let result):
                 return result
             }
         }
+    }
+
+    private func restoreKnownTargetOriginIfNeeded(
+        _ savedVisualOrigin: CGPoint,
+        containerExploration: ContainerExploration,
+        exploration: SemanticExploration
+    ) {
+        guard case .knownTargetReveal = exploration.scope else { return }
+        Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
     }
 
     private func scanGoal(target: AccessibilityTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
@@ -162,21 +204,35 @@ extension Navigation {
         _ plan: ScrollScanPlan,
         exploration: inout SemanticExploration
     ) async -> ScrollScanOutcome {
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
         if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
             return .terminal(terminal)
         }
 
         for offset in scanOffsets(for: plan.container, direction: plan.direction) {
+            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
             if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
                 return .limitHit(reason)
             }
-            plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
-            if plan.animated {
-                _ = await tripwire.waitForAllClear(timeout: 0.5)
-            } else {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+            let classification: ScreenClassifier.Classification?
+            do {
+                let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+                defer { notificationWindow.cancel() }
+                plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                if plan.animated {
+                    _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
+                } else {
+                    await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                }
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                classification = await absorbExplorationPage(
+                    in: &exploration,
+                    notificationBatch: notificationWindow.capture()
+                )
             }
-            absorbExplorationPage(in: &exploration)
+            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+            if classification?.isScreenReplacement == true { return .screenReplaced }
 
             if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
                 return .terminal(terminal)
@@ -316,19 +372,62 @@ extension Navigation {
         }
     }
 
-    private func absorbExplorationPage(in exploration: inout SemanticExploration) {
-        exploration.absorb(stash.semanticPageForExploration())
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(exploration.screen)
+    private func absorbExplorationPage(
+        in exploration: inout SemanticExploration,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) async -> ScreenClassifier.Classification? {
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        let page: InterfaceObservation?
+        switch exploration.scope {
+        case .manifestBoundedDiscovery:
+            page = await settledExplorationPage()
+        case .knownTargetReveal(let deadline):
+            page = await settledKnownTargetPage(deadline: deadline)
+        }
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        if let notificationBatch {
+            return exploration.absorbScrolledPage(page, notificationBatch: notificationBatch)
+        }
+        return exploration.absorb(page)
     }
 
     private func restoreContainerPosition(
         _ containerExploration: ContainerExploration,
         savedVisualOrigin: CGPoint,
         exploration: inout SemanticExploration
-    ) async {
+    ) async -> ScreenClassifier.Classification? {
+        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        defer { notificationWindow.cancel() }
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        absorbExplorationPage(in: &exploration)
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        return await absorbExplorationPage(
+            in: &exploration,
+            notificationBatch: notificationWindow.capture()
+        )
+    }
+
+    private func settledKnownTargetPage(
+        deadline: SemanticObservationDeadline
+    ) async -> InterfaceObservation? {
+        guard !Task.isCancelled,
+              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        let timeoutMs = min(
+            SettleSession.defaultTimeoutMs,
+            max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
+        )
+        let settle = await SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: timeoutMs
+        ).run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: tripwire.tripwireSignal()
+        )
+        guard !Task.isCancelled,
+              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        return InterfaceObservationProof.settled(settle, stash: stash)?.screen
     }
 
     static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {

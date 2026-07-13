@@ -8,7 +8,7 @@ import TheScore
 /// This is not part of the wire protocol. It classifies existing local errors
 /// so CLI/MCP surfaces and tests can reason about failures without parsing
 /// human messages.
-public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
+public enum FailurePhase: String, Codable, Sendable, Equatable, CaseIterable {
     case discovery
     case setup
     case transport
@@ -22,7 +22,7 @@ public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
 }
 
 /// Stable diagnostic category for a command failure.
-public enum DiagnosticFailureKind: String, Sendable, Equatable {
+public enum DiagnosticFailureKind: String, Codable, Sendable, Equatable {
     case request
     case discovery
     case connection
@@ -259,10 +259,6 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable, CustomStr
 
 /// Canonical diagnostic failure shape used by CLI and MCP responses.
 public struct DiagnosticFailure: Sendable, Equatable {
-    /// Typed machine-readable failure code.
-    public let failureCode: KnownFailureCode
-    /// Broad diagnostic category for the failure.
-    public let kind: DiagnosticFailureKind
     /// User-facing failure message.
     public let message: String
     /// Lifecycle metadata and recovery hint for the failure.
@@ -272,6 +268,12 @@ public struct DiagnosticFailure: Sendable, Equatable {
 
     /// Display-ready failure message.
     public var displayMessage: String { message }
+
+    /// Typed machine-readable failure code.
+    public var failureCode: KnownFailureCode { details.code }
+
+    /// Broad diagnostic category for the failure.
+    public var kind: DiagnosticFailureKind { details.code.kind }
 
     /// Raw JSON/API boundary projection of `failureCode`.
     public var code: String { failureCode.rawValue }
@@ -285,47 +287,15 @@ public struct DiagnosticFailure: Sendable, Equatable {
     /// Short recovery hint that can be surfaced separately from the message.
     public var hint: String? { details.hint }
 
-    private static let unknownDetails = FailureDetails(
-        code: .clientUnknown,
-        hint: nil
-    )
-
     /// Creates a diagnostic failure from fully typed metadata.
     public init(
         message: String,
         details: FailureDetails,
-        kind: DiagnosticFailureKind? = nil,
         buildDiagnostics: [HeistBuildDiagnostic] = []
     ) {
-        self.failureCode = details.code
-        self.kind = kind ?? DiagnosticFailureKind(details: details)
         self.message = message
         self.details = details
         self.buildDiagnostics = buildDiagnostics
-    }
-
-    /// Creates a diagnostic failure, falling back to the unknown client error
-    /// shape when details are absent.
-    public init(
-        message: String,
-        details: FailureDetails?,
-        kind: DiagnosticFailureKind? = nil,
-        buildDiagnostics: [HeistBuildDiagnostic] = []
-    ) {
-        let resolvedKind: DiagnosticFailureKind?
-        if let kind {
-            resolvedKind = kind
-        } else if details == nil {
-            resolvedKind = .unknown
-        } else {
-            resolvedKind = nil
-        }
-        self.init(
-            message: message,
-            details: details ?? Self.unknownDetails,
-            kind: resolvedKind,
-            buildDiagnostics: buildDiagnostics
-        )
     }
 }
 
@@ -359,11 +329,5 @@ extension ConnectionFailure {
             failureCode: details.code,
             hint: details.hint
         )
-    }
-}
-
-private extension DiagnosticFailureKind {
-    init(details: FailureDetails) {
-        self = details.code.kind
     }
 }

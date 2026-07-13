@@ -153,7 +153,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = stash.accessibilityNotifications.beginHeistScope()
-        interactionObservation.resetAnnouncementWaitCursorForHeist()
+        interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
         let demand = stash.beginSemanticObservationDemand(scope: .visible)
@@ -167,7 +167,8 @@ extension TheBrains {
             return .failure(
                 method: .heistPlan,
                 errorKind: .validationError,
-                message: "Could not bind root heist argument: \(error)"
+                message: "Could not bind root heist argument: \(error)",
+                evidence: .none
             )
         }
         let execution = await executeHeistStepAccumulator(
@@ -209,9 +210,14 @@ extension TheBrains {
         )
 
         if abortedAtPath == nil {
-            return .success(payload: .heistExecution(heistResult), message: message)
+            return .success(payload: .heistExecution(heistResult), message: message, evidence: .none)
         }
-        return .failure(payload: .heistExecution(heistResult), errorKind: .actionFailed, message: message)
+        return .failure(
+            payload: .heistExecution(heistResult),
+            errorKind: .actionFailed,
+            message: message,
+            evidence: .none
+        )
     }
 
     internal func executeHeistSteps(

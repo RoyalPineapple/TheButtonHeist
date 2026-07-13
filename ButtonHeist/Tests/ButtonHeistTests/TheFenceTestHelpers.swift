@@ -40,6 +40,11 @@ extension TheFence {
     }
 
     @ButtonHeistActor
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
+        try admit(FenceCommandInput(command: command, arguments: arguments)).parsed
+    }
+
+    @ButtonHeistActor
     func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
         let request: FenceOperationRequest
         do {
@@ -391,7 +396,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
         default:
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
         }
     }
 
@@ -416,7 +421,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 ))
             }
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
         }
         return probe
     }
@@ -540,7 +545,8 @@ func makeReceiptTestTrace(
     before beforeInterface: Interface,
     after afterInterface: Interface,
     beforeScreenId: String? = "screen",
-    afterScreenId: String? = "screen"
+    afterScreenId: String? = "screen",
+    afterTransition: AccessibilityTrace.Transition = .init()
 ) -> AccessibilityTrace {
     let beforeCapture = AccessibilityTrace.Capture(
         sequence: 1,
@@ -551,9 +557,22 @@ func makeReceiptTestTrace(
         sequence: 2,
         interface: afterInterface,
         parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(screenId: afterScreenId)
+        context: AccessibilityTrace.Context(screenId: afterScreenId),
+        transition: afterTransition
     )
     return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+}
+
+func makeReceiptScreenChangedTransition(sequence: UInt64 = 1) -> AccessibilityTrace.Transition {
+    AccessibilityTrace.Transition(accessibilityNotifications: [
+        AccessibilityNotificationEvidence(
+            sequence: sequence,
+            kind: .screenChanged,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
+            notificationData: .none,
+            associatedElement: .none
+        ),
+    ])
 }
 
 func makeTestHeistActionStep(
@@ -573,13 +592,12 @@ func makeTestHeistActionStep(
             command: command,
             dispatchResult: result,
             expectationResult: expectationActionResult,
-            expectation: expectation,
-            warning: nil
+            expectation: expectation
         )
     } else {
         precondition(expectationActionResult == nil && expectation == nil)
         evidence = command.map {
-            .dispatch(command: $0, dispatchResult: result, warning: nil)
+            .dispatch(command: $0, dispatchResult: result)
         } ?? .commandlessDispatch(dispatchResult: result)
     }
 

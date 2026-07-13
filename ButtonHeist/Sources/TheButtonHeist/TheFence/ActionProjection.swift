@@ -72,6 +72,8 @@ struct ActionProjection: Sendable {
 
     var message: String? { result.message }
 
+    var warning: HeistActionWarning? { result.warning }
+
     var announcement: String? { result.announcement }
 
     var payload: ActionPayloadProjection {

@@ -77,24 +77,26 @@ final class PostActionObservation {
     }
 
     enum SettledObservationResult {
-        case observed(settle: SettleSession.Outcome, finalState: BeforeState, trace: AccessibilityTrace)
+        case committed(settle: SettleSession.Outcome, finalState: BeforeState, trace: AccessibilityTrace)
+        case diagnostic(settle: SettleSession.Outcome, trace: AccessibilityTrace)
         case unavailable(
             settle: SettleSession.Outcome,
-            baselineCapture: AccessibilityTrace.Capture,
+            trace: AccessibilityTrace,
             failureMessage: String
         )
 
         var accessibilityTrace: AccessibilityTrace {
             switch self {
-            case .observed(_, _, let trace):
+            case .committed(_, _, let trace), .diagnostic(_, let trace):
                 return trace
-            case .unavailable(_, let baselineCapture, _):
-                return AccessibilityTrace(capture: baselineCapture)
+            case .unavailable(_, let trace, _):
+                return trace
             }
         }
 
         var settled: Bool {
-            settle.outcome.didSettleCleanly
+            if case .committed = self { return true }
+            return false
         }
 
         var settleTimeMs: Int {
@@ -103,7 +105,8 @@ final class PostActionObservation {
 
         private var settle: SettleSession.Outcome {
             switch self {
-            case .observed(let settle, _, _),
+            case .committed(let settle, _, _),
+                 .diagnostic(let settle, _),
                  .unavailable(let settle, _, _):
                 return settle
             }
@@ -111,7 +114,7 @@ final class PostActionObservation {
 
         func message(explicit message: String?) -> String? {
             switch self {
-            case .observed:
+            case .committed, .diagnostic:
                 return message
             case .unavailable(_, _, let failureMessage):
                 return failureMessage
@@ -122,7 +125,7 @@ final class PostActionObservation {
             for outcome: PostActionObservation.ActionOutcome
         ) -> ActionResultOutcome {
             switch self {
-            case .observed:
+            case .committed, .diagnostic:
                 return outcome.resultOutcome
             case .unavailable:
                 return .failure(.actionFailed)
@@ -133,9 +136,9 @@ final class PostActionObservation {
             for outcome: PostActionObservation.ActionOutcome
         ) -> ActionResultPayload? {
             switch self {
-            case .observed(_, let finalState, _):
+            case .committed(_, let finalState, _):
                 return outcome.resolvedPayload(after: finalState)
-            case .unavailable:
+            case .diagnostic, .unavailable:
                 return outcome.immediatePayload
             }
         }
@@ -149,7 +152,7 @@ final class PostActionObservation {
     func captureSemanticState(from observation: SettledSemanticObservation) -> BeforeState {
         captureSemanticState(
             from: observation.screen,
-            tripwireSignal: observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence,
             interfaceProjection: observation.scope.stateInterfaceProjection
         )
@@ -158,7 +161,7 @@ final class PostActionObservation {
     func captureSemanticState(from evidence: VisibleSemanticObservationEvidence) -> BeforeState {
         captureSemanticState(
             from: evidence.screen,
-            tripwireSignal: evidence.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: evidence.settledObservationSequence
         )
     }
@@ -169,7 +172,7 @@ final class PostActionObservation {
             : event.observation.screen
         let current = captureSemanticState(
             from: screen,
-            tripwireSignal: event.observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence,
             interfaceProjection: event.scope.stateInterfaceProjection
         )
@@ -206,41 +209,70 @@ final class PostActionObservation {
                 "committed observation requires clean settle"
             )
             let finalState = captureFinalSemanticState(after: event)
-            return observedResult(
+            let trace = observedTrace(
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
-                accessibilityNotifications: event.trace.captures.last?.transition.accessibilityNotifications ?? []
+                transitionEvidence: event.trace.captures.last?.transition
+            )
+            return .committed(
+                settle: observation.settle,
+                finalState: finalState,
+                trace: trace
             )
 
-        case .observedUnsettled(let screen):
+        case .observedUnsettled(let tree, let notificationBatch):
             guard case .timedOut = observation.settle.outcome else {
                 preconditionFailure("unsettled observation requires settle timeout")
+            }
+            let screen: InterfaceObservation
+            do {
+                screen = try InterfaceObservation.build(tree: tree)
+            } catch {
+                preconditionFailure("Unsettled semantic observation failed validation: \(error)")
             }
             let finalState = captureSemanticState(
                 from: screen,
                 tripwireSignal: before.tripwireSignal,
                 settledObservationSequence: nil
             )
-            return observedResult(
+            let trace = observedTrace(
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
-                accessibilityNotifications: []
+                transitionEvidence: diagnosticTransitionEvidence(
+                    notificationBatch,
+                    in: finalState.screen
+                )
             )
+            return .diagnostic(settle: observation.settle, trace: trace)
 
-        case .unavailable:
+        case .unavailable(let notificationBatch):
+            let trace: AccessibilityTrace
+            if let notificationBatch {
+                trace = observedTrace(
+                    before: before,
+                    finalState: before,
+                    settle: observation.settle,
+                    transitionEvidence: diagnosticTransitionEvidence(
+                        notificationBatch,
+                        in: before.screen
+                    )
+                )
+            } else {
+                trace = AccessibilityTrace(capture: before.capture)
+            }
             switch observation.settle.outcome {
             case .cancelled(let timeMs):
                 return .unavailable(
                     settle: observation.settle,
-                    baselineCapture: before.capture,
+                    trace: trace,
                     failureMessage: "cancelled after \(timeMs)ms"
                 )
             case .timedOut:
                 return .unavailable(
                     settle: observation.settle,
-                    baselineCapture: before.capture,
+                    trace: trace,
                     failureMessage: "Could not parse post-action accessibility tree"
                 )
             case .settled:
@@ -249,27 +281,37 @@ final class PostActionObservation {
         }
     }
 
-    private func observedResult(
+    private func observedTrace(
         before: BeforeState,
         finalState: BeforeState,
         settle: SettleSession.Outcome,
-        accessibilityNotifications: [AccessibilityNotificationEvidence]
-    ) -> SettledObservationResult {
+        transitionEvidence: AccessibilityTrace.Transition?
+    ) -> AccessibilityTrace {
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
-            accessibilityNotifications,
+            transitionEvidence?.accessibilityNotifications ?? [],
             from: finalState,
             to: finalState
         )
-        let trace = buildPostActionTrace(
+        return buildPostActionTrace(
             before: before,
             final: finalState,
             settleOutcome: settle,
-            accessibilityNotifications: accessibilityNotifications
+            accessibilityNotifications: accessibilityNotifications,
+            transitionEvidence: transitionEvidence
         )
-        return .observed(
-            settle: settle,
-            finalState: finalState,
-            trace: trace
+    }
+
+    private func diagnosticTransitionEvidence(
+        _ notificationBatch: AccessibilityNotificationBatch?,
+        in screen: InterfaceObservation
+    ) -> AccessibilityTrace.Transition? {
+        guard let notificationBatch else { return nil }
+        return AccessibilityTrace.Transition(
+            accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
+                notificationBatch.events,
+                in: screen
+            ),
+            accessibilityNotificationGap: notificationBatch.gap
         )
     }
 
@@ -312,9 +354,13 @@ final class PostActionObservation {
         current: BeforeState,
         classification: ScreenClassifier.Classification
     ) -> Bool {
-        classification.isScreenChange
-            || current.capture.context != baseline.capture.context
-            || current.interfaceHash != baseline.interfaceHash
+        switch classification {
+        case .screenChangedNotification, .inferredScreenChange:
+            return true
+        case .sameGeneration:
+            return current.capture.context != baseline.capture.context
+                || current.interfaceHash != baseline.interfaceHash
+        }
     }
 
     func makeTraceCapture(
@@ -358,39 +404,34 @@ final class PostActionObservation {
         parentCapture: AccessibilityTrace.Capture,
         classification: ScreenClassifier.Classification,
         transient: [HeistElement] = [],
-        accessibilityNotifications: [AccessibilityNotificationEvidence] = []
+        accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
+        accessibilityNotificationGap: AccessibilityNotificationGap? = nil
     ) -> AccessibilityTrace {
-        if let fallbackReason = classification.reason {
+        let transition: AccessibilityTrace.Transition
+        switch classification {
+        case .sameGeneration, .screenChangedNotification:
+            transition = AccessibilityTrace.Transition(
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications,
+                accessibilityNotificationGap: accessibilityNotificationGap
+            )
+        case .inferredScreenChange(let reason):
             AccessibilityObservationFallbackLog.record(
-                fallbackReason,
+                reason,
                 source: .postAction
+            )
+            transition = AccessibilityTrace.Transition(
+                fallbackReason: reason,
+                transient: transient,
+                accessibilityNotifications: accessibilityNotifications,
+                accessibilityNotificationGap: accessibilityNotificationGap
             )
         }
         return makeAccessibilityTrace(
             afterInterface: afterInterface,
             parentCapture: parentCapture,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: classification.reason,
-                transient: transient,
-                accessibilityNotifications: accessibilityNotifications
-            )
+            transition: transition
         )
-    }
-
-    func makeClassifiedAccessibilityTrace(after: BeforeState, parent: BeforeState) -> AccessibilityTrace {
-        let classification = ScreenClassifier.classify(
-            before: parent.screenSnapshot,
-            after: after.screenSnapshot
-        )
-        let capture = AccessibilityTrace.Capture(
-            sequence: after.capture.sequence,
-            interface: after.capture.interface,
-            parentHash: after.capture.parentHash,
-            context: after.capture.context,
-            transition: AccessibilityTrace.Transition(fallbackReason: classification.reason),
-            hash: after.capture.hash
-        )
-        return AccessibilityTrace(captures: [parent.capture, capture])
     }
 
     private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) -> BeforeState {
@@ -400,7 +441,7 @@ final class PostActionObservation {
             : observation.screen
         return captureSemanticState(
             from: screen,
-            tripwireSignal: observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence
         )
     }
@@ -409,11 +450,13 @@ final class PostActionObservation {
         before: BeforeState,
         final: BeforeState,
         settleOutcome: SettleSession.Outcome,
-        accessibilityNotifications: [AccessibilityNotificationEvidence]
+        accessibilityNotifications: [AccessibilityNotificationEvidence],
+        transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
-        let classification = ScreenClassifier.classify(
+        let classification = transitionEvidence?.screenClassification ?? ScreenClassifier.classify(
             before: before.screenSnapshot,
-            after: final.screenSnapshot
+            after: final.screenSnapshot,
+            notifications: accessibilityNotifications.map(\.kind)
         )
         return makeAccessibilityTrace(
             afterInterface: final.interface,
@@ -425,7 +468,8 @@ final class PostActionObservation {
                 final: final,
                 classification: classification
             ),
-            accessibilityNotifications: accessibilityNotifications
+            accessibilityNotifications: accessibilityNotifications,
+            accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
         )
     }
 
@@ -477,14 +521,8 @@ final class PostActionObservation {
         for reference: AccessibilityNotificationElementReference,
         in state: BeforeState
     ) -> HeistId? {
-        guard reference.path.indices.count == 1,
-              let index = reference.path.indices.first,
-              index == reference.traversalIndex,
-              state.screen.orderedElements.indices.contains(index)
-        else {
-            return nil
-        }
-        return state.screen.orderedElements[index].heistId
+        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
+            .heistId(for: reference)
     }
 
     private static func accessibilityNotificationElementReference(
@@ -492,14 +530,8 @@ final class PostActionObservation {
         in state: BeforeState,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
-        for (index, element) in state.screen.orderedElements.enumerated() where element.heistId == heistId {
-            return AccessibilityNotificationElementReference(
-                path: TreePath([index]),
-                traversalIndex: index,
-                resolution: resolution
-            )
-        }
-        return nil
+        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
+            .accessibilityNotificationElementReference(for: heistId, resolution: resolution)
     }
 
     private func makeCaptureContext(
@@ -515,22 +547,11 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
-            firstResponder: screen.flatMap { firstResponderTarget(in: $0) },
+            firstResponder: screen.flatMap { stash.firstResponderTarget(in: $0.tree) },
             keyboardVisible: safecracker.isKeyboardVisible(),
             screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
-    }
-
-    private func firstResponderTarget(in screen: InterfaceObservation) -> AccessibilityTarget? {
-        guard let firstResponderHeistId = screen.liveCapture.firstResponderHeistId else { return nil }
-        let elements = screen.orderedElements.map {
-            PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
-        }
-        return MinimumPredicateSelector.minimumUniquePredicate(
-            for: firstResponderHeistId.predicateSelectionElementId,
-            in: elements
-        )?.target
     }
 
     // MARK: - Result Building
@@ -608,7 +629,7 @@ final class PostActionObservation {
         final: BeforeState,
         classification: ScreenClassifier.Classification
     ) -> [HeistElement] {
-        guard !classification.isScreenChange,
+        guard case .sameGeneration = classification,
               !settleResult.events.containsTripwireSignalChange else {
             return []
         }
@@ -631,6 +652,20 @@ private extension SemanticObservationScope {
     }
 }
 
+private extension AccessibilityTrace.Transition {
+    @MainActor var screenClassification: ScreenClassifier.Classification {
+        if accessibilityNotifications.contains(where: {
+            if case .screenChanged = $0.kind { true } else { false }
+        }) {
+            return .screenChangedNotification
+        }
+        if let fallbackReason {
+            return .inferredScreenChange(reason: fallbackReason)
+        }
+        return .sameGeneration
+    }
+}
+
 extension ActionResult {
     @MainActor init(
         postActionMethod method: ActionMethod,
@@ -644,27 +679,52 @@ extension ActionResult {
         let settlement: ActionSettlementEvidence = settledObservation.settled
             ? .settled(durationMs: settledObservation.settleTimeMs)
             : .timedOut(durationMs: settledObservation.settleTimeMs)
-        let evidence = ActionResultEvidence(
-            accessibilityTrace: settledObservation.accessibilityTrace,
-            settlement: settlement,
-            subjectEvidence: outcome.subjectEvidence,
-            activationTrace: outcome.activationTrace
+        let observation = ActionResultObservationEvidence.settledTrace(
+            settledObservation.accessibilityTrace,
+            settlement
         )
-        if let payload {
-            self = ActionResult(
-                outcome: resultOutcome,
-                payload: payload,
-                message: message,
-                evidence: evidence
+        switch resultOutcome {
+        case .success:
+            let evidence = ActionResultSuccessEvidence(
+                observation: observation,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace,
+                warning: Self.warning(method: method, subjectEvidence: outcome.subjectEvidence)
             )
-            return
+            self = payload.map { ActionResult.success(payload: $0, message: message, evidence: evidence) }
+                ?? ActionResult.success(method: method, message: message, evidence: evidence)
+        case .failure(let errorKind):
+            let evidence = ActionResultFailureEvidence(
+                observation: observation,
+                subjectEvidence: outcome.subjectEvidence,
+                activationTrace: outcome.activationTrace
+            )
+            self = payload.map {
+                ActionResult.failure(payload: $0, errorKind: errorKind, message: message, evidence: evidence)
+            } ?? ActionResult.failure(method: method, errorKind: errorKind, message: message, evidence: evidence)
         }
-        self = ActionResult(
-            outcome: resultOutcome,
-            method: method,
-            message: message,
-            evidence: evidence
-        )
+    }
+
+    private static func warning(
+        method: ActionMethod,
+        subjectEvidence: ActionSubjectEvidence?
+    ) -> HeistActionWarning? {
+        guard let element = subjectEvidence?.element else { return nil }
+        let evidence = ElementDiagnosticSummary(
+            label: element.label,
+            identifier: element.identifier,
+            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
+            actions: element.actions.sorted { $0.description < $1.description }
+        ).rendered(using: .activationAffordanceEvidence)
+
+        switch method {
+        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(element.traits):
+            return .activationWeakAffordance(evidence: evidence)
+        case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
+            return .textEntryWeakAffordance(evidence: evidence)
+        default:
+            return nil
+        }
     }
 }
 
@@ -740,95 +800,50 @@ private extension PostActionObservation.ActionOutcome {
 extension InterfaceObservation {
     func removingElements(withIds removedIds: Set<HeistId>) -> InterfaceObservation {
         guard !removedIds.isEmpty else { return self }
-        let removal = liveCapture.removingElementsWithPathMap(withIds: removedIds)
-        return InterfaceObservation(
-            tree: tree.removingElements(withIds: removedIds, using: removal.pathMap),
-            liveCapture: removal.liveCapture
-        )
-    }
-}
-
-private extension InterfaceTree {
-    func removingElements(
-        withIds removedIds: Set<HeistId>,
-        using pathMap: [TreePath: TreePath]
-    ) -> InterfaceTree {
-        var remappedElements: [HeistId: Element] = [:]
-        remappedElements.reserveCapacity(elements.count)
-        for (heistId, entry) in elements where !removedIds.contains(heistId) {
-            remappedElements[heistId] = Element(
-                heistId: entry.heistId,
-                scrollMembership: remap(entry.scrollMembership, using: pathMap),
-                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
-                element: entry.element
-            )
-        }
-
-        var remappedContainers: [TreePath: Container] = [:]
-        remappedContainers.reserveCapacity(containers.count)
-        for entry in containers.values.sorted(by: { $0.path < $1.path }) {
-            let remappedPath = pathMap[entry.path] ?? entry.path
-            remappedContainers[remappedPath] = Container(
-                container: entry.container,
-                path: remappedPath,
-                containerName: entry.containerName,
-                contentRect: entry.contentFrame,
-                scrollMembership: remap(entry.scrollMembership, using: pathMap),
-                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
-                scrollInventory: entry.scrollInventory
-            )
-        }
-        return InterfaceTree(elements: remappedElements, containers: remappedContainers)
-    }
-
-    private func remap(
-        _ membership: ScrollMembership?,
-        using pathMap: [TreePath: TreePath]
-    ) -> ScrollMembership? {
-        guard let membership else { return nil }
-        return ScrollMembership(
-            containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
-            index: membership.index
-        )
-    }
-}
-
-private struct LiveCaptureRemovalResult {
-    let liveCapture: LiveCapture
-    let pathMap: [TreePath: TreePath]
-}
-
-private extension LiveCapture {
-    func removingElementsWithPathMap(
-        withIds removedIds: Set<HeistId>
-    ) -> LiveCaptureRemovalResult {
-        guard !removedIds.isEmpty else {
-            return LiveCaptureRemovalResult(liveCapture: self, pathMap: [:])
-        }
-        let filteredLiveTree = hierarchy.removingElements(
+        let filteredViewport = liveCapture.hierarchy.removingElements(
             withIds: removedIds,
-            idsByPath: heistIdsByPath
+            idsByPath: liveCapture.heistIdsByPath
         )
-        let liveCapture = LiveCapture(
-            hierarchy: filteredLiveTree.hierarchy,
-            containerNamesByPath: Self.remap(containerNamesByPath, using: filteredLiveTree.pathMap),
-            heistIdsByPath: filteredLiveTree.idsByPath,
-            elementRefs: elementRefs.filter { !removedIds.contains($0.key) },
-            containerRefsByPath: Self.remap(containerRefsByPath, using: filteredLiveTree.pathMap),
-            containerContentFramesByPath: Self.remap(containerContentFramesByPath, using: filteredLiveTree.pathMap),
+        let pathMap = filteredViewport.pathMap
+        let snapshot = LiveCapture.Snapshot(
+            hierarchy: filteredViewport.hierarchy,
+            containerNamesByPath: Self.remap(liveCapture.containerNamesByPath, using: pathMap),
+            heistIdsByPath: filteredViewport.idsByPath,
+            containerContentFramesByPath: Self.remap(liveCapture.containerContentFramesByPath, using: pathMap),
             containerScrollMembershipsByPath: Self.remapMemberships(
-                containerScrollMembershipsByPath,
-                using: filteredLiveTree.pathMap
+                liveCapture.containerScrollMembershipsByPath,
+                using: pathMap
             ),
             containerObservedScrollContentActivationPointsByPath: Self.remap(
-                containerObservedScrollContentActivationPointsByPath,
-                using: filteredLiveTree.pathMap
+                liveCapture.containerObservedScrollContentActivationPointsByPath,
+                using: pathMap
             ),
-            scrollInventoriesByPath: Self.remap(scrollInventoriesByPath, using: filteredLiveTree.pathMap),
-            firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
-            scrollableContainerViewsByPath: Self.remap(scrollableContainerViewsByPath, using: filteredLiveTree.pathMap)
+            scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap),
+            firstResponderHeistId: liveCapture.firstResponderHeistId.flatMap {
+                removedIds.contains($0) ? nil : $0
+            }
         )
-        return LiveCaptureRemovalResult(liveCapture: liveCapture, pathMap: filteredLiveTree.pathMap)
+        let dispatchReferences = LiveCapture.DispatchReferences(
+            elementRefs: liveCapture.elementRefs.filter { !removedIds.contains($0.key) },
+            containerRefsByPath: Self.remap(liveCapture.containerRefsByPath, using: pathMap),
+            scrollableContainerViewsByPath: Self.remap(
+                liveCapture.scrollableContainerViewsByPath,
+                using: pathMap
+            )
+        )
+        let filteredTree = tree.removingElements(
+            withIds: removedIds,
+            using: pathMap,
+            viewportCapture: snapshot
+        )
+        do {
+            return try InterfaceObservation.build(
+                tree: filteredTree,
+                dispatchReferences: dispatchReferences
+            )
+        } catch {
+            preconditionFailure("Post-action observation filtering failed validation: \(error)")
+        }
     }
 
     private static func remap<Value>(
@@ -859,6 +874,60 @@ private extension LiveCapture {
                     )
                 )
             }
+        )
+    }
+}
+
+private extension InterfaceTree {
+    func removingElements(
+        withIds removedIds: Set<HeistId>,
+        using pathMap: [TreePath: TreePath],
+        viewportCapture: LiveCapture.Snapshot
+    ) -> InterfaceTree {
+        var remappedElements: [HeistId: Element] = [:]
+        remappedElements.reserveCapacity(elements.count)
+        for (heistId, entry) in elements where !removedIds.contains(heistId) {
+            let remappedPath = viewportElementIDs.contains(heistId)
+                ? pathMap[entry.path] ?? entry.path
+                : entry.path
+            remappedElements[heistId] = Element(
+                heistId: entry.heistId,
+                path: remappedPath,
+                scrollMembership: remap(entry.scrollMembership, using: pathMap),
+                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                element: entry.element
+            )
+        }
+
+        var remappedContainers: [TreePath: Container] = [:]
+        remappedContainers.reserveCapacity(containers.count)
+        for entry in containers.values.sorted(by: { $0.path < $1.path }) {
+            let remappedPath = pathMap[entry.path] ?? entry.path
+            remappedContainers[remappedPath] = Container(
+                container: entry.container,
+                path: remappedPath,
+                containerName: entry.containerName,
+                contentRect: entry.contentFrame,
+                scrollMembership: remap(entry.scrollMembership, using: pathMap),
+                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                scrollInventory: entry.scrollInventory
+            )
+        }
+        return InterfaceTree(
+            elements: remappedElements,
+            containers: remappedContainers,
+            viewportCapture: viewportCapture
+        )
+    }
+
+    private func remap(
+        _ membership: ScrollMembership?,
+        using pathMap: [TreePath: TreePath]
+    ) -> ScrollMembership? {
+        guard let membership else { return nil }
+        return ScrollMembership(
+            containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
+            index: membership.index
         )
     }
 }

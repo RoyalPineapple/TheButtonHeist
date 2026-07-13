@@ -2,8 +2,10 @@
 #if DEBUG
 import UIKit
 
-import AccessibilitySnapshotParser
+import ThePlans
 import TheScore
+
+import AccessibilitySnapshotParser
 
 /// Classifies parsed accessibility snapshots.
 ///
@@ -21,7 +23,7 @@ import TheScore
         let modalMarkers: [Marker]
         let primaryHeader: String?
         let backButton: Marker?
-        let selectedTab: Marker?
+        let selectedTabs: Set<Marker>
         let rootShape: [RootShapeToken]
     }
 
@@ -39,18 +41,8 @@ import TheScore
     }
 
     enum RootShapeKind: Equatable, Hashable {
-        case container(ContainerRootShapeRole)
+        case container(AccessibilityContainerKind)
         case element(ElementRootShapeRole)
-    }
-
-    enum ContainerRootShapeRole: Equatable, Hashable {
-        case none
-        case semanticGroup
-        case list
-        case landmark
-        case dataTable
-        case tabBar
-        case series
     }
 
     enum ElementRootShapeRole: Equatable, Hashable {
@@ -70,15 +62,27 @@ import TheScore
         let isScrollable: Bool
     }
 
-    typealias Reason = AccessibilityObservationFallbackReason
+    enum Classification: Equatable {
+        case sameGeneration
+        case screenChangedNotification
+        case inferredScreenChange(reason: AccessibilityObservationFallbackReason)
 
-    struct Classification: Equatable {
-        let isScreenChange: Bool
-        let reason: Reason?
+        var isScreenReplacement: Bool {
+            switch self {
+            case .sameGeneration:
+                false
+            case .screenChangedNotification, .inferredScreenChange:
+                true
+            }
+        }
 
-        static let sameScreen = Classification(isScreenChange: false, reason: nil)
-        static func screenChanged(_ reason: Reason) -> Classification {
-            Classification(isScreenChange: true, reason: reason)
+        var fallbackReason: AccessibilityObservationFallbackReason? {
+            switch self {
+            case .sameGeneration, .screenChangedNotification:
+                nil
+            case .inferredScreenChange(let reason):
+                reason
+            }
         }
     }
 
@@ -88,7 +92,7 @@ import TheScore
                 hierarchy: tree.viewportCapture.hierarchy,
                 elements: tree.viewportCapture.hierarchy.sortedElements
             ),
-            firstResponderHeistId: nil
+            firstResponderHeistId: tree.firstResponderHeistId
         )
     }
 
@@ -96,28 +100,40 @@ import TheScore
         snapshot(of: stash.interfaceTree)
     }
 
-    static func classify(before: Snapshot, after: Snapshot) -> Classification {
+    static func classify(
+        before: Snapshot?,
+        after: Snapshot,
+        notifications: [AccessibilityNotificationKind]
+    ) -> Classification {
+        if notifications.contains(where: {
+            if case .screenChanged = $0 { return true }
+            return false
+        }) {
+            return .screenChangedNotification
+        }
+        guard let before else { return .sameGeneration }
+
         let beforeSignature = before.signature
         let afterSignature = after.signature
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
-            return .screenChanged(.modalBoundaryChanged)
+            return .inferredScreenChange(reason: .modalBoundaryChanged)
         }
-        if beforeSignature.selectedTab != afterSignature.selectedTab {
-            return .screenChanged(.selectedTabChanged)
+        if beforeSignature.selectedTabs != afterSignature.selectedTabs {
+            return .inferredScreenChange(reason: .selectedTabChanged)
         }
         if beforeSignature.backButton != afterSignature.backButton {
-            return .screenChanged(.navigationMarkerChanged)
+            return .inferredScreenChange(reason: .navigationMarkerChanged)
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader {
-            return .screenChanged(.primaryHeaderChanged)
+            return .inferredScreenChange(reason: .primaryHeaderChanged)
         }
         if beforeSignature.rootShape != afterSignature.rootShape,
            !hasStableInteractionContext(before: before, after: after),
            isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape) {
-            return .screenChanged(.rootShapeChanged)
+            return .inferredScreenChange(reason: .rootShapeChanged)
         }
-        return .sameScreen
+        return .sameGeneration
     }
 
     static func signature(
@@ -128,7 +144,7 @@ import TheScore
             modalMarkers: modalMarkers(in: hierarchy),
             primaryHeader: summaryElement(in: elements)?.label,
             backButton: elements.first(where: isBackButton).map(marker(for:)),
-            selectedTab: selectedTabMarker(in: hierarchy),
+            selectedTabs: selectedTabMarkers(in: hierarchy),
             rootShape: rootShapeTokens(in: hierarchy)
         )
     }
@@ -137,20 +153,7 @@ import TheScore
         if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
             return explicit
         }
-        return elements
-            .enumerated()
-            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
-                guard element.traits.contains(.header), element.label != nil else { return nil }
-                return (index, element)
-            }
-            .min { left, right in
-                let leftFrame = left.element.shape.frame
-                let rightFrame = right.element.shape.frame
-                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
-                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
-                return left.index < right.index
-            }?
-            .element
+        return elements.first { $0.traits.contains(.header) && $0.label != nil }
     }
 
     private static func hasStableInteractionContext(before: Snapshot, after: Snapshot) -> Bool {
@@ -168,27 +171,27 @@ import TheScore
     }
 
     private static func marker(for container: AccessibilityContainer) -> Marker {
-        switch container.type {
+        let facts = container.containerPredicateFacts
+        let identifier = stableIdentifier(facts.identifier)
+        switch facts.role {
         case .none:
             return Marker(
-                label: container.scrollableContentSize == nil ? "container" : "scrollable",
+                label: facts.isScrollable ? "scrollable" : "container",
                 value: nil,
-                identifier: stableIdentifier(container.identifier)
+                identifier: identifier
             )
         case .semanticGroup(let label, let value):
-            return Marker(label: label, value: value, identifier: stableIdentifier(container.identifier))
+            return Marker(label: label, value: value, identifier: identifier)
         case .list:
-            return Marker(label: "list", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "list", value: nil, identifier: identifier)
         case .landmark:
-            return Marker(label: "landmark", value: nil, identifier: stableIdentifier(container.identifier))
-        case .dataTable(let rowCount, let columnCount, _):
-            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: stableIdentifier(container.identifier))
-        case .scrollable:
-            return Marker(label: "scrollable", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "landmark", value: nil, identifier: identifier)
+        case .dataTable(let rowCount, let columnCount):
+            return Marker(label: "dataTable", value: "\(rowCount)x\(columnCount)", identifier: identifier)
         case .tabBar:
-            return Marker(label: "tabBar", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "tabBar", value: nil, identifier: identifier)
         case .series:
-            return Marker(label: "series", value: nil, identifier: stableIdentifier(container.identifier))
+            return Marker(label: "series", value: nil, identifier: identifier)
         }
     }
 
@@ -203,9 +206,8 @@ import TheScore
         }
     }
 
-    private static func selectedTabMarker(in hierarchy: [AccessibilityHierarchy]) -> Marker? {
-        let markers: [Marker] = hierarchy.compactMap(
-            first: 1,
+    private static func selectedTabMarkers(in hierarchy: [AccessibilityHierarchy]) -> Set<Marker> {
+        Set(hierarchy.compactMap(
             context: false,
             container: { isInTabBar, container in
                 if case .tabBar = container.type { return true }
@@ -215,8 +217,7 @@ import TheScore
                 guard isInTabBar, element.traits.contains(.selected) else { return nil }
                 return marker(for: element)
             }
-        )
-        return markers.first
+        ))
     }
 
     private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [RootShapeToken] {
@@ -230,7 +231,7 @@ import TheScore
                 into: &tokens
             )
         }
-        return Array(tokens.prefix(80))
+        return tokens
     }
 
     private static func appendShapeTokens(
@@ -266,15 +267,16 @@ import TheScore
                 }
                 return
             }
+            let facts = container.containerPredicateFacts
             tokens.append(
                 RootShapeToken(
-                    kind: .container(containerRole(of: container)),
+                    kind: .container(facts.role.kind),
                     depth: depth,
-                    stableIdentifier: stableIdentifier(containerIdentifier(of: container)),
+                    stableIdentifier: stableIdentifier(facts.identifier),
                     state: RootShapeState(
                         isSelected: false,
-                        isModal: container.isModalBoundary,
-                        isScrollable: container.scrollableContentSize != nil
+                        isModal: facts.isModalBoundary,
+                        isScrollable: facts.isScrollable
                     )
                 )
             )
@@ -287,31 +289,6 @@ import TheScore
                 )
             }
         }
-    }
-
-    private static func containerRole(of container: AccessibilityContainer) -> ContainerRootShapeRole {
-        switch container.type {
-        case .none:
-            return .none
-        case .semanticGroup:
-            return .semanticGroup
-        case .list:
-            return .list
-        case .landmark:
-            return .landmark
-        case .dataTable:
-            return .dataTable
-        case .scrollable:
-            return .none
-        case .tabBar:
-            return .tabBar
-        case .series:
-            return .series
-        }
-    }
-
-    private static func containerIdentifier(of container: AccessibilityContainer) -> String? {
-        container.identifier
     }
 
     private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {
@@ -337,7 +314,7 @@ import TheScore
     ) -> Bool {
         guard depth == 0, hasMultipleRootNodes, !container.isModalBoundary else { return false }
         guard case .semanticGroup = container.type else { return false }
-        return stableIdentifier(containerIdentifier(of: container)) == nil
+        return stableIdentifier(container.containerPredicateFacts.identifier) == nil
     }
 
     private static func isRootShapeReplacement(before: [RootShapeToken], after: [RootShapeToken]) -> Bool {

@@ -26,8 +26,7 @@ extension Actions {
         case .element(let target), .elementUnitPoint(let target, _):
             switch await navigation.elementInflation.inflate(
                 for: target,
-                method: method,
-                deallocatedBoundary: "gesture action"
+                method: method
             ) {
             case .inflated(let target):
                 inflatedTarget = target

@@ -26,7 +26,8 @@ package struct PathIndexedAccessibilityContainer {
 package extension AccessibilityContainer {
     /// Whether this container can expose off-viewport content by scrolling.
     var isScrollable: Bool {
-        scrollableContentSize != nil
+        if case .scrollable = type { return true }
+        return scrollableContentSize != nil
     }
 }
 

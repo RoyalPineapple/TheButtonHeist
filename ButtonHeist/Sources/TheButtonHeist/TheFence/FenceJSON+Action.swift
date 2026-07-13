@@ -8,6 +8,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case status
     case method
     case message
+    case warning
     case announcement
     case value
     case rotor
@@ -84,6 +85,7 @@ struct PublicActionResultOutput: Encodable {
         try container.encode(PublicStatus(projection.status), forKey: .status)
         try container.encode(projection.actionMethod.rawValue, forKey: .method)
         try container.encodeIfPresent(projection.message, forKey: .message)
+        try container.encodeIfPresent(projection.warning, forKey: .warning)
         try container.encodeIfPresent(projection.announcement, forKey: .announcement)
         try encodePayload(to: &container)
         try container.encodeIfPresent(
@@ -430,7 +432,7 @@ struct PublicHeistReportNode: Encodable {
         self.durationMs = projection.durationMs
         self.intent = projection.intent
         self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
-        self.failure = projection.failure.map { PublicHeistFailureDetail(projection: $0) }
+        self.failure = projection.failure.map(PublicHeistFailureDetail.init)
         self.abortedAtChildPath = projection.abortedAtChildPath
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
         self.children = projection.children.map { PublicHeistReportNode(projection: $0) }
@@ -442,7 +444,6 @@ struct PublicHeistFailureDetail: Encodable {
     let contract: String
     let observed: String
     let expected: String?
-    let activationTrace: ActivationTrace?
     let code: String
     let kind: String
     let phase: String
@@ -454,7 +455,6 @@ struct PublicHeistFailureDetail: Encodable {
         contract = projection.detail.contract
         observed = projection.detail.observed
         expected = projection.detail.expected
-        activationTrace = projection.detail.activationTrace
         code = projection.diagnosticFailure.code
         kind = projection.diagnosticFailure.kind.rawValue
         phase = projection.diagnosticFailure.phase.rawValue
@@ -517,23 +517,21 @@ struct PublicHeistActionEvidence: Encodable {
         case result
         case expectationResult
         case expectation
-        case warning
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(projection.command?.rawValue, forKey: .commandName)
         try container.encodeIfPresent(projection.target, forKey: .target)
-        switch projection.evidence {
-        case .commandResolutionFailure(let warning):
-            try container.encodeIfPresent(warning, forKey: .warning)
-        case .dispatch(let result, let warning):
+        switch projection {
+        case .commandResolutionFailure:
+            break
+        case .dispatch(_, let result), .commandlessDispatch(let result):
             try container.encode(
                 PublicActionResultOutput(projection: result, context: .heistReportEvidence),
                 forKey: .result
             )
-            try container.encodeIfPresent(warning, forKey: .warning)
-        case .expectation(let dispatchResult, let expectationResult, let expectation, let warning):
+        case .expectation(_, let dispatchResult, let expectationResult, let expectation):
             try container.encode(
                 PublicActionResultOutput(projection: dispatchResult, context: .heistReportEvidence),
                 forKey: .result
@@ -542,8 +540,10 @@ struct PublicHeistActionEvidence: Encodable {
                 PublicActionResultOutput(projection: expectationResult, context: .heistReportEvidence),
                 forKey: .expectationResult
             )
-            try container.encode(PublicExpectationResult(projection: expectation), forKey: .expectation)
-            try container.encodeIfPresent(warning, forKey: .warning)
+            try container.encode(
+                PublicExpectationResult(projection: expectation),
+                forKey: .expectation
+            )
         }
     }
 }

@@ -479,18 +479,18 @@ func waitForBuildsWaitStep() throws {
 func `container predicates and scoped targets render canonically`() throws {
     let heist = try HeistPlan {
         WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))
-        WaitFor(.exists(.container(.actions([.custom("Archive")]))), timeout: .seconds(1))
+        WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))
         Activate(.within(container: .label("Checkout"), .label("Pay")))
     }
 
     #expect(try heist == HeistPlan(body: [
         .wait(WaitStep(predicate: .exists(.container(.label("Checkout"))), timeout: 2)),
-        .wait(WaitStep(predicate: .exists(.container(.actions([.custom("Archive")]))), timeout: 1)),
+        .wait(WaitStep(predicate: .exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)),
         .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ]))
     let canonical = try heist.canonicalSwiftDSL()
     #expect(canonical.contains(#"WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))"#))
-    #expect(canonical.contains(#"WaitFor(.exists(.container(.actions([.custom("Archive")]))), timeout: .seconds(1))"#))
+    #expect(canonical.contains(#"WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))"#))
     #expect(canonical.contains(#"Activate(.within(container: .label("Checkout"), .label("Pay")))"#))
 }
 
@@ -817,11 +817,20 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
         Activate(.label("Add to Cart"))
     }
 
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        try HeistPlan {
+    do {
+        _ = try HeistPlan {
             try first("Milk")
             try second("Bread")
         }
+        Issue.record("Expected conflicting nested definitions to fail admission")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        let failure = try #require(error.failures.first)
+        #expect(error.failures.count == 1)
+        #expect(failure.path == "$.definitions[0].definitions[1].name")
+        #expect(failure.contract == "duplicate heist definition names are not allowed in the same scope")
+        #expect(failure.observed == #""addToCart""#)
+    } catch {
+        Issue.record("Expected HeistPlanRuntimeSafetyError, got \(error)")
     }
 }
 

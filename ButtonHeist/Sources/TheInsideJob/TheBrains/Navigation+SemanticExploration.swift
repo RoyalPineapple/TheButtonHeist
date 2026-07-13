@@ -10,6 +10,47 @@ import ThePlans
 
 extension Navigation {
 
+    enum ExplorationBaseline {
+        case interfaceMemory(InterfaceObservation)
+        case currentViewport(InterfaceObservation)
+
+        var screen: InterfaceObservation {
+            switch self {
+            case .interfaceMemory(let screen), .currentViewport(let screen):
+                screen
+            }
+        }
+
+        var discoveryCommitPolicy: DiscoveryCommitPolicy {
+            switch self {
+            case .interfaceMemory:
+                .mergeIntoInterface
+            case .currentViewport:
+                .replaceInterface
+            }
+        }
+    }
+
+    enum DiscoveryCommitPolicy: Equatable {
+        case mergeIntoInterface
+        case replaceInterface
+    }
+
+    enum ExplorationGenerationDisposition: Equatable {
+        case preservesGeneration
+        case replacesGeneration(reason: AccessibilityObservationFallbackReason)
+
+        mutating func record(_ classification: ScreenClassifier.Classification) {
+            guard case .inferredScreenChange(let reason) = classification else { return }
+            self = .replacesGeneration(reason: reason)
+        }
+    }
+
+    enum SemanticExplorationScope {
+        case manifestBoundedDiscovery
+        case knownTargetReveal(SemanticObservationDeadline)
+    }
+
     struct ContainerExploration {
         let semanticContainer: InterfaceTree.Container
         let scrollView: UIScrollView
@@ -46,12 +87,14 @@ extension Navigation {
     enum ScrollContainerScanResult: Equatable, Sendable {
         case terminal(ScrollTraversalTerminal)
         case completed
+        case screenReplaced
         case omitted(ExplorationOmissionReason)
     }
 
     enum ScrollScanOutcome: Equatable, Sendable {
         case terminal(ScrollTraversalTerminal)
         case exhausted
+        case screenReplaced
         case limitHit(ExplorationOmissionReason)
     }
 
@@ -147,6 +190,9 @@ extension Navigation {
             outcome: ScrollScanOutcome
         ) -> StateChange<ScrollContainerScanState, ScrollContainerScanEffect, ScrollContainerScanRejection> {
             switch (direction, outcome) {
+            case (_, .screenReplaced):
+                return .changed(to: .finished(.screenReplaced), effects: [.finish(.screenReplaced)])
+
             case (_, .terminal(let terminal)):
                 let result = ScrollContainerScanResult.terminal(terminal)
                 return .changed(to: .finished(result), effects: [.finish(result)])
@@ -185,31 +231,123 @@ extension Navigation {
     struct ExploredScreen {
         let screen: InterfaceObservation
         let manifest: ScreenManifest
+        let generationDisposition: ExplorationGenerationDisposition
+        let discoveryCommitPolicy: DiscoveryCommitPolicy
+
+        internal init(
+            screen: InterfaceObservation,
+            manifest: ScreenManifest,
+            generationDisposition: ExplorationGenerationDisposition,
+            discoveryCommitPolicy: DiscoveryCommitPolicy
+        ) {
+            self.screen = screen
+            self.manifest = manifest
+            self.generationDisposition = generationDisposition
+            self.discoveryCommitPolicy = discoveryCommitPolicy
+        }
     }
 
     struct SemanticExploration {
         var screen: InterfaceObservation
         var manifest: ScreenManifest
+        let scope: SemanticExplorationScope
+        let discoveryCommitPolicy: DiscoveryCommitPolicy
+        private(set) var generationDisposition = ExplorationGenerationDisposition.preservesGeneration
 
         init(
-            baseline: InterfaceObservation,
+            baseline: ExplorationBaseline,
             maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
         ) {
-            screen = baseline
+            screen = baseline.screen
+            scope = .manifestBoundedDiscovery
+            discoveryCommitPolicy = baseline.discoveryCommitPolicy
             manifest = ScreenManifest(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
             )
         }
 
-        mutating func absorb(_ parsed: InterfaceObservation?) {
-            guard let parsed else { return }
-            screen = InterfaceObservation(
-                tree: screen.tree.merging(parsed.tree),
-                liveCapture: parsed.liveCapture
+        init(baseline: InterfaceObservation, knownTargetDeadline: SemanticObservationDeadline) {
+            screen = baseline
+            scope = .knownTargetReveal(knownTargetDeadline)
+            discoveryCommitPolicy = .mergeIntoInterface
+            manifest = ScreenManifest()
+        }
+
+        var hasTimeRemaining: Bool {
+            switch scope {
+            case .manifestBoundedDiscovery:
+                return true
+            case .knownTargetReveal(let deadline):
+                return deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent())
+            }
+        }
+
+        func cappedAnimatedWait(_ maximum: TimeInterval) -> TimeInterval {
+            switch scope {
+            case .manifestBoundedDiscovery:
+                return maximum
+            case .knownTargetReveal(let deadline):
+                return min(maximum, deadline.remainingSeconds())
+            }
+        }
+
+        @discardableResult
+        @MainActor
+        mutating func absorb(_ parsed: InterfaceObservation?) -> ScreenClassifier.Classification? {
+            guard let parsed else { return nil }
+            let classification = ScreenClassifier.classify(
+                before: ScreenClassifier.snapshot(of: screen.tree),
+                after: ScreenClassifier.snapshot(of: parsed.tree),
+                notifications: []
             )
+            return absorb(parsed, classification: classification)
+        }
+
+        @discardableResult
+        @MainActor
+        mutating func absorbScrolledPage(
+            _ parsed: InterfaceObservation?,
+            notificationBatch: AccessibilityNotificationBatch?
+        ) -> ScreenClassifier.Classification? {
+            guard let parsed else { return nil }
+            let classification: ScreenClassifier.Classification = if notificationBatch?.events.contains(where: {
+                if case .screenChanged = $0.kind { return true }
+                return false
+            }) == true {
+                .screenChangedNotification
+            } else {
+                .sameGeneration
+            }
+            return absorb(parsed, classification: classification)
+        }
+
+        private mutating func absorb(
+            _ parsed: InterfaceObservation,
+            classification: ScreenClassifier.Classification
+        ) -> ScreenClassifier.Classification {
+            generationDisposition.record(classification)
+            if classification.isScreenReplacement {
+                // A replacement starts a new graph, not a new execution budget.
+                let scrollCount = manifest.scrollCount
+                manifest = ScreenManifest(
+                    maxScrollsPerContainer: manifest.maxScrollsPerContainer,
+                    maxScrollsPerDiscovery: manifest.maxScrollsPerDiscovery
+                )
+                manifest.scrollCount = scrollCount
+                screen = parsed
+            } else {
+                do {
+                    screen = try parsed.replacingTreeWithCurrentCapture(
+                        screen.tree.merging(parsed.tree)
+                    )
+                } catch {
+                    preconditionFailure("Exploration observation failed validation: \(error)")
+                }
+            }
             addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
+            return classification
         }
 
         mutating func markExplored(_ container: InterfaceTree.Container) {
@@ -226,7 +364,12 @@ extension Navigation {
 
         mutating func finish(startTime: CFTimeInterval) -> ExploredScreen {
             manifest.explorationTime = CACurrentMediaTime() - startTime
-            return ExploredScreen(screen: screen, manifest: manifest)
+            return ExploredScreen(
+                screen: screen,
+                manifest: manifest,
+                generationDisposition: generationDisposition,
+                discoveryCommitPolicy: discoveryCommitPolicy
+            )
         }
     }
 }

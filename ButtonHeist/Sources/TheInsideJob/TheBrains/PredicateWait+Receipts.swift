@@ -124,8 +124,7 @@ extension PredicateWait {
         let cursor = announcementCursor(cursorStrategy)
         guard let announcement = await waitForAnnouncement(cursor, predicate, timeout) else {
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
-            let expectation = ExpectationResult(
-                met: false,
+            let expectation = ExpectationResult.Unmet(
                 predicate: step.predicate,
                 actual: message
             )
@@ -137,8 +136,7 @@ extension PredicateWait {
         }
 
         let elapsed = Self.elapsedSeconds(since: start)
-        let expectation = ExpectationResult(
-            met: true,
+        let expectation = ExpectationResult.Met(
             predicate: step.predicate,
             actual: announcement.text
         )
@@ -161,8 +159,7 @@ extension PredicateWait {
             return .timedOut(
                 message: message,
                 accessibilityTrace: trace,
-                expectation: ExpectationResult(
-                    met: false,
+                expectation: ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: message
                 )
@@ -178,8 +175,7 @@ extension PredicateWait {
                 errorKind: .actionFailed,
                 message: message,
                 accessibilityTrace: trace,
-                expectation: ExpectationResult(
-                    met: false,
+                expectation: ExpectationResult.Unmet(
                     predicate: step.predicate,
                     actual: message
                 ),
@@ -193,8 +189,7 @@ extension PredicateWait {
                 elapsed: Self.elapsedSeconds(since: start)
             ),
             accessibilityTrace: trace,
-            expectation: ExpectationResult(
-                met: true,
+            expectation: ExpectationResult.Met(
                 predicate: step.predicate,
                 actual: announcement.text
             ),
@@ -293,7 +288,8 @@ extension PredicateWait {
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
             )
-        if success {
+        switch (success, expectation) {
+        case (true, .met(let expectation)):
             return .matched(
                 message: message,
                 accessibilityTrace: trace,
@@ -301,14 +297,19 @@ extension PredicateWait {
                 observedSequence: observedSequence,
                 observationSummary: observationSummary
             )
+        case (false, .unmet(let expectation)):
+            return .timedOut(
+                message: message,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: observedSequence,
+                observationSummary: observationSummary
+            )
+        case (true, .unmet):
+            preconditionFailure("Successful predicate wait requires a met expectation")
+        case (false, .met):
+            preconditionFailure("Timed-out predicate wait requires an unmet expectation")
         }
-        return .timedOut(
-            message: message,
-            accessibilityTrace: trace,
-            expectation: expectation,
-            observedSequence: observedSequence,
-            observationSummary: observationSummary
-        )
     }
 
     private static func waitSuccessMessage(

@@ -6,7 +6,6 @@ extension TheFence.Command {
         case .perform:
             return makeDescriptor(
                 family: .heistRuntime,
-                requestDecoder: TheFence.decodePerformCommandRequest,
                 parameters: [
                     FenceParameters.performStep.spec,
                 ],
@@ -17,7 +16,6 @@ extension TheFence.Command {
         case .runHeist:
             return makeDescriptor(
                 family: .heistRuntime,
-                requestDecoder: TheFence.decodeRunHeistCommandRequest,
                 parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
                 timeout: .fixed(.longAction),
                 responseProjection: .heistExecution,
@@ -26,7 +24,6 @@ extension TheFence.Command {
         case .listHeists:
             return makeDescriptor(
                 family: .heistRuntime,
-                requestDecoder: TheFence.decodeListHeistsCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
                     FenceParameters.heistCatalogDetail.spec,
@@ -41,7 +38,6 @@ extension TheFence.Command {
         case .describeHeist:
             return makeDescriptor(
                 family: .heistRuntime,
-                requestDecoder: TheFence.decodeDescribeHeistCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
                     FenceParameters.heistName.spec,

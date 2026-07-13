@@ -10,8 +10,7 @@ import UIKit
 
 /// Deterministic tests for post-action observation and exploration behavior
 /// that operate purely against the current `InterfaceObservation` snapshot: failure result
-/// assembly, classified trace projections, wait-change guards, and
-/// semantic discovery observation.
+/// assembly, wait-change guards, and semantic discovery observation.
 ///
 /// Success-path post-action observation and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -109,7 +108,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {
+    func testFallbackScreenChangeFinalStateKeepsPersistentVisibleElement() async throws {
         let persistent = AccessibilityElement.make(
             label: "Inbox",
             traits: .staticText,
@@ -516,7 +515,83 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.payload, .value("Saved"))
     }
 
-    func testActionResultWithDeltaSuccessReportsScreenChange() async {
+    func testPostActionReceiptDoesNotResolveDeferredPayloadFromUnsettledDiagnosticEvidence() async {
+        let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let diagnosticScreen = InterfaceObservation.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Status",
+                    value: "Saved",
+                    traits: .staticText,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "status")
+            ),
+        ])
+        let outcome = PostActionObservation.ActionOutcome.success(.init(
+            payload: .afterState { state in
+                guard let value = state.screen.findElement(heistId: "status")?.element.value else {
+                    return .none
+                }
+                return .payload(.typeText(value))
+            }
+        ))
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .typeText,
+            outcome: outcome,
+            before: before,
+            settleOutcome: settledOutcome(
+                finalScreen: diagnosticScreen,
+                outcome: .timedOut(timeMs: 250)
+            )
+        )
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertNil(result.payload)
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.value,
+            "Saved"
+        )
+    }
+
+    func testTypeTextPayloadUsesCommittedElementIdentity() {
+        let selectedId: HeistId = "selected_message"
+        let replacementId: HeistId = "replacement_message"
+        let afterScreen = InterfaceObservation.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Message",
+                    value: "Selected",
+                    traits: .textEntry,
+                    respondsToUserInteraction: false
+                ),
+                selectedId
+            ),
+            (
+                AccessibilityElement.make(
+                    label: "Message",
+                    value: "Replacement",
+                    traits: .textEntry,
+                    respondsToUserInteraction: false
+                ),
+                replacementId
+            ),
+        ])
+        brains.stash.installScreenForTesting(afterScreen)
+        let afterState = brains.postActionObservation.captureSemanticState()
+
+        XCTAssertEqual(
+            brains.actions.typeTextPayload(resolvedElementId: selectedId, in: afterState),
+            .typeText("Selected")
+        )
+    }
+
+    func testActionResultWithDeltaReportsTypedFallbackScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
@@ -534,9 +609,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             result.accessibilityTrace?.changeFacts.map(\.kind),
             [.elementsChanged, .screenChanged, .elementsChanged]
         )
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .primaryHeaderChanged
+        )
     }
 
-    func testScreenChangeReceiptRefinesMixedTransitionSurface() async throws {
+    func testFallbackScreenChangeReceiptPublishesSettledReplacementSurface() async throws {
         let beforeScreen = makeScreen(elements: [
             ("ButtonHeist Demo", .header, "root_header"),
             ("Controls Demo", .button, "controls_demo"),
@@ -546,34 +625,27 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
 
-        let mixedTransitionScreen = makeScreen(elements: [
-            ("Controls Demo", .button, "controls_demo"),
-            ("Todo List", .button, "todo_list"),
-            ("Words", .button, "words"),
-            ("Section A", .header, "section_a_header"),
-            ("A acid", .button, "a_acid"),
-            ("abacus major", .button, "abacus_major"),
-            ("ButtonHeist Demo", .backButton, "back_button"),
-        ])
         let cleanSettledScreen = makeScreen(elements: [
             ("Section A", .header, "section_a_header"),
             ("A acid", .button, "a_acid"),
             ("abacus major", .button, "abacus_major"),
             ("ButtonHeist Demo", .backButton, "back_button"),
         ])
-        brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
-
         let result = await brains.interactionObservation.finishAfterAction(
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
+            settleOutcome: settledOutcome(finalScreen: cleanSettledScreen)
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(
             result.accessibilityTrace?.changeFacts.map(\.kind),
             [.elementsChanged, .screenChanged, .elementsChanged]
+        )
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .navigationMarkerChanged
         )
         let labels = result.accessibilityTrace?.captures.last?.interface.projectedElements.compactMap { $0.label } ?? []
         XCTAssertTrue(labels.contains("Section A"), "Expected new screen labels: \(labels)")
@@ -588,7 +660,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testScreenChangeNotificationReferencesAreRemappedAfterPruning() async throws {
+    func testGappedElementChangedNotificationReferencesAreRemappedToCommittedScreen() async throws {
         let beforeScreen = makeScreen(elements: [
             ("ButtonHeist Demo", .header, "root_header"),
             ("Controls Demo", .button, "controls_demo"),
@@ -598,21 +670,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
 
-        let controls = AccessibilityElement.make(
-            label: "Controls Demo",
-            traits: .button,
-            respondsToUserInteraction: false
-        )
-        let todos = AccessibilityElement.make(
-            label: "Todo List",
-            traits: .button,
-            respondsToUserInteraction: false
-        )
-        let words = AccessibilityElement.make(
-            label: "Words",
-            traits: .button,
-            respondsToUserInteraction: false
-        )
         let section = AccessibilityElement.make(
             label: "Section A",
             traits: .header,
@@ -634,24 +691,20 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let acidObject = NSObject()
-        let mixedTransitionScreen = InterfaceObservation.makeForTests([
-            .init(controls, heistId: "controls_demo"),
-            .init(todos, heistId: "todo_list"),
-            .init(words, heistId: "words"),
+        let cleanSettledScreen = InterfaceObservation.makeForTests([
             .init(section, heistId: "section_a_header"),
             .init(acid, heistId: "a_acid", object: acidObject),
             .init(abacus, heistId: "abacus_major"),
             .init(back, heistId: "back_button"),
         ])
-        let cleanSettledScreen = InterfaceObservation.makeForTests([
-            .init(section, heistId: "section_a_header"),
-            .init(acid, heistId: "a_acid"),
-            .init(abacus, heistId: "abacus_major"),
-            .init(back, heistId: "back_button"),
-        ])
-        brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
         let notificationWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
+        brains.stash.accessibilityNotifications.record(
+            code: 99_999,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        brains.stash.accessibilityNotifications.clearPendingEvents()
         brains.stash.accessibilityNotifications.record(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload(acidObject),
@@ -662,12 +715,17 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             outcome: successOutcome(),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen),
+            settleOutcome: settledOutcome(finalScreen: cleanSettledScreen),
             notificationWindow: notificationWindow
         )
 
         let notification = try XCTUnwrap(
             result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
+        )
+        XCTAssertEqual(notification.kind, .elementChanged(.layout))
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .navigationMarkerChanged
         )
         guard case .element(let reference) = notification.notificationData else {
             return XCTFail("Expected notification data to resolve to final trace element, got \(notification.notificationData)")
@@ -700,7 +758,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             associatedElement: .none
         )
 
-        brains.stash.semanticObservationStream.commitSettledVisibleObservation(
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Passive", .staticText, "passive")])
         )
 
@@ -759,7 +817,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(discoveryAfter)
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryAfter)
 
         let result = await resultTask.value
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
@@ -882,7 +940,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -926,9 +984,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -954,7 +1012,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(observedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(observedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -979,7 +1037,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(emptyScreen)
 
         let receipt = await receiptTask.value
 
@@ -1003,7 +1061,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(readyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(readyScreen)
 
         let receipt = await receiptTask.value
 
@@ -1033,7 +1091,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
 
         let receipt = await receiptTask.value
 
@@ -1066,7 +1124,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(quantityScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
 
         let receipt = await receiptTask.value
 
@@ -1091,9 +1149,12 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(loadingScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(loadingScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(emptyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            emptyScreen,
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
 
         let receipt = await receiptTask.value
 
@@ -1457,8 +1518,8 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testPredicateWaitPreservesActionBaselineWhenCaptureIsNotInObservationHistory() async throws {
         let beforeScreen = volumeScreen(value: "50%")
         let afterScreen = volumeScreen(value: "60%")
-        _ = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
-        let afterEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(afterScreen)
+        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
+        let afterEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(afterScreen)
         let actionBaseline = AccessibilityTrace.Capture(
             sequence: 1,
             interface: brains.stash.discoveryInterfaceWithHash(
@@ -1493,13 +1554,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testObservationWindowRetainsFastRoundTripTransition() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        _ = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let finalEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1518,10 +1579,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testCompleteObservationWindowProducesUnchangedProof() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1543,12 +1604,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testIncompleteObservationWindowDoesNotProduceUnchangedVerdict() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1559,10 +1620,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard case .incomplete = window.completeness else {
             return XCTFail("Expected generation reset to make the window incomplete")
         }
-        XCTAssertTrue(window.trace.changeFacts.contains {
-            if case .screenChanged = $0 { return true }
-            return false
-        })
+        XCTAssertTrue(window.trace.changeFacts.isEmpty)
 
         let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
         let predicateResult = PredicateObservationEvidence(
@@ -1574,12 +1632,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testIncompleteObservationWindowStillProvesEndpointElementChange() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1597,12 +1655,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testNoChangePredicateRequiresCompleteObservationWindow() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         brains.stash.semanticObservationStream.clearSettledObservationHistory()
-        let currentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
         let window = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1621,21 +1679,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(predicateResult.actual, "observation history incomplete")
     }
 
-    func testScreenAppearanceStartsNewObservationGeneration() throws {
-        let oldScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
-            makeScreen(elements: [("Menu", .header, "menu_header")])
+    func testScopedScreenChangedStartsNewObservationGeneration() throws {
+        let oldScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
-        let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")]),
-            pendingAccessibilityNotifications: [
-                PendingAccessibilityNotificationEvent(
-                    sequence: 1,
-                    kind: .screenChanged,
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    notificationData: .none,
-                    associatedElement: .none
-                ),
-            ]
+            notificationBatch: notificationBatch(kind: .screenChanged)
         )
         let oldBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let transitionWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1644,6 +1694,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         ))
 
         XCTAssertNotEqual(newScreenEvent.generation, oldScreenEvent.generation)
+        XCTAssertNil(newScreenEvent.trace.captures.last?.transition.fallbackReason)
+        XCTAssertEqual(
+            newScreenEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.screenChanged]
+        )
         XCTAssertEqual(transitionWindow.completeness, .complete)
         XCTAssertEqual(
             transitionWindow.trace.changeFacts.map(\.kind),
@@ -1651,7 +1706,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let newBaseline = try XCTUnwrap(newScreenEvent.settledCapture)
-        let nextEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let nextEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Checkout", .header, "checkout_header")])
         )
         let newScreenWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1663,12 +1718,170 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(newScreenWindow.completeness, .complete)
     }
 
-    func testChangePredicatesReadScreenAndElementFactsSeparately() throws {
-        let oldScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+    func testPassiveCommitConsumesScopedScreenChangedSinceLastCommit() {
+        let notifications = brains.stash.accessibilityNotifications
+        let heistScope = notifications.beginHeistScope()
+        defer { heistScope.cancel() }
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+
+        notifications.record(code: 1000, notificationData: .none, associatedElement: .none)
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(
+            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.screenChanged]
+        )
+    }
+
+    func testPassiveCommitIgnoresAmbientScreenChangedBetweenHeistScopes() {
+        let notifications = brains.stash.accessibilityNotifications
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+        let firstScope = notifications.beginHeistScope()
+        firstScope.cancel()
+        notifications.record(code: 1000, notificationData: .none, associatedElement: .none)
+        let secondScope = notifications.beginHeistScope()
+        defer { secondScope.cancel() }
+
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+
+        XCTAssertEqual(after.generation, before.generation)
+        XCTAssertTrue(after.trace.captures.last?.transition.accessibilityNotifications.isEmpty == true)
+        XCTAssertTrue(after.trace.changeFacts.isEmpty)
+    }
+
+    func testElementChangedNotificationDoesNotSuppressSnapshotFallback() throws {
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
-        let newScreenEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
-            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(kind: .elementChanged(.layout))
+        )
+
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+        XCTAssertEqual(
+            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.elementChanged(.layout)]
+        )
+        XCTAssertEqual(
+            after.trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
+    }
+
+    func testNotificationGapFallsBackToSnapshotClassification() throws {
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Menu", .header, "menu_header")])
+        )
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(
+                kind: .elementChanged(.layout),
+                gap: AccessibilityNotificationGap(droppedThroughSequence: 1)
+            )
+        )
+
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+    }
+
+    func testScreenChangedReplacesDiscoveryOnlyTargetableTruthBeforePublication() {
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("Old offscreen row", .staticText, "old_offscreen_row"),
+            ])
+        )
+
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("New visible row", .staticText, "new_visible_row"),
+            ]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
+
+        XCTAssertNil(brains.stash.interfaceTree.elements["old_offscreen_row"])
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["new_visible_row"])
+    }
+
+    func testScreenChangedReplacesDiscoveryCommitInsteadOfMergingOldTruth() {
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("Old discovered row", .staticText, "old_discovered_row"),
+            ])
+        )
+
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [
+                ("Checkout", .header, "checkout_header"),
+                ("New discovered row", .staticText, "new_discovered_row"),
+            ]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
+
+        XCTAssertNil(brains.stash.interfaceTree.elements["old_discovered_row"])
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["new_discovered_row"])
+    }
+
+    func testExplicitScreenChangedPublishesSettledCandidateExactly() {
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [
+                ("Home", .header, "home_header"),
+                ("Old control", .button, "old_control"),
+            ])
+        )
+
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [
+                ("Old control", .button, "old_control"),
+                ("Details", .header, "details_header"),
+                ("Persistent status", .staticText, "persistent_status"),
+            ]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
+
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["old_control"])
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["details_header"])
+        XCTAssertNotNil(brains.stash.interfaceTree.elements["persistent_status"])
+    }
+
+    func testUnknownNotificationRequiresExplicitSnapshotFallbackForScreenChange() throws {
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Menu", .header, "menu_header")])
+        )
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(kind: .unknown(4_002))
+        )
+
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+        XCTAssertEqual(
+            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.unknown(4_002)]
+        )
+        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+    }
+
+    func testChangePredicatesReadScreenAndElementFactsSeparately() throws {
+        let oldScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Menu", .header, "menu_header")])
+        )
+        let newScreenEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
         )
         let oldScreenBaseline = try XCTUnwrap(oldScreenEvent.settledCapture)
         let screenWindow = try XCTUnwrap(brains.stash.semanticObservationStream.observationWindow(
@@ -1686,10 +1899,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(screenPredicate.met)
         XCTAssertTrue(elementPredicateAgainstScreen.met)
 
-        let elementBaselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let elementBaselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let elementCurrentEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let elementCurrentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
         let elementBaseline = try XCTUnwrap(elementBaselineEvent.settledCapture)
@@ -1711,13 +1924,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testPredicateObservationStreamPreservesChangeBaselineAcrossReductions() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let intermediateEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let intermediateEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        let finalEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             volumeScreen(value: "70%")
         )
 
@@ -1756,58 +1969,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             WaitObservationPlan(predicate: .exists(.container(.identifier("CheckoutList")))).scope,
             .discovery
         )
-    }
-
-    func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
-        seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.postActionObservation.captureSemanticState()
-
-        seedScreen(elements: [
-            ("Menu", .header, "menu_header"),
-            ("Chicken Tikka", .button, "button_chicken_tikka"),
-        ])
-        let after = brains.postActionObservation.captureSemanticState()
-
-        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
-
-        XCTAssertNil(trace.captures.last?.transition.fallbackReason)
-        guard case .elementsChanged(let fact)? = trace.changeFacts.first else {
-            return XCTFail("Expected elementsChanged fact")
-        }
-        XCTAssertEqual(fact.metadata.captureEdge?.before.hash, before.capture.hash)
-        XCTAssertEqual(fact.metadata.captureEdge?.after.hash, trace.captures.last?.hash)
-    }
-
-    func testClassifiedTraceStartsSegmentForRealScreenChange() throws {
-        seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.postActionObservation.captureSemanticState()
-
-        seedScreen(elements: [("Checkout", .header, "checkout_header")])
-        let after = brains.postActionObservation.captureSemanticState()
-
-        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
-
-        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
-        XCTAssertEqual(trace.changeFacts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-        guard case .screenChanged(let fact) = trace.changeFacts[1] else {
-            return XCTFail("Expected screenChanged marker")
-        }
-        XCTAssertEqual(fact.metadata.captureEdge?.before.hash, before.capture.hash)
-        XCTAssertEqual(fact.metadata.captureEdge?.after.hash, trace.captures.last?.hash)
-    }
-
-    func testClassifiedTraceFactsAreDerivedFromCaptures() throws {
-        seedScreen(elements: [("Cart", .header, "cart_header"), ("Total", .staticText, "total_label")])
-        let before = brains.postActionObservation.captureSemanticState()
-
-        seedScreen(elements: [("Cart", .header, "cart_header"), ("Total $12.00", .staticText, "total_label")])
-        let after = brains.postActionObservation.captureSemanticState()
-
-        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
-        XCTAssertFalse(trace.changeFacts.isEmpty)
-        XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
-        XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
-        XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)
     }
 
     // MARK: - Semantic Capture
@@ -1897,7 +2058,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: 7,
             scope: .discovery,
             screen: screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let event = SettledSemanticObservationEvent(
             sequence: 7,
@@ -1954,7 +2115,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        let screen = InterfaceObservation(
+        let screen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: [
                     "visible_button": InterfaceTree.Element(
@@ -1992,7 +2153,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                     ),
                 ]
             ),
-            liveCapture: LiveCapture(
+            liveCapture: LiveCapture.makeForTests(
                 hierarchy: [
                     .container(rootContainer, children: [
                         .element(visible, traversalIndex: 0),
@@ -2033,7 +2194,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
-            after: current.screenSnapshot
+            after: current.screenSnapshot,
+            notifications: []
         )
 
         XCTAssertFalse(
@@ -2070,7 +2232,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
-            after: current.screenSnapshot
+            after: current.screenSnapshot,
+            notifications: []
         )
 
         XCTAssertTrue(
@@ -2115,9 +2278,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No live labeled element available for target short-circuit test")
         }
 
-        let exploration = await brains.navigation.exploreScreen(
+        guard let exploration = await brains.navigation.exploreScreen(
             target: literalTarget(ElementPredicate(label: .exact(label)))
-        )
+        ) else {
+            return XCTFail("Expected target exploration to settle")
+        }
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)
         XCTAssertTrue(exploration.manifest.pendingScrollPaths.isEmpty)
@@ -2138,7 +2303,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         var exploration = Navigation.SemanticExploration(
-            baseline: InterfaceObservation.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
+            baseline: .interfaceMemory(
+                InterfaceObservation.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
+            )
         )
 
         exploration.absorb(InterfaceObservation.makeForTests(elements: [(after, HeistId(rawValue: "total_staticText"))]))
@@ -2162,7 +2329,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
         let nestedEntry = semanticContainer(nested, path: nestedPath)
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
         exploration.manifest.addPendingContainers([outerEntry])
 
         exploration.markExplored(outerEntry)
@@ -2182,7 +2349,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 180, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
-        let page = InterfaceObservation(
+        let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(outer, children: [
@@ -2191,7 +2358,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
         )
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
         exploration.absorb(page)
 
@@ -2208,7 +2375,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 520, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
-        let page = InterfaceObservation(
+        let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(outer, children: [
@@ -2220,11 +2387,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         let outerPath = TreePath([0])
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
         exploration.manifest.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
-        exploration.absorb(page)
+        exploration.absorbScrolledPage(page, notificationBatch: nil)
 
         XCTAssertTrue(exploration.manifest.exploredScrollPaths.contains(outerPath))
         XCTAssertFalse(exploration.manifest.pendingScrollPaths.contains(outerPath))
@@ -2232,7 +2399,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() {
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
         let result = exploration.finish(startTime: CACurrentMediaTime() - 0.01)
 
@@ -2250,7 +2417,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No semantic-only scrollable container in host UI")
         }
 
-        let exploration = await brains.navigation.exploreScreen()
+        guard let exploration = await brains.navigation.exploreScreen() else {
+            return XCTFail("Expected swipeable-container exploration to settle")
+        }
         let manifest = exploration.manifest
 
         XCTAssertTrue(manifest.exploredScrollPaths.contains(container.path))
@@ -2284,6 +2453,25 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
         brains.stash.installScreenForTesting(makeScreen(elements: elements))
+    }
+
+    private func notificationBatch(
+        kind: AccessibilityNotificationKind,
+        gap: AccessibilityNotificationGap? = nil
+    ) -> AccessibilityNotificationBatch {
+        AccessibilityNotificationBatch(
+            events: [PendingAccessibilityNotificationEvent(
+                sequence: 1,
+                kind: kind,
+                timestamp: Date(timeIntervalSince1970: 0),
+                notificationData: .none,
+                associatedElement: .none,
+                provenance: .scoped
+            )],
+            through: AccessibilityNotificationCursor(sequence: 1),
+            scopedScreenChangedThrough: kind == .screenChanged ? 1 : 0,
+            gap: gap
+        )
     }
 
     private func waitForSettledSemanticWaiter(
@@ -2342,7 +2530,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: sequence,
             scope: scope,
             screen: screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let state = brains.postActionObservation.captureSemanticState(from: settled)
         let trace = AccessibilityTrace(capture: state.capture)
@@ -2370,7 +2558,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: sequence,
             scope: .discovery,
             screen: state.screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let event = SettledSemanticObservationEvent(
             sequence: sequence,
@@ -2423,12 +2611,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         finalScreen: InterfaceObservation?,
         outcome: SettleOutcome = .settled(timeMs: 0)
     ) -> SettleSession.Outcome {
+        if let finalScreen {
+            brains.stash.recordParsedObservedEvidence(finalScreen)
+        }
         let elements = finalScreen?.liveCapture.hierarchy.sortedElements ?? []
         let elementsByKey = Dictionary(uniqueKeysWithValues: elements.map { ($0.timelineKey, $0) })
         return SettleSession.Outcome(
             outcome: outcome,
             events: [],
-            finalScreen: finalScreen,
+            finalObservation: finalScreen.map { SettleSessionFinalObservation(screen: $0) },
             elementsByKey: elementsByKey
         )
     }

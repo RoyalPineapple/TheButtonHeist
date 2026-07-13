@@ -308,7 +308,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
-    func testCaptureBackedScreenChangedFactsCarrySourceEdgeAndDeriveFromTransition() throws {
+    func testCaptureBackedFallbackScreenFactsCarrySourceEdgeAndDeriveFromTransition() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -320,11 +320,30 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
 
+        XCTAssertEqual(after.transition.fallbackReason, .primaryHeaderChanged)
         XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
         try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
-    func testScreenChangedNotificationWinsWhenScreenIdentityIsUnchanged() throws {
+    func testFallbackScreenClassificationOutranksIncidentalElementNotification() {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(
+                fallbackReason: .primaryHeaderChanged,
+                accessibilityNotifications: [notification(kind: .elementChanged(.layout), sequence: 1)]
+            )
+        )
+
+        XCTAssertEqual(
+            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
+    }
+
+    func testScreenChangedNotificationWinsWhenSettledSnapshotIsUnchanged() throws {
         let notification = notification(kind: .screenChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
@@ -337,6 +356,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
 
         let facts = AccessibilityTrace.ChangeFact.between(before, after)
+        XCTAssertNil(after.transition.fallbackReason)
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
         guard case .screenChanged(let payload) = facts[1] else {
             return XCTFail("Expected screenChanged from the scoped screenChanged notification")
         }
@@ -345,33 +366,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             try JSONDecoder().decode([AccessibilityTrace.ChangeFact].self, from: JSONEncoder().encode(facts)),
             facts
         )
-    }
-
-    func testObservationGenerationBoundaryCannotProduceElementUpdates() {
-        let beforeInterface = makeTestInterface(elements: [
-            makeElement(label: "Quantity", value: "1", traits: [.adjustable]),
-        ])
-        let afterInterface = makeTestInterface(elements: [
-            makeElement(label: "Quantity", value: "2", traits: [.adjustable]),
-        ])
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: beforeInterface,
-            context: AccessibilityTrace.Context(screenId: "checkout", observationGeneration: 7)
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: afterInterface,
-            parentHash: before.hash,
-            context: AccessibilityTrace.Context(screenId: "checkout", observationGeneration: 8)
-        )
-
-        let facts = AccessibilityTrace.ChangeFact.between(before, after)
-
-        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
-        XCTAssertTrue(facts.testElementEdits.updated.isEmpty)
-        XCTAssertEqual(facts.testDisappearedLabels, ["Quantity"])
-        XCTAssertEqual(facts.testAppearedLabels, ["Quantity"])
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
@@ -415,25 +409,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         }
         XCTAssertEqual(after.transition.accessibilityNotifications, [notification])
         XCTAssertTrue(payload.isNotificationOnly)
-    }
-
-    func testScreenAppearanceFallbackPrecedesValueChangedNotification() {
-        let notification = notification(kind: .elementChanged(.value), sequence: 1)
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Volume"))
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Volume"),
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(
-                fallbackReason: .primaryHeaderChanged,
-                accessibilityNotifications: [notification]
-            )
-        )
-
-        XCTAssertEqual(
-            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
-        )
     }
 
     func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() {
@@ -651,26 +626,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(unavailableProjection.activationPointEvidence, .unavailable)
         XCTAssertNil(unavailableProjection.activationPointEvidence.point)
         XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
-    }
-
-    func testCaptureScreenContextDiffsAsScreenChanged() {
-        let interface = makeInterface()
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: interface,
-            context: AccessibilityTrace.Context(screenId: "menu")
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: interface,
-            parentHash: before.hash,
-            context: AccessibilityTrace.Context(screenId: "checkout")
-        )
-
-        XCTAssertEqual(
-            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
-            [.elementsChanged, .screenChanged, .elementsChanged]
-        )
     }
 
     func testInteractionDigestReportsScreenAndFirstResponderChanges() throws {

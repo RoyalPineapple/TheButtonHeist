@@ -14,57 +14,9 @@ enum HeistDefinitionMerger {
         _ definitions: [HeistPlanAdmissionCandidate],
         duplicatePolicy: HeistDefinitionDuplicatePolicy
     ) -> [HeistPlanAdmissionCandidate] {
-        merge(
-            definitions,
-            duplicatePolicy: duplicatePolicy,
-            name: \.name,
-            isNamespace: { $0.parameter == .none && $0.body.isEmpty && !$0.definitions.isEmpty },
-            children: \.definitions,
-            replacingChildren: { definition, children in
-                HeistPlanAdmissionCandidate(
-                    version: definition.version,
-                    name: definition.name,
-                    parameter: definition.parameter,
-                    definitions: children,
-                    body: definition.body
-                )
-            }
-        )
-    }
-
-    static func merge(
-        _ definitions: [HeistPlan],
-        duplicatePolicy: HeistDefinitionDuplicatePolicy
-    ) -> [HeistPlan] {
-        merge(
-            definitions,
-            duplicatePolicy: duplicatePolicy,
-            name: \.name,
-            isNamespace: { $0.parameter == .none && $0.body.isEmpty },
-            children: \.definitions,
-            replacingChildren: { definition, children in
-                HeistPlan(
-                    runtimeValidatedVersion: definition.version,
-                    name: definition.name,
-                    parameter: definition.parameter,
-                    definitions: children,
-                    body: definition.body
-                )
-            }
-        )
-    }
-
-    private static func merge<Definition: Equatable>(
-        _ definitions: [Definition],
-        duplicatePolicy: HeistDefinitionDuplicatePolicy,
-        name: KeyPath<Definition, String?>,
-        isNamespace: (Definition) -> Bool,
-        children: KeyPath<Definition, [Definition]>,
-        replacingChildren: (Definition, [Definition]) -> Definition
-    ) -> [Definition] {
         definitions.reduce(into: []) { merged, definition in
-            guard let definitionName = definition[keyPath: name],
-                  let existingIndex = merged.firstIndex(where: { $0[keyPath: name] == definitionName })
+            guard let definitionName = definition.name,
+                  let existingIndex = merged.firstIndex(where: { $0.name == definitionName })
             else {
                 merged.append(definition)
                 return
@@ -74,21 +26,26 @@ enum HeistDefinitionMerger {
             if duplicatePolicy == .discardIdentical, existing == definition {
                 return
             }
-            guard isNamespace(existing), isNamespace(definition) else {
+            guard existing.isNamespaceFragment, definition.isNamespaceFragment else {
                 merged.append(definition)
                 return
             }
-            merged[existingIndex] = replacingChildren(
-                existing,
-                merge(
-                    existing[keyPath: children] + definition[keyPath: children],
-                    duplicatePolicy: duplicatePolicy,
-                    name: name,
-                    isNamespace: isNamespace,
-                    children: children,
-                    replacingChildren: replacingChildren
-                )
+            merged[existingIndex] = HeistPlanAdmissionCandidate(
+                version: existing.version,
+                name: existing.name,
+                parameter: existing.parameter,
+                definitions: merge(
+                    existing.definitions + definition.definitions,
+                    duplicatePolicy: duplicatePolicy
+                ),
+                body: existing.body
             )
         }
+    }
+}
+
+private extension HeistPlanAdmissionCandidate {
+    var isNamespaceFragment: Bool {
+        parameter == .none && body.isEmpty && !definitions.isEmpty
     }
 }

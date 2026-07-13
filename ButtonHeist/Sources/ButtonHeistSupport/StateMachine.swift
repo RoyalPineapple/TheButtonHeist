@@ -1,14 +1,14 @@
-package protocol SimpleStateMachine: Sendable {
-    associatedtype State: Sendable & Equatable
-    associatedtype Event: Sendable & Equatable
-    associatedtype Effect: Sendable & Equatable
-    associatedtype Rejection: Sendable & Equatable
+package protocol SimpleStateMachine {
+    associatedtype State: Equatable
+    associatedtype Event: Equatable
+    associatedtype Effect: Equatable
+    associatedtype Rejection: Equatable
 
     func advance(_ state: State, with event: Event) -> StateChange<State, Effect, Rejection>
 }
 
-package enum StateChange<State, Effect, Rejection>: Sendable, Equatable
-where State: Sendable & Equatable, Effect: Sendable & Equatable, Rejection: Sendable & Equatable {
+package enum StateChange<State, Effect, Rejection>: Equatable
+where State: Equatable, Effect: Equatable, Rejection: Equatable {
     case changed(to: State, effects: [Effect] = [])
     case rejected(Rejection, stayingIn: State)
 
@@ -34,7 +34,9 @@ where State: Sendable & Equatable, Effect: Sendable & Equatable, Rejection: Send
     }
 }
 
-package struct StateDriver<Machine: SimpleStateMachine>: Sendable {
+extension StateChange: Sendable where State: Sendable, Effect: Sendable, Rejection: Sendable {}
+
+package struct StateDriver<Machine: SimpleStateMachine> {
     package private(set) var state: Machine.State
     package let machine: Machine
 
@@ -50,3 +52,5 @@ package struct StateDriver<Machine: SimpleStateMachine>: Sendable {
         return change
     }
 }
+
+extension StateDriver: Sendable where Machine: Sendable, Machine.State: Sendable {}

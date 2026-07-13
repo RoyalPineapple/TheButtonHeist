@@ -71,19 +71,13 @@ struct HeistReportProjection: Sendable {
         summary = HeistReportSummaryProjection(summary: reportSummary)
         metrics = HeistExecutionMetricProjection(rollup: rollup)
         failedStepPath = reportSummary.abortedAtPath
-        failureScreenshotSummary = result.failureScreenshotSummary
-        failureInterfaceDump = result.failureInterfaceDump(
+        failureScreenshotSummary = rollup.failureScreenshotSummary
+        failureInterfaceDump = rollup.failureInterfaceDump(
             elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = accessibilityTrace.flatMap {
             DeltaProjection(trace: $0, isComplete: true, profile: profile, includeScreenInterface: true)
         }
-    }
-}
-
-private extension ProjectionProfile {
-    var heistReport: ProjectionProfile {
-        kind == .summary ? .mcp : self
     }
 }
 
@@ -127,6 +121,7 @@ struct HeistReportNodeProjection: Sendable {
     var abortedAtChildPath: String? { step.abortedAtChildPath }
     var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
     var actionErrorKind: ErrorKind? { results.actionErrorKind }
+    var activationTrace: ActivationTrace? { results.actionResult?.activationTrace }
     var traceDelta: DeltaProjection? {
         evidence?.traceDelta
     }

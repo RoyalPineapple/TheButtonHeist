@@ -1,5 +1,4 @@
 #if canImport(UIKit) && DEBUG
-import ButtonHeistSupport
 import UIKit
 
 import TheScore
@@ -7,12 +6,19 @@ import ThePlans
 
 extension ElementInflation {
 
-    private enum TargetRefreshGraceMode {
-        case revealPath
-        case liveTarget(method: ActionMethod)
+    private enum TargetRefreshMode {
+        case revealPath(
+            treeElement: InterfaceTree.Element,
+            transaction: RevealTransaction
+        )
+        case liveTarget(
+            treeElement: InterfaceTree.Element,
+            target: AccessibilityTarget,
+            method: ActionMethod
+        )
     }
 
-    private enum TargetRefreshGraceResolution {
+    private enum TargetRefreshResolution {
         case treeElement(InterfaceTree.Element, didReveal: Bool)
         case liveTarget(InflatedElementTarget)
         case failed(ElementInflationFailure)
@@ -22,291 +28,181 @@ extension ElementInflation {
     internal func stateAfterReveal(
         _ treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
-        attempt: Int
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
     ) async -> State {
-        if case .success(let visible)? = visibleTargetResolution(target) {
+        if stash.liveContains(heistId: treeElement.heistId),
+           let committed = stash.interfaceElement(heistId: treeElement.heistId) {
             return .refreshing(
                 target: target,
-                treeElement: visible,
-                attempt: attempt,
+                treeElement: committed,
+                deadline: deadline,
                 didReveal: false
             )
         }
 
-        let reveal = await revealSemanticTarget(treeElement)
-        if case .failed(let failure) = reveal {
-            switch refreshedVisibleTargetResolution(target) {
-            case .success(let visible)?:
-                return .refreshing(
-                    target: target,
-                    treeElement: visible,
-                    attempt: attempt,
-                    didReveal: false
-                )
-            case .failure(let failure)?:
-                return .failed(failure)
-            case nil:
-                break
+        let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        let reveal = await revealSemanticTarget(
+            treeElement,
+            deadline: deadline,
+            transaction: transaction
+        )
+        switch reveal {
+        case .cancelled:
+            return .failed(.cancelled(
+                "semantic target reveal was cancelled before the target became actionable"
+            ))
+        case .timedOut:
+            return .failed(.timedOut(
+                "semantic target reveal reached the action deadline before the target became actionable"
+            ))
+        case .failed(let failure):
+            if failure == .scanDidNotRevealTarget {
+                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
             }
-            switch await awaitTargetRefreshGrace(for: target, mode: .revealPath) {
+            switch await awaitTargetRefresh(
+                mode: .revealPath(treeElement: treeElement, transaction: transaction),
+                after: settledSequence,
+                deadline: deadline
+            ) {
             case .treeElement(let resolved, let didReveal):
                 return .refreshing(
                     target: target,
                     treeElement: resolved,
-                    attempt: attempt,
+                    deadline: deadline,
                     didReveal: didReveal
                 )
-            case .failure(let graceFailure):
-                return .failed(graceFailure)
+            case .failure(let refreshFailure):
+                return .failed(refreshFailure)
             case .inflated(let inflatedTarget):
                 return .refreshing(
                     target: target,
                     treeElement: inflatedTarget.treeElement,
-                    attempt: attempt,
+                    deadline: deadline,
                     didReveal: false
                 )
             case .timedOut:
                 return .failed(.noRevealPath(
                     semanticRevealFailureMessage(failure, entry: treeElement)
-                        + "; no reveal path appeared within \(Int(revealPathGraceTimeout * 1_000))ms"
+                        + "; no reveal path appeared before the action deadline"
                 ))
             case .cancelled:
-                return .failed(.noRevealPath(
+                return .failed(.cancelled(
                     semanticRevealFailureMessage(failure, entry: treeElement)
                         + "; reveal path wait was cancelled before a path appeared"
                 ))
             }
+        case .alreadyVisible, .revealed:
+            break
         }
         return .refreshing(
             target: target,
             treeElement: treeElement,
-            attempt: attempt,
+            deadline: deadline,
             didReveal: reveal.didReveal
         )
     }
 
-    internal func awaitStaleLiveTargetGrace(
+    internal func awaitLiveTargetRefresh(
         for target: AccessibilityTarget,
+        treeElement: InterfaceTree.Element,
         method: ActionMethod,
-        reason: RetryReason
-    ) async -> TargetRefreshGraceTerminal {
-        switch reason {
-        case .objectDeallocated, .staleTarget:
-            break
-        case .activationPointOffscreen:
-            return .timedOut
-        }
-
-        return await awaitTargetRefreshGrace(for: target, mode: .liveTarget(method: method))
-    }
-
-    private func refreshedVisibleTargetResolution(
-        _ target: AccessibilityTarget
-    ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
-        guard stash.refreshCurrentVisibleTree() != nil else { return nil }
-        return visibleTargetResolution(target)
-    }
-
-    /// Re-observe until a target whose reveal failed becomes resolvable, or
-    /// the grace window expires.
-    ///
-    /// A reveal failure during a screen transition reads a mid-arrival world:
-    /// the settled union can know the target before the destination finishes
-    /// loading and wires live scroll geometry. The window wakes when the app
-    /// posts a transition-completion notification (screenChanged or
-    /// layoutChanged mean the change has already landed, so the next parse
-    /// should find it); silent apps fall back to a coarse re-parse cadence.
-    /// The target arriving on-viewport resolves visibly, and a fresh known
-    /// entry that gained scroll membership earns one reveal retry.
-    ///
-    /// Every iteration suspends — first on the notification waiter, then on a
-    /// one-frame real-time floor — so the window can never starve the main
-    /// actor, and task cancellation exits promptly.
-    private func awaitTargetRefreshGrace(
-        for target: AccessibilityTarget,
-        mode: TargetRefreshGraceMode
-    ) async -> TargetRefreshGraceTerminal {
-        let deadline = CFAbsoluteTimeGetCurrent() + revealPathGraceTimeout
-        var driver = StateDriver(
-            initial: RevealPathGraceState.idle,
-            machine: RevealPathGraceMachine(silentReparseInterval: revealPathSilentReparseInterval)
+        after settledSequence: SettledObservationSequence?,
+        deadline: SemanticObservationDeadline
+    ) async -> TargetRefreshTerminal {
+        await awaitTargetRefresh(
+            mode: .liveTarget(treeElement: treeElement, target: target, method: method),
+            after: settledSequence,
+            deadline: deadline
         )
-        var effect = driver.send(.begin(
-            cursor: stash.accessibilityNotifications.transitionCursor(),
-            remaining: revealPathGraceRemainingTime(until: deadline)
-        )).revealPathGraceEffect
+    }
 
-        while true {
-            switch effect {
-            case .waitForTransitionEvent(let cursor, let timeout):
-                guard !Task.isCancelled else {
-                    effect = driver.send(.cancelled).revealPathGraceEffect
-                    continue
-                }
-                let advanced = await stash.accessibilityNotifications.waitForTransitionEvent(
-                    after: cursor,
-                    timeout: timeout
-                )
-                effect = driver.send(.transitionWaitCompleted(advanced)).revealPathGraceEffect
+    /// Resolve only after committed semantic truth advances. A known target
+    /// that gains scroll membership earns at most one reveal attempt.
+    private func awaitTargetRefresh(
+        mode: TargetRefreshMode,
+        after settledSequence: SettledObservationSequence?,
+        deadline: SemanticObservationDeadline
+    ) async -> TargetRefreshTerminal {
+        var sequence = settledSequence
+        var didAttemptKnownTargetReveal = false
 
-            case .yieldRealFrame:
-                await tripwire.yieldRealFrames(1)
-                effect = driver.send(Task.isCancelled ? .cancelled : .frameYielded).revealPathGraceEffect
+        while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+            guard !Task.isCancelled else { return .cancelled }
+            guard let event = await stash.observeSettledSemanticObservation(
+                scope: .visible,
+                after: sequence,
+                timeout: deadline.remainingSeconds()
+            ) else {
+                return Task.isCancelled ? .cancelled : .timedOut
+            }
+            sequence = event.sequence
 
-            case .refreshVisibleTree:
-                let refreshResult = targetRefreshGraceRefreshResult(mode: mode)
-                effect = driver.send(.visibleTreeRefreshCompleted(
-                    refreshResult,
-                    remaining: revealPathGraceRemainingTime(until: deadline)
-                )).revealPathGraceEffect
+            switch targetRefreshResolution(mode: mode, deadline: deadline) {
+            case .treeElement(let visible, let didReveal):
+                return .treeElement(visible, didReveal: didReveal)
+            case .liveTarget(let inflatedTarget):
+                return .inflated(inflatedTarget)
+            case .failed(let failure):
+                return .failure(failure)
+            case .missing:
+                break
+            }
 
-            case .resolveVisibleTarget:
-                switch targetRefreshGraceResolution(target: target, mode: mode) {
-                case .treeElement(let visible, let didReveal):
-                    guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
-                    else {
-                        preconditionFailure("Reveal path grace visible resolution did not finish as resolved.")
-                    }
-                    return .treeElement(visible, didReveal: didReveal)
-                case .liveTarget(let inflatedTarget):
-                    guard case .finish(.resolvedVisible) = driver.send(.visibleTargetResolved).revealPathGraceEffect
-                    else {
-                        preconditionFailure("Target refresh grace live resolution did not finish as resolved.")
-                    }
-                    return .inflated(inflatedTarget)
-                case .failed(let failure):
-                    guard case .finish(.failedVisibleTarget) = driver.send(.visibleTargetFailed).revealPathGraceEffect
-                    else {
-                        preconditionFailure("Reveal path grace visible failure did not finish as failed.")
-                    }
-                    return .failure(failure)
-                case .missing:
-                    effect = driver.send(.visibleTargetMissing(
-                        remaining: revealPathGraceRemainingTime(until: deadline)
-                    )).revealPathGraceEffect
-                }
+            guard case .revealPath(let treeElement, let transaction) = mode,
+                  !didAttemptKnownTargetReveal,
+                  let fresh = stash.interfaceElement(heistId: treeElement.heistId),
+                  fresh.scrollMembership != nil
+            else { continue }
 
-            case .attemptKnownTargetReveal:
-                switch mode {
-                case .revealPath:
-                    switch await attemptRevealPathGraceKnownTarget(for: target) {
-                    case .unavailable:
-                        effect = driver.send(.knownTargetRevealAttempted(
-                            .unavailable,
-                            remaining: revealPathGraceRemainingTime(until: deadline)
-                        )).revealPathGraceEffect
-                    case .failed:
-                        effect = driver.send(.knownTargetRevealAttempted(
-                            .failed,
-                            remaining: revealPathGraceRemainingTime(until: deadline)
-                        )).revealPathGraceEffect
-                    case .revealed(let fresh, let didReveal):
-                        guard case .finish(.resolvedAfterKnownReveal(let effectDidReveal)) = driver.send(
-                            .knownTargetRevealAttempted(
-                                .revealed(didReveal: didReveal),
-                                remaining: revealPathGraceRemainingTime(until: deadline)
-                            )
-                        ).revealPathGraceEffect else {
-                            preconditionFailure("Reveal path grace known reveal did not finish as resolved.")
-                        }
-                        return .treeElement(fresh, didReveal: effectDidReveal)
-                    }
-
-                case .liveTarget:
-                    effect = driver.send(.knownTargetRevealAttempted(
-                        .unavailable,
-                        remaining: revealPathGraceRemainingTime(until: deadline)
-                    )).revealPathGraceEffect
-                }
-
-            case .finish(.timedOut):
-                return .timedOut
-            case .finish(.cancelled):
+            didAttemptKnownTargetReveal = true
+            switch await revealSemanticTarget(
+                fresh,
+                deadline: deadline,
+                transaction: transaction
+            ) {
+            case .alreadyVisible:
+                return .treeElement(fresh, didReveal: false)
+            case .revealed:
+                return .treeElement(fresh, didReveal: true)
+            case .failed:
+                continue
+            case .cancelled:
                 return .cancelled
-
-            case .finish(.resolvedVisible),
-                 .finish(.failedVisibleTarget),
-                 .finish(.resolvedAfterKnownReveal):
-                preconditionFailure("Reveal path grace terminal effect must be consumed with boundary payload.")
+            case .timedOut:
+                return .timedOut
             }
         }
+
+        return Task.isCancelled ? .cancelled : .timedOut
     }
 
-    private func targetRefreshGraceRefreshResult(
-        mode: TargetRefreshGraceMode
-    ) -> RevealPathGraceVisibleTreeRefreshResult {
-        let refreshedScreen: InterfaceObservation?
+    private func targetRefreshResolution(
+        mode: TargetRefreshMode,
+        deadline: SemanticObservationDeadline
+    ) -> TargetRefreshResolution {
         switch mode {
-        case .revealPath:
-            refreshedScreen = stash.refreshCurrentVisibleTree()
-        case .liveTarget:
-            refreshedScreen = stash.refreshLiveCapture()
-        }
-        return refreshedScreen == nil ? .unavailable : .refreshed
-    }
+        case .revealPath(let treeElement, _):
+            guard stash.liveContains(heistId: treeElement.heistId),
+                  let committed = stash.interfaceElement(heistId: treeElement.heistId)
+            else { return .missing }
+            return .treeElement(committed, didReveal: false)
 
-    private func targetRefreshGraceResolution(
-        target: AccessibilityTarget,
-        mode: TargetRefreshGraceMode
-    ) -> TargetRefreshGraceResolution {
-        switch mode {
-        case .revealPath:
-            switch visibleTargetResolution(target) {
-            case .success(let visible)?:
-                return .treeElement(visible, didReveal: false)
-            case .failure(let failure)?:
+        case .liveTarget(let treeElement, let target, let method):
+            switch resolveCurrentLiveElementTarget(
+                treeElement: treeElement,
+                target: target,
+                method: method,
+                deadline: deadline
+            ) {
+            case .success(let inflatedTarget):
+                return .liveTarget(inflatedTarget)
+            case .failure(let failure):
                 return .failed(failure)
-            case nil:
-                return .missing
-            }
-
-        case .liveTarget(let method):
-            switch visibleTargetResolution(target) {
-            case .success(_)?:
-                guard let resolution = resolveCurrentVisibleLiveElementTarget(
-                    target: target,
-                    method: method
-                ) else {
-                    return .missing
-                }
-                switch resolution {
-                case .success(let inflatedTarget):
-                    return .liveTarget(inflatedTarget)
-                case .failure(let failure):
-                    return .failed(failure)
-                case .retry:
-                    return .missing
-                }
-            case .failure(let failure)?:
-                return .failed(failure)
-            case nil:
+            case .retry:
                 return .missing
             }
         }
-    }
-
-    private func revealPathGraceRemainingTime(until deadline: CFAbsoluteTime) -> Double {
-        deadline - CFAbsoluteTimeGetCurrent()
-    }
-
-    private enum RevealPathGraceKnownTargetAttempt {
-        case unavailable
-        case failed
-        case revealed(InterfaceTree.Element, didReveal: Bool)
-    }
-
-    private func attemptRevealPathGraceKnownTarget(
-        for target: AccessibilityTarget
-    ) async -> RevealPathGraceKnownTargetAttempt {
-        guard case .success(let fresh) = knownSemanticTarget(target),
-              fresh.scrollMembership != nil
-        else { return .unavailable }
-
-        let retryReveal = await revealSemanticTarget(fresh)
-        if case .failed = retryReveal {
-            return .failed
-        }
-        return .revealed(fresh, didReveal: retryReveal.didReveal)
     }
 }
 

@@ -70,7 +70,7 @@ final class PendingRequestRegistryTests: XCTestCase {
         }
 
         XCTAssertTrue(registry.resolveTransientResponse(
-            .actionResult(ActionResult.success(method: .activate)),
+            .actionResult(ActionResult.success(method: .activate, evidence: .none)),
             requestId: requestId
         ))
         _ = try await actionTask.value

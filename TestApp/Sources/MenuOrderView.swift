@@ -431,7 +431,7 @@ struct MenuOrderView: View {
 private struct MenuItemRow: View {
     @Binding var item: MenuItem
     let isExpanded: Bool
-    let onTap: () -> Void
+    let onTap: @MainActor () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

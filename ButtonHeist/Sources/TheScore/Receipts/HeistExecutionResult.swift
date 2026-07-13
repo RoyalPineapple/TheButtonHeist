@@ -15,17 +15,14 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         outcome.abortedAtPath
     }
 
-    public static func passed(
+    package static func passed(
         steps: [HeistExecutionStepResult],
         durationMs: Int
     ) -> HeistExecutionResult {
         do {
+            try Self.validatePassedSteps(steps, codingPath: [])
             return HeistExecutionResult(
-                outcome: try Self.validatedOutcome(
-                    steps: steps,
-                    abortedAtPath: nil,
-                    codingPath: []
-                ),
+                outcome: .passed(HeistExecutionPassedOutcome(steps: steps)),
                 durationMs: durationMs
             )
         } catch {
@@ -33,18 +30,22 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         }
     }
 
-    public static func failed(
+    package static func failed(
         steps: [HeistExecutionStepResult],
         durationMs: Int,
         abortedAtPath: String
     ) -> HeistExecutionResult {
         do {
+            try Self.validateFailedSteps(
+                steps,
+                abortedAtPath: abortedAtPath,
+                codingPath: []
+            )
             return HeistExecutionResult(
-                outcome: try Self.validatedOutcome(
+                outcome: .failed(HeistExecutionFailedOutcome(
                     steps: steps,
-                    abortedAtPath: abortedAtPath,
-                    codingPath: []
-                ),
+                    abortedAtPath: abortedAtPath
+                )),
                 durationMs: durationMs
             )
         } catch {
@@ -58,13 +59,21 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         abortedAtPath: String? = nil
     ) {
         self.durationMs = durationMs
-        let failedPath = steps.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
         do {
-            outcome = try Self.validatedOutcome(
-                steps: steps,
-                abortedAtPath: abortedAtPath ?? failedPath,
-                codingPath: []
-            )
+            if let abortedAtPath {
+                try Self.validateFailedSteps(
+                    steps,
+                    abortedAtPath: abortedAtPath,
+                    codingPath: []
+                )
+                outcome = .failed(HeistExecutionFailedOutcome(
+                    steps: steps,
+                    abortedAtPath: abortedAtPath
+                ))
+            } else {
+                try Self.validatePassedSteps(steps, codingPath: [])
+                outcome = .passed(HeistExecutionPassedOutcome(steps: steps))
+            }
         } catch {
             preconditionFailure("Invalid heist execution result: \(error)")
         }
@@ -89,7 +98,7 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let steps = try container.decode([HeistExecutionStepResult].self, forKey: .steps)
         durationMs = try container.decode(Int.self, forKey: .durationMs)
-        outcome = try Self.validatedOutcome(
+        outcome = try Self.decodeOutcome(
             steps: steps,
             abortedAtPath: try container.decodeIfPresent(String.self, forKey: .abortedAtPath),
             codingPath: container.codingPath
@@ -103,34 +112,57 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         try container.encodeIfPresent(abortedAtPath, forKey: .abortedAtPath)
     }
 
-    private static func validatedOutcome(
+    private static func decodeOutcome(
         steps: [HeistExecutionStepResult],
         abortedAtPath: String?,
         codingPath: [CodingKey]
     ) throws -> HeistExecutionOutcome {
-        let failedPath = steps.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
-        switch (abortedAtPath, failedPath) {
-        case (.none, .none):
+        switch abortedAtPath {
+        case .none:
+            try validatePassedSteps(steps, codingPath: codingPath)
             return .passed(HeistExecutionPassedOutcome(steps: steps))
-        case (.none, .some(let failedPath)):
-            throw Self.receiptError(
-                "failed heist execution result must include abortedAtPath for \(failedPath)",
-                codingPath: codingPath + [CodingKeys.abortedAtPath]
+        case .some(let abortedAtPath):
+            try validateFailedSteps(
+                steps,
+                abortedAtPath: abortedAtPath,
+                codingPath: codingPath
             )
-        case (.some(let abortedAtPath), .none):
-            throw Self.receiptError(
+            return .failed(HeistExecutionFailedOutcome(steps: steps, abortedAtPath: abortedAtPath))
+        }
+    }
+
+    private static func validatePassedSteps(
+        _ steps: [HeistExecutionStepResult],
+        codingPath: [CodingKey]
+    ) throws {
+        guard let failedPath = firstFailedPath(in: steps) else { return }
+        throw receiptError(
+            "failed heist execution result must include abortedAtPath for \(failedPath)",
+            codingPath: codingPath + [CodingKeys.abortedAtPath]
+        )
+    }
+
+    private static func validateFailedSteps(
+        _ steps: [HeistExecutionStepResult],
+        abortedAtPath: String,
+        codingPath: [CodingKey]
+    ) throws {
+        guard let failedPath = firstFailedPath(in: steps) else {
+            throw receiptError(
                 "passed heist execution result must not include abortedAtPath \(abortedAtPath)",
                 codingPath: codingPath + [CodingKeys.abortedAtPath]
             )
-        case (.some(let abortedAtPath), .some(let failedPath)):
-            guard abortedAtPath == failedPath else {
-                throw Self.receiptError(
-                    "heist execution abortedAtPath \(abortedAtPath) must match first failed step \(failedPath)",
-                    codingPath: codingPath + [CodingKeys.abortedAtPath]
-                )
-            }
-            return .failed(HeistExecutionFailedOutcome(steps: steps, abortedAtPath: abortedAtPath))
         }
+        guard abortedAtPath == failedPath else {
+            throw receiptError(
+                "heist execution abortedAtPath \(abortedAtPath) must match first failed step \(failedPath)",
+                codingPath: codingPath + [CodingKeys.abortedAtPath]
+            )
+        }
+    }
+
+    private static func firstFailedPath(in steps: [HeistExecutionStepResult]) -> String? {
+        steps.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
     }
 
     private static func receiptError(_ message: String, codingPath: [CodingKey]) -> DecodingError {

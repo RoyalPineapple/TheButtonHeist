@@ -83,6 +83,9 @@ extension TheBurglar {
         if firstResponders.count > 1 {
             logEvents.append(.multipleFirstResponders(firstResponders.map(\.heistId)))
         }
+        let firstResponderHeistId = firstResponders.count == 1
+            ? firstResponders.first?.heistId
+            : nil
 
         let heistIdsByPath = Dictionary(
             uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
@@ -94,7 +97,8 @@ extension TheBurglar {
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: facts.scroll.inventoriesByPath
+            scrollInventoriesByPath: facts.scroll.inventoriesByPath,
+            firstResponderHeistId: firstResponderHeistId
         )
         let tree = InterfaceTree(
             elements: Dictionary(
@@ -127,20 +131,23 @@ extension TheBurglar {
             hierarchy: projection.snapshot.hierarchy,
             entries: projection.entries
         )
-        let liveElementTable = makeLiveElementTable(
-            entries: projection.entries,
-            liveReferences: liveReferences
-        )
-        let liveCapture = LiveCapture(
-            snapshot: projection.snapshot,
-            liveElementTable: liveElementTable,
+        let dispatchReferences = LiveCapture.DispatchReferences(
+            elementRefs: Dictionary(
+                uniqueKeysWithValues: projection.entries.compactMap { entry in
+                    liveReferences.elementRef(for: entry).map { (entry.heistId, $0) }
+                }
+            ),
             containerRefsByPath: liveReferences.containerRefsByPath,
             scrollableContainerViewsByPath: liveReferences.scrollableContainerViewsByPath
         )
-        return InterfaceObservation(
-            tree: projection.tree,
-            liveCapture: liveCapture
-        )
+        do {
+            return try InterfaceObservation.build(
+                tree: projection.tree,
+                dispatchReferences: dispatchReferences
+            )
+        } catch {
+            preconditionFailure("InterfaceObservation build failed validation: \(error)")
+        }
     }
 
     private static func buildObservationEntries(
@@ -160,32 +167,13 @@ extension TheBurglar {
                 path: indexedElement.path,
                 treeElement: InterfaceTree.Element(
                     heistId: heistId,
+                    path: indexedElement.path,
                     scrollMembership: scrollFacts?.membership,
                     observedScrollContentActivationPoint: scrollFacts?.observedScrollContentActivationPoint,
                     element: indexedElement.element
                 ),
                 isFirstResponder: facts.focus.isFirstResponder(at: indexedElement.path)
             )
-        }
-    }
-
-    private static func makeLiveElementTable(
-        entries: [InterfaceObservationBuildEntry],
-        liveReferences: InterfaceObservationBuildLiveReferences
-    ) -> LiveCapture.LiveElementTable {
-        do {
-            return try LiveCapture.LiveElementTable(entries: entries.map { entry in
-                LiveCapture.LiveElementEntry(
-                    path: entry.path,
-                    treeElement: entry.treeElement,
-                    ref: liveReferences.elementRef(for: entry),
-                    isFirstResponder: entry.isFirstResponder
-                )
-            })
-        } catch let error as LiveCapture.LiveElementTableValidationError {
-            preconditionFailure(error.description)
-        } catch {
-            preconditionFailure("InterfaceObservation build failed to validate live element table: \(error)")
         }
     }
 

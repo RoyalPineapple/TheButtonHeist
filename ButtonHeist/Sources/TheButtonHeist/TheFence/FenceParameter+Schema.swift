@@ -356,6 +356,36 @@ internal extension FenceParameterSpec {
     var usesCustomPayloadValidation: Bool {
         validation == .customPayload
     }
+
+    var expectedTypeDescription: String {
+        if let enumValues {
+            return SchemaValidationError.expectedEnumValues(enumValues)
+        }
+        return type.expectedDescription
+    }
+}
+
+private extension FenceParameterSpec.ParamType {
+    var expectedDescription: String {
+        switch self {
+        case .string:
+            return "string"
+        case .integer:
+            return "integer"
+        case .number:
+            return "number"
+        case .boolean:
+            return "boolean"
+        case .stringArray:
+            return "array of strings"
+        case .stringMatch:
+            return "StringMatch object with mode and optional value"
+        case .object:
+            return "object"
+        case .array:
+            return "array"
+        }
+    }
 }
 
 @_spi(ButtonHeistTooling) public extension FenceParameterSpec.ParamType {

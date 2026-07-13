@@ -8,11 +8,11 @@ extension PostActionObservation {
     func captureSemanticState() -> BeforeState {
         let latestEvent = stash.latestSettledSemanticObservationEvent
         return captureSemanticState(
-            from: InterfaceObservation(
+            from: InterfaceObservation.makeForTests(
                 tree: stash.interfaceTree,
-                liveCapture: LiveCapture(snapshot: stash.interfaceTree.viewportCapture)
+                liveCapture: LiveCapture.makeForTests(snapshot: stash.interfaceTree.viewportCapture)
             ),
-            tripwireSignal: latestEvent?.observation.tripwireSignal ?? .empty,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: latestEvent?.sequence
         )
     }

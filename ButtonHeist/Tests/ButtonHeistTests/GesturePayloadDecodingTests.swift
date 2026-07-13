@@ -5,6 +5,21 @@ import ThePlans
 
 final class GesturePayloadDecodingTests: XCTestCase {
 
+    func testGestureDescriptorScalarsUseFenceParameterDeclarations() throws {
+        let tapUnitPoint = try XCTUnwrap(
+            TheFence.Command.oneFingerTap.descriptor.parameters.first { $0.key == FenceParameterKey.unitPoint.rawValue }
+        )
+        XCTAssertEqual(tapUnitPoint.objectProperties, [
+            FenceParameters.unitPointX.spec,
+            FenceParameters.unitPointY.spec,
+        ])
+
+        let longPressDuration = try XCTUnwrap(
+            TheFence.Command.longPress.descriptor.parameters.first { $0.key == FenceParameterKey.duration.rawValue }
+        )
+        XCTAssertEqual(longPressDuration, FenceParameters.gestureDuration.spec)
+    }
+
     @ButtonHeistActor
     func testSwipeElementDirectionIntentDecodesPayload() async throws {
         let message = try await sentRuntimeMessage(

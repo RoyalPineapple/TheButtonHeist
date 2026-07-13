@@ -11,24 +11,38 @@ extension Actions {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
+        let inflatedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
+        case .unavailable:
+            return .failure(
+                .editAction,
+                message: ActionCapabilityDiagnostic.editActionFailed(
+                    target.action,
+                    stash: stash,
+                    safecracker: safecracker
+                )
+            )
+        case .failed(let failure):
             return failure.actionDispatchOutcome(commandMethod: .editAction)
+        case .inflated(let target):
+            inflatedTarget = target
         }
-        let success = safecracker.performEditAction(target.action)
+        let success = safecracker.performEditAction(target.action, on: inflatedTarget.liveTarget.object)
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
             stash: stash,
             safecracker: safecracker
         )
         return success
-            ? .success(method: .editAction)
+            ? .success(
+                method: .editAction,
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
+                resolvedElementId: inflatedTarget.treeElement.heistId
+            )
             : .failure(.editAction, message: message ?? "edit action failed")
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .setPasteboard) {
-            return failure.actionDispatchOutcome(commandMethod: .setPasteboard)
-        }
         UIPasteboard.general.string = target.text
         return .success(payload: .setPasteboard(target.text))
     }
@@ -45,11 +59,29 @@ extension Actions {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
+        let inflatedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
+        case .unavailable:
+            return .failure(
+                .resignFirstResponder,
+                message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
+                    stash: stash,
+                    safecracker: safecracker
+                )
+            )
+        case .failed(let failure):
             return failure.actionDispatchOutcome(commandMethod: .resignFirstResponder)
+        case .inflated(let target):
+            inflatedTarget = target
         }
-        let success = safecracker.resignFirstResponder()
-        if success { return .success(method: .resignFirstResponder) }
+        let success = safecracker.resignFirstResponder(inflatedTarget.liveTarget.object)
+        if success {
+            return .success(
+                method: .resignFirstResponder,
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
+                resolvedElementId: inflatedTarget.treeElement.heistId
+            )
+        }
         return .failure(
             .resignFirstResponder,
             message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
@@ -112,17 +144,12 @@ extension Actions {
     }
 
     func typeTextPayload(
-        for request: TypeTextTarget,
-        resolvedElementId: HeistId?,
+        resolvedElementId: HeistId,
         in afterState: PostActionObservation.BeforeState
     ) -> ActionResultPayload? {
-        if let resolvedElementId,
-           let value = afterState.screen.findElement(heistId: resolvedElementId)?.element.value {
-            return .typeText(value)
-        }
-        guard let target = request.target else { return nil }
-        return Self.textInputValue(for: target, in: afterState.interface.projectedElements)
-            .map(ActionResultPayload.typeText)
+        guard let element = afterState.screen.findElement(heistId: resolvedElementId),
+              let value = element.element.value else { return nil }
+        return .typeText(value)
     }
 
     private func typeTextInjectionFailureMessage(
@@ -172,8 +199,7 @@ extension Actions {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: target,
-            method: .typeText,
-            deallocatedBoundary: "text input focus"
+            method: .typeText
         ) {
         case .inflated(let target):
             inflatedTarget = target
@@ -185,14 +211,14 @@ extension Actions {
             return .focused(focusedTextInput(from: inflatedTarget))
         }
 
-        return await activateTextInputTarget(inflatedTarget.target)
+        return await activateTextInputTarget(inflatedTarget.committedTarget)
     }
 
     private func activateTextInputTarget(
-        _ target: AccessibilityTarget
+        _ target: ElementInflation.CommittedElementTarget
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
-        switch await navigation.elementInflation.inflateAfterActivationRefresh(for: target) {
+        switch await navigation.elementInflation.refreshCommittedTarget(target, method: .activate) {
         case .inflated(let target):
             refreshedTarget = target
         case .failed(let failure):
@@ -265,22 +291,6 @@ extension Actions {
             resolvedObject: inflatedTarget.liveTarget.object,
             currentValue: inflatedTarget.liveTarget.element.value
         )
-    }
-
-    private static func textInputValue(for target: AccessibilityTarget, in elements: [HeistElement]) -> String? {
-        switch target {
-        case .predicate(let template, let ordinal):
-            guard let predicate = try? template.resolve(in: .empty) else { return nil }
-            let matches = ElementMatchGraph(elements: elements).resolve(predicate).elements
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal].value
-            }
-            guard matches.count == 1 else { return nil }
-            return matches[0].value
-        case .container, .ref, .within:
-            return nil
-        }
     }
 
     private static func liveTextInputValue(for object: NSObject?) -> String? {

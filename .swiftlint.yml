@@ -193,20 +193,6 @@ custom_rules:
   # The audit flagged these as 5.3 / 5.5 medium-severity — Wave 2b will track
   # them by hand. Revisit if a structural distinguishing feature emerges.
 
-  agent_unannotated_callback:
-    name: "Agent: callback without isolation annotation"
-    # Match `var onFoo: ((...) -> Void)?` at any visibility. Post-#353 demotions,
-    # the canonical onEvent/onSend/onTransition callbacks are `internal`, so the
-    # rule covers them too — class-level isolation inference is not a substitute
-    # for an explicit annotation in the closure type.
-    #
-    # PR #361 M1: param list allows one level of nested parens so tuple-arg
-    # callbacks (`var onFoo: (((Int, String)) -> Void)?`) are caught. The
-    # plain `[^)]*` form stopped at the first `)` and silently missed them.
-    regex: '\bvar\s+on\w+:\s*\(\((?:[^()]|\([^()]*\))*\)\s*->\s*Void\)\?'
-    message: "`onFoo` callbacks must declare isolation in the closure type (e.g. `(@ButtonHeistActor (X) -> Void)?` or `@Sendable`). Class-level actor inference and docstring isolation both drift."
-    severity: warning
-
   agent_no_task_detached:
     name: "Agent: Task.detached banned"
     # Match both `Task.detached(...)` and `Task.detached { ... }` (trailing closure).

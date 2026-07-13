@@ -122,6 +122,15 @@ final class TheBrains {
                 return error.message
             }
         }
+
+        var errorKind: ErrorKind {
+            switch self {
+            case .rootViewUnavailable, .inactiveRuntime:
+                return .accessibilityTreeUnavailable
+            case .selection:
+                return .validationError
+            }
+        }
     }
 
     init(
@@ -159,11 +168,21 @@ final class TheBrains {
         let message = stash.latestSemanticObservationFailureDiagnostic()
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
-        return .failure(method: method, errorKind: .accessibilityTreeUnavailable, message: message)
+        return .failure(
+            method: method,
+            errorKind: .accessibilityTreeUnavailable,
+            message: message,
+            evidence: .none
+        )
     }
 
     func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
-        .failure(method: method, errorKind: .actionFailed, message: TheBrains.runtimeInactiveMessage)
+        .failure(
+            method: method,
+            errorKind: .actionFailed,
+            message: TheBrains.runtimeInactiveMessage,
+            evidence: .none
+        )
     }
 
     // MARK: - Clear
@@ -192,29 +211,35 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0) else {
-            return .failure(.rootViewUnavailable)
-        }
+        for _ in 0..<2 {
+            guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0),
+                  let exploration = await navigation.exploreScreen(
+                    baseline: .currentViewport(
+                        stash.visibleExplorationBaseline(from: visibleEvidence.screen)
+                    ),
+                    maxScrollsPerContainer: query.maxScrollsPerContainer,
+                    maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
+                  ) else {
+                return .failure(.rootViewUnavailable)
+            }
+            guard stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration) != nil else {
+                continue
+            }
 
-        let exploration = await navigation.exploreScreen(
-            baseline: stash.visibleExplorationBaseline(from: visibleEvidence.screen),
-            maxScrollsPerContainer: query.maxScrollsPerContainer,
-            maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
-        )
-        _ = stash.commitDiscoveryInterface(exploration.screen)
-
-        do {
-            let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
-            let diagnostics = exploration.manifest.interfaceDiagnostics(
-                for: exploration.screen,
-                includedElementCount: interface.projectedElements.count
-            )
-            return .success(interface
-                .withDiagnostics(diagnostics)
-                .withScreenActions(actions.availableScreenActions()))
-        } catch {
-            return .failure(.selection(error))
+            do {
+                let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
+                let diagnostics = exploration.manifest.interfaceDiagnostics(
+                    for: exploration.screen,
+                    includedElementCount: interface.projectedElements.count
+                )
+                return .success(interface
+                    .withDiagnostics(diagnostics)
+                    .withScreenActions(actions.availableScreenActions()))
+            } catch {
+                return .failure(.selection(error))
+            }
         }
+        return .failure(.rootViewUnavailable)
     }
 
     func beginChangedWait() -> Bool {

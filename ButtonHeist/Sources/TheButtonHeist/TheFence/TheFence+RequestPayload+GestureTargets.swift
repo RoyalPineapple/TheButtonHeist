@@ -10,21 +10,27 @@ extension TheFence {
     }
 
     func decodeLongPressTarget(_ request: CommandArgumentEnvelope) throws -> LongPressTarget {
-        try decodeGestureTarget(request, as: LongPressTarget.self) {
+        let duration = try request.value(FenceParameters.gestureDuration) ?? .longPressDefault
+        let target = try decodeGestureTarget(request.dropping(.duration), as: LongPressTarget.self) {
             try $0.validatePublicGestureTarget(command: .longPress)
         }
+        return LongPressTarget(selection: target.selection, duration: duration)
     }
 
     func decodeSwipeTarget(_ request: CommandArgumentEnvelope) throws -> SwipeTarget {
-        try decodeGestureTarget(request, as: SwipeTarget.self) {
+        let duration = try request.value(FenceParameters.gestureDuration)
+        let target = try decodeGestureTarget(request.dropping(.duration), as: SwipeTarget.self) {
             try $0.validatePublicGestureTarget(command: .swipe)
         }
+        return SwipeTarget(selection: target.selection, duration: duration)
     }
 
     func decodeDragTarget(_ request: CommandArgumentEnvelope) throws -> DragTarget {
-        try decodeGestureTarget(request, as: DragTarget.self) {
+        let duration = try request.value(FenceParameters.gestureDuration)
+        let target = try decodeGestureTarget(request.dropping(.duration), as: DragTarget.self) {
             try $0.validatePublicGestureTarget(command: .drag)
         }
+        return DragTarget(selection: target.selection, duration: duration)
     }
 
     private func decodeGestureTarget<T: Decodable>(
@@ -106,11 +112,7 @@ private extension GesturePointSelection {
 
 private extension UnitPoint {
     func validatePublicGestureUnitPoint(field: String) throws {
-        guard (0...1).contains(x) else {
-            throw SchemaValidationError(field: "\(field).x", observed: x, expected: "number in 0...1")
-        }
-        guard (0...1).contains(y) else {
-            throw SchemaValidationError(field: "\(field).y", observed: y, expected: "number in 0...1")
-        }
+        _ = try FenceParameters.unitPointX.decode(jsonSchemaNumber(x), field: "\(field).x")
+        _ = try FenceParameters.unitPointY.decode(jsonSchemaNumber(y), field: "\(field).y")
     }
 }

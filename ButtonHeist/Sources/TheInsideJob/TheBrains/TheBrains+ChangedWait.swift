@@ -20,7 +20,8 @@ extension TheBrains {
             return .failure(
                 method: .wait,
                 errorKind: .actionFailed,
-                message: "wait already in progress"
+                message: "wait already in progress",
+                evidence: .none
             )
         }
         defer { finishChangedWait() }

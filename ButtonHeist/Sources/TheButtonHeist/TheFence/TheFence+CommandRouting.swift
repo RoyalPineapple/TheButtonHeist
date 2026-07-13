@@ -17,7 +17,7 @@ import TheScore
     public var errorDescription: String? { message }
 }
 
-/// Routed public command input before admission into TheFence's typed runtime.
+/// Unadmitted boundary input. Execution can only consume its typed admission.
 @_spi(ButtonHeistTooling) public struct FenceCommandInput: Sendable {
     @_spi(ButtonHeistTooling) public let command: TheFence.Command
     @_spi(ButtonHeistTooling) public let arguments: TheFence.CommandArgumentEnvelope
@@ -27,28 +27,6 @@ import TheScore
         self.arguments = arguments
     }
 
-    @_spi(ButtonHeistTooling) public func validatePublicContract() throws {
-        guard command.descriptor.isPublicRequestContract else {
-            throw SchemaValidationError(
-                field: "command",
-                observed: "string \"\(command.rawValue)\"",
-                expected: "public command for The Button Heist"
-            )
-        }
-
-        let metadataKeys = Set([FenceParameterKey.requestId.rawValue])
-        let allowedKeys = metadataKeys.union(command.descriptor.topLevelParameterKeys)
-        guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            try command.descriptor.validatePublicRequestArguments(arguments)
-            return
-        }
-
-        throw SchemaValidationError(
-            field: arguments.field(forUnknownKey: unexpectedKey),
-            observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
-            expected: "valid \(command.rawValue) parameter"
-        )
-    }
 }
 
 /// Fully admitted operation ready to enter TheFence's execution pipeline.

@@ -133,17 +133,25 @@ final class WaitForIntegrationTests: XCTestCase {
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
     }
 
-    private func waitForSettledSemanticWaiter(
+    private func waitForSemanticObservationWaiter(
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
+        let stream = insideJob.brains.stash.semanticObservationStream
         let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while insideJob.brains.stash.semanticObservationStream.settledWaiterCount == 0,
+        while stream.settledWaiterCount == 0,
+              stream.cycleWaiterCount == 0,
               CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
-        XCTAssertEqual(insideJob.brains.stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
+        XCTAssertEqual(
+            stream.settledWaiterCount + stream.cycleWaiterCount,
+            1,
+            "Wait must own exactly one next-event waiter",
+            file: file,
+            line: line
+        )
     }
 
     // MARK: - Passive Observation
@@ -432,8 +440,10 @@ final class WaitForIntegrationTests: XCTestCase {
                 timeout: 5.0
             )
         }
-        // The mutation must happen after the wait owns a baseline so the receipt carries a two-capture trace.
-        await waitForSettledSemanticWaiter()
+        // Commit the wait-owned baseline before publishing the satisfying event.
+        await waitForSemanticObservationWaiter()
+        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveWaitBaseline)
         delayedLabel = addLabel("WaitForChange-Delayed")
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         let result = await waitTask.value
@@ -450,6 +460,12 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-Removed")
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
+        XCTAssertTrue(
+            insideJob.brains.stash.interfaceTree.orderedElements.contains {
+                $0.element.label == "WaitForChange-Removed"
+            },
+            "Baseline must contain the element before waiting for absence"
+        )
 
         let waitTask = Task { @MainActor in
             await self.changedWait(
@@ -457,8 +473,10 @@ final class WaitForIntegrationTests: XCTestCase {
                 timeout: 5.0
             )
         }
-        // The mutation must happen after the wait owns a baseline so the receipt carries a two-capture trace.
-        await waitForSettledSemanticWaiter()
+        // Mutate only after the wait is suspended beyond the committed baseline.
+        await waitForSemanticObservationWaiter()
+        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveWaitBaseline)
         mutateVisibleHierarchy {
             label.removeFromSuperview()
         }
@@ -531,7 +549,7 @@ final class WaitForIntegrationTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        let visibleHeistId: HeistId = "wait_change_visible_anchor_staticText"
+        let visibleHeistId: HeistId = "wait_change_visible_anchor"
 
         let offViewportElement = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-OffViewport",
@@ -539,6 +557,12 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
+        XCTAssertEqual(TheStash.IdAssignment.assign([visibleBefore]), [visibleHeistId])
+        XCTAssertEqual(TheStash.IdAssignment.assign([visibleAfter]), [visibleHeistId])
+        XCTAssertNil(
+            offViewportElement.identifier,
+            "The pure-value off-viewport fixture deliberately keeps its synthetic known identity"
+        )
         let baseline = InterfaceObservation.makeForTests(
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
@@ -552,7 +576,7 @@ final class WaitForIntegrationTests: XCTestCase {
                 timeout: 5.0
             )
         }
-        await waitForSettledSemanticWaiter()
+        await waitForSemanticObservationWaiter()
 
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
         insideJob.brains.stash.installScreenForTesting(updatedVisible)

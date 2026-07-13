@@ -27,7 +27,9 @@ extension ElementInflation {
         case noRevealPath
         case staleRefresh
         case cancelled
+        case timedOut
         case geometryNotActionable
+        case invalidTransition
     }
 
     internal struct ElementInflationFailure: Error {
@@ -70,11 +72,21 @@ extension ElementInflation {
             .init(.cancelled, failureKind: .actionFailed, message: message)
         }
 
+        internal static func timedOut(_ message: String) -> ElementInflationFailure {
+            .init(.timedOut, failureKind: .timeout, message: message)
+        }
+
         internal static func geometryNotActionable(
             _ message: String,
             failureKind: TheSafecracker.FailureKind = .actionFailed
         ) -> ElementInflationFailure {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
+        }
+
+        internal static func invalidTransition(
+            _ rejection: StateTransitionRejection
+        ) -> ElementInflationFailure {
+            .init(.invalidTransition, failureKind: .actionFailed, message: rejection.description)
         }
 
         internal func actionDispatchOutcome(commandMethod: ActionMethod) -> TheSafecracker.ActionDispatchOutcome {
@@ -96,17 +108,11 @@ extension ElementInflation {
         }
     }
 
-    internal func retryExhaustedFailure(
-        reason: RetryReason,
-        maxAttempts: Int
-    ) -> ElementInflationFailure {
-        let message = "inflation exhausted \(maxAttempts) retry attempts after \(reason.failureDescription)"
-        switch reason {
-        case .objectDeallocated, .staleTarget:
-            return .staleRefresh(message, failureKind: .targetUnavailable)
-        case .activationPointOffscreen:
-            return .geometryNotActionable(message)
-        }
+    internal func staleRefreshFailure(reason: RetryReason) -> ElementInflationFailure {
+        .staleRefresh(
+            "target refresh reached the action deadline after \(reason.failureDescription)",
+            failureKind: .targetUnavailable
+        )
     }
 
     internal func noScrollViewFailure(

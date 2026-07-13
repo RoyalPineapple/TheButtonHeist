@@ -228,9 +228,9 @@ struct TodoListView: View {
 
 struct TodoRowView: View {
     let item: TodoItem
-    let onToggle: () -> Void
-    let onEdit: () -> Void
-    let onMoveToCategory: (TaskCategory) -> Void
+    let onToggle: @MainActor () -> Void
+    let onEdit: @MainActor () -> Void
+    let onMoveToCategory: @MainActor (TaskCategory) -> Void
 
     var body: some View {
         rowContent
@@ -317,7 +317,7 @@ struct TodoRowView: View {
 
 private struct MoveActionsModifier: ViewModifier {
     let currentCategory: TaskCategory
-    let onMove: (TaskCategory) -> Void
+    let onMove: @MainActor (TaskCategory) -> Void
 
     func body(content: Content) -> some View {
         TaskCategory.allCases
@@ -337,9 +337,9 @@ struct TodoEditSheet: View {
     @State private var category: TaskCategory
     @Environment(\.dismiss) private var dismiss
     let item: TodoItem
-    let onSave: (TodoItem) -> Void
+    let onSave: @MainActor (TodoItem) -> Void
 
-    init(item: TodoItem, onSave: @escaping (TodoItem) -> Void) {
+    init(item: TodoItem, onSave: @escaping @MainActor (TodoItem) -> Void) {
         self.item = item
         self.onSave = onSave
         _title = State(initialValue: item.title)

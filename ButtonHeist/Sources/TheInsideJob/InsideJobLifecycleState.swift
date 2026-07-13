@@ -11,7 +11,7 @@ enum InsideJobRuntimeStartPhase: Equatable, Sendable {
 
 @MainActor
 extension TheInsideJob {
-    enum ServerPhase: Equatable, Sendable {
+    enum ServerPhase: Equatable {
         case stopped
         case starting(InsideJobStartAttempt)
         case running(InsideJobRuntimeResources)
@@ -48,8 +48,7 @@ extension TheInsideJob {
         }
     }
 
-    /// `@unchecked Sendable` justification: `ServerTransport` is MainActor-owned lifecycle state carried through a pure MainActor reducer.
-    struct InsideJobRuntimeResources: Equatable, @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    struct InsideJobRuntimeResources: Equatable {
         let transport: ServerTransport
         let actualPort: UInt16
         let bonjourServiceName: String?
@@ -63,8 +62,7 @@ extension TheInsideJob {
         }
     }
 
-    /// `@unchecked Sendable` justification: start attempts carry a MainActor-owned transport until the reducer either activates or cleans it up.
-    struct InsideJobStartAttempt: Equatable, @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    struct InsideJobStartAttempt: Equatable {
         let id: UUID
         let transport: ServerTransport
 
@@ -77,7 +75,7 @@ extension TheInsideJob {
         let idleTimerBaseline: Bool
     }
 
-    struct InsideJobSuspension: Equatable, Sendable {
+    struct InsideJobSuspension: Equatable {
         let id: UUID
         let resources: InsideJobRuntimeResources
     }
@@ -101,8 +99,7 @@ extension TheInsideJob {
         case stop
     }
 
-    /// `@unchecked Sendable` justification: transport start requests carry MainActor-owned transport handles into the async start interpreter.
-    struct InsideJobTransportStartRequest: Equatable, @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    struct InsideJobTransportStartRequest: Equatable {
         let id: UUID
         let phase: InsideJobRuntimeStartPhase
         let transport: ServerTransport
@@ -149,11 +146,11 @@ extension TheInsideJob {
     }
 }
 
-struct InsideJobLifecycleMachine: SimpleStateMachine {
+struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     typealias State = TheInsideJob.ServerPhase
     typealias Change = StateChange<State, Effect, Rejection>
 
-    enum Event: Equatable, Sendable {
+    enum Event: Equatable {
         case lifecycleSuspensionNotification
         case foregroundNotification(replacingExisting: Bool)
         case terminationNotification
@@ -225,8 +222,7 @@ struct InsideJobLifecycleMachine: SimpleStateMachine {
         }
     }
 
-    /// `@unchecked Sendable` justification: effects are returned by the MainActor reducer and immediately interpreted on MainActor.
-    enum Effect: Equatable, @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    enum Effect: Equatable {
         case scheduleSuspend
         case scheduleResume(afterCancelling: TheInsideJob.InsideJobResumeAttempt?)
         case scheduleStop
@@ -282,6 +278,7 @@ struct InsideJobLifecycleMachine: SimpleStateMachine {
         case staleStopAttempt
     }
 
+    @MainActor
     func advance(_ state: State, with event: Event) -> Change {
         switch event {
         case .lifecycleSuspensionNotification:
@@ -385,7 +382,17 @@ struct InsideJobLifecycleMachine: SimpleStateMachine {
                 ]
             )
         case .resuming(let attempt):
-            return .changed(to: state, effects: [.cancelResume(attempt)])
+            return .changed(
+                to: .stopping(stopAttempt),
+                effects: [
+                    .cancelResume(attempt),
+                    .releaseResources(
+                        policy: .stop,
+                        idleTimerBaseline: attempt.suspendedRuntime.idleTimerBaseline
+                    ),
+                    .tearDownRuntimeServices,
+                ]
+            )
         }
     }
 
@@ -404,14 +411,10 @@ struct InsideJobLifecycleMachine: SimpleStateMachine {
     }
 
     private func stopFinished(_ state: State, id: UUID) -> Change {
-        switch state {
-        case .stopping(let attempt) where attempt.id == id:
-            return .changed(to: .stopped)
-        case .stopping:
+        guard case .stopping(let attempt) = state, attempt.id == id else {
             return .rejected(.staleStopAttempt, stayingIn: state)
-        case .stopped, .starting, .running, .suspending, .suspended, .resuming:
-            return .changed(to: state)
         }
+        return .changed(to: .stopped)
     }
 
     private func suspendRequested(_ state: State, suspension: TheInsideJob.InsideJobSuspension?) -> Change {

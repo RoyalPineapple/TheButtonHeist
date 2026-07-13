@@ -7,16 +7,18 @@ extension ElementInflation {
 
     static let maxNestedRevealDepth = 8
 
-    enum SemanticRevealFailure: Equatable {
+    enum SemanticRevealFailure: Equatable, Sendable {
         case missingScrollMembership
         case noLiveScrollableAncestor
         case scanDidNotRevealTarget
     }
 
-    enum SemanticRevealResult {
+    enum SemanticRevealResult: Sendable {
         case alreadyVisible
         case revealed
         case failed(SemanticRevealFailure)
+        case cancelled
+        case timedOut
 
         var didReveal: Bool {
             if case .revealed = self { return true }
@@ -28,29 +30,77 @@ extension ElementInflation {
     /// elements carry no executable scroll authority unless the parser
     /// retained a live scroll ancestor.
     @discardableResult
-    func revealSemanticTarget(_ treeElement: InterfaceTree.Element) async -> SemanticRevealResult {
-        if let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
-           visible.element.representsSameSemanticElement(as: treeElement.element) {
+    func revealSemanticTarget(
+        _ treeElement: InterfaceTree.Element,
+        deadline: SemanticObservationDeadline
+    ) async -> SemanticRevealResult {
+        let transaction = RevealTransaction()
+        transaction.captureScrollableHierarchy(in: stash)
+        let result = await revealSemanticTarget(
+            treeElement,
+            deadline: deadline,
+            transaction: transaction
+        )
+        switch result {
+        case .alreadyVisible, .revealed:
+            transaction.commit()
+        case .failed, .cancelled, .timedOut:
+            transaction.rollBack()
+        }
+        return result
+    }
+
+    func revealSemanticTarget(
+        _ treeElement: InterfaceTree.Element,
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
+    ) async -> SemanticRevealResult {
+        if let interruption = semanticRevealInterruption(deadline: deadline) {
+            return interruption
+        }
+        if stash.liveElementAliasing(treeElement) != nil {
             return .alreadyVisible
         }
 
         guard treeElement.scrollMembership != nil else {
             return .failed(.missingScrollMembership)
         }
-        if await revealScrollAncestors(for: treeElement),
-           await moveToObservedContentActivationPoint(treeElement) {
+        if let scrollView = await revealScrollAncestors(
+            for: treeElement,
+            deadline: deadline,
+            transaction: transaction
+        ), await moveToObservedContentActivationPoint(
+            treeElement,
+            in: scrollView,
+            deadline: deadline,
+            transaction: transaction
+        ) {
             return .revealed
         }
-        guard let revealedScreen = await revealKnownTarget?(treeElement.heistId) else {
-            return .failed(.noLiveScrollableAncestor)
+        if let interruption = semanticRevealInterruption(deadline: deadline) {
+            return interruption
         }
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(revealedScreen)
-        guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
-              visible.element.representsSameSemanticElement(as: treeElement.element)
-        else {
-            return .failed(.scanDidNotRevealTarget)
+        for _ in 0..<2 {
+            transaction.captureScrollableHierarchy(in: stash)
+            guard let exploredScreen = await exploration.revealKnownTarget(.init(
+                heistId: treeElement.heistId,
+                deadline: deadline
+            )) else {
+                return semanticRevealInterruption(deadline: deadline)
+                    ?? .failed(.noLiveScrollableAncestor)
+            }
+            guard stash.semanticObservationStream.commitExploredDiscoveryObservation(exploredScreen) != nil else {
+                continue
+            }
+            if let interruption = semanticRevealInterruption(deadline: deadline) {
+                return interruption
+            }
+            guard stash.liveElementAliasing(treeElement) != nil else {
+                return .failed(.scanDidNotRevealTarget)
+            }
+            return .revealed
         }
-        return .revealed
+        return .failed(.scanDidNotRevealTarget)
     }
 
     static func semanticRevealTargetOffset(
@@ -76,114 +126,96 @@ extension ElementInflation {
         )
     }
 
-    private func moveToObservedContentActivationPoint(_ treeElement: InterfaceTree.Element) async -> Bool {
-        guard let observedActivationPoint = treeElement.observedScrollContentActivationPoint,
-              let scrollView = liveScrollView(for: treeElement)
-        else { return false }
+    private func moveToObservedContentActivationPoint(
+        _ treeElement: InterfaceTree.Element,
+        in scrollView: UIScrollView,
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
+    ) async -> Bool {
+        guard semanticRevealInterruption(deadline: deadline) == nil,
+              let observedActivationPoint = treeElement.observedScrollContentActivationPoint else { return false }
 
+        transaction.record(scrollView)
         scrollView.setContentOffset(
             Self.semanticRevealTargetOffset(for: observedActivationPoint, in: scrollView),
             animated: false
         )
+        guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.refreshTreeAfterViewportMove()
-        return true
+        guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
+        guard stash.refreshLiveCapture() != nil else { return false }
+        return semanticRevealInterruption(deadline: deadline) == nil
+            && stash.liveElementAliasing(treeElement) != nil
     }
 
-    private func revealScrollAncestors(for treeElement: InterfaceTree.Element) async -> Bool {
-        guard let scrollContainerPath = treeElement.scrollContainerPath else { return false }
-        return await revealScrollContainer(at: scrollContainerPath, depth: 0)
+    private func revealScrollAncestors(
+        for treeElement: InterfaceTree.Element,
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
+    ) async -> UIScrollView? {
+        guard semanticRevealInterruption(deadline: deadline) == nil,
+              let scrollContainerPath = treeElement.scrollContainerPath else { return nil }
+        return await revealScrollContainer(
+            at: scrollContainerPath,
+            depth: 0,
+            deadline: deadline,
+            transaction: transaction
+        )
     }
 
-    private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        if liveScrollView(forScrollContainerPath: path) != nil {
-            return true
+    private func revealScrollContainer(
+        at path: TreePath,
+        depth: Int,
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
+    ) async -> UIScrollView? {
+        guard semanticRevealInterruption(deadline: deadline) == nil,
+              depth < Self.maxNestedRevealDepth else { return nil }
+        guard let container = semanticContainer(at: path) else { return nil }
+        guard let membership = container.scrollMembership else {
+            return stash.refreshedLiveScrollView(for: container)
         }
-        guard depth < Self.maxNestedRevealDepth else { return false }
-        guard let container = semanticContainer(at: path),
-              let membership = container.scrollMembership,
-              let observedActivationPoint = container.observedScrollContentActivationPoint
-        else { return false }
-        guard await revealScrollContainer(at: membership.containerPath, depth: depth + 1),
-              let parentScrollView = liveScrollView(forScrollContainerPath: membership.containerPath)
-        else { return false }
+        guard semanticRevealInterruption(deadline: deadline) == nil else { return nil }
+        guard let parentScrollView = await revealScrollContainer(
+            at: membership.containerPath,
+            depth: depth + 1,
+            deadline: deadline,
+            transaction: transaction
+        ) else { return nil }
+        guard semanticRevealInterruption(deadline: deadline) == nil else { return nil }
+        guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
+            return nil
+        }
 
+        transaction.record(parentScrollView)
         parentScrollView.setContentOffset(
             Self.semanticRevealTargetOffset(for: observedActivationPoint, in: parentScrollView),
             animated: false
         )
+        guard semanticRevealInterruption(deadline: deadline) == nil else { return nil }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        guard stash.refreshTreeAfterViewportMove() != nil else { return false }
-        return liveScrollView(forScrollContainerPath: path) != nil
+        guard semanticRevealInterruption(deadline: deadline) == nil,
+              stash.refreshLiveCapture() != nil else { return nil }
+        transaction.captureScrollableHierarchy(in: stash)
+        return directNestedLiveScrollView(for: container, in: parentScrollView)
     }
 
-    private func liveScrollView(for treeElement: InterfaceTree.Element) -> UIScrollView? {
-        guard let scrollContainerPath = treeElement.scrollContainerPath else {
-            return stash.liveScrollView(for: treeElement)
-        }
-        return liveScrollView(forScrollContainerPath: scrollContainerPath)
-            ?? stash.liveScrollView(for: treeElement)
+    private func semanticRevealInterruption(
+        deadline: SemanticObservationDeadline
+    ) -> SemanticRevealResult? {
+        if Task.isCancelled { return .cancelled }
+        return deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ? nil : .timedOut
     }
 
-    private func liveScrollView(forScrollContainerPath path: TreePath) -> UIScrollView? {
-        if let scrollView = stash.capturedLiveScrollView(forContainerPath: path) {
-            return scrollView
-        }
-        guard let remappedPath = remappedLiveScrollContainerPath(for: path) else {
-            return nil
-        }
-        return stash.capturedLiveScrollView(forContainerPath: remappedPath)
-    }
-
-    private func remappedLiveScrollContainerPath(for path: TreePath) -> TreePath? {
-        guard let expectedContainer = semanticContainer(at: path),
-              expectedContainer.scrollMembership != nil,
-              expectedContainer.container.isSemanticRevealScrollable
-        else { return nil }
-
-        let matches = stash.scrollableContainerViewsByPath.keys
-            .sorted()
-            .filter { candidatePath in
-                guard candidatePath != path,
-                      candidatePath.parent == path.parent,
-                      let candidate = semanticContainer(at: candidatePath),
-                      candidate.scrollMembership == expectedContainer.scrollMembership,
-                      candidate.matchesScrollIdentity(of: expectedContainer)
-                else { return false }
-                return true
-            }
-        return matches.count == 1 ? matches[0] : nil
+    private func directNestedLiveScrollView(
+        for semanticContainer: InterfaceTree.Container,
+        in parent: UIScrollView
+    ) -> UIScrollView? {
+        stash.refreshedLiveScrollView(for: semanticContainer, directChildOf: parent)
     }
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
         stash.interfaceTree.containers[path]
-            ?? stash.latestObservation.tree.containers[path]
-    }
-}
-
-private extension InterfaceTree.Container {
-    func matchesScrollIdentity(of other: InterfaceTree.Container) -> Bool {
-        container.semanticRevealScrollContentSize == other.container.semanticRevealScrollContentSize
-            && contentFrame == other.contentFrame
-    }
-}
-
-private extension AccessibilityContainer {
-    var isSemanticRevealScrollable: Bool {
-        semanticRevealScrollContentSize != nil
-    }
-
-    var semanticRevealScrollContentSize: AccessibilitySize? {
-        scrollableContentSize
-    }
-}
-
-private extension AccessibilityElement {
-    func representsSameSemanticElement(as other: AccessibilityElement) -> Bool {
-        label == other.label
-            && identifier == other.identifier
-            && value == other.value
-            && traits == other.traits
     }
 }
 

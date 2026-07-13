@@ -417,6 +417,42 @@ struct SemanticInterfaceProjection {
 }
 
 extension SemanticInterfaceProjection {
+    func accessibilityNotificationElementReference(
+        for heistId: HeistId,
+        resolution: AccessibilityNotificationElementResolution
+    ) -> AccessibilityNotificationElementReference? {
+        guard let record = interface.graph.elementsInTraversalOrder.first(where: { record in
+            elementByProjectedPath[record.path]?.heistId == heistId
+        }) else { return nil }
+        return AccessibilityNotificationElementReference(
+            path: record.path,
+            traversalIndex: record.traversalIndex,
+            resolution: resolution
+        )
+    }
+
+    func accessibilityNotificationElementReference(
+        matching element: AccessibilityElement,
+        resolution: AccessibilityNotificationElementResolution
+    ) -> AccessibilityNotificationElementReference? {
+        let matches = interface.graph.elementsInTraversalOrder.filter { record in
+            elementByProjectedPath[record.path]?.element == element
+        }
+        guard matches.count == 1, let record = matches.first else { return nil }
+        return AccessibilityNotificationElementReference(
+            path: record.path,
+            traversalIndex: record.traversalIndex,
+            resolution: resolution
+        )
+    }
+
+    func heistId(for reference: AccessibilityNotificationElementReference) -> HeistId? {
+        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
+            $0.path == reference.path && $0.traversalIndex == reference.traversalIndex
+        }) else { return nil }
+        return elementByProjectedPath[record.path]?.heistId
+    }
+
     func treeElements(matching matchSet: ElementMatchSet) -> [InterfaceTree.Element] {
         matchSet.matches.map { match in
             guard let treeElement = elementByProjectedPath[match.path] else {

@@ -132,14 +132,14 @@ internal enum FenceParameterBlocks: Sendable {
     internal static let wait: [FenceParameterSpec] = [predicate, expectationTimeout]
 
     internal static let unitPoint: [FenceParameterSpec] = [
-        param(.x, .number, required: true), param(.y, .number, required: true),
+        FenceParameters.unitPointX.spec,
+        FenceParameters.unitPointY.spec,
     ]
-    internal static let screenPoint: [FenceParameterSpec] = unitPoint
-    internal static let gestureDuration = param(
-        .duration, .number,
-        maximum: GestureDuration.maximumSeconds,
-        exclusiveMinimum: 0
-    )
+    internal static let screenPoint: [FenceParameterSpec] = [
+        FenceParameters.screenPointX.spec,
+        FenceParameters.screenPointY.spec,
+    ]
+    internal static let gestureDuration = FenceParameters.gestureDuration.spec
 
 }
 

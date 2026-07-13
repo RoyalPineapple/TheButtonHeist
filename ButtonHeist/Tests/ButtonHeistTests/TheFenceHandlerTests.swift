@@ -460,6 +460,14 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(diagnosticFailure.hint, "Fix the request.")
     }
 
+    func testFenceErrorRendersTypedHintAtDisplayBoundary() throws {
+        let error = FenceError.connectionTimeout
+        let hint = try XCTUnwrap(error.failureDetails.hint)
+
+        XCTAssertEqual(error.coreMessage, "Connection timed out")
+        XCTAssertEqual(error.errorDescription, "Connection timed out\n  Hint: \(hint)")
+    }
+
     func testErrorResponseCarriesTypedDiagnosticFailure() throws {
         let details = FailureDetails(
             code: .requestInvalid
@@ -474,20 +482,31 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(encodedFailure, failure)
         XCTAssertEqual(response.diagnosticFailure, failure)
 
-        let json = try publicJSONProbe(response).object()
+        let data = try response.jsonData()
+        let encoded = try JSONDecoder().decode(JSONValue.self, from: data)
+        guard case .object(let responseObject) = encoded,
+              let detailsValue = responseObject["details"],
+              case .object(let detailsObject) = detailsValue else {
+            return XCTFail("Expected canonical public failure object")
+        }
+        XCTAssertEqual(Set(responseObject.keys), ["status", "message", "code", "details"])
+        XCTAssertEqual(Set(detailsObject.keys), ["kind", "phase", "retryable", "hint"])
+
+        let json = try JSONProbe(data: data).object()
         XCTAssertEqual(failure.failureCode, .requestInvalid)
         XCTAssertEqual(failure.details.code, .requestInvalid)
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("message"), failure.displayMessage)
         XCTAssertEqual(try json.string("code"), failure.code)
-        XCTAssertEqual(try json.string("kind"), failure.kind.rawValue)
         try json.assertMissing("errorCode")
-        XCTAssertEqual(try json.string("phase"), failure.phase.rawValue)
-        XCTAssertEqual(try json.bool("retryable"), failure.retryable)
-        XCTAssertEqual(try json.string("hint"), failure.hint)
+        try json.assertMissing("kind")
+        try json.assertMissing("phase")
+        try json.assertMissing("retryable")
+        try json.assertMissing("hint")
 
         let detailsJSON = try json.object("details")
-        XCTAssertEqual(try detailsJSON.string("code"), failure.code)
+        try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), failure.kind.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), failure.phase.rawValue)
         XCTAssertEqual(try detailsJSON.bool("retryable"), failure.retryable)
@@ -534,15 +553,18 @@ final class TheFenceHandlerTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("code"), expectedFailureCode)
         try json.assertMissing("errorCode")
-        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.request.rawValue)
-        XCTAssertEqual(try json.string("phase"), FailurePhase.request.rawValue)
-        XCTAssertFalse(try json.bool("retryable"))
-        XCTAssertEqual(try json.string("hint"), diagnostics[0].hint)
+        try json.assertMissing("kind")
+        try json.assertMissing("phase")
+        try json.assertMissing("retryable")
+        try json.assertMissing("hint")
 
         let detailsJSON = try json.object("details")
-        XCTAssertEqual(try detailsJSON.string("code"), expectedFailureCode)
+        try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
+        XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.request.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.request.rawValue)
         XCTAssertFalse(try detailsJSON.bool("retryable"))
+        XCTAssertEqual(try detailsJSON.string("hint"), diagnostics[0].hint)
 
         let buildDiagnostics = try detailsJSON.array("buildDiagnostics")
         XCTAssertEqual(buildDiagnostics.count, 2)
@@ -654,9 +676,10 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertEqual(failure.phase, phase, name)
             XCTAssertEqual(try json.string("code"), knownCode.rawValue, name)
             XCTAssertNoThrow(try json.assertMissing("errorCode"), name)
-            XCTAssertEqual(try json.string("kind"), kind.rawValue, name)
-            XCTAssertEqual(try json.string("phase"), phase.rawValue, name)
-            XCTAssertEqual(try detailsJSON.string("code"), knownCode.rawValue, name)
+            XCTAssertNoThrow(try json.assertMissing("kind"), name)
+            XCTAssertNoThrow(try json.assertMissing("phase"), name)
+            XCTAssertNoThrow(try detailsJSON.assertMissing("code"), name)
+            XCTAssertNoThrow(try detailsJSON.assertMissing("errorCode"), name)
             XCTAssertEqual(try detailsJSON.string("kind"), kind.rawValue, name)
             XCTAssertEqual(try detailsJSON.string("phase"), phase.rawValue, name)
         }
@@ -773,8 +796,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("code"), KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
-        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.discovery.rawValue)
-        XCTAssertEqual(try json.string("phase"), FailurePhase.discovery.rawValue)
+        let detailsJSON = try json.object("details")
+        XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.discovery.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.discovery.rawValue)
     }
 
     func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
@@ -808,12 +832,13 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("code"), KnownFailureCode.authFailed.rawValue)
-        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.authentication.rawValue)
-        XCTAssertEqual(try json.string("phase"), FailurePhase.authentication.rawValue)
-        XCTAssertEqual(try json.string("hint"), hint)
+        try json.assertMissing("kind")
+        try json.assertMissing("phase")
+        try json.assertMissing("hint")
 
         let detailsJSON = try json.object("details")
-        XCTAssertEqual(try detailsJSON.string("code"), KnownFailureCode.authFailed.rawValue)
+        try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.authentication.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.authentication.rawValue)
         XCTAssertEqual(try detailsJSON.string("hint"), hint)
@@ -832,7 +857,10 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("code"), KnownFailureCode.authFailed.rawValue)
-        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.authentication.rawValue)
+        XCTAssertEqual(
+            try json.object("details").string("kind"),
+            DiagnosticFailureKind.authentication.rawValue
+        )
         XCTAssertTrue(try json.string("message").contains(reason))
     }
 
@@ -863,16 +891,18 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("code"), KnownFailureCode.transportNetworkError.rawValue)
         try json.assertMissing("errorCode")
-        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.connection.rawValue)
-        XCTAssertEqual(try json.string("phase"), FailurePhase.transport.rawValue)
-        XCTAssertTrue(try json.bool("retryable"))
-        XCTAssertEqual(try json.string("hint"), KnownFailureCode.transportNetworkError.defaultHint)
+        try json.assertMissing("kind")
+        try json.assertMissing("phase")
+        try json.assertMissing("retryable")
+        try json.assertMissing("hint")
 
         let detailsJSON = try json.object("details")
-        XCTAssertEqual(try detailsJSON.string("code"), KnownFailureCode.transportNetworkError.rawValue)
+        try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.connection.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.transport.rawValue)
         XCTAssertTrue(try detailsJSON.bool("retryable"))
+        XCTAssertEqual(try detailsJSON.string("hint"), KnownFailureCode.transportNetworkError.defaultHint)
     }
 
     @ButtonHeistActor
@@ -890,24 +920,13 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    @ButtonHeistActor
-    func testDispatchSchemaFailureUsesDiagnosticFailureMapper() async throws {
-        let fence = TheFence(configuration: .init())
+    func testSchemaFailureUsesDiagnosticFailureMapper() throws {
         let validationError = SchemaValidationError(
             field: "target",
             observed: "integer 7",
             expected: "object"
         )
-        let parsed = TheFence.ParsedRequest(
-            command: .listTargets,
-            requestId: "public-failure-test",
-            dispatch: TheFence.DecodedRequestDispatch(handler: { _ in
-                throw validationError
-            }),
-            expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
-        )
-
-        let response = try await fence.execute(parsed: parsed)
+        let response = FenceResponse.failure(validationError)
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
         XCTAssertEqual(failure.failureCode, .requestValidationError)
@@ -951,7 +970,7 @@ final class TheFenceHandlerTests: XCTestCase {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
             return probe
         }
@@ -1814,9 +1833,9 @@ final class TheFenceHandlerTests: XCTestCase {
                 dispatchResult: ActionResult.failure(
                     method: .activate,
                     errorKind: .actionFailed,
-                    message: "boom"
-                ),
-                warning: nil
+                    message: "boom",
+                    evidence: .none
+                )
             ),
             failure: HeistFailureDetail(
                 category: .action,
@@ -1880,162 +1899,6 @@ final class TheFenceHandlerTests: XCTestCase {
         return TheFence.CommandArgumentEnvelope(values: fields)
     }
 
-    // MARK: - Typed Argument Parsing
-
-    func testCommandArgumentEnvelopeReadsTypedScalarValues() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.inlineData.rawValue: .bool(true),
-            FenceParameterKey.ordinal.rawValue: .int(3),
-            FenceParameterKey.duration.rawValue: .double(2.5),
-            FenceParameterKey.requestId.rawValue: .string("abc123"),
-        ])
-
-        XCTAssertEqual(try envelope.schemaBoolean(.inlineData), true)
-        XCTAssertEqual(try envelope.schemaInteger(.ordinal), 3)
-        XCTAssertEqual(try envelope.schemaNumber(.duration), 2.5)
-        XCTAssertEqual(envelope.observedDescription(for: .requestId), "string \"abc123\"")
-        XCTAssertNil(envelope.observedDescription(forUnknownKey: "missing"))
-    }
-
-    func testCommandArgumentEnvelopeReadsNestedTypedValues() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.target.rawValue: .object([
-                FenceParameterKey.label.rawValue: .string("Pay"),
-                FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
-            ]),
-            FenceParameterKey.elementUnitPoints.rawValue: .array([
-                .object([FenceParameterKey.x.rawValue: .double(0.25), FenceParameterKey.y.rawValue: .double(0.75)]),
-                .object([FenceParameterKey.x.rawValue: .double(0.5), FenceParameterKey.y.rawValue: .double(0.5)]),
-            ]),
-        ])
-
-        let object = try XCTUnwrap(try envelope.schemaDictionary(.target))
-        XCTAssertEqual(try object.schemaString(.label), "Pay")
-        XCTAssertEqual(try object.schemaStringArray(.traits), ["button", "selected"])
-
-        guard case .array(let array)? = envelope.value(for: .elementUnitPoints) else {
-            return XCTFail("Expected typed array")
-        }
-        XCTAssertEqual(array.count, 2)
-        guard case .object(let firstObject) = array[0] else {
-            return XCTFail("Expected typed object")
-        }
-        let first = TheFence.CommandArgumentEnvelope(
-            values: firstObject,
-            fieldPrefix: "\(FenceParameterKey.elementUnitPoints.rawValue)[0]"
-        )
-        XCTAssertEqual(try first.schemaNumber(.x), 0.25)
-        XCTAssertEqual(try first.schemaNumber(.y), 0.75)
-        guard case .object(let secondObject) = array[1] else {
-            return XCTFail("Expected typed object")
-        }
-        let second = TheFence.CommandArgumentEnvelope(
-            values: secondObject,
-            fieldPrefix: "\(FenceParameterKey.elementUnitPoints.rawValue)[1]"
-        )
-        XCTAssertEqual(try second.schemaNumber(.x), 0.5)
-        XCTAssertEqual(try second.schemaNumber(.y), 0.5)
-    }
-
-    func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.subtree.rawValue: .object([
-                FenceParameterKey.container.rawValue: .object([
-                    FenceParameterKey.type.rawValue: .string("list"),
-                    FenceParameterKey.isModalBoundary.rawValue: .bool(true),
-                    FenceParameterKey.scale.rawValue: .double(0.5),
-                ]),
-                FenceParameterKey.ordinal.rawValue: .int(2),
-            ]),
-        ])
-
-        let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
-        let container = try XCTUnwrap(try subtree.schemaDictionary(.container))
-        XCTAssertEqual(try subtree.schemaInteger(.ordinal), 2)
-        XCTAssertEqual(try container.schemaEnum(.type, as: AccessibilityContainerKind.self), .list)
-        XCTAssertEqual(try container.schemaBoolean(.isModalBoundary), true)
-        XCTAssertEqual(try container.schemaNumber(.scale), 0.5)
-    }
-
-    func testCommandArgumentEnvelopeNestedSchemaErrorsUseQualifiedFields() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.subtree.rawValue: .object([
-                FenceParameterKey.traits.rawValue: .array([.int(7)]),
-            ]),
-        ])
-
-        let subtree = try XCTUnwrap(try envelope.schemaDictionary(.subtree))
-        XCTAssertThrowsError(try subtree.schemaStringArray(.traits)) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for subtree.traits[0]: observed integer 7; expected string"
-            )
-        }
-    }
-
-    func testCommandArgumentEnvelopeReadsTypedObjectArrays() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.elementUnitPoints.rawValue: .array([
-                .object([FenceParameterKey.x.rawValue: .double(0.25), FenceParameterKey.y.rawValue: .double(0.75)]),
-                .object([FenceParameterKey.x.rawValue: .int(1), FenceParameterKey.y.rawValue: .int(2)]),
-            ]),
-        ])
-
-        let points = try envelope.requiredSchemaObjectArray(.elementUnitPoints)
-        XCTAssertEqual(points.count, 2)
-        XCTAssertEqual(try points[0].requiredSchemaNumber(.x), 0.25)
-        XCTAssertEqual(try points[0].requiredSchemaNumber(.y), 0.75)
-        XCTAssertEqual(try points[1].requiredSchemaNumber(.x), 1)
-        XCTAssertEqual(try points[1].requiredSchemaNumber(.y), 2)
-    }
-
-    func testCommandArgumentEnvelopeObjectArrayErrorsUseIndexedFields() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.elementUnitPoints.rawValue: .array([
-                .object([FenceParameterKey.x.rawValue: .string("bad")]),
-            ]),
-        ])
-
-        let points = try envelope.requiredSchemaObjectArray(.elementUnitPoints)
-        XCTAssertThrowsError(try points[0].requiredSchemaNumber(.x)) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for elementUnitPoints[0].x: observed string \"bad\"; expected number"
-            )
-        }
-    }
-
-    func testCommandArgumentEnvelopeReadsRequiredEnum() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.direction.rawValue: .string("up"),
-        ])
-
-        XCTAssertEqual(
-            try envelope.requiredSchemaEnum(.direction, as: SwipeDirection.self),
-            .up
-        )
-    }
-
-    func testCommandArgumentEnvelopeRequiredEnumErrorsUseExpectedCases() throws {
-        let missing = TheFence.CommandArgumentEnvelope(values: [:])
-        XCTAssertThrowsError(try missing.requiredSchemaEnum(.direction, as: SwipeDirection.self)) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for direction: observed missing; expected enum one of up, down, left, right"
-            )
-        }
-
-        let invalid = TheFence.CommandArgumentEnvelope(values: [
-            FenceParameterKey.direction.rawValue: .string("diagonal"),
-        ])
-        XCTAssertThrowsError(try invalid.requiredSchemaEnum(.direction, as: SwipeDirection.self)) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
-            )
-        }
-    }
-
     @ButtonHeistActor
     func testAccessibilityTargetWithIdentifier() async throws {
         guard let target = try decodedAccessibilityTarget(target: targetValue(identifier: "myButton")),
@@ -2049,6 +1912,34 @@ final class TheFenceHandlerTests: XCTestCase {
     func testAccessibilityTargetRejectsHeistIdField() async throws {
         // heistId is no longer a targeting field — it is rejected as unknown.
         XCTAssertThrowsError(try decodedAccessibilityTarget(target: legacyHeistIdTargetValue("button_save")))
+    }
+
+    @ButtonHeistActor
+    func testAccessibilityTargetRejectsRemovedContainerPredicateShapes() async {
+        let exactOrders = stringMatchValue(mode: "exact", value: "orders")
+        let removedShapes = [
+            accessibilityTargetValue([
+                "container": .object(["identifier": .string("orders")]),
+            ]),
+            accessibilityTargetValue([
+                "container": .object([
+                    "checks": .array([
+                        .object([
+                            "kind": .string("identifier"),
+                            "match": exactOrders,
+                            "semantic": .object([
+                                "kind": .string("label"),
+                                "match": exactOrders,
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
+        ]
+
+        for target in removedShapes {
+            XCTAssertThrowsError(try decodedAccessibilityTarget(target: target))
+        }
     }
 
     @ButtonHeistActor
@@ -2206,7 +2097,14 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSchemaValidationReportsBadCoercedValue() async {
         await assertOperationValidationError(
             command: .wait,
-            arguments: ["timeout": .string("forever")],
+            arguments: [
+                "predicate": .object([
+                    "type": .string("changed"),
+                    "scope": .string("elements"),
+                    "assertions": .array([]),
+                ]),
+                "timeout": .string("forever"),
+            ],
             equals: "schema validation failed for timeout: observed string \"forever\"; expected number"
         )
     }
@@ -3288,15 +3186,15 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
             return .actionResult(ActionResult.success(
                 method: .wait,
-                evidence: ActionResultEvidence(
-                    accessibilityTrace: AccessibilityTrace.elementsChangedForTests(
+                evidence: ActionResultSuccessEvidence(
+                    observation: .trace(AccessibilityTrace.elementsChangedForTests(
                         elementCount: 1,
                         edits: ElementEdits()
-                    )
+                    ))
                 )
             ))
         }
@@ -3320,14 +3218,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                evidence: ActionResultEvidence(
-                    accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
-                )
+                evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace.noChangeForTests(elementCount: 1)))
             ))
         }
 
@@ -3352,15 +3248,13 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
             return .actionResult(ActionResult.failure(
                 method: .wait,
                 errorKind: .timeout,
                 message: "timed out after 0.2s — expectation not met",
-                evidence: ActionResultEvidence(
-                    accessibilityTrace: AccessibilityTrace.noChangeForTests(elementCount: 1)
-                )
+                evidence: ActionResultFailureEvidence(observation: .trace(AccessibilityTrace.noChangeForTests(elementCount: 1)))
             ))
         }
 
@@ -3412,16 +3306,16 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultEvidence(accessibilityTrace: trace)
+                    evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                 ))
             case .wait:
                 return .actionResult(ActionResult.success(
                     method: .wait,
                     message: "expectation met after observed change",
-                    evidence: ActionResultEvidence(accessibilityTrace: trace)
+                    evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                 ))
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
         }
 
@@ -4018,7 +3912,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .requestInterface:
                 return .interface(interfaceFixture)
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
         }
 
@@ -4057,7 +3951,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     )
                 ))
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
         }
 
@@ -4066,8 +3960,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "container": .object([
                     "checks": .array([
                         containerPredicateCheckValue(
-                            kind: "semantic",
-                            semanticKind: "identifier",
+                            kind: "identifier",
                             match: stringMatchValue(mode: "exact", value: "actions")
                         ),
                     ]),
@@ -4254,18 +4147,12 @@ private func predicateCheckValue(
 
 private func containerPredicateCheckValue(
     kind: String,
-    semanticKind: String? = nil,
     match: HeistValue? = nil,
     type: String? = nil,
     value: HeistValue? = nil
 ) -> HeistValue {
     var object: [String: HeistValue] = ["kind": .string(kind)]
-    if let semanticKind, let match {
-        object["semantic"] = .object([
-            "kind": .string(semanticKind),
-            "match": match,
-        ])
-    }
+    if let match { object["match"] = match }
     if let type { object["type"] = .string(type) }
     if let value { object["value"] = value }
     return .object(object)

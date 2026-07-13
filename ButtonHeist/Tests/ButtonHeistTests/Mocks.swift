@@ -224,11 +224,12 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             abortedAtPath: abortedAtPath
         )
         if abortedAtPath == nil {
-            return .actionResult(ActionResult.success(payload: .heistExecution(result)))
+            return .actionResult(ActionResult.success(payload: .heistExecution(result), evidence: .none))
         }
         return .actionResult(ActionResult.failure(
             payload: .heistExecution(result),
-            errorKind: .actionFailed
+            errorKind: .actionFailed,
+            evidence: .none
         ))
     }
 
@@ -354,10 +355,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 command: action.command,
                 dispatchResult: actionResult,
                 expectationResult: $0.actionResult,
-                expectation: $0.result,
-                warning: nil
+                expectation: $0.result
             )
-        } ?? .dispatch(command: action.command, dispatchResult: actionResult, warning: nil)
+        } ?? .dispatch(command: action.command, dispatchResult: actionResult)
         if let failure {
             return .failed(
                 path: path,
@@ -553,7 +553,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             let result = ActionResult.failure(
                 method: .wait,
                 errorKind: .validationError,
-                message: "mock could not resolve heist expectation predicate")
+                message: "mock could not resolve heist expectation predicate", evidence: .none)
             return (
                 result,
                 ExpectationResult(
@@ -618,9 +618,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             return ActionResult.failure(
                 method: actionMethod(for: command),
                 errorKind: .general,
-                message: error.message)
+                message: error.message, evidence: .none)
         default:
-            return ActionResult.success(method: actionMethod(for: command))
+            return ActionResult.success(method: actionMethod(for: command), evidence: .none)
         }
     }
 

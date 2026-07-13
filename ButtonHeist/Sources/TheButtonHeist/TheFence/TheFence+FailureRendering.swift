@@ -6,6 +6,11 @@ extension FenceError: LocalizedError {
         "or sending a large response. The connection is preserved; retry the command on the same session."
 
     public var errorDescription: String? {
-        failureDescriptor.displayMessage
+        let descriptor = failureDescriptor
+        guard let hint = descriptor.hint else { return descriptor.coreMessage }
+        return """
+            \(descriptor.coreMessage)
+              Hint: \(hint)
+            """
     }
 }

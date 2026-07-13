@@ -23,54 +23,56 @@ final class SemanticObservationSettledWaiters {
     func wait(
         scope: SemanticObservationScope,
         afterSequence: SettledObservationSequence?,
-        timeout: Double?
+        timeout: Double?,
+        onRegistered: @MainActor () -> Void = {},
+        currentEvent: @MainActor () -> SettledSemanticObservationEvent?
     ) async -> SettledSemanticObservationEvent? {
         let key = reserveWaiterKey(scope: scope, afterSequence: afterSequence)
         let oneShot = TimedOneShot<SettledSemanticObservationEvent?>()
 
-        let result: SettledSemanticObservationEvent? = await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>) in
-                if Task.isCancelled {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                guard oneShot.register(continuation) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
+        return await oneShot.wait(
+            cancellationValue: nil,
+            onRegistered: { oneShot in
                 waiters.insert(oneShot, for: key)
+                onRegistered()
+                if let event = currentEvent(), canFulfill(key, with: event) {
+                    complete(key, returning: event)
+                }
                 if let timeoutDuration = observationWaitTimeout(timeout) {
                     oneShot.armTimeout(after: timeoutDuration) { [weak self] in
                         await self?.complete(key, returning: nil)
                     }
                 }
+            },
+            onFinished: {
+                complete(key, returning: nil)
             }
-        } onCancel: {
-            oneShot.resolve(returning: nil)
-        }
-        complete(key, returning: nil)
-        return result
+        )
     }
 
-    func completeAll(returning event: SettledSemanticObservationEvent?) {
+    func cancelAll() {
         for waiter in waiters.removeAll() {
-            waiter.resolve(returning: event)
+            waiter.resolve(returning: nil)
         }
     }
 
-    func completeWaiters(with eventsByFulfilledScope: [SemanticObservationScope: SettledSemanticObservationEvent]) {
-        let completed = waiters.removeAll { key in
-            guard let event = eventsByFulfilledScope[key.scope] else { return false }
-            return event.sequence > (key.afterSequence ?? 0)
-        }
-        for removal in completed {
-            removal.waiter.resolve(returning: eventsByFulfilledScope[removal.key.scope])
+    func completeWaiters(with events: [SettledSemanticObservationEvent]) {
+        for event in events {
+            let completed = waiters.removeAll { key in
+                canFulfill(key, with: event)
+            }
+            for removal in completed {
+                removal.waiter.resolve(returning: event)
+            }
         }
     }
 
     private func complete(_ key: WaiterKey, returning event: SettledSemanticObservationEvent?) {
         waiters.resolve(key, returning: event)
+    }
+
+    private func canFulfill(_ key: WaiterKey, with event: SettledSemanticObservationEvent) -> Bool {
+        event.scope == key.scope && event.sequence > (key.afterSequence ?? 0)
     }
 
     private func reserveWaiterKey(

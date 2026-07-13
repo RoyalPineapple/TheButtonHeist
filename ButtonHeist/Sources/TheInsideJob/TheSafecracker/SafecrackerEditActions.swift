@@ -6,12 +6,9 @@ import ThePlans
 
 struct SafecrackerEditActions {
 
-    /// Perform a standard edit action on the current first responder.
-    /// Uses UIApplication.sendAction to route through the responder chain,
-    /// following KIF's pattern of bypassing the edit menu UI entirely.
     @MainActor
-    func perform(_ action: EditAction) -> Bool {
-        UIApplication.shared.sendAction(action.selector, to: nil, from: nil, for: nil)
+    func perform(_ action: EditAction, on object: NSObject) -> Bool {
+        UIApplication.shared.sendAction(action.selector, to: object, from: nil, for: nil)
     }
 
     /// Resign first responder, dismissing the keyboard if visible.
@@ -19,6 +16,12 @@ struct SafecrackerEditActions {
     @MainActor
     func resignFirstResponder() -> Bool {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    @MainActor
+    func resignFirstResponder(_ object: NSObject) -> Bool {
+        guard let responder = object as? UIResponder else { return false }
+        return responder.resignFirstResponder()
     }
 }
 

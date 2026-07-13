@@ -156,7 +156,7 @@ final class TheStash {
         interfaceTree.interfaceHash
     }
 
-    /// HeistId of the element whose live object is currently first responder.
+    /// HeistId captured for the current viewport's first responder.
     var firstResponderHeistId: HeistId? {
         currentLiveCapture.firstResponderHeistId
     }

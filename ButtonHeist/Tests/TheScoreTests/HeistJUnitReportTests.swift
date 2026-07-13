@@ -33,7 +33,7 @@ final class HeistJUnitReportTests: XCTestCase {
     }
 
     func testEmptyReport() {
-        let report = HeistJUnitReport(
+        let report = HeistJUnitReport.passed(
             heistName: "empty",
             app: "com.test.app",
             receiptNodeCount: 0,
@@ -161,8 +161,39 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "type=\"heistFailure\"")
     }
 
+    func testJunitXMLUsesCanonicalFailureInsteadOfFirstFailedWrapper() {
+        let wrapper = HeistJUnitReport.StepResult(
+            index: 0,
+            command: "invocation",
+            target: nil,
+            timeSeconds: 0.1,
+            outcome: .failed(message: "wrapper failed", errorKind: .commandError)
+        )
+        let leaf = HeistJUnitReport.StepResult(
+            index: 1,
+            command: "activate",
+            target: semanticTarget(label: "Pay"),
+            timeSeconds: 0.2,
+            outcome: .failed(message: "leaf failed", errorKind: .action(.actionFailed))
+        )
+        let report = HeistJUnitReport.failed(
+            heistName: "nested-failure",
+            app: "com.test.app",
+            receiptNodeCount: 2,
+            totalTimeSeconds: 0.3,
+            steps: [wrapper, leaf],
+            failedStepIndex: 1
+        )
+
+        let xml = report.junitXML()
+
+        assertContains(xml, "leaf failed")
+        assertContains(xml, "step: [1] activate")
+        XCTAssertFalse(xml.contains("wrapper failed"))
+    }
+
     func testJunitXMLEmptySteps() {
-        let report = HeistJUnitReport(
+        let report = HeistJUnitReport.passed(
             heistName: "empty",
             app: "com.test.app",
             receiptNodeCount: 0,
@@ -189,12 +220,13 @@ final class HeistJUnitReportTests: XCTestCase {
                 errorKind: nil
             )
         )
-        let report = HeistJUnitReport(
+        let report = HeistJUnitReport.failed(
             heistName: "escape-test",
             app: "com.test.app",
             receiptNodeCount: 5,
             totalTimeSeconds: 0.1,
-            steps: [step]
+            steps: [step],
+            failedStepIndex: 0
         )
         let xml = report.junitXML()
 
@@ -207,7 +239,7 @@ final class HeistJUnitReportTests: XCTestCase {
     // MARK: - JUnit XML: Timing
 
     func testJunitXMLIncludesTotalTiming() {
-        let report = HeistJUnitReport(
+        let report = HeistJUnitReport.passed(
             heistName: "timing",
             app: "com.test.app",
             receiptNodeCount: 1,
@@ -234,12 +266,13 @@ final class HeistJUnitReportTests: XCTestCase {
             timeSeconds: 0.5,
             outcome: .failed(message: "swipe failed", errorKind: .action(.actionFailed))
         )
-        let report = HeistJUnitReport(
+        let report = HeistJUnitReport.failed(
             heistName: "target-test",
             app: "com.test.app",
             receiptNodeCount: 10,
             totalTimeSeconds: 0.5,
-            steps: [step]
+            steps: [step],
+            failedStepIndex: 0
         )
         let xml = report.junitXML()
 
@@ -282,7 +315,17 @@ final class HeistJUnitReportTests: XCTestCase {
                 outcome: outcome
             )
         }
-        return HeistJUnitReport(
+        if let failedStepIndex = steps.firstIndex(where: \.failed) {
+            return HeistJUnitReport.failed(
+                heistName: "test-heist",
+                app: "com.test.app",
+                receiptNodeCount: receiptNodeCount ?? outcomes.count,
+                totalTimeSeconds: steps.reduce(0) { $0 + $1.timeSeconds },
+                steps: steps,
+                failedStepIndex: failedStepIndex
+            )
+        }
+        return HeistJUnitReport.passed(
             heistName: "test-heist",
             app: "com.test.app",
             receiptNodeCount: receiptNodeCount ?? outcomes.count,

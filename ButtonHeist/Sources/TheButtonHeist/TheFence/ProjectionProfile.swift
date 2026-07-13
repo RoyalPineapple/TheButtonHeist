@@ -1,5 +1,11 @@
 import TheScore
 
+private enum MCPProjectionLimits {
+    static let deltaElementsPerBucket = 5
+    static let screenPreviewElements = 5
+    static let caseResults = 10
+}
+
 struct ProjectionLimits: Sendable, Equatable {
     let visibleElementBudget: Int
     let totalNodeBudget: Int
@@ -57,6 +63,17 @@ struct ProjectionLimits: Sendable, Equatable {
             failureInterfaceElements: failureInterfaceElements
         )
     }
+
+    var boundedForMCP: ProjectionLimits {
+        ProjectionLimits(
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget,
+            deltaElementsPerBucket: min(deltaElementsPerBucket, MCPProjectionLimits.deltaElementsPerBucket),
+            screenPreviewElements: min(screenPreviewElements, MCPProjectionLimits.screenPreviewElements),
+            caseResults: min(caseResults, MCPProjectionLimits.caseResults),
+            failureInterfaceElements: failureInterfaceElements
+        )
+    }
 }
 
 @_spi(ButtonHeistInternals) public struct ProjectionProfile: Sendable, Equatable {
@@ -86,7 +103,11 @@ struct ProjectionLimits: Sendable, Equatable {
     public static var mcp: ProjectionProfile {
         ProjectionProfile(
             kind: .mcp,
-            limits: .current(deltaElementsPerBucket: 5, screenPreviewElements: 5, caseResults: 10)
+            limits: .current(
+                deltaElementsPerBucket: MCPProjectionLimits.deltaElementsPerBucket,
+                screenPreviewElements: MCPProjectionLimits.screenPreviewElements,
+                caseResults: MCPProjectionLimits.caseResults
+            )
         )
     }
 
@@ -96,6 +117,12 @@ struct ProjectionLimits: Sendable, Equatable {
 
     var interfaceDetail: InterfaceDetail {
         kind == .full ? .full : .summary
+    }
+
+    var heistReport: ProjectionProfile {
+        kind == .summary
+            ? ProjectionProfile(kind: .mcp, limits: limits.boundedForMCP)
+            : self
     }
 }
 

@@ -486,34 +486,13 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNotNil(target["checks"])
     }
 
-    func testSharedRequestBuilderRejectsWaitTimeoutAtOrBelowZeroInJSONLinesMode() {
-        for timeout in ["0", "-1"] {
-            XCTAssertThrowsError(
-                try CLIRequestBuilder.parsedRequest(
-                    from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":\#(timeout)}"#
-                )
-            ) { error in
-                let failure = requestBuildFailure(from: error)
-                let message = failure.message
-                XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
-                XCTAssertTrue(message.contains("expected number > 0"), message)
-                XCTAssertEqual(failure.details.code, .requestValidationError)
-            }
-        }
-    }
+    func testSharedRequestBuilderDefersCommandValidationToFenceAdmission() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":0,"unknown":true}"#
+        )
 
-    func testSharedRequestBuilderRejectsWaitTimeoutAboveThirtyInJSONLinesMode() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
-                from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":31}"#
-            )
-        ) { error in
-            let failure = requestBuildFailure(from: error)
-            let message = failure.message
-            XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
-            XCTAssertTrue(message.contains("expected number in 0...30"), message)
-            XCTAssertEqual(failure.details.code, .requestValidationError)
-        }
+        XCTAssertEqual(parsed.argument(.timeout), .int(0))
+        XCTAssertEqual(parsed.argument(FenceParameterKey(rawValue: "unknown")!), .bool(true))
     }
 
     func testSharedRequestBuilderRoutesValidWaitInJSONLinesMode() throws {

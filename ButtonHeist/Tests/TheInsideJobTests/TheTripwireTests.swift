@@ -267,6 +267,40 @@ final class TheTripwireTests: XCTestCase {
         )
     }
 
+    func testSemanticSignalKeepsOnlyDurableWindowFacts() {
+        let viewController = UIViewController()
+        let window = UIWindow()
+        let signal = TheTripwire.TripwireSignal(
+            topmostVC: ObjectIdentifier(viewController),
+            navigation: .empty,
+            windowStack: TheTripwire.WindowStackSignal(windows: [
+                TheTripwire.WindowSignal(
+                    id: ObjectIdentifier(window),
+                    level: 7,
+                    isKeyWindow: true
+                ),
+            ]),
+            accessibilityNotificationSequence: 42
+        )
+
+        XCTAssertEqual(
+            signal.semanticValue,
+            TheTripwire.SemanticSignal(windows: [
+                TheTripwire.SemanticWindowSignal(level: 7, isKeyWindow: true),
+            ])
+        )
+        XCTAssertFalse(containsLiveTripwireIdentity(signal.semanticValue))
+    }
+
+    private func containsLiveTripwireIdentity(_ value: Any) -> Bool {
+        if value is ObjectIdentifier || value is TheTripwire.TripwireSignal {
+            return true
+        }
+        return Mirror(reflecting: value).children.contains {
+            containsLiveTripwireIdentity($0.value)
+        }
+    }
+
     // MARK: - Pulse Lifecycle
 
     func testStartPulseSetsRunningState() {

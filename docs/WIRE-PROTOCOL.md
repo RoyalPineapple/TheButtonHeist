@@ -38,10 +38,13 @@ message discriminators such as `requestInterface`, `requestScreen`, `status`,
 and `heistPlan`. Use Fence command names at public adapter boundaries and wire
 discriminators only when speaking raw TCP.
 
-Side-effecting app interactions are not public primitive wire messages. A
-single `activate`, `type_text`, `wait`, `set_pasteboard`, or viewport command is
-a one-step `HeistPlan`; composed flows are multi-step plans. The public
-mutating wire path is always `heistPlan`.
+Side-effecting app interactions are not raw command dictionaries on the wire.
+Durable mutations such as `activate`, `type_text`, `wait`, and `set_pasteboard`
+cross as one-step or composed `heistPlan` messages. Non-durable viewport/debug
+commands cross as typed `runtimeAction` messages. In both cases, Fence admission
+has already parsed the canonical name into `TheFence.Command`, validated the
+descriptor-owned parameter schema, and converted `FenceCommandInput` into the
+typed `FenceOperationRequest` consumed by execution.
 
 ## Transport
 
@@ -134,7 +137,7 @@ Client request:
 Server response:
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"interface","payload":{"timestamp":"2026-02-03T10:30:45.123Z","tree":[],"annotations":{"elements":[],"containers":[]}}}
+{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"interface","payload":{"timestamp":791807445.123,"tree":[],"annotations":{"elements":[],"containers":[]}}}
 ```
 
 | Field | Description |
@@ -166,7 +169,7 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
-### Unsupported Legacy Auth Messages
+### Rejected Auth Tags
 
 `authApprovalPending` and `authApproved` are not valid current server messages.
 Current clients reject either tag as an unsupported auth response and instruct the
@@ -203,56 +206,61 @@ Clients without a token fail before starting the TLS connection.
 
 The interface payload carries the canonical hierarchy tree plus ButtonHeist
 annotations. There is no parallel wire `elements` array in the public wire
-contract.
+contract. `timestamp` uses Foundation `Date`'s default Codable representation:
+seconds since 2001-01-01 00:00:00 UTC.
 
 ```json
 {
   "buttonHeistVersion": "<semver>",
   "type": "interface",
   "payload": {
-    "screenDescription": "Sign In - 1 text field, 1 button",
-    "timestamp": "2026-02-03T10:30:45.123Z",
+    "timestamp": 791807445.123,
     "tree": [
       {
         "element": {
-          "heistId": "button_sign_in",
+          "description": "Button",
           "label": "Sign In",
           "identifier": "signInButton",
           "traits": ["button"],
-          "frameX": 16,
-          "frameY": 140,
-          "frameWidth": 361,
-          "frameHeight": 44,
-          "activationPointEvidence": {
-            "source": "defaultCenter",
-            "point": { "x": 196.5, "y": 162 }
-          }
+          "shape": { "type": "frame", "frame": [[16, 140], [361, 44]] },
+          "activationPoint": [196.5, 162],
+          "usesDefaultActivationPoint": true,
+          "customActions": [],
+          "customContent": [],
+          "customRotors": [],
+          "respondsToUserInteraction": true,
+          "visibility": "onscreen",
+          "traversalIndex": 0
         }
       }
     ],
     "annotations": {
-      "elements": [],
+      "elements": [
+        { "path": { "indices": [0] }, "actions": ["activate"] }
+      ],
       "containers": []
     }
   }
 }
 ```
 
-`heistId` is a current-capture annotation for correlation and diagnostics.
-`AccessibilityTarget` is the canonical target object for actions, predicates,
-and `get_interface.query.subtree`. An element target carries an ordered
-predicate `checks` chain and optional `ordinal`; a container target carries
-`container` and optional `ordinal`; `container` plus `target` expresses a
-descendant-scoped target; `ref` refers to a scoped heist target parameter.
+The raw interface tree carries parser values plus path-indexed Button Heist
+annotations. Capture-local `HeistId` values remain inside TheInsideJob and are
+not selectors on this transport. `AccessibilityTarget` is the canonical target
+object for actions, predicates, and `get_interface.query.subtree`. An element
+target carries an ordered predicate `checks` chain and optional `ordinal`; a
+container target carries `container` and optional `ordinal`; `container` plus
+`target` expresses a descendant-scoped target; `ref` refers to a scoped heist
+target parameter.
 Public target nesting is bounded by the shared public JSON input depth limit.
 Checks include `label`, `identifier`, `value`, `hint`, `traits`, `actions`,
 `customContent`, and `rotors`. Durable replay uses the same target shape.
 
 Container identifiers are matched on every delivered container type that
 carries the identifier. They are not restricted to semantic-group containers.
-Canonical container kinds are `none`, `scrollable`, `semanticGroup`, `list`,
-`landmark`, `dataTable`, `tabBar`, and `series`; parser `scrollable` containers are never
-projected as `none`.
+Canonical container roles are `none`, `semanticGroup`, `list`, `landmark`,
+`dataTable`, `tabBar`, and `series`. Identifier and scrollability are orthogonal
+checks; a roleless parser scroll container has role `none` and `scrollable=true`.
 Target resolution always walks the canonical delivered tree, including for
 `exists`, `missing`, and subtree queries.
 `InterfaceQuery` contains only optional `subtree`, `maxScrollsPerContainer`,
@@ -302,14 +310,17 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
 ```
 
 Semantic action steps identify elements semantically. The host resolves the
-target against current state, moves the viewport if needed, refreshes, acquires
-fresh live geometry, and then dispatches through the heist runtime. Cached
-coordinates from a prior capture are not the authority.
+target against settled state once, pins the resolved capture-local `HeistId`,
+and derives one deadline from its scroll-membership ancestor graph. Nested
+ancestors reveal outermost-first. Refresh, geometry stabilization, and dispatch
+must continue to resolve that exact id; a different element that matches the
+original selector cannot take over the action. Cached coordinates from a prior
+capture are not the authority.
 
-Explicit viewport messages such as `scroll`, `scrollToEdge`, and
-`scrollToVisible` remain public Fence commands because moving the viewport is
-the requested behavior, but they also cross the device wire as one-step
-`heistPlan` requests.
+Explicit viewport commands such as `scroll`, `scroll_to_edge`, and
+`scroll_to_visible` remain public Fence commands because moving the viewport is
+the requested behavior. They are non-durable debug operations and cross the
+device wire as typed `runtimeAction` requests, not as `heistPlan` steps.
 
 ### Screen Capture
 
@@ -330,13 +341,12 @@ media only through explicit, size-bounded opt-ins.
 The host evaluates current-tree predicates against the current delivered
 interface first, then extends one observation window until the predicate is met
 or the timeout expires. `exists` and `missing` read current state. Lifecycle
-assertions require observed facts; they never pass from an implied final state
-or a warning fallback. The response is a heist execution receipt, even for a
-single wait.
+assertions require observed facts and never pass from an implied final state.
+The response is a heist execution receipt, even for a single wait.
 
 To assert current settled container presence without requiring a transition,
 put the container in the canonical target slot:
-`{"type":"exists","target":{"container":{"checks":[{"kind":"semantic","semantic":{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}}]}}}`.
+`{"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}`.
 Scoped targets use `{"container":{"checks":[...]},"target":{...}}` so
 resolution is limited to descendants of the matching container.
 
@@ -349,20 +359,42 @@ The strict predicate wire grammar is:
 
 `screen` assertions accept `exists` and `missing`; `elements` assertions also
 accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
-`screenChanged`, alternate spellings, and flat target wrappers are invalid.
+`screenChanged`, and flat target wrappers are invalid.
+
+Raw heist receipt steps use one tagged `outcome`; status-specific evidence,
+failure, abort path, and children live inside that case:
+
+```json
+{"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"_0":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}}},"children":[]}}
+```
+
+`status`, `evidence`, `failure`, and `children` are outcome-owned and are invalid
+as top-level step fields. Swift constructors pair each
+`HeistStepReceiptKind<Evidence>` with its matching evidence type before creating
+the tagged outcome.
 
 ## Action Results
 
 Action responses use `actionResult`:
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate"}}
+{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
-Optional action evidence is nested under one `evidence` object. Settlement is
-the tagged shape `{"kind":"settled|timedOut","durationMs":...}`; traces,
-subject evidence, activation traces, timing, and announcements are siblings in
-that object. The removed flat evidence fields are invalid input.
+Action evidence is required and bound to the result outcome. Its `observation`
+is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
+Only `settledTrace` owns the tagged settlement shape
+`{"kind":"settled|timedOut","durationMs":...}`.
+The `trace` case cannot include `settlement`.
+`settledTrace` with `timedOut` may carry receipt-local diagnostic captures, but
+those captures are not admitted to settled semantic state.
+Captured announcements derive from the trace; standalone announcements use the
+`announcement` case. Settlement duration does not also appear in stored timing.
+Warnings are valid only in successful evidence and are not duplicated on a
+containing heist action receipt. Missing evidence, optional evidence bags, flat
+evidence fields, and sibling receipt warnings are invalid input.
+Fence projections surface that warning inside the projected action result, not
+beside the result on report evidence.
 
 `ActionResult.payload` is a tagged union when command-specific data is needed,
 for example:
@@ -371,8 +403,9 @@ for example:
 {"kind":"value","data":"Hello"}
 ```
 
-Returned elements may include capture-local annotations. Compose follow-up
-commands from their semantic fields, not from `heistId`.
+Returned elements expose semantic accessibility fields. Compose follow-up
+commands from those fields; internal capture-local `HeistId` values are not
+public selectors.
 
 Action failures use `{"outcome":{"kind":"failure","errorKind":"..."}}`
 when the error belongs to the action. Server-level failures use the `error`
@@ -381,10 +414,19 @@ an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md)
 
 ## Traces, Facts, and Public Deltas
 
-`AccessibilityTrace` stores ordered settled captures. The runtime derives one
-ordered `ChangeFact` stream from adjacent capture edges. Predicate evaluation,
-diagnostics, and repair analysis consume that stream directly; no separate
+`AccessibilityTrace` stores ordered capture evidence. Proof-backed captures in
+the semantic stream are settled temporal truth, and the runtime derives one
+ordered `ChangeFact` stream from their adjacent edges. A timed-out action may
+return a diagnostic trace in its receipt, but that trace is not committed or
+usable as a settled observation baseline. Predicate evaluation, diagnostics,
+and repair analysis consume the applicable fact stream directly; no separate
 stored or endpoint temporal model exists.
+
+Only proof-backed observations become committed captures in the settled
+semantic stream. A raw `InterfaceObservation` is live parser evidence and
+cannot be committed directly. Visible commits require a clean-settle
+`InterfaceObservationProof`; discovery commits require the proof made from the
+finished exploration graph after its settled pages have been reduced.
 
 Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
 always derives three ordered facts: old-tree departures, the screen marker,
@@ -394,9 +436,51 @@ the same screen generation. A complete trace with no facts is proof of
 
 Scoped notification evidence has one semantic shape: `screenChanged`,
 `elementChanged` with a `layout` or `value` subtype, `announcement`, or
-`unknown` with its raw code. Screen and element notifications classify
-interface change even when tree hashes are equal. Announcements remain ordered
-transition evidence without synthesizing an interface mutation.
+`unknown` with its raw code. A scoped screen notification authoritatively
+classifies replacement even when tree hashes are equal. Element and
+announcement notifications remain same-generation evidence. Unknown kinds
+retain their raw code and never become screen evidence by themselves.
+UIKit does not guarantee delivery of a useful notification for every change;
+absence permits explicit snapshot classification but is not itself evidence of
+either replacement or stability.
+
+A clean post-action commit contributes one captured notification batch. Its
+retained events are strictly after the action window's opening cursor and no
+later than the batch's exact through-cursor. That through-cursor becomes the
+observation's notification cursor. A failed settle cancels the window and does
+not attach its events to settled trace evidence. If the bounded notification
+stream discarded relevant events, the destination capture carries
+`transition.accessibilityNotificationGap.droppedThroughSequence`; a gapped edge
+does not claim complete notification evidence. A scoped `screenChanged` after
+batch capture is outside that cursor and still invalidates the committed
+observation.
+
+Notification object payloads never carry UIKit identity. A resolved element
+payload contains an `AccessibilityNotificationElementReference` with the
+destination interface's canonical semantic graph `path`, `traversalIndex`, and
+resolution method. The path and traversal index identify one record in that
+graph's traversal order. Failed correlation remains explicit as an unresolved
+payload.
+
+First-responder state is captured internally as a capture-local `HeistId` and
+retained in the value-only capture snapshot, never as a UIKit object identity.
+When trace context exposes `firstResponder`, the host projects that captured id
+once to an `AccessibilityTarget`; internal ids do not cross the wire. A
+first-responder action pins the captured id and fails if inflation finishes on a
+different id or the current first responder changed during inflation.
+
+Observed notification evidence and inferred screen classification occupy
+different transition fields. `transition.accessibilityNotifications` retains
+the notification records. `transition.fallbackReason` separately retains the
+typed reason inferred by `ScreenClassifier` from settled snapshots.
+`ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative;
+`elementChanged` and `announcement` suppress replacement inference; and only an
+empty or unknown batch permits snapshot inference. Every inferred replacement
+records one of `modalBoundaryChanged`, `selectedTabChanged`,
+`navigationMarkerChanged`, `primaryHeaderChanged`, or `rootShapeChanged` in
+`transition.fallbackReason`. Parsed screen IDs, first-responder state, geometry,
+and observation-generation counters never classify a screen boundary on their
+own.
 
 For UIKit value controls, both `elementChanged` subtypes and `announcement` are
 recapture triggers. The notification kind does not assert the new value;

@@ -169,14 +169,317 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
+    func testEveryPublicCommandHasOneRuntimeAdmission() async throws {
         let (fence, _) = makeConnectedFence()
 
         for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            XCTAssertNoThrow(
-                try fence.parseRequest(command: descriptor.command, values: sampleArguments(for: descriptor.command)),
-                descriptor.command.rawValue
+            let input = FenceCommandInput(
+                command: descriptor.command,
+                arguments: .init(values: sampleArguments(for: descriptor.command))
             )
+            let request = try fence.admit(input)
+
+            XCTAssertEqual(request.command, descriptor.command, descriptor.command.rawValue)
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryProjectedParameterMutationIsEnforcedByRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                for mutation in invalidValues(for: parameter) {
+                    var arguments = sampleArguments(for: descriptor.command)
+                    arguments[parameter.key] = mutation
+
+                    XCTAssertThrowsError(
+                        try fence.admit(FenceCommandInput(
+                            command: descriptor.command,
+                            arguments: .init(values: arguments)
+                        )),
+                        "\(descriptor.command.rawValue).\(parameter.key): \(mutation)"
+                    )
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryRequiredProjectedParameterIsRequiredByRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters where parameter.required {
+                var arguments = sampleArguments(for: descriptor.command)
+                XCTAssertNotNil(
+                    arguments.removeValue(forKey: parameter.key),
+                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
+                )
+
+                XCTAssertThrowsError(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: arguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key)"
+                ) { error in
+                    XCTAssertEqual(
+                        (error as? SchemaValidationError)?.field,
+                        parameter.key,
+                        "\(descriptor.command.rawValue).\(parameter.key): \(error)"
+                    )
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryPublicCommandRejectsUnknownParametersAtRuntimeAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+        let unknownKey = "__unknown_parameter__"
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            var arguments = sampleArguments(for: descriptor.command)
+            arguments[unknownKey] = .bool(true)
+
+            XCTAssertThrowsError(
+                try fence.admit(FenceCommandInput(
+                    command: descriptor.command,
+                    arguments: .init(values: arguments)
+                )),
+                descriptor.command.rawValue
+            ) { error in
+                XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesDeferEveryRequiredParameterFailureToAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters where parameter.required {
+                var values = sampleArguments(for: descriptor.command)
+                XCTAssertNotNil(
+                    values.removeValue(forKey: parameter.key),
+                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
+                )
+                var routedInputs: [FenceCommandInput] = []
+
+                if descriptor.mcpExposure == .directTool {
+                    routedInputs.append(try TheFence.Command.routeToolRequest(
+                        named: descriptor.command.rawValue,
+                        arguments: .init(values: values)
+                    ).get())
+                }
+                if descriptor.cliExposure == .directCommand {
+                    values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                    routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                        .init(values: values),
+                        context: "test"
+                    ).get())
+                }
+
+                XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+                for input in routedInputs {
+                    XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                        XCTAssertEqual(
+                            (error as? SchemaValidationError)?.field,
+                            parameter.key,
+                            "\(descriptor.command.rawValue).\(parameter.key): \(error)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesDeferEveryProjectedParameterMutationToAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                for mutation in invalidValues(for: parameter) {
+                    var values = sampleArguments(for: descriptor.command)
+                    values[parameter.key] = mutation
+                    var routedInputs: [FenceCommandInput] = []
+                    let expectedFailure: Error
+
+                    do {
+                        _ = try fence.admit(FenceCommandInput(
+                            command: descriptor.command,
+                            arguments: .init(values: values)
+                        ))
+                        XCTFail("Expected admission failure for \(descriptor.command.rawValue).\(parameter.key)")
+                        continue
+                    } catch {
+                        expectedFailure = error
+                    }
+
+                    if descriptor.mcpExposure == .directTool {
+                        routedInputs.append(try TheFence.Command.routeToolRequest(
+                            named: descriptor.command.rawValue,
+                            arguments: .init(values: values)
+                        ).get())
+                    }
+                    if descriptor.cliExposure == .directCommand {
+                        values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                        routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                            .init(values: values),
+                            context: "test"
+                        ).get())
+                    }
+
+                    XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+                    for input in routedInputs {
+                        XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                            XCTAssertEqual(
+                                String(reflecting: type(of: error)),
+                                String(reflecting: type(of: expectedFailure))
+                            )
+                            XCTAssertEqual(String(describing: error), String(describing: expectedFailure))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryProjectedDefaultIsAcceptedOmittedAndExplicitly() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                guard let defaultValue = parameter.defaultValue else { continue }
+                var omittedArguments = sampleArguments(for: descriptor.command)
+                omittedArguments.removeValue(forKey: parameter.key)
+                var explicitArguments = omittedArguments
+                explicitArguments[parameter.key] = defaultValue
+
+                XCTAssertNoThrow(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: omittedArguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key) omitted"
+                )
+                XCTAssertNoThrow(
+                    try fence.admit(FenceCommandInput(
+                        command: descriptor.command,
+                        arguments: .init(values: explicitArguments)
+                    )),
+                    "\(descriptor.command.rawValue).\(parameter.key) explicit"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testEveryCommandWithAccessibilityTargetSchemaRejectsMalformedNestedTarget() async throws {
+        let (fence, _) = makeConnectedFence()
+        let cases = try malformedNestedTargets().flatMap(nestedTargetMutationCases)
+        let commandsWithTargetSchema = Set(
+            TheFence.Command.descriptors
+                .filter { $0.parameters.contains(where: containsAccessibilityTargetSchema) }
+                .map(\.command)
+        )
+
+        XCTAssertEqual(Set(cases.map(\.command)), commandsWithTargetSchema)
+
+        for mutation in cases {
+            XCTAssertThrowsError(
+                try fence.admit(FenceCommandInput(
+                    command: mutation.command,
+                    arguments: .init(values: mutation.arguments)
+                )),
+                mutation.command.rawValue
+            ) { error in
+                XCTAssertTrue(
+                    String(describing: error).localizedCaseInsensitiveContains("target"),
+                    "\(mutation.command.rawValue): \(error)"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesExecuteTheSameAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.mcpExposure == .directTool {
+            let arguments = TheFence.CommandArgumentEnvelope(values: sampleArguments(for: descriptor.command))
+            let input = try TheFence.Command.routeToolRequest(
+                named: descriptor.command.rawValue,
+                arguments: arguments
+            ).get()
+
+            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
+        }
+
+        for descriptor in TheFence.Command.descriptors where descriptor.cliExposure == .directCommand {
+            var values = sampleArguments(for: descriptor.command)
+            values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+            let input = try TheFence.Command.routeCLICommandEnvelope(
+                .init(values: values),
+                context: "test"
+            ).get()
+
+            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesDeferEveryUnknownParameterFailureToAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+        let unknownKey = "__unknown_parameter__"
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            var values = sampleArguments(for: descriptor.command)
+            values[unknownKey] = .bool(true)
+            var routedInputs: [FenceCommandInput] = []
+
+            if descriptor.mcpExposure == .directTool {
+                routedInputs.append(try TheFence.Command.routeToolRequest(
+                    named: descriptor.command.rawValue,
+                    arguments: .init(values: values)
+                ).get())
+            }
+            if descriptor.cliExposure == .directCommand {
+                values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                    .init(values: values),
+                    context: "test"
+                ).get())
+            }
+
+            XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+            for input in routedInputs {
+                XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                    XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testAdmissionRejectsMalformedMetadataAndSemanticRequirements() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .ping,
+            arguments: .init(values: ["requestId": .int(7)])
+        ))) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, "requestId")
+        }
+        XCTAssertThrowsError(try fence.admit(FenceCommandInput(
+            command: .activate,
+            arguments: .init(values: [:])
+        ))) { error in
+            XCTAssertEqual((error as? TheFence.MissingAccessibilityTarget)?.command, .activate)
         }
     }
 
@@ -339,6 +642,146 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
+    private func invalidValues(for parameter: FenceParameterSpec) -> [HeistValue] {
+        var values = [incompatibleValue(for: parameter.type)]
+        if parameter.enumValues != nil {
+            values.append(.string("__invalid_enum_value__"))
+        }
+        if let minLength = parameter.minLength {
+            values.append(.string(String(repeating: "x", count: max(0, minLength - 1))))
+        }
+        if let minimum = parameter.minimum {
+            values.append(parameter.type == .integer ? .int(Int(minimum) - 1) : .double(minimum - 1))
+        }
+        if let exclusiveMinimum = parameter.exclusiveMinimum {
+            values.append(.double(exclusiveMinimum))
+        }
+        if let maximum = parameter.maximum {
+            values.append(parameter.type == .integer ? .int(Int(maximum) + 1) : .double(maximum + 1))
+        }
+        if let minItems = parameter.minItems {
+            values.append(.array(Array(repeating: .string("item"), count: max(0, minItems - 1))))
+        }
+        if let maxItems = parameter.maxItems {
+            values.append(.array(Array(repeating: .string("item"), count: maxItems + 1)))
+        }
+        return values
+    }
+
+    private func incompatibleValue(for type: FenceParameterSpec.ParamType) -> HeistValue {
+        switch type {
+        case .string:
+            .object([:])
+        case .integer, .number, .boolean:
+            .string("wrong type")
+        case .stringArray, .array:
+            .object([:])
+        case .stringMatch, .object:
+            .string("wrong type")
+        }
+    }
+
+    private func nestedTargetMutationCases(_ malformedTarget: HeistValue) -> [NestedTargetMutationCase] {
+        let expectation = HeistValue.object([
+            "type": .string("exists"),
+            "target": malformedTarget,
+        ])
+        let plan = HeistValue.string("""
+            HeistPlan("entry") {
+                Warn("ready")
+            }
+            """)
+
+        return [
+            NestedTargetMutationCase(command: .getInterface, arguments: ["subtree": malformedTarget]),
+            NestedTargetMutationCase(command: .wait, arguments: [
+                "predicate": expectation,
+            ]),
+            NestedTargetMutationCase(command: .oneFingerTap, arguments: ["element": malformedTarget]),
+            NestedTargetMutationCase(command: .longPress, arguments: ["element": malformedTarget]),
+            NestedTargetMutationCase(command: .swipe, arguments: [
+                "elementDirection": .object([
+                    "element": malformedTarget,
+                    "direction": .string(SwipeDirection.left.rawValue),
+                ]),
+            ]),
+            NestedTargetMutationCase(command: .drag, arguments: [
+                "elementToPoint": .object([
+                    "element": malformedTarget,
+                    "end": .object(["x": .double(120), "y": .double(240)]),
+                ]),
+            ]),
+            NestedTargetMutationCase(command: .scroll, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .scrollToVisible, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .scrollToEdge, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .activate, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .rotor, arguments: ["target": malformedTarget]),
+            NestedTargetMutationCase(command: .typeText, arguments: [
+                "target": malformedTarget,
+                "text": .string("hello"),
+            ]),
+            NestedTargetMutationCase(command: .editAction, arguments: [
+                "action": .string(EditAction.paste.rawValue),
+                "expect": expectation,
+            ]),
+            NestedTargetMutationCase(command: .setPasteboard, arguments: [
+                "text": .string("clipboard"),
+                "expect": expectation,
+            ]),
+            NestedTargetMutationCase(command: .dismissKeyboard, arguments: ["expect": expectation]),
+            NestedTargetMutationCase(command: .runHeist, arguments: [
+                "argument": .object([
+                    "type": .string(HeistParameterKind.accessibilityTarget.rawValue),
+                    "target": malformedTarget,
+                ]),
+                "plan": plan,
+            ]),
+        ]
+    }
+
+    private func malformedNestedTargets() throws -> [HeistValue] {
+        let target = AccessibilityTarget.within(
+            container: .identifier("container"),
+            .identifier("target")
+        )
+        guard case .object(let root) = try TheFence.HeistValuePayloadEncoder.encode(target),
+              case .object(let nested)? = root["target"],
+              case .array(let checks)? = nested["checks"],
+              case .object(let firstCheck)? = checks.first else {
+            XCTFail("Canonical scoped target must encode a nested target check")
+            return [.object([:])]
+        }
+
+        var missingRequiredCheck = firstCheck
+        missingRequiredCheck.removeValue(forKey: "kind")
+        var invalidEnumCheck = firstCheck
+        invalidEnumCheck["kind"] = .string("__invalid_enum_value__")
+        var unknownKeyTarget = nested
+        unknownKeyTarget["__unknown_parameter__"] = .bool(true)
+        var wrongTypeTarget = nested
+        wrongTypeTarget["ordinal"] = .string("wrong type")
+
+        return [
+            nested.merging(["checks": .array([.object(missingRequiredCheck)])]) { _, new in new },
+            nested.merging(["checks": .array([.object(invalidEnumCheck)])]) { _, new in new },
+            unknownKeyTarget,
+            wrongTypeTarget,
+        ].map { nestedTarget in
+            var scopedTarget = root
+            scopedTarget["target"] = .object(nestedTarget)
+            return .object(scopedTarget)
+        }
+    }
+
+    private func containsAccessibilityTargetSchema(_ parameter: FenceParameterSpec) -> Bool {
+        let targetKeys = Set(["checks", "ref", "ordinal", "container", "target"])
+        if parameter.objectPropertyKeys == targetKeys {
+            return true
+        }
+        return parameter.objectProperties.contains(where: containsAccessibilityTargetSchema)
+            || parameter.arrayItemProperties.contains(where: containsAccessibilityTargetSchema)
+    }
+
     private func sampleClientMessages() throws -> [ClientMessage] {
         return [
             .clientHello,
@@ -403,4 +846,9 @@ final class WireCommandParityTests: XCTestCase {
 
 private struct EncodedClientType: Decodable {
     let type: ClientWireMessageType
+}
+
+private struct NestedTargetMutationCase {
+    let command: TheFence.Command
+    let arguments: [String: HeistValue]
 }

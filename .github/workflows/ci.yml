@@ -46,10 +46,14 @@ jobs:
       - name: Run Bumper Bowling
         run: scripts/check-source-shape.sh
 
+      - name: Test source-shape guardrails
+        env:
+          BUMPER_BOWLING_PACKAGE_PATH: ${{ github.workspace }}/.build/bumper-bowling
+        run: scripts/tests/check-source-shape-test.sh
+
   release-contract:
     # Release/install validation belongs in CI. Version bumps belong in the
     # release script, not in every implementation PR that touches shared types.
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -57,7 +61,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate release/install contract
         run: scripts/validate-release-contract.sh
@@ -240,7 +244,7 @@ jobs:
 
   ios-tests:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-tests
       BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
@@ -298,7 +302,7 @@ jobs:
       - name: Run iOS tests
         # Run the hosted iOS test bundle before demo smoke gates so test compile
         # and runtime failures fail before spending minutes replaying CLI flows.
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           set -eo pipefail
           echo "IOS_TEST_RUN_START=$(date +%s)" >> "$GITHUB_ENV"

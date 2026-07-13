@@ -47,6 +47,25 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.failureKind, .actionFailed)
     }
 
+    func testElementInflationTransitionRejectionPreservesCommandMethod() {
+        let rejection = ElementInflation.StateTransitionRejection(
+            state: .inflated,
+            event: .advance(to: .refreshing)
+        )
+        let failure = ElementInflation.ElementInflationFailure.invalidTransition(rejection)
+
+        XCTAssertEqual(failure.failedStep, .invalidTransition)
+        XCTAssertEqual(failure.failureKind, .actionFailed)
+        XCTAssertEqual(
+            failure.message,
+            "element inflation failed [invalidTransition]: cannot transition from inflated to refreshing"
+        )
+        let result = failure.actionDispatchOutcome(commandMethod: .activate)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.failureKind, .actionFailed)
+    }
+
     func testRefreshReresolveActivateSuccessStopsPolicy() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))

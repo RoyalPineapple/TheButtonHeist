@@ -8,11 +8,13 @@ private let driverIdentityLogger = ButtonHeistLog.logger(.handoff(.driverIdentit
 ///
 /// Also used as the associated value in `HandoffConnectionPhase.failed`, which
 /// is why this enum is `Equatable`. Not every case can appear in `.failed`: the
-/// phase-producing cases are `connectionFailed` and `disconnected`; auth and
-/// session-lock failures are disconnect causes. The resolver/timeout cases are
-/// thrown directly from resolution/waiting paths and never become a phase value.
+/// phase-producing cases are `connectionFailed`, `serverFailure`, and
+/// `disconnected`; auth and session-lock failures are disconnect causes. The
+/// resolver/timeout cases are thrown directly from resolution/waiting paths and
+/// never become a phase value.
 enum HandoffConnectionError: Error, LocalizedError, Equatable {
     case connectionFailed(String)
+    case serverFailure(ServerError)
     case disconnected(DisconnectReason)
     case timeout
     case noDeviceFound
@@ -20,7 +22,10 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
     case ambiguousDeviceTarget(filter: String, matches: [String])
 
     var errorDescription: String? {
-        HandoffFailureFormatter.message(for: diagnostic)
+        if case .serverFailure(let serverError) = self {
+            return serverError.message
+        }
+        return HandoffFailureFormatter.message(for: diagnostic)
     }
 
     var failureCode: String {
@@ -46,6 +51,14 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 target: nil,
                 cause: message,
                 code: .connectionFailed
+            )
+        case .serverFailure(let serverError):
+            let details = serverError.failureDetails
+            return HandoffFailureDiagnostic(
+                target: nil,
+                cause: serverError.message,
+                code: details.code,
+                hint: serverError.recoveryHint ?? details.hint
             )
         case .disconnected(let reason):
             return reason.diagnostic

@@ -17,154 +17,271 @@ import ThePlans
 @MainActor
 internal final class ElementInflation {
 
+    internal struct KnownTargetRevealRequest {
+        internal let heistId: HeistId
+        internal let deadline: SemanticObservationDeadline
+    }
+
+    internal struct Exploration {
+        internal var discoverTarget: @MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?
+        internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
+    }
+
+    internal struct GeometryEnvironment {
+        internal let now: @MainActor () -> CFAbsoluteTime
+        internal let awaitFrame: @MainActor () async -> Void
+    }
+
+    internal struct CommittedElementTarget {
+        private let sourceTarget: AccessibilityTarget
+        private let resolvedHeistId: HeistId
+        private let deadline: SemanticObservationDeadline
+
+        internal init(_ inflatedTarget: InflatedElementTarget) {
+            sourceTarget = inflatedTarget.target
+            resolvedHeistId = inflatedTarget.treeElement.heistId
+            deadline = inflatedTarget.deadline
+        }
+
+        internal var target: AccessibilityTarget { sourceTarget }
+        internal var heistId: HeistId { resolvedHeistId }
+        internal var handoffDeadline: SemanticObservationDeadline { deadline }
+    }
+
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
-    internal var discoverTarget: (@MainActor (AccessibilityTarget) async -> InterfaceObservation?)?
-    internal var revealKnownTarget: (@MainActor (HeistId) async -> InterfaceObservation?)?
-
-    /// Bounded window inflation waits for a target whose reveal failed, or
-    /// whose visible live object was recycled, to become resolvable before
-    /// failing the active recovery path.
-    ///
-    /// Async-loaded destinations can produce an interface tree containing the
-    /// target before its live scroll geometry is wired, so a reveal failure at
-    /// the dispatch instant is not proof of unreachability — the very next
-    /// settled capture can show the target framed and reachable. The wait is
-    /// keyed off the target resolving, not a fixed retry count, because the
-    /// gating operation is typically I/O (an in-flight content load).
-    /// Field-measured arrivals land within ~500ms of dispatch; the standard
-    /// settle timeout covers them with margin.
-    internal var revealPathGraceTimeout: TimeInterval = SemanticObservationTiming.defaultTimeout
-
-    /// Re-parse cadence inside the grace window when the app posts no
-    /// transition-completion notifications. Apps that announce transitions
-    /// wake the window immediately; silent apps fall back to this interval.
-    internal var revealPathSilentReparseInterval: TimeInterval = 0.15
+    internal var exploration: Exploration
+    internal var geometryEnvironment: GeometryEnvironment
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    internal static let stableGeometryQuietFrames: Int = 2
-    internal static let stableGeometryTimeout: TimeInterval = 1.0
     internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     internal init(
         stash: TheStash,
         safecracker: TheSafecracker,
-        tripwire: TheTripwire
+        tripwire: TheTripwire,
+        exploration: Exploration
     ) {
         self.stash = stash
         self.safecracker = safecracker
         self.tripwire = tripwire
+        self.exploration = exploration
+        geometryEnvironment = GeometryEnvironment(
+            now: CFAbsoluteTimeGetCurrent,
+            awaitFrame: { await tripwire.yieldRealFrames(1) }
+        )
     }
 
     internal func inflate(
         for target: AccessibilityTarget,
         method: ActionMethod,
-        deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
+        guard !Task.isCancelled else {
+            return .failed(.cancelled("element inflation was cancelled before resolution"))
+        }
         let resolvedTarget: AccessibilityTarget
         do {
             resolvedTarget = try target.validatedForElementAction()
         } catch {
             return .failed(.targetResolution(error))
         }
-        stash.refreshCurrentVisibleTree()
-        var state: State = .resolving(.initial)
-        let maxAttempts = 2
+        return await runInflation(
+            for: resolvedTarget,
+            method: method,
+            activationPointPolicy: activationPointPolicy
+        )
+    }
+
+    private func runInflation(
+        for target: AccessibilityTarget,
+        method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy,
+        initialState: State = .resolving
+    ) async -> ElementInflationResult {
+        var state = initialState
+        let revealTransaction = RevealTransaction()
+        revealTransaction.captureScrollableHierarchy(in: stash)
 
         while true {
             switch state {
-            case .resolving(let pass):
-                switch await findTargetInTree(resolvedTarget, allowKnownFallback: pass.allowsKnownFallback) {
+            case .resolving:
+                let nextState: State
+                switch await findTargetInTree(target) {
                 case .success(.visible(let treeElement)):
-                    transition(
-                        &state,
-                        to: .refreshing(
-                            target: resolvedTarget,
-                            treeElement: treeElement,
-                            attempt: pass.attempt,
-                            didReveal: false
-                        )
-                    )
-                case .success(.known(let treeElement)):
-                    transition(&state, to: .revealing(treeElement: treeElement, attempt: pass.attempt))
-                case .failure(let failure):
-                    transition(&state, to: .failed(failure))
-                }
-
-            case .revealing(let treeElement, let attempt):
-                transition(&state, to: await stateAfterReveal(treeElement, target: resolvedTarget, attempt: attempt))
-
-            case .refreshing(let target, let treeElement, let attempt, let didReveal):
-                transition(
-                    &state,
-                    to: await stateAfterRefresh(
+                    nextState = .refreshing(
                         target: target,
                         treeElement: treeElement,
-                        didReveal: didReveal,
-                        attempt: attempt,
-                        method: method,
-                        deallocatedBoundary: deallocatedBoundary,
-                        activationPointPolicy: activationPointPolicy
+                        deadline: handoffDeadline(for: treeElement),
+                        didReveal: false
                     )
-                )
+                case .success(.known(let treeElement)):
+                    nextState = .revealing(
+                        target: target,
+                        treeElement: treeElement,
+                        deadline: handoffDeadline(for: treeElement)
+                    )
+                case .failure(let failure):
+                    nextState = .failed(failure)
+                }
+                if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
+                    return .failed(failure)
+                }
 
-            case .placing(let inflatedTarget, let attempt, let didReveal):
-                transition(
-                    &state,
-                    to: await stateAfterPlacement(
-                        inflatedTarget,
-                        didReveal: didReveal,
-                        attempt: attempt,
-                        method: method
-                    )
+            case .revealing(let target, let treeElement, let deadline):
+                let nextState = await stateAfterReveal(
+                    treeElement,
+                    target: target,
+                    deadline: deadline,
+                    transaction: revealTransaction
                 )
+                if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
+                    return .failed(failure)
+                }
 
-            case .retrying(let failedAttempt, let reason):
-                let nextAttempt = failedAttempt + 1
-                if nextAttempt >= maxAttempts {
-                    transition(
-                        &state,
-                        to: .failed(retryExhaustedFailure(reason: reason, maxAttempts: maxAttempts))
-                    )
-                } else {
-                    await tripwire.yieldRealFrames(1)
-                    stash.refreshCurrentVisibleTree()
-                    transition(&state, to: .resolving(.afterRetry(attempt: nextAttempt, reason: reason)))
+            case .refreshing(let target, let treeElement, let deadline, let didReveal):
+                let nextState = await stateAfterRefresh(
+                    target: target,
+                    treeElement: treeElement,
+                    didReveal: didReveal,
+                    method: method,
+                    activationPointPolicy: activationPointPolicy,
+                    deadline: deadline
+                )
+                if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
+                    return .failed(failure)
+                }
+
+            case .placing(let inflatedTarget, let didReveal):
+                let nextState = await stateAfterPlacement(
+                    inflatedTarget,
+                    didReveal: didReveal,
+                    method: method,
+                    transaction: revealTransaction
+                )
+                if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
+                    return .failed(failure)
                 }
 
             case .inflated(let result):
+                revealTransaction.commit()
                 return .inflated(result)
 
             case .failed(let failure):
+                revealTransaction.rollBack()
                 return .failed(failure)
             }
         }
     }
 
-    internal func inflateAfterActivationRefresh(
-        for target: AccessibilityTarget
+    internal func refreshCommittedTarget(
+        _ target: CommittedElementTarget,
+        method: ActionMethod
     ) async -> ElementInflationResult {
-        refreshLiveCaptureForActivation()
-        return await inflate(
-            for: target,
-            method: .activate,
-            deallocatedBoundary: "activation refresh"
+        guard !Task.isCancelled else {
+            return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
+        }
+        guard target.handoffDeadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else {
+            return .failed(.staleRefresh(
+                "committed target \(target.heistId) reached the action deadline before refresh",
+                failureKind: .targetUnavailable
+            ))
+        }
+        stash.refreshLiveCapture()
+        guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
+            return .failed(.staleRefresh(
+                "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",
+                failureKind: .targetUnavailable
+            ))
+        }
+        let initialState: State = stash.liveContains(heistId: target.heistId)
+            ? .refreshing(
+                target: target.target,
+                treeElement: treeElement,
+                deadline: target.handoffDeadline,
+                didReveal: false
+            )
+            : .revealing(
+                target: target.target,
+                treeElement: treeElement,
+                deadline: target.handoffDeadline
+            )
+        return await runInflation(
+            for: target.target,
+            method: method,
+            activationPointPolicy: .requireOnscreen,
+            initialState: initialState
         )
     }
 
-    private func transition(_ state: inout State, to nextState: State) {
-        let currentDescription = state.description
-        let nextDescription = nextState.description
-        insideJobLogger.debug(
-            "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
-        )
-        state = nextState
+    internal static func handoffTickCount(
+        for treeElement: InterfaceTree.Element,
+        in tree: InterfaceTree
+    ) -> Int {
+        var visited = Set<TreePath>()
+        var containerPath = treeElement.scrollMembership?.containerPath
+        while let path = containerPath, visited.insert(path).inserted {
+            containerPath = tree.containers[path]?.scrollMembership?.containerPath
+        }
+        return max(2, visited.count + 1)
     }
 
-    private func refreshLiveCaptureForActivation() {
-        stash.refreshCurrentVisibleTree()
+    internal func handoffDeadline(
+        for treeElement: InterfaceTree.Element
+    ) -> SemanticObservationDeadline {
+        let tickCount = Self.handoffTickCount(for: treeElement, in: stash.interfaceTree)
+        return SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent(),
+            timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout
+        )
+    }
+
+    private func transition(
+        _ state: inout State,
+        to proposedState: State
+    ) -> ElementInflationFailure? {
+        let nextState: State
+        let event: StateEvent
+        if proposedState.isCancellationFailure {
+            nextState = proposedState
+            event = .cancelled
+        } else if Task.isCancelled {
+            nextState = .failed(.cancelled(
+                "element inflation was cancelled while \(state.phase.rawValue)"
+            ))
+            event = .cancelled
+        } else {
+            nextState = proposedState
+            event = .advance(to: nextState.phase)
+        }
+
+        switch StateMachine().advance(state.phase, with: event) {
+        case .rejected(let rejection, _):
+            return .invalidTransition(rejection)
+        case .changed(let expectedPhase, _):
+            guard expectedPhase == nextState.phase else {
+                return .invalidTransition(.init(state: state.phase, event: event))
+            }
+
+            let currentDescription = state.description
+            let nextDescription = nextState.description
+            insideJobLogger.debug(
+                "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
+            )
+            state = nextState
+            return nil
+        }
+    }
+}
+
+extension ElementInflation.InflatedElementTarget {
+    internal var committedTarget: ElementInflation.CommittedElementTarget {
+        ElementInflation.CommittedElementTarget(self)
     }
 }
 

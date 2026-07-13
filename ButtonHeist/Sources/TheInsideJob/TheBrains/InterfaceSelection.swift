@@ -1,9 +1,10 @@
 #if canImport(UIKit)
 import Foundation
+
 import ThePlans
+import TheScore
 
 import AccessibilitySnapshotModel
-import TheScore
 
 enum InterfaceSelectionError: Error, Equatable {
     case subtreeNotFound
@@ -156,15 +157,28 @@ private struct InterfaceSubtreeCandidate: Comparable {
 
 private extension AccessibilityContainer {
     func subtreeCandidateSummary(annotation: InterfaceContainerAnnotation?) -> String {
-        [
+        let facts = containerPredicateFacts
+        let semanticFields: [String?]
+        switch facts.role {
+        case .semanticGroup(let label, let value):
+            semanticFields = [
+                subtreeSummaryField("label", label),
+                subtreeSummaryField("value", value),
+            ]
+        case .none, .list, .landmark, .dataTable, .tabBar, .series:
+            semanticFields = []
+        }
+        return ([
             "container",
-            subtreeSummaryRequiredField("type", accessibilityContainerKind.rawValue),
+            subtreeSummaryRequiredField("type", facts.role.kind.rawValue),
             subtreeSummaryField("containerName", annotation?.containerName?.rawValue),
-            subtreeSummaryField("identifier", containerPredicateIdentifier),
-            subtreeSummaryField("label", containerPredicateLabel),
-            subtreeSummaryField("value", containerPredicateValue),
-            isModalBoundary ? "isModalBoundary=true" : nil,
-        ].compactMap { $0 }.joined(separator: " ")
+            subtreeSummaryField("identifier", facts.identifier),
+        ] + semanticFields + [
+            facts.isModalBoundary ? "isModalBoundary=true" : nil,
+            facts.isScrollable ? "isScrollable=true" : nil,
+        ])
+            .compactMap { $0 }
+            .joined(separator: " ")
     }
 }
 

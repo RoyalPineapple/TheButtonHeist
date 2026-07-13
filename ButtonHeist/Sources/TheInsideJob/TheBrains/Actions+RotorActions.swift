@@ -46,7 +46,10 @@ extension Actions {
         guard let treeElement = hit.treeElement else { return }
 
         if case .objectUnavailable = stash.resolveLiveActionTarget(for: treeElement) {
-            _ = await navigation.elementInflation.revealSemanticTarget(treeElement)
+            _ = await navigation.elementInflation.revealSemanticTarget(
+                treeElement,
+                deadline: navigation.elementInflation.handoffDeadline(for: treeElement)
+            )
         }
 
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {

@@ -1,40 +1,46 @@
 import Foundation
 
 struct ParsedPredicateBranches {
-    let cases: [PredicateCase]
-    let elseBody: [HeistStep]?
+    let cases: [HeistPredicateCaseAdmissionCandidate]
+    let elseBody: [HeistStepAdmissionCandidate]?
 }
 
 struct ParsedClosureParameterBlock {
     let referenceName: HeistReferenceName
-    let body: [HeistStep]
+    let body: [HeistStepAdmissionCandidate]
 }
 
 extension HeistPlanSourceParser {
-    mutating func parseWaitFor() throws -> HeistStep {
+    mutating func parseWaitFor() throws -> HeistStepAdmissionCandidate {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
         let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
         try expectSymbol(")")
-        return .wait(WaitStep(
+        return .wait(HeistWaitAdmissionCandidate(
             predicate: predicate,
             timeout: timeout,
             elseBody: try parseLowercaseElseChainIfPresent(chainContext: "WaitFor")
         ))
     }
 
-    mutating func parseIf() throws -> HeistStep {
+    mutating func parseIf() throws -> HeistStepAdmissionCandidate {
         if consumeSymbol("(") {
             let predicate = try parseScreenAssertion()
             try expectSymbol(")")
             let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "If")
-            return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
+            return .conditional(try HeistConditionalAdmissionCandidate(
+                cases: branches.cases,
+                elseBody: branches.elseBody
+            ))
         }
         let branches = try parsePredicateBranches()
-        return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
+        return .conditional(try HeistConditionalAdmissionCandidate(
+            cases: branches.cases,
+            elseBody: branches.elseBody
+        ))
     }
 
-    mutating func parseForEach() throws -> HeistStep {
+    mutating func parseForEach() throws -> HeistStepAdmissionCandidate {
         try expectSymbol("(")
         if consumeSymbol("[") {
             throw error(previous, #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
@@ -46,7 +52,7 @@ extension HeistPlanSourceParser {
             } while consumeSymbol(",")
             try expectSymbol(")")
             let closure = try parseClosureParameterBlock(binding: .string)
-            return .forEachString(try ForEachStringStep(
+            return .forEachString(try HeistForEachStringAdmissionCandidate(
                 values: values,
                 parameter: closure.referenceName,
                 body: closure.body
@@ -64,7 +70,7 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         let closure = try parseClosureParameterBlock(binding: .target)
-        return .forEachElement(try ForEachElementStep(
+        return .forEachElement(try HeistForEachElementAdmissionCandidate(
             matching: matching,
             limit: limit,
             parameter: closure.referenceName,
@@ -72,7 +78,7 @@ extension HeistPlanSourceParser {
         ))
     }
 
-    mutating func parseRepeatUntil() throws -> HeistStep {
+    mutating func parseRepeatUntil() throws -> HeistStepAdmissionCandidate {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
         guard let timeout = try parseTrailingTimeout(defaultValue: nil) else {
@@ -80,7 +86,7 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         let body = try parseHeistBlock()
-        return .repeatUntil(try RepeatUntilStep(
+        return .repeatUntil(try HeistRepeatUntilAdmissionCandidate(
             predicate: predicate,
             timeout: timeout,
             body: body,
@@ -184,8 +190,8 @@ extension HeistPlanSourceParser {
 
     mutating func parsePredicateBranches() throws -> ParsedPredicateBranches {
         try expectSymbol("{")
-        var cases: [PredicateCase] = []
-        var elseBody: [HeistStep]?
+        var cases: [HeistPredicateCaseAdmissionCandidate] = []
+        var elseBody: [HeistStepAdmissionCandidate]?
         while !consumeSymbol("}") {
             try rejectForbiddenStatementSyntax()
             let token = currentToken
@@ -198,7 +204,10 @@ extension HeistPlanSourceParser {
                 try expectSymbol("(")
                 let predicate = try parseScreenAssertion()
                 try expectSymbol(")")
-                cases.append(PredicateCase(predicate: predicate, body: try parseHeistBlock()))
+                cases.append(HeistPredicateCaseAdmissionCandidate(
+                    predicate: predicate,
+                    body: try parseHeistBlock()
+                ))
             case "Else":
                 guard elseBody == nil else {
                     throw error(token, "a branch block accepts at most one Else")
@@ -218,18 +227,20 @@ extension HeistPlanSourceParser {
         let body = try parseHeistBlock()
         let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
         return ParsedPredicateBranches(
-            cases: [PredicateCase(predicate: predicate, body: body)],
+            cases: [HeistPredicateCaseAdmissionCandidate(predicate: predicate, body: body)],
             elseBody: elseBody
         )
     }
 
-    mutating func parseHeistBlock() throws -> [HeistStep] {
+    mutating func parseHeistBlock() throws -> [HeistStepAdmissionCandidate] {
         try expectSymbol("{")
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return body.steps.map(\.runtimeSafetyStep)
+        return body.steps
     }
 
-    mutating func parseLowercaseElseChainIfPresent(chainContext: String) throws -> [HeistStep]? {
+    mutating func parseLowercaseElseChainIfPresent(
+        chainContext: String
+    ) throws -> [HeistStepAdmissionCandidate]? {
         guard consumeSymbol(".") else { return nil }
         let token = currentToken
         let chain = try parseIdentifier()
@@ -252,7 +263,7 @@ extension HeistPlanSourceParser {
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         return ParsedClosureParameterBlock(
             referenceName: referenceName,
-            body: body.steps.map(\.runtimeSafetyStep)
+            body: body.steps
         )
     }
 

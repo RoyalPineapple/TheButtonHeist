@@ -249,13 +249,13 @@ extension HeistPlanSourceParser {
         case ["Mechanical", "Drag"]:
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalDrag()))]
         case ["WaitFor"]:
-            return [HeistStepAdmissionCandidate(try parseWaitFor())]
+            return [try parseWaitFor()]
         case ["If"]:
-            return [HeistStepAdmissionCandidate(try parseIf())]
+            return [try parseIf()]
         case ["ForEach"]:
-            return [HeistStepAdmissionCandidate(try parseForEach())]
+            return [try parseForEach()]
         case ["RepeatUntil"]:
-            return [HeistStepAdmissionCandidate(try parseRepeatUntil())]
+            return [try parseRepeatUntil()]
         case ["HeistPlan"]:
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
             return [.heist(plan)]

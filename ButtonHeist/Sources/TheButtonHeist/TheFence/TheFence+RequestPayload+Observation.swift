@@ -21,29 +21,12 @@ extension TheFence {
         case inlineData
     }
 
-    static func decodeGetInterfaceRequest(
-        _ fence: TheFence,
-        _ arguments: CommandArgumentEnvelope,
-        _ requestId: String,
-        _ expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
-        let request = try fence.makeGetInterfaceRequest(arguments)
-        return DecodedRequestDispatch { fence in try await fence.handleGetInterface(request) }
-    }
-
-    static func decodeGetScreenRequest(
-        _ fence: TheFence,
-        _ arguments: CommandArgumentEnvelope,
-        _ requestId: String,
-        _ expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
-        let request = try fence.makeScreenRequest(arguments, requestId: requestId)
-        return DecodedRequestDispatch { fence in try await fence.handleGetScreen(request) }
-    }
-
-    private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
+    func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         return GetInterfaceRequest(
-            detail: try arguments.value(FenceParameters.interfaceDetail) ?? .summary,
+            detail: try arguments.value(
+                FenceParameters.interfaceDetail,
+                defaultFrom: Command.getInterface.descriptor
+            ),
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeTarget(arguments),
                 maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
@@ -64,31 +47,23 @@ extension TheFence {
         } else {
             preconditionFailure("Unsupported interface discovery limit parameter \(key.rawValue)")
         }
-        guard let value = try arguments.value(parameter) else { return nil }
-        guard (1...2_000).contains(value) else {
-            throw SchemaValidationError(
-                field: arguments.field(key),
-                observed: value,
-                expected: "integer between 1 and 2000"
-            )
-        }
-        return value
+        return try arguments.value(parameter)
     }
 
-    private func makeScreenRequest(
+    func makeScreenRequest(
         _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ScreenRequest {
         return ScreenRequest(
             destination: try screenshotDestination(arguments),
-            mode: try arguments.value(FenceParameters.screenMode) ?? .raw,
+            mode: try arguments.value(FenceParameters.screenMode, defaultFrom: Command.getScreen.descriptor),
             requestId: requestId
         )
     }
 
     private func screenshotDestination(_ arguments: CommandArgumentEnvelope) throws -> ScreenshotDestination {
         let outputPath = try arguments.value(FenceParameters.output)
-        let inlineData = try arguments.value(FenceParameters.inlineData) ?? false
+        let inlineData = try arguments.value(FenceParameters.inlineData, defaultFrom: Command.getScreen.descriptor)
         switch (inlineData, outputPath) {
         case (true, nil):
             return .inlineData

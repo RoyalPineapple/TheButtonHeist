@@ -11,7 +11,12 @@ final class AutoSettleFieldsTests: XCTestCase {
     func testActionResultRoundTripsWithSettleFields() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(settlement: .settled(durationMs: 1234))
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 1234)
+                )
+            )
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -24,7 +29,12 @@ final class AutoSettleFieldsTests: XCTestCase {
             method: .wait,
             errorKind: .timeout,
             message: "timed out",
-            evidence: ActionResultEvidence(settlement: .timedOut(durationMs: 750))
+            evidence: ActionResultFailureEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .timedOut(durationMs: 750)
+                )
+            )
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -37,9 +47,12 @@ final class AutoSettleFieldsTests: XCTestCase {
     func testSettleDurationHasOneCanonicalStoredValue() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                settlement: .settled(durationMs: 125),
-                timing: ActionPerformanceTiming(actionDispatchMs: 4, settleMs: 125)
+            evidence: ActionResultSuccessEvidence(
+                observation: .settledTrace(
+                    .noChangeForTests(elementCount: 0),
+                    .settled(durationMs: 125)
+                ),
+                timing: ActionPerformanceTiming(actionDispatchMs: 4)
             )
         )
 
@@ -88,7 +101,7 @@ final class AutoSettleFieldsTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(accessibilityTrace: trace)
+            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -123,9 +136,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultEvidence(
-                accessibilityTrace: AccessibilityTrace(captures: [first, second])
-            )
+            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [first, second])))
         )
         let encoded = try JSONEncoder().encode(result)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])

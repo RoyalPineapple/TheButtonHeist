@@ -198,6 +198,18 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
     public var expectation: ExpectationResult? { expectationEvidence?.expectation }
     public var waitEvidence: HeistWaitEvidence? { expectationEvidence?.waitEvidence }
 
+    var provesInvocationFailure: Bool {
+        switch self {
+        case .heist(_, let childFailedPath):
+            return childFailedPath != nil
+        case .invocation(_, _, _, .childFailed):
+            return true
+        case .invocation(_, _, _, .completed(let expectation)):
+            guard let expectation else { return false }
+            return !expectation.actionResult.outcome.isSuccess || !expectation.expectation.met
+        }
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist invocation evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)

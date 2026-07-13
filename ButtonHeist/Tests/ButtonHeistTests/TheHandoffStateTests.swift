@@ -87,11 +87,12 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testServerErrorSetsConnectionPhaseFailed() async {
         let handoff = TheHandoff()
+        let serverError = ServerError(kind: .general, message: "something went wrong")
 
-        handoff.handleServerMessage(.error(ServerError(kind: .general, message: "something went wrong")), requestId: nil)
+        handoff.handleServerMessage(.error(serverError), requestId: nil)
 
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("something went wrong"))
-        XCTAssertEqual(handoff.connectionDiagnosticFailure, .connectionFailed("something went wrong"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
+        XCTAssertEqual(handoff.connectionDiagnosticFailure, .serverFailure(serverError))
     }
 
     @ButtonHeistActor
@@ -1352,21 +1353,22 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testWaitForConnectionResultThrowsWhenAlreadyFailed() async {
         let handoff = TheHandoff()
+        let serverError = ServerError(kind: .general, message: "boom")
         // Drive into .failed state via a server error.
         handoff.handleServerMessage(
-            .error(ServerError(kind: .general, message: "boom")),
+            .error(serverError),
             requestId: nil
         )
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("boom"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
         do {
             try await handoff.waitForConnectionResult(timeout: 5)
             XCTFail("Expected HandoffConnectionError to be thrown")
         } catch let error as HandoffConnectionError {
-            guard case .connectionFailed(let message) = error else {
-                return XCTFail("Expected .connectionFailed, got \(error)")
+            guard case .serverFailure(let failure) = error else {
+                return XCTFail("Expected .serverFailure, got \(error)")
             }
-            XCTAssertEqual(message, "boom")
+            XCTAssertEqual(failure, serverError)
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
@@ -1567,6 +1569,7 @@ final class TheHandoffStateTests: XCTestCase {
     func testTerminalAttemptIgnoresLateRequestScopedError() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let serverError = ServerError(kind: .general, message: "connection failed")
         let mock = MockConnection()
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }
@@ -1581,10 +1584,10 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
-            .error(ServerError(kind: .general, message: "connection failed")),
+            .error(serverError),
             requestId: nil
         ))
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "request failed")),
@@ -1593,13 +1596,14 @@ final class TheHandoffStateTests: XCTestCase {
 
         XCTAssertNil(receivedMessage)
         XCTAssertNil(receivedRequestID)
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
     }
 
     @ButtonHeistActor
     func testTerminalAttemptIgnoresLateRequestScopedObservationPayloads() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let serverError = ServerError(kind: .general, message: "connection failed")
         let mock = MockConnection()
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }
@@ -1612,10 +1616,10 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
-            .error(ServerError(kind: .general, message: "connection failed")),
+            .error(serverError),
             requestId: nil
         ))
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
         let interface = makeReceiptTestInterface(
             [makeReceiptTestElement(label: "Title")],
@@ -1639,13 +1643,14 @@ final class TheHandoffStateTests: XCTestCase {
         ))
 
         XCTAssertTrue(receivedMessages.isEmpty)
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
     }
 
     @ButtonHeistActor
     func testTerminalAttemptIgnoresStateMutatingRequestScopedMessages() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let serverError = ServerError(kind: .general, message: "connection failed")
         let mock = MockConnection()
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }
@@ -1653,7 +1658,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
-            .error(ServerError(kind: .general, message: "connection failed")),
+            .error(serverError),
             requestId: nil
         ))
 
@@ -1663,7 +1668,7 @@ final class TheHandoffStateTests: XCTestCase {
         ))
 
         XCTAssertNil(handoff.serverInfo)
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
     }
 
     @ButtonHeistActor
@@ -1754,13 +1759,14 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testWaitForConnectionResultIgnoresIdempotentDisconnect() async throws {
         let handoff = TheHandoff()
+        let serverError = ServerError(kind: .general, message: "boom")
 
         // Drive into .failed (server error) — this is a terminal phase.
         handoff.handleServerMessage(
-            .error(ServerError(kind: .general, message: "boom")),
+            .error(serverError),
             requestId: nil
         )
-        assertFailed(handoff.connectionPhase, failure: .connectionFailed("boom"))
+        assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
         // Calling disconnect() now is a no-op transition (.failed → .disconnected
         // is technically a phase change but, importantly, awaiters from any

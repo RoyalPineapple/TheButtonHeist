@@ -42,12 +42,6 @@ extension TheInsideJob {
         }
 
         await performLifecycleEffects(change.effects)
-        if change.effects.contains(where: \.isCancelResumeEffect) {
-            guard case .suspended = serverPhase else { return }
-            await stopRuntime()
-            return
-        }
-
         let finishChange = applyLifecycleEvent(.stopFinished(attempt.id))
         await performLifecycleEffects(finishChange.effects)
     }
@@ -183,13 +177,6 @@ extension TheInsideJob {
             await muscle.tearDown()
             await getaway.tearDown()
         }
-    }
-}
-
-private extension InsideJobLifecycleMachine.Effect {
-    var isCancelResumeEffect: Bool {
-        if case .cancelResume = self { return true }
-        return false
     }
 }
 

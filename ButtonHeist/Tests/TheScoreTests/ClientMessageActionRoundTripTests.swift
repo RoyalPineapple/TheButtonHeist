@@ -130,6 +130,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             method: .activate,
             errorKind: .elementNotFound,
             message: "Element not found",
+            evidence: .none
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -145,6 +146,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             method: .activate,
             errorKind: .elementNotFound,
             message: "Element not found",
+            evidence: .none
         )
         let data = try JSONEncoder().encode(result)
         let encoded = try JSONDecoder().decode(EncodedActionResultProbe.self, from: data)
@@ -166,7 +168,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithValueField() throws {
-        let result = ActionResult.success(payload: .typeText("hello world"))
+        let result = ActionResult.success(payload: .typeText("hello world"), evidence: .none)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
@@ -179,7 +181,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testServerMessageActionResultEncoding() throws {
-        let result = ActionResult.success(method: .syntheticTap)
+        let result = ActionResult.success(method: .syntheticTap, evidence: .none)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)

@@ -63,13 +63,16 @@ extension HeistCanonicalSwiftDSLRenderer {
         if container.checks.count == 1 {
             switch container.checks[0] {
             case .type(let type):
-                return type == .dataTable ? ".dataTable()" : ".\(type.rawValue)"
+                if type == .dataTable { return ".dataTable()" }
+                return type == .series ? ".type(.series)" : ".\(type.rawValue)"
+            case .identifier(let match):
+                return ".identifier(\(renderCorrection(match: match)))"
             case .semantic(let predicate):
                 return renderCorrection(semanticContainer: predicate)
             case .scrollable(true):
-                return ".scrollable"
+                return ".scrollable(true)"
             case .actions(let actions):
-                return ".actions(\(renderActionArray(actions)))"
+                return ".actions(\(renderContainerActions(actions)))"
             case .rowCount, .columnCount, .modalBoundary, .scrollable(false):
                 break
             }
@@ -81,13 +84,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch check {
         case .type(let type):
             return ".type(.\(type.rawValue))"
+        case .identifier(let match):
+            return ".identifier(\(renderCorrection(match: match)))"
         case .semantic(let predicate):
             return ".semantic(\(renderCorrection(semanticContainer: predicate)))"
-        case .rowCount(let count): return ".rowCount(\(count))"
-        case .columnCount(let count): return ".columnCount(\(count))"
+        case .rowCount(let count): return ".rowCount(.init(\(count.value)))"
+        case .columnCount(let count): return ".columnCount(.init(\(count.value)))"
         case .modalBoundary(let required): return ".modalBoundary(\(required))"
         case .scrollable(let required): return ".scrollable(\(required))"
-        case .actions(let actions): return ".actions(\(renderActionArray(actions)))"
+        case .actions(let actions): return ".actions(\(renderContainerActions(actions)))"
         }
     }
 
@@ -95,7 +100,6 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch predicate {
         case .label(let match): return ".label(\(renderCorrection(match: match)))"
         case .value(let match): return ".value(\(renderCorrection(match: match)))"
-        case .identifier(let match): return ".identifier(\(renderCorrection(match: match)))"
         }
     }
 
@@ -164,21 +168,28 @@ extension HeistCanonicalSwiftDSLRenderer {
         return try ".matching(\(container.checks.map { try renderContainerCheck($0, environment: environment) }.joined(separator: ", ")))"
     }
 
-    func renderSingleContainerCheck(_ checks: [ContainerPredicateCheck<String>]) -> String? {
-        renderSingleContainerCheck(checks) { renderSemanticContainerPredicate($0) }
+    func renderSingleContainerCheck(_ checks: NonEmptyArray<ContainerPredicateCheck<String>>) -> String? {
+        renderSingleContainerCheck(
+            checks,
+            renderIdentifier: { renderCallArgument($0) },
+            renderSemantic: { renderSemanticContainerPredicate($0) }
+        )
     }
 
     func renderSingleContainerCheck(
-        _ checks: [ContainerPredicateCheck<StringExpr>],
+        _ checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>,
         environment: RenderEnvironment
     ) throws -> String? {
-        try renderSingleContainerCheck(checks) {
-            try renderSemanticContainerPredicate($0, environment: environment)
-        }
+        try renderSingleContainerCheck(
+            checks,
+            renderIdentifier: { try renderCallArgument($0, environment: environment) },
+            renderSemantic: { try renderSemanticContainerPredicate($0, environment: environment) }
+        )
     }
 
     private func renderSingleContainerCheck<Value: StringMatchPayload>(
-        _ checks: [ContainerPredicateCheck<Value>],
+        _ checks: NonEmptyArray<ContainerPredicateCheck<Value>>,
+        renderIdentifier: (StringMatch<Value>) throws -> String,
         renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
     ) rethrows -> String? {
         guard checks.count == 1 else { return nil }
@@ -196,15 +207,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .type(.tabBar):
             return ".tabBar"
         case .type(.series):
-            return ".series"
-        case .type(.scrollable):
-            return ".type(.scrollable)"
+            return ".type(.series)"
+        case .identifier(let match):
+            return try ".identifier(\(renderIdentifier(match)))"
         case .semantic(let predicate):
             return try renderSemantic(predicate)
         case .scrollable(true):
-            return ".scrollable"
+            return ".scrollable(true)"
         case .actions(let actions):
-            return ".actions(\(renderActionArray(actions)))"
+            return ".actions(\(renderContainerActions(actions)))"
         case .rowCount, .columnCount, .modalBoundary:
             return nil
         case .scrollable(false):
@@ -212,23 +223,25 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func renderDataTable(_ checks: [ContainerPredicateCheck<String>]) -> String? {
+    func renderDataTable(_ checks: NonEmptyArray<ContainerPredicateCheck<String>>) -> String? {
         renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
     }
 
-    func renderDataTable(_ checks: [ContainerPredicateCheck<StringExpr>]) -> String? {
+    func renderDataTable(_ checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>) -> String? {
         renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
     }
 
-    private func renderDataTable(rowCount: Int?, columnCount: Int?, hasOnlyTableChecks: Bool) -> String? {
+    private func renderDataTable(rowCount: UInt?, columnCount: UInt?, hasOnlyTableChecks: Bool) -> String? {
         guard hasOnlyTableChecks else { return nil }
         var arguments: [String] = []
-        if let rowCount { arguments.append("rowCount: \(rowCount)") }
-        if let columnCount { arguments.append("columnCount: \(columnCount)") }
+        if let rowCount { arguments.append("rowCount: .init(\(rowCount))") }
+        if let columnCount { arguments.append("columnCount: .init(\(columnCount))") }
         return ".dataTable(\(arguments.joined(separator: ", ")))"
     }
 
-    private func hasOnlyDataTableChecks<Value: StringMatchPayload>(_ checks: [ContainerPredicateCheck<Value>]) -> Bool {
+    private func hasOnlyDataTableChecks<Value: StringMatchPayload>(
+        _ checks: NonEmptyArray<ContainerPredicateCheck<Value>>
+    ) -> Bool {
         let hasDataTableType = checks.contains { check in
             if case .type(.dataTable) = check { return true }
             return false
@@ -237,59 +250,72 @@ extension HeistCanonicalSwiftDSLRenderer {
             switch check {
             case .type(.dataTable), .rowCount, .columnCount:
                 return true
-            case .type, .semantic, .modalBoundary, .scrollable, .actions:
+            case .type, .identifier, .semantic, .modalBoundary, .scrollable, .actions:
                 return false
             }
         }
         return hasDataTableType && containsOnlyDataTableChecks
     }
 
-    private func rowCount<Value: StringMatchPayload>(in checks: [ContainerPredicateCheck<Value>]) -> Int? {
+    private func rowCount<Value: StringMatchPayload>(
+        in checks: NonEmptyArray<ContainerPredicateCheck<Value>>
+    ) -> UInt? {
         checks.compactMap {
-            if case .rowCount(let count) = $0 { return count }
+            if case .rowCount(let count) = $0 { return count.value }
             return nil
         }.first
     }
 
-    private func columnCount<Value: StringMatchPayload>(in checks: [ContainerPredicateCheck<Value>]) -> Int? {
+    private func columnCount<Value: StringMatchPayload>(
+        in checks: NonEmptyArray<ContainerPredicateCheck<Value>>
+    ) -> UInt? {
         checks.compactMap {
-            if case .columnCount(let count) = $0 { return count }
+            if case .columnCount(let count) = $0 { return count.value }
             return nil
         }.first
     }
 
     func renderContainerCheck(_ check: ContainerPredicateCheck<String>) -> String {
-        renderContainerCheck(check) { renderSemanticContainerPredicate($0) }
+        renderContainerCheck(
+            check,
+            renderIdentifier: { renderCallArgument($0) },
+            renderSemantic: { renderSemanticContainerPredicate($0) }
+        )
     }
 
     func renderContainerCheck(
         _ check: ContainerPredicateCheck<StringExpr>,
         environment: RenderEnvironment
     ) throws -> String {
-        try renderContainerCheck(check) {
-            try renderSemanticContainerPredicate($0, environment: environment)
-        }
+        try renderContainerCheck(
+            check,
+            renderIdentifier: { try renderCallArgument($0, environment: environment) },
+            renderSemantic: { try renderSemanticContainerPredicate($0, environment: environment) }
+        )
     }
 
     private func renderContainerCheck<Value: StringMatchPayload>(
         _ check: ContainerPredicateCheck<Value>,
+        renderIdentifier: (StringMatch<Value>) throws -> String,
         renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
     ) rethrows -> String {
         switch check {
         case .type(let type):
             return ".type(.\(type.rawValue))"
+        case .identifier(let match):
+            return try ".identifier(\(renderIdentifier(match)))"
         case .semantic(let predicate):
             return try ".semantic(\(renderSemantic(predicate)))"
         case .rowCount(let count):
-            return ".rowCount(\(count))"
+            return ".rowCount(.init(\(count.value)))"
         case .columnCount(let count):
-            return ".columnCount(\(count))"
+            return ".columnCount(.init(\(count.value)))"
         case .modalBoundary(let required):
             return ".modalBoundary(\(required))"
         case .scrollable(let required):
             return ".scrollable(\(required))"
         case .actions(let actions):
-            return ".actions(\(renderActionArray(actions)))"
+            return ".actions(\(renderContainerActions(actions)))"
         }
     }
 
@@ -299,8 +325,6 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".label(\(renderCallArgument(match)))"
         case .value(let match):
             return ".value(\(renderCallArgument(match)))"
-        case .identifier(let match):
-            return ".identifier(\(renderCallArgument(match)))"
         }
     }
 
@@ -313,9 +337,12 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try ".label(\(renderCallArgument(match, environment: environment)))"
         case .value(let match):
             return try ".value(\(renderCallArgument(match, environment: environment)))"
-        case .identifier(let match):
-            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
         }
+    }
+
+    private func renderContainerActions(_ actions: ContainerPredicateActions) -> String {
+        let values = actions.values.sorted { $0.canonicalSortKey < $1.canonicalSortKey }
+        return ".init(\(values.map(render(action:)).joined(separator: ", ")))"
     }
 
     func renderTargetPredicate(_ predicate: ElementPredicate) -> String {
