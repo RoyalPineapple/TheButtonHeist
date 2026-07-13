@@ -92,7 +92,10 @@ final class AdversarialLabDogfoodTests: XCTestCase {
         XCTAssertTrue(failure.description.localizedCaseInsensitiveContains("ambiguous"), failure.description)
     }
 
-    func testDynamicCellsKeepSemanticIdentityAfterChurn() async throws {
+    func testDynamicCellsKeepSemanticIdentityAfterChurn() throws {
+        let runtime = TheInsideJob.shared
+        defer { assertInProcessRuntimeStopped(runtime) }
+
         let noodles = AccessibilityTarget.element(
             .label("Nebula Noodles Prime"),
             .customContent(.init(label: "SKU", value: "SKU-72")),
@@ -103,7 +106,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
             .actions([.custom("Add to Cart")])
         )
 
-        let heist = try await runHeist("AdversarialDynamicCellsPass") {
+        let heist = try XCTUnwrap(runHeistSync("AdversarialDynamicCellsPass") {
             try DemoNavigation.openAdversarialScenario("Dynamic Cells")
             Activate(.label("Churn menu"))
                 .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
@@ -116,7 +119,7 @@ final class AdversarialLabDogfoodTests: XCTestCase {
                     .customContent(.init(label: "Line Total", value: "$18.00")),
                     .actions([.custom("Remove from Cart")])
                 )), timeout: .seconds(6))
-        }
+        })
 
         XCTAssertNil(heist.result.firstFailedStep)
     }
@@ -252,6 +255,22 @@ final class AdversarialLabDogfoodTests: XCTestCase {
         } catch let failure as Heist.Failure {
             return failure
         }
+    }
+
+    private func assertInProcessRuntimeStopped(
+        _ runtime: TheInsideJob,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let observationStream = runtime.brains.stash.semanticObservationStream
+        XCTAssertFalse(runtime.isRunning, file: file, line: line)
+        XCTAssertNil(runtime.listeningPort, file: file, line: line)
+        XCTAssertFalse(runtime.tripwire.isPulseRunning, file: file, line: line)
+        XCTAssertFalse(runtime.brains.semanticObservationIsActive, file: file, line: line)
+        XCTAssertFalse(observationStream.isActive, file: file, line: line)
+        XCTAssertEqual(observationStream.settledWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.cycleWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
     }
 }
 
