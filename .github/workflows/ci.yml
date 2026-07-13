@@ -346,7 +346,9 @@ jobs:
               -skip-testing TheInsideJobTests/TLSIntegrationTests \
               -skip-testing TheInsideJobTests/TheSafecrackerIntegrationTests
           else
-            run_hosted_tests
+            run_hosted_tests \
+              -parallel-testing-enabled YES \
+              -parallel-testing-worker-count 2
           fi
 
       - name: Collect iOS heist receipts
