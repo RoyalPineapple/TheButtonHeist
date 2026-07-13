@@ -3365,6 +3365,50 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(staleObject.activationCount, 0)
     }
 
+    func testActionsExecuteActivateKeepsCommittedHeistIdWhenOrdinalOrderChangesDuringRefresh() async {
+        brains.stopSemanticObservation()
+        let selectedId: HeistId = "selected_action"
+        let otherId: HeistId = "other_action"
+        let element = AccessibilityElement.make(
+            label: "Repeated Action",
+            traits: .button,
+            frame: CGRect(x: 40, y: 120, width: 180, height: 44)
+        )
+        let selectedObject = ActionActivationOverrideView(frame: element.bhFrame)
+        let otherObject = ActionActivationOverrideView(frame: element.bhFrame)
+        installScreen(elements: [
+            (element, selectedId),
+            (element, otherId),
+        ])
+
+        let actionTask = Task { @MainActor in
+            await brains.actions.executeActivate(
+                literalTarget(ElementPredicate(label: "Repeated Action"), ordinal: 0)
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: brains.stash)
+        let reorderedScreen = InterfaceObservation.makeForTests(
+            elements: [
+                (element, otherId),
+                (element, selectedId),
+            ],
+            objects: [
+                selectedId: selectedObject,
+                otherId: otherObject,
+            ]
+        )
+        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = reorderedScreen
+
+        let result = await actionTask.value
+
+        XCTAssertTrue(result.success, result.message ?? "activate failed")
+        XCTAssertEqual(result.resolvedElementId, selectedId)
+        XCTAssertEqual(selectedObject.activationCount, 1)
+        XCTAssertEqual(otherObject.activationCount, 0)
+    }
+
     func testExecuteTypeTextIntoTargetFocusesWithAccessibilityActivateBeforeTyping() async throws {
         brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
@@ -3420,6 +3464,79 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(textField.activationCount, 1)
         XCTAssertTrue(textField.isFirstResponder)
         XCTAssertEqual(textField.text, "hello")
+    }
+
+    func testExecuteTypeTextKeepsCommittedHeistIdWhenOrdinalOrderChangesBeforeFocus() async throws {
+        brains.stopSemanticObservation()
+        let selectedId: HeistId = "selected_message"
+        let otherId: HeistId = "other_message"
+        let selectedTextField = ActionActivatingTextField(
+            frame: CGRect(x: 48, y: 180, width: 240, height: 44)
+        )
+        let otherTextField = ActionActivatingTextField(
+            frame: CGRect(x: 48, y: 240, width: 240, height: 44)
+        )
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        for (textField, identifier) in [(selectedTextField, selectedId), (otherTextField, otherId)] {
+            textField.isAccessibilityElement = true
+            textField.accessibilityLabel = "Repeated Message"
+            textField.accessibilityIdentifier = identifier.rawValue
+            rootView.addSubview(textField)
+        }
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+
+        let selectedElement = AccessibilityElement.make(
+            label: "Repeated Message",
+            identifier: selectedId.rawValue,
+            traits: .textEntry,
+            frame: selectedTextField.frame
+        )
+        let otherElement = AccessibilityElement.make(
+            label: "Repeated Message",
+            identifier: otherId.rawValue,
+            traits: .textEntry,
+            frame: otherTextField.frame
+        )
+        installScreen(elements: [
+            (selectedElement, selectedId),
+            (otherElement, otherId),
+        ])
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: selectedTextField) {}
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+
+        let actionTask = Task { @MainActor in
+            await brains.actions.executeTypeText(TypeTextTarget(
+                text: "hello",
+                target: literalTarget(ElementPredicate(label: "Repeated Message"), ordinal: 0)
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: brains.stash)
+        let reorderedScreen = InterfaceObservation.makeForTests(
+            elements: [
+                (otherElement, otherId),
+                (selectedElement, selectedId),
+            ],
+            objects: [
+                selectedId: selectedTextField,
+                otherId: otherTextField,
+            ]
+        )
+        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = reorderedScreen
+
+        let result = await actionTask.value
+
+        XCTAssertTrue(result.success, result.message ?? "type_text failed")
+        XCTAssertEqual(result.resolvedElementId, selectedId)
+        XCTAssertEqual(selectedTextField.activationCount, 1)
+        XCTAssertEqual(otherTextField.activationCount, 0)
+        XCTAssertEqual(selectedTextField.text, "hello")
     }
 
     func testExecuteTypeTextReportsFinalValueFromInteractionAfterState() async throws {

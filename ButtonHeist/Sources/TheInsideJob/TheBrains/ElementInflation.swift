@@ -22,6 +22,19 @@ internal final class ElementInflation {
         internal var revealKnownTarget: @MainActor (HeistId) async -> Navigation.ExploredScreen?
     }
 
+    internal struct CommittedElementTarget {
+        private let sourceTarget: AccessibilityTarget
+        private let resolvedHeistId: HeistId
+
+        internal init(_ inflatedTarget: InflatedElementTarget) {
+            sourceTarget = inflatedTarget.target
+            resolvedHeistId = inflatedTarget.treeElement.heistId
+        }
+
+        internal var target: AccessibilityTarget { sourceTarget }
+        internal var heistId: HeistId { resolvedHeistId }
+    }
+
     internal let stash: TheStash
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
@@ -70,7 +83,8 @@ internal final class ElementInflation {
         method: ActionMethod,
         deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        initialState: State = .resolving
     ) async -> ElementInflationResult {
         let resolvedTarget: AccessibilityTarget
         do {
@@ -78,7 +92,7 @@ internal final class ElementInflation {
         } catch {
             return .failed(.targetResolution(error))
         }
-        var state: State = .resolving
+        var state = initialState
 
         while true {
             switch state {
@@ -144,13 +158,31 @@ internal final class ElementInflation {
     }
 
     internal func inflateAfterActivationRefresh(
-        for target: AccessibilityTarget
+        for target: CommittedElementTarget
     ) async -> ElementInflationResult {
         refreshLiveCaptureForActivation()
-        return await inflate(
-            for: target,
+        guard !Task.isCancelled else {
+            return .failed(.cancelled("element inflation was cancelled before activation refresh"))
+        }
+        guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
+            return .failed(.staleRefresh(
+                "committed target \(target.heistId) disappeared before activation refresh",
+                failureKind: .targetUnavailable
+            ))
+        }
+        let initialState: State = stash.liveContains(heistId: target.heistId)
+            ? .refreshing(target: target.target, treeElement: treeElement, didReveal: false)
+            : .revealing(treeElement: treeElement)
+        return await inflateBeforeDeadline(
+            for: target.target,
             method: .activate,
-            deallocatedBoundary: "activation refresh"
+            deallocatedBoundary: "activation refresh",
+            activationPointPolicy: .requireOnscreen,
+            deadline: SemanticObservationDeadline(
+                start: CFAbsoluteTimeGetCurrent(),
+                timeoutSeconds: Self.operationTimeout
+            ),
+            initialState: initialState
         )
     }
 
@@ -193,6 +225,12 @@ internal final class ElementInflation {
 
     private func refreshLiveCaptureForActivation() {
         stash.refreshLiveCapture()
+    }
+}
+
+extension ElementInflation.InflatedElementTarget {
+    internal var committedTarget: ElementInflation.CommittedElementTarget {
+        ElementInflation.CommittedElementTarget(self)
     }
 }
 

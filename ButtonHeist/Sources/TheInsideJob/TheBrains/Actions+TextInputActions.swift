@@ -185,11 +185,11 @@ extension Actions {
             return .focused(focusedTextInput(from: inflatedTarget))
         }
 
-        return await activateTextInputTarget(inflatedTarget.target)
+        return await activateTextInputTarget(inflatedTarget.committedTarget)
     }
 
     private func activateTextInputTarget(
-        _ target: AccessibilityTarget
+        _ target: ElementInflation.CommittedElementTarget
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateAfterActivationRefresh(for: target) {

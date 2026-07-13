@@ -102,7 +102,7 @@ extension Actions {
                 accessibilityActivate: accessibilityActions.activate,
                 refreshAndResolve: {
                     switch await self.navigation.elementInflation.inflateAfterActivationRefresh(
-                        for: context.target
+                        for: context.committedTarget
                     ) {
                     case .inflated(let inflatedTarget):
                         return .resolved(
