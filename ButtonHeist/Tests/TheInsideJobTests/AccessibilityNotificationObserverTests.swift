@@ -418,7 +418,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
     }
 
-    func testHeistScopeKeepsActionClaimsAppendOnlyUntilScopeEnds() {
+    func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() {
         let bus = AccessibilityNotificationBus()
         bus.record(code: 1001, notificationData: .none, associatedElement: .none)
 
@@ -437,12 +437,15 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
         XCTAssertEqual(
             bus.pendingEvents().map(\.kind),
-            [.elementChanged(.value), .announcement],
+            [.elementChanged(.layout), .elementChanged(.value), .announcement],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 
         heist.cancel()
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [])
+        XCTAssertEqual(
+            bus.pendingEvents().map(\.kind),
+            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+        )
     }
 
     private func waitForNotification(

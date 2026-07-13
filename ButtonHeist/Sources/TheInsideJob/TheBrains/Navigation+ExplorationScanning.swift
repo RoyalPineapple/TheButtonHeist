@@ -370,7 +370,6 @@ extension Navigation {
         savedVisualOrigin: CGPoint,
         exploration: inout SemanticExploration
     ) async {
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)

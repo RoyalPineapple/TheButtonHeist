@@ -676,7 +676,8 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollOrder,
             [ObjectIdentifier(outerScrollView), ObjectIdentifier(innerScrollView)]
         )
-        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(outerScrollView.contentOffset, .zero)
+        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
         XCTAssertEqual(innerScrollView.setContentOffsetAnimations, [false])
         XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
         XCTAssertTrue(innerScrollView.window === targetWindow)
@@ -726,7 +727,8 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected the separate-window decoy to fail closed, got \(result)")
         }
-        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(outerScrollView.contentOffset, .zero)
+        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
         XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
         XCTAssertTrue(outerScrollView.window === targetWindow)
         XCTAssertTrue(decoyScrollView.window === decoyWindow)
@@ -757,7 +759,8 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .revealed = result else {
             return XCTFail("Expected duplicate current live identity to preserve the scroll alias, got \(result)")
         }
-        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(outerScrollView.contentOffset, .zero)
+        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
     }
 
     func testNestedSemanticRevealRejectsMultipleDirectChildren() async {

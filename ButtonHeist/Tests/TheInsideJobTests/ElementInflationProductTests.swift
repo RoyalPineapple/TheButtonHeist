@@ -554,7 +554,7 @@ final class ElementInflationProductTests: XCTestCase {
         ])
     }
 
-    func testMissingRevealPathFailsAsInflationDiagnostic() async throws {
+    func testMissingRevealPathIsBoundedByInflationDeadline() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "live_decoy_unrevealable_submit",
             label: "Live Decoy"
@@ -575,8 +575,8 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
-            "element inflation failed [noRevealPath]",
-            "no live scrollable ancestor",
+            "element inflation failed [timedOut]",
+            "action deadline",
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
         XCTAssertFalse(result.message?.contains("get_interface") ?? false)
