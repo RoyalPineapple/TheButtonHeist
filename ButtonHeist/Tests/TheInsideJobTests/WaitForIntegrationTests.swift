@@ -111,11 +111,13 @@ final class WaitForIntegrationTests: XCTestCase {
 
     private func changedWait(
         expectation: AccessibilityPredicate<RootContext>,
-        timeout: Double? = nil
+        timeout: Double? = nil,
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> ActionResult {
         await insideJob.brains.executeChangedWait(
             timeout: timeout ?? 5.0,
-            expectation: expectation
+            expectation: expectation,
+            onReadyToPoll: onReadyToPoll
         )
     }
 
@@ -131,27 +133,6 @@ final class WaitForIntegrationTests: XCTestCase {
     private func mutateVisibleHierarchy(_ body: () -> Void) {
         body()
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
-    }
-
-    private func waitForSemanticObservationWaiter(
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let stream = insideJob.brains.stash.semanticObservationStream
-        let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while stream.settledWaiterCount == 0,
-              stream.cycleWaiterCount == 0,
-              CFAbsoluteTimeGetCurrent() < deadline {
-            await Task.yield()
-            guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
-        }
-        XCTAssertEqual(
-            stream.settledWaiterCount + stream.cycleWaiterCount,
-            1,
-            "Wait must own exactly one next-event waiter",
-            file: file,
-            line: line
-        )
     }
 
     // MARK: - Passive Observation
@@ -434,16 +415,15 @@ final class WaitForIntegrationTests: XCTestCase {
 
         var delayedLabel: UILabel?
         defer { delayedLabel?.removeFromSuperview() }
+        let readyToPoll = expectation(description: "Wait committed its initial observation")
         let waitTask = Task { @MainActor in
             await self.changedWait(
                 expectation: .exists(literalTarget(ElementPredicate(label: "WaitForChange-Delayed"))),
-                timeout: 5.0
+                timeout: 5.0,
+                onReadyToPoll: { _ in readyToPoll.fulfill() }
             )
         }
-        // Commit the wait-owned baseline before publishing the satisfying event.
-        await waitForSemanticObservationWaiter()
-        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
-        XCTAssertTrue(didObserveWaitBaseline)
+        await fulfillment(of: [readyToPoll], timeout: 5.0)
         delayedLabel = addLabel("WaitForChange-Delayed")
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         let result = await waitTask.value
@@ -467,16 +447,15 @@ final class WaitForIntegrationTests: XCTestCase {
             "Baseline must contain the element before waiting for absence"
         )
 
+        let readyToPoll = expectation(description: "Wait committed its initial observation")
         let waitTask = Task { @MainActor in
             await self.changedWait(
                 expectation: .missing(literalTarget(ElementPredicate(label: "WaitForChange-Removed"))),
-                timeout: 5.0
+                timeout: 5.0,
+                onReadyToPoll: { _ in readyToPoll.fulfill() }
             )
         }
-        // Mutate only after the wait is suspended beyond the committed baseline.
-        await waitForSemanticObservationWaiter()
-        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
-        XCTAssertTrue(didObserveWaitBaseline)
+        await fulfillment(of: [readyToPoll], timeout: 5.0)
         mutateVisibleHierarchy {
             label.removeFromSuperview()
         }
@@ -567,21 +546,35 @@ final class WaitForIntegrationTests: XCTestCase {
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        insideJob.brains.stash.installScreenForTesting(baseline)
+        let stream = insideJob.brains.stash.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
+        let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
         XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
-        let waitTask = Task { @MainActor in
-            await self.changedWait(
-                expectation: .changed(.elements()),
-                timeout: 5.0
-            )
-        }
-        await waitForSemanticObservationWaiter()
-
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
-        insideJob.brains.stash.installScreenForTesting(updatedVisible)
-
-        let result = await waitTask.value
+        let updatedEvent = stream.commitVisibleObservationForTesting(updatedVisible)
+        let wait = PredicateWait(
+            observeEvent: { _, sequence, _ in
+                XCTAssertEqual(sequence, baselineEvent.sequence)
+                return updatedEvent
+            },
+            latestEvent: { updatedEvent },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                self.insideJob.brains.postActionObservation.semanticObservation(from: event)
+            },
+            buildObservationWindow: { baseline, event in
+                stream.observationWindow(from: baseline, through: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
+        )
+        let result = await wait.wait(
+            for: WaitStep(predicate: .changed(.elements()), timeout: 5.0),
+            initialTrace: AccessibilityTrace(capture: baselineCapture.capture),
+            after: baselineEvent.sequence
+        ).actionResult
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(

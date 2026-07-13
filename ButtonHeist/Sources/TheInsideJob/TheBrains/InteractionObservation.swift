@@ -161,14 +161,16 @@ final class InteractionObservation {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
             observationPlan: observationPlan,
-            announcementCursorStrategy: announcementCursorStrategy
+            announcementCursorStrategy: announcementCursorStrategy,
+            onReadyToPoll: onReadyToPoll
         )
     }
 
@@ -177,14 +179,16 @@ final class InteractionObservation {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             after: sequence,
             observationPlan: observationPlan,
-            announcementCursorStrategy: announcementCursorStrategy
+            announcementCursorStrategy: announcementCursorStrategy,
+            onReadyToPoll: onReadyToPoll
         )
     }
 

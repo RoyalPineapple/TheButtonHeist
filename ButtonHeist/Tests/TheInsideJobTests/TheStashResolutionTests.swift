@@ -728,6 +728,23 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(served)
     }
 
+    func testDiscoveryObservationHonorsExplicitCursorWhenNextEventAlreadyExists() async throws {
+        let baseline = bagman.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Baseline"), "baseline")])
+        )
+        let current = bagman.semanticObservationStream.commitDiscoveryObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(element(label: "Current"), "current")])
+        )
+
+        let served = await bagman.semanticObservationStream.settledEvent(
+            scope: .discovery,
+            after: baseline.sequence,
+            timeout: 0.1
+        )
+
+        XCTAssertEqual(try XCTUnwrap(served).sequence, current.sequence)
+    }
+
     func testNotificationOverflowIsExplicitInCommittedTrace() async throws {
         let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
         let action = bagman.accessibilityNotifications.beginActionWindow()

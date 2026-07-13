@@ -648,15 +648,17 @@ internal final class SemanticObservationStream {
         for scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
     ) -> SettledObservationSequence? {
+        if let sequence {
+            return sequence
+        }
         let currentSequence = latestEvent?.sequence
         if scope == .discovery {
-            let baseline = sequence ?? currentSequence
-            return max(baseline ?? 0, currentSequence ?? 0)
-        }
-        if sequence == nil, !isActive {
             return currentSequence
         }
-        return sequence
+        if !isActive {
+            return currentSequence
+        }
+        return nil
     }
 
     private func cleanEvent(

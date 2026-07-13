@@ -1326,6 +1326,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let predicate = AccessibilityPredicate<RootContext>.exists(literalTarget(ElementPredicate(label: "Ready")))
         var observedScopes: [SemanticObservationScope] = []
         var sequence: SettledObservationSequence = 0
+        var readySequence: SettledObservationSequence?
         let wait = PredicateWait(
             observeEvent: { scope, _, _ in
                 observedScopes.append(scope)
@@ -1347,18 +1348,21 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: WaitStep(predicate: predicate, timeout: 1)
+            for: WaitStep(predicate: predicate, timeout: 1),
+            onReadyToPoll: { readySequence = $0 }
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(Array(observedScopes.prefix(2)), [.discovery, .visible])
+        XCTAssertEqual(readySequence, 1)
     }
 
     func testPredicateWaitReturnsFromInitialDiscoveryMatch() async {
         let predicate = AccessibilityPredicate<RootContext>.exists(literalTarget(ElementPredicate(label: "Ready")))
         var observedScopes: [SemanticObservationScope] = []
         var sequence: SettledObservationSequence = 0
+        var readySequence: SettledObservationSequence?
         let wait = PredicateWait(
             observeEvent: { scope, _, _ in
                 observedScopes.append(scope)
@@ -1380,12 +1384,14 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: WaitStep(predicate: predicate, timeout: 1)
+            for: WaitStep(predicate: predicate, timeout: 1),
+            onReadyToPoll: { readySequence = $0 }
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(observedScopes, [.discovery])
+        XCTAssertNil(readySequence)
     }
 
     func testPredicateWaitAcceptsSatisfiedChangeFromInitialTraceBeforeObserving() async {
@@ -2056,6 +2062,42 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(final.reduction.changeBaseline?.cursor.sequence, baselineEvent.sequence)
         XCTAssertEqual(final.reduction.observationWindow?.baseline.cursor.sequence, baselineEvent.sequence)
         XCTAssertEqual(final.reduction.observationWindow?.current.cursor.sequence, finalEvent.sequence)
+    }
+
+    func testPredicateObservationStreamPreservesCurrentStateWaitWindow() throws {
+        let predicate: AccessibilityPredicate<RootContext> = .missing(
+            literalTarget(ElementPredicate(label: "Removed"))
+        )
+        let baselineEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [
+                ("Anchor", .staticText, "anchor"),
+                ("Removed", .staticText, "removed"),
+            ])
+        )
+        let finalEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Anchor", .staticText, "anchor")])
+        )
+
+        var stream = PredicateObservationStreamState()
+        let seeded = stream.reducing(
+            brains.postActionObservation.semanticObservation(from: baselineEvent),
+            predicate: predicate,
+            baselineSeed: .currentObservation
+        )
+        stream = seeded.state
+        let final = stream.reducing(
+            brains.postActionObservation.semanticObservation(from: finalEvent),
+            predicate: predicate,
+            baselineSeed: .preserve
+        )
+
+        XCTAssertTrue(final.reduction.expectation.met)
+        XCTAssertNil(final.reduction.changeBaseline)
+        XCTAssertEqual(final.reduction.observationWindow?.baseline.cursor.sequence, baselineEvent.sequence)
+        XCTAssertEqual(final.reduction.observationWindow?.current.cursor.sequence, finalEvent.sequence)
+        XCTAssertTrue(final.reduction.trace?.changeFacts.contains {
+            if case .elementsChanged = $0 { true } else { false }
+        } == true)
     }
 
     func testWaitObservationPlanUsesDiscoveryForElementAndContainerPredicates() {

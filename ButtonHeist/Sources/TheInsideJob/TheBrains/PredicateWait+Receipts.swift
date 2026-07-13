@@ -32,10 +32,9 @@ extension PredicateWait {
                 pollWhenTimeoutZero: false,
                 discoveryBootstrap: .afterInitialDiscoveryAttempt,
                 evaluate: { observation in
-                    let baselineSeed: PredicateObservationBaselineSeed =
-                        step.predicate.requiresChangeBaseline && stream.changeBaseline == nil
-                            ? .previousObservationIfAvailable
-                            : .preserve
+                    let baselineSeed: PredicateObservationBaselineSeed = stream.observationBaseline == nil
+                        ? .previousObservationIfAvailable
+                        : .preserve
                     let reduced = reduceObservation(
                         observation,
                         predicate: step.predicate,
