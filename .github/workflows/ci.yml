@@ -242,7 +242,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ios-tests:
+  ios-test-lanes:
     name: ios-tests (${{ matrix.lane }})
     runs-on: macos-15
     timeout-minutes: 40
@@ -425,6 +425,17 @@ jobs:
             append_duration "Build ${{ matrix.scheme }}" "${IOS_TEST_BUILD_START:-}" "${IOS_TEST_BUILD_END:-}"
             append_duration "Run ${{ matrix.scheme }}" "${IOS_TEST_RUN_START:-}" "${IOS_TEST_RUN_END:-}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  ios-tests:
+    name: ios-tests
+    if: always()
+    needs: ios-test-lanes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every hosted iOS lane
+        env:
+          IOS_TEST_LANES_RESULT: ${{ needs.ios-test-lanes.result }}
+        run: test "$IOS_TEST_LANES_RESULT" = success
 
   ios-demo-gates:
     runs-on: macos-15
