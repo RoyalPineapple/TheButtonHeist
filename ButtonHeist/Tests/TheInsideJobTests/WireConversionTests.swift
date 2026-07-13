@@ -695,6 +695,52 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(selectedProjection.label, "zymurgy")
     }
 
+    func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() {
+        let visible = makeElement(label: "Visible", traits: [.staticText])
+        let offscreen = AccessibilityElement.make(
+            label: "Offscreen",
+            traits: .staticText,
+            visibility: .offscreen
+        )
+        let container = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let screen = InterfaceObservation.makeForTests(
+            elements: [
+                "visible": InterfaceTree.Element(
+                    heistId: "visible",
+                    path: TreePath([0, 0]),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
+                    element: visible
+                ),
+                "offscreen": InterfaceTree.Element(
+                    heistId: "offscreen",
+                    path: TreePath([0, 1]),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
+                    element: offscreen
+                ),
+            ],
+            hierarchy: [
+                .container(container, children: [
+                    .element(visible, traversalIndex: 0),
+                    .element(offscreen, traversalIndex: 1),
+                ]),
+            ],
+            heistIdsByPath: [
+                TreePath([0, 0]): "visible",
+                TreePath([0, 1]): "offscreen",
+            ],
+            firstResponderHeistId: nil
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+
+        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Visible", "Offscreen"])
+        XCTAssertEqual(interface.projectedElements.filter { $0.label == "Offscreen" }.count, 1)
+    }
+
     func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {
         let outer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),

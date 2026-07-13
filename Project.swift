@@ -418,5 +418,20 @@ let project = Project(
         hostedTestScheme(name: "DogfoodRuntimeContractTests"),
         hostedTestScheme(name: "AdversarialMutationTests"),
         hostedTestScheme(name: "AdversarialNavigationTests"),
+        .scheme(
+            name: "HostedBehaviorTests",
+            buildAction: .buildAction(targets: [
+                .target("DogfoodFeatureFlowTests"),
+                .target("DogfoodRuntimeContractTests"),
+                .target("AdversarialMutationTests"),
+                .target("AdversarialNavigationTests"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("DogfoodFeatureFlowTests")),
+                .testableTarget(target: .target("DogfoodRuntimeContractTests")),
+                .testableTarget(target: .target("AdversarialMutationTests")),
+                .testableTarget(target: .target("AdversarialNavigationTests")),
+            ])
+        ),
     ]
 )

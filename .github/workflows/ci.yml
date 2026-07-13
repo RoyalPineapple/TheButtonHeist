@@ -253,17 +253,8 @@ jobs:
           - lane: core
             scheme: TheInsideJobTests
             device: iPhone 16 Pro
-          - lane: dogfood-feature
-            scheme: DogfoodFeatureFlowTests
-            device: iPhone 16 Pro
-          - lane: dogfood-runtime
-            scheme: DogfoodRuntimeContractTests
-            device: iPhone 16 Pro
-          - lane: adversarial-mutation
-            scheme: AdversarialMutationTests
-            device: iPhone 16 Pro
-          - lane: adversarial-navigation
-            scheme: AdversarialNavigationTests
+          - lane: hosted-behavior
+            scheme: HostedBehaviorTests
             device: iPhone 16 Pro
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-${{ matrix.lane }}
