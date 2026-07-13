@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @Environment(AppSettings.self) private var settings
@@ -133,6 +134,10 @@ struct RootView: View {
             .navigationDestination(item: $adversarialRoute) { route in
                 AdversarialScenarioView(scenario: route.scenario)
                     .id(route.id)
+                    .task {
+                        await Task.yield()
+                        AdversarialLabRoute.markReady(route.id)
+                    }
             }
         }
         .onOpenURL(perform: openDemoRoute)
@@ -142,14 +147,68 @@ struct RootView: View {
         guard url.scheme == "buttonheist-demo",
               url.host == "adversarial",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let title = components.queryItems?.first(where: { $0.name == "scenario" })?.value,
-              let scenario = AdversarialScenario.allCases.first(where: { $0.title == title })
+              let rawScenario = components.queryItems?.first(where: { $0.name == "scenario" })?.value,
+              let scenario = AdversarialScenario(rawValue: rawScenario),
+              let rawRouteID = components.queryItems?.first(where: { $0.name == "route_id" })?.value,
+              let routeID = UUID(uuidString: rawRouteID)
         else { return }
-        adversarialRoute = AdversarialRoute(scenario: scenario)
+        AdversarialLabRoute.begin()
+        adversarialRoute = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(10))
+            adversarialRoute = AdversarialRoute(id: routeID, scenario: scenario)
+        }
     }
 }
 
 private struct AdversarialRoute: Identifiable, Hashable {
-    let id = UUID()
+    let id: UUID
     let scenario: AdversarialScenario
+}
+
+@MainActor
+internal final class AdversarialLabRoute {
+    private static var readyRouteID: UUID?
+
+    private init() {}
+
+    internal static func open(_ scenario: AdversarialScenario) async throws {
+        let routeID = UUID()
+        var components = URLComponents()
+        components.scheme = "buttonheist-demo"
+        components.host = "adversarial"
+        components.queryItems = [
+            URLQueryItem(name: "scenario", value: scenario.rawValue),
+            URLQueryItem(name: "route_id", value: routeID.uuidString),
+        ]
+        guard let url = components.url else {
+            throw AdversarialLabRouteError.invalidURL
+        }
+        guard await UIApplication.shared.open(url) else {
+            throw AdversarialLabRouteError.rejectedByApplication
+        }
+
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while readyRouteID != routeID {
+            guard clock.now < deadline else {
+                throw AdversarialLabRouteError.timedOut(scenario)
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    fileprivate static func begin() {
+        readyRouteID = nil
+    }
+
+    fileprivate static func markReady(_ routeID: UUID) {
+        readyRouteID = routeID
+    }
+}
+
+internal enum AdversarialLabRouteError: Error {
+    case invalidURL
+    case rejectedByApplication
+    case timedOut(AdversarialScenario)
 }

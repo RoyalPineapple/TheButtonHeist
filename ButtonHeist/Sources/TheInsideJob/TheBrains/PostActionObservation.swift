@@ -395,10 +395,11 @@ final class PostActionObservation {
         accessibilityNotifications: [AccessibilityNotificationEvidence],
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
-        let classification = transitionEvidence?.screenClassification ?? ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: final.screenSnapshot,
-            notifications: accessibilityNotifications.map(\.kind)
+        let classification = postActionScreenClassification(
+            before: before,
+            final: final,
+            accessibilityNotifications: accessibilityNotifications,
+            transitionEvidence: transitionEvidence
         )
         return makeAccessibilityTrace(
             afterInterface: final.interface,
@@ -413,6 +414,28 @@ final class PostActionObservation {
             accessibilityNotifications: accessibilityNotifications,
             accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
         )
+    }
+
+    private func postActionScreenClassification(
+        before: BeforeState,
+        final: BeforeState,
+        accessibilityNotifications: [AccessibilityNotificationEvidence],
+        transitionEvidence: AccessibilityTrace.Transition?
+    ) -> ScreenClassifier.Classification {
+        let baselineClassification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: final.screenSnapshot,
+            notifications: accessibilityNotifications.map(\.kind)
+        )
+        if let transitionEvidence {
+            switch transitionEvidence.screenClassification {
+            case .screenChangedNotification, .inferredScreenChange:
+                return transitionEvidence.screenClassification
+            case .sameGeneration:
+                break
+            }
+        }
+        return baselineClassification
     }
 
     static func remapAccessibilityNotifications(

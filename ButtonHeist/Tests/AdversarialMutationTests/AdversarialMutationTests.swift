@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 
+@testable import BHDemo
 import ButtonHeistHostedTestSupport
 import ButtonHeistTesting
 import ThePlans
@@ -13,7 +14,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testAsyncRevealNotificationAndSilentVariantsPass() async throws {
         let destination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
         let notificationCommand = HeistActionCommand.activate(.label("Reveal with notification"))
-        try DemoNavigation.openAdversarialScenario("Async Reveal")
+        try await AdversarialLabRoute.open(.asyncReveal)
         let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
             Activate(.label("Reveal with notification"))
                 .expect(destination, timeout: .seconds(3))
@@ -29,7 +30,7 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertTrue(notificationReceipt.receiptNotificationKinds.contains(.screenChanged))
 
         let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
-        try DemoNavigation.openAdversarialScenario("Async Reveal")
+        try await AdversarialLabRoute.open(.asyncReveal)
         let silent = try await runHeist("AdversarialAsyncRevealSilentPass") {
             Activate(.label("Reveal silently"))
                 .expect(destination, timeout: .seconds(3))
@@ -49,7 +50,7 @@ final class AdversarialMutationTests: XCTestCase {
         let visibleDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
         let missingDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 9999"))
         let revealCommand = HeistActionCommand.activate(.label("Reveal silently"))
-        try DemoNavigation.openAdversarialScenario("Async Reveal")
+        try await AdversarialLabRoute.open(.asyncReveal)
         let failure = try await expectHeistFailure("AdversarialAsyncRevealWrongDestinationFails") {
             Activate(.label("Reveal silently"))
                 .expect(visibleDestination, timeout: .seconds(3))
@@ -72,10 +73,7 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(waitEvidence.expectation.met, false)
     }
 
-    func testDynamicCellsKeepSemanticIdentityAfterChurn() throws {
-        let runtime = TheInsideJob.shared
-        defer { assertInProcessRuntimeStopped(runtime) }
-
+    func testDynamicCellsKeepSemanticIdentityAfterChurn() async throws {
         let noodles = AccessibilityTarget.element(
             .label("Nebula Noodles"),
             .customContent(.init(label: "SKU", value: "SKU-72")),
@@ -87,8 +85,8 @@ final class AdversarialMutationTests: XCTestCase {
             .actions([.custom("Add to Cart")])
         )
 
-        try DemoNavigation.openAdversarialScenario("Dynamic Cells")
-        let heist = try XCTUnwrap(runHeistSync("AdversarialDynamicCellsPass") {
+        try await AdversarialLabRoute.open(.dynamicCells)
+        let heist = try await runHeist("AdversarialDynamicCellsPass") {
             Activate(.label("Churn menu"))
                 .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
             CustomAction("Add to Cart", on: noodles)
@@ -101,7 +99,7 @@ final class AdversarialMutationTests: XCTestCase {
                     .customContent(.init(label: "Line Total", value: "$18.00")),
                     .actions([.custom("Remove from Cart")])
                 )), timeout: .seconds(6))
-        })
+        }
 
         XCTAssertNil(heist.result.firstFailedStep)
         let receipt = try actionEvidence(
@@ -133,7 +131,7 @@ final class AdversarialMutationTests: XCTestCase {
             .actions([.custom("Add to Cart")])
         )
 
-        try DemoNavigation.openAdversarialScenario("Dynamic Cells")
+        try await AdversarialLabRoute.open(.dynamicCells)
         let failure = try await expectHeistFailure("AdversarialDynamicCellsStaleTargetFails") {
             Activate(.label("Churn menu"))
                 .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
@@ -153,7 +151,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testTextFieldFallbackTypesThroughTapActivation() async throws {
         let field = AccessibilityTarget.element(.label("Fallback field"), traits: [.textEntry])
 
-        try DemoNavigation.openAdversarialScenario("Text Field Fallback")
+        try await AdversarialLabRoute.open(.textFieldFallback)
         let heist = try await runHeist("AdversarialTextFieldFallbackPass") {
             TypeText("fallback typed", into: field)
                 .expect(.exists(.element(
@@ -184,7 +182,7 @@ final class AdversarialMutationTests: XCTestCase {
     }
 
     func testTextFieldFallbackTargetlessTypingFailsBeforeFocus() async throws {
-        try DemoNavigation.openAdversarialScenario("Text Field Fallback")
+        try await AdversarialLabRoute.open(.textFieldFallback)
         let failure = try await expectHeistFailure("AdversarialTextFieldFallbackTargetlessFails") {
             TypeText("orphan typed")
         }
@@ -208,7 +206,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
         let beforeValue = "Generation 2, actions 0, generation 1 actions 0"
         let finalValue = "Generation 2, actions 1, generation 1 actions 0"
-        try DemoNavigation.openAdversarialScenario("Stale Live Object")
+        try await AdversarialLabRoute.open(.staleLiveObject)
         let heist = try await runHeist("AdversarialStaleLiveObjectPass") {
             Activate(.label("Submit Order"))
                 .expect(.exists(.element(
@@ -239,7 +237,7 @@ final class AdversarialMutationTests: XCTestCase {
     func testStaleLiveObjectDuplicateCurrentTargetsFailAmbiguous() async throws {
         let primaryValue = "Generation 2, actions 0, generation 1 actions 0"
         let duplicateValue = "Generation 3, actions 0, generation 1 actions 0"
-        try DemoNavigation.openAdversarialScenario("Stale Live Object")
+        try await AdversarialLabRoute.open(.staleLiveObject)
         let failure = try await expectHeistFailure("AdversarialStaleLiveObjectAmbiguousFails") {
             Activate(.label("Show Duplicate Target"))
                 .expect(.exists(.element(
@@ -292,21 +290,6 @@ final class AdversarialMutationTests: XCTestCase {
         )
     }
 
-    private func assertInProcessRuntimeStopped(
-        _ runtime: TheInsideJob,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let observationStream = runtime.brains.stash.semanticObservationStream
-        XCTAssertFalse(runtime.isRunning, file: file, line: line)
-        XCTAssertNil(runtime.listeningPort, file: file, line: line)
-        XCTAssertFalse(runtime.tripwire.isPulseRunning, file: file, line: line)
-        XCTAssertFalse(runtime.brains.semanticObservationIsActive, file: file, line: line)
-        XCTAssertFalse(observationStream.isActive, file: file, line: line)
-        XCTAssertEqual(observationStream.settledWaiterCount, 0, file: file, line: line)
-        XCTAssertEqual(observationStream.cycleWaiterCount, 0, file: file, line: line)
-        XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
-    }
 }
 
 private struct ExpectedFailureDidNotFail: Error {}

@@ -104,6 +104,26 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertEqual(merged.viewportCapture.element(for: "button_second"), second)
     }
 
+    func testViewportUpdateRetainsElementsThatMoveOffscreenInFullTreeCapture() throws {
+        let visibleTarget = makeElement(label: "Target", traits: .button)
+        let anchor = makeElement(label: "Anchor", traits: .staticText)
+        let initial = InterfaceObservation.makeForTests(elements: [
+            (visibleTarget, "target"),
+            (anchor, "anchor"),
+        ])
+        let refreshed = InterfaceObservation.makeForTests(elements: [
+            (.make(label: "Target", traits: .button, visibility: .offscreen), "target"),
+            (anchor, "anchor"),
+        ])
+
+        let updated = initial.tree.updatingViewport(with: refreshed)
+
+        XCTAssertEqual(updated.viewportElementIDs, ["anchor"])
+        XCTAssertEqual(updated.elementIDs, ["anchor", "target"])
+        XCTAssertEqual(updated.findElement(heistId: "target")?.element.visibility, .offscreen)
+        XCTAssertNoThrow(try InterfaceObservation.build(tree: updated))
+    }
+
     func testRemovingElementsRemapsLiveSemanticAndAnnotationPaths() {
         let removed = makeElement(
             label: "Old",

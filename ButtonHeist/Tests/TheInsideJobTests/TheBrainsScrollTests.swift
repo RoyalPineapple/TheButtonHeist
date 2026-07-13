@@ -1555,7 +1555,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.element.label, "Raw Replacement")
         XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Gone Target")
         if let committed = brains.stash.interfaceElement(heistId: targetId) {
-            XCTAssertNil(brains.stash.liveElementAliasing(committed))
+            XCTAssertNil(brains.stash.visibleLiveElementAliasing(committed))
         } else {
             XCTFail("Expected committed semantic target to remain available")
         }

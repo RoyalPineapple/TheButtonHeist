@@ -88,8 +88,8 @@ private struct FalseActivateTextField: UIViewRepresentable {
 }
 
 private final class RefusingActivationTextField: UITextField {
-    var onActivationAttempt: (() -> Void)?
-    var onFocusAcquired: (() -> Void)?
+    var onActivationAttempt: (@MainActor () -> Void)?
+    var onFocusAcquired: (@MainActor () -> Void)?
 
     override func accessibilityActivate() -> Bool {
         onActivationAttempt?()

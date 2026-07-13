@@ -251,6 +251,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 stream: &stream,
                 state: state,
                 baselineSeed: .supplied(suppliedBaseline),
+                suppliedTrace: initialTrace,
                 timedOutWhenUnmatched: timeout == 0
             )
         }
@@ -287,13 +288,15 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         stream: inout PredicateObservationStreamState,
         state: State,
         baselineSeed: PredicateObservationBaselineSeed,
+        suppliedTrace: AccessibilityTrace? = nil,
         timedOutWhenUnmatched: Bool
     ) -> Decision {
         let reduced = reduceObservation(
             entry,
             predicate: step.predicate,
             baselineSeed: baselineSeed,
-            stream: stream
+            stream: stream,
+            suppliedTrace: suppliedTrace
         )
         stream = reduced.state
         return reducer.decision(
@@ -349,12 +352,14 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         _ observation: HeistSemanticObservation,
         predicate: AccessibilityPredicate<RootContext>,
         baselineSeed: PredicateObservationBaselineSeed,
-        stream: PredicateObservationStreamState
+        stream: PredicateObservationStreamState,
+        suppliedTrace: AccessibilityTrace? = nil
     ) -> PredicateObservationStreamReduction {
         let seeded = stream.reducing(
             observation,
             predicate: predicate,
-            baselineSeed: baselineSeed
+            baselineSeed: baselineSeed,
+            preserving: suppliedTrace
         )
         guard let baseline = seeded.state.changeBaseline else { return seeded }
         let window = buildObservationWindow(
@@ -365,7 +370,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             observation,
             predicate: predicate,
             baselineSeed: .supplied(baseline),
-            observationWindow: window
+            observationWindow: window,
+            preserving: suppliedTrace
         )
     }
 

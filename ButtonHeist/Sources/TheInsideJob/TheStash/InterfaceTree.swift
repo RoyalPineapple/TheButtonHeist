@@ -153,7 +153,7 @@ struct InterfaceTree: Sendable, Equatable {
             return observed
         }
 
-        let disappearedIDs = viewportElementIDs.subtracting(observed.viewportElementIDs)
+        let disappearedIDs = viewportElementIDs.subtracting(observed.elementIDs)
         return InterfaceTree(
             elements: elements
                 .merging(observed.elements) { _, new in new }

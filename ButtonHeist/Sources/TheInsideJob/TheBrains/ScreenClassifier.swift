@@ -87,13 +87,28 @@ import AccessibilitySnapshotParser
     }
 
     static func snapshot(of tree: InterfaceTree) -> Snapshot {
-        Snapshot(
+        let hierarchy = classificationHierarchy(tree.viewportCapture.hierarchy)
+        return Snapshot(
             signature: signature(
-                hierarchy: tree.viewportCapture.hierarchy,
-                elements: tree.viewportCapture.hierarchy.sortedElements
+                hierarchy: hierarchy,
+                elements: hierarchy.sortedElements
             ),
             firstResponderHeistId: tree.firstResponderHeistId
         )
+    }
+
+    private static func classificationHierarchy(
+        _ hierarchy: [AccessibilityHierarchy]
+    ) -> [AccessibilityHierarchy] {
+        hierarchy.compactMap { node in
+            switch node {
+            case .element(let element, let traversalIndex):
+                guard element.visibility == .onscreen else { return nil }
+                return .element(element, traversalIndex: traversalIndex)
+            case .container(let container, let children):
+                return .container(container, children: classificationHierarchy(children))
+            }
+        }
     }
 
     static func snapshot(of stash: TheStash) -> Snapshot {

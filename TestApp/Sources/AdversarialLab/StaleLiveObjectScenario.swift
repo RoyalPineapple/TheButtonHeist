@@ -140,7 +140,7 @@ private final class StaleLiveObjectViewController: UIViewController, UIScrollVie
 }
 
 private final class ReplacingOnAccessibilityReadButton: UIButton {
-    var onAccessibilityValueRead: (() -> Void)?
+    var onAccessibilityValueRead: (@MainActor () -> Void)?
 
     override var accessibilityValue: String? {
         get {

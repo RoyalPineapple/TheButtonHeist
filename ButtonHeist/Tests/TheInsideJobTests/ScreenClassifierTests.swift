@@ -52,6 +52,22 @@ final class ScreenClassifierTests: XCTestCase {
         XCTAssertEqual(result, .inferredScreenChange(reason: .primaryHeaderChanged))
     }
 
+    func testFullTreeVisibilitySwapInfersScreenChangeFromOnscreenDestination() {
+        let before = screen(elements: [
+            element(label: "Home", traits: .header),
+            element(label: "Settings", traits: .header, visibility: .offscreen),
+        ])
+        let after = screen(elements: [
+            element(label: "Home", traits: .header, visibility: .offscreen),
+            element(label: "Settings", traits: .header),
+        ])
+
+        XCTAssertEqual(
+            classify(before: before, after: after),
+            .inferredScreenChange(reason: .primaryHeaderChanged)
+        )
+    }
+
     func testExplicitSummaryElementKeepsSameGeneration() {
         let before = screen(elements: [
             element(label: "Home Header", traits: .header),
@@ -389,7 +405,8 @@ final class ScreenClassifierTests: XCTestCase {
         value: String? = nil,
         identifier: String? = nil,
         traits: UIAccessibilityTraits,
-        shape: AccessibilityShape = .frame(.zero)
+        shape: AccessibilityShape = .frame(.zero),
+        visibility: AccessibilityVisibility = .onscreen
     ) -> AccessibilityElement {
         .make(
             label: label,
@@ -397,7 +414,8 @@ final class ScreenClassifierTests: XCTestCase {
             identifier: identifier,
             traits: traits,
             shape: shape,
-            respondsToUserInteraction: false
+            respondsToUserInteraction: false,
+            visibility: visibility
         )
     }
 }
