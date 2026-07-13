@@ -60,7 +60,12 @@ struct LiveCapture: Equatable {
     }
 
     var firstResponderHeistId: HeistId? {
-        snapshot.firstResponderHeistId
+        snapshot.firstResponderHeistId.flatMap { heistId in
+            guard let reference = dispatchReferences.elementRefs[heistId] else {
+                return heistId
+            }
+            return reference.isCapturedObjectAvailable ? heistId : nil
+        }
     }
 
     var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
@@ -189,7 +194,8 @@ struct LiveCapture: Equatable {
         let containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
         let scrollInventoriesByPath: [TreePath: ScrollInventory]
-        /// Durable first-responder identity. Live UIKit evidence remains in weak dispatch references.
+        /// Value-only first-responder evidence from this capture.
+        /// Live UIKit identity remains in weak dispatch references.
         let firstResponderHeistId: HeistId?
 
         init(
@@ -279,16 +285,16 @@ struct LiveCapture: Equatable {
 
     struct ScrollableViewRef: Equatable {
         weak var view: UIScrollView?
+        /// Viewport-local comparison evidence; never used as semantic identity.
+        private let capturedViewIdentifier: ObjectIdentifier?
+
+        init(view: UIScrollView?) {
+            self.view = view
+            capturedViewIdentifier = view.map(ObjectIdentifier.init)
+        }
 
         static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
-            switch (lhs.view, rhs.view) {
-            case (nil, nil):
-                return true
-            case let (left?, right?):
-                return left === right
-            default:
-                return false
-            }
+            lhs.capturedViewIdentifier == rhs.capturedViewIdentifier
         }
     }
 
@@ -297,17 +303,39 @@ struct LiveCapture: Equatable {
         weak var object: NSObject?
         /// Nearest live scroll view for coordinate conversion.
         weak var scrollView: UIScrollView?
+        /// Viewport-local comparison evidence; never used for semantic lookup.
+        private let capturedObjectIdentifier: ObjectIdentifier?
+        private let capturedScrollViewIdentifier: ObjectIdentifier?
+
+        fileprivate var isCapturedObjectAvailable: Bool {
+            capturedObjectIdentifier == object.map(ObjectIdentifier.init)
+        }
+
+        init(object: NSObject?, scrollView: UIScrollView?) {
+            self.object = object
+            self.scrollView = scrollView
+            capturedObjectIdentifier = object.map(ObjectIdentifier.init)
+            capturedScrollViewIdentifier = scrollView.map(ObjectIdentifier.init)
+        }
 
         static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
-            lhs.object === rhs.object && lhs.scrollView === rhs.scrollView
+            lhs.capturedObjectIdentifier == rhs.capturedObjectIdentifier
+                && lhs.capturedScrollViewIdentifier == rhs.capturedScrollViewIdentifier
         }
     }
 
     struct ContainerRef: Equatable {
         weak var object: NSObject?
+        /// Viewport-local comparison evidence; never used as semantic identity.
+        private let capturedObjectIdentifier: ObjectIdentifier?
+
+        init(object: NSObject?) {
+            self.object = object
+            capturedObjectIdentifier = object.map(ObjectIdentifier.init)
+        }
 
         static func == (lhs: ContainerRef, rhs: ContainerRef) -> Bool {
-            lhs.object === rhs.object
+            lhs.capturedObjectIdentifier == rhs.capturedObjectIdentifier
         }
     }
 
@@ -770,124 +798,6 @@ struct LiveCapture: Equatable {
 private extension TreePath {
     var liveCaptureDiagnosticDescription: String {
         "[\(indices.map(String.init).joined(separator: ", "))]"
-    }
-}
-
-private extension AccessibilityElement {
-    func matchesCapturedFacts(of other: AccessibilityElement) -> Bool {
-        description == other.description
-            && label == other.label
-            && value == other.value
-            && traits == other.traits
-            && identifier == other.identifier
-            && hint == other.hint
-            && userInputLabels == other.userInputLabels
-            && shape.matchesCapturedGeometry(of: other.shape)
-            && activationPoint.matchesCapturedGeometry(of: other.activationPoint)
-            && usesDefaultActivationPoint == other.usesDefaultActivationPoint
-            && customActions == other.customActions
-            && customContent == other.customContent
-            && customRotors.matchesCapturedFacts(of: other.customRotors)
-            && accessibilityLanguage == other.accessibilityLanguage
-            && respondsToUserInteraction == other.respondsToUserInteraction
-            && visibility == other.visibility
-    }
-}
-
-private extension Array where Element == AccessibilityElement.CustomRotor {
-    func matchesCapturedFacts(of other: Self) -> Bool {
-        count == other.count && zip(self, other).allSatisfy { lhs, rhs in
-            lhs.matchesCapturedFacts(of: rhs)
-        }
-    }
-}
-
-private extension AccessibilityElement.CustomRotor {
-    func matchesCapturedFacts(of other: Self) -> Bool {
-        name == other.name
-            && limit == other.limit
-            && resultMarkers.count == other.resultMarkers.count
-            && zip(resultMarkers, other.resultMarkers).allSatisfy { lhs, rhs in
-                lhs.matchesCapturedFacts(of: rhs)
-            }
-    }
-}
-
-private extension AccessibilityElement.CustomRotor.ResultMarker {
-    func matchesCapturedFacts(of other: Self) -> Bool {
-        guard elementDescription == other.elementDescription,
-              rangeDescription == other.rangeDescription else { return false }
-        switch (shape, other.shape) {
-        case (nil, nil):
-            return true
-        case let (.some(lhs), .some(rhs)):
-            return lhs.matchesCapturedGeometry(of: rhs)
-        case (.some, nil), (nil, .some):
-            return false
-        }
-    }
-}
-
-private extension AccessibilityShape {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        switch (self, other) {
-        case let (.frame(lhs), .frame(rhs)):
-            return lhs.matchesCapturedGeometry(of: rhs)
-        case let (.path(lhs), .path(rhs)):
-            return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { lhs, rhs in
-                lhs.matchesCapturedGeometry(of: rhs)
-            }
-        case (.frame, .path), (.path, .frame):
-            return false
-        }
-    }
-}
-
-private extension AccessibilityPathElement {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        switch (self, other) {
-        case let (.move(lhs), .move(rhs)),
-             let (.line(lhs), .line(rhs)):
-            return lhs.matchesCapturedGeometry(of: rhs)
-        case let (.quadCurve(lhs, lhsControl), .quadCurve(rhs, rhsControl)):
-            return lhs.matchesCapturedGeometry(of: rhs)
-                && lhsControl.matchesCapturedGeometry(of: rhsControl)
-        case let (.curve(lhs, lhsControl1, lhsControl2), .curve(rhs, rhsControl1, rhsControl2)):
-            return lhs.matchesCapturedGeometry(of: rhs)
-                && lhsControl1.matchesCapturedGeometry(of: rhsControl1)
-                && lhsControl2.matchesCapturedGeometry(of: rhsControl2)
-        case (.closeSubpath, .closeSubpath):
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-private extension AccessibilityRect {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        origin.matchesCapturedGeometry(of: other.origin)
-            && size.matchesCapturedGeometry(of: other.size)
-    }
-}
-
-private extension AccessibilityPoint {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        x.matchesCapturedGeometry(of: other.x)
-            && y.matchesCapturedGeometry(of: other.y)
-    }
-}
-
-private extension AccessibilitySize {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        width.matchesCapturedGeometry(of: other.width)
-            && height.matchesCapturedGeometry(of: other.height)
-    }
-}
-
-private extension Double {
-    func matchesCapturedGeometry(of other: Self) -> Bool {
-        self == other || (isNaN && other.isNaN)
     }
 }
 

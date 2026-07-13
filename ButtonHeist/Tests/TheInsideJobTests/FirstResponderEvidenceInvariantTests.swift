@@ -35,6 +35,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testFirstResponderSnapshotDoesNotRetainUIKitObject() {
         let heistId: HeistId = "email_field"
         var responder: UITextField? = UITextField()
+        weak var releasedResponder: UITextField? = responder
         let capture = InterfaceObservation.makeForTests(
             [
                 InterfaceObservation.TestEntry(
@@ -50,8 +51,50 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertTrue(capture.object(for: heistId) === responder)
         responder = nil
 
+        XCTAssertNil(releasedResponder)
         XCTAssertNil(capture.object(for: heistId))
+        XCTAssertNil(capture.firstResponderHeistId)
         XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
+    }
+
+    func testReplacementCaptureDoesNotInheritStaleFirstResponderEvidence() {
+        let heistId: HeistId = "email_field"
+        let brains = TheBrains(tripwire: TheTripwire())
+        var original: UITextField? = UITextField()
+        weak var releasedOriginal: UITextField? = original
+        let originalScreen = InterfaceObservation.makeForTests(
+            [
+                InterfaceObservation.TestEntry(
+                    label: "Email",
+                    heistId: heistId,
+                    traits: .textEntry,
+                    object: original
+                ),
+            ],
+            firstResponderHeistId: heistId
+        )
+        brains.stash.recordParsedObservedEvidence(originalScreen)
+        XCTAssertEqual(brains.stash.firstResponderHeistId, heistId)
+
+        let replacement = UITextField()
+        let replacementScreen = InterfaceObservation.makeForTests(
+            [
+                InterfaceObservation.TestEntry(
+                    label: "Email",
+                    heistId: heistId,
+                    traits: .textEntry,
+                    object: replacement
+                ),
+            ],
+            firstResponderHeistId: nil
+        )
+        brains.stash.recordParsedObservedEvidence(replacementScreen)
+        original = nil
+
+        XCTAssertNil(releasedOriginal)
+        XCTAssertNil(originalScreen.liveCapture.object(for: heistId))
+        XCTAssertTrue(brains.stash.currentLiveCapture.object(for: heistId) === replacement)
+        XCTAssertNil(brains.stash.firstResponderHeistId)
     }
 
     func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() async throws {
@@ -133,7 +176,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             treeElement: replacementElement,
             liveTarget: replacementLiveTarget,
             deadline: SemanticObservationDeadline(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: 0,
                 timeoutSeconds: 1
             )
         )
