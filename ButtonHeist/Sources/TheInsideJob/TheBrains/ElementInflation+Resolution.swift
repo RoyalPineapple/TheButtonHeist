@@ -85,9 +85,13 @@ extension ElementInflation {
         case nil:
             break
         }
-        if case .failure(let failure) = knownSemanticTarget(target),
-           failure.failedStep == .ambiguous {
+        switch knownSemanticTarget(target) {
+        case .success(let known):
+            return .success(.known(known))
+        case .failure(let failure) where failure.failedStep == .ambiguous:
             return .failure(failure)
+        case .failure:
+            break
         }
         if let exploredScreen = await exploration.discoverTarget(target) {
             stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
