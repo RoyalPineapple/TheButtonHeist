@@ -302,7 +302,10 @@ final class ElementInflationProductTests: XCTestCase {
             literalTarget(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed")
+        XCTAssertTrue(
+            result.outcome.isSuccess,
+            nestedScrollFailureDescription(result, fixture: fixture)
+        )
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
@@ -324,7 +327,10 @@ final class ElementInflationProductTests: XCTestCase {
             literalTarget(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
         ))
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested scroll semantic activate failed with decoy")
+        XCTAssertTrue(
+            result.outcome.isSuccess,
+            nestedScrollFailureDescription(result, fixture: fixture)
+        )
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
@@ -594,6 +600,24 @@ final class ElementInflationProductTests: XCTestCase {
         ]
         .compactMap(\.self)
         .joined(separator: "; ")
+    }
+
+    private func nestedScrollFailureDescription(
+        _ result: ActionResult,
+        fixture: NestedScrollRevealFixture
+    ) -> String {
+        [
+            result.message ?? "nested scroll semantic activate failed",
+            "outerOffset=\(fixture.outerScrollView.contentOffset)",
+            "innerOffset=\(fixture.innerScrollView.contentOffset)",
+            "outerReveals=\(fixture.outerScrollView.revealRequestCount)",
+            "innerReveals=\(fixture.innerScrollView.revealRequestCount)",
+            "targetHidden=\(fixture.target.isHidden)",
+            "targetAccessible=\(fixture.target.isAccessibilityElement)",
+            "liveIds=\(brains.stash.liveHeistIds().map(\.rawValue).sorted())",
+            "semanticPath=\(brains.stash.interfaceElement(heistId: fixture.knownHeistId)?.scrollContainerPath?.indices ?? [])",
+            brains.stash.liveScrollContainerDiagnostics(),
+        ].joined(separator: "; ")
     }
 
     private func installOffscreenActivationFixture(

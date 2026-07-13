@@ -37,8 +37,8 @@ extension ElementInflation {
         guard treeElement.scrollMembership != nil else {
             return .failed(.missingScrollMembership)
         }
-        if await revealScrollAncestors(for: treeElement),
-           await moveToObservedContentActivationPoint(treeElement) {
+        if let scrollView = await revealScrollAncestors(for: treeElement),
+           await moveToObservedContentActivationPoint(treeElement, in: scrollView) {
             return .revealed
         }
         guard let exploredScreen = await exploration.revealKnownTarget(treeElement.heistId) else {
@@ -76,11 +76,11 @@ extension ElementInflation {
         )
     }
 
-    private func moveToObservedContentActivationPoint(_ treeElement: InterfaceTree.Element) async -> Bool {
-        guard let scrollContainerPath = treeElement.scrollContainerPath,
-              let observedActivationPoint = treeElement.observedScrollContentActivationPoint,
-              let scrollView = stash.liveScrollView(forContainerPath: scrollContainerPath)
-        else { return false }
+    private func moveToObservedContentActivationPoint(
+        _ treeElement: InterfaceTree.Element,
+        in scrollView: UIScrollView
+    ) async -> Bool {
+        guard let observedActivationPoint = treeElement.observedScrollContentActivationPoint else { return false }
 
         scrollView.setContentOffset(
             Self.semanticRevealTargetOffset(for: observedActivationPoint, in: scrollView),
@@ -91,35 +91,60 @@ extension ElementInflation {
         return true
     }
 
-    private func revealScrollAncestors(for treeElement: InterfaceTree.Element) async -> Bool {
-        guard let scrollContainerPath = treeElement.scrollContainerPath else { return false }
+    private func revealScrollAncestors(for treeElement: InterfaceTree.Element) async -> UIScrollView? {
+        guard let scrollContainerPath = treeElement.scrollContainerPath else { return nil }
         return await revealScrollContainer(at: scrollContainerPath, depth: 0)
     }
 
-    private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        guard depth < Self.maxNestedRevealDepth else { return false }
-        guard let container = semanticContainer(at: path) else { return false }
+    private func revealScrollContainer(at path: TreePath, depth: Int) async -> UIScrollView? {
+        guard depth < Self.maxNestedRevealDepth else { return nil }
+        guard let container = semanticContainer(at: path) else { return nil }
         guard let membership = container.scrollMembership else {
-            return stash.liveScrollView(forContainerPath: path) != nil
+            return stash.liveScrollView(forContainerPath: path)
         }
         guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
-            return false
+            return nil
         }
-        guard await revealScrollContainer(at: membership.containerPath, depth: depth + 1),
-              let parentScrollView = stash.liveScrollView(forContainerPath: membership.containerPath)
-        else { return false }
+        guard let parentScrollView = await revealScrollContainer(
+            at: membership.containerPath,
+            depth: depth + 1
+        ) else { return nil }
 
         parentScrollView.setContentOffset(
             Self.semanticRevealTargetOffset(for: observedActivationPoint, in: parentScrollView),
             animated: false
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        guard stash.refreshLiveCapture() != nil else { return false }
-        return stash.liveScrollView(forContainerPath: path) != nil
+        guard stash.refreshLiveCapture() != nil else { return nil }
+        return directNestedLiveScrollView(in: parentScrollView)
+    }
+
+    private func directNestedLiveScrollView(in parent: UIScrollView) -> UIScrollView? {
+        var seen = Set<ObjectIdentifier>()
+        let matches = stash.scrollableContainerViewsByPath.values.filter { candidate in
+            guard candidate !== parent,
+                  seen.insert(ObjectIdentifier(candidate)).inserted
+            else { return false }
+            return candidate.nearestScrollableSuperview === parent
+        }
+        return matches.count == 1 ? matches[0] : nil
     }
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
         stash.interfaceTree.containers[path]
+    }
+}
+
+private extension UIView {
+    var nearestScrollableSuperview: UIScrollView? {
+        var ancestor = superview
+        while let current = ancestor {
+            if let scrollView = current as? UIScrollView {
+                return scrollView
+            }
+            ancestor = current.superview
+        }
+        return nil
     }
 }
 
