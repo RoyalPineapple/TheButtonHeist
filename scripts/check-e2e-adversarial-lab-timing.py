@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Self-check receipt timing extraction used by e2e-adversarial-lab.py."""
+"""Self-check adversarial lab timing and report aggregation."""
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -11,6 +14,7 @@ LAB_SCRIPT = Path(__file__).with_name("e2e-adversarial-lab.py")
 SPEC = importlib.util.spec_from_file_location("e2e_adversarial_lab", LAB_SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 lab = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = lab
 SPEC.loader.exec_module(lab)
 
 
@@ -76,3 +80,79 @@ assert ceiling_hits == [
         "elapsedMs": 490,
     }
 ]
+
+
+negative_scenario = lab.Scenario(
+    name="/deterministic-negative",
+    plan="unused",
+    repeat_count=3,
+    expectation=lab.ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC,
+    expected_diagnostic_text="expected diagnostic",
+)
+negative_results = [
+    subprocess.CompletedProcess(
+        args=["buttonheist"],
+        returncode=1,
+        stdout=json.dumps(RECEIPT),
+        stderr="Expected Diagnostic was emitted",
+    ),
+    subprocess.CompletedProcess(
+        args=["buttonheist"],
+        returncode=1,
+        stdout=json.dumps(RECEIPT),
+        stderr="different diagnostic",
+    ),
+    subprocess.CompletedProcess(
+        args=["buttonheist"],
+        returncode=0,
+        stdout=json.dumps(RECEIPT),
+        stderr="expected diagnostic was emitted",
+    ),
+]
+negative_observations = [
+    lab.observe_iteration(negative_scenario, iteration, result, duration_ms)
+    for iteration, result, duration_ms in zip(
+        range(1, 4),
+        negative_results,
+        [30, 10, 20],
+        strict=True,
+    )
+]
+negative_report = lab.scenario_report(negative_scenario, negative_observations)
+
+assert negative_report["attempted"] == 3
+assert negative_report["passed"] == 1
+assert negative_report["failed"] == 2
+assert negative_report["cliWallTimingMs"] == {
+    "count": 3,
+    "min": 10,
+    "p50": 20,
+    "p95": 30,
+    "p99": 30,
+    "max": 30,
+    "total": 60,
+}
+assert negative_report["receiptTimingMs"]["heistDurationMs"]["count"] == 3
+assert negative_report["receiptTimingMs"]["heistDurationMs"]["total"] == 3702
+assert [iteration["diagnosticMatched"] for iteration in negative_report["iterations"]] == [
+    True,
+    False,
+    True,
+]
+assert [iteration["passed"] for iteration in negative_report["iterations"]] == [
+    True,
+    False,
+    False,
+]
+assert [hit["iteration"] for hit in negative_report["unexpectedCeilingHits"]] == [1, 2, 3]
+assert negative_report["iterations"][0]["response"] == RECEIPT
+assert negative_report["iterations"][1]["stderr"] == "different diagnostic"
+
+ceiling_only_report = lab.scenario_report(negative_scenario, negative_observations[:1])
+record_summary = lab.gate_summary([ceiling_only_report], lab.CeilingPolicy.RECORD)
+fail_summary = lab.gate_summary([ceiling_only_report], lab.CeilingPolicy.FAIL)
+
+assert record_summary["ceilingPolicyViolated"] is False
+assert lab.gate_failed(record_summary) is False
+assert fail_summary["ceilingPolicyViolated"] is True
+assert lab.gate_failed(fail_summary) is True

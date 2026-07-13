@@ -25,6 +25,8 @@ jobs:
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
       BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.repeat_count || '20' }}
+      BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event.inputs.repeat_count || '20' }}
+      BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
       BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/adversarial-nightly
       BUTTONHEIST_RECEIPTS_MODE: failing-and-passing
 
@@ -74,7 +76,7 @@ jobs:
         run: swift build --package-path ButtonHeistCLI
 
       - name: Run adversarial lab
-        timeout-minutes: 20
+        timeout-minutes: 35
         run: |
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/run-with-heist-receipts.sh \
@@ -85,6 +87,8 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --repeat-count "$BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT" \
+            --failure-repeat-count "$BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT" \
+            --ceiling-policy "$BUTTONHEIST_ADVERSARIAL_CEILING_POLICY" \
             --report "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json"
 
       - name: Collect adversarial diagnostics

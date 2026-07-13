@@ -16,12 +16,63 @@ import subprocess
 import sys
 import time
 import traceback
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 
 BUNDLE_ID = "com.buttonheist.testapp"
 CEILING_HIT_TOLERANCE_MS = 25
+
+
+class ScenarioExpectation(str, Enum):
+    COMMAND_SUCCEEDS = "command-succeeds"
+    COMMAND_FAILS_WITH_DIAGNOSTIC = "command-fails-with-diagnostic"
+
+
+class CeilingPolicy(str, Enum):
+    RECORD = "record"
+    FAIL = "fail"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class Scenario:
+    name: str
+    plan: str
+    repeat_count: int
+    expectation: ScenarioExpectation
+    expected_diagnostic_text: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.repeat_count < 1:
+            raise ValueError("scenario repeat count must be at least 1")
+        if self.expectation is ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC:
+            if not self.expected_diagnostic_text:
+                raise ValueError("failing scenarios require expected diagnostic text")
+        elif self.expected_diagnostic_text is not None:
+            raise ValueError("passing scenarios cannot expect diagnostic text")
+
+
+@dataclass(frozen=True)
+class IterationObservation:
+    iteration: int
+    passed: bool
+    returncode: int
+    diagnostic_matched: bool | None
+    cli_wall_duration_ms: int
+    receipt_timing_samples: dict[str, list[int]]
+    unexpected_ceiling_hits: list[dict[str, Any]]
+    response: Any | None
+    stdout: str
+    stderr: str
+
+    @property
+    def requires_app_recovery(self) -> bool:
+        return self.returncode != 0
 
 
 def percentile(values: list[int], pct: float) -> int:
@@ -186,6 +237,92 @@ def receipt_metrics(response: Any) -> tuple[dict[str, Any], list[dict[str, Any]]
 
 def with_iteration(items: list[dict[str, Any]], iteration: int) -> list[dict[str, Any]]:
     return [{"iteration": iteration, **item} for item in items]
+
+
+def observe_iteration(
+    scenario: Scenario,
+    iteration: int,
+    result: subprocess.CompletedProcess[str],
+    duration_ms: int,
+) -> IterationObservation:
+    parsed_stdout = parse_jsonish(result.stdout)
+    parsed = parsed_stdout if parsed_stdout is not None else parse_jsonish(result.stderr)
+    timing_samples, ceiling_hits = receipt_metrics(parsed)
+    diagnostic_matched: bool | None = None
+    if scenario.expectation is ScenarioExpectation.COMMAND_SUCCEEDS:
+        passed = result.returncode == 0
+    else:
+        expected_text = scenario.expected_diagnostic_text
+        if expected_text is None:
+            raise ValueError("failing scenarios require expected diagnostic text")
+        diagnostic_matched = expected_text.casefold() in f"{result.stdout}\n{result.stderr}".casefold()
+        passed = result.returncode != 0 and diagnostic_matched
+    return IterationObservation(
+        iteration=iteration,
+        passed=passed,
+        returncode=result.returncode,
+        diagnostic_matched=diagnostic_matched,
+        cli_wall_duration_ms=duration_ms,
+        receipt_timing_samples=timing_samples,
+        unexpected_ceiling_hits=ceiling_hits,
+        response=parsed,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
+def iteration_report(observation: IterationObservation) -> dict[str, Any]:
+    return {
+        "iteration": observation.iteration,
+        "passed": observation.passed,
+        "returncode": observation.returncode,
+        "diagnosticMatched": observation.diagnostic_matched,
+        "requiresAppRecovery": observation.requires_app_recovery,
+        "cliWallDurationMs": observation.cli_wall_duration_ms,
+        "receiptTimingMs": summarize_receipt_timing(observation.receipt_timing_samples),
+        "unexpectedCeilingHits": observation.unexpected_ceiling_hits,
+        "response": observation.response,
+        "stdout": observation.stdout,
+        "stderr": observation.stderr,
+    }
+
+
+def scenario_report(scenario: Scenario, observations: list[IterationObservation]) -> dict[str, Any]:
+    timing_samples = empty_receipt_timing_samples()
+    ceiling_hits: list[dict[str, Any]] = []
+    for observation in observations:
+        merge_receipt_timing_samples(timing_samples, observation.receipt_timing_samples)
+        ceiling_hits.extend(with_iteration(observation.unexpected_ceiling_hits, observation.iteration))
+    durations = [observation.cli_wall_duration_ms for observation in observations]
+    passed = sum(observation.passed for observation in observations)
+    return {
+        "name": scenario.name,
+        "expectation": scenario.expectation.value,
+        "expectedDiagnosticText": scenario.expected_diagnostic_text,
+        "repeatCount": scenario.repeat_count,
+        "attempted": len(observations),
+        "passed": passed,
+        "failed": len(observations) - passed,
+        "cliWallTimingMs": sample_stats(durations),
+        "receiptTimingMs": summarize_receipt_timing(timing_samples),
+        "unexpectedCeilingHits": ceiling_hits,
+        "iterations": [iteration_report(observation) for observation in observations],
+    }
+
+
+def gate_summary(scenarios: list[dict[str, Any]], ceiling_policy: CeilingPolicy) -> dict[str, Any]:
+    ceiling_hit_count = sum(len(scenario["unexpectedCeilingHits"]) for scenario in scenarios)
+    return {
+        "attempted": sum(scenario["attempted"] for scenario in scenarios),
+        "passed": sum(scenario["passed"] for scenario in scenarios),
+        "failed": sum(scenario["failed"] for scenario in scenarios),
+        "unexpectedCeilingHits": ceiling_hit_count,
+        "ceilingPolicyViolated": ceiling_policy is CeilingPolicy.FAIL and ceiling_hit_count > 0,
+    }
+
+
+def gate_failed(summary: dict[str, Any]) -> bool:
+    return summary["failed"] > 0 or summary["ceilingPolicyViolated"]
 
 
 def free_port() -> int:
@@ -514,6 +651,35 @@ def run_heist(cli: Path, app: DemoApp, plan: str, *, timeout: float = 60) -> tup
     return result, duration_ms
 
 
+def execute_scenario(
+    cli: Path,
+    app: DemoApp,
+    scenario: Scenario,
+    report: dict[str, Any],
+    report_path: Path,
+    ceiling_policy: CeilingPolicy,
+) -> None:
+    observations: list[IterationObservation] = []
+    scenario_index = len(report["scenarios"])
+    report["scenarios"].append(scenario_report(scenario, observations))
+    report["summary"] = gate_summary(report["scenarios"], ceiling_policy)
+    write_report(report_path, report)
+
+    for iteration in range(1, scenario.repeat_count + 1):
+        result, duration_ms = run_heist(cli, app, scenario.plan)
+        observation = observe_iteration(scenario, iteration, result, duration_ms)
+        observations.append(observation)
+        report["scenarios"][scenario_index] = scenario_report(scenario, observations)
+        report["summary"] = gate_summary(report["scenarios"], ceiling_policy)
+        write_report(report_path, report)
+
+        stop_after_recovery = not observation.passed and observation.requires_app_recovery
+        if observation.requires_app_recovery:
+            app.launch()
+        if stop_after_recovery:
+            break
+
+
 def error_summary(error: BaseException) -> dict[str, Any]:
     return {
         "type": type(error).__name__,
@@ -533,8 +699,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--app", default=os.environ.get("BH_DEMO_APP"))
     parser.add_argument("--sim-udid", default=os.environ.get("SIM_UDID"))
     parser.add_argument("--repeat-count", type=int, default=int(os.environ.get("BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT", "20")))
+    parser.add_argument(
+        "--failure-repeat-count",
+        type=int,
+        default=os.environ.get("BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT"),
+    )
+    parser.add_argument(
+        "--ceiling-policy",
+        type=CeilingPolicy,
+        choices=list(CeilingPolicy),
+        default=os.environ.get("BUTTONHEIST_ADVERSARIAL_CEILING_POLICY", CeilingPolicy.RECORD.value),
+    )
     parser.add_argument("--report", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-adversarial-nightly-report.json"))
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.failure_repeat_count is None:
+        args.failure_repeat_count = args.repeat_count
+    return args
 
 
 def main() -> int:
@@ -542,16 +722,27 @@ def main() -> int:
     report_path = Path(args.report)
     report: dict[str, Any] = {
         "gate": "ios-demo-adversarial-lab-nightly",
-        "repeatCount": args.repeat_count,
         "status": "starting",
-        "scenarios": {},
-        "diagnostics": {},
+        "configuration": {
+            "repeatCount": args.repeat_count,
+            "failureRepeatCount": args.failure_repeat_count,
+            "ceilingPolicy": args.ceiling_policy.value,
+        },
+        "runtime": {
+            "cli": args.cli,
+            "app": args.app,
+            "simulator": args.sim_udid,
+        },
+        "scenarios": [],
+        "summary": gate_summary([], args.ceiling_policy),
     }
     write_report(report_path, report)
 
     try:
         if args.repeat_count < 1:
             raise RuntimeError("--repeat-count must be at least 1")
+        if args.failure_repeat_count < 1:
+            raise RuntimeError("--failure-repeat-count must be at least 1")
         if not args.app:
             raise RuntimeError("--app is required")
         if not args.sim_udid:
@@ -571,75 +762,51 @@ def main() -> int:
         app.launch()
 
         report["status"] = "running"
-        report["cli"] = str(cli)
-        report["app"] = str(app_path)
-        report["simulator"] = args.sim_udid
+        report["runtime"] = {
+            "cli": str(cli),
+            "app": str(app_path),
+            "simulator": args.sim_udid,
+        }
         write_report(report_path, report)
 
-        overall_failed = False
         for scenario, plan in PASSING_PLANS.items():
-            durations: list[int] = []
-            failures: list[dict[str, Any]] = []
-            timing_samples = empty_receipt_timing_samples()
-            ceiling_hits: list[dict[str, Any]] = []
-            for iteration in range(1, args.repeat_count + 1):
-                result, duration_ms = run_heist(cli, app, plan)
-                durations.append(duration_ms)
-                parsed = parse_jsonish(result.stdout) or parse_jsonish(result.stderr)
-                iteration_timing, hits = receipt_metrics(parsed)
-                merge_receipt_timing_samples(timing_samples, iteration_timing)
-                iteration_hits = with_iteration(hits, iteration)
-                ceiling_hits.extend(iteration_hits)
-                if result.returncode != 0:
-                    failures.append({
-                        "iteration": iteration,
-                        "returncode": result.returncode,
-                        "cliWallDurationMs": duration_ms,
-                        "receiptTimingMs": summarize_receipt_timing(iteration_timing),
-                        "ceilingHits": iteration_hits,
-                        "response": parsed,
-                        "stderr": result.stderr[-4000:],
-                    })
-                    overall_failed = True
-                    app.launch()
-                    break
-            report["scenarios"][scenario] = {
-                "attempted": len(durations),
-                "passed": len(durations) - len(failures),
-                "failed": len(failures),
-                "cliWallDurationMs": stats(durations),
-                "receiptTimingMs": summarize_receipt_timing(timing_samples),
-                "unexpectedCeilingHits": ceiling_hits,
-                "failures": failures,
-            }
-            write_report(report_path, report)
+            execute_scenario(
+                cli,
+                app,
+                Scenario(
+                    name=scenario,
+                    plan=plan,
+                    repeat_count=args.repeat_count,
+                    expectation=ScenarioExpectation.COMMAND_SUCCEEDS,
+                ),
+                report,
+                report_path,
+                args.ceiling_policy,
+            )
 
         for scenario, (plan, expected_text) in FAILING_PLANS.items():
-            result, duration_ms = run_heist(cli, app, plan)
-            parsed = parse_jsonish(result.stdout) or parse_jsonish(result.stderr)
-            timing_samples, ceiling_hits = receipt_metrics(parsed)
-            text = json.dumps(parsed, sort_keys=True) if parsed is not None else result.stdout + result.stderr
-            matched = result.returncode != 0 and expected_text.lower() in text.lower()
-            if not matched:
-                overall_failed = True
-            report["diagnostics"][scenario] = {
-                "passed": matched,
-                "expectedText": expected_text,
-                "returncode": result.returncode,
-                "cliWallDurationMs": duration_ms,
-                "receiptTimingMs": summarize_receipt_timing(timing_samples),
-                "ceilingHits": ceiling_hits,
-                "response": parsed,
-                "stderr": result.stderr[-4000:],
-            }
-            write_report(report_path, report)
-            app.launch()
+            execute_scenario(
+                cli,
+                app,
+                Scenario(
+                    name=scenario,
+                    plan=plan,
+                    repeat_count=args.failure_repeat_count,
+                    expectation=ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC,
+                    expected_diagnostic_text=expected_text,
+                ),
+                report,
+                report_path,
+                args.ceiling_policy,
+            )
 
         app.terminate()
-        report["status"] = "failed" if overall_failed else "passed"
+        report["summary"] = gate_summary(report["scenarios"], args.ceiling_policy)
+        failed = gate_failed(report["summary"])
+        report["status"] = "failed" if failed else "passed"
         write_report(report_path, report)
         print(json.dumps(report, indent=2, sort_keys=True))
-        return 1 if overall_failed else 0
+        return 1 if failed else 0
     except Exception as error:
         report["status"] = "failed"
         report["error"] = error_summary(error)
