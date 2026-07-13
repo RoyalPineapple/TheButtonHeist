@@ -69,6 +69,16 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 }
 
 @Test
+func `invalid external plan remains a candidate until runtime safety admission`() throws {
+    let data = Data(#"{"version":1,"body":[{"type":"invoke","invoke":{"path":["MissingCapability"]}}]}"#.utf8)
+    let candidate = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
+        _ = try candidate.validatedForRuntimeSafety()
+    }
+}
+
+@Test
 func `JSONDecoder decode of nested collection loops is rejected by runtime safety validation`() throws {
     let nestedCollectionLoop = Data("""
     {
