@@ -427,10 +427,22 @@ let project = Project(
                 .target("AdversarialNavigationTests"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("DogfoodFeatureFlowTests")),
-                .testableTarget(target: .target("DogfoodRuntimeContractTests")),
-                .testableTarget(target: .target("AdversarialMutationTests")),
-                .testableTarget(target: .target("AdversarialNavigationTests")),
+                .testableTarget(
+                    target: .target("DogfoodFeatureFlowTests"),
+                    parallelization: .enabled
+                ),
+                .testableTarget(
+                    target: .target("DogfoodRuntimeContractTests"),
+                    parallelization: .enabled
+                ),
+                .testableTarget(
+                    target: .target("AdversarialMutationTests"),
+                    parallelization: .enabled
+                ),
+                .testableTarget(
+                    target: .target("AdversarialNavigationTests"),
+                    parallelization: .enabled
+                ),
             ])
         ),
     ]
