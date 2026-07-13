@@ -623,23 +623,87 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
     }
 
-    func testNestedScrollTargetSelectsNearestLiveAncestor() async {
+    func testNestedSemanticRevealFoldsMembershipChainOutermostFirst() async {
+        let outerPath = TreePath([0])
+        let innerPath = TreePath([0, 0])
+        let decoyPath = TreePath([1])
         let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let innerScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
         innerScrollView.contentSize = CGSize(width: 280, height: 900)
-        let target = installNestedScrollTarget(
-            outerScrollView: outerScrollView,
-            innerScrollView: innerScrollView
+        let decoyScrollView = RecordingScrollView(frame: innerScrollView.frame)
+        decoyScrollView.contentSize = innerScrollView.contentSize
+        let innerActivationPoint = observedContentActivationPoint(CGPoint(x: 160, y: 1_000))
+        let targetActivationPoint = observedContentActivationPoint(CGPoint(x: 140, y: 700))
+        let target = InterfaceTree.Element(
+            heistId: "nested_target",
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: innerPath, index: nil),
+            observedScrollContentActivationPoint: targetActivationPoint,
+            element: makeElement(label: "Nested Target", traits: .button)
         )
+        let outerContainer = makeScrollableContainer(
+            contentSize: outerScrollView.contentSize,
+            frame: outerScrollView.frame
+        )
+        let innerContainer = makeScrollableContainer(
+            contentSize: innerScrollView.contentSize,
+            frame: innerScrollView.frame
+        )
+        let decoyContainer = makeScrollableContainer(
+            contentSize: decoyScrollView.contentSize,
+            frame: decoyScrollView.frame
+        )
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [target.heistId: target],
+            hierarchy: [
+                .container(outerContainer, children: [
+                    .container(innerContainer, children: []),
+                ]),
+                .container(decoyContainer, children: []),
+            ],
+            containerScrollMembershipsByPath: [
+                innerPath: InterfaceTree.ScrollMembership(containerPath: outerPath, index: nil),
+            ],
+            containerObservedScrollContentActivationPointsByPath: [
+                innerPath: innerActivationPoint,
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [
+                outerPath: .init(view: outerScrollView),
+                innerPath: .init(view: innerScrollView),
+                decoyPath: .init(view: decoyScrollView),
+            ]
+        ))
+        var scrollOrder: [ObjectIdentifier] = []
+        for scrollView in [outerScrollView, innerScrollView, decoyScrollView] {
+            scrollView.onSetContentOffset = { scrollOrder.append(ObjectIdentifier($0)) }
+        }
 
         let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
 
         guard case .revealed = result else {
-            return XCTFail("Expected semantic reveal through the nearest ancestor, got \(result)")
+            return XCTFail("Expected semantic reveal through both membership containers, got \(result)")
         }
+        XCTAssertEqual(
+            scrollOrder,
+            [ObjectIdentifier(outerScrollView), ObjectIdentifier(innerScrollView)]
+        )
+        let expectedOuterOffset = ElementInflation.semanticRevealTargetOffset(
+            for: innerActivationPoint,
+            in: outerScrollView
+        )
+        XCTAssertEqual(outerScrollView.contentOffset.x, expectedOuterOffset.x, accuracy: 0.01)
+        XCTAssertEqual(outerScrollView.contentOffset.y, expectedOuterOffset.y, accuracy: 0.01)
+        let expectedInnerOffset = ElementInflation.semanticRevealTargetOffset(
+            for: targetActivationPoint,
+            in: innerScrollView
+        )
+        XCTAssertEqual(innerScrollView.contentOffset.x, expectedInnerOffset.x, accuracy: 0.01)
+        XCTAssertEqual(innerScrollView.contentOffset.y, expectedInnerOffset.y, accuracy: 0.01)
+        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [false])
         XCTAssertEqual(innerScrollView.setContentOffsetAnimations, [false])
-        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(decoyScrollView.contentOffset, .zero)
     }
 
     func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() async throws {
@@ -2543,9 +2607,11 @@ final class TheBrainsScrollTests: XCTestCase {
 
     private final class RecordingScrollView: UIScrollView {
         var setContentOffsetAnimations: [Bool] = []
+        var onSetContentOffset: ((RecordingScrollView) -> Void)?
 
         override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
             setContentOffsetAnimations.append(animated)
+            onSetContentOffset?(self)
             super.setContentOffset(contentOffset, animated: animated)
         }
     }
