@@ -231,6 +231,7 @@ let project = Project(
                 .target(name: "TheScore"),
             ],
             settings: .settings(base: [
+                "ENABLE_TESTING_SEARCH_PATHS": "YES",
                 "SWIFT_STRICT_CONCURRENCY": "complete",
             ])
         ),
