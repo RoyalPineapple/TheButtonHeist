@@ -16,8 +16,8 @@ public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case invoke
 }
 
-public struct HeistStepReceiptKind<Evidence>: Sendable {
-    public let stepKind: HeistExecutionStepKind
+package struct HeistStepReceiptKind<Evidence>: Sendable {
+    package let stepKind: HeistExecutionStepKind
     fileprivate let wrapEvidence: @Sendable (Evidence) -> HeistStepEvidence
 
     fileprivate init(
@@ -29,25 +29,25 @@ public struct HeistStepReceiptKind<Evidence>: Sendable {
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistActionEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistActionEvidence {
     static var action: Self {
         Self(stepKind: .action, wrapEvidence: HeistStepEvidence.action)
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistWaitEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistWaitEvidence {
     static var wait: Self {
         Self(stepKind: .wait, wrapEvidence: HeistStepEvidence.wait)
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistCaseSelectionEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistCaseSelectionEvidence {
     static var conditional: Self {
         Self(stepKind: .conditional, wrapEvidence: HeistStepEvidence.caseSelection)
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistForEachElementEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistForEachElementEvidence {
     static var forEachElement: Self {
         Self(stepKind: .forEachElement, wrapEvidence: HeistStepEvidence.forEachElement)
     }
@@ -57,7 +57,7 @@ public extension HeistStepReceiptKind where Evidence == HeistForEachElementEvide
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistForEachStringEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistForEachStringEvidence {
     static var forEachString: Self {
         Self(stepKind: .forEachString, wrapEvidence: HeistStepEvidence.forEachString)
     }
@@ -67,7 +67,7 @@ public extension HeistStepReceiptKind where Evidence == HeistForEachStringEviden
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistRepeatUntilEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistRepeatUntilEvidence {
     static var repeatUntil: Self {
         Self(stepKind: .repeatUntil, wrapEvidence: HeistStepEvidence.repeatUntil)
     }
@@ -77,7 +77,7 @@ public extension HeistStepReceiptKind where Evidence == HeistRepeatUntilEvidence
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistInvocationEvidence {
+package extension HeistStepReceiptKind where Evidence == HeistInvocationEvidence {
     static var heist: Self {
         Self(stepKind: .heist, wrapEvidence: HeistStepEvidence.invocation)
     }
@@ -87,7 +87,7 @@ public extension HeistStepReceiptKind where Evidence == HeistInvocationEvidence 
     }
 }
 
-public extension HeistStepReceiptKind where Evidence == HeistExecutionWarning {
+package extension HeistStepReceiptKind where Evidence == HeistExecutionWarning {
     static var warning: Self {
         Self(stepKind: .warn, wrapEvidence: HeistStepEvidence.warning)
     }
@@ -129,7 +129,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         outcome.children
     }
 
-    public static func passed(
+    package static func passed(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int,
@@ -146,7 +146,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func passed<Evidence>(
+    package static func passed<Evidence>(
         path: String,
         receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
@@ -184,7 +184,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func failed(
+    package static func failed(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int,
@@ -203,7 +203,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func failed<Evidence>(
+    package static func failed<Evidence>(
         path: String,
         receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
@@ -269,7 +269,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func childAborted<Evidence>(
+    package static func childAborted<Evidence>(
         path: String,
         receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
@@ -293,7 +293,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func childAborted<Evidence>(
+    package static func childAborted<Evidence>(
         path: String,
         receiptKind: HeistStepReceiptKind<Evidence>,
         durationMs: Int,
@@ -335,7 +335,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         }
     }
 
-    public static func skipped(
+    package static func skipped(
         path: String,
         kind: HeistExecutionStepKind,
         durationMs: Int = 0,
@@ -437,7 +437,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
              (.repeatUntilIteration, .failed(let failed)),
              (.heist, .failed(let failed)),
              (.invoke, .failed(let failed)):
-            try validateEvidence(failed.evidence, matches: kind, codingPath: codingPath)
+            try validateFailedEvidence(failed.evidence, kind: kind, codingPath: codingPath)
         case (.wait, .childAborted(let aborted)),
              (.conditional, .childAborted(let aborted)),
              (.forEachElement, .childAborted(let aborted)),
@@ -617,6 +617,42 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             throw receiptError(
                 "passed wait step must include matched or handled_else evidence outcome",
                 codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
+            )
+        }
+    }
+
+    private static func validateFailedEvidence(
+        _ evidence: HeistStepEvidence?,
+        kind: HeistExecutionStepKind,
+        codingPath: [CodingKey]
+    ) throws {
+        try validateEvidence(evidence, matches: kind, codingPath: codingPath)
+        guard let evidence else { return }
+
+        let failureDescription: String?
+        switch (kind, evidence) {
+        case (.wait, .wait(let evidence)) where evidence.outcome != .failed:
+            failureDescription = "failed wait step requires failed wait evidence outcome"
+        case (.forEachElement, .forEachElement(let evidence)) where evidence.failureReason == nil,
+             (.forEachIteration, .forEachElement(let evidence)) where evidence.failureReason == nil:
+            failureDescription = "failed loop step requires failure reason evidence"
+        case (.forEachString, .forEachString(let evidence)) where evidence.failureReason == nil,
+             (.forEachIteration, .forEachString(let evidence)) where evidence.failureReason == nil:
+            failureDescription = "failed loop step requires failure reason evidence"
+        case (.repeatUntil, .repeatUntil(let evidence)) where evidence.outcome != .failed,
+             (.repeatUntilIteration, .repeatUntil(let evidence)) where evidence.outcome != .failed:
+            failureDescription = "failed repeat_until step requires failed repeat_until evidence outcome"
+        case (.heist, .invocation(let evidence)) where evidence.childFailedPath == nil,
+             (.invoke, .invocation(let evidence)) where evidence.childFailedPath == nil:
+            failureDescription = "failed invocation step requires child failure evidence"
+        default:
+            failureDescription = nil
+        }
+
+        if let failureDescription {
+            throw receiptError(
+                failureDescription,
+                codingPath: evidenceCodingPath(codingPath)
             )
         }
     }

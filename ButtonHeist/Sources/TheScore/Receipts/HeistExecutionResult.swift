@@ -15,7 +15,7 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         outcome.abortedAtPath
     }
 
-    public static func passed(
+    package static func passed(
         steps: [HeistExecutionStepResult],
         durationMs: Int
     ) -> HeistExecutionResult {
@@ -30,7 +30,7 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
         }
     }
 
-    public static func failed(
+    package static func failed(
         steps: [HeistExecutionStepResult],
         durationMs: Int,
         abortedAtPath: String

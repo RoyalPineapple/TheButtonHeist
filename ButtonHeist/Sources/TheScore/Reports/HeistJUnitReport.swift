@@ -41,7 +41,7 @@ public struct HeistJUnitReport: Sendable, Equatable {
         self.conclusion = conclusion
     }
 
-    public static func passed(
+    package static func passed(
         heistName: String,
         app: String,
         receiptNodeCount: Int,
@@ -59,7 +59,7 @@ public struct HeistJUnitReport: Sendable, Equatable {
         )
     }
 
-    public static func failed(
+    package static func failed(
         heistName: String,
         app: String,
         receiptNodeCount: Int,
