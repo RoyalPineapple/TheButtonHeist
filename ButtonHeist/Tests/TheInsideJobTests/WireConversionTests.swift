@@ -430,13 +430,13 @@ final class WireConverterTests: XCTestCase {
                     "first_row_staticText": InterfaceTree.Element(
                         heistId: "first_row_staticText",
                         path: recycledElementPath,
-                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 0),
+                        scrollMembership: nil,
                         element: first
                     ),
                     "second_row_staticText": InterfaceTree.Element(
                         heistId: "second_row_staticText",
                         path: recycledElementPath,
-                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 1),
+                        scrollMembership: nil,
                         element: second
                     ),
                 ],
@@ -505,7 +505,7 @@ final class WireConverterTests: XCTestCase {
                     "library_search_searchField": InterfaceTree.Element(
                         heistId: "library_search_searchField",
                         path: rowPath,
-                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: libraryPath, index: 0),
+                        scrollMembership: nil,
                         element: row
                     ),
                 ],
@@ -655,11 +655,13 @@ final class WireConverterTests: XCTestCase {
             elements: [
                 "aardvark_staticText": InterfaceTree.Element(
                     heistId: "aardvark_staticText",
+                    path: TreePath([0, 0]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                     element: visible
                 ),
                 "zymurgy_staticText": InterfaceTree.Element(
                     heistId: "zymurgy_staticText",
+                    path: TreePath([0, 1]),
                     scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
                     element: offViewport
                 ),
@@ -722,6 +724,7 @@ final class WireConverterTests: XCTestCase {
                 elements: [
                     "interstitial_staticText": InterfaceTree.Element(
                         heistId: "interstitial_staticText",
+                        path: TreePath([0, 0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0, 0]), index: 0),
                         element: nestedWord
                     ),
@@ -744,7 +747,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0, 0])])
     }
 
-    func testDiscoveryInterfaceEmitsDuplicateGraftedHeistIdOnce() throws {
+    func testDiscoveryInterfaceEmitsCanonicalGraftedHeistIdOnce() throws {
         let rootContainer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 2_000)),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -762,11 +765,7 @@ final class WireConverterTests: XCTestCase {
                 elements: [
                     "recycled_cell": InterfaceTree.Element(
                         heistId: "recycled_cell",
-                        scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
-                        element: recycledCell
-                    ),
-                    "stale_recycled_cell_path": InterfaceTree.Element(
-                        heistId: "recycled_cell",
+                        path: TreePath([0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: recycledCell
                     ),
@@ -825,11 +824,13 @@ final class WireConverterTests: XCTestCase {
                 elements: [
                     "repeat_button": InterfaceTree.Element(
                         heistId: "repeat_button",
+                        path: TreePath([0, 0]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: firstCell
                     ),
                     "repeat_button_1": InterfaceTree.Element(
                         heistId: "repeat_button_1",
+                        path: TreePath([0, 1]),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1),
                         element: secondCell
                     ),
