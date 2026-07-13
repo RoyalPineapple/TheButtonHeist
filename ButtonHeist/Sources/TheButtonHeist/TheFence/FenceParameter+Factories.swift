@@ -268,8 +268,6 @@ private extension SemanticContainerPredicate {
             "label"
         case .value:
             "value"
-        case .identifier:
-            "identifier"
         }
     }
 }

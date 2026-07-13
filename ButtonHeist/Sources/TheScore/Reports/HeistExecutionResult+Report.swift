@@ -85,7 +85,7 @@ private struct HeistExecutionEvidenceFold {
     }
 }
 
-fileprivate struct HeistExecutionNodeFacts {
+private struct HeistExecutionNodeFacts {
     let node: HeistExecutionEvidenceNode
     let evidenceEvents: [HeistExecutionEvidenceEvent]
     let warning: HeistExecutionWarning?
