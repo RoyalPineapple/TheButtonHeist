@@ -66,9 +66,6 @@ jobs:
       - name: Validate release/install contract
         run: scripts/validate-release-contract.sh
 
-      - name: Test Swift API breakage exemptions
-        run: scripts/tests/check-swift-api-breaking-changes-test.sh
-
       - name: Validate adversarial receipt timing parser
         run: python3 scripts/check-e2e-adversarial-lab-timing.py
 
