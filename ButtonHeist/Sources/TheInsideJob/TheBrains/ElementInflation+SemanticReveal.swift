@@ -106,7 +106,7 @@ extension ElementInflation {
             at: membership.containerPath,
             depth: depth + 1
         ) else { return nil }
-        if hasCurrentLiveAlias(for: parentScrollView) {
+        if stash.liveScrollableContainerView(forPath: path) === parentScrollView {
             return parentScrollView
         }
         guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
@@ -134,13 +134,6 @@ extension ElementInflation {
             return candidate.nearestScrollableSuperview === parent
         }
         return matches.count == 1 ? matches[0] : nil
-    }
-
-    private func hasCurrentLiveAlias(for scrollView: UIScrollView) -> Bool {
-        stash.scrollableContainerViewsByPath.values.lazy
-            .filter { $0 === scrollView }
-            .prefix(2)
-            .count == 2
     }
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
