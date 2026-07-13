@@ -969,8 +969,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 heistId: targetId,
                 contentActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
-            ),
-            includeLiveScrollAncestor: false
+            )
         )
         scrollView.setContentOffsetAnimations.removeAll()
         let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
@@ -1766,10 +1765,10 @@ final class TheBrainsScrollTests: XCTestCase {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
-            self.brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(currentScreen)
             return nil
         }
 
@@ -2024,7 +2023,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
             return XCTFail("Expected settled observation to recover stale reveal")
         }
-        XCTAssertEqual(discoveryAttempts, 1)
+        XCTAssertEqual(discoveryAttempts, 0)
         XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [false])
         XCTAssertEqual(inflatedTarget.treeElement.heistId, recoveredEntry.heistId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
