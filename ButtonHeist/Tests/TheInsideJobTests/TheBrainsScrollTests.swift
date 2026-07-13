@@ -931,20 +931,17 @@ final class TheBrainsScrollTests: XCTestCase {
             return nil
         }
         let revealTask = Task { @MainActor in
-            await self.brains.navigation.elementInflation.stateAfterReveal(
+            let state = await self.brains.navigation.elementInflation.stateAfterReveal(
                 entry,
                 target: literalTarget(ElementPredicate(label: "Settings")),
                 deadline: self.semanticRevealDeadline()
             )
+            guard case .failed(let failure) = state else { return false }
+            return failure.failedStep == .cancelled
         }
         revealTask.cancel()
 
-        let state = await revealTask.value
-
-        guard case .failed(let failure) = state else {
-            return XCTFail("Expected typed cancellation failure, got \(state)")
-        }
-        XCTAssertEqual(failure.failedStep, .cancelled)
+        XCTAssertTrue(await revealTask.value)
         XCTAssertEqual(knownTargetAttempts, 0)
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
     }
