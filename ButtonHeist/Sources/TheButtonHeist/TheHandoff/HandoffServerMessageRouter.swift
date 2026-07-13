@@ -32,7 +32,7 @@ struct HandoffServerMessageRouter {
             if let requestId {
                 return .forward(message, requestId)
             }
-            return .connectionFailure(serverError.message)
+            return .serverFailure(serverError)
         case .status(let payload):
             serverMessageLogger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
             return .handled
@@ -49,7 +49,7 @@ enum HandoffServerMessageRoute {
     case admission(HandoffAdmissionDecision)
     case serverInfo(ServerInfo)
     case forward(ServerMessage, String?)
-    case connectionFailure(String)
+    case serverFailure(ServerError)
     case pong(PongPayload, requestId: String?)
     case handled
 }

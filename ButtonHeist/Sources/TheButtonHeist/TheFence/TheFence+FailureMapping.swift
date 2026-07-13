@@ -7,6 +7,13 @@ extension FenceError {
     init(_ connectionError: HandoffConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
+        case .serverFailure(let serverError):
+            let details = serverError.failureDetails
+            self = .connectionFailure(ConnectionFailure(
+                message: serverError.message,
+                failureCode: details.code,
+                hint: serverError.recoveryHint ?? details.hint
+            ))
         case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
         case .timeout: self = .connectionTimeout
