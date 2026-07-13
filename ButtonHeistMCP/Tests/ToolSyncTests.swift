@@ -8,12 +8,8 @@ struct ToolSyncTests {
     @Test("Public CLI/MCP command contract matches the committed descriptor snapshot")
     func publicCommandContractMatchesCommittedDescriptorSnapshot() throws {
         let actual = try PublicCommandContractFixture.renderedData()
-        try PublicCommandContractFixture.updateIfRequested(with: actual)
         let fixtureURL = PublicCommandContractFixture.fileURL
-        let expected = try #require(
-            try? Data(contentsOf: fixtureURL),
-            "Missing generated contract fixture. Run: \(PublicCommandContractFixture.updateCommand)"
-        )
+        let expected = try PublicCommandContractFixture.committedData(for: actual)
 
         #expect(
             actual == expected,
@@ -22,6 +18,58 @@ struct ToolSyncTests {
             Review the typed descriptor change, then run: \(PublicCommandContractFixture.updateCommand)
             """
         )
+    }
+
+    @Test("Public command contract update requires exact local opt-in")
+    func publicCommandContractUpdateRequiresExactLocalOptIn() {
+        let key = PublicCommandContractFixture.updateEnvironmentKey
+
+        #expect(PublicCommandContractFixture.mode(environment: [:]) == .comparison)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "true"]) == .comparison)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "1"]) == .update)
+        #expect(PublicCommandContractFixture.mode(environment: [key: "1", "CI": "1"]) == .comparison)
+    }
+
+    @Test("Public command contract comparison never rewrites the fixture")
+    func publicCommandContractComparisonNeverRewritesFixture() throws {
+        let fixtureURL = temporaryContractFixtureURL()
+        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let committed = Data("committed\n".utf8)
+        let rendered = Data("rendered\n".utf8)
+        try committed.write(to: fixtureURL)
+
+        let expected = try PublicCommandContractFixture.committedData(
+            for: rendered,
+            environment: [:],
+            fixtureURL: fixtureURL
+        )
+
+        #expect(expected == committed)
+        #expect(try Data(contentsOf: fixtureURL) == committed)
+    }
+
+    @Test("Public command contract comparison rejects missing and empty fixtures")
+    func publicCommandContractComparisonRejectsMissingAndEmptyFixtures() throws {
+        let fixtureURL = temporaryContractFixtureURL()
+        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let rendered = Data("rendered\n".utf8)
+
+        #expect(throws: PublicCommandContractFixture.FixtureError.self) {
+            try PublicCommandContractFixture.committedData(
+                for: rendered,
+                environment: [:],
+                fixtureURL: fixtureURL
+            )
+        }
+
+        try Data().write(to: fixtureURL)
+        #expect(throws: PublicCommandContractFixture.FixtureError.self) {
+            try PublicCommandContractFixture.committedData(
+                for: rendered,
+                environment: [:],
+                fixtureURL: fixtureURL
+            )
+        }
     }
 
     @Test("Tool input schemas satisfy canonical schema lint in memory")
@@ -362,6 +410,11 @@ struct ToolSyncTests {
         ]))
         #expect(schemaValue(at: ["properties", "detail", "default"], in: listHeists.inputSchema) == .string("summary"))
     }
+}
+
+private func temporaryContractFixtureURL() -> URL {
+    FileManager.default.temporaryDirectory
+        .appending(path: "public-command-contract-\(UUID().uuidString).json")
 }
 
 private func schemaValue(at path: [String], in root: Value) -> Value? {

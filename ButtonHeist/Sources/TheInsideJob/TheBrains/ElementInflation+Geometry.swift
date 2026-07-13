@@ -238,39 +238,34 @@ extension ElementInflation {
                 )
             }
             guard stash.refreshLiveCapture() != nil else { continue }
-            switch visibleTargetResolution(inflatedTarget.target) {
-            case .success(let currentTreeElement)?:
-                guard let currentTarget = stableActionTarget(
-                    target: inflatedTarget.target,
-                    treeElement: currentTreeElement
-                ) else {
-                    return .failed(.staleRefresh(
-                        "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
-                            + "could not be proven against the current live capture"
-                    ))
-                }
-                stableTarget = currentTarget
-                switch stabilization.reduce(.sample(
-                    LiveGeometrySample(currentTarget.liveTarget),
-                    viewport: ScreenMetrics.current.bounds
-                )) {
-                case .awaiting(let next):
-                    stabilization = next
-                case .stable:
-                    return .inflated(currentTarget)
-                case .offscreen:
-                    return .failed(.geometryNotActionable(
-                        "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
-                            + "activation point stayed off-screen after placement; "
-                            + Self.liveGeometrySummary(currentTarget.liveTarget)
-                    ))
-                case .timedOut, .cancelled:
-                    preconditionFailure("A geometry sample cannot reduce to timeout or cancellation")
-                }
-            case .failure(let failure)?:
-                return .failed(failure)
-            case nil:
-                continue
+            guard let currentTreeElement = stash.interfaceElement(
+                heistId: inflatedTarget.treeElement.heistId
+            ), retainedInterfaceElement(currentTreeElement, matches: inflatedTarget.target) else {
+                return .failed(.staleRefresh(
+                    "selected target \(inflatedTarget.treeElement.heistId.rawValue) left committed semantic truth"
+                ))
+            }
+            guard let currentTarget = stableActionTarget(
+                target: inflatedTarget.target,
+                treeElement: currentTreeElement
+            ) else { continue }
+            stableTarget = currentTarget
+            switch stabilization.reduce(.sample(
+                LiveGeometrySample(currentTarget.liveTarget),
+                viewport: ScreenMetrics.current.bounds
+            )) {
+            case .awaiting(let next):
+                stabilization = next
+            case .stable:
+                return .inflated(currentTarget)
+            case .offscreen:
+                return .failed(.geometryNotActionable(
+                    "target \(Navigation.ScrollTargetDescription(currentTreeElement).description) "
+                        + "activation point stayed off-screen after placement; "
+                        + Self.liveGeometrySummary(currentTarget.liveTarget)
+                ))
+            case .timedOut, .cancelled:
+                preconditionFailure("A geometry sample cannot reduce to timeout or cancellation")
             }
         }
 
