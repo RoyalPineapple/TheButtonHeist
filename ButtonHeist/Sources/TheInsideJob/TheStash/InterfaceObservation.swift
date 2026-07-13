@@ -40,13 +40,25 @@ struct InterfaceObservation: Equatable {
         tree: InterfaceTree,
         dispatchReferences: LiveCapture.DispatchReferences = .empty
     ) throws -> InterfaceObservation {
+        try build(
+            tree: tree,
+            dispatchReferences: dispatchReferences,
+            captureToken: InterfaceCaptureToken()
+        )
+    }
+
+    private static func build(
+        tree: InterfaceTree,
+        dispatchReferences: LiveCapture.DispatchReferences,
+        captureToken: InterfaceCaptureToken
+    ) throws -> InterfaceObservation {
         InterfaceObservation(
             validatedTree: tree,
             liveCapture: try LiveCapture.build(
                 validating: tree,
                 dispatchReferences: dispatchReferences
             ),
-            captureToken: InterfaceCaptureToken()
+            captureToken: captureToken
         )
     }
 
@@ -100,13 +112,9 @@ struct InterfaceObservation: Equatable {
 
     var viewportOnly: InterfaceObservation {
         do {
-            let viewportTree = tree.viewportOnly
-            return InterfaceObservation(
-                validatedTree: viewportTree,
-                liveCapture: try LiveCapture.build(
-                    validating: viewportTree,
-                    dispatchReferences: liveCapture.dispatchReferences
-                ),
+            return try Self.build(
+                tree: tree.viewportOnly,
+                dispatchReferences: liveCapture.dispatchReferences,
                 captureToken: captureToken
             )
         } catch {
