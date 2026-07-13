@@ -48,9 +48,9 @@ final class SemanticObservationSettledWaiters {
         )
     }
 
-    func completeAll(returning event: SettledSemanticObservationEvent?) {
+    func cancelAll() {
         for waiter in waiters.removeAll() {
-            waiter.resolve(returning: event)
+            waiter.resolve(returning: nil)
         }
     }
 

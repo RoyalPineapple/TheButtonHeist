@@ -468,7 +468,7 @@ final class SemanticObservationStream {
         passiveObservationState.task?.cancel()
         passiveObservationState = .stopped
         cycles.cancelRunningCycle()
-        settledWaiters.completeAll(returning: nil)
+        settledWaiters.cancelAll()
         cycles.completeAllWaiters()
         if let stash {
             AccessibilityNotificationObserver.shared.unsubscribe(stash.accessibilityNotifications)
