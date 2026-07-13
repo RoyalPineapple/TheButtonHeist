@@ -482,7 +482,17 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(encodedFailure, failure)
         XCTAssertEqual(response.diagnosticFailure, failure)
 
-        let json = try publicJSONProbe(response).object()
+        let data = try response.jsonData()
+        let encoded = try JSONDecoder().decode(JSONValue.self, from: data)
+        guard case .object(let responseObject) = encoded,
+              let detailsValue = responseObject["details"],
+              case .object(let detailsObject) = detailsValue else {
+            return XCTFail("Expected canonical public failure object")
+        }
+        XCTAssertEqual(Set(responseObject.keys), ["status", "message", "code", "details"])
+        XCTAssertEqual(Set(detailsObject.keys), ["kind", "phase", "retryable", "hint"])
+
+        let json = try JSONProbe(data: data).object()
         XCTAssertEqual(failure.failureCode, .requestInvalid)
         XCTAssertEqual(failure.details.code, .requestInvalid)
         XCTAssertEqual(try json.string("status"), "error")
@@ -550,6 +560,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let detailsJSON = try json.object("details")
         try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.request.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.request.rawValue)
         XCTAssertFalse(try detailsJSON.bool("retryable"))
@@ -668,6 +679,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertNoThrow(try json.assertMissing("kind"), name)
             XCTAssertNoThrow(try json.assertMissing("phase"), name)
             XCTAssertNoThrow(try detailsJSON.assertMissing("code"), name)
+            XCTAssertNoThrow(try detailsJSON.assertMissing("errorCode"), name)
             XCTAssertEqual(try detailsJSON.string("kind"), kind.rawValue, name)
             XCTAssertEqual(try detailsJSON.string("phase"), phase.rawValue, name)
         }
@@ -826,6 +838,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let detailsJSON = try json.object("details")
         try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.authentication.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.authentication.rawValue)
         XCTAssertEqual(try detailsJSON.string("hint"), hint)
@@ -885,6 +898,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let detailsJSON = try json.object("details")
         try detailsJSON.assertMissing("code")
+        try detailsJSON.assertMissing("errorCode")
         XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.connection.rawValue)
         XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.transport.rawValue)
         XCTAssertTrue(try detailsJSON.bool("retryable"))
