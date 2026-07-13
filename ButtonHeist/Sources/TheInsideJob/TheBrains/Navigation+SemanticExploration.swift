@@ -51,12 +51,14 @@ extension Navigation {
     enum ScrollContainerScanResult: Equatable, Sendable {
         case terminal(ScrollTraversalTerminal)
         case completed
+        case screenReplaced
         case omitted(ExplorationOmissionReason)
     }
 
     enum ScrollScanOutcome: Equatable, Sendable {
         case terminal(ScrollTraversalTerminal)
         case exhausted
+        case screenReplaced
         case limitHit(ExplorationOmissionReason)
     }
 
@@ -152,6 +154,9 @@ extension Navigation {
             outcome: ScrollScanOutcome
         ) -> StateChange<ScrollContainerScanState, ScrollContainerScanEffect, ScrollContainerScanRejection> {
             switch (direction, outcome) {
+            case (_, .screenReplaced):
+                return .changed(to: .finished(.screenReplaced), effects: [.finish(.screenReplaced)])
+
             case (_, .terminal(let terminal)):
                 let result = ScrollContainerScanResult.terminal(terminal)
                 return .changed(to: .finished(result), effects: [.finish(result)])
@@ -239,17 +244,35 @@ extension Navigation {
             }
         }
 
-        mutating func absorb(_ parsed: InterfaceObservation?) {
-            guard let parsed else { return }
-            do {
-                screen = try InterfaceObservation.build(
-                    tree: screen.tree.merging(parsed.tree),
-                    dispatchReferences: parsed.liveCapture.dispatchReferences
+        @discardableResult
+        mutating func absorb(_ parsed: InterfaceObservation?) -> ScreenClassifier.Classification? {
+            guard let parsed else { return nil }
+            let classification = ScreenClassifier.classify(
+                before: ScreenClassifier.snapshot(of: screen.tree),
+                after: ScreenClassifier.snapshot(of: parsed.tree),
+                notifications: []
+            )
+            if classification.isScreenReplacement {
+                // A replacement starts a new graph, not a new execution budget.
+                let scrollCount = manifest.scrollCount
+                manifest = ScreenManifest(
+                    maxScrollsPerContainer: manifest.maxScrollsPerContainer,
+                    maxScrollsPerDiscovery: manifest.maxScrollsPerDiscovery
                 )
-            } catch {
-                preconditionFailure("Exploration observation failed validation: \(error)")
+                manifest.scrollCount = scrollCount
+                screen = parsed
+            } else {
+                do {
+                    screen = try InterfaceObservation.build(
+                        tree: screen.tree.merging(parsed.tree),
+                        dispatchReferences: parsed.liveCapture.dispatchReferences
+                    )
+                } catch {
+                    preconditionFailure("Exploration observation failed validation: \(error)")
+                }
             }
             addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
+            return classification
         }
 
         mutating func markExplored(_ container: InterfaceTree.Container) {

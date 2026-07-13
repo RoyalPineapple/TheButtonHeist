@@ -57,7 +57,7 @@ extension Navigation {
                 return nil
             }
 
-            for container in batch {
+            containerBatch: for container in batch {
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
                 guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                     exploration.manifest.markDiscoveryLimitHit()
@@ -80,6 +80,14 @@ extension Navigation {
                     return terminal
                 case .completed:
                     exploration.markExplored(containerExploration.semanticContainer)
+                case .screenReplaced:
+                    if let terminal = scanGoalTerminal(
+                        scanGoal(target: target, targetHeistId: targetHeistId),
+                        in: exploration.screen
+                    ) {
+                        return terminal
+                    }
+                    break containerBatch
                 case .omitted(let reason):
                     exploration.manifest.markOmitted(containerExploration.path, reason: reason)
                 }
@@ -157,11 +165,14 @@ extension Navigation {
                 effect = driver.send(.scanCompleted(outcome)).scrollContainerScanEffect
 
             case .restore:
-                await restoreContainerPosition(
+                let classification = await restoreContainerPosition(
                     containerExploration,
                     savedVisualOrigin: savedVisualOrigin,
                     exploration: &exploration
                 )
+                if classification?.isScreenReplacement == true {
+                    return .screenReplaced
+                }
                 effect = driver.send(.restoreCompleted).scrollContainerScanEffect
 
             case .finish(let result):
@@ -211,8 +222,9 @@ extension Navigation {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
             guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-            await absorbExplorationPage(in: &exploration)
+            let classification = await absorbExplorationPage(in: &exploration)
             guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+            if classification?.isScreenReplacement == true { return .screenReplaced }
 
             if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
                 return .terminal(terminal)
@@ -352,8 +364,10 @@ extension Navigation {
         }
     }
 
-    private func absorbExplorationPage(in exploration: inout SemanticExploration) async {
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
+    private func absorbExplorationPage(
+        in exploration: inout SemanticExploration
+    ) async -> ScreenClassifier.Classification? {
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
         let page: InterfaceObservation?
         switch exploration.scope {
         case .manifestBoundedDiscovery:
@@ -361,20 +375,20 @@ extension Navigation {
         case .knownTargetReveal(let deadline):
             page = await settledKnownTargetPage(deadline: deadline)
         }
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
-        exploration.absorb(page)
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        return exploration.absorb(page)
     }
 
     private func restoreContainerPosition(
         _ containerExploration: ContainerExploration,
         savedVisualOrigin: CGPoint,
         exploration: inout SemanticExploration
-    ) async {
+    ) async -> ScreenClassifier.Classification? {
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return }
-        await absorbExplorationPage(in: &exploration)
+        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        return await absorbExplorationPage(in: &exploration)
     }
 
     private func settledKnownTargetPage(
